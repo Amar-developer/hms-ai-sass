@@ -1,1 +1,64 @@
+<<<<<<< HEAD
 # medizinhub-hms
+=======
+# MedizinHub HMS Complete v6 - Doctor Revenue & Consultation Billing
+
+Runnable NextJS + Tailwind frontend prototype.
+
+## Product documentation
+
+This project now includes a practical documentation backbone for evolving the prototype into a plug-and-play smart healthcare SaaS platform:
+
+- [Documentation index](./docs/README.md)
+- [Developer setup guide](./docs/developer-setup.md)
+- [Product blueprint](./docs/product-blueprint.md)
+- [Development master prompt](./docs/development-master-prompt.md)
+- [Backend architecture spec](./docs/backend-architecture-spec.md)
+- [Plug-and-play architecture](./docs/plug-and-play-architecture.md)
+- [Module catalog](./docs/module-catalog.md)
+- [Data, security, and India compliance](./docs/data-security-compliance.md)
+- [Technology strategy](./docs/technology-strategy.md)
+- [SaaS plans and roadmap](./docs/saas-plans-roadmap.md)
+
+## Run
+```bash
+npm install
+npm run dev
+```
+Open http://localhost:3000
+
+## Backend scaffold
+
+The FastAPI backend foundation is in [backend](./backend). It currently includes health/readiness APIs, tenant context middleware, a plug-and-play module manifest, and starter tests.
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+## Added in v6
+- Doctor consultation workspace with prescription, patient remarks and notes
+- Lab test referral and scan referral capture
+- Recommend/referral to another doctor
+- Doctor fee setting by clinic + department + doctor
+- OP, IP fixed, IP percentage, online and home visit consultation fees
+- Extra fee capture during consultation
+- Doctor-wise revenue analytics
+- Lab tests written by doctor
+- Scans referred by doctor
+- Medicine value referred to pharmacy
+- Overall monthly revenue report
+
+## Core modules retained
+- Multi clinic / polyclinic / multi-speciality hospital
+- Single and multiple branch support
+- Appointment booking
+- New patient creation
+- OP and IP flows
+- Token queue normal/emergency
+- Doctor dashboard
+- Lab, pharmacy/prescription, billing, subscriptions and reports
+>>>>>>> fc210ad (Initial MedizinHub HMS project)

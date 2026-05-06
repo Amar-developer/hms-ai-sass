@@ -1,0 +1,569 @@
+# Developer Setup Guide
+
+This guide helps developers run **MedizinHub HMS** locally on macOS, Windows, and Linux.
+
+The project currently has two parts:
+
+- Frontend: Next.js, React, TypeScript, Tailwind.
+- Backend: FastAPI, SQLModel, SQLite quick-start, PostgreSQL for team development, Alembic migrations.
+
+## Prerequisites
+
+Install these tools first:
+
+| Tool | Recommended Version | Used For |
+| --- | --- | --- |
+| Node.js | 20 LTS or newer | Frontend |
+| npm | Comes with Node.js | Frontend dependencies |
+| Python | 3.10 or newer | Backend |
+| Git | Latest stable | Source control |
+
+Optional for later production-like development:
+
+- Docker Desktop
+
+Docker Desktop is recommended for team development because it starts PostgreSQL and Redis with the same local configuration for everyone.
+
+## macOS Setup
+
+### 1. Install Tools
+
+Using Homebrew:
+
+```bash
+brew install node python git
+```
+
+Check versions:
+
+```bash
+node --version
+npm --version
+python3 --version
+git --version
+```
+
+### 2. Install Frontend Dependencies
+
+From the project root:
+
+```bash
+npm install
+```
+
+### 3. Install Backend Dependencies
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+cd ..
+```
+
+### 4. Choose Database Mode
+
+#### Option A: SQLite Quick Start
+
+No setup is needed. If `MEDIZINHUB_DATABASE_URL` is not set, the backend uses:
+
+```text
+sqlite:///./medizinhub_hms.db
+```
+
+When the backend is started from the `backend` directory, the file is:
+
+```text
+backend/medizinhub_hms.db
+```
+
+#### Option B: PostgreSQL Team Setup
+
+From the project root:
+
+```bash
+docker compose up -d postgres redis
+```
+
+Use this backend environment variable:
+
+```bash
+export MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms"
+export MEDIZINHUB_REDIS_URL="redis://localhost:6379/0"
+```
+
+Run migrations:
+
+```bash
+cd backend
+source .venv/bin/activate
+alembic upgrade head
+cd ..
+```
+
+### 5. Run Frontend
+
+```bash
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+If Next.js starts on port `3001`, the backend allows that local origin also. For another frontend port, start the backend with:
+
+```bash
+MEDIZINHUB_CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002" .venv/bin/uvicorn app.main:app --reload --port 8000
+```
+
+The frontend calls `http://localhost:8000/api/v1` by default. To override it:
+
+```bash
+NEXT_PUBLIC_MEDIZINHUB_API_URL="http://localhost:8000/api/v1" npm run dev -- --hostname 127.0.0.1 --port 3000
+```
+
+### 6. Run Backend
+
+In a second terminal:
+
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+```
+
+Open:
+
+```text
+http://localhost:8000/api/v1/health
+http://localhost:8000/docs
+```
+
+## Windows Setup
+
+### 1. Install Tools
+
+Recommended:
+
+- Install Node.js LTS from `https://nodejs.org`
+- Install Python from `https://www.python.org/downloads/windows/`
+- Install Git from `https://git-scm.com/download/win`
+
+During Python installation, enable:
+
+```text
+Add python.exe to PATH
+```
+
+Check versions in PowerShell:
+
+```powershell
+node --version
+npm --version
+python --version
+git --version
+```
+
+### 2. Install Frontend Dependencies
+
+From the project root:
+
+```powershell
+npm install
+```
+
+### 3. Install Backend Dependencies
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+cd ..
+```
+
+If PowerShell blocks virtualenv activation, run PowerShell as your user and execute:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Then activate again:
+
+```powershell
+.\backend\.venv\Scripts\Activate.ps1
+```
+
+### 4. Choose Database Mode
+
+#### Option A: SQLite Quick Start
+
+No setup is needed. If `MEDIZINHUB_DATABASE_URL` is not set, the backend uses:
+
+```text
+sqlite:///./medizinhub_hms.db
+```
+
+#### Option B: PostgreSQL Team Setup
+
+From the project root:
+
+```powershell
+docker compose up -d postgres redis
+```
+
+Set backend environment variables in the PowerShell terminal used to run the backend:
+
+```powershell
+$env:MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms"
+$env:MEDIZINHUB_REDIS_URL="redis://localhost:6379/0"
+```
+
+Run migrations:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+alembic upgrade head
+cd ..
+```
+
+### 5. Run Frontend
+
+```powershell
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+### 6. Run Backend
+
+In a second PowerShell terminal:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload --port 8000
+```
+
+Open:
+
+```text
+http://localhost:8000/api/v1/health
+http://localhost:8000/docs
+```
+
+## Linux Setup
+
+### 1. Install Tools
+
+Ubuntu/Debian example:
+
+```bash
+sudo apt update
+sudo apt install -y nodejs npm python3 python3-venv python3-pip git
+```
+
+For newer Node.js versions, prefer NodeSource or nvm.
+
+Check versions:
+
+```bash
+node --version
+npm --version
+python3 --version
+git --version
+```
+
+### 2. Install Frontend Dependencies
+
+From the project root:
+
+```bash
+npm install
+```
+
+### 3. Install Backend Dependencies
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+cd ..
+```
+
+### 4. Choose Database Mode
+
+#### Option A: SQLite Quick Start
+
+No setup is needed. If `MEDIZINHUB_DATABASE_URL` is not set, the backend uses:
+
+```text
+sqlite:///./medizinhub_hms.db
+```
+
+#### Option B: PostgreSQL Team Setup
+
+From the project root:
+
+```bash
+docker compose up -d postgres redis
+```
+
+Use this backend environment variable:
+
+```bash
+export MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms"
+export MEDIZINHUB_REDIS_URL="redis://localhost:6379/0"
+```
+
+Run migrations:
+
+```bash
+cd backend
+source .venv/bin/activate
+alembic upgrade head
+cd ..
+```
+
+### 5. Run Frontend
+
+```bash
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+### 6. Run Backend
+
+In a second terminal:
+
+```bash
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+```
+
+Open:
+
+```text
+http://localhost:8000/api/v1/health
+http://localhost:8000/docs
+```
+
+## Run Tests
+
+### Frontend Tests
+
+From the project root:
+
+```bash
+npm test
+```
+
+### Backend Tests
+
+macOS/Linux:
+
+```bash
+backend/.venv/bin/python -m pytest
+backend/.venv/bin/ruff check backend/app backend/tests
+```
+
+Windows PowerShell:
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m pytest
+.\backend\.venv\Scripts\ruff.exe check backend/app backend/tests
+```
+
+## Backend API Quick Check
+
+Health:
+
+```bash
+curl http://localhost:8000/api/v1/health
+```
+
+Create a tenant:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tenants \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Demo Clinic"}'
+```
+
+List modules:
+
+```bash
+curl http://localhost:8000/api/v1/modules
+```
+
+Windows PowerShell equivalent:
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri http://localhost:8000/api/v1/tenants `
+  -ContentType "application/json" `
+  -Body '{"name":"Demo Clinic"}'
+```
+
+## Local URLs
+
+| Service | URL |
+| --- | --- |
+| Frontend | `http://localhost:3000` |
+| Backend health | `http://localhost:8000/api/v1/health` |
+| Backend docs | `http://localhost:8000/docs` |
+| Backend OpenAPI JSON | `http://localhost:8000/openapi.json` |
+
+## Environment Variables
+
+Current backend environment variables:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `MEDIZINHUB_APP_NAME` | `MedizinHub HMS API` | API display name |
+| `MEDIZINHUB_APP_VERSION` | `0.1.0` | API version |
+| `MEDIZINHUB_ENVIRONMENT` | `local` | Runtime environment |
+| `MEDIZINHUB_API_PREFIX` | `/api/v1` | API route prefix |
+| `MEDIZINHUB_ENABLE_DOCS` | `true` | Enable Swagger/ReDoc |
+| `MEDIZINHUB_DATABASE_URL` | `sqlite:///./medizinhub_hms.db` | Database URL |
+| `MEDIZINHUB_REDIS_URL` | empty | Future Redis URL |
+| `MEDIZINHUB_AUTO_CREATE_TABLES` | `true` | Auto-create SQLModel tables on app startup. Keep `true` for SQLite quick-start; set `false` when relying strictly on Alembic migrations. |
+
+Example:
+
+```bash
+MEDIZINHUB_DATABASE_URL="sqlite:///./local_hms.db" uvicorn app.main:app --reload --port 8000
+```
+
+PostgreSQL example:
+
+```bash
+MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms" uvicorn app.main:app --reload --port 8000
+```
+
+## Alembic Migrations
+
+Run migrations from the `backend` directory:
+
+```bash
+cd backend
+source .venv/bin/activate
+alembic upgrade head
+```
+
+Create a new migration after changing SQLModel models:
+
+```bash
+alembic revision --autogenerate -m "describe change"
+```
+
+Review the generated migration before committing it.
+
+For strict migration testing, run the backend with:
+
+```bash
+export MEDIZINHUB_AUTO_CREATE_TABLES=false
+```
+
+## Common Issues
+
+### Port Already In Use
+
+Frontend:
+
+```bash
+npm run dev -- --port 3001
+```
+
+Backend:
+
+```bash
+uvicorn app.main:app --reload --port 8001
+```
+
+### Python Virtualenv Not Activated
+
+If `pytest`, `ruff`, or `uvicorn` is not found, activate the backend virtualenv again.
+
+macOS/Linux:
+
+```bash
+source backend/.venv/bin/activate
+```
+
+Windows:
+
+```powershell
+.\backend\.venv\Scripts\Activate.ps1
+```
+
+### Delete and Recreate Backend Virtualenv
+
+macOS/Linux:
+
+```bash
+rm -rf backend/.venv
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force backend\.venv
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+```
+
+### Clear Frontend Dependencies
+
+macOS/Linux:
+
+```bash
+rm -rf node_modules package-lock.json
+npm install
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force node_modules
+Remove-Item package-lock.json
+npm install
+```
+
+## Recommended Daily Developer Workflow
+
+1. Pull latest code.
+2. Run `npm install` if frontend dependencies changed.
+3. Run backend dependency install if `backend/requirements*.txt` changed.
+4. Start backend on port `8000`.
+5. Start frontend on port `3000`.
+6. Run tests before pushing changes.
+
+Commands:
+
+```bash
+npm test
+backend/.venv/bin/python -m pytest
+backend/.venv/bin/ruff check backend/app backend/tests
+```

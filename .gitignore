@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+backend/.venv/
+
+# Build outputs
+.next/
+out/
+dist/
+build/
+
+# Test and tool caches
+.pytest_cache/
+.ruff_cache/
+coverage/
+.coverage
+tsconfig.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Local OS and database files
+.DS_Store
+*.db
+*.sqlite
+*.sqlite3
