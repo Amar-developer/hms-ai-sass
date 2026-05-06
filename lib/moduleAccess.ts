@@ -1,4 +1,4 @@
-import {isModuleEnabled} from '@/lib/hmsLogic';
+import {isModuleEnabled} from './hmsLogic';
 
 export function canOpenModule(id: string, roleAllowedModules: string[], clinic: any) {
   return (

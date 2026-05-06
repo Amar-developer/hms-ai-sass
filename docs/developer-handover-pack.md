@@ -132,6 +132,7 @@ Docs:
 - `docs/db-design-erd-production-gaps.md`: schema, ERD, and production gaps.
 - `docs/api-permission-matrix.md`: endpoint and RBAC matrix.
 - `docs/developer-setup.md`: OS-specific install/run guide.
+- `docs/module-development-guide.md`: required module structure, tests, permissions, entitlement, audit, and PR checklist.
 
 ## Development Rules
 
