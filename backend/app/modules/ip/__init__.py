@@ -1,0 +1,1 @@
+"""In-patient management module."""

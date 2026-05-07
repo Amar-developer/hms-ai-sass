@@ -66,6 +66,11 @@ PHARMACY_CREATE = "pharmacy.create"
 PHARMACY_READ = "pharmacy.read"
 PHARMACY_EDIT = "pharmacy.edit"
 PHARMACY_DELETE = "pharmacy.delete"
+IP_MANAGE = "ip.manage"
+IP_CREATE = "ip.create"
+IP_READ = "ip.read"
+IP_EDIT = "ip.edit"
+IP_DELETE = "ip.delete"
 NOTIFICATIONS_MANAGE = "notifications.manage"
 AUDIT_READ = "audit.read"
 REPORTS_READ = "reports.read"
@@ -139,6 +144,11 @@ PERMISSION_CATALOG = [
     PHARMACY_READ,
     PHARMACY_EDIT,
     PHARMACY_DELETE,
+    IP_MANAGE,
+    IP_CREATE,
+    IP_READ,
+    IP_EDIT,
+    IP_DELETE,
     NOTIFICATIONS_MANAGE,
     AUDIT_READ,
     REPORTS_READ,

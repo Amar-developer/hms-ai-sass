@@ -51,8 +51,9 @@ class InvoiceRead(BaseModel):
     tenant_id: str
     branch_id: str
     patient_id: str
-    appointment_id: str
+    appointment_id: str | None
     consultation_id: str | None
+    ip_admission_id: str | None = None
     invoice_number: str
     status: InvoiceStatus
     subtotal_amount: int

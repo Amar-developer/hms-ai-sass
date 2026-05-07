@@ -8,6 +8,7 @@ from app.modules.consultations.models import ClinicalTemplate, Consultation, Con
 from app.modules.consultations.models import ConsultationComplaint, ConsultationDiagnosis, ConsultationMedicine
 from app.modules.consultations.models import ConsultationReferral, ConsultationVital
 from app.modules.identity.models import AuthSession, Permission, Role, RolePermission, User, UserRole
+from app.modules.ip.models import IPAdmission, IPCharge, IPConsentForm, IPConsultation, IPDischargeSummary, IPTreatment
 from app.modules.lab.models import LabOrder, LabOrderItem, LabResult, LabResultTemplate, LabSample
 from app.modules.lab.models import LabTestCatalog, LabTestPackage, LabTestPackageItem
 from app.modules.notifications.models import NotificationEvent
@@ -43,6 +44,12 @@ __all__ = [
     "CreditNote",
     "Invoice",
     "InvoiceItem",
+    "IPAdmission",
+    "IPCharge",
+    "IPConsentForm",
+    "IPConsultation",
+    "IPDischargeSummary",
+    "IPTreatment",
     "LabOrder",
     "LabOrderItem",
     "LabResult",

@@ -83,12 +83,13 @@ export function useAppController() {
       setDepartmentId(departmentRows[0].id);
     }
 
-    const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows] = await Promise.all([
+    const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows] = await Promise.all([
       apiFetchIfAllowed<any[]>('/patients', session, 'patients.read', []),
       apiFetchIfAllowed<any[]>('/appointments', session, 'appointments.manage', []),
       apiFetchIfAllowed<any[]>('/queue?include_completed=true', session, 'queue.manage', []),
       apiFetchIfAllowed<any[]>('/consultations', session, 'consultations.read', []),
       apiFetchIfAllowed<any[]>('/billing/invoices', session, 'billing.manage', []),
+      apiFetchIfAllowed<any[]>('/ip/admissions', session, ['ip.manage', 'ip.read'], []),
     ]);
 
     const mappedPatients = patientRows.map(mapPatient);
@@ -99,6 +100,7 @@ export function useAppController() {
 
     setPatients(mappedPatients);
     setAppointments(mappedAppointments);
+    setIpAdmissions(ipRows);
     setLiveInvoices(invoiceRows);
     setLiveSummary({
       patients: patientRows.length,
@@ -301,6 +303,7 @@ export function useAppController() {
   if (navHasAnyPermission('patients.read', 'patients.write', 'patients.create', 'patients.edit')) permissionModules.add('patients');
   if (navHasAnyPermission('practitioners.manage', 'practitioners.read', 'practitioners.create', 'practitioners.edit')) permissionModules.add('practitioners');
   if (navHasAnyPermission('scheduling.manage', 'scheduling.read', 'scheduling.create', 'scheduling.edit', 'scheduling.delete')) permissionModules.add('scheduling');
+  if (navHasAnyPermission('ip.manage', 'ip.read', 'ip.create', 'ip.edit', 'ip.delete')) permissionModules.add('ip');
   if (navHasAnyPermission('consultations.read', 'consultations.write', 'consultations.sign')) {
     permissionModules.add('doctor');
     permissionModules.add('consultation');
