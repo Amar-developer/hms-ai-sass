@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from app.api.router import api_router
 from app.core.config import get_settings
-from app.core.database import engine
+from app.core.database import engine, get_session
 from app.core.middleware import TenantContextMiddleware
 from app.modules.subscriptions.service import ensure_default_plans
 
@@ -14,8 +14,20 @@ from app.modules.subscriptions.service import ensure_default_plans
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     #Keep business initialization only
-    with Session(engine) as session:
-        ensure_default_plans(session)
+    override = app.dependency_overrides.get(get_session)
+    if override:
+        session_generator = override()
+        session = next(session_generator)
+        try:
+            ensure_default_plans(session)
+        finally:
+            try:
+                next(session_generator)
+            except StopIteration:
+                pass
+    else:
+        with Session(engine) as session:
+            ensure_default_plans(session)
 
     yield
 
