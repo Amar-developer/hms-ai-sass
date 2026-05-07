@@ -71,6 +71,11 @@ IP_CREATE = "ip.create"
 IP_READ = "ip.read"
 IP_EDIT = "ip.edit"
 IP_DELETE = "ip.delete"
+PHYSIOTHERAPY_MANAGE = "physiotherapy.manage"
+PHYSIOTHERAPY_CREATE = "physiotherapy.create"
+PHYSIOTHERAPY_READ = "physiotherapy.read"
+PHYSIOTHERAPY_EDIT = "physiotherapy.edit"
+PHYSIOTHERAPY_DELETE = "physiotherapy.delete"
 NOTIFICATIONS_MANAGE = "notifications.manage"
 AUDIT_READ = "audit.read"
 REPORTS_READ = "reports.read"
@@ -149,6 +154,11 @@ PERMISSION_CATALOG = [
     IP_READ,
     IP_EDIT,
     IP_DELETE,
+    PHYSIOTHERAPY_MANAGE,
+    PHYSIOTHERAPY_CREATE,
+    PHYSIOTHERAPY_READ,
+    PHYSIOTHERAPY_EDIT,
+    PHYSIOTHERAPY_DELETE,
     NOTIFICATIONS_MANAGE,
     AUDIT_READ,
     REPORTS_READ,

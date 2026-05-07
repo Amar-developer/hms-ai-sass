@@ -1,0 +1,72 @@
+from datetime import date, datetime
+
+from sqlmodel import Field, SQLModel
+
+from app.modules.tenants.models import new_id, now_utc
+
+
+class PhysiotherapyEquipment(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("physioeq"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
+    name: str = Field(index=True, min_length=2, max_length=160)
+    modality_type: str = Field(index=True, max_length=80)
+    manufacturer: str | None = Field(default=None, max_length=120)
+    model_number: str | None = Field(default=None, max_length=120)
+    serial_number: str | None = Field(default=None, max_length=120)
+    is_portable: bool = Field(default=False, index=True)
+    is_active: bool = Field(default=True, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+    updated_at: datetime = Field(default_factory=now_utc)
+
+
+class PhysiotherapyCase(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("physiocase"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    patient_id: str = Field(index=True, foreign_key="patient.id")
+    source_appointment_id: str | None = Field(default=None, index=True, foreign_key="appointment.id")
+    ip_admission_id: str | None = Field(default=None, index=True, foreign_key="ipadmission.id")
+    physiotherapist_id: str | None = Field(default=None, index=True)
+    department_id: str | None = Field(default=None, index=True, foreign_key="department.id")
+    care_context: str = Field(default="op", index=True, max_length=20)
+    case_number: str = Field(index=True, min_length=3, max_length=60)
+    assessment_date: date = Field(default_factory=date.today, index=True)
+    body_region: str | None = Field(default=None, index=True, max_length=120)
+    condition: str | None = Field(default=None, max_length=500)
+    pain_score: int | None = Field(default=None, ge=0, le=10)
+    range_of_motion: str | None = Field(default=None, max_length=500)
+    muscle_strength: str | None = Field(default=None, max_length=500)
+    treatment_goal: str | None = Field(default=None, max_length=1000)
+    planned_sessions: int = Field(default=1, ge=1)
+    frequency: str | None = Field(default=None, max_length=120)
+    status: str = Field(default="active", index=True, max_length=40)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+    updated_at: datetime = Field(default_factory=now_utc)
+
+
+class PhysiotherapySession(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("physiosess"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    case_id: str = Field(index=True, foreign_key="physiotherapycase.id")
+    session_date: date = Field(default_factory=date.today, index=True)
+    session_number: int = Field(default=1, ge=1)
+    equipment_id: str | None = Field(default=None, index=True, foreign_key="physiotherapyequipment.id")
+    modality_type: str = Field(index=True, max_length=80)
+    treatment_area: str | None = Field(default=None, max_length=160)
+    intensity: str | None = Field(default=None, max_length=120)
+    duration_minutes: int = Field(default=15, ge=1)
+    pre_pain_score: int | None = Field(default=None, ge=0, le=10)
+    post_pain_score: int | None = Field(default=None, ge=0, le=10)
+    exercises: str | None = Field(default=None, max_length=2000)
+    home_program: str | None = Field(default=None, max_length=2000)
+    notes: str | None = Field(default=None, max_length=2000)
+    charge_amount: int = Field(default=0, ge=0)
+    status: str = Field(default="completed", index=True, max_length=40)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)

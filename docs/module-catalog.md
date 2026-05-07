@@ -16,7 +16,7 @@
 | Lab & Diagnostics | Test workflow | Orders, sample collection, results, reports, doctor visibility |
 | Pharmacy | Medicine workflow | Prescription issue, medicine inventory, substitutes, stock alerts |
 | IP Admission | Hospital inpatient flow | Admission, bed, ward, treatment, discharge, package billing |
-| Physiotherapy | Session-based care | Treatment plans, session packages, progress tracking |
+| Physiotherapy | OP/IP rehabilitation | Assessment, pain score, electrotherapy equipment, IFT, ultrasound, TENS, laser, SWD, CPM, muscle stimulation, rehab exercises, home program, session packages, progress tracking, and billing |
 | Reports & Analytics | Business intelligence | Revenue, doctor utilization, branch performance, patient volume |
 | Staff & Roles | Access control | Roles, permissions, shifts, staff audit |
 | Subscription | SaaS billing | Plans, patient limits, module limits, add-ons, invoices |

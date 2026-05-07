@@ -12,6 +12,7 @@ from app.api.v1.modules import router as modules_router
 from app.api.v1.notifications import router as notifications_router
 from app.api.v1.patients import router as patients_router
 from app.api.v1.pharmacy import router as pharmacy_router
+from app.api.v1.physiotherapy import router as physiotherapy_router
 from app.api.v1.practitioners import router as practitioners_router
 from app.api.v1.queue import router as queue_router
 from app.api.v1.settings import router as settings_router
@@ -34,5 +35,6 @@ api_router.include_router(billing_router, tags=["billing"])
 api_router.include_router(ip_router, tags=["ip"])
 api_router.include_router(lab_router, tags=["lab"])
 api_router.include_router(pharmacy_router, tags=["pharmacy"])
+api_router.include_router(physiotherapy_router, tags=["physiotherapy"])
 api_router.include_router(settings_router, tags=["settings"])
 api_router.include_router(notifications_router, tags=["notifications"])

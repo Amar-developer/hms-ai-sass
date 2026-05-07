@@ -289,6 +289,10 @@ Role management UI requirements:
 10. Patient receives secure links for prescriptions, reports, invoices, and follow-up reminders.
 11. Owner dashboard tracks revenue, doctor utilization, no-shows, repeat visits, settlements, and branch performance.
 
+### Physiotherapy Module Scope
+
+Physiotherapy must work as a separate plug-and-play module for OP and IP care. OP physiotherapy supports registration-linked assessment, pain score, body-region mapping, treatment plan, IFT, ultrasound, TENS, laser, shortwave diathermy, muscle stimulation, exercise therapy, home program, follow-up sessions, and billing. IP physiotherapy supports bedside assessment, post-surgical rehabilitation, CPM, gait training, tilt table, EMS/muscle stimulation, daily reviews, progress tracking, discharge advice, and IP-linked billing. Equipment usage must be tracked by branch, modality, portability, session, duration, intensity, therapist, and patient outcome.
+
 ## Differentiators
 
 ### Patient 360 Clinical Brain

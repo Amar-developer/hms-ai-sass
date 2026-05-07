@@ -264,6 +264,7 @@ def ensure_plan_and_subscription(session: Session, tenant: Tenant) -> tuple[Subs
         "voice",
         "lab",
         "pharmacy",
+        "physiotherapy",
         "ai",
         "ip",
     ]

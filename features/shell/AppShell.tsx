@@ -13,6 +13,7 @@ import {IPAdmission} from '@/features/ip/IPAdmission';
 import {Lab} from '@/features/lab/Lab';
 import {Patient} from '@/features/patients/Patient';
 import {Pharmacy} from '@/features/pharmacy/Pharmacy';
+import {Physiotherapy} from '@/features/physiotherapy/Physiotherapy';
 import {SuperAdminDashboard,superAdminSections} from '@/features/platform/SuperAdminDashboard';
 import {Doctors} from '@/features/doctors/Doctors';
 import {TokenQueue} from '@/features/queue/TokenQueue';
@@ -83,6 +84,8 @@ export function AppShell(props:any) {
         return <Lab {...ctx} />;
       case 'pharmacy':
         return <Pharmacy {...ctx} />;
+      case 'physiotherapy':
+        return <Physiotherapy {...ctx} />;
       case 'billing':
         return <Billing {...ctx} />;
       case 'admin':

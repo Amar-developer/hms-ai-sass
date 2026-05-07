@@ -310,6 +310,7 @@ export function useAppController() {
   }
   if (navHasAnyPermission('lab.manage', 'lab.read', 'lab.create', 'lab.edit')) permissionModules.add('lab');
   if (navHasAnyPermission('pharmacy.manage', 'pharmacy.read', 'pharmacy.create', 'pharmacy.edit')) permissionModules.add('pharmacy');
+  if (navHasAnyPermission('physiotherapy.manage', 'physiotherapy.read', 'physiotherapy.create', 'physiotherapy.edit', 'physiotherapy.delete')) permissionModules.add('physiotherapy');
   if (navHasAnyPermission('billing.manage', 'invoices.read', 'invoices.create', 'payments.manage')) permissionModules.add('billing');
   if (navHasAnyPermission('reports.read', 'audit.read')) permissionModules.add('reports');
   const enabled = (id: string) => canOpenModule(id, Array.from(new Set([...allowedForRole, ...Array.from(permissionModules)])), clinic);

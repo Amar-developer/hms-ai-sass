@@ -54,6 +54,7 @@ class InvoiceRead(BaseModel):
     appointment_id: str | None
     consultation_id: str | None
     ip_admission_id: str | None = None
+    physiotherapy_case_id: str | None = None
     invoice_number: str
     status: InvoiceStatus
     subtotal_amount: int

@@ -88,6 +88,7 @@ class Invoice(SQLModel, table=True):
     appointment_id: str | None = Field(default=None, index=True, foreign_key="appointment.id")
     consultation_id: str | None = Field(default=None, index=True, foreign_key="consultation.id")
     ip_admission_id: str | None = Field(default=None, index=True, foreign_key="ipadmission.id")
+    physiotherapy_case_id: str | None = Field(default=None, index=True, foreign_key="physiotherapycase.id")
     invoice_number: str = Field(index=True, min_length=3, max_length=60)
     status: InvoiceStatus = Field(default=InvoiceStatus.ISSUED, index=True)
     subtotal_amount: int = Field(default=0, ge=0)

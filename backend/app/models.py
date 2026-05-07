@@ -16,6 +16,7 @@ from app.modules.patients.models import Patient, PatientAlert, PatientContact
 from app.modules.pharmacy.models import MedicineBatch, MedicineCatalog, PharmacyIssue, PharmacyIssueItem
 from app.modules.pharmacy.models import PharmacyPurchase, PharmacyPurchaseItem, PharmacyStockLedger, PharmacySupplier
 from app.modules.pharmacy.models import PharmacyReturn, PharmacyReturnItem
+from app.modules.physiotherapy.models import PhysiotherapyCase, PhysiotherapyEquipment, PhysiotherapySession
 from app.modules.practitioners.models import Practitioner, PractitionerBranch, PractitionerDepartment, PractitionerLeave
 from app.modules.practitioners.models import PractitionerRoomAssignment, PractitionerSchedule
 from app.modules.queue.models import QueueEntry, QueueEvent
@@ -75,6 +76,9 @@ __all__ = [
     "PharmacyReturnItem",
     "PharmacyStockLedger",
     "PharmacySupplier",
+    "PhysiotherapyCase",
+    "PhysiotherapyEquipment",
+    "PhysiotherapySession",
     "Practitioner",
     "PractitionerBranch",
     "PractitionerDepartment",
