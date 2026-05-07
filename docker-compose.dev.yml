@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: medizinhub-postgres
+    environment:
+      POSTGRES_DB: medizinhub_hms
+      POSTGRES_USER: medizinhub
+      POSTGRES_PASSWORD: medizinhub_dev
+    ports:
+      - "5433:5432"
+    volumes:
+      - medizinhub_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medizinhub -d medizinhub_hms"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: medizinhub-redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev          
+    container_name: medizinhub-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app                         
+      - /app/node_modules                
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8080
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev          
+    container_name: medizinhub-backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend:/app                   
+    depends_on:
+      postgres:
+        condition: service_healthy       
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app
+    command: >
+      bash -c "
+      alembic -c alembic/alembic.ini upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
+      "
+
+volumes:
+  medizinhub_postgres_data:

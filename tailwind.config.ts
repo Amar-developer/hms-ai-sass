@@ -1,4 +1,4 @@
-import type {Config} from 'tailwindcss';
+import type { Config } from 'tailwindcss';
 
 const config: Config = {
   content: [
@@ -7,7 +7,13 @@ const config: Config = {
     './features/**/*.{ts,tsx}',
     './lib/**/*.{ts,tsx}',
   ],
-  theme: {extend: {}},
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['var(--font-poppins)'],
+      },
+    },
+  },
   plugins: [],
 };
 

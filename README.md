@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# medizinhub-hms
-=======
 # MedizinHub HMS Complete v6 - Doctor Revenue & Consultation Billing
 
 Runnable NextJS + Tailwind frontend prototype.
@@ -61,4 +58,37 @@ uvicorn app.main:app --reload --port 8000
 - Token queue normal/emergency
 - Doctor dashboard
 - Lab, pharmacy/prescription, billing, subscriptions and reports
->>>>>>> fc210ad (Initial MedizinHub HMS project)
+
+
+
+# FOR DEVELOPMENT
+# First time or after requirements.txt / package.json changes
+docker compose -f docker-compose.dev.yml up --build
+
+# Normal start (after first build)
+docker compose -f docker-compose.dev.yml up
+
+# Stop everything
+docker compose -f docker-compose.dev.yml down
+
+# FOR PRODUCTION
+# 1. Build all images fresh 
+docker compose build
+
+# 2. Start everything in background (-d = detached)
+docker compose up -d
+
+# 3. Check all containers are running
+docker compose ps
+
+# 4. Watch logs (all services)
+docker compose logs -f
+
+# 5. Watch logs for one service only
+docker compose logs -f backend
+
+# 6. Stop everything (keeps data volumes)
+docker compose down
+
+# 7. Stop and DELETE all data volumes (careful!)
+docker compose down -v

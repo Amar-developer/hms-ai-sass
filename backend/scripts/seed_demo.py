@@ -5,8 +5,8 @@ from datetime import date, datetime, time, timezone
 
 from sqlalchemy.exc import ProgrammingError
 from sqlmodel import Session, select
+from app.core.database import engine
 
-from app.core.database import engine, init_db
 from app.modules.appointments.models import Appointment, AppointmentStatus, AppointmentType
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import DoctorFeeRule, FeeShareType, Invoice, PaymentMethod
@@ -1503,7 +1503,6 @@ def seed_demo_data(session: Session) -> dict[str, str | int]:
 
 
 def main() -> None:
-    init_db()
     try:
         with Session(engine) as session:
             summary = seed_demo_data(session)

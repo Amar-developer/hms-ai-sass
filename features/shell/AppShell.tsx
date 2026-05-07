@@ -338,7 +338,7 @@ function BrandBlock({compact=false}:{compact?:boolean}) {
       </div>
       <div className="min-w-0">
         <h1 className={`${compact ? 'text-base' : 'text-sm'} font-bold`}>MedizinHub HMS</h1>
-        <p className="truncate text-xs text-slate-500">Healthcare SaaS Workspace</p>
+        <p className="truncate text-sm text-slate-500">Healthcare SaaS Workspace</p>
       </div>
     </div>
   );
