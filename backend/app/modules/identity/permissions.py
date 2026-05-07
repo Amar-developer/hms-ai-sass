@@ -1,6 +1,10 @@
 PLATFORM_TENANTS_MANAGE = "platform.tenants.manage"
 PLATFORM_SUBSCRIPTIONS_MANAGE = "platform.subscriptions.manage"
 IDENTITY_USERS_MANAGE = "identity.users.manage"
+IDENTITY_USERS_CREATE = "identity.users.create"
+IDENTITY_USERS_READ = "identity.users.read"
+IDENTITY_USERS_EDIT = "identity.users.edit"
+IDENTITY_USERS_DELETE = "identity.users.delete"
 IDENTITY_ROLES_MANAGE = "identity.roles.manage"
 IDENTITY_ROLES_CREATE = "identity.roles.create"
 IDENTITY_ROLES_READ = "identity.roles.read"
@@ -11,7 +15,26 @@ SETTINGS_CREATE = "settings.create"
 SETTINGS_READ = "settings.read"
 SETTINGS_EDIT = "settings.edit"
 SETTINGS_DELETE = "settings.delete"
+DEPARTMENTS_MANAGE = "departments.manage"
+DEPARTMENTS_CREATE = "departments.create"
+DEPARTMENTS_READ = "departments.read"
+DEPARTMENTS_EDIT = "departments.edit"
+DEPARTMENTS_DELETE = "departments.delete"
+BRANCHES_MANAGE = "branches.manage"
+BRANCHES_CREATE = "branches.create"
+BRANCHES_READ = "branches.read"
+BRANCHES_EDIT = "branches.edit"
+BRANCHES_DELETE = "branches.delete"
 PRACTITIONERS_MANAGE = "practitioners.manage"
+PRACTITIONERS_CREATE = "practitioners.create"
+PRACTITIONERS_READ = "practitioners.read"
+PRACTITIONERS_EDIT = "practitioners.edit"
+PRACTITIONERS_DELETE = "practitioners.delete"
+SCHEDULING_MANAGE = "scheduling.manage"
+SCHEDULING_CREATE = "scheduling.create"
+SCHEDULING_READ = "scheduling.read"
+SCHEDULING_EDIT = "scheduling.edit"
+SCHEDULING_DELETE = "scheduling.delete"
 PATIENTS_READ = "patients.read"
 PATIENTS_WRITE = "patients.write"
 PATIENTS_CREATE = "patients.create"
@@ -51,6 +74,10 @@ PERMISSION_CATALOG = [
     PLATFORM_TENANTS_MANAGE,
     PLATFORM_SUBSCRIPTIONS_MANAGE,
     IDENTITY_USERS_MANAGE,
+    IDENTITY_USERS_CREATE,
+    IDENTITY_USERS_READ,
+    IDENTITY_USERS_EDIT,
+    IDENTITY_USERS_DELETE,
     IDENTITY_ROLES_MANAGE,
     IDENTITY_ROLES_CREATE,
     IDENTITY_ROLES_READ,
@@ -61,7 +88,26 @@ PERMISSION_CATALOG = [
     SETTINGS_READ,
     SETTINGS_EDIT,
     SETTINGS_DELETE,
+    DEPARTMENTS_MANAGE,
+    DEPARTMENTS_CREATE,
+    DEPARTMENTS_READ,
+    DEPARTMENTS_EDIT,
+    DEPARTMENTS_DELETE,
+    BRANCHES_MANAGE,
+    BRANCHES_CREATE,
+    BRANCHES_READ,
+    BRANCHES_EDIT,
+    BRANCHES_DELETE,
     PRACTITIONERS_MANAGE,
+    PRACTITIONERS_CREATE,
+    PRACTITIONERS_READ,
+    PRACTITIONERS_EDIT,
+    PRACTITIONERS_DELETE,
+    SCHEDULING_MANAGE,
+    SCHEDULING_CREATE,
+    SCHEDULING_READ,
+    SCHEDULING_EDIT,
+    SCHEDULING_DELETE,
     PATIENTS_READ,
     PATIENTS_WRITE,
     PATIENTS_CREATE,

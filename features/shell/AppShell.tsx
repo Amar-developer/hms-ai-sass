@@ -5,7 +5,7 @@ import {Bell,ChevronDown,HeartPulse,KeyRound,LogOut,Settings} from 'lucide-react
 import {Badge,Card,Field,Select} from '@/components/ui';
 import {ChangePassword} from '@/features/auth/ChangePassword';
 import {AppointmentCalendarBooking} from '@/features/appointments/AppointmentCalendarBooking';
-import {TenantAdmin,tenantAdminSections} from '@/features/admin/TenantAdmin';
+import {TenantAdmin,canUseTenantAdminSection,tenantAdminSections} from '@/features/admin/TenantAdmin';
 import {Billing} from '@/features/billing/Billing';
 import {Dashboard} from '@/features/dashboard/Dashboard';
 import {DoctorConsultation} from '@/features/doctor/DoctorConsultation';
@@ -14,7 +14,7 @@ import {Lab} from '@/features/lab/Lab';
 import {Patient} from '@/features/patients/Patient';
 import {Pharmacy} from '@/features/pharmacy/Pharmacy';
 import {SuperAdminDashboard,superAdminSections} from '@/features/platform/SuperAdminDashboard';
-import {Practitioners} from '@/features/practitioners/Practitioners';
+import {Doctors} from '@/features/doctors/Doctors';
 import {TokenQueue} from '@/features/queue/TokenQueue';
 import {Reports} from '@/features/reports/Reports';
 import {Scheduling} from '@/features/scheduling/Scheduling';
@@ -55,6 +55,7 @@ export function AppShell(props:any) {
   const [superAdminSettingsOpen,setSuperAdminSettingsOpen]=useState(true);
   const [tenantAdminSection,setTenantAdminSection]=useState('users');
   const [tenantAdminSettingsOpen,setTenantAdminSettingsOpen]=useState(true);
+  const visibleTenantAdminSections=tenantAdminSections.filter(([sectionId]:any)=>canUseTenantAdminSection(sectionId,apiSession?.user));
 
   function renderPage() {
     switch (activePage) {
@@ -69,13 +70,15 @@ export function AppShell(props:any) {
       case 'patients':
         return <Patient {...ctx} />;
       case 'practitioners':
-        return <Practitioners {...ctx} />;
+        return <Doctors {...ctx} />;
       case 'scheduling':
         return <Scheduling {...ctx} />;
       case 'ip':
         return <IPAdmission {...ctx} />;
       case 'doctor':
-        return <DoctorConsultation {...ctx} />;
+        return <DoctorConsultation {...ctx} view="dashboard" setActive={setActive} />;
+      case 'consultation':
+        return <DoctorConsultation {...ctx} view="workspace" setActive={setActive} />;
       case 'lab':
         return <Lab {...ctx} />;
       case 'pharmacy':
@@ -85,7 +88,7 @@ export function AppShell(props:any) {
       case 'admin':
         return <TenantAdmin {...ctx} section={tenantAdminSection} setSection={setTenantAdminSection} />;
       case 'subscriptions':
-        return <Subscriptions />;
+        return <Subscriptions {...ctx} />;
       case 'reports':
         return <Reports {...ctx} />;
       default:
@@ -173,7 +176,7 @@ export function AppShell(props:any) {
                           <Settings size={13}/>
                           Settings
                         </div>
-                        {tenantAdminSections.map(([sectionId,sectionLabel,SectionIcon]:any)=>(
+                        {visibleTenantAdminSections.map(([sectionId,sectionLabel,SectionIcon]:any)=>(
                           <button
                             key={sectionId}
                             type="button"

@@ -58,6 +58,328 @@ def test_create_practitioner_with_multiple_departments_and_filter(client):
     assert [row["id"] for row in filtered.json()] == [created.json()["id"]]
 
 
+def test_appointment_create_permission_can_read_doctors_and_calendar(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Appointment Visible",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
+    ).json()
+    client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": date(2026, 5, 4).weekday(),
+            "start_time": "09:00:00",
+            "end_time": "10:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Appointment Creator",
+            "key": "appointment_creator",
+            "permission_keys": ["appointments.create"],
+        },
+    ).json()
+    user = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Staff Nurse Booking",
+            "email": "staff.nurse.booking@test.local",
+            "password": "NurseBook123",
+            "user_type": "nurse",
+            "role_keys": [role["key"]],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": user["email"], "password": "NurseBook123", "tenant_id": tenant["id"]},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+
+    doctors = client.get(
+        f"/api/v1/practitioners?branch_id={branch['id']}&department_id=general",
+        headers=headers,
+    )
+    calendar = client.get(
+        f"/api/v1/practitioners/{practitioner['id']}/calendar"
+        f"?branch_id={branch['id']}&department_id=general&start_date=2026-05-04&end_date=2026-05-04",
+        headers=headers,
+    )
+
+    assert doctors.status_code == 200
+    assert [row["id"] for row in doctors.json()] == [practitioner["id"]]
+    assert calendar.status_code == 200
+    assert calendar.json()["days"][0]["slots"]
+
+
+def test_appointment_creator_can_read_doctor_when_department_code_is_sent(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    department = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "General Medicine", "code": "GENERAL", "branch_id": branch["id"]},
+    ).json()
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Department Code",
+            "branch_ids": [branch["id"]],
+            "department_ids": [department["id"]],
+        },
+    ).json()
+    client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "department_id": department["id"],
+            "weekday": date(2026, 5, 4).weekday(),
+            "start_time": "09:00:00",
+            "end_time": "10:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Staff Nurse Code Booking",
+            "key": "staff_nurse_code_booking",
+            "permission_keys": ["appointments.create"],
+        },
+    ).json()
+    user = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Staff Nurse Code",
+            "email": "staff.nurse.code@test.local",
+            "password": "NurseCode123",
+            "user_type": "nurse",
+            "role_keys": [role["key"]],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": user["email"], "password": "NurseCode123", "tenant_id": tenant["id"]},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+
+    doctors = client.get(
+        f"/api/v1/practitioners?branch_id={branch['id']}&department_id=GENERAL",
+        headers=headers,
+    )
+    calendar = client.get(
+        f"/api/v1/practitioners/{practitioner['id']}/calendar"
+        f"?branch_id={branch['id']}&department_id=GENERAL&start_date=2026-05-04&end_date=2026-05-04",
+        headers=headers,
+    )
+
+    assert doctors.status_code == 200
+    assert [row["id"] for row in doctors.json()] == [practitioner["id"]]
+    assert calendar.status_code == 200
+    assert calendar.json()["department_id"] == department["id"]
+    assert calendar.json()["days"][0]["slots"]
+
+
+def test_appointment_create_permission_can_read_tenant_reference_data_for_booking(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    for name, code in [
+        ("General Medicine", "general"),
+        ("Pediatrics", "ped"),
+        ("Diabetology", "diab"),
+    ]:
+        client.post(
+            f"/api/v1/tenants/{tenant['id']}/departments",
+            headers={"X-Tenant-ID": tenant["id"]},
+            json={"name": name, "code": code, "branch_id": branch["id"]},
+        )
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Staff Nurse Booking References",
+            "key": "staff_nurse_booking_refs",
+            "permission_keys": ["appointments.create"],
+        },
+    ).json()
+    user = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Staff Nurse References",
+            "email": "staff.nurse.references@test.local",
+            "password": "NurseRefs123",
+            "user_type": "nurse",
+            "role_keys": [role["key"]],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": user["email"], "password": "NurseRefs123", "tenant_id": tenant["id"]},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+
+    branches = client.get(f"/api/v1/tenants/{tenant['id']}/branches", headers=headers)
+    departments = client.get(f"/api/v1/tenants/{tenant['id']}/departments", headers=headers)
+    cross_tenant = client.get("/api/v1/tenants/other-tenant/branches", headers=headers)
+
+    assert branches.status_code == 200
+    assert branch["id"] in [row["id"] for row in branches.json()]
+    assert departments.status_code == 200
+    assert {"general", "ped", "diab"}.issubset({row["code"] for row in departments.json()})
+    assert cross_tenant.status_code == 403
+
+
+def test_scheduling_crud_permissions_can_manage_doctor_time_slots(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Schedule Permission",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
+    ).json()
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Schedule Manager",
+            "key": "schedule_manager",
+            "permission_keys": [
+                "scheduling.create",
+                "scheduling.read",
+                "scheduling.edit",
+                "scheduling.delete",
+            ],
+        },
+    ).json()
+    user = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Schedule Staff",
+            "email": "schedule.staff@test.local",
+            "password": "Schedule123",
+            "user_type": "staff",
+            "role_keys": [role["key"]],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": user["email"], "password": "Schedule123", "tenant_id": tenant["id"]},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+
+    doctors = client.get("/api/v1/practitioners", headers=headers)
+    created = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": 1,
+            "start_time": "09:00:00",
+            "end_time": "11:00:00",
+            "slot_minutes": 10,
+        },
+    )
+    listed = client.get("/api/v1/practitioners/schedules", headers=headers)
+    updated = client.patch(
+        f"/api/v1/practitioners/schedules/{created.json()['id']}",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": 1,
+            "start_time": "10:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+    deleted = client.delete(f"/api/v1/practitioners/schedules/{created.json()['id']}", headers=headers)
+
+    assert doctors.status_code == 200
+    assert doctors.json()[0]["id"] == practitioner["id"]
+    assert created.status_code == 201
+    assert listed.status_code == 200
+    assert listed.json()[0]["id"] == created.json()["id"]
+    assert updated.status_code == 200
+    assert str(updated.json()["start_time"]).startswith("10:00")
+    assert deleted.status_code == 200
+
+
+def test_scheduling_read_permission_cannot_create_doctor_time_slots(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Schedule Reader",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
+    ).json()
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Schedule Reader",
+            "key": "schedule_reader",
+            "permission_keys": ["scheduling.read"],
+        },
+    ).json()
+    user = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Schedule Read Only",
+            "email": "schedule.readonly@test.local",
+            "password": "Schedule123",
+            "user_type": "staff",
+            "role_keys": [role["key"]],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": user["email"], "password": "Schedule123", "tenant_id": tenant["id"]},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+
+    listed_doctors = client.get("/api/v1/practitioners", headers=headers)
+    listed_schedules = client.get("/api/v1/practitioners/schedules", headers=headers)
+    created = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers=headers,
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": 1,
+            "start_time": "09:00:00",
+            "end_time": "11:00:00",
+            "slot_minutes": 10,
+        },
+    )
+
+    assert listed_doctors.status_code == 200
+    assert listed_schedules.status_code == 200
+    assert created.status_code == 403
+
+
 def test_update_and_delete_practitioner_management(client):
     tenant, branch, other_branch, _patient = setup_tenant_branch_departments_patient(client)
     practitioner = client.post(

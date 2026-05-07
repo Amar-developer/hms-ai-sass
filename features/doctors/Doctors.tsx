@@ -1,12 +1,11 @@
 'use client';
 
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useState} from 'react';
 import {Plus} from 'lucide-react';
 import {Badge,Button,Card,Field,Input,Select} from '@/components/ui';
 import {apiFetch} from '@/lib/api';
-import {practitioners as mockPractitioners} from '@/lib/mockData';
 
-const practitionerTypes = [
+const doctorTypes = [
   ['doctor','Doctor'],
   ['physiotherapist','Physiotherapist'],
   ['nurse','Nurse'],
@@ -16,7 +15,7 @@ const practitionerTypes = [
 
 const pageSize = 10;
 
-export function Practitioners({apiSession,clinic}:any){
+export function Doctors({apiSession,clinic}:any){
  const isSuperAdmin=Boolean(apiSession?.user?.is_super_admin);
  const [view,setView]=useState('list');
  const [tenants,setTenants]=useState<any[]>([]);
@@ -55,7 +54,7 @@ export function Practitioners({apiSession,clinic}:any){
     apiFetch('/practitioners',session),
    ]);
    setBranches(branchRows);setDepartments(departmentRows);setUsers(userRows);setRows(practitionerRows);
-  }catch(err:any){setMessage(err.message||'Could not load practitioners.')}finally{setBusy(false)}
+  }catch(err:any){setMessage(err.message||'Could not load doctors.')}finally{setBusy(false)}
  }
 
  useEffect(()=>{if(apiSession){loadTenants()}},[apiSession?.token]);
@@ -66,7 +65,7 @@ export function Practitioners({apiSession,clinic}:any){
   requestAnimationFrame(()=>window.scrollTo({top:0,behavior:'smooth'}));
  }
 
- async function createPractitioner(e:any){
+ async function createDoctor(e:any){
   e.preventDefault();if(!scopedSession)return;
   const form=e.currentTarget;const fd=new FormData(form);
   setBusy(true);setMessage('');
@@ -84,11 +83,11 @@ export function Practitioners({apiSession,clinic}:any){
     actor_user_id:apiSession.user?.id||null,
    })});
    setRows((previous:any[])=>[created,...previous.filter((row:any)=>row.id!==created.id)]);
-   form.reset();open('list');await loadData(tenantId);setMessage(`Practitioner created: ${created.full_name}`);
-  }catch(err:any){setMessage(err.message||'Could not create practitioner.')}finally{setBusy(false)}
+   form.reset();open('list');await loadData(tenantId);setMessage(`Doctor created: ${created.full_name}`);
+  }catch(err:any){setMessage(err.message||'Could not create doctor.')}finally{setBusy(false)}
  }
 
- async function updatePractitioner(e:any){
+ async function updateDoctor(e:any){
   e.preventDefault();if(!scopedSession||!selected)return;
   const fd=new FormData(e.currentTarget);
   setBusy(true);setMessage('');
@@ -106,8 +105,8 @@ export function Practitioners({apiSession,clinic}:any){
     actor_user_id:apiSession.user?.id||null,
    })});
    setRows((previous:any[])=>[updated,...previous.filter((row:any)=>row.id!==updated.id)]);
-   open('list');await loadData(tenantId);setMessage('Practitioner updated.');
-  }catch(err:any){setMessage(err.message||'Could not update practitioner.')}finally{setBusy(false)}
+   open('list');await loadData(tenantId);setMessage('Doctor updated.');
+  }catch(err:any){setMessage(err.message||'Could not update doctor.')}finally{setBusy(false)}
  }
 
  async function deactivate(row:any){
@@ -121,26 +120,24 @@ export function Practitioners({apiSession,clinic}:any){
     actor_user_id:apiSession.user?.id||null,
    })});
    setRows((previous:any[])=>[updated,...previous.filter((item:any)=>item.id!==updated.id)]);
-   setMessage(`Practitioner ${updated.status === 'active' ? 'activated' : 'deactivated'}.`);
+   setMessage(`Doctor ${updated.status === 'active' ? 'activated' : 'deactivated'}.`);
   }catch(err:any){setMessage(err.message||'Could not update status.')}finally{setBusy(false);setConfirm(null)}
  }
 
- async function deletePractitioner(row:any){
+ async function deleteDoctor(row:any){
   if(!scopedSession)return;
   setBusy(true);setMessage('');
   try{
    await apiFetch(`/practitioners/${row.id}`,scopedSession,{method:'DELETE'});
    setRows((previous:any[])=>previous.map((item:any)=>item.id===row.id?{...item,status:'inactive'}:item));
-   setMessage('Practitioner deleted/deactivated.');
-  }catch(err:any){setMessage(err.message||'Could not delete practitioner.')}finally{setBusy(false);setConfirm(null)}
+   setMessage('Doctor deleted/deactivated.');
+  }catch(err:any){setMessage(err.message||'Could not delete doctor.')}finally{setBusy(false);setConfirm(null)}
  }
 
- if(!apiSession){
-  return <Card><h3 className="text-lg font-bold">Doctor / Practitioner Management</h3><p className="text-sm text-slate-500">Backend login is required for practitioner CRUD. Mock data is shown for preview only.</p><div className="mt-4 grid gap-3">{mockPractitioners.map((p:any)=><div key={p.id} className="grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-4"><b>{p.name}</b><span>{p.role}</span><span>{p.specialty}</span><span>{p.employeeId}</span></div>)}</div></Card>
- }
+ if(!apiSession)return <Card><h3 className="text-lg font-bold">Doctor Management</h3><p className="mt-2 text-sm text-slate-500">Backend login is required for doctor CRUD.</p></Card>;
 
- if(view==='create')return <PractitionerForm title="Create Doctor / Practitioner" branches={branches} departments={departments} users={users} busy={busy} onSubmit={createPractitioner} back={()=>open('list')}/>;
- if(view==='edit')return <PractitionerForm title="Edit Doctor / Practitioner" practitioner={selected} branches={branches} departments={departments} users={users} busy={busy} onSubmit={updatePractitioner} back={()=>open('list')}/>;
+ if(view==='create')return <DoctorForm title="Create Doctor" branches={branches} departments={departments} users={users} busy={busy} onSubmit={createDoctor} back={()=>open('list')}/>;
+ if(view==='edit')return <DoctorForm title="Edit Doctor" doctor={selected} branches={branches} departments={departments} users={users} busy={busy} onSubmit={updateDoctor} back={()=>open('list')}/>;
 
  const filtered=rows.filter((row:any)=>{
   const text=[row.full_name,row.primary_specialty,row.registration_number,row.mobile,row.email,row.id].join(' ').toLowerCase();
@@ -154,55 +151,55 @@ export function Practitioners({apiSession,clinic}:any){
 
  return <Card>
   <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-   <div><h3 className="text-lg font-bold">Doctor / Practitioner Management</h3><p className="text-sm text-slate-500">Create, update, deactivate, and map practitioners to tenants, branches, and departments.</p></div>
-   <button type="button" onClick={()=>open('create')} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"><Plus size={16}/>Create Practitioner</button>
+   <div><h3 className="text-lg font-bold">Doctor Management</h3><p className="text-sm text-slate-500">Create, update, deactivate, and map doctors to tenants, branches, and departments.</p></div>
+   <button type="button" onClick={()=>open('create')} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"><Plus size={16}/>Create Doctor</button>
   </div>
   {message&&<div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
   <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
    {isSuperAdmin&&<Field label="Tenant"><Select value={tenantId} onChange={(e:any)=>setTenantId(e.target.value)}>{tenants.map((tenant:any)=><option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}</Select></Field>}
    <Field label="Search"><Input value={query} onChange={(e:any)=>{setQuery(e.target.value);setPage(1)}} placeholder="Name, specialty, mobile, email"/></Field>
-   <Field label="Type"><Select value={type} onChange={(e:any)=>{setType(e.target.value);setPage(1)}}><option value="all">All types</option>{practitionerTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field>
+   <Field label="Type"><Select value={type} onChange={(e:any)=>{setType(e.target.value);setPage(1)}}><option value="all">All types</option>{doctorTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field>
    <Field label="Status"><Select value={status} onChange={(e:any)=>{setStatus(e.target.value);setPage(1)}}><option value="all">All status</option><option value="active">Active</option><option value="inactive">Inactive</option></Select></Field>
   </div>
   <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
    <div className="hidden grid-cols-[1.15fr_.85fr_1fr_1fr_.8fr_.8fr_1.1fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid">
-    <span>Practitioner</span><span>Type</span><span>Branches</span><span>Departments</span><span>Contact</span><span>Status</span><span>Actions</span>
+    <span>Doctor</span><span>Type</span><span>Branches</span><span>Departments</span><span>Contact</span><span>Status</span><span>Actions</span>
    </div>
    <div className="divide-y divide-slate-200">
-    {pageRows.length===0&&<Empty text={busy?'Loading practitioners...':'No practitioners match your search.'}/>}
-    {pageRows.map((row:any)=><PractitionerRow key={row.id} row={row} branches={branches} departments={departments} onEdit={()=>open('edit',row.id)} onStatus={()=>setConfirm({kind:'status',row})} onDelete={()=>setConfirm({kind:'delete',row})}/>)}
+    {pageRows.length===0&&<Empty text={busy?'Loading doctors...':'No doctors match your search.'}/>}
+    {pageRows.map((row:any)=><DoctorRow key={row.id} row={row} branches={branches} departments={departments} onEdit={()=>open('edit',row.id)} onStatus={()=>setConfirm({kind:'status',row})} onDelete={()=>setConfirm({kind:'delete',row})}/>)}
    </div>
   </div>
   <Pagination page={safePage} totalPages={totalPages} total={filtered.length} onPage={setPage}/>
-  {confirm&&<ConfirmModal busy={busy} confirm={confirm} onClose={()=>setConfirm(null)} onConfirm={()=>confirm.kind==='delete'?deletePractitioner(confirm.row):deactivate(confirm.row)}/>}
+  {confirm&&<ConfirmModal busy={busy} confirm={confirm} onClose={()=>setConfirm(null)} onConfirm={()=>confirm.kind==='delete'?deleteDoctor(confirm.row):deactivate(confirm.row)}/>}
  </Card>
 }
 
-function PractitionerForm({title,practitioner,branches,departments,users,busy,onSubmit,back}:any){
- const selectedBranches=practitioner?.branch_ids||[];
- const selectedDepartments=practitioner?.department_ids||[];
+function DoctorForm({title,doctor,branches,departments,users,busy,onSubmit,back}:any){
+ const selectedBranches=doctor?.branch_ids||[];
+ const selectedDepartments=doctor?.department_ids||[];
  const doctorUsers=users.filter((user:any)=>['doctor','nurse','lab','staff'].includes(user.user_type)||user.roles?.includes('doctor'));
- return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">{title}</h3><p className="text-sm text-slate-500">{practitioner?.id||'Map practitioner to branch and department availability.'}</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Practitioners</button></div>
+ return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">{title}</h3><p className="text-sm text-slate-500">{doctor?.id||'Map doctor to branch and department availability.'}</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Doctors</button></div>
   <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-   <Field label="Full Name"><Input name="fullName" defaultValue={practitioner?.full_name||''} required placeholder="Dr. Priya Raman"/></Field>
-   <Field label="Practitioner Type"><Select name="practitionerType" defaultValue={practitioner?.practitioner_type||'doctor'}>{practitionerTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field>
-   <Field label="Linked Login User"><Select name="userId" defaultValue={practitioner?.user_id||''}><option value="">No login linked</option>{doctorUsers.map((user:any)=><option key={user.id} value={user.id}>{user.name} - {user.email}</option>)}</Select></Field>
-   <Field label="Primary Specialty"><Input name="primarySpecialty" defaultValue={practitioner?.primary_specialty||''} placeholder="General Medicine"/></Field>
-   <Field label="Registration Number"><Input name="registrationNumber" defaultValue={practitioner?.registration_number||''} placeholder="TNMC12345"/></Field>
-   <Field label="Mobile"><Input name="mobile" defaultValue={practitioner?.mobile||''}/></Field>
-   <Field label="Email"><Input name="email" type="email" defaultValue={practitioner?.email||''}/></Field>
-   {practitioner&&<Field label="Status"><Select name="status" defaultValue={practitioner.status}><option value="active">Active</option><option value="inactive">Inactive</option></Select></Field>}
-   <div className="md:col-span-2 xl:col-span-3"><CheckboxGroup title="Branches" name="branchIds" rows={branches} selected={selectedBranches} empty="Create branches before mapping practitioners."/></div>
-   <div className="md:col-span-2 xl:col-span-3"><CheckboxGroup title="Departments" name="departmentIds" rows={departments} selected={selectedDepartments} empty="Create departments before mapping practitioners."/></div>
-   <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3"><Button disabled={busy}>{busy? 'Saving...' : practitioner ? 'Save Practitioner' : 'Create Practitioner'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div>
+   <Field label="Full Name"><Input name="fullName" defaultValue={doctor?.full_name||''} required placeholder="Dr. Priya Raman"/></Field>
+   <Field label="Doctor Type"><Select name="practitionerType" defaultValue={doctor?.practitioner_type||'doctor'}>{doctorTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field>
+   <Field label="Linked Login User"><Select name="userId" defaultValue={doctor?.user_id||''}><option value="">No login linked</option>{doctorUsers.map((user:any)=><option key={user.id} value={user.id}>{user.name} - {user.email}</option>)}</Select></Field>
+   <Field label="Primary Specialty"><Input name="primarySpecialty" defaultValue={doctor?.primary_specialty||''} placeholder="General Medicine"/></Field>
+   <Field label="Registration Number"><Input name="registrationNumber" defaultValue={doctor?.registration_number||''} placeholder="TNMC12345"/></Field>
+   <Field label="Mobile"><Input name="mobile" defaultValue={doctor?.mobile||''}/></Field>
+   <Field label="Email"><Input name="email" type="email" defaultValue={doctor?.email||''}/></Field>
+   {doctor&&<Field label="Status"><Select name="status" defaultValue={doctor.status}><option value="active">Active</option><option value="inactive">Inactive</option></Select></Field>}
+   <div className="md:col-span-2 xl:col-span-3"><CheckboxGroup title="Branches" name="branchIds" rows={branches} selected={selectedBranches} empty="Create branches before mapping doctors."/></div>
+   <div className="md:col-span-2 xl:col-span-3"><CheckboxGroup title="Departments" name="departmentIds" rows={departments} selected={selectedDepartments} empty="Create departments before mapping doctors."/></div>
+   <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3"><Button disabled={busy}>{busy? 'Saving...' : doctor ? 'Save Doctor' : 'Create Doctor'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div>
   </form>
  </Card>
 }
 
-function PractitionerRow({row,branches,departments,onEdit,onStatus,onDelete}:any){
+function DoctorRow({row,branches,departments,onEdit,onStatus,onDelete}:any){
  const branchNames=(row.branch_ids||[]).map((id:string)=>branches.find((branch:any)=>branch.id===id)?.name||id);
  const departmentNames=(row.department_ids||[]).map((id:string)=>departments.find((department:any)=>department.id===id)?.name||id);
- const typeLabel=practitionerTypes.find(([value])=>value===row.practitioner_type)?.[1]||row.practitioner_type;
+ const typeLabel=doctorTypes.find(([value])=>value===row.practitioner_type)?.[1]||row.practitioner_type;
  return <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.15fr_.85fr_1fr_1fr_.8fr_.8fr_1.1fr] xl:items-center">
   <div><b>{row.full_name}</b><p className="break-all text-xs text-slate-500">{row.registration_number||row.id}</p><p className="text-xs text-slate-500">{row.primary_specialty||'-'}</p></div>
   <span>{typeLabel}</span>
@@ -220,4 +217,4 @@ function CheckboxGroup({title,name,rows,selected,empty}:any){
 
 function Pagination({page,totalPages,total,onPage}:any){return <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm"><span className="text-slate-500">{total} records · Page {page} of {totalPages}</span><div className="flex gap-2"><button type="button" onClick={()=>onPage(Math.max(1,page-1))} disabled={page<=1} className="rounded-xl border px-3 py-2 font-bold disabled:text-slate-300">Previous</button><button type="button" onClick={()=>onPage(Math.min(totalPages,page+1))} disabled={page>=totalPages} className="rounded-xl border px-3 py-2 font-bold disabled:text-slate-300">Next</button></div></div>}
 function Empty({text}:any){return <div className="px-4 py-8 text-center text-sm text-slate-500">{text}</div>}
-function ConfirmModal({confirm,busy,onClose,onConfirm}:any){const isDelete=confirm.kind==='delete';return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-md"><h3 className="text-lg font-bold">{isDelete?'Delete Practitioner':'Change Practitioner Status'}</h3><p className="mt-2 text-sm text-slate-600">{isDelete?'This will deactivate the practitioner so future scheduling cannot use them.':'Please confirm the practitioner status change.'}</p><p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm font-bold">{confirm.row.full_name}</p><div className="mt-5 flex flex-wrap gap-2"><Button onClick={onConfirm} disabled={busy}>{busy?'Working...':'Confirm'}</Button><button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></Card></div>}
+function ConfirmModal({confirm,busy,onClose,onConfirm}:any){const isDelete=confirm.kind==='delete';return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-md"><h3 className="text-lg font-bold">{isDelete?'Delete Doctor':'Change Doctor Status'}</h3><p className="mt-2 text-sm text-slate-600">{isDelete?'This will deactivate the doctor so future scheduling cannot use them.':'Please confirm the doctor status change.'}</p><p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm font-bold">{confirm.row.full_name}</p><div className="mt-5 flex flex-wrap gap-2"><Button onClick={onConfirm} disabled={busy}>{busy?'Working...':'Confirm'}</Button><button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></Card></div>}

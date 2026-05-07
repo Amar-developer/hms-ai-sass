@@ -134,7 +134,7 @@ Critical screens:
 - Appointment listing, book OP appointment, generated slots, patient search/new patient, duplicate appointment warning.
 - Token queue, token display mode, emergency override, requeue/no-show/cancel.
 - Patient management and patient details.
-- Practitioner management and scheduling.
+- Doctor management and scheduling.
 - Doctor consultation, structured prescription, lab referral, signing, addendum.
 - Billing, payment, receipt, refund/credit note.
 - Lab orders/results and pharmacy inventory/dispense.

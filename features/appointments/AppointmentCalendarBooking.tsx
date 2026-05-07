@@ -5,8 +5,7 @@ import {CalendarPlus, Search, X} from 'lucide-react';
 
 import {Badge, Button, Card, Field, Input, Select} from '@/components/ui';
 import {apiFetch, type ApiSession} from '@/lib/api';
-import {practitioners} from '@/lib/mockData';
-import {generatePatientId, generateToken, practitionersByDepartment, searchPatients} from '@/lib/hmsLogic';
+import {generatePatientId, generateToken, searchPatients} from '@/lib/hmsLogic';
 
 type Props = {
   clinic: any;
@@ -29,6 +28,16 @@ const slotGroups = [
   {id: 'morning', label: 'Morning 10 AM - 1 PM', start: '10:00', end: '13:00'},
   {id: 'evening', label: 'Evening 6 PM - 9 PM', start: '18:00', end: '21:00'},
 ] as const;
+
+function formatDisplayTime(value: any) {
+  const raw = String(value || '').slice(0, 5);
+  const [hourText, minuteText = '00'] = raw.split(':');
+  const hour = Number(hourText);
+  if (Number.isNaN(hour)) return raw || '-';
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minuteText.padStart(2, '0')} ${period}`;
+}
 
 export function AppointmentCalendarBooking(props: Props) {
   const {
@@ -105,9 +114,8 @@ export function AppointmentCalendarBooking(props: Props) {
   const safePage = Math.min(page, totalPages);
   const rows = listRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  const mockDoctors = practitionersByDepartment(practitioners, departmentId);
-  const doctors = apiSession ? liveDoctors : mockDoctors;
-  const doctor = doctors.find((item: any) => item.id === doctorId) || doctors[0] || mockDoctors[0];
+  const doctors = liveDoctors;
+  const doctor = doctors.find((item: any) => item.id === doctorId) || doctors[0];
   const patientMatches = apiSession
     ? liveMatches
     : searchPatients(patients, patientSearch).map((patient: any) => ({
@@ -203,24 +211,40 @@ export function AppointmentCalendarBooking(props: Props) {
 
   useEffect(() => {
     let alive = true;
+    async function fetchDoctors(path: string) {
+      try {
+        return await apiFetch(path, apiSession as ApiSession);
+      } catch (err: any) {
+        if (String(err.message || '').includes('403') || String(err.message || '').toLowerCase().includes('permission')) {
+          throw err;
+        }
+        return [];
+      }
+    }
     async function loadDoctors() {
       if (!apiSession) {
-        setDoctorId(mockDoctors[0]?.id || '');
+        setDoctorId('');
         return;
       }
       try {
-        const rows = await apiFetch(
-          `/practitioners?branch_id=${encodeURIComponent(branchId)}&department_id=${encodeURIComponent(departmentId)}`,
-          apiSession,
-        );
+        const exactPath = `/practitioners?branch_id=${encodeURIComponent(branchId)}&department_id=${encodeURIComponent(departmentId)}`;
+        const branchPath = `/practitioners?branch_id=${encodeURIComponent(branchId)}`;
+        const departmentPath = `/practitioners?department_id=${encodeURIComponent(departmentId)}`;
+        let rows = await fetchDoctors(exactPath);
+        if (rows.length === 0) rows = await fetchDoctors(branchPath);
+        if (rows.length === 0) rows = await fetchDoctors(departmentPath);
+        if (rows.length === 0) rows = await fetchDoctors('/practitioners');
         if (!alive) return;
         setLiveDoctors(rows);
         setDoctorId((current) => (rows.some((row: any) => row.id === current) ? current : rows[0]?.id || ''));
+        if (rows.length === 0) {
+          setMessage('No doctor is mapped for this tenant, branch, and department. Ask the tenant admin to create/map a Doctor and add Doctor Scheduling timings.');
+        }
       } catch (err: any) {
         if (alive) {
           setLiveDoctors([]);
           setDoctorId('');
-          setMessage(err.message || 'Could not load doctors for this department.');
+          setMessage(err.message || 'Your role cannot read doctors for appointment booking. Enable Appointments Create or Doctors Read permission for this role.');
         }
       }
     }
@@ -228,7 +252,7 @@ export function AppointmentCalendarBooking(props: Props) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, departmentId, mockDoctors.length]);
+  }, [apiSession?.token, apiSession?.tenantId, branchId, departmentId]);
 
   useEffect(() => {
     let alive = true;
@@ -378,6 +402,10 @@ export function AppointmentCalendarBooking(props: Props) {
 
   async function bookAppointment() {
     if (!selectedPatient) return;
+    if (!doctorId) {
+      setMessage('Select a doctor before booking. If the dropdown is empty, map a doctor to this tenant, branch, and department.');
+      return;
+    }
     if (appointmentType !== 'emergency' && !selectedTimingSlot) {
       setMessage('Select an available timing slot.');
       return;
@@ -570,6 +598,7 @@ export function AppointmentCalendarBooking(props: Props) {
               </Field>
               <Field label="Doctor">
                 <Select value={doctorId} onChange={(e: any) => setDoctorId(e.target.value)} disabled={apiSession && doctors.length === 0}>
+                  {doctors.length === 0 && <option value="">No doctor available</option>}
                   {doctors.map((item: any) => <option key={item.id} value={item.id}>{item.full_name || item.name}</option>)}
                 </Select>
               </Field>
@@ -626,7 +655,7 @@ export function AppointmentCalendarBooking(props: Props) {
                         : 'bg-slate-100 text-slate-400'
                   }`}
                 >
-                  {slotIntervalsEnabled ? String(slot.start_time).slice(0, 5) : slot.label}
+                  {slotIntervalsEnabled ? formatDisplayTime(slot.start_time) : slot.label}
                   <p className="mt-1 text-xs font-medium opacity-70">{slotIntervalsEnabled ? slot.status : 'Consultation timing'}</p>
                 </button>
               ))}
@@ -651,7 +680,7 @@ export function AppointmentCalendarBooking(props: Props) {
               <Info label="Patient" value={selectedPatient?.full_name || booked.appointment?.patient || '-'} />
               <Info label="Token" value={booked.queue_entry?.token_number || booked.queue_entry?.token || booked.appointment?.token || '-'} />
               <Info label="Date" value={booked.appointment?.appointment_date || appointmentDate} />
-              <Info label="Time" value={booked.appointment?.appointment_time || selectedTimingSlot?.label || selectedTimingSlot?.start_time || '-'} />
+              <Info label="Time" value={booked.appointment?.appointment_time ? formatDisplayTime(booked.appointment.appointment_time) : selectedTimingSlot?.label || (selectedTimingSlot?.start_time ? formatDisplayTime(selectedTimingSlot.start_time) : '-')} />
             </div>
             <div className="mt-4 rounded-2xl border bg-white p-4">
               <p className="text-xs font-bold uppercase text-slate-500">Token Slip</p>
@@ -764,7 +793,7 @@ function sessionOptionsFromSlots(slots: any[], appointmentDate: string) {
     const period = start < '13:00' ? 'Morning' : start < '18:00' ? 'Afternoon' : 'Evening';
     return {
       id: scheduleId,
-      label: `${period} ${start} - ${end}`,
+      label: `${period} ${formatDisplayTime(start)} - ${formatDisplayTime(end)}`,
       start,
       end,
       appointment_date: appointmentDate,

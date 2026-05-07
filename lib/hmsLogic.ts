@@ -1,10 +1,9 @@
-import { departments } from './mockData';
-export function getDepartment(id:string){return departments.find(d=>d.id===id)||departments[0]}
-export function practitionersByDepartment(list:any[], departmentId:string, role='Doctor'){return list.filter(p=>(p.departmentIds||[p.departmentId]).includes(departmentId) && p.role===role)}
+export function departmentPrefix(id:string){const clean=String(id||'GEN').replace(/[^a-z0-9]/gi,'');return (clean.slice(0,3).toUpperCase()||'GEN')}
+export function doctorsByDepartment(list:any[], departmentId:string, role='Doctor'){return list.filter(p=>(p.departmentIds||[p.departmentId]).includes(departmentId) && p.role===role)}
 export function consultationFee(clinic:any, departmentId:string, practitioner:any){return practitioner?.feeOverrides?.[clinic.id] || clinic.consultationFees?.[departmentId] || 200}
 export function isModuleEnabled(clinic:any,module:string){return clinic.modules.includes(module)}
 export function generatePatientId(count:number){return `PAT-${String(count+1).padStart(4,'0')}`}
-export function generateToken(departmentId:string, tokenType:'Normal'|'Emergency', count:number){const d=getDepartment(departmentId); const n=String(count+1).padStart(3,'0'); return tokenType==='Emergency'?`${d.prefix}-E${String(count+1).padStart(2,'0')}`:`${d.prefix}${n}`}
+export function generateToken(departmentId:string, tokenType:'Normal'|'Emergency', count:number){const prefix=departmentPrefix(departmentId); const n=String(count+1).padStart(3,'0'); return tokenType==='Emergency'?`${prefix}-E${String(count+1).padStart(2,'0')}`:`${prefix}${n}`}
 export function searchPatients(patients:any[], q:string){const s=q.trim().toLowerCase(); if(!s) return patients; return patients.filter(p=>[p.id,p.name,p.mobile,p.guardian,p.guardianMobile,p.area].filter(Boolean).some(v=>String(v).toLowerCase().includes(s)))}
 export function sortQueue(appts:any[]){return [...appts].sort((a,b)=>a.priority-b.priority || String(a.time).localeCompare(String(b.time)))}
 export function getDoctorFeeSetting(settings:any[], clinicId:string, doctorId:string, departmentId:string){

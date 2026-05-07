@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
@@ -34,7 +34,7 @@ from app.modules.practitioners.service import (
     practitioner_is_eligible,
     room_assignment_conflicts,
 )
-from app.modules.tenants.models import Branch
+from app.modules.tenants.models import Branch, Department
 
 router = APIRouter(prefix="/practitioners")
 
@@ -51,6 +51,24 @@ def _validate_links(session: Session, tenant_id: str, branch_ids: list[str], dep
         branch = session.get(Branch, branch_id)
         if not branch or branch.tenant_id != tenant_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid branch: {branch_id}")
+
+def _resolve_department(session: Session, tenant_id: str, department_id: str | None) -> Department | None:
+    if not department_id:
+        return None
+    department = session.get(Department, department_id)
+    if department and department.tenant_id == tenant_id:
+        return department
+    return session.exec(
+        select(Department).where(
+            Department.tenant_id == tenant_id,
+            Department.code == department_id,
+        )
+    ).first()
+
+
+def _department_filter_ids(session: Session, tenant_id: str, department_id: str | None) -> set[str]:
+    department = _resolve_department(session, tenant_id, department_id)
+    return {department_id, department.id, department.code} if department and department_id else ({department_id} if department_id else set())
 
 
 def _get_practitioner(session: Session, tenant_id: str, practitioner_id: str) -> Practitioner:
@@ -152,7 +170,19 @@ def list_practitioners(
     branch_id: str | None = None,
     department_id: str | None = None,
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.APPOINTMENTS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+            permissions.APPOINTMENTS_READ,
+            permissions.SCHEDULING_MANAGE,
+            permissions.SCHEDULING_CREATE,
+            permissions.SCHEDULING_READ,
+            permissions.SCHEDULING_EDIT,
+        )
+    ),
 ) -> list[PractitionerRead]:
     statement = select(Practitioner).where(Practitioner.tenant_id == tenant_id).order_by(Practitioner.full_name)
     practitioners = list(session.exec(statement).all())
@@ -163,10 +193,11 @@ def list_practitioners(
             if branch_id in practitioner_branch_ids(session, tenant_id, practitioner.id)
         ]
     if department_id:
+        department_ids = _department_filter_ids(session, tenant_id, department_id)
         practitioners = [
             practitioner
             for practitioner in practitioners
-            if department_id in practitioner_department_ids(session, tenant_id, practitioner.id)
+            if department_ids.intersection(practitioner_department_ids(session, tenant_id, practitioner.id))
         ]
     return [_read(session, practitioner) for practitioner in practitioners]
 
@@ -179,7 +210,7 @@ def list_all_practitioner_schedules(
     department_id: str | None = None,
     is_active: bool | None = None,
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ)),
 ) -> list[PractitionerSchedule]:
     statement = select(PractitionerSchedule).where(PractitionerSchedule.tenant_id == tenant_id)
     if practitioner_id:
@@ -187,7 +218,8 @@ def list_all_practitioner_schedules(
     if branch_id:
         statement = statement.where(PractitionerSchedule.branch_id == branch_id)
     if department_id:
-        statement = statement.where(PractitionerSchedule.department_id == department_id)
+        department_ids = _department_filter_ids(session, tenant_id, department_id)
+        statement = statement.where(PractitionerSchedule.department_id.in_(department_ids))
     if is_active is not None:
         statement = statement.where(PractitionerSchedule.is_active == is_active)
     return list(session.exec(statement.order_by(PractitionerSchedule.updated_at.desc(), PractitionerSchedule.created_at.desc())).all())
@@ -199,7 +231,7 @@ def update_practitioner_schedule(
     payload: PractitionerScheduleUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_EDIT)),
 ) -> PractitionerSchedule:
     schedule = _get_schedule(session, tenant_id, schedule_id)
     updates = payload.model_dump(exclude_unset=True, exclude={"actor_user_id"})
@@ -234,7 +266,7 @@ def delete_practitioner_schedule(
     schedule_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_DELETE)),
 ) -> dict[str, bool | str]:
     schedule = _get_schedule(session, tenant_id, schedule_id)
     schedule.is_active = False
@@ -259,7 +291,7 @@ def get_practitioner(
     practitioner_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(require_any_permission(permissions.PRACTITIONERS_MANAGE, permissions.PRACTITIONERS_READ)),
 ) -> PractitionerRead:
     return _read(session, _get_practitioner(session, tenant_id, practitioner_id))
 
@@ -270,7 +302,7 @@ def update_practitioner(
     payload: PractitionerUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_CREATE)),
 ) -> PractitionerRead:
     practitioner = _get_practitioner(session, tenant_id, practitioner_id)
     branch_ids = payload.branch_ids
@@ -331,7 +363,12 @@ def create_practitioner_schedule(
     payload: PractitionerScheduleCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.SCHEDULING_MANAGE,
+            permissions.SCHEDULING_CREATE,
+        )
+    ),
 ) -> PractitionerSchedule:
     _get_practitioner(session, tenant_id, practitioner_id)
     _validate_links(session, tenant_id, [payload.branch_id], [])
@@ -358,7 +395,7 @@ def list_practitioner_schedules(
     practitioner_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ)),
 ) -> list[PractitionerSchedule]:
     _get_practitioner(session, tenant_id, practitioner_id)
     return list(
@@ -496,19 +533,28 @@ def check_practitioner_eligibility(
     department_id: str | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.APPOINTMENTS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+            permissions.APPOINTMENTS_READ,
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+        )
+    ),
 ) -> PractitionerEligibilityRead:
+    resolved_department_id = _resolve_department(session, tenant_id, department_id).id if department_id and _resolve_department(session, tenant_id, department_id) else department_id
     return PractitionerEligibilityRead(
         practitioner_id=practitioner_id,
         tenant_id=tenant_id,
         branch_id=branch_id,
-        department_id=department_id,
+        department_id=resolved_department_id,
         eligible=practitioner_is_eligible(
             session,
             tenant_id=tenant_id,
             practitioner_id=practitioner_id,
             branch_id=branch_id,
-            department_id=department_id,
+            department_id=resolved_department_id,
         ),
     )
 
@@ -522,14 +568,23 @@ def check_practitioner_schedule_availability(
     department_id: str | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.APPOINTMENTS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+            permissions.APPOINTMENTS_READ,
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+        )
+    ),
 ) -> PractitionerAvailabilityRead:
+    resolved_department_id = _resolve_department(session, tenant_id, department_id).id if department_id and _resolve_department(session, tenant_id, department_id) else department_id
     availability = check_practitioner_availability(
         session,
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         branch_id=branch_id,
-        department_id=department_id,
+        department_id=resolved_department_id,
         appointment_date=appointment_date,
         appointment_time=appointment_time,
     )
@@ -537,7 +592,7 @@ def check_practitioner_schedule_availability(
         practitioner_id=practitioner_id,
         tenant_id=tenant_id,
         branch_id=branch_id,
-        department_id=department_id,
+        department_id=resolved_department_id,
         appointment_date=appointment_date,
         appointment_time=appointment_time,
         available=availability.available,
@@ -556,10 +611,19 @@ def get_practitioner_calendar(
     department_id: str | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.APPOINTMENTS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+            permissions.APPOINTMENTS_READ,
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+        )
+    ),
 ) -> PractitionerCalendarRead:
     _get_practitioner(session, tenant_id, practitioner_id)
     _validate_links(session, tenant_id, [branch_id], [])
+    resolved_department_id = _resolve_department(session, tenant_id, department_id).id if department_id and _resolve_department(session, tenant_id, department_id) else department_id
     if start_date > end_date:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start date must be on or before end date")
     if (end_date - start_date).days > 62:
@@ -569,7 +633,7 @@ def get_practitioner_calendar(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
         branch_id=branch_id,
-        department_id=department_id,
+        department_id=resolved_department_id,
         start_date=start_date,
         end_date=end_date,
     )

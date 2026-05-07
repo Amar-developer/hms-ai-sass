@@ -14,9 +14,19 @@ const sections = [
 ] as const;
 
 export const tenantAdminSections = sections;
+export function canUseTenantAdminSection(section:string, user:any){
+ const permissions=user?.permissions||[];
+ if(user?.is_super_admin||permissions.includes('*')||user?.roles?.includes('tenant_admin'))return true;
+ if(section==='users')return ['identity.users.manage','identity.users.create','identity.users.read','identity.users.edit','identity.users.delete'].some(permission=>permissions.includes(permission));
+ if(section==='roles')return permissions.includes('identity.roles.manage')||permissions.includes('identity.roles.read');
+ if(section==='departments')return ['departments.manage','departments.create','departments.read','departments.edit','departments.delete','settings.manage'].some(permission=>permissions.includes(permission));
+ if(section==='branches')return ['branches.manage','branches.create','branches.read','branches.edit','branches.delete','settings.manage'].some(permission=>permissions.includes(permission));
+ if(section==='settings')return permissions.includes('settings.manage');
+ return false;
+}
 const userTypes = [
   ['tenant_admin','Tenant Admin'],
-  ['doctor','Doctor / Practitioner'],
+  ['doctor','Doctor'],
   ['reception','Reception'],
   ['nurse','Staff Nurse'],
   ['lab','Lab Technician'],
@@ -24,6 +34,29 @@ const userTypes = [
   ['billing','Billing Staff'],
   ['back_office','Back Office Staff'],
   ['staff','General Staff'],
+] as const;
+
+const requiredRolePermissions = [
+ {key:'identity.users.manage',module:'identity.users',action:'manage',description:'Users Manage'},
+ {key:'identity.users.create',module:'identity.users',action:'create',description:'Users Create'},
+ {key:'identity.users.read',module:'identity.users',action:'read',description:'Users Read'},
+ {key:'identity.users.edit',module:'identity.users',action:'edit',description:'Users Edit'},
+ {key:'identity.users.delete',module:'identity.users',action:'delete',description:'Users Delete'},
+ {key:'departments.manage',module:'departments',action:'manage',description:'Departments Manage'},
+ {key:'departments.create',module:'departments',action:'create',description:'Departments Create'},
+ {key:'departments.read',module:'departments',action:'read',description:'Departments Read'},
+ {key:'departments.edit',module:'departments',action:'edit',description:'Departments Edit'},
+ {key:'departments.delete',module:'departments',action:'delete',description:'Departments Delete'},
+ {key:'branches.manage',module:'branches',action:'manage',description:'Branches Manage'},
+ {key:'branches.create',module:'branches',action:'create',description:'Branches Create'},
+ {key:'branches.read',module:'branches',action:'read',description:'Branches Read'},
+ {key:'branches.edit',module:'branches',action:'edit',description:'Branches Edit'},
+ {key:'branches.delete',module:'branches',action:'delete',description:'Branches Delete'},
+ {key:'scheduling.manage',module:'scheduling',action:'manage',description:'Scheduling Manage'},
+ {key:'scheduling.create',module:'scheduling',action:'create',description:'Scheduling Create'},
+ {key:'scheduling.read',module:'scheduling',action:'read',description:'Scheduling Read'},
+ {key:'scheduling.edit',module:'scheduling',action:'edit',description:'Scheduling Edit'},
+ {key:'scheduling.delete',module:'scheduling',action:'delete',description:'Scheduling Delete'},
 ] as const;
 
 export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,setSection:externalSetSection}:any){
@@ -52,6 +85,7 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
  const selectedUser=users.find((row:any)=>row.id===selectedId);
  const selectedDepartment=departments.find((row:any)=>row.id===selectedId);
  const selectedBranch=branches.find((row:any)=>row.id===selectedId);
+ const visibleSections=sections.filter(([sectionId])=>canUseTenantAdminSection(sectionId,apiSession?.user));
 
  function open(nextSection:string,nextView='list'){
   setSection(nextSection);
@@ -65,13 +99,19 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
   setBusy(true);setMessage('');
   try{
    const scoped={...apiSession,tenantId:apiSession.tenantId};
+   const canUsers=canUseTenantAdminSection('users',apiSession.user);
+   const canRoles=canUseTenantAdminSection('roles',apiSession.user)||canUsers;
+   const canDepartments=canUseTenantAdminSection('departments',apiSession.user);
+   const canBranches=canUseTenantAdminSection('branches',apiSession.user);
+   const canSettings=canUseTenantAdminSection('settings',apiSession.user);
+   const safeFetch=async(path:string,enabled=true)=>enabled?apiFetch(path,scoped).catch(()=>[]):Promise.resolve([]);
    const [roleRows,userRows,departmentRows,branchRows,settingRows,permissionRows]=await Promise.all([
-    apiFetch('/identity/roles',scoped),
-    apiFetch('/identity/users',scoped),
-    apiFetch(`/tenants/${apiSession.tenantId}/departments`,scoped),
-    apiFetch(`/tenants/${apiSession.tenantId}/branches`,scoped),
-    apiFetch('/settings',scoped),
-    apiFetch('/identity/permissions',scoped),
+    safeFetch('/identity/roles',canRoles),
+    safeFetch('/identity/users',canUsers),
+    safeFetch(`/tenants/${apiSession.tenantId}/departments`,canDepartments),
+    safeFetch(`/tenants/${apiSession.tenantId}/branches`,canBranches),
+    safeFetch('/settings',canSettings),
+    apiFetch('/identity/permissions',scoped).catch(()=>[]),
    ]);
    setRoles(roleRows);setUsers(userRows);setDepartments(departmentRows);setBranches(branchRows);setSettings(settingRows);setPermissions(permissionRows);
    const find=(key:string)=>settingRows.find((x:any)=>x.key===key);
@@ -86,6 +126,11 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
  }
 
  useEffect(()=>{loadAdmin()},[apiSession?.token,apiSession?.tenantId]);
+ useEffect(()=>{
+  if(apiSession&&visibleSections.length&&!visibleSections.some(([sectionId])=>sectionId===section)){
+   open(visibleSections[0][0]);
+  }
+ },[apiSession?.token,section,visibleSections.length]);
 
  async function createRole(e:any){
   e.preventDefault();const form=e.currentTarget;const fd=new FormData(form);
@@ -221,6 +266,7 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
  }
 
  if(!apiSession)return <Card><h3 className="text-lg font-bold">Tenant Admin</h3><p className="mt-2 text-sm text-slate-500">Login to manage tenant settings.</p></Card>;
+ if(visibleSections.length===0)return <Card><h3 className="text-lg font-bold">Tenant Admin</h3><p className="mt-2 text-sm text-slate-500">Your role does not include tenant administration permissions.</p></Card>;
 
  return <div className="space-y-5">
   <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h3 className="text-xl font-bold">{clinic?.name||'Tenant'} Administration</h3><p className="text-sm text-slate-500">Manage only this tenant’s users, roles, departments, branches, and settings.</p></div><Badge tone="green">Tenant scoped</Badge></div></Card>
@@ -281,7 +327,11 @@ function SettingsPanel(props:any){
 }
 
 function PermissionCheckboxes({permissions,selected,disabled}:any){
- const grouped=permissions.reduce((acc:any,permission:any)=>{acc[permission.module]=[...(acc[permission.module]||[]),permission];return acc},{});
+ const catalog=[...permissions];
+ for(const permission of requiredRolePermissions){
+  if(!catalog.some((item:any)=>item.key===permission.key))catalog.push(permission);
+ }
+ const grouped=catalog.reduce((acc:any,permission:any)=>{acc[permission.module]=[...(acc[permission.module]||[]),permission];return acc},{});
  const buckets=[
   ['manage','Manage',['manage','sign','approve','export']],
   ['create','Create',['create']],
@@ -291,8 +341,9 @@ function PermissionCheckboxes({permissions,selected,disabled}:any){
  ];
  const modules=Object.keys(grouped).sort();
  const selectedSet=new Set(selected||[]);
- const bucketFor=(permission:any)=>buckets.find((bucket:any)=>bucket[2].includes(permission.action))||buckets[0];
- const labelFor=(permission:any)=>title(String(permission.action||'manage').replaceAll('_',' '));
+ const normalizedAction=(permission:any)=>String(permission.action||'manage').split('.').pop()||'manage';
+ const bucketFor=(permission:any)=>buckets.find((bucket:any)=>bucket[2].includes(normalizedAction(permission)))||buckets[0];
+ const labelFor=(permission:any)=>title(String(permission.action||'manage').replaceAll('_',' ').replaceAll('.',' '));
  return <div><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end"><div><h4 className="font-bold">Module Permissions</h4><p className="text-sm text-slate-500">Enable permissions by module. Use Manage for full workflow/action access, then Create, Read, Edit, and Delete as needed.</p></div><Badge tone="slate">{selectedSet.size} selected</Badge></div><div className="mt-3 grid gap-4 xl:grid-cols-2">{modules.map(module=><div key={module} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start"><div><h5 className="font-bold">{title(module.replaceAll('_',' '))}</h5><p className="text-xs text-slate-500">{grouped[module].length} permissions</p></div><Badge tone="slate">Module</Badge></div><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">{buckets.map((bucket:any)=>{const bucketPermissions=grouped[module].filter((permission:any)=>bucketFor(permission)[0]===bucket[0]).sort((a:any,b:any)=>a.key.localeCompare(b.key));return <div key={`${module}-${bucket[0]}`} className="rounded-2xl bg-slate-50 p-3"><p className="mb-2 text-xs font-bold uppercase text-slate-500">{bucket[1]}</p><div className="grid gap-2">{bucketPermissions.length?bucketPermissions.map((permission:any)=><label key={permission.key} className="flex items-start gap-2 text-sm"><input name="permissionKeys" type="checkbox" value={permission.key} defaultChecked={selectedSet.has(permission.key)} disabled={disabled} className="mt-1 h-4 w-4"/><span><span className="font-semibold">{labelFor(permission)}</span><span className="block break-all text-xs text-slate-400">{permission.key}</span></span></label>):<span className="text-xs text-slate-300">No access</span>}</div></div>})}</div></div>)}</div></div>
 }
 
@@ -311,6 +362,6 @@ function Actions({busy,back,disabled,label}:any){return <div className="flex fle
 function ConfirmModal({action,busy,onCancel,onConfirm}:any){return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"><Card className="max-w-md"><h3 className="text-lg font-bold">Confirm {action.kind}</h3><p className="mt-2 text-sm text-slate-500">This will {action.kind==='delete'?'deactivate/delete':'change status for'} {action.row.name || action.row.email}. Continue?</p><div className="mt-4 flex gap-2"><Button onClick={onConfirm} disabled={busy}>Confirm</Button><button type="button" onClick={onCancel} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></Card></div>}
 function Empty({text}:any){return <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">{text}</div>}
 function Pagination({page,totalPages,total,pageSize,onPage}:any){const start=total===0?0:(page-1)*pageSize+1;const end=Math.min(page*pageSize,total);return <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center"><span>Showing {start}-{end} of {total}</span><div className="flex gap-2"><button type="button" onClick={()=>onPage(Math.max(1,page-1))} disabled={page<=1} className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300">Previous</button><span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-700">Page {page} / {totalPages}</span><button type="button" onClick={()=>onPage(Math.min(totalPages,page+1))} disabled={page>=totalPages} className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300">Next</button></div></div>}
-function title(value:string){return value.charAt(0).toUpperCase()+value.slice(1)}
+function title(value:string){return value.split(' ').filter(Boolean).map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')}
 function formatDate(value:any){return value?new Date(value).toLocaleDateString():'-'}
 function isLocked(row:any){return Boolean(row?.is_template_locked||row?.source_template_role_id||row?.source_template_department_id||row?.source_template_branch_id)}

@@ -15,7 +15,7 @@ const tenantTypes = [
 
 const userTypes = [
   ['tenant_admin','Tenant Admin'],
-  ['doctor','Doctor / Practitioner'],
+  ['doctor','Doctor'],
   ['reception','Reception'],
   ['nurse','Staff Nurse'],
   ['lab','Lab Technician'],
@@ -23,6 +23,29 @@ const userTypes = [
   ['billing','Billing Staff'],
   ['back_office','Back Office Staff'],
   ['staff','General Staff'],
+] as const;
+
+const requiredRolePermissions = [
+ {key:'identity.users.manage',module:'identity.users',action:'manage',description:'Users Manage'},
+ {key:'identity.users.create',module:'identity.users',action:'create',description:'Users Create'},
+ {key:'identity.users.read',module:'identity.users',action:'read',description:'Users Read'},
+ {key:'identity.users.edit',module:'identity.users',action:'edit',description:'Users Edit'},
+ {key:'identity.users.delete',module:'identity.users',action:'delete',description:'Users Delete'},
+ {key:'departments.manage',module:'departments',action:'manage',description:'Departments Manage'},
+ {key:'departments.create',module:'departments',action:'create',description:'Departments Create'},
+ {key:'departments.read',module:'departments',action:'read',description:'Departments Read'},
+ {key:'departments.edit',module:'departments',action:'edit',description:'Departments Edit'},
+ {key:'departments.delete',module:'departments',action:'delete',description:'Departments Delete'},
+ {key:'branches.manage',module:'branches',action:'manage',description:'Branches Manage'},
+ {key:'branches.create',module:'branches',action:'create',description:'Branches Create'},
+ {key:'branches.read',module:'branches',action:'read',description:'Branches Read'},
+ {key:'branches.edit',module:'branches',action:'edit',description:'Branches Edit'},
+ {key:'branches.delete',module:'branches',action:'delete',description:'Branches Delete'},
+ {key:'scheduling.manage',module:'scheduling',action:'manage',description:'Scheduling Manage'},
+ {key:'scheduling.create',module:'scheduling',action:'create',description:'Scheduling Create'},
+ {key:'scheduling.read',module:'scheduling',action:'read',description:'Scheduling Read'},
+ {key:'scheduling.edit',module:'scheduling',action:'edit',description:'Scheduling Edit'},
+ {key:'scheduling.delete',module:'scheduling',action:'delete',description:'Scheduling Delete'},
 ] as const;
 
 export const superAdminSections = [
@@ -579,7 +602,7 @@ function CreateTenantForm({plans,moduleRegistry,templates,busy,createTenant}:any
   </div>
   <form onSubmit={createTenant} className="mt-5 grid gap-4">
    <input type="hidden" name="branchCount" value={branches.length}/>
-   <div className={step===0?'grid gap-4 md:grid-cols-3':'hidden'}><Field label="Tenant Name"><Input name="name" required placeholder="Sunrise Clinic"/></Field><Field label="Legal Name"><Input name="legalName" placeholder="Sunrise Healthcare Pvt Ltd"/></Field><Field label="Tenant Type"><Select name="tenantType">{tenantTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Status"><Select name="status" defaultValue="trial"><option value="trial">Trial</option><option value="active">Active</option><option value="suspended">Suspended</option></Select></Field><Field label="Logo URL"><Input name="logoUrl"/></Field><Field label="Email"><Input name="email" type="email"/></Field><Field label="Phone"><Input name="phone"/></Field><Field label="Country"><Input name="country" defaultValue="IN" maxLength={2}/></Field><Field label="Timezone"><Input name="timezone" defaultValue="Asia/Kolkata"/></Field><div className="md:col-span-3"><Field label="Address"><Input name="address"/></Field></div><div className="md:col-span-3"><Field label="Description"><Input name="description" placeholder="Clinic, hospital, or group description"/></Field></div></div>
+   <div className={step===0?'grid gap-4 md:grid-cols-3':'hidden'}><Field label="Tenant Name"><Input name="name" required placeholder="Clinic name"/></Field><Field label="Legal Name"><Input name="legalName" placeholder="Registered legal name"/></Field><Field label="Tenant Type"><Select name="tenantType">{tenantTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Status"><Select name="status" defaultValue="trial"><option value="trial">Trial</option><option value="active">Active</option><option value="suspended">Suspended</option></Select></Field><Field label="Logo URL"><Input name="logoUrl"/></Field><Field label="Email"><Input name="email" type="email"/></Field><Field label="Phone"><Input name="phone"/></Field><Field label="Country"><Input name="country" defaultValue="IN" maxLength={2}/></Field><Field label="Timezone"><Input name="timezone" defaultValue="Asia/Kolkata"/></Field><div className="md:col-span-3"><Field label="Address"><Input name="address"/></Field></div><div className="md:col-span-3"><Field label="Description"><Input name="description" placeholder="Clinic, hospital, or group description"/></Field></div></div>
    <div className={step===1?'grid gap-4':'hidden'}><div className="grid gap-4 md:grid-cols-3"><Field label="Subscription Model"><Select name="planId">{plans.map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name} - ₹{plan.price_inr_monthly}</option>)}</Select></Field></div><div><div className="flex items-center justify-between gap-3"><div><h4 className="font-bold">Branches</h4><p className="text-sm text-slate-500">Add local branches for the tenant. Template branches can also be copied later.</p></div><button type="button" onClick={()=>setBranches([...branches,{id:Date.now()+branches.length}])} className="rounded-2xl border px-4 py-3 text-sm font-bold">Add More Branch</button></div><div className="mt-3 grid gap-3">{branches.map((branch:any,index:number)=><div key={branch.id} className="rounded-2xl border border-slate-200 p-4"><div className="mb-3 flex items-center justify-between gap-3"><b>Branch {index+1}</b>{branches.length>1&&<button type="button" onClick={()=>setBranches(branches.filter((item:any)=>item.id!==branch.id))} className="rounded-xl border px-3 py-2 text-xs font-bold text-red-600">Cancel Branch</button>}</div><div className="grid gap-3 md:grid-cols-3"><Field label="Branch Name"><Input name={`branchName_${index}`} defaultValue={index===0?'Main Branch':''} required={index===0}/></Field><Field label="Branch Code"><Input name={`branchCode_${index}`} defaultValue={index===0?'MAIN':''} placeholder={`BR${index+1}`}/></Field><Field label="City"><Input name={`branchCity_${index}`} placeholder="Chennai"/></Field><Field label="State"><Input name={`branchState_${index}`} placeholder="Tamil Nadu"/></Field><div className="md:col-span-2"><Field label="Branch Address"><Input name={`branchAddress_${index}`}/></Field></div></div></div>)}</div></div></div>
    <div className={step===2?'grid gap-4':'hidden'}><ModuleChecklist modules={moduleRegistry}/></div>
    <div className={step===3?'grid gap-4 lg:grid-cols-3':'hidden'}><TemplateChecklist title="Default Roles" name="roleTemplateIds" items={templates.roles} defaultSelected={(item:any)=>roleDefaults.has(item.key)} empty="Create default roles under MedizinHub HMS first."/><TemplateChecklist title="Default Departments" name="departmentTemplateIds" items={templates.departments} defaultSelected={(item:any)=>departmentDefaults.has(item.code)||departmentDefaults.has(String(item.code||'').toLowerCase())} empty="Create default departments under MedizinHub HMS first."/><TemplateChecklist title="Default Branch Templates" name="branchTemplateIds" items={templates.branches} defaultSelected={(item:any)=>branchDefaults.has(item.code)} empty="Create branch templates under MedizinHub HMS first."/></div>
@@ -658,7 +681,11 @@ function RolePermissions({role,permissionCatalog,busy,updateRole,back}:any){
 }
 
 function PermissionCheckboxes({permissions,selected}:any){
- const grouped=permissions.reduce((acc:any,permission:any)=>{acc[permission.module]=[...(acc[permission.module]||[]),permission];return acc},{});
+ const catalog=[...permissions];
+ for(const permission of requiredRolePermissions){
+  if(!catalog.some((item:any)=>item.key===permission.key))catalog.push(permission);
+ }
+ const grouped=catalog.reduce((acc:any,permission:any)=>{acc[permission.module]=[...(acc[permission.module]||[]),permission];return acc},{});
  const buckets=[
   ['manage','Manage',['manage','sign','approve','export']],
   ['create','Create',['create']],

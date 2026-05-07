@@ -120,6 +120,37 @@ def require_permission(permission_key: str):
         if tenant.status == TenantStatus.SUSPENDED:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended")
         if permission_key not in user_permission_keys(session, current_user):
+            if permission_key == "settings.manage" and "tenant_admin" in user_role_keys(session, current_user):
+                return current_user
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        return current_user
+
+    return dependency
+
+
+def require_any_permission(*permission_keys: str):
+    def dependency(
+        x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+        current_user: User = Depends(get_current_user),
+        session: Session = Depends(get_session),
+    ) -> User:
+        if current_user.is_super_admin:
+            return current_user
+        if not x_tenant_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Tenant-ID header is required")
+        if current_user.tenant_id != x_tenant_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied")
+        tenant = session.get(Tenant, x_tenant_id)
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        if tenant.status == TenantStatus.SUSPENDED:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended")
+        user_permissions = set(user_permission_keys(session, current_user))
+        if not user_permissions.intersection(permission_keys):
+            if "tenant_admin" in user_role_keys(session, current_user) and any(
+                not permission_key.startswith("platform.") for permission_key in permission_keys
+            ):
+                return current_user
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
         return current_user
 

@@ -54,6 +54,22 @@ def _assert_tenant_admin(session: Session, current_user: User, tenant_id: str) -
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant admin access required")
 
 
+def _assert_tenant_permission(
+    session: Session,
+    current_user: User,
+    tenant_id: str,
+    *permission_keys: str,
+) -> None:
+    if current_user.is_super_admin:
+        return
+    if current_user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied")
+    if "tenant_admin" in user_role_keys(session, current_user):
+        return
+    if not set(permission_keys).intersection(user_permission_keys(session, current_user)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+
+
 def _is_primary_tenant(session: Session, tenant_id: str | None) -> bool:
     if not tenant_id:
         return False
@@ -195,7 +211,12 @@ def _ensure_primary_tenant_admin_role(session: Session, primary_tenant: Tenant, 
 
 
 def _permission_read(key: str) -> PermissionRead:
-    module, _, action = key.partition(".")
+    parts = key.split(".")
+    if len(parts) >= 3 and parts[0] == "identity":
+        module = parts[1]
+        action = parts[2]
+    else:
+        module, _, action = key.partition(".")
     return PermissionRead(key=key, module=module, action=action or "manage", description=key.replace(".", " ").title())
 
 
@@ -455,7 +476,15 @@ def list_roles(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[RoleRead]:
-    _assert_tenant_admin(session, current_user, tenant_id)
+    _assert_tenant_permission(
+        session,
+        current_user,
+        tenant_id,
+        permissions.IDENTITY_ROLES_MANAGE,
+        permissions.IDENTITY_ROLES_READ,
+        permissions.IDENTITY_USERS_MANAGE,
+        permissions.IDENTITY_USERS_READ,
+    )
     roles = session.exec(
         select(Role).where(Role.tenant_id == tenant_id).order_by(Role.updated_at.desc(), Role.created_at.desc())
     ).all()
@@ -588,7 +617,7 @@ def create_user(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> UserRead:
-    _assert_tenant_admin(session, current_user, tenant_id)
+    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_CREATE)
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
@@ -638,7 +667,7 @@ def list_users(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[UserRead]:
-    _assert_tenant_admin(session, current_user, tenant_id)
+    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_READ)
     users = session.exec(
         select(User).where(User.tenant_id == tenant_id).order_by(User.updated_at.desc(), User.created_at.desc())
     ).all()
@@ -671,7 +700,7 @@ def update_user(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> UserRead:
-    _assert_tenant_admin(session, current_user, tenant_id)
+    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_EDIT)
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
     updates = payload.model_dump(exclude_unset=True)
     if "email" in updates and updates["email"]:
@@ -714,7 +743,7 @@ def change_user_status(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> UserRead:
-    _assert_tenant_admin(session, current_user, tenant_id)
+    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_EDIT)
     if payload.is_active is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required")
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
@@ -747,7 +776,7 @@ def delete_user(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
-    _assert_tenant_admin(session, current_user, tenant_id)
+    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_DELETE)
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
     if user.id == current_user.id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own user")

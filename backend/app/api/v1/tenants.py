@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.auth import require_permission, require_super_admin, require_tenant_admin
+from app.core.auth import require_any_permission, require_permission, require_super_admin
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.models import AuditEvent
@@ -223,9 +223,11 @@ def delete_tenant(
 def create_branch(
     tenant_id: str,
     payload: BranchCreate,
-    current_user: User = Depends(require_tenant_admin),
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    current_user: User = Depends(require_any_permission(permissions.BRANCHES_MANAGE, permissions.BRANCHES_CREATE, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> Branch:
+    _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
@@ -274,7 +276,21 @@ def create_branch(
 def list_branches(
     tenant_id: str,
     request_tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.BRANCHES_MANAGE,
+            permissions.BRANCHES_READ,
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+            permissions.APPOINTMENTS_READ,
+            permissions.SCHEDULING_MANAGE,
+            permissions.SCHEDULING_READ,
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> list[Branch]:
     can_cross_scope = False
@@ -298,9 +314,11 @@ def update_branch(
     tenant_id: str,
     branch_id: str,
     payload: BranchUpdate,
-    current_user: User = Depends(require_tenant_admin),
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    current_user: User = Depends(require_any_permission(permissions.BRANCHES_MANAGE, permissions.BRANCHES_EDIT, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> Branch:
+    _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     branch = _get_branch_or_404(session, tenant_id, branch_id)
     _assert_branch_editable_by_actor(branch, current_user)
     updates = payload.model_dump(exclude_unset=True)
@@ -394,11 +412,13 @@ def update_branch_status(
     tenant_id: str,
     branch_id: str,
     payload: BranchUpdate,
-    current_user: User = Depends(require_tenant_admin),
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    current_user: User = Depends(require_any_permission(permissions.BRANCHES_MANAGE, permissions.BRANCHES_EDIT, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> Branch:
     if payload.is_active is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required")
+    _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     branch = _get_branch_or_404(session, tenant_id, branch_id)
     _assert_branch_editable_by_actor(branch, current_user)
     branch.is_active = payload.is_active
@@ -425,9 +445,11 @@ def update_branch_status(
 def delete_branch(
     tenant_id: str,
     branch_id: str,
-    current_user: User = Depends(require_tenant_admin),
+    x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
+    current_user: User = Depends(require_any_permission(permissions.BRANCHES_MANAGE, permissions.BRANCHES_DELETE, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
+    _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     branch = _get_branch_or_404(session, tenant_id, branch_id)
     _assert_branch_editable_by_actor(branch, current_user)
     branch.is_active = False
@@ -458,7 +480,7 @@ def create_department(
     tenant_id: str,
     payload: DepartmentCreate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_CREATE, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> Department:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
@@ -565,7 +587,21 @@ def assign_department_to_tenant(
 def list_departments(
     tenant_id: str,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.DEPARTMENTS_READ,
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+            permissions.APPOINTMENTS_READ,
+            permissions.SCHEDULING_MANAGE,
+            permissions.SCHEDULING_READ,
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> list[Department]:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
@@ -581,7 +617,7 @@ def get_department(
     tenant_id: str,
     department_id: str,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_READ, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> Department:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
@@ -594,7 +630,7 @@ def update_department(
     department_id: str,
     payload: DepartmentUpdate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_EDIT, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> Department:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
@@ -634,7 +670,7 @@ def update_department_status(
     department_id: str,
     payload: DepartmentUpdate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_EDIT, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> Department:
     if payload.is_active is None:
@@ -667,7 +703,7 @@ def delete_department(
     tenant_id: str,
     department_id: str,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_DELETE, permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)

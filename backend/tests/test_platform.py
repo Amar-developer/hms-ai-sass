@@ -414,6 +414,122 @@ def test_branch_status_and_delete_are_soft_actions(client: TestClient):
     assert deleted.json()["mode"] == "deactivated"
 
 
+def test_settings_manage_permission_can_crud_tenant_branches_and_departments(client: TestClient):
+    tenant = client.post(
+        "/api/v1/tenants",
+        json={"name": "Delegated Settings Clinic", "tenant_type": "clinic", "status": "active"},
+    ).json()
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Settings Operator",
+            "key": "settings_operator",
+            "permission_keys": ["settings.manage"],
+        },
+    ).json()
+    user = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Settings Nurse",
+            "email": "settings.nurse@test.local",
+            "password": "Settings123",
+            "user_type": "nurse",
+            "role_keys": [role["key"]],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": user["email"], "password": "Settings123", "tenant_id": tenant["id"]},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+
+    branch = client.post(
+        f"/api/v1/tenants/{tenant['id']}/branches",
+        headers=headers,
+        json={"name": "Main Clinic", "code": "MAIN", "city": "Chennai"},
+    )
+    branches = client.get(f"/api/v1/tenants/{tenant['id']}/branches", headers=headers)
+    updated_branch = client.patch(
+        f"/api/v1/tenants/{tenant['id']}/branches/{branch.json()['id']}",
+        headers=headers,
+        json={"name": "Main Clinic Updated", "code": "MAIN", "city": "Madurai"},
+    )
+    department = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers=headers,
+        json={"name": "General Medicine", "description": "OP care", "branch_id": branch.json()["id"]},
+    )
+    departments = client.get(f"/api/v1/tenants/{tenant['id']}/departments", headers=headers)
+    updated_department = client.patch(
+        f"/api/v1/tenants/{tenant['id']}/departments/{department.json()['id']}",
+        headers=headers,
+        json={"name": "General Medicine Updated", "description": "OP and review care"},
+    )
+    deleted_department = client.delete(
+        f"/api/v1/tenants/{tenant['id']}/departments/{department.json()['id']}",
+        headers=headers,
+    )
+
+    assert branch.status_code == 201
+    assert branches.status_code == 200
+    assert [row["name"] for row in branches.json()] == ["Main Clinic"]
+    assert updated_branch.status_code == 200
+    assert updated_branch.json()["name"] == "Main Clinic Updated"
+    assert department.status_code == 201
+    assert departments.status_code == 200
+    assert departments.json()[0]["name"] == "General Medicine"
+    assert updated_department.status_code == 200
+    assert updated_department.json()["name"] == "General Medicine Updated"
+    assert deleted_department.status_code == 200
+    assert deleted_department.json()["mode"] == "deactivated"
+
+
+def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_permissions(client: TestClient):
+    tenant = client.post(
+        "/api/v1/tenants",
+        json={"name": "Legacy Tenant Admin Clinic", "tenant_type": "clinic", "status": "active"},
+    ).json()
+    client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "Tenant Admin", "key": "tenant_admin", "permission_keys": []},
+    )
+    user = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Legacy Tenant Admin",
+            "email": "legacy.tenant.admin@test.local",
+            "password": "TenantPass123",
+            "user_type": "tenant_admin",
+            "role_keys": ["tenant_admin"],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": user["email"], "password": "TenantPass123", "tenant_id": tenant["id"]},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+
+    branch = client.post(
+        f"/api/v1/tenants/{tenant['id']}/branches",
+        headers=headers,
+        json={"name": "Legacy Main", "code": "LEGACY"},
+    )
+    department = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers=headers,
+        json={"name": "Legacy General", "branch_id": branch.json()["id"]},
+    )
+
+    assert branch.status_code == 201
+    assert client.get(f"/api/v1/tenants/{tenant['id']}/branches", headers=headers).status_code == 200
+    assert department.status_code == 201
+    assert client.get(f"/api/v1/tenants/{tenant['id']}/departments", headers=headers).status_code == 200
+
+
 def test_tenant_admin_cannot_change_locked_global_branch_template(unauthenticated_client):
     from backend.tests.test_identity_auth import bootstrap_super_admin, create_tenant_with_paid_plan
 

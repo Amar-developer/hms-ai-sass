@@ -5,8 +5,11 @@ import {API_BASE,apiFetch,type ApiSession} from '@/lib/api';
 import {demoUsers,loginPresets} from '@/lib/authPresets';
 import {type LiveSummary,mapAppointment,mapPatient} from '@/lib/liveData';
 import {canOpenModule} from '@/lib/moduleAccess';
-import {clinics,departments,initialAppointments,initialIpAdmissions,initialPatients} from '@/lib/mockData';
 import {nav,roleModules} from '@/lib/navigation';
+
+const allModuleIds = nav.map(([id]) => id);
+const defaultBranch = {id: 'default-branch', name: 'Default Branch', city: ''};
+const defaultDepartment = {id: 'general', name: 'General Medicine', prefix: 'GEN'};
 
 export function useAppController() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -20,27 +23,30 @@ export function useAppController() {
   const [role, setRole] = useState('tenant_admin');
   const [showPassword, setShowPassword] = useState(false);
   const [active, setActive] = useState('dashboard');
-  const [clinicId, setClinicId] = useState('c3');
-  const baseClinic = clinics.find((c) => c.id === clinicId)!;
-  const [branchId, setBranchId] = useState(baseClinic.branches[0].id);
-  const baseAllowedDepartments = departments.filter((d) => baseClinic.departments.includes(d.id));
-  const [departmentId, setDepartmentId] = useState(baseAllowedDepartments[0].id);
-  const [patients, setPatients] = useState<any[]>(initialPatients);
-  const [appointments, setAppointments] = useState<any[]>(initialAppointments);
-  const [ipAdmissions, setIpAdmissions] = useState<any[]>(initialIpAdmissions);
+  const [clinicId, setClinicId] = useState('preview');
+  const [branchId, setBranchId] = useState(defaultBranch.id);
+  const [departmentId, setDepartmentId] = useState(defaultDepartment.id);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [ipAdmissions, setIpAdmissions] = useState<any[]>([]);
 
   function hasPermission(session: ApiSession, permission: string) {
     const keys = session.user?.permissions || [];
     return session.user?.is_super_admin || keys.includes('*') || keys.includes(permission);
   }
 
+  function sessionHasAnyPermission(session: ApiSession, permissions: string[]) {
+    return permissions.some((permission) => hasPermission(session, permission));
+  }
+
   async function apiFetchIfAllowed<T>(
     path: string,
     session: ApiSession,
-    permission: string,
+    permission: string | string[],
     fallback: T,
   ): Promise<T> {
-    if (!hasPermission(session, permission)) return fallback;
+    const permissions = Array.isArray(permission) ? permission : [permission];
+    if (!sessionHasAnyPermission(session, permissions)) return fallback;
     try {
       return await apiFetch(path, session);
     } catch {
@@ -50,9 +56,24 @@ export function useAppController() {
 
   async function loadLiveData(session: ApiSession) {
     setLiveStatus('Loading seeded backend data...');
+    const referenceReadPermissions = [
+      'settings.manage',
+      'settings.read',
+      'branches.manage',
+      'branches.read',
+      'departments.manage',
+      'departments.read',
+      'appointments.manage',
+      'appointments.create',
+      'appointments.read',
+      'scheduling.manage',
+      'scheduling.read',
+      'practitioners.manage',
+      'practitioners.read',
+    ];
     const [branchRows, departmentRows] = await Promise.all([
-      apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/branches`, session, 'settings.manage', []),
-      apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/departments`, session, 'settings.manage', []),
+      apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/branches`, session, referenceReadPermissions, []),
+      apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/departments`, session, referenceReadPermissions, []),
     ]);
     setLiveBranches(branchRows);
     setLiveDepartments(departmentRows);
@@ -73,11 +94,11 @@ export function useAppController() {
     const mappedPatients = patientRows.map(mapPatient);
     const patientMap = new Map<string, any>(mappedPatients.map((p: any) => [p.id, p]));
     const mappedAppointments = appointmentRows.map((a: any) =>
-      mapAppointment(a, queueRows, consultationRows, patientMap, clinicId, backendBranchId),
+      mapAppointment(a, queueRows, consultationRows, patientMap, session.tenantId, backendBranchId),
     );
 
-    setPatients(mappedPatients.length ? mappedPatients : initialPatients);
-    setAppointments(mappedAppointments.length ? mappedAppointments : initialAppointments);
+    setPatients(mappedPatients);
+    setAppointments(mappedAppointments);
     setLiveInvoices(invoiceRows);
     setLiveSummary({
       patients: patientRows.length,
@@ -186,6 +207,9 @@ export function useAppController() {
     setLiveBranchId('');
     setLiveBranches([]);
     setLiveDepartments([]);
+    setPatients([]);
+    setAppointments([]);
+    setIpAdmissions([]);
     setActive('dashboard');
     setRole('tenant_admin');
     setShowPassword(false);
@@ -210,34 +234,30 @@ export function useAppController() {
   }
 
   function changeClinic(id: string) {
-    const next = clinics.find((c) => c.id === id)!;
     setClinicId(id);
-    setBranchId(next.branches[0].id);
-    setDepartmentId(next.departments[0]);
-    if (active !== 'dashboard' && !next.modules.includes(active)) setActive('dashboard');
+    if (!apiSession && active !== 'dashboard') setActive('dashboard');
   }
 
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const branchOptions = liveBranches.length
     ? liveBranches.map((row: any) => ({id: row.id, name: row.name, city: row.city}))
-    : baseClinic.branches;
+    : apiSession ? [] : [defaultBranch];
   const departmentOptions = liveDepartments.length
     ? liveDepartments.map((row: any) => ({id: row.id, name: row.name, prefix: row.code}))
-    : baseAllowedDepartments;
+    : apiSession ? [] : [defaultDepartment];
   const effectiveClinicId = apiSession && !isSuperAdmin ? apiSession.tenantId : clinicId;
   const effectiveBranchId = liveBranchId || branchId;
-  const clinic = apiSession && !isSuperAdmin
-    ? {
-        ...baseClinic,
-        id: apiSession.tenantId,
-        name: apiSession.user?.tenant_name || 'Current Tenant',
-        type: branchOptions.length > 1 ? 'Multi Branch Tenant' : 'Single Branch Tenant',
-        multiBranch: branchOptions.length > 1,
-        branches: branchOptions,
-        departments: departmentOptions.map((department: any) => department.id),
-      }
-    : baseClinic;
-  const branch = branchOptions.find((b: any) => b.id === effectiveBranchId) || branchOptions[0];
+  const clinic = {
+    id: apiSession ? apiSession.tenantId : clinicId,
+    name: apiSession?.user?.tenant_name || (isSuperAdmin ? 'MedizinHub HMS' : 'Current Tenant'),
+    type: branchOptions.length > 1 ? 'Multi Branch Tenant' : 'Single Branch Tenant',
+    multiBranch: branchOptions.length > 1,
+    modules: allModuleIds,
+    branches: branchOptions,
+    departments: departmentOptions.map((department: any) => department.id),
+    consultationFees: {},
+  };
+  const branch = branchOptions.find((b: any) => b.id === effectiveBranchId) || branchOptions[0] || defaultBranch;
   const allowedDepartments = departmentOptions;
 
   function selectBranch(id: string) {
@@ -248,7 +268,10 @@ export function useAppController() {
     }
   }
 
-  const scopedAppointments = appointments.filter((a) => a.clinicId === effectiveClinicId && a.branchId === effectiveBranchId);
+  const scopedAppointments = appointments.filter((a) => {
+    if (isSuperAdmin) return true;
+    return a.clinicId === effectiveClinicId && (!effectiveBranchId || a.branchId === effectiveBranchId);
+  });
   const ctx = {
     clinic,
     branch,
@@ -268,7 +291,25 @@ export function useAppController() {
     liveInvoices,
   };
   const allowedForRole = roleModules[role] || roleModules.tenant_admin;
-  const enabled = (id: string) => canOpenModule(id, allowedForRole, clinic);
+  const permissionModules = new Set<string>();
+  const permissionKeys = apiSession?.user?.permissions || [];
+  const navHasAnyPermission = (...keys: string[]) =>
+    Boolean(apiSession?.user?.is_super_admin || permissionKeys.includes('*') || keys.some((key) => permissionKeys.includes(key)));
+  if (navHasAnyPermission('identity.users.manage', 'identity.users.create', 'identity.users.read', 'identity.users.edit', 'identity.users.delete', 'identity.roles.manage', 'identity.roles.read', 'settings.manage', 'branches.manage', 'branches.read', 'departments.manage', 'departments.read')) permissionModules.add('admin');
+  if (navHasAnyPermission('appointments.manage', 'appointments.create', 'appointments.read', 'appointments.edit')) permissionModules.add('appointments');
+  if (navHasAnyPermission('queue.manage')) permissionModules.add('queue');
+  if (navHasAnyPermission('patients.read', 'patients.write', 'patients.create', 'patients.edit')) permissionModules.add('patients');
+  if (navHasAnyPermission('practitioners.manage', 'practitioners.read', 'practitioners.create', 'practitioners.edit')) permissionModules.add('practitioners');
+  if (navHasAnyPermission('scheduling.manage', 'scheduling.read', 'scheduling.create', 'scheduling.edit', 'scheduling.delete')) permissionModules.add('scheduling');
+  if (navHasAnyPermission('consultations.read', 'consultations.write', 'consultations.sign')) {
+    permissionModules.add('doctor');
+    permissionModules.add('consultation');
+  }
+  if (navHasAnyPermission('lab.manage', 'lab.read', 'lab.create', 'lab.edit')) permissionModules.add('lab');
+  if (navHasAnyPermission('pharmacy.manage', 'pharmacy.read', 'pharmacy.create', 'pharmacy.edit')) permissionModules.add('pharmacy');
+  if (navHasAnyPermission('billing.manage', 'invoices.read', 'invoices.create', 'payments.manage')) permissionModules.add('billing');
+  if (navHasAnyPermission('reports.read', 'audit.read')) permissionModules.add('reports');
+  const enabled = (id: string) => canOpenModule(id, Array.from(new Set([...allowedForRole, ...Array.from(permissionModules)])), clinic);
 
   return {
     authenticated,
@@ -279,7 +320,7 @@ export function useAppController() {
       nav,
       enabled,
       clinic,
-      clinics,
+      clinics: [clinic],
       clinicId: effectiveClinicId,
       changeClinic,
       branchId: effectiveBranchId,

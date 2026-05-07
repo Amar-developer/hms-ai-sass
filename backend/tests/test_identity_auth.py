@@ -181,6 +181,64 @@ def test_identity_actions_are_audited(unauthenticated_client):
     assert "identity.user_created" in actions
 
 
+def test_identity_users_manage_permission_can_manage_users_without_tenant_admin_role(client):
+    tenant = client.post("/api/v1/tenants", json={"name": "Delegated User Clinic"}).json()
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "User Manager",
+            "key": "user_manager",
+            "permission_keys": ["identity.users.manage"],
+        },
+    ).json()
+    operator = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "name": "Nurse User Manager",
+            "email": "nurse.user.manager@test.local",
+            "password": "UserManage123",
+            "user_type": "nurse",
+            "role_keys": [role["key"]],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": operator["email"],
+            "password": "UserManage123",
+            "tenant_id": tenant["id"],
+        },
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+
+    users = client.get("/api/v1/identity/users", headers=headers)
+    roles = client.get("/api/v1/identity/roles", headers=headers)
+    created = client.post(
+        "/api/v1/identity/users",
+        headers=headers,
+        json={
+            "name": "Front Desk From Nurse",
+            "email": "frontdesk.from.nurse@test.local",
+            "password": "FrontDesk123",
+            "user_type": "reception",
+            "role_keys": [],
+        },
+    )
+    blocked_role_create = client.post(
+        "/api/v1/identity/roles",
+        headers=headers,
+        json={"name": "Should Not Create Role", "key": "blocked_role", "permission_keys": []},
+    )
+
+    assert users.status_code == 200
+    assert roles.status_code == 200
+    assert created.status_code == 201
+    assert created.json()["created_by_user_id"] == operator["id"]
+    assert blocked_role_create.status_code == 403
+
+
 def test_tenant_user_update_status_and_delete_are_supported(unauthenticated_client):
     client = unauthenticated_client
     super_token = bootstrap_super_admin(client)
@@ -293,6 +351,18 @@ def test_super_admin_can_assign_primary_role_template_to_customer_tenant(unauthe
     assert catalog.status_code == 200
     assert {"create", "read", "edit", "delete"}.issubset(
         {row["action"] for row in catalog.json() if row["module"] == "appointments"}
+    )
+    assert {"manage", "create", "read", "edit", "delete"}.issubset(
+        {row["action"] for row in catalog.json() if row["module"] == "users"}
+    )
+    assert {"manage", "create", "read", "edit", "delete"}.issubset(
+        {row["action"] for row in catalog.json() if row["module"] == "branches"}
+    )
+    assert {"manage", "create", "read", "edit", "delete"}.issubset(
+        {row["action"] for row in catalog.json() if row["module"] == "departments"}
+    )
+    assert {"manage", "create", "read", "edit", "delete"}.issubset(
+        {row["action"] for row in catalog.json() if row["module"] == "scheduling"}
     )
 
     template = client.post(

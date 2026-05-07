@@ -107,13 +107,13 @@ Frontend:
 - `features/patients/Patient.tsx`: extracted Patient module for registry, summary, alerts, risk notes, and timeline.
 - `features/pharmacy/Pharmacy.tsx`: extracted pharmacy module for OP direct issues, doctor prescriptions, and dispense workflow.
 - `features/platform/SuperAdminDashboard.tsx`: extracted super admin tenant, plan dashboard, template assignment, and tenant onboarding wizard.
-- `features/practitioners/Practitioners.tsx`: extracted practitioner listing module.
+- `features/doctors/Doctors.tsx`: extracted doctor listing module.
 - `features/queue/TokenQueue.tsx`: extracted token queue module for call, skip/not available, requeue, and cancel actions.
 - `features/reports/Reports.tsx`: extracted revenue and operational reports module.
 - `features/scheduling/Scheduling.tsx`: extracted practitioner scheduling display module.
 - `features/shell/AppShell.tsx`: extracted authenticated shell, sidebar, header selectors, change-password mount, and route switch.
 - `features/shell/useAppController.ts`: shared app controller hook for auth/session state, tenant live-data loading, clinic/branch/department scope, and shell props.
-- `features/shared/SimpleList.tsx`: shared fallback list component for mock-only screens.
+- `features/shared/SimpleList.tsx`: legacy shared list component; production modules should load backend data only.
 - `features/shared/Info.tsx`: shared compact key/value display component.
 - `features/subscriptions/Subscriptions.tsx`: extracted subscription plan display module.
 - `components/ui.tsx`: shared Card/Input/Button/Badge UI.
@@ -121,7 +121,7 @@ Frontend:
 - `lib/authPresets.ts`: shared demo user labels and login presets.
 - `lib/liveData.ts`: shared live summary type and backend row mapping helpers.
 - `lib/moduleAccess.ts`: shared module access helper used by the shell controller.
-- `lib/mockData.ts`: fallback demo data.
+- `__tests__/fixtures/`: unit-test fixture data. Production modules must load backend data through `lib/api.ts`.
 - `lib/navigation.ts`: shared navigation items and role-to-module access map.
 - `lib/hmsLogic.ts`: frontend helper logic.
 
