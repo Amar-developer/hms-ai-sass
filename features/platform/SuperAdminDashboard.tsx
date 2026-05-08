@@ -81,7 +81,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
  const [tenantSuccess,setTenantSuccess]=useState<any>(null);
  const [message,setMessage]=useState('');
  const [busy,setBusy]=useState(false);
- const selected=tenants.find(t=>t.id===selectedId)||tenants.find(t=>!t.is_primary)||tenants[0];
+ const selected=tenants.find(t=>t.id===selectedId)||tenants.find(t=>t.is_primary)||tenants[0];
  const customerTenants=tenants.filter(t=>!t.is_primary);
  const activeTenants=customerTenants.filter(t=>t.status==='active').length;
  const trialTenants=customerTenants.filter(t=>t.status==='trial').length;
@@ -98,7 +98,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
   try{
    const [tenantRows,planRows,moduleRows]=await Promise.all([apiFetch('/tenants',apiSession),apiFetch('/subscription-plans',apiSession),apiFetch('/modules',apiSession)]);
    setTenants(tenantRows);setPlans(planRows);setModuleRegistry(moduleRows);
-   if(!selectedId&&tenantRows.length)setSelectedId(tenantRows.find((t:any)=>!t.is_primary)?.id||tenantRows[0].id);
+   if(!selectedId&&tenantRows.length)setSelectedId(tenantRows.find((t:any)=>t.is_primary)?.id||tenantRows[0].id);
    const primary=tenantRows.find((tenant:any)=>tenant.is_primary);
    if(primary)await loadPrimaryTemplates(primary.id);
    return tenantRows;
@@ -508,8 +508,8 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
    {currentSection==='roleEdit'&&<EditRole role={roles.find((r:any)=>r.id===selectedRoleId)} busy={busy} updateRole={updateRole} back={()=>changeSection('roles')}/>}
    {currentSection==='rolePermissions'&&<RolePermissions role={roles.find((r:any)=>r.id===selectedRoleId)} permissionCatalog={permissionCatalog} busy={busy} updateRole={updateRole} back={()=>changeSection('roles')}/>}
    {currentSection==='roleAssign'&&<AssignTemplate title="Assign Role Template" item={roles.find((r:any)=>r.id===selectedRoleId)} tenants={tenants.filter((tenant:any)=>tenant.id!==selectedId)} busy={busy} onSubmit={assignRoleTemplate} back={()=>changeSection('roles')}/>}
-   {currentSection==='users'&&<TenantUsers tenants={customerTenants} selectedId={selectedId} setSelectedId={setSelectedId} users={users} setSelectedUserId={setSelectedUserId} setSection={changeSection} setConfirmAction={setConfirmAction}/>}
-   {currentSection==='userCreate'&&<CreateUser tenants={customerTenants} selectedId={selectedId} setSelectedId={setSelectedId} roles={roles} busy={busy} createUser={createUser} back={()=>changeSection('users')}/>}
+   {currentSection==='users'&&<TenantUsers tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId} users={users} setSelectedUserId={setSelectedUserId} setSection={changeSection} setConfirmAction={setConfirmAction}/>}
+   {currentSection==='userCreate'&&<CreateUser tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId} roles={roles} busy={busy} createUser={createUser} back={()=>changeSection('users')}/>}
    {currentSection==='userEdit'&&<EditUser user={users.find((u:any)=>u.id===selectedUserId)} roles={roles} busy={busy} updateUser={updateUser} back={()=>changeSection('users')}/>}
    {currentSection==='departments'&&<DepartmentsManagement tenants={tenants} customerTenants={customerTenants} selected={selected} selectedId={selectedId} setSelectedId={setSelectedId} departments={departments} setSelectedDepartmentId={setSelectedDepartmentId} setSection={changeSection} setConfirmAction={setConfirmAction}/>}
    {currentSection==='departmentCreate'&&<CreateDepartment tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId} busy={busy} createDepartment={createDepartment} back={()=>changeSection('departments')}/>}

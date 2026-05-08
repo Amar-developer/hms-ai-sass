@@ -48,10 +48,10 @@ export function AppShell(props:any) {
     liveSummary,
   } = props;
 
-  const visibleNav = nav.filter(([id]:any) => enabled(id));
-  const activePage = visibleNav.some(([id]:any) => id === active) ? active : visibleNav[0]?.[0] || 'dashboard';
-  const roleLabel = apiSession?.user?.roles?.[0] || demoUsers.find((u:any) => u[0] === role)?.[1] || 'User';
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const visibleNav = nav.filter(([id]:any) => enabled(id) && !(isSuperAdmin && id === 'admin'));
+  const activePage = visibleNav.some(([id]:any) => id === active) ? active : (isSuperAdmin ? 'superadmin' : visibleNav[0]?.[0] || 'dashboard');
+  const roleLabel = apiSession?.user?.roles?.[0] || demoUsers.find((u:any) => u[0] === role)?.[1] || 'User';
   const [superAdminSection,setSuperAdminSection]=useState('overview');
   const [superAdminSettingsOpen,setSuperAdminSettingsOpen]=useState(true);
   const [tenantAdminSection,setTenantAdminSection]=useState('users');
