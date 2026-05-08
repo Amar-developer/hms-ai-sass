@@ -12,6 +12,7 @@ This project now includes a practical documentation backbone for evolving the pr
 - [Development master prompt](./docs/development-master-prompt.md)
 - [Backend architecture spec](./docs/backend-architecture-spec.md)
 - [Plug-and-play architecture](./docs/plug-and-play-architecture.md)
+- [Source control and quality guide](./docs/source-control-and-quality-guide.md)
 - [Module catalog](./docs/module-catalog.md)
 - [Data, security, and India compliance](./docs/data-security-compliance.md)
 - [Technology strategy](./docs/technology-strategy.md)

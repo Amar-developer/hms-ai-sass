@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+case "$branch" in
+  main|master|develop|development|production|release)
+    echo "Direct pushes from protected branch '$branch' are blocked locally."
+    echo "Push a feature branch and open a pull request."
+    exit 1
+    ;;
+esac
+
+echo "Running pre-push full quality gate..."
+backend/.venv/bin/ruff check backend/app backend/tests
+backend/.venv/bin/pytest backend/tests -q
+npm test
+npm run build
+
+echo "Pre-push checks passed."

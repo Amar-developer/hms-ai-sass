@@ -214,7 +214,7 @@ def test_super_admin_can_assign_primary_department_template_to_customer_tenant(c
 
 
 def test_tenant_admin_cannot_change_locked_global_department_template(unauthenticated_client):
-    from backend.tests.test_identity_auth import bootstrap_super_admin, create_tenant_with_paid_plan
+    from test_identity_auth import bootstrap_super_admin, create_tenant_with_paid_plan
 
     client = unauthenticated_client
     super_token = bootstrap_super_admin(client)
@@ -531,7 +531,7 @@ def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_p
 
 
 def test_tenant_admin_cannot_change_locked_global_branch_template(unauthenticated_client):
-    from backend.tests.test_identity_auth import bootstrap_super_admin, create_tenant_with_paid_plan
+    from test_identity_auth import bootstrap_super_admin, create_tenant_with_paid_plan
 
     client = unauthenticated_client
     super_token = bootstrap_super_admin(client)

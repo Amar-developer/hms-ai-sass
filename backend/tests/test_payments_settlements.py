@@ -1,4 +1,4 @@
-from backend.tests.test_billing import create_fee_rule, setup_signed_consultation
+from test_billing import create_fee_rule, setup_signed_consultation
 
 
 def create_invoice(client, appointment_type: str = "op", fee: int = 1000, doctor_pct: int = 60):
