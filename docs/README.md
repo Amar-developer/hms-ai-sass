@@ -7,6 +7,7 @@ MedizinHub HMS is planned as a plug-and-play healthcare SaaS platform for Indian
 - [Developer Setup Guide](./developer-setup.md): installation and local run instructions for macOS, Windows, and Linux.
 - [Developer Handover Pack](./developer-handover-pack.md): current build status, run commands, code map, developer rules, and next tasks.
 - [Module Development Guide](./module-development-guide.md): required backend/frontend structure, tenant/RBAC/entitlement/audit rules, tests, and PR checklist for new modules.
+- [Source Control and Quality Guide](./source-control-and-quality-guide.md): branch rules, Git hooks, commit rules, CI checks, migration rules, and PR quality gates.
 - [API Permission Matrix](./api-permission-matrix.md): endpoint-by-endpoint RBAC reference for backend and frontend developers.
 - [Product Blueprint](./product-blueprint.md): product vision, target users, core workflows, and differentiators.
 - [Development Master Prompt](./development-master-prompt.md): reusable engineering prompt for consistent module development.
