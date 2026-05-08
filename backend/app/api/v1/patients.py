@@ -97,12 +97,25 @@ def _duplicate_candidates(session: Session, tenant_id: str, payload: PatientCrea
         same_guardian_mobile = bool(
             normalized_guardian_mobile and normalized_guardian_mobile in {patient_mobile, patient_guardian_mobile}
         )
-        if same_name and same_mobile:
+        same_date_of_birth = bool(payload.date_of_birth and patient.date_of_birth == payload.date_of_birth)
+        if same_name and same_date_of_birth and (same_mobile or same_guardian_mobile):
+            reason = "Same patient name, date of birth, and mobile"
+            confidence = "high"
+        elif same_name and same_date_of_birth:
+            reason = "Same patient name and date of birth"
+            confidence = "high"
+        elif same_name and same_mobile and not payload.date_of_birth:
             reason = "Same patient name and mobile"
             confidence = "high"
-        elif same_name and same_guardian_mobile:
+        elif same_name and same_guardian_mobile and not payload.date_of_birth:
             reason = "Same patient name and guardian mobile"
             confidence = "high"
+        elif same_name and (same_mobile or same_guardian_mobile):
+            reason = "Same patient name and mobile, but date of birth differs"
+            confidence = "medium"
+        elif same_date_of_birth and (same_mobile or same_guardian_mobile):
+            reason = "Same date of birth and mobile"
+            confidence = "medium"
         elif same_mobile or same_guardian_mobile:
             reason = "Same mobile number"
             confidence = "medium"

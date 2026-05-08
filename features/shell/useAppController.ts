@@ -83,19 +83,21 @@ export function useAppController() {
       setDepartmentId(departmentRows[0].id);
     }
 
-    const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows] = await Promise.all([
+    const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows] = await Promise.all([
       apiFetchIfAllowed<any[]>('/patients', session, 'patients.read', []),
       apiFetchIfAllowed<any[]>('/appointments', session, 'appointments.manage', []),
       apiFetchIfAllowed<any[]>('/queue?include_completed=true', session, 'queue.manage', []),
       apiFetchIfAllowed<any[]>('/consultations', session, 'consultations.read', []),
       apiFetchIfAllowed<any[]>('/billing/invoices', session, 'billing.manage', []),
       apiFetchIfAllowed<any[]>('/ip/admissions', session, ['ip.manage', 'ip.read'], []),
+      apiFetchIfAllowed<any[]>('/practitioners', session, referenceReadPermissions, []),
     ]);
 
     const mappedPatients = patientRows.map(mapPatient);
     const patientMap = new Map<string, any>(mappedPatients.map((p: any) => [p.id, p]));
+    const practitionerMap = new Map<string, any>(practitionerRows.map((practitioner: any) => [practitioner.id, practitioner]));
     const mappedAppointments = appointmentRows.map((a: any) =>
-      mapAppointment(a, queueRows, consultationRows, patientMap, session.tenantId, backendBranchId),
+      mapAppointment(a, queueRows, consultationRows, patientMap, practitionerMap, session.tenantId, backendBranchId),
     );
 
     setPatients(mappedPatients);

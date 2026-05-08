@@ -331,8 +331,9 @@ export function AppointmentCalendarBooking(props: Props) {
             area: String(fd.get('area') || '') || null,
           }),
         });
-        if (duplicateRows.length > 0) {
-          setLiveMatches(duplicateRows);
+        const highConfidenceDuplicates = duplicateRows.filter((row: any) => row.confidence === 'high');
+        if (highConfidenceDuplicates.length > 0) {
+          setLiveMatches(highConfidenceDuplicates);
           setBookingStep('search');
           setMessage('Possible duplicate patient found. Please select the existing patient or verify before creating a new record.');
           return;

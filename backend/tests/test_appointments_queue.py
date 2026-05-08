@@ -386,6 +386,55 @@ def test_duplicate_patient_detection_blocks_exact_registration(client: TestClien
     assert duplicate_create.json()["detail"] == "Possible duplicate patient found. Search and select existing patient instead."
 
 
+def test_patient_registration_allows_shared_family_mobile_number(client: TestClient):
+    tenant = create_tenant(client)
+    client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "Balaji N", "mobile": "9876543210", "date_of_birth": "1985-05-10"},
+    )
+
+    duplicate_check = client.post(
+        "/api/v1/patients/duplicates",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "Dakshiin B", "mobile": "9876543210", "date_of_birth": "2018-09-15"},
+    )
+    child_create = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "Dakshiin B", "mobile": "9876543210", "date_of_birth": "2018-09-15"},
+    )
+
+    assert duplicate_check.status_code == 200
+    assert duplicate_check.json()[0]["confidence"] == "medium"
+    assert child_create.status_code == 201
+    assert child_create.json()["full_name"] == "Dakshiin B"
+
+
+def test_duplicate_patient_detection_uses_date_of_birth_for_high_confidence(client: TestClient):
+    tenant = create_tenant(client)
+    first = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "Same Name", "mobile": "9000000001", "date_of_birth": "1990-01-20"},
+    )
+    assert first.status_code == 201
+
+    same_dob = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "Same Name", "mobile": "9000000001", "date_of_birth": "1990-01-20"},
+    )
+    different_dob = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "Same Name", "mobile": "9000000001", "date_of_birth": "2018-01-20"},
+    )
+
+    assert same_dob.status_code == 409
+    assert different_dob.status_code == 201
+
+
 def test_duplicate_appointment_prevention_by_patient_doctor_and_slot(client: TestClient):
     tenant = create_tenant(client)
     branch = create_branch(client, tenant["id"])

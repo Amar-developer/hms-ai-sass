@@ -91,7 +91,7 @@ def list_queue(
         )
     return list(
         session.exec(
-            statement.order_by(QueueEntry.priority_rank, QueueEntry.queue_position, QueueEntry.created_at)
+            statement.order_by(QueueEntry.token_number, QueueEntry.created_at)
         ).all()
     )
 
@@ -119,7 +119,7 @@ def queue_display(
             ]
         )
     )
-    rows = list(session.exec(statement.order_by(QueueEntry.priority_rank, QueueEntry.queue_position)).all())
+    rows = list(session.exec(statement.order_by(QueueEntry.token_number, QueueEntry.created_at)).all())
     if display_mode == "called_only":
         rows = [row for row in rows if row.status == AppointmentStatus.CALLED]
     language = _token_language(session, tenant_id, branch_id or rows[0].branch_id) if rows or branch_id else "english"

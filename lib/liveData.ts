@@ -30,12 +30,14 @@ export function mapAppointment(
   queue: any[],
   consultations: any[],
   patientMap: Map<string, any>,
+  practitionerMap: Map<string, any>,
   clinicId: string,
   branchId: string,
 ) {
   const q = queue.find((x) => x.appointment_id === row.id);
   const c = consultations.find((x) => x.appointment_id === row.id);
   const p = patientMap.get(row.patient_id);
+  const practitioner = practitionerMap.get(row.practitioner_id);
   return {
     id: row.id,
     queueEntryId: q?.id,
@@ -51,7 +53,7 @@ export function mapAppointment(
     patient: p?.name || row.patient_id,
     departmentId: row.department_id || 'general',
     doctorId: row.practitioner_id || '',
-    doctor: row.practitioner_name || row.practitioner_id || 'Unassigned',
+    doctor: row.practitioner_name || practitioner?.full_name || practitioner?.name || 'Unassigned',
     appointmentDate: row.appointment_date,
     time: row.appointment_time || 'Today',
     status: row.status,

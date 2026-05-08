@@ -15,6 +15,14 @@ type TokenQueueProps = {
 
 type QueueAction = 'call' | 'skip' | 'requeue' | 'cancel';
 
+function tokenSortValue(row:any){
+  return String(row.token_number||row.token||'').trim();
+}
+
+function sortByTokenNumber(rows:any[]){
+  return [...rows].sort((a:any,b:any)=>tokenSortValue(a).localeCompare(tokenSortValue(b),undefined,{numeric:true,sensitivity:'base'}));
+}
+
 export function TokenQueue({
   scopedAppointments,
   appointments,
@@ -27,8 +35,9 @@ export function TokenQueue({
   const [displayMode,setDisplayMode]=useState<'reception'|'called_only'>('reception');
   const [tokenLanguage,setTokenLanguage]=useState<'english'|'tamil'|'both'>('english');
   const [displayRows,setDisplayRows]=useState<any[]>([]);
-  const queue = sortQueue(scopedAppointments);
+  const queue = sortByTokenNumber(sortQueue(scopedAppointments));
   const visibleQueue=displayMode==='called_only'?queue.filter((appointment:any)=>appointment.queueStatus==='called'||appointment.queueStatus==='Called'):queue;
+  const visibleDisplayRows=sortByTokenNumber(displayRows);
 
   useEffect(()=>{
     let alive=true;
@@ -119,7 +128,7 @@ export function TokenQueue({
       </div>
       {message && <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {(displayRows.length?displayRows:visibleQueue.slice(0,4)).map((item:any)=>(
+        {(visibleDisplayRows.length?visibleDisplayRows:visibleQueue.slice(0,4)).map((item:any)=>(
           <div key={item.id} className="rounded-2xl bg-slate-900 p-4 text-white">
             <p className="text-xs font-bold uppercase text-slate-300">{item.priority||item.tokenType||'normal'}</p>
             <p className="mt-1 text-3xl font-black">{item.token_number||item.token}</p>
