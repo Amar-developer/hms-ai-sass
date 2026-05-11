@@ -1,28 +1,224 @@
 'use client';
 
-import {useEffect,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {Badge,Button,Card,Input,Select} from '@/components/ui';
 import {apiBlob,apiFetch} from '@/lib/api';
 
+function invoiceSource(invoice:any){
+  if(invoice.physiotherapy_case_id) return {label:'Physiotherapy',tone:'purple'};
+  if(invoice.ip_admission_id) return {label:'IP Billing',tone:'blue'};
+  if(invoice.consultation_id||invoice.appointment_id) return {label:'Consultation',tone:'slate'};
+  return {label:'Direct',tone:'amber'};
+}
+
+function money(value:any){
+  return `₹${Number(value||0).toLocaleString('en-IN')}`;
+}
+
 export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoices}:any){
- const [busy,setBusy]=useState('');
- const [message,setMessage]=useState('');
- const [amounts,setAmounts]=useState<Record<string,string>>({});
- const [methods,setMethods]=useState<Record<string,string>>({});
- const [references,setReferences]=useState<Record<string,string>>({});
- const [dueReport,setDueReport]=useState<any>(null);
- const [revenueReport,setRevenueReport]=useState<any>(null);
- const [settlement,setSettlement]=useState<any>(null);
- const patientMap=new Map(patients.map((p:any)=>[p.id,p]));
- const invoicedConsultations=new Set((liveInvoices||[]).map((i:any)=>i.consultation_id).filter(Boolean));
- const signedReady=appointments.filter((a:any)=>a.consultationId&&a.consultationStatus==='signed'&&!invoicedConsultations.has(a.consultationId));
- useEffect(()=>{if(apiSession)loadReports()},[apiSession?.token,apiSession?.tenantId,(liveInvoices||[]).length]);
- async function loadReports(){if(!apiSession)return;try{const [due,revenue,summary]=await Promise.all([apiFetch('/billing/reports/due-collection',apiSession),apiFetch('/billing/reports/revenue?group_by=doctor',apiSession),apiFetch('/billing/doctor-settlements/summary',apiSession)]);setDueReport(due);setRevenueReport(revenue);setSettlement(summary)}catch{}}
- async function generateInvoice(a:any){if(!apiSession)return;setBusy(a.id);setMessage('');try{await apiFetch('/billing/invoices/from-consultation',apiSession,{method:'POST',body:JSON.stringify({consultation_id:a.consultationId,discount_amount:0,created_by_user_id:apiSession.user?.id})});await loadLiveData(apiSession);await loadReports();setMessage(`Invoice generated for ${a.patient}.`)}catch(err:any){setMessage(err.message||'Could not generate invoice.')}finally{setBusy('')}}
- async function collectPayment(invoice:any){if(!apiSession)return;const amount=Number(amounts[invoice.id]||invoice.balance_amount||0);if(!amount){setMessage('Enter payment amount.');return}setBusy(invoice.id);setMessage('');try{await apiFetch(`/billing/invoices/${invoice.id}/payments`,apiSession,{method:'POST',body:JSON.stringify({method:methods[invoice.id]||'cash',amount,reference_number:references[invoice.id]||null,collected_by_user_id:apiSession.user?.id})});await loadLiveData(apiSession);await loadReports();setAmounts({...amounts,[invoice.id]:''});setReferences({...references,[invoice.id]:''});setMessage(`Payment recorded for ${invoice.invoice_number}.`)}catch(err:any){setMessage(err.message||'Could not record payment.')}finally{setBusy('')}}
- async function issueCreditNote(invoice:any){if(!apiSession)return;const reason=window.prompt(`Credit note reason for ${invoice.invoice_number}`);if(!reason)return;setBusy(invoice.id);try{await apiFetch(`/billing/invoices/${invoice.id}/credit-notes`,apiSession,{method:'POST',body:JSON.stringify({amount:Math.max(1,invoice.balance_amount||invoice.total_amount),reason,created_by_user_id:apiSession.user?.id})});setMessage(`Credit note issued for ${invoice.invoice_number}.`)}catch(err:any){setMessage(err.message||'Could not issue credit note.')}finally{setBusy('')}}
- async function openReceipt(invoice:any){if(!apiSession)return;setBusy(invoice.id);try{const blob=await apiBlob(`/billing/invoices/${invoice.id}/receipt.pdf`,apiSession);const url=URL.createObjectURL(blob);window.open(url,'_blank','noopener,noreferrer');setTimeout(()=>URL.revokeObjectURL(url),30000)}catch(err:any){setMessage(err.message||'Could not open receipt.')}finally{setBusy('')}}
- async function finalizeSettlement(){if(!apiSession)return;setBusy('settlement');try{const saved=await apiFetch('/billing/doctor-settlements/finalize',apiSession,{method:'POST',body:JSON.stringify({finalized_by_user_id:apiSession.user?.id})});setSettlement(saved);setMessage(`Doctor settlement finalized for ₹${saved.settlement_amount}.`)}catch(err:any){setMessage(err.message||'Could not finalize settlement.')}finally{setBusy('')}}
- if(!apiSession)return <Card><h3 className="text-lg font-bold">Invoices / Billing</h3><p className="mt-2 text-sm text-slate-500">Backend login is required to view billing data.</p></Card>;
- return <div className="space-y-6"><div className="grid gap-4 md:grid-cols-4"><Card><p className="text-sm text-slate-500">Due Collection</p><p className="mt-1 text-2xl font-bold">₹{dueReport?.total_due_amount??0}</p><p className="text-xs text-slate-500">{dueReport?.invoice_count??0} invoices</p></Card><Card><p className="text-sm text-slate-500">Revenue</p><p className="mt-1 text-2xl font-bold">₹{revenueReport?.total_invoice_amount??0}</p><p className="text-xs text-slate-500">Tax ₹{revenueReport?.total_tax_amount??0}</p></Card><Card><p className="text-sm text-slate-500">Paid</p><p className="mt-1 text-2xl font-bold">₹{revenueReport?.total_paid_amount??0}</p><p className="text-xs text-slate-500">Doctor share ₹{revenueReport?.total_doctor_share??0}</p></Card><Card><p className="text-sm text-slate-500">Settlement</p><p className="mt-1 text-2xl font-bold">₹{settlement?.doctor_share_paid_basis??settlement?.settlement_amount??0}</p><button type="button" onClick={finalizeSettlement} className="mt-2 rounded-xl border px-3 py-2 text-xs font-bold" disabled={busy==='settlement'}>Finalize</button></Card></div><Card><h3 className="text-lg font-bold">Invoice Generation</h3><p className="text-sm text-slate-500">Signed consultations ready for billing.</p>{message&&<div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}<div className="mt-4 grid gap-3">{signedReady.length===0&&<div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No signed consultations waiting for invoice.</div>}{signedReady.map((a:any)=><div key={a.id} className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"><div><b>{a.token} · {a.patient}</b><p className="text-sm text-slate-500">Consultation: {a.consultationId}</p></div><Button disabled={busy===a.id} onClick={()=>generateInvoice(a)}>{busy===a.id?'Generating...':'Generate Invoice'}</Button></div>)}</div></Card><Card><h3 className="text-lg font-bold">Invoices & Payments</h3><div className="mt-4 overflow-auto rounded-2xl border"><table className="w-full min-w-[1180px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Invoice</th><th>Patient</th><th>Status</th><th>Tax</th><th>Total</th><th>Paid</th><th>Balance</th><th>Doctor Share</th><th>Payment</th><th>Actions</th></tr></thead><tbody className="divide-y">{(liveInvoices||[]).length===0&&<tr><td colSpan={10} className="px-4 py-4 text-slate-500">No invoices yet.</td></tr>}{(liveInvoices||[]).map((invoice:any)=>{const p:any=patientMap.get(invoice.patient_id);return <tr key={invoice.id}><td className="px-4 py-4"><b>{invoice.invoice_number}</b><p className="text-xs text-slate-500">{invoice.id}</p></td><td>{p?.name||invoice.patient_id}</td><td><Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge></td><td>₹{invoice.tax_amount||0}</td><td>₹{invoice.total_amount}</td><td>₹{invoice.paid_amount}</td><td>₹{invoice.balance_amount}</td><td>₹{invoice.doctor_share_amount}</td><td>{invoice.balance_amount>0?<div className="grid min-w-[360px] gap-2 md:grid-cols-[90px_1fr_1fr_auto] md:items-center"><Select value={methods[invoice.id]||'cash'} onChange={(e:any)=>setMethods({...methods,[invoice.id]:e.target.value})}><option value="cash">Cash</option><option value="upi">UPI</option><option value="gpay">GPay</option><option value="paytm">Paytm</option><option value="credit_card">Credit Card</option><option value="debit_card">Debit Card</option><option value="bank_transfer">Bank</option></Select><Input type="number" min="1" max={invoice.balance_amount} value={amounts[invoice.id]??invoice.balance_amount} onChange={(e:any)=>setAmounts({...amounts,[invoice.id]:e.target.value})}/><Input placeholder="Reference" value={references[invoice.id]||''} onChange={(e:any)=>setReferences({...references,[invoice.id]:e.target.value})}/><Button disabled={busy===invoice.id} onClick={()=>collectPayment(invoice)}>{busy===invoice.id?'Saving...':'Pay'}</Button></div>:<Badge tone="green">Settled</Badge>}</td><td><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>openReceipt(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Receipt</button><button type="button" onClick={()=>issueCreditNote(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Credit Note</button></div></td></tr>})}</tbody></table></div></Card></div>
+  const [busy,setBusy]=useState('');
+  const [message,setMessage]=useState('');
+  const [amounts,setAmounts]=useState<Record<string,string>>({});
+  const [methods,setMethods]=useState<Record<string,string>>({});
+  const [references,setReferences]=useState<Record<string,string>>({});
+  const [dueReport,setDueReport]=useState<any>(null);
+  const [revenueReport,setRevenueReport]=useState<any>(null);
+  const [settlement,setSettlement]=useState<any>(null);
+
+  const patientMap=useMemo(()=>new Map(patients.map((p:any)=>[p.id,p])),[patients]);
+  const invoices=useMemo(
+    ()=>
+      [...(liveInvoices||[])].sort(
+        (a:any,b:any)=>new Date(b.created_at||0).getTime()-new Date(a.created_at||0).getTime(),
+      ),
+    [liveInvoices],
+  );
+  const invoicedConsultations=new Set(invoices.map((i:any)=>i.consultation_id).filter(Boolean));
+  const signedReady=appointments.filter((a:any)=>a.consultationId&&a.consultationStatus==='signed'&&!invoicedConsultations.has(a.consultationId));
+
+  useEffect(()=>{if(apiSession)loadReports()},[apiSession?.token,apiSession?.tenantId,invoices.length]);
+
+  async function loadReports(){
+    if(!apiSession)return;
+    try{
+      const [due,revenue,summary]=await Promise.all([
+        apiFetch('/billing/reports/due-collection',apiSession),
+        apiFetch('/billing/reports/revenue?group_by=doctor',apiSession),
+        apiFetch('/billing/doctor-settlements/summary',apiSession),
+      ]);
+      setDueReport(due);
+      setRevenueReport(revenue);
+      setSettlement(summary);
+    }catch{}
+  }
+
+  async function generateInvoice(a:any){
+    if(!apiSession)return;
+    setBusy(a.id);
+    setMessage('');
+    try{
+      await apiFetch('/billing/invoices/from-consultation',apiSession,{
+        method:'POST',
+        body:JSON.stringify({consultation_id:a.consultationId,discount_amount:0,created_by_user_id:apiSession.user?.id}),
+      });
+      await loadLiveData(apiSession);
+      await loadReports();
+      setMessage(`Invoice generated for ${a.patient}.`);
+    }catch(err:any){setMessage(err.message||'Could not generate invoice.')}
+    finally{setBusy('')}
+  }
+
+  async function collectPayment(invoice:any){
+    if(!apiSession)return;
+    const amount=Number(amounts[invoice.id]||invoice.balance_amount||0);
+    if(!amount){setMessage('Enter payment amount.');return}
+    setBusy(invoice.id);
+    setMessage('');
+    try{
+      await apiFetch(`/billing/invoices/${invoice.id}/payments`,apiSession,{
+        method:'POST',
+        body:JSON.stringify({
+          method:methods[invoice.id]||'cash',
+          amount,
+          reference_number:references[invoice.id]||null,
+          collected_by_user_id:apiSession.user?.id,
+        }),
+      });
+      await loadLiveData(apiSession);
+      await loadReports();
+      setAmounts({...amounts,[invoice.id]:''});
+      setReferences({...references,[invoice.id]:''});
+      setMessage(`Payment recorded for ${invoice.invoice_number}.`);
+    }catch(err:any){setMessage(err.message||'Could not record payment.')}
+    finally{setBusy('')}
+  }
+
+  async function issueCreditNote(invoice:any){
+    if(!apiSession)return;
+    const reason=window.prompt(`Credit note reason for ${invoice.invoice_number}`);
+    if(!reason)return;
+    setBusy(invoice.id);
+    try{
+      await apiFetch(`/billing/invoices/${invoice.id}/credit-notes`,apiSession,{
+        method:'POST',
+        body:JSON.stringify({
+          amount:Math.max(1,invoice.balance_amount||invoice.total_amount),
+          reason,
+          created_by_user_id:apiSession.user?.id,
+        }),
+      });
+      setMessage(`Credit note issued for ${invoice.invoice_number}.`);
+    }catch(err:any){setMessage(err.message||'Could not issue credit note.')}
+    finally{setBusy('')}
+  }
+
+  async function openReceipt(invoice:any){
+    if(!apiSession)return;
+    setBusy(invoice.id);
+    try{
+      const blob=await apiBlob(`/billing/invoices/${invoice.id}/receipt.pdf`,apiSession);
+      const url=URL.createObjectURL(blob);
+      window.open(url,'_blank','noopener,noreferrer');
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+    }catch(err:any){setMessage(err.message||'Could not open receipt.')}
+    finally{setBusy('')}
+  }
+
+  async function finalizeSettlement(){
+    if(!apiSession)return;
+    setBusy('settlement');
+    try{
+      const saved=await apiFetch('/billing/doctor-settlements/finalize',apiSession,{
+        method:'POST',
+        body:JSON.stringify({finalized_by_user_id:apiSession.user?.id}),
+      });
+      setSettlement(saved);
+      setMessage(`Doctor settlement finalized for ${money(saved.settlement_amount)}.`);
+    }catch(err:any){setMessage(err.message||'Could not finalize settlement.')}
+    finally{setBusy('')}
+  }
+
+  if(!apiSession){
+    return <Card><h3 className="text-lg font-bold">Invoices / Billing</h3><p className="mt-2 text-sm text-slate-500">Backend login is required to view billing data.</p></Card>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card><p className="text-sm text-slate-500">Due Collection</p><p className="mt-1 text-2xl font-bold">{money(dueReport?.total_due_amount)}</p><p className="text-xs text-slate-500">{dueReport?.invoice_count??0} invoices</p></Card>
+        <Card><p className="text-sm text-slate-500">Revenue</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_invoice_amount)}</p><p className="text-xs text-slate-500">Tax {money(revenueReport?.total_tax_amount)}</p></Card>
+        <Card><p className="text-sm text-slate-500">Paid</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_paid_amount)}</p><p className="text-xs text-slate-500">Doctor share {money(revenueReport?.total_doctor_share)}</p></Card>
+        <Card><p className="text-sm text-slate-500">Settlement</p><p className="mt-1 text-2xl font-bold">{money(settlement?.doctor_share_paid_basis??settlement?.settlement_amount)}</p><button type="button" onClick={finalizeSettlement} className="mt-2 rounded-xl border px-3 py-2 text-xs font-bold" disabled={busy==='settlement'}>Finalize</button></Card>
+      </div>
+
+      <Card>
+        <h3 className="text-lg font-bold">Invoice Generation</h3>
+        <p className="text-sm text-slate-500">Signed consultations ready for billing. Lab, prescription, IP, and physiotherapy invoices appear in the invoice list after their module creates or links billing.</p>
+        {message&&<div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
+        <div className="mt-4 grid gap-3">
+          {signedReady.length===0&&<div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No signed consultations waiting for invoice.</div>}
+          {signedReady.map((a:any)=>(
+            <div key={a.id} className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center">
+              <div><b>{a.token} · {a.patient}</b><p className="text-sm text-slate-500">Consultation: {a.consultationId}</p></div>
+              <Button disabled={busy===a.id} onClick={()=>generateInvoice(a)}>{busy===a.id?'Generating...':'Generate Invoice'}</Button>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="text-lg font-bold">Invoices & Payments</h3>
+        <div className="mt-4 overflow-auto rounded-2xl border">
+          <table className="w-full min-w-[1280px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Invoice</th>
+                <th>Source</th>
+                <th>Patient</th>
+                <th>Status</th>
+                <th>Tax</th>
+                <th>Total</th>
+                <th>Paid</th>
+                <th>Balance</th>
+                <th>Doctor Share</th>
+                <th>Payment</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {invoices.length===0&&<tr><td colSpan={11} className="px-4 py-4 text-slate-500">No invoices yet.</td></tr>}
+              {invoices.map((invoice:any)=>{
+                const p:any=patientMap.get(invoice.patient_id);
+                const source=invoiceSource(invoice);
+                return (
+                  <tr key={invoice.id}>
+                    <td className="px-4 py-4"><b>{invoice.invoice_number}</b><p className="text-xs text-slate-500">{invoice.id}</p></td>
+                    <td><Badge tone={source.tone as any}>{source.label}</Badge>{invoice.physiotherapy_case_id&&<p className="mt-1 text-xs text-slate-500">{invoice.physiotherapy_case_id}</p>}</td>
+                    <td>{p?.name||invoice.patient_id}</td>
+                    <td><Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge></td>
+                    <td>{money(invoice.tax_amount)}</td>
+                    <td>{money(invoice.total_amount)}</td>
+                    <td>{money(invoice.paid_amount)}</td>
+                    <td>{money(invoice.balance_amount)}</td>
+                    <td>{money(invoice.doctor_share_amount)}</td>
+                    <td>
+                      {invoice.balance_amount>0?(
+                        <div className="grid min-w-[360px] gap-2 md:grid-cols-[90px_1fr_1fr_auto] md:items-center">
+                          <Select value={methods[invoice.id]||'cash'} onChange={(e:any)=>setMethods({...methods,[invoice.id]:e.target.value})}><option value="cash">Cash</option><option value="upi">UPI</option><option value="gpay">GPay</option><option value="paytm">Paytm</option><option value="credit_card">Credit Card</option><option value="debit_card">Debit Card</option><option value="bank_transfer">Bank</option></Select>
+                          <Input type="number" min="1" max={invoice.balance_amount} value={amounts[invoice.id]??invoice.balance_amount} onChange={(e:any)=>setAmounts({...amounts,[invoice.id]:e.target.value})}/>
+                          <Input placeholder="Reference" value={references[invoice.id]||''} onChange={(e:any)=>setReferences({...references,[invoice.id]:e.target.value})}/>
+                          <Button disabled={busy===invoice.id} onClick={()=>collectPayment(invoice)}>{busy===invoice.id?'Saving...':'Pay'}</Button>
+                        </div>
+                      ):<Badge tone="green">Settled</Badge>}
+                    </td>
+                    <td><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>openReceipt(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Receipt</button><button type="button" onClick={()=>issueCreditNote(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Credit Note</button></div></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
 }

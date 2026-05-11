@@ -1,0 +1,12 @@
+.venv
+__pycache__
+app/**/__pycache__
+alembic/**/__pycache__
+tests/**/__pycache__
+*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.env
+.env.*
+Dockerfile.dev

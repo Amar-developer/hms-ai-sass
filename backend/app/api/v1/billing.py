@@ -362,7 +362,7 @@ def list_invoices(
     statement = select(Invoice).where(Invoice.tenant_id == tenant_id)
     if branch_id:
         statement = statement.where(Invoice.branch_id == branch_id)
-    return list(session.exec(statement.order_by(Invoice.created_at)).all())
+    return list(session.exec(statement.order_by(Invoice.created_at.desc())).all())
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDetailRead)

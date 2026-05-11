@@ -45,6 +45,8 @@ Current enforced guardrails:
 | `lab.create/read/edit/delete` | Granular lab workflow controls |
 | `pharmacy.manage` | Pharmacy issues/status |
 | `pharmacy.create/read/edit/delete` | Granular pharmacy workflow controls |
+| `physiotherapy.manage` | Physiotherapy case, session, equipment, and billing workflow controls |
+| `physiotherapy.create/read/edit/delete` | Granular physiotherapy workflow controls |
 | `notifications.manage` | Notification queue create/list |
 | `audit.read` | Audit event create/list/detail |
 | `reports.read` | Subscription active/entitlement reads and future reports |
@@ -252,7 +254,23 @@ Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, pa
 | `GET` | `/api/v1/pharmacy/stock-ledger` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/low-stock` | `pharmacy.manage` |
 
-Lab APIs enforce module entitlement and branch scope for catalog, packages, templates, direct orders, consultation-derived records, sample collection, result release, report PDF access, and status updates. Result release queues lab-ready notifications when communication provider settings and subscription entitlements allow them. Pharmacy APIs enforce pharmacy entitlement and branch scope for medicine catalog, suppliers, purchase entry with purchase date, PO number, supplier discount, line discount, CGST, SGST, batches, expired stock returns, stock ledger, low-stock alerts, prescription/direct/external issues, dispense stock reduction, substitutes, billing linkage, listing, detail, and status updates. Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, and physiotherapy invoice generation.
+Lab APIs enforce module entitlement and branch scope for catalog, packages, templates, direct orders, consultation-derived records, sample collection, result release, report PDF access, and status updates. Result release queues lab-ready notifications when communication provider settings and subscription entitlements allow them. Pharmacy APIs enforce pharmacy entitlement and branch scope for medicine catalog, suppliers, purchase entry with purchase date, PO number, supplier discount, line discount, CGST, SGST, batches, expired stock returns, stock ledger, low-stock alerts, prescription/direct/external issues, dispense stock reduction, substitutes, billing linkage, listing, detail, and status updates.
+
+## Physiotherapy
+
+| Method | Endpoint | Permission |
+| --- | --- | --- |
+| `GET` | `/api/v1/physiotherapy/equipment` | `physiotherapy.read` |
+| `POST` | `/api/v1/physiotherapy/equipment` | `physiotherapy.create` |
+| `GET` | `/api/v1/physiotherapy/cases` | `physiotherapy.read` |
+| `POST` | `/api/v1/physiotherapy/cases` | `physiotherapy.create` |
+| `PATCH` | `/api/v1/physiotherapy/cases/{case_id}` | `physiotherapy.edit` |
+| `GET` | `/api/v1/physiotherapy/cases/{case_id}/sessions` | `physiotherapy.read` |
+| `POST` | `/api/v1/physiotherapy/cases/{case_id}/sessions` | `physiotherapy.edit` |
+| `GET` | `/api/v1/physiotherapy/cases/{case_id}/invoice` | `billing.manage` |
+| `POST` | `/api/v1/physiotherapy/cases/{case_id}/invoice` | `billing.manage` |
+
+Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection and receipt PDFs use the shared billing endpoints.
 
 ## Settings, Notifications, and Audit
 

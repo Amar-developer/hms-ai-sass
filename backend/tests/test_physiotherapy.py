@@ -4,6 +4,7 @@ from datetime import date
 from sqlmodel import Session, select
 
 from app.modules.audit.models import AuditEvent
+from app.modules.billing.models import TaxRule
 from app.modules.patients.models import Gender, Patient
 from app.modules.physiotherapy.models import PhysiotherapyCase
 from app.modules.subscriptions.models import SubscriptionPlan, TenantSubscription
@@ -37,6 +38,8 @@ def seed_physio_tenant(test_engine):
         session.refresh(branch)
         session.refresh(patient)
         session.refresh(plan)
+        session.add(TaxRule(tenant_id=tenant.id, branch_id=branch.id, name="Physio GST", tax_percentage=5))
+        session.commit()
         session.add(TenantSubscription(tenant_id=tenant.id, plan_id=plan.id, starts_on=date.today(), is_active=True))
         session.commit()
         return tenant.id, branch.id, patient.id
@@ -88,10 +91,30 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
     assert session.status_code == 201
     assert session.json()["session_number"] == 1
 
-    invoice = client.post(f"/api/v1/physiotherapy/cases/{case_body['id']}/invoice", headers=headers)
+    invoice = client.post(
+        f"/api/v1/physiotherapy/cases/{case_body['id']}/invoice",
+        headers=headers,
+        json={"discount_amount": 100},
+    )
     assert invoice.status_code == 201
     assert invoice.json()["invoice"]["physiotherapy_case_id"] == case_body["id"]
-    assert invoice.json()["invoice"]["total_amount"] == 800
+    assert invoice.json()["invoice"]["subtotal_amount"] == 800
+    assert invoice.json()["invoice"]["discount_amount"] == 100
+    assert invoice.json()["invoice"]["tax_amount"] == 35
+    assert invoice.json()["invoice"]["total_amount"] == 735
+    assert invoice.json()["items"][0]["item_type"] == "physiotherapy"
+
+    payment = client.post(
+        f"/api/v1/billing/invoices/{invoice.json()['invoice']['id']}/payments",
+        headers=headers,
+        json={"method": "cash", "amount": 735},
+    )
+    assert payment.status_code == 201
+
+    fetched_invoice = client.get(f"/api/v1/physiotherapy/cases/{case_body['id']}/invoice", headers=headers)
+    assert fetched_invoice.status_code == 200
+    assert fetched_invoice.json()["invoice"]["balance_amount"] == 0
+    assert fetched_invoice.json()["payments"][0]["amount"] == 735
 
     with Session(test_engine) as db:
         case_row = db.get(PhysiotherapyCase, case_body["id"])

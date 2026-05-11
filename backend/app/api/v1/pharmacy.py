@@ -488,10 +488,16 @@ def create_pharmacy_issue_from_consultation(
     from app.modules.consultations.models import ConsultationMedicine
 
     medicines = list(session.exec(select(ConsultationMedicine).where(ConsultationMedicine.consultation_id == consultation.id)).all())
+    total = 0
     for med in medicines:
         catalog = session.exec(select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id, MedicineCatalog.name == med.medicine_name)).first()
-        item = PharmacyIssueItem(tenant_id=tenant_id, branch_id=issue.branch_id, pharmacy_issue_id=issue.id, medicine_id=catalog.id if catalog else None, medicine_name=med.medicine_name, quantity=1, unit_price=catalog.default_sale_price if catalog else 0)
+        unit_price = catalog.default_sale_price if catalog else 0
+        total += unit_price
+        item = PharmacyIssueItem(tenant_id=tenant_id, branch_id=issue.branch_id, pharmacy_issue_id=issue.id, medicine_id=catalog.id if catalog else None, medicine_name=med.medicine_name, quantity=1, unit_price=unit_price)
         session.add(item)
+    if medicines and issue.amount == 0:
+        issue.amount = total
+        session.add(issue)
     session.commit()
     record_audit_event(
         session,

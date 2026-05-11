@@ -92,3 +92,9 @@ class PhysiotherapySessionRead(PhysiotherapySessionCreate):
     status: str
     created_by_user_id: str | None
     created_at: datetime
+
+
+class PhysiotherapyInvoiceCreate(BaseModel):
+    discount_amount: int = Field(default=0, ge=0)
+    tax_rule_id: str | None = None
+    created_by_user_id: str | None = None

@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {Badge,Button,Card,Field,Input,Select} from '@/components/ui';
-import {apiFetch} from '@/lib/api';
+import {apiBlob,apiFetch,generatePhysiotherapyInvoice,getPhysiotherapyInvoice,recordInvoicePayment} from '@/lib/api';
 
 type View='list'|'op'|'ip'|'equipment'|'detail';
 const modalities=[
@@ -16,6 +16,7 @@ const modalities=[
   ['exercise','Therapeutic Exercise'],
 ];
 
+
 function today(){return new Date().toISOString().slice(0,10)}
 function patientName(p:any){return p?.name||p?.full_name||p?.patient_name||p?.id||'Patient'}
 function inr(value:any){return `Rs. ${Number(value||0).toLocaleString('en-IN')}`}
@@ -25,16 +26,21 @@ export function Physiotherapy({branchId,departmentId,patients,appointments=[],ip
   const [cases,setCases]=useState<any[]>([]);
   const [equipment,setEquipment]=useState<any[]>([]);
   const [sessions,setSessions]=useState<any[]>([]);
+  const [invoiceDetail,setInvoiceDetail]=useState<any>(null);
   const [selectedId,setSelectedId]=useState('');
   const [busy,setBusy]=useState('');
   const [message,setMessage]=useState('');
   const [error,setError]=useState('');
+  const [invoiceDiscount,setInvoiceDiscount]=useState('0');
+  const [paymentAmount,setPaymentAmount]=useState('');
+  const [paymentMethod,setPaymentMethod]=useState('cash');
+  const [paymentReference,setPaymentReference]=useState('');
   const patientMap=useMemo(()=>new Map(patients.map((p:any)=>[p.id,p])),[patients]);
   const selected=cases.find((row)=>row.id===selectedId)||cases[0];
   const opAppointments=appointments.filter((row:any)=>row.patientId||row.patient_id);
 
   useEffect(()=>{loadPhysio()},[apiSession?.token,apiSession?.tenantId]);
-  useEffect(()=>{if(selected?.id)loadSessions(selected.id)},[selected?.id]);
+  useEffect(()=>{if(selected?.id){loadSessions(selected.id);loadInvoice(selected.id)}},[selected?.id]);
   useEffect(()=>{if(!selectedId&&cases[0]?.id)setSelectedId(cases[0].id)},[cases,selectedId]);
 
   async function loadPhysio(){
@@ -56,6 +62,16 @@ export function Physiotherapy({branchId,departmentId,patients,appointments=[],ip
     if(!apiSession)return;
     try{setSessions(await apiFetch(`/physiotherapy/cases/${caseId}/sessions`,apiSession));}
     catch(err:any){setError(err.message||'Unable to load physiotherapy sessions.');}
+  }
+
+  async function loadInvoice(caseId:string){
+    if(!apiSession)return;
+    setInvoiceDetail(null);
+    try{
+      const detail=await getPhysiotherapyInvoice(apiSession,caseId);
+      setInvoiceDetail(detail);
+      setPaymentAmount(String(detail.invoice?.balance_amount||''));
+    }catch{}
   }
 
   async function refresh(){
@@ -144,6 +160,7 @@ export function Physiotherapy({branchId,departmentId,patients,appointments=[],ip
     try{
       await apiFetch(`/physiotherapy/cases/${selected.id}/sessions`,apiSession,{method:'POST',body:JSON.stringify(payload)});
       await loadSessions(selected.id);
+      await loadInvoice(selected.id);
       setMessage('Physiotherapy session saved.');
       e.currentTarget.reset();
     }catch(err:any){setError(err.message||'Unable to save physiotherapy session.');}
@@ -154,10 +171,50 @@ export function Physiotherapy({branchId,departmentId,patients,appointments=[],ip
     if(!selected)return;
     setBusy('invoice');setError('');setMessage('');
     try{
-      const detail=await apiFetch(`/physiotherapy/cases/${selected.id}/invoice`,apiSession,{method:'POST'});
+      const detail=await generatePhysiotherapyInvoice(apiSession,selected.id,{
+        discount_amount:Number(invoiceDiscount||0),
+        created_by_user_id:apiSession.user?.id,
+      });
+      setInvoiceDetail(detail);
+      setPaymentAmount(String(detail.invoice.balance_amount||''));
       setMessage(`Physiotherapy invoice ${detail.invoice.invoice_number} generated for ${inr(detail.invoice.total_amount)}.`);
       await refresh();
     }catch(err:any){setError(err.message||'Unable to generate physiotherapy invoice.');}
+    finally{setBusy('')}
+  }
+
+  async function collectInvoicePayment(){
+    const invoice=invoiceDetail?.invoice;
+    if(!invoice)return;
+    const amount=Number(paymentAmount||invoice.balance_amount||0);
+    if(!amount){setError('Enter payment amount.');return}
+    setBusy('payment');setError('');setMessage('');
+    try{
+      const detail=await recordInvoicePayment(apiSession,invoice.id,{
+        method:paymentMethod,
+        amount,
+        reference_number:paymentReference||null,
+        collected_by_user_id:apiSession.user?.id,
+      });
+      setInvoiceDetail(detail);
+      setPaymentAmount(String(detail.invoice.balance_amount||''));
+      setPaymentReference('');
+      await refresh();
+      setMessage(`Payment recorded for ${detail.invoice.invoice_number}.`);
+    }catch(err:any){setError(err.message||'Unable to record physiotherapy payment.');}
+    finally{setBusy('')}
+  }
+
+  async function openReceipt(){
+    const invoice=invoiceDetail?.invoice;
+    if(!invoice)return;
+    setBusy('receipt');setError('');
+    try{
+      const blob=await apiBlob(`/billing/invoices/${invoice.id}/receipt.pdf`,apiSession);
+      const url=URL.createObjectURL(blob);
+      window.open(url,'_blank','noopener,noreferrer');
+      setTimeout(()=>URL.revokeObjectURL(url),30000);
+    }catch(err:any){setError(err.message||'Unable to open physiotherapy receipt.');}
     finally{setBusy('')}
   }
 
@@ -241,7 +298,40 @@ export function Physiotherapy({branchId,departmentId,patients,appointments=[],ip
               {sessions.map((row:any)=><div key={row.id} className="rounded-2xl bg-slate-50 p-4 text-sm"><b>Session {row.session_number} · {row.modality_type}</b><p className="text-slate-500">{row.session_date} · {row.duration_minutes} mins · Pain {row.pre_pain_score??'-'} to {row.post_pain_score??'-'}</p><p className="mt-1 font-bold">{inr(row.charge_amount)}</p></div>)}
               {sessions.length===0&&<p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No sessions recorded yet.</p>}
             </div>
-            <Button type="button" onClick={generateInvoice} disabled={!sessions.some((row:any)=>Number(row.charge_amount)>0)||busy==='invoice'} className="mt-4 w-full">Generate Physiotherapy Invoice</Button>
+            <div className="mt-4 rounded-2xl border border-slate-200 p-4">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Info title="Billable" value={inr(sessions.reduce((sum:number,row:any)=>sum+Number(row.charge_amount||0),0))}/>
+                <Info title="Invoiced" value={invoiceDetail?.invoice?.invoice_number||'Not generated'}/>
+                <Info title="Balance" value={inr(invoiceDetail?.invoice?.balance_amount||0)}/>
+              </div>
+              {!invoiceDetail?(
+                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+                  <Field label="Discount"><Input type="number" min="0" value={invoiceDiscount} onChange={(e:any)=>setInvoiceDiscount(e.target.value)}/></Field>
+                  <Button type="button" onClick={generateInvoice} disabled={!sessions.some((row:any)=>Number(row.charge_amount)>0)||busy==='invoice'}>{busy==='invoice'?'Generating...':'Generate Invoice'}</Button>
+                </div>
+              ):(
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <Info title="Subtotal" value={inr(invoiceDetail.invoice.subtotal_amount)}/>
+                    <Info title="Discount" value={inr(invoiceDetail.invoice.discount_amount)}/>
+                    <Info title="Tax" value={inr(invoiceDetail.invoice.tax_amount)}/>
+                    <Info title="Total" value={inr(invoiceDetail.invoice.total_amount)}/>
+                  </div>
+                  {invoiceDetail.invoice.balance_amount>0?(
+                    <div className="grid gap-3 lg:grid-cols-[120px_1fr_1fr_auto] lg:items-end">
+                      <Field label="Method"><Select value={paymentMethod} onChange={(e:any)=>setPaymentMethod(e.target.value)}><option value="cash">Cash</option><option value="upi">UPI</option><option value="gpay">GPay</option><option value="paytm">Paytm</option><option value="credit_card">Credit Card</option><option value="debit_card">Debit Card</option><option value="bank_transfer">Bank</option></Select></Field>
+                      <Field label="Amount"><Input type="number" min="1" max={invoiceDetail.invoice.balance_amount} value={paymentAmount} onChange={(e:any)=>setPaymentAmount(e.target.value)}/></Field>
+                      <Field label="Reference"><Input value={paymentReference} onChange={(e:any)=>setPaymentReference(e.target.value)} placeholder="UPI/card/bank reference"/></Field>
+                      <Button type="button" onClick={collectInvoicePayment} disabled={busy==='payment'}>{busy==='payment'?'Saving...':'Collect'}</Button>
+                    </div>
+                  ):<Badge tone="green">Invoice paid</Badge>}
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" onClick={openReceipt} disabled={busy==='receipt'} className="rounded-2xl border px-4 py-3 text-sm font-bold">Receipt</button>
+                    {(invoiceDetail.payments||[]).map((payment:any)=><Badge key={payment.id} tone="blue">{payment.method} {inr(payment.amount)}</Badge>)}
+                  </div>
+                </div>
+              )}
+            </div>
           </Card>
         </div>
       )}

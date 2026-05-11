@@ -10,8 +10,8 @@ from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.appointments.models import Appointment
 from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import Invoice, InvoiceItem
-from app.modules.billing.schemas import InvoiceDetailRead, InvoiceItemRead, InvoiceRead
+from app.modules.billing.models import Invoice, InvoiceItem, Payment, TaxRule
+from app.modules.billing.schemas import InvoiceDetailRead, InvoiceItemRead, InvoiceRead, PaymentRead
 from app.modules.billing.service import next_invoice_number
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -24,6 +24,7 @@ from app.modules.physiotherapy.schemas import (
     PhysiotherapyCaseUpdate,
     PhysiotherapyEquipmentCreate,
     PhysiotherapyEquipmentRead,
+    PhysiotherapyInvoiceCreate,
     PhysiotherapySessionCreate,
     PhysiotherapySessionRead,
 )
@@ -60,11 +61,37 @@ def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
             .order_by(InvoiceItem.created_at)
         ).all()
     )
+    payments = list(
+        session.exec(
+            select(Payment)
+            .where(Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id)
+            .order_by(Payment.collected_at)
+        ).all()
+    )
     return InvoiceDetailRead(
         invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
         items=[InvoiceItemRead.model_validate(item, from_attributes=True) for item in items],
-        payments=[],
+        payments=[PaymentRead.model_validate(payment, from_attributes=True) for payment in payments],
     )
+
+
+def _resolve_tax_rule(session: Session, tenant_id: str, branch_id: str, tax_rule_id: str | None) -> TaxRule | None:
+    tax_rule = session.get(TaxRule, tax_rule_id) if tax_rule_id else None
+    if tax_rule:
+        if (
+            tax_rule.tenant_id != tenant_id
+            or not tax_rule.is_active
+            or tax_rule.branch_id not in {None, branch_id}
+        ):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tax rule")
+        return tax_rule
+    return session.exec(
+        select(TaxRule).where(
+            TaxRule.tenant_id == tenant_id,
+            TaxRule.is_active == True,  # noqa: E712
+            (TaxRule.branch_id == branch_id) | (TaxRule.branch_id.is_(None)),
+        )
+    ).first()
 
 
 @router.get("/equipment", response_model=list[PhysiotherapyEquipmentRead])
@@ -230,8 +257,8 @@ def create_session(
     return treatment
 
 
-@router.post("/cases/{case_id}/invoice", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
-def generate_invoice(
+@router.get("/cases/{case_id}/invoice", response_model=InvoiceDetailRead)
+def get_case_invoice(
     case_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
@@ -239,14 +266,52 @@ def generate_invoice(
 ) -> InvoiceDetailRead:
     _assert_enabled(session, tenant_id)
     case = _get_case(session, tenant_id, case_id, current_user)
+    invoice = session.exec(
+        select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.physiotherapy_case_id == case.id)
+    ).first()
+    if not invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Physiotherapy invoice not found")
+    return _invoice_detail(session, invoice)
+
+
+@router.post("/cases/{case_id}/invoice", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
+def generate_invoice(
+    case_id: str,
+    payload: PhysiotherapyInvoiceCreate | None = None,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    _assert_enabled(session, tenant_id)
+    payload = payload or PhysiotherapyInvoiceCreate()
+    case = _get_case(session, tenant_id, case_id, current_user)
     existing = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.physiotherapy_case_id == case.id)).first()
     if existing:
         return _invoice_detail(session, existing)
-    rows = list(session.exec(select(PhysiotherapySession).where(PhysiotherapySession.tenant_id == tenant_id, PhysiotherapySession.case_id == case.id, PhysiotherapySession.charge_amount > 0)).all())
+    rows = list(
+        session.exec(
+            select(PhysiotherapySession).where(
+                PhysiotherapySession.tenant_id == tenant_id,
+                PhysiotherapySession.case_id == case.id,
+                PhysiotherapySession.charge_amount > 0,
+            )
+        ).all()
+    )
     if not rows:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add at least one billable physiotherapy session before generating invoice")
-    total = sum(row.charge_amount for row in rows)
-    invoice_prefix, _scope, _scope_id = resolve_setting(session, tenant_id=tenant_id, module="invoice", key=SettingKey.INVOICE_PREFIX, branch_id=case.branch_id)
+    subtotal = sum(row.charge_amount for row in rows)
+    discount = min(payload.discount_amount, subtotal)
+    taxable = subtotal - discount
+    tax_rule = _resolve_tax_rule(session, tenant_id, case.branch_id, payload.tax_rule_id)
+    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    total = taxable + tax_amount
+    invoice_prefix, _scope, _scope_id = resolve_setting(
+        session,
+        tenant_id=tenant_id,
+        module="invoice",
+        key=SettingKey.INVOICE_PREFIX,
+        branch_id=case.branch_id,
+    )
     invoice = Invoice(
         tenant_id=tenant_id,
         branch_id=case.branch_id,
@@ -255,12 +320,15 @@ def generate_invoice(
         ip_admission_id=case.ip_admission_id,
         physiotherapy_case_id=case.id,
         invoice_number=next_invoice_number(session, tenant_id, str(invoice_prefix or "INV")),
-        subtotal_amount=total,
-        taxable_amount=total,
+        subtotal_amount=subtotal,
+        discount_amount=discount,
+        taxable_amount=taxable,
+        tax_amount=tax_amount,
+        tax_rule_id=tax_rule.id if tax_rule else None,
         total_amount=total,
         balance_amount=total,
         clinic_share_amount=total,
-        created_by_user_id=current_user.id,
+        created_by_user_id=payload.created_by_user_id or current_user.id,
     )
     session.add(invoice)
     session.commit()
@@ -279,5 +347,15 @@ def generate_invoice(
         )
     session.commit()
     session.refresh(invoice)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=case.branch_id, actor_user_id=current_user.id, action="physiotherapy_invoice.generated", resource_type="invoice", resource_id=invoice.id, purpose="physiotherapy_billing", metadata_json=f'{{"physiotherapy_case_id":"{case.id}"}}')
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=case.branch_id,
+        actor_user_id=payload.created_by_user_id or current_user.id,
+        action="physiotherapy_invoice.generated",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        purpose="physiotherapy_billing",
+        metadata_json=f'{{"physiotherapy_case_id":"{case.id}"}}',
+    )
     return _invoice_detail(session, invoice)

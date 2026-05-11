@@ -6,9 +6,17 @@ from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch
 
 
-def enforce_entitlement(session: Session, tenant_id: str, module_key: str) -> None:
-    enforce_module_enabled(session, tenant_id, module_key)
-
+def enforce_entitlement(session: Session,
+    tenant_id: str,
+    module_key: str,
+    current_user: User | None = None,
+) -> None:
+    enforce_module_enabled(
+        session,
+        tenant_id,
+        module_key,
+        current_user=current_user,
+    )
 
 def require_branch_in_tenant(session: Session, tenant_id: str, branch_id: str | None) -> Branch | None:
     if not branch_id:

@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlmodel import Session, create_engine
+from sqlmodel import SQLModel, Session, create_engine
 
 from app.core.config import get_settings
 
@@ -29,6 +29,10 @@ def create_db_engine():
 
 
 engine = create_db_engine()
+
+
+def init_db() -> None:
+    SQLModel.metadata.create_all(engine)
 
 
 # Dependency for FastAPI

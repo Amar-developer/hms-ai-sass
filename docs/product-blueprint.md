@@ -293,6 +293,8 @@ Role management UI requirements:
 
 Physiotherapy must work as a separate plug-and-play module for OP and IP care. OP physiotherapy supports registration-linked assessment, pain score, body-region mapping, treatment plan, IFT, ultrasound, TENS, laser, shortwave diathermy, muscle stimulation, exercise therapy, home program, follow-up sessions, and billing. IP physiotherapy supports bedside assessment, post-surgical rehabilitation, CPM, gait training, tilt table, EMS/muscle stimulation, daily reviews, progress tracking, discharge advice, and IP-linked billing. Equipment usage must be tracked by branch, modality, portability, session, duration, intensity, therapist, and patient outcome.
 
+Physiotherapy billing should behave like the doctor appointment and lab billing flows: billable therapy sessions roll into a case-level invoice, discounts are applied before tax, active branch tax rules are resolved automatically unless a specific rule is selected, and the generated invoice remains linked to the physiotherapy case, source appointment, IP admission, and patient. Billing staff should be able to collect cash/card/UPI payments, view paid/balance status, and open receipts from the physiotherapy workspace as well as the central invoice screen.
+
 ## Differentiators
 
 ### Patient 360 Clinical Brain

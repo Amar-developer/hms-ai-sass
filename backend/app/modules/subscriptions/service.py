@@ -220,9 +220,21 @@ def next_subscription_invoice_number(session: Session) -> str:
     return f"MHDSUB-{count + 1:06d}"
 
 
-def enforce_module_enabled(session: Session, tenant_id: str, module_key: str) -> None:
+def enforce_module_enabled(
+    session: Session,
+    tenant_id: str,
+    module_key: str,
+    current_user=None,
+) -> None:
+
+    # SUPER ADMIN BYPASS
+    if current_user and current_user.is_super_admin:
+        return
+
     _subscription, plan = get_active_subscription(session, tenant_id)
+
     enabled = modules_from_json(plan.enabled_modules_json)
+
     if module_key not in enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

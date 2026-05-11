@@ -63,3 +63,38 @@ export async function apiBlob(path: string, session: ApiSession, options: Reques
   }
   return res.blob();
 }
+
+export type PhysiotherapyInvoicePayload = {
+  discount_amount?: number;
+  tax_rule_id?: string | null;
+  created_by_user_id?: string | null;
+};
+
+export type InvoicePaymentPayload = {
+  method: string;
+  amount: number;
+  reference_number?: string | null;
+  collected_by_user_id?: string | null;
+};
+
+export function getPhysiotherapyInvoice(session: ApiSession, caseId: string) {
+  return apiFetch(`/physiotherapy/cases/${caseId}/invoice`, session);
+}
+
+export function generatePhysiotherapyInvoice(
+  session: ApiSession,
+  caseId: string,
+  payload: PhysiotherapyInvoicePayload = {},
+) {
+  return apiFetch(`/physiotherapy/cases/${caseId}/invoice`, session, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function recordInvoicePayment(session: ApiSession, invoiceId: string, payload: InvoicePaymentPayload) {
+  return apiFetch(`/billing/invoices/${invoiceId}/payments`, session, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
