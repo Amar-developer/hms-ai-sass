@@ -13,6 +13,7 @@ Current enforced guardrails:
 - Inactive roles no longer grant permissions, even if still assigned to a user.
 - Suspended tenants are blocked for tenant users on protected tenant APIs.
 - Branch-scoped users can access only their assigned branch when a record or query is branch-specific.
+- Doctor users are scoped to their linked active practitioner profile for practitioner, appointment, queue, and consultation workflows. A doctor can only list their own practitioner profile and only list, open, call, requeue, start, create, update, sign, or addend consultations for appointments assigned to that same practitioner inside the selected tenant and branch scope.
 - Core clinical modules are entitlement-checked at API level: patients, appointments, queue, consultations, billing basic, billing advanced, lab, and pharmacy.
 - New custom subscription plans with no explicit module list default to core HMS modules: patients, appointments, queue, consultations, and billing basic.
 
@@ -161,6 +162,8 @@ Patient APIs enforce the `patients` module entitlement and branch scope for bran
 | `GET` | `/api/v1/practitioners/{practitioner_id}/availability` | `appointments.manage` | Single time availability check |
 | `GET` | `/api/v1/practitioners/{practitioner_id}/calendar` | `appointments.manage` | Generated available/booked/leave/unavailable slots |
 
+For `user_type=doctor`, `GET /api/v1/practitioners` is restricted to the practitioner's own linked active profile so doctor dashboards cannot populate dropdowns with other doctors from the same specialty.
+
 ## Appointment and Queue
 
 | Method | Endpoint | Permission | Notes |
@@ -178,7 +181,7 @@ Patient APIs enforce the `patients` module entitlement and branch scope for bran
 | `POST` | `/api/v1/queue/{entry_id}/no-show` | `queue.manage` | Mark no-show |
 | `POST` | `/api/v1/queue/{entry_id}/start-consultation` | `queue.manage` | Starts consultation workflow |
 
-Appointment APIs enforce the `appointments` module entitlement. Queue APIs enforce the `queue` module entitlement. Both enforce branch scope for branch-assigned users. Appointment create/read responses carry visit purpose, source appointment linkage, and billable/free-review status so OP, doctor review, fitness certificate, follow-up, and emergency visits can be audited and billed consistently.
+Appointment APIs enforce the `appointments` module entitlement. Queue APIs enforce the `queue` module entitlement. Both enforce branch scope for branch-assigned users. For `user_type=doctor`, the backend additionally resolves `practitioner.user_id = current_user.id` and restricts appointment and queue reads/actions to that practitioner. Appointment create/read responses carry visit purpose, source appointment linkage, and billable/free-review status so OP, doctor review, fitness certificate, follow-up, and emergency visits can be audited and billed consistently.
 
 ## Consultation
 
@@ -193,7 +196,29 @@ Appointment APIs enforce the `appointments` module entitlement. Queue APIs enfor
 | `POST` | `/api/v1/consultations/{consultation_id}/sign` | `consultations.sign` |
 | `POST` | `/api/v1/consultations/{consultation_id}/addendums` | `consultations.write` |
 
-Consultation APIs enforce the `consultations` module entitlement and branch scope. Draft consultations can save structured vitals, complaints, diagnoses, medicines, lab/scan referrals, follow-up advice, and notes. Signed consultation records remain immutable except addendums.
+Consultation APIs enforce the `consultations` module entitlement and branch scope. For `user_type=doctor`, consultation reads and writes are restricted to consultations whose `practitioner_id` matches the logged-in user's linked active practitioner profile. Draft consultations can save structured vitals, complaints, diagnoses, medicines, lab/scan referrals, follow-up advice, and notes. Signed consultation records remain immutable except addendums.
+
+## IP Admission
+
+| Method | Endpoint | Permission | Notes |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/ip/rooms` | `ip.create` | Create ward/room/bed master with daily room charge |
+| `GET` | `/api/v1/ip/rooms` | `ip.read` | List branch-scoped IP rooms with date-range availability |
+| `PATCH` | `/api/v1/ip/rooms/{room_id}` | `ip.edit` | Update room master or active status |
+| `POST` | `/api/v1/ip/admissions` | `ip.create` | Admit patient into an available room/bed for selected date range |
+| `POST` | `/api/v1/ip/admissions/from-appointment/{appointment_id}` | `ip.create` | Convert OP appointment to IP admission |
+| `GET` | `/api/v1/ip/admissions` | `ip.read` | List branch-scoped IP admissions |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/consultations` | `ip.edit` | Record IP doctor visit/round with optional visit fee |
+| `POST` | `/api/v1/ip/consultations/{consultation_id}/sign` | `ip.edit` | Sign doctor visit and create a billable consultation line when fee is configured |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/medication-orders` | `ip.edit` | Create IP medication order with per-dose charge |
+| `GET` | `/api/v1/ip/admissions/{admission_id}/medication-orders` | `ip.read` | List IP medication orders |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/medication-orders/{order_id}/administrations` | `ip.edit` | Record MAR dose; given doses create billable medicine lines |
+| `GET` | `/api/v1/ip/admissions/{admission_id}/medication-administrations` | `ip.read` | List MAR dose history |
+| `GET` | `/api/v1/ip/admissions/{admission_id}/billing-items` | `ip.read` | Running bill from clinical events |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/billing-items` | `ip.edit` | Add manual running-bill line |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/invoice` | `billing.manage` | Generates IP invoice including automatic room charge, billable clinical events, and manual charges |
+
+IP admission APIs enforce tenant, branch, room availability, and module entitlement checks. A room/bed cannot be reused for overlapping active admission date ranges. Room rent is calculated from admission date through discharge summary date, or planned discharge/current date when discharge is not finalized. Treatment notes remain clinical documentation; signed IP consultations and given MAR doses create linked billable items for the running bill and final invoice.
 
 ## Billing, Payments, and Settlements
 

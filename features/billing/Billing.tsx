@@ -15,6 +15,21 @@ function money(value:any){
   return `₹${Number(value||0).toLocaleString('en-IN')}`;
 }
 
+function itemTypeLabel(type:any){
+  const labels:Record<string,string>={
+    consultation:'Consultation',
+    lab:'Lab / Scan',
+    pharmacy:'Medicine',
+    ip_room:'IP Room',
+    ip_consultation:'IP Doctor',
+    ip_medication:'IP Medicine',
+    ip_lab:'IP Lab / Scan',
+    ip_charge:'IP Charge',
+    physiotherapy:'Physiotherapy',
+  };
+  return labels[String(type||'')]||String(type||'Service').replaceAll('_',' ');
+}
+
 export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoices}:any){
   const [busy,setBusy]=useState('');
   const [message,setMessage]=useState('');
@@ -24,6 +39,8 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
   const [dueReport,setDueReport]=useState<any>(null);
   const [revenueReport,setRevenueReport]=useState<any>(null);
   const [settlement,setSettlement]=useState<any>(null);
+  const [detail,setDetail]=useState<any>(null);
+  const [detailLoading,setDetailLoading]=useState('');
 
   const patientMap=useMemo(()=>new Map(patients.map((p:any)=>[p.id,p])),[patients]);
   const invoices=useMemo(
@@ -66,6 +83,37 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       setMessage(`Invoice generated for ${a.patient}.`);
     }catch(err:any){setMessage(err.message||'Could not generate invoice.')}
     finally{setBusy('')}
+  }
+
+  async function refreshConsultationInvoice(invoice:any){
+    if(!apiSession||!invoice.consultation_id)return;
+    setBusy(`refresh-${invoice.id}`);
+    setMessage('');
+    try{
+      await apiFetch('/billing/invoices/from-consultation',apiSession,{
+        method:'POST',
+        body:JSON.stringify({
+          consultation_id:invoice.consultation_id,
+          discount_amount:invoice.discount_amount||0,
+          created_by_user_id:apiSession.user?.id,
+        }),
+      });
+      await loadLiveData(apiSession);
+      await loadReports();
+      setMessage(`Invoice refreshed for ${invoice.invoice_number}.`);
+    }catch(err:any){setMessage(err.message||'Could not refresh invoice items.')}
+    finally{setBusy('')}
+  }
+
+  async function openInvoiceDetail(invoice:any){
+    if(!apiSession)return;
+    setDetailLoading(invoice.id);
+    setMessage('');
+    try{
+      const row=await apiFetch(`/billing/invoices/${invoice.id}`,apiSession);
+      setDetail(row);
+    }catch(err:any){setMessage(err.message||'Could not load invoice details.')}
+    finally{setDetailLoading('')}
   }
 
   async function collectPayment(invoice:any){
@@ -144,6 +192,13 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
 
   return (
     <div className="space-y-6">
+      {detail&&(
+        <InvoiceDetailModal
+          detail={detail}
+          patient={patientMap.get(detail.invoice?.patient_id)}
+          onClose={()=>setDetail(null)}
+        />
+      )}
       <div className="grid gap-4 md:grid-cols-4">
         <Card><p className="text-sm text-slate-500">Due Collection</p><p className="mt-1 text-2xl font-bold">{money(dueReport?.total_due_amount)}</p><p className="text-xs text-slate-500">{dueReport?.invoice_count??0} invoices</p></Card>
         <Card><p className="text-sm text-slate-500">Revenue</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_invoice_amount)}</p><p className="text-xs text-slate-500">Tax {money(revenueReport?.total_tax_amount)}</p></Card>
@@ -191,7 +246,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                 const p:any=patientMap.get(invoice.patient_id);
                 const source=invoiceSource(invoice);
                 return (
-                  <tr key={invoice.id}>
+                  <tr key={invoice.id} onClick={()=>openInvoiceDetail(invoice)} className="cursor-pointer hover:bg-slate-50">
                     <td className="px-4 py-4"><b>{invoice.invoice_number}</b><p className="text-xs text-slate-500">{invoice.id}</p></td>
                     <td><Badge tone={source.tone as any}>{source.label}</Badge>{invoice.physiotherapy_case_id&&<p className="mt-1 text-xs text-slate-500">{invoice.physiotherapy_case_id}</p>}</td>
                     <td>{p?.name||invoice.patient_id}</td>
@@ -201,7 +256,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                     <td>{money(invoice.paid_amount)}</td>
                     <td>{money(invoice.balance_amount)}</td>
                     <td>{money(invoice.doctor_share_amount)}</td>
-                    <td>
+                    <td onClick={(event)=>event.stopPropagation()}>
                       {invoice.balance_amount>0?(
                         <div className="grid min-w-[360px] gap-2 md:grid-cols-[90px_1fr_1fr_auto] md:items-center">
                           <Select value={methods[invoice.id]||'cash'} onChange={(e:any)=>setMethods({...methods,[invoice.id]:e.target.value})}><option value="cash">Cash</option><option value="upi">UPI</option><option value="gpay">GPay</option><option value="paytm">Paytm</option><option value="credit_card">Credit Card</option><option value="debit_card">Debit Card</option><option value="bank_transfer">Bank</option></Select>
@@ -211,7 +266,23 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                         </div>
                       ):<Badge tone="green">Settled</Badge>}
                     </td>
-                    <td><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>openReceipt(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Receipt</button><button type="button" onClick={()=>issueCreditNote(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Credit Note</button></div></td>
+                    <td onClick={(event)=>event.stopPropagation()}>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={()=>openInvoiceDetail(invoice)} disabled={detailLoading===invoice.id} className="rounded-xl border px-3 py-2 text-xs font-bold">{detailLoading===invoice.id?'Loading...':'View'}</button>
+                        {invoice.consultation_id&&!invoice.ip_admission_id&&!invoice.physiotherapy_case_id&&(
+                          <button
+                            type="button"
+                            onClick={()=>refreshConsultationInvoice(invoice)}
+                            disabled={busy===`refresh-${invoice.id}`}
+                            className="rounded-xl border px-3 py-2 text-xs font-bold"
+                          >
+                            {busy===`refresh-${invoice.id}`?'Refreshing...':'Refresh Items'}
+                          </button>
+                        )}
+                        <button type="button" onClick={()=>openReceipt(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Receipt</button>
+                        <button type="button" onClick={()=>issueCreditNote(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Credit Note</button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -221,4 +292,95 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       </Card>
     </div>
   );
+}
+
+function InvoiceDetailModal({detail,patient,onClose}:any){
+  const invoice=detail.invoice||{};
+  const items=detail.items||[];
+  const payments=detail.payments||[];
+  const source=invoiceSource(invoice);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <Card className="max-h-[90vh] w-full max-w-5xl overflow-auto">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-xl font-bold">{invoice.invoice_number}</h3>
+              <Badge tone={source.tone as any}>{source.label}</Badge>
+              <Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">{patient?.name||patient?.full_name||invoice.patient_id}</p>
+            <p className="mt-1 text-xs text-slate-500">{invoice.id}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold">Close</button>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <DetailStat title="Subtotal" value={money(invoice.subtotal_amount)}/>
+          <DetailStat title="Discount" value={money(invoice.discount_amount)}/>
+          <DetailStat title="Tax" value={money(invoice.tax_amount)}/>
+          <DetailStat title="Total" value={money(invoice.total_amount)}/>
+          <DetailStat title="Paid" value={money(invoice.paid_amount)}/>
+          <DetailStat title="Balance" value={money(invoice.balance_amount)}/>
+          <DetailStat title="Doctor Share" value={money(invoice.doctor_share_amount)}/>
+          <DetailStat title="Clinic Share" value={money(invoice.clinic_share_amount)}/>
+        </div>
+
+        <div className="mt-5 rounded-2xl border">
+          <div className="border-b bg-slate-50 px-4 py-3">
+            <h4 className="font-bold">Bill Items</h4>
+            <p className="text-xs text-slate-500">Consultation, lab/scan, medicine, IP, and physiotherapy services included in this invoice.</p>
+          </div>
+          <div className="overflow-auto">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Service</th>
+                  <th>Description</th>
+                  <th>Qty</th>
+                  <th>Rate</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {items.length===0&&<tr><td colSpan={5} className="px-4 py-4 text-slate-500">No bill items found.</td></tr>}
+                {items.map((item:any)=>(
+                  <tr key={item.id}>
+                    <td className="px-4 py-4"><Badge tone="slate">{itemTypeLabel(item.item_type)}</Badge></td>
+                    <td className="max-w-[420px] py-4">{item.description}</td>
+                    <td>{item.quantity}</td>
+                    <td>{money(item.unit_amount)}</td>
+                    <td className="font-bold">{money(item.total_amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="mt-5 rounded-2xl border">
+          <div className="border-b bg-slate-50 px-4 py-3">
+            <h4 className="font-bold">Payments</h4>
+          </div>
+          <div className="grid gap-2 p-4">
+            {payments.length===0&&<p className="text-sm text-slate-500">No payments recorded yet.</p>}
+            {payments.map((payment:any)=>(
+              <div key={payment.id} className="flex flex-col justify-between gap-2 rounded-2xl bg-slate-50 p-3 text-sm md:flex-row md:items-center">
+                <div>
+                  <b>{payment.method}</b>
+                  <p className="text-xs text-slate-500">{payment.reference_number||payment.id}</p>
+                </div>
+                <Badge tone={payment.status==='recorded'?'green':'amber'}>{payment.status}</Badge>
+                <b>{money(payment.amount)}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function DetailStat({title,value}:any){
+  return <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">{title}</p><p className="mt-1 break-words text-lg font-bold">{value}</p></div>;
 }

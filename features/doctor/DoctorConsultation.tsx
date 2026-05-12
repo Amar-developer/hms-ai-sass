@@ -30,8 +30,57 @@ function toneForQueue(status:string){
  return 'amber';
 }
 
-export function DoctorConsultation({clinic,branch,branchId,departmentId,patients,scopedAppointments,appointments,setAppointments,apiSession,loadLiveData,view='dashboard',setActive}:any){
- const doctorList:any[]=Object.values(scopedAppointments.reduce((acc:any,appointment:any)=>{const id=appointment.doctorId||appointment.practitioner_id;if(!id)return acc;acc[id] ||= {id,name:appointment.doctor||appointment.practitioner_name||id,specialty:appointment.departmentName||appointment.departmentId||''};return acc;},{}));
+function statusKey(value:any){
+ return String(value||'').trim().toLowerCase().replaceAll(' ','_');
+}
+
+function appointmentDateKey(row:any){
+ return String(row.appointmentDate||row.appointment_date||'').slice(0,10);
+}
+
+function isWaitingAppointment(row:any){
+ const status=statusKey(row.status);
+ const queue=statusKey(row.queueStatus||row.queue_status);
+ return ['scheduled','confirmed','checked_in','waiting','called','patient_not_available','requeued','in_consultation','in_queue','emergency_queue'].includes(status)
+  || ['scheduled','confirmed','checked_in','waiting','called','patient_not_available','requeued','in_consultation','in_queue','emergency_queue'].includes(queue);
+}
+
+function isCompletedAppointment(row:any){
+ const status=statusKey(row.status);
+ const queue=statusKey(row.queueStatus||row.queue_status);
+ const consultation=statusKey(row.consultationStatus||row.consultation_status);
+ return ['consultation_completed','billed','consultation_done','seen','completed','done'].includes(status)
+  || ['consultation_completed','billed','consultation_done','seen','completed','done'].includes(queue)
+  || consultation==='signed';
+}
+
+function isCancelledAppointment(row:any){
+ const status=statusKey(row.status);
+ const queue=statusKey(row.queueStatus||row.queue_status);
+ return ['cancelled','canceled','no_show'].includes(status)||['cancelled','canceled','no_show'].includes(queue);
+}
+
+function asArray(value:any){
+ return Array.isArray(value)?value.filter(Boolean):value?[value]:[];
+}
+
+export function DoctorConsultation({clinic,branch,branchId,departmentId,patients,scopedAppointments,appointments,setAppointments,apiSession,loadLiveData,livePractitioners=[],doctorScope=null,view='dashboard',setActive}:any){
+ const isDoctorUser=Boolean(apiSession?.user?.user_type==='doctor'||apiSession?.user?.roles?.includes('doctor'));
+ const allDoctorList:any[]=Object.values([...livePractitioners.map((practitioner:any)=>({
+  doctorId:practitioner.id,
+  doctor:practitioner.full_name||practitioner.name,
+  departmentName:practitioner.primary_specialty||'',
+  departmentId:(practitioner.department_ids||[])[0]||departmentId,
+  departmentIds:practitioner.department_ids||[],
+  branchIds:practitioner.branch_ids||[]
+ })),...scopedAppointments].reduce((acc:any,appointment:any)=>{const id=appointment.doctorId||appointment.practitioner_id;if(!id)return acc;const existing=acc[id]||{};acc[id]={id,name:appointment.doctor||appointment.practitioner_name||existing.name||id,specialty:appointment.departmentName||existing.specialty||appointment.departmentId||'',departmentIds:Array.from(new Set([...asArray(existing.departmentIds),...asArray(appointment.departmentIds),appointment.departmentId].filter(Boolean))),branchIds:Array.from(new Set([...asArray(existing.branchIds),appointment.branchId].filter(Boolean)))};return acc;},{}));
+ const doctorList=allDoctorList.filter((doctor:any)=>{
+  if(doctorScope?.practitionerId)return doctor.id===doctorScope.practitionerId;
+  const branchIds=asArray(doctor.branchIds);
+  const departmentIds=asArray(doctor.departmentIds);
+  return (!branchId||branchIds.length===0||branchIds.includes(branchId))
+   && (!departmentId||departmentIds.length===0||departmentIds.includes(departmentId));
+ });
  const practitioners=doctorList.map((doctor:any)=>({...doctor,role:'Doctor'}));
  const [medicineCatalog,setMedicineCatalog]=useState<any[]>([]);
  const [labCatalog,setLabCatalog]=useState<any[]>([]);
@@ -71,22 +120,43 @@ export function DoctorConsultation({clinic,branch,branchId,departmentId,patients
  const [referDoctorId,setReferDoctorId]=useState('');
  const [busy,setBusy]=useState(false);
  const [message,setMessage]=useState('');
+ const [selectedDate,setSelectedDate]=useState(()=>new Date().toISOString().slice(0,10));
+ const [dashboardFilter,setDashboardFilter]=useState<'booked'|'waiting'|'completed'|'seen'>('booked');
  useEffect(()=>{const id=setInterval(()=>setTick(v=>v+1),5000); return ()=>clearInterval(id)},[]);
- useEffect(()=>{if(!doctorId&&doctorList[0]?.id)setDoctorId(doctorList[0].id)},[doctorId,doctorList.length]);
+ useEffect(()=>{
+  const scopedDoctorId=doctorScope?.practitionerId||'';
+  const nextDoctorId=scopedDoctorId||doctorList.find((doctor:any)=>doctor.id===doctorId)?.id||doctorList[0]?.id||'';
+  if(nextDoctorId!==doctorId){
+   const selectedAppointment=scopedAppointments.find((appointment:any)=>appointment.id===selectedAppointmentId);
+   const keepSelection=Boolean(
+    selectedAppointment
+    && (!departmentId||selectedAppointment.departmentId===departmentId)
+    && (selectedAppointment.doctorId===nextDoctorId||selectedAppointment.practitioner_id===nextDoctorId)
+   );
+   setDoctorId(nextDoctorId);
+   if(!keepSelection)setSelectedAppointmentId('');
+  }
+ },[doctorId,doctorScope?.practitionerId,departmentId,branchId,doctorList.length,selectedAppointmentId,scopedAppointments.length]);
  const doctor:any=doctorList.find((p:any)=>p.id===doctorId)||doctorList[0]||{id:'',name:'No practitioner',specialty:''};
  const feeSetting=null;
  const consultationCharge=calculateConsultationCharge(feeSetting,feeType,ipBaseAmount);
- const doctorQueue=sortQueue(scopedAppointments.filter((a:any)=>a.doctorId===doctor.id || a.departmentId===departmentId));
- const activeQueue=doctorQueue.filter((a:any)=>!['Consultation Done','Cancelled','Billed','Seen'].includes(a.status));
- const current=activeQueue.find((a:any)=>a.queueStatus==='Called') || activeQueue.find((a:any)=>a.queueStatus==='Emergency Queue') || activeQueue.find((a:any)=>a.queueStatus==='In Queue') || activeQueue.find((a:any)=>a.queueStatus==='Requeued') || activeQueue[0];
+ const doctorQueue=sortQueue(scopedAppointments.filter((a:any)=>{
+  if(departmentId&&a.departmentId!==departmentId)return false;
+  if(doctorScope?.practitionerId)return a.doctorId===doctorScope.practitionerId||a.practitioner_id===doctorScope.practitionerId;
+  if(doctor.id)return a.doctorId===doctor.id||a.practitioner_id===doctor.id;
+  return true;
+ }));
+ const selectedDateQueue=doctorQueue.filter((a:any)=>appointmentDateKey(a)===selectedDate);
+ const activeQueue=selectedDateQueue.filter((a:any)=>!isCompletedAppointment(a)&&!isCancelledAppointment(a));
+ const current=activeQueue.find((a:any)=>statusKey(a.queueStatus)==='called') || activeQueue.find((a:any)=>statusKey(a.queueStatus)==='emergency_queue') || activeQueue.find((a:any)=>statusKey(a.queueStatus)==='waiting'||statusKey(a.queueStatus)==='in_queue') || activeQueue.find((a:any)=>statusKey(a.queueStatus)==='requeued') || activeQueue[0];
  const selected=doctorQueue.find((a:any)=>a.id===selectedAppointmentId) || current;
  useEffect(()=>{if(selected?.treatmentType)setTreatmentType(selected.treatmentType);else if(selected?.visitPurpose==='fitness_certificate'||selected?.visitType==='FITNESS CERTIFICATE')setTreatmentType('fitness_certificate');else if(selected?.visitPurpose==='doctor_review'||selected?.visitType==='DOCTOR REVIEW')setTreatmentType('doctor_review')},[selected?.id]);
  const patient=patients.find((p:any)=>p.id===selected?.patientId);
- const completedToday=doctorQueue.filter((a:any)=>['Consultation Done','Seen','Billed'].includes(a.status)).length;
- const waitingToday=activeQueue.filter((a:any)=>['In Queue','Emergency Queue','Requeued','Called'].includes(a.queueStatus)).length;
+ const completedToday=selectedDateQueue.filter(isCompletedAppointment).length;
+ const waitingToday=selectedDateQueue.filter((a:any)=>isWaitingAppointment(a)&&!isCompletedAppointment(a)&&!isCancelledAppointment(a)).length;
  const finalFee=Number(consultationCharge||selected?.fee||0)+Number(extraFee||0);
- const emergencyToday=doctorQueue.filter((a:any)=>a.tokenType==='Emergency'||a.queueStatus==='Emergency Queue'||String(a.visitType||'').toLowerCase()==='emergency').length;
- const uniquePatientCount=new Set(doctorQueue.map((a:any)=>a.patientId||a.patient_id).filter(Boolean)).size;
+ const emergencyToday=selectedDateQueue.filter((a:any)=>a.tokenType==='Emergency'||statusKey(a.queueStatus)==='emergency_queue'||String(a.visitType||'').toLowerCase()==='emergency').length;
+ const uniquePatientCount=new Set(selectedDateQueue.filter(isCompletedAppointment).map((a:any)=>a.patientId||a.patient_id).filter(Boolean)).size;
  const appointmentDays=Array.from({length:7},(_,index)=>{
   const date=new Date();
   date.setDate(date.getDate()+index);
@@ -94,7 +164,11 @@ export function DoctorConsultation({clinic,branch,branchId,departmentId,patients
   const count=doctorQueue.filter((a:any)=>String(a.appointmentDate||a.appointment_date||'').slice(0,10)===iso).length;
   return {iso,day:date.getDate(),label:date.toLocaleDateString(undefined,{weekday:'short'}),count};
  });
- const scheduleRows=doctorQueue.slice(0,8);
+ const scheduleRows=selectedDateQueue.filter((a:any)=>{
+  if(dashboardFilter==='waiting')return isWaitingAppointment(a)&&!isCompletedAppointment(a)&&!isCancelledAppointment(a);
+  if(dashboardFilter==='completed'||dashboardFilter==='seen')return isCompletedAppointment(a);
+  return true;
+ }).slice(0,8);
  const selectedPatientHistory=selected?appointments.filter((item:any)=>{
   const itemPatientId=item.patientId||item.patient_id;
   return itemPatientId&&itemPatientId===(selected.patientId||selected.patient_id)&&item.id!==selected.id;
@@ -140,9 +214,9 @@ export function DoctorConsultation({clinic,branch,branchId,departmentId,patients
  function callNext(){if(current) callPatient(current)}
  function openConsultation(id:string){setSelectedAppointmentId(id);sessionStorage.setItem('medizinhub.consultationAppointmentId',id);setActive?.('consultation')}
  function callNextInWorkspace(){const next=activeQueue.find((a:any)=>a.id!==selected?.id)||current;if(!next)return;callPatient(next);openConsultation(next.id)}
- function skipPatient(){if(!selected)return; updateAppt(selected.id,{status:'Patient Not Available',queueStatus:'Not Available',skippedCount:(selected.skippedCount||0)+1})}
- function requeuePatient(mode:'after2'|'end'){if(!selected)return; updateAppt(selected.id,{status:'Scheduled',queueStatus:'Requeued',priority:mode==='after2'?2.5:5,requeueMode:mode})}
- function cancelAppointment(){if(!selected)return; updateAppt(selected.id,{status:'Cancelled',queueStatus:'Cancelled'})}
+ async function skipPatient(){if(!selected)return;if(apiSession&&selected.queueEntryId){setBusy(true);setMessage('');try{await apiFetch(`/queue/${selected.queueEntryId}/mark-not-available`,apiSession,{method:'POST',body:JSON.stringify({reason:'Patient not present from doctor dashboard'})});await loadLiveData(apiSession);setMessage('Patient marked not available.')}catch(err:any){setMessage(err.message||'Could not update token.')}finally{setBusy(false)}return}updateAppt(selected.id,{status:'Patient Not Available',queueStatus:'Not Available',skippedCount:(selected.skippedCount||0)+1})}
+ async function requeuePatient(mode:'after2'|'end'){if(!selected)return;if(apiSession&&selected.queueEntryId){setBusy(true);setMessage('');try{await apiFetch(`/queue/${selected.queueEntryId}/requeue`,apiSession,{method:'POST',body:JSON.stringify({reason:'Requeued from doctor dashboard',place_at_end:mode==='end'})});await loadLiveData(apiSession);setMessage('Token requeued.')}catch(err:any){setMessage(err.message||'Could not requeue token.')}finally{setBusy(false)}return}updateAppt(selected.id,{status:'Scheduled',queueStatus:'Requeued',priority:mode==='after2'?2.5:5,requeueMode:mode})}
+ async function cancelAppointment(){if(!selected)return;if(apiSession&&selected.queueEntryId){setBusy(true);setMessage('');try{await apiFetch(`/queue/${selected.queueEntryId}/cancel`,apiSession,{method:'POST',body:JSON.stringify({reason:'Cancelled from doctor dashboard'})});await loadLiveData(apiSession);setSelectedAppointmentId('');setMessage('Appointment cancelled.')}catch(err:any){setMessage(err.message||'Could not cancel appointment.')}finally{setBusy(false)}return}updateAppt(selected.id,{status:'Cancelled',queueStatus:'Cancelled'})}
  function markDone(){
   if(!selected)return;
   const referralDoctor:any=referDoctor?doctorList.find((p:any)=>p.id===referDoctorId):null;
@@ -151,7 +225,7 @@ export function DoctorConsultation({clinic,branch,branchId,departmentId,patients
  }
  async function ensureBackendConsultation(){
   if(!apiSession||!selected)throw new Error('Backend login and appointment selection are required.');
-  if(selected.queueEntryId&&selected.queueStatus!=='in_consultation'&&selected.status!=='in_consultation'){try{await apiFetch(`/queue/${selected.queueEntryId}/start-consultation`,apiSession,{method:'POST',body:JSON.stringify({reason:'Started from doctor dashboard'})})}catch(err:any){if(!String(err.message||'').includes('already'))throw err}}
+  if(selected.queueEntryId&&statusKey(selected.queueStatus)!=='in_consultation'&&statusKey(selected.status)!=='in_consultation'){try{await apiFetch(`/queue/${selected.queueEntryId}/start-consultation`,apiSession,{method:'POST',body:JSON.stringify({reason:'Started from doctor dashboard'})})}catch(err:any){if(!String(err.message||'').includes('already'))throw err}}
   if(selected.consultationId)return selected.consultationId;
    const created=await apiFetch('/consultations',apiSession,{method:'POST',body:JSON.stringify({appointment_id:selected.id,treatment_type:treatmentType,created_by_user_id:apiSession.user?.id,...structuredPayload()})});
   await loadLiveData(apiSession);
@@ -187,10 +261,10 @@ export function DoctorConsultation({clinic,branch,branchId,departmentId,patients
  </div>
  return <div className="space-y-6">
   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-   <DoctorMetric icon={CalendarClock} title="Today Booked" value={doctorQueue.length} caption={doctor.name}/>
-   <DoctorMetric icon={Clock3} title="Waiting" value={waitingToday} caption="Live token queue" tone="amber"/>
-   <DoctorMetric icon={CheckCircle2} title="Completed" value={completedToday} caption="Consultation done" tone="green"/>
-   <DoctorMetric icon={UsersRound} title="Patients Seen" value={uniquePatientCount} caption={`${emergencyToday} emergency priority`} tone="blue"/>
+   <DoctorMetric icon={CalendarClock} title="Today Booked" value={selectedDateQueue.length} caption={doctor.name} active={dashboardFilter==='booked'} onClick={()=>setDashboardFilter('booked')}/>
+   <DoctorMetric icon={Clock3} title="Waiting" value={waitingToday} caption="Live token queue" tone="amber" active={dashboardFilter==='waiting'} onClick={()=>setDashboardFilter('waiting')}/>
+   <DoctorMetric icon={CheckCircle2} title="Completed" value={completedToday} caption="Consultation done" tone="green" active={dashboardFilter==='completed'} onClick={()=>setDashboardFilter('completed')}/>
+   <DoctorMetric icon={UsersRound} title="Patients Seen" value={uniquePatientCount} caption={`${emergencyToday} emergency priority`} tone="blue" active={dashboardFilter==='seen'} onClick={()=>setDashboardFilter('seen')}/>
   </div>
   <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)]">
    <Card>
@@ -199,24 +273,24 @@ export function DoctorConsultation({clinic,branch,branchId,departmentId,patients
      <Badge tone="blue">Refresh #{tick}</Badge>
     </div>
     <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-7">
-     {appointmentDays.map((day:any)=><div key={day.iso} className={`rounded-2xl border p-3 text-center ${day.count?'border-slate-900 bg-slate-900 text-white':'border-slate-200 bg-white'}`}><p className="text-xs font-bold uppercase opacity-70">{day.label}</p><p className="text-xl font-black">{day.day}</p><div className="mx-auto mt-2 h-1.5 w-1.5 rounded-full bg-current opacity-70"/><p className="mt-1 text-[11px] font-bold opacity-70">{day.count} booked</p></div>)}
+     {appointmentDays.map((day:any)=><button key={day.iso} type="button" onClick={()=>{setSelectedDate(day.iso);setSelectedAppointmentId('')}} className={`rounded-2xl border p-3 text-center transition ${selectedDate===day.iso?'border-slate-900 bg-slate-900 text-white':day.count?'border-slate-300 bg-slate-50 text-slate-950 hover:border-slate-500':'border-slate-200 bg-white text-slate-950 hover:border-slate-300'}`}><p className="text-xs font-bold uppercase opacity-70">{day.label}</p><p className="text-xl font-black">{day.day}</p><div className="mx-auto mt-2 h-1.5 w-1.5 rounded-full bg-current opacity-70"/><p className="mt-1 text-[11px] font-bold opacity-70">{day.count} booked</p></button>)}
     </div>
     <ScheduleList rows={scheduleRows} selectedId={selected?.id} onSelect={setSelectedAppointmentId} onConsult={openConsultation}/>
    </Card>
-   <Card><div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-bold">Today's Booked Appointments</h3><p className="text-sm text-slate-500">Select a token or open consultation directly.</p></div><Badge tone="blue">{branch.name}</Badge></div>{message&&<div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}<div className="mt-4 grid gap-3"><Field label="Doctor"><Select value={doctorId} onChange={(e:any)=>{setDoctorId(e.target.value);setSelectedAppointmentId('')}}>{doctorList.map((d:any)=><option key={d.id} value={d.id}>{d.name} - {d.specialty}</option>)}</Select></Field><Button onClick={callNext} disabled={!current||busy}>Call Next Patient</Button></div><div className="mt-5 space-y-3">{doctorQueue.map((a:any)=><div key={a.id} className={`rounded-2xl border p-4 ${selected?.id===a.id?'border-slate-900 bg-slate-50':'border-slate-200 bg-white'}`}><div className="flex items-start justify-between gap-3"><button type="button" onClick={()=>setSelectedAppointmentId(a.id)} className="min-w-0 text-left"><b>{a.token} · {a.patient}</b><p className="text-xs text-slate-500">{displayTime(a.time||a.appointment_time)} · {a.status} · {a.queueStatus}</p></button><div className="flex shrink-0 flex-wrap justify-end gap-2"><Badge tone={a.tokenType==='Emergency'?'red':'amber'}>{a.tokenType}</Badge>{a.consultationStatus&&<Badge tone={a.consultationStatus==='signed'?'green':'blue'}>{a.consultationStatus}</Badge>}</div></div><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={()=>setSelectedAppointmentId(a.id)} className="rounded-xl border px-3 py-2 text-xs font-bold">Select</button><button type="button" onClick={()=>openConsultation(a.id)} className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white">Consultation</button></div></div>)}</div></Card>
+   <Card><div className="flex items-center justify-between gap-3"><div><h3 className="text-lg font-bold">Today's Booked Appointments</h3><p className="text-sm text-slate-500">{displayDate(selectedDate)} · {dashboardFilter}</p></div><Badge tone="blue">{branch.name}</Badge></div>{message&&<div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}<div className="mt-4 grid gap-3"><Field label="Doctor"><Select value={doctorId} onChange={(e:any)=>{setDoctorId(e.target.value);setSelectedAppointmentId('')}} disabled={isDoctorUser}>{doctorList.map((d:any)=><option key={d.id} value={d.id}>{d.name} - {d.specialty}</option>)}</Select></Field><Button onClick={callNext} disabled={!current||busy}>Call Next Patient</Button></div><div className="mt-5 space-y-3">{scheduleRows.map((a:any)=><div key={a.id} className={`rounded-2xl border p-4 ${selected?.id===a.id?'border-slate-900 bg-slate-50':'border-slate-200 bg-white'}`}><div className="flex items-start justify-between gap-3"><button type="button" onClick={()=>setSelectedAppointmentId(a.id)} className="min-w-0 text-left"><b>{a.token} · {a.patient}</b><p className="text-xs text-slate-500">{displayTime(a.time||a.appointment_time)} · {a.status} · {a.queueStatus}</p></button><div className="flex shrink-0 flex-wrap justify-end gap-2"><Badge tone={a.tokenType==='Emergency'?'red':'amber'}>{a.tokenType}</Badge>{a.consultationStatus&&<Badge tone={a.consultationStatus==='signed'?'green':'blue'}>{a.consultationStatus}</Badge>}</div></div><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={()=>setSelectedAppointmentId(a.id)} className="rounded-xl border px-3 py-2 text-xs font-bold">Select</button><button type="button" onClick={()=>openConsultation(a.id)} className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white">Consultation</button></div></div>)}</div></Card>
   </div>
   <Card><h3 className="text-lg font-bold">Doctor Revenue Tracking Logic</h3><div className="mt-3 grid gap-3 md:grid-cols-5"><div className="rounded-2xl bg-slate-50 p-4"><b>Consultation</b><p className="text-sm text-slate-500">OP/IP/Online/Home Visit</p></div><div className="rounded-2xl bg-slate-50 p-4"><b>Lab Referral</b><p className="text-sm text-slate-500">Lab tests written</p></div><div className="rounded-2xl bg-slate-50 p-4"><b>Scan Referral</b><p className="text-sm text-slate-500">Diagnostics referred</p></div><div className="rounded-2xl bg-slate-50 p-4"><b>Pharmacy</b><p className="text-sm text-slate-500">Medicine value referred</p></div><div className="rounded-2xl bg-slate-50 p-4"><b>Reports</b><p className="text-sm text-slate-500">Admin revenue analytics</p></div></div></Card>
  </div>
 }
 
-function DoctorMetric({icon:Icon,title,value,caption,tone='slate'}:any){
+function DoctorMetric({icon:Icon,title,value,caption,tone='slate',active=false,onClick}:any){
  const toneClass:any={
   slate:'bg-slate-100 text-slate-700',
   amber:'bg-amber-100 text-amber-700',
   green:'bg-emerald-100 text-emerald-700',
   blue:'bg-blue-100 text-blue-700'
  };
- return <Card className="min-h-[118px]">
+ return <button type="button" onClick={onClick} className={`min-h-[118px] rounded-3xl border bg-white p-5 text-left shadow-sm transition ${active?'border-slate-900 ring-2 ring-slate-900/10':'border-slate-200 hover:border-slate-400'}`}>
   <div className="flex items-center gap-4">
    <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${toneClass[tone]||toneClass.slate}`}><Icon className="h-6 w-6"/></div>
    <div className="min-w-0">
@@ -225,7 +299,7 @@ function DoctorMetric({icon:Icon,title,value,caption,tone='slate'}:any){
     <p className="truncate text-xs font-semibold text-slate-500">{caption}</p>
    </div>
   </div>
- </Card>
+ </button>
 }
 
 function ScheduleList({rows,selectedId,onSelect,onConsult}:any){

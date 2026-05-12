@@ -5,7 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.core.access_control import enforce_entitlement, require_user_branch_access, scoped_branch_id
+from app.core.access_control import (
+    current_doctor_practitioner_id,
+    enforce_entitlement,
+    require_doctor_practitioner_access,
+    require_user_branch_access,
+    scoped_branch_id,
+)
 from app.core.auth import require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
@@ -184,6 +190,7 @@ def create_consultation(
     if not appointment or appointment.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid appointment")
     require_user_branch_access(current_user, appointment.branch_id)
+    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
     patient = session.get(Patient, appointment.patient_id)
     if not patient or patient.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient")
@@ -241,9 +248,12 @@ def list_consultations(
 ) -> list[Consultation]:
     enforce_entitlement(session, tenant_id, "consultations")
     branch_id = scoped_branch_id(current_user, branch_id)
+    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
     statement = select(Consultation).where(Consultation.tenant_id == tenant_id)
     if branch_id:
         statement = statement.where(Consultation.branch_id == branch_id)
+    if doctor_practitioner_id:
+        statement = statement.where(Consultation.practitioner_id == doctor_practitioner_id)
     if patient_id:
         statement = statement.where(Consultation.patient_id == patient_id)
     if appointment_id:
@@ -288,6 +298,7 @@ def get_consultation(
     enforce_entitlement(session, tenant_id, "consultations")
     consultation = _get_consultation_or_404(session, tenant_id, consultation_id)
     require_user_branch_access(current_user, consultation.branch_id)
+    require_doctor_practitioner_access(session, tenant_id, current_user, consultation.practitioner_id)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -315,6 +326,7 @@ def update_consultation(
     enforce_entitlement(session, tenant_id, "consultations")
     consultation = _get_consultation_or_404(session, tenant_id, consultation_id)
     require_user_branch_access(current_user, consultation.branch_id)
+    require_doctor_practitioner_access(session, tenant_id, current_user, consultation.practitioner_id)
     if consultation.status == ConsultationStatus.SIGNED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -358,6 +370,7 @@ def sign_consultation(
     enforce_entitlement(session, tenant_id, "consultations")
     consultation = _get_consultation_or_404(session, tenant_id, consultation_id)
     require_user_branch_access(current_user, consultation.branch_id)
+    require_doctor_practitioner_access(session, tenant_id, current_user, consultation.practitioner_id)
     if consultation.status == ConsultationStatus.SIGNED:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Consultation already signed")
 
@@ -433,6 +446,7 @@ def create_addendum(
     enforce_entitlement(session, tenant_id, "consultations")
     consultation = _get_consultation_or_404(session, tenant_id, consultation_id)
     require_user_branch_access(current_user, consultation.branch_id)
+    require_doctor_practitioner_access(session, tenant_id, current_user, consultation.practitioner_id)
     if consultation.status != ConsultationStatus.SIGNED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

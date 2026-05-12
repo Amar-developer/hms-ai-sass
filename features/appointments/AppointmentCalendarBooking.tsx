@@ -70,6 +70,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const [slotIntervalsEnabled, setSlotIntervalsEnabled] = useState(false);
   const [slotIntervalMinutes, setSlotIntervalMinutes] = useState(5);
   const [liveDoctors, setLiveDoctors] = useState<any[]>([]);
+  const [doctorFeeRules, setDoctorFeeRules] = useState<any[]>([]);
   const [doctorId, setDoctorId] = useState('');
   const [calendar, setCalendar] = useState<any>(null);
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
@@ -116,6 +117,22 @@ export function AppointmentCalendarBooking(props: Props) {
 
   const doctors = liveDoctors;
   const doctor = doctors.find((item: any) => item.id === doctorId) || doctors[0];
+  const selectedFeeRule = useMemo(() => {
+    const candidates = doctorFeeRules.filter((rule: any) => {
+      if (!rule.is_active) return false;
+      if (rule.appointment_type !== appointmentType) return false;
+      if (rule.branch_id && rule.branch_id !== branchId) return false;
+      if (rule.department_id && rule.department_id !== departmentId) return false;
+      if (rule.practitioner_id && rule.practitioner_id !== doctorId) return false;
+      return true;
+    });
+    return candidates
+      .sort((a: any, b: any) => {
+        const score = (rule: any) => Number(Boolean(rule.practitioner_id)) * 4 + Number(Boolean(rule.department_id)) * 2 + Number(Boolean(rule.branch_id));
+        return score(b) - score(a);
+      })[0];
+  }, [doctorFeeRules, appointmentType, branchId, departmentId, doctorId]);
+  const selectedFeeAmount = selectedFeeRule?.fee_amount;
   const patientMatches = apiSession
     ? liveMatches
     : searchPatients(patients, patientSearch).map((patient: any) => ({
@@ -211,6 +228,27 @@ export function AppointmentCalendarBooking(props: Props) {
 
   useEffect(() => {
     let alive = true;
+    async function loadFeeRules() {
+      if (!apiSession) {
+        setDoctorFeeRules([]);
+        return;
+      }
+      try {
+        const params = branchId ? `?branch_id=${encodeURIComponent(branchId)}` : '';
+        const rows = await apiFetch(`/billing/doctor-fee-rules${params}`, apiSession);
+        if (alive) setDoctorFeeRules(rows);
+      } catch {
+        if (alive) setDoctorFeeRules([]);
+      }
+    }
+    loadFeeRules();
+    return () => {
+      alive = false;
+    };
+  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+
+  useEffect(() => {
+    let alive = true;
     async function fetchDoctors(path: string) {
       try {
         return await apiFetch(path, apiSession as ApiSession);
@@ -228,17 +266,12 @@ export function AppointmentCalendarBooking(props: Props) {
       }
       try {
         const exactPath = `/practitioners?branch_id=${encodeURIComponent(branchId)}&department_id=${encodeURIComponent(departmentId)}`;
-        const branchPath = `/practitioners?branch_id=${encodeURIComponent(branchId)}`;
-        const departmentPath = `/practitioners?department_id=${encodeURIComponent(departmentId)}`;
-        let rows = await fetchDoctors(exactPath);
-        if (rows.length === 0) rows = await fetchDoctors(branchPath);
-        if (rows.length === 0) rows = await fetchDoctors(departmentPath);
-        if (rows.length === 0) rows = await fetchDoctors('/practitioners');
+        const rows = await fetchDoctors(exactPath);
         if (!alive) return;
         setLiveDoctors(rows);
         setDoctorId((current) => (rows.some((row: any) => row.id === current) ? current : rows[0]?.id || ''));
         if (rows.length === 0) {
-          setMessage('No doctor is mapped for this tenant, branch, and department. Ask the tenant admin to create/map a Doctor and add Doctor Scheduling timings.');
+          setMessage('No doctor is mapped for this branch and department. Ask the tenant admin to map a doctor and add Doctor Scheduling timings.');
         }
       } catch (err: any) {
         if (alive) {
@@ -618,6 +651,11 @@ export function AppointmentCalendarBooking(props: Props) {
                   {timingOptions.map((group: any) => <option key={group.id} value={group.id}>{group.label}</option>)}
                 </Select>
               </Field>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-xs font-bold uppercase text-slate-500">Doctor Fee</p>
+                <p className="mt-1 text-lg font-black">{isBillable ? (selectedFeeAmount !== undefined ? `₹${Number(selectedFeeAmount).toLocaleString('en-IN')}` : 'Not configured') : 'Free'}</p>
+                <p className="mt-1 text-xs text-slate-500">{doctorId ? (doctor?.full_name || doctor?.name || 'Selected doctor') : 'Select doctor'}</p>
+              </div>
             </div>
             {appointmentType === 'emergency' && (
               <div className="mt-4 rounded-2xl bg-red-50 p-4">

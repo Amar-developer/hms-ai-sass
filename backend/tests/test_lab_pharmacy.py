@@ -27,6 +27,7 @@ def setup_lab_pharmacy_tenant(client):
                 "queue",
                 "consultations",
                 "billing_basic",
+                "billing_advanced",
                 "lab",
                 "pharmacy",
                 "sms",
@@ -281,6 +282,117 @@ def test_create_pharmacy_issue_from_consultation_and_dispense(client):
     assert dispensed.status_code == 200
     assert dispensed.json()["status"] == "dispensed"
     assert dispensed.json()["dispensed_at"] is not None
+
+
+def test_consultation_invoice_refresh_includes_lab_and_pharmacy_charges(client):
+    tenant, branch, patient = setup_lab_pharmacy_tenant(client)
+    client.post(
+        "/api/v1/billing/doctor-fee-rules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "appointment_type": "op",
+            "fee_amount": 600,
+            "share_type": "percentage",
+            "doctor_share_percentage": 60,
+            "practitioner_id": "doctor_demo",
+        },
+    )
+    client.post(
+        "/api/v1/lab/catalog/tests",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "code": "CBC",
+            "name": "Complete Blood Count",
+            "sample_type": "Blood",
+            "default_price": 350,
+        },
+    )
+    client.post(
+        "/api/v1/pharmacy/medicines",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "code": "PCM500",
+            "name": "Paracetamol 500mg",
+            "generic_name": "Paracetamol",
+            "default_sale_price": 5,
+        },
+    )
+    booking = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "appointment_type": "op",
+            "appointment_date": date.today().isoformat(),
+            "practitioner_id": "doctor_demo",
+        },
+    ).json()
+    consultation = client.post(
+        "/api/v1/consultations",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "appointment_id": booking["appointment"]["id"],
+            "prescription_text": "Paracetamol 500mg 1-0-1 for 3 days",
+            "lab_referral_text": "Complete Blood Count",
+            "medicines": [
+                {
+                    "medicine_name": "Paracetamol 500mg",
+                    "dosage": "500mg",
+                    "frequency": "1-0-1",
+                    "duration": "3 days",
+                    "instructions": "After food",
+                }
+            ],
+            "referrals": [
+                {
+                    "referral_type": "lab",
+                    "item_name": "Complete Blood Count",
+                    "priority": "routine",
+                    "instructions": "Fever workup",
+                }
+            ],
+        },
+    ).json()
+    signed = client.post(
+        f"/api/v1/consultations/{consultation['id']}/sign",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"signed_by_user_id": "doctor_demo"},
+    ).json()
+
+    first_invoice = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"consultation_id": signed["id"]},
+    ).json()
+    lab_order = client.post(
+        f"/api/v1/lab/orders/from-consultation/{signed['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"ordered_by_user_id": "doctor_demo"},
+    )
+    pharmacy_issue = client.post(
+        f"/api/v1/pharmacy/issues/from-consultation/{signed['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"issued_by_user_id": "pharmacy_user"},
+    )
+    refreshed = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"consultation_id": signed["id"]},
+    )
+
+    assert lab_order.status_code == 201
+    assert pharmacy_issue.status_code == 201
+    assert pharmacy_issue.json()["amount"] == 30
+    assert refreshed.status_code == 201
+    detail = refreshed.json()
+    assert detail["invoice"]["id"] == first_invoice["invoice"]["id"]
+    assert detail["invoice"]["subtotal_amount"] == 980
+    assert detail["invoice"]["total_amount"] == 980
+    assert detail["invoice"]["doctor_share_amount"] == 360
+    assert {item["item_type"] for item in detail["items"]} == {"consultation", "lab", "pharmacy"}
 
 
 def test_create_external_pharmacy_issue(client):

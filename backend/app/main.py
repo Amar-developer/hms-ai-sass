@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session
 
 from app.api.router import api_router
+from app.api.v1.health import HealthResponse, ReadinessResponse, health, readiness
 from app.core.config import get_settings
 from app.core.database import engine, get_session
 from app.core.middleware import TenantContextMiddleware
@@ -43,6 +44,7 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.add_middleware(TenantContextMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -50,8 +52,8 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    app.add_middleware(TenantContextMiddleware)
+    app.add_api_route("/health", health, methods=["GET"], response_model=HealthResponse, tags=["platform"])
+    app.add_api_route("/readiness", readiness, methods=["GET"], response_model=ReadinessResponse, tags=["platform"])
     app.include_router(api_router, prefix=settings.api_prefix)
 
     return app

@@ -11,6 +11,9 @@ type TokenQueueProps = {
   setAppointments: (value: any[]) => void;
   apiSession: ApiSession | null;
   loadLiveData: (session: ApiSession) => Promise<void>;
+  departmentId: string;
+  doctorScope?: any;
+  setActive?: (page: string) => void;
 };
 
 type QueueAction = 'call' | 'skip' | 'requeue' | 'cancel';
@@ -23,21 +26,38 @@ function sortByTokenNumber(rows:any[]){
   return [...rows].sort((a:any,b:any)=>tokenSortValue(a).localeCompare(tokenSortValue(b),undefined,{numeric:true,sensitivity:'base'}));
 }
 
+function isActiveQueueStatus(value:any){
+  const status=String(value||'').trim().toLowerCase().replaceAll(' ','_');
+  return !['cancelled','canceled','no_show','consultation_completed','billed','completed','done'].includes(status);
+}
+
 export function TokenQueue({
   scopedAppointments,
   appointments,
   setAppointments,
   apiSession,
   loadLiveData,
+  departmentId,
+  doctorScope,
+  setActive,
 }: TokenQueueProps) {
   const [busyId, setBusyId] = useState('');
   const [message, setMessage] = useState('');
   const [displayMode,setDisplayMode]=useState<'reception'|'called_only'>('reception');
   const [tokenLanguage,setTokenLanguage]=useState<'english'|'tamil'|'both'>('english');
   const [displayRows,setDisplayRows]=useState<any[]>([]);
-  const queue = sortByTokenNumber(sortQueue(scopedAppointments));
+  const queue = sortByTokenNumber(sortQueue(scopedAppointments.filter((appointment:any)=>{
+    if(departmentId&&appointment.departmentId!==departmentId)return false;
+    if(!isActiveQueueStatus(appointment.queueStatus||appointment.status))return false;
+    if(doctorScope?.practitionerId){
+      return appointment.doctorId===doctorScope.practitionerId||appointment.practitioner_id===doctorScope.practitionerId;
+    }
+    return true;
+  })));
   const visibleQueue=displayMode==='called_only'?queue.filter((appointment:any)=>appointment.queueStatus==='called'||appointment.queueStatus==='Called'):queue;
-  const visibleDisplayRows=sortByTokenNumber(displayRows);
+  const visibleDisplayRows=sortByTokenNumber(displayRows)
+    .map((row:any)=>({...row,appointment:queue.find((appointment:any)=>appointment.id===row.appointment_id)}))
+    .filter((row:any)=>row.appointment);
 
   useEffect(()=>{
     let alive=true;
@@ -56,6 +76,12 @@ export function TokenQueue({
 
   function updateAppointment(id: string, patch: any) {
     setAppointments(appointments.map((a: any) => (a.id === id ? {...a, ...patch} : a)));
+  }
+
+  function openConsultation(appointment:any){
+    if(!appointment?.id)return;
+    sessionStorage.setItem('medizinhub.consultationAppointmentId',appointment.id);
+    setActive?.('consultation');
   }
 
   async function transition(appointment: any, action: QueueAction) {
@@ -128,13 +154,16 @@ export function TokenQueue({
       </div>
       {message && <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {(visibleDisplayRows.length?visibleDisplayRows:visibleQueue.slice(0,4)).map((item:any)=>(
-          <div key={item.id} className="rounded-2xl bg-slate-900 p-4 text-white">
+        {(visibleDisplayRows.length?visibleDisplayRows:visibleQueue.slice(0,8)).map((item:any)=>{
+          const appointment=item.appointment||item;
+          return (
+          <button key={item.id} type="button" onClick={()=>openConsultation(appointment)} className="rounded-2xl bg-slate-900 p-4 text-left text-white transition hover:bg-slate-800">
             <p className="text-xs font-bold uppercase text-slate-300">{item.priority||item.tokenType||'normal'}</p>
             <p className="mt-1 text-3xl font-black">{item.token_number||item.token}</p>
-            <p className="mt-1 text-sm text-slate-300">{item.display_text||item.patient}</p>
-          </div>
-        ))}
+            <p className="mt-1 text-sm font-semibold text-white">{appointment.patient||item.patient_id}</p>
+            <p className="mt-1 truncate text-xs text-slate-300">{appointment.doctor||'Doctor'} · {appointment.queueStatus||item.status}</p>
+          </button>
+        )})}
       </div>
       <div className="mt-4 overflow-auto rounded-2xl border">
         <table className="w-full min-w-[900px] text-sm">
@@ -151,8 +180,8 @@ export function TokenQueue({
           <tbody>
             {visibleQueue.map((appointment: any) => (
               <tr key={appointment.id} className="border-t">
-                <td className="p-3 font-bold">{appointment.token}</td>
-                <td>{appointment.patient}</td>
+                <td className="p-3 font-bold"><button type="button" onClick={()=>openConsultation(appointment)} className="rounded-xl border px-3 py-2 font-bold hover:bg-slate-50">{appointment.token}</button></td>
+                <td><button type="button" onClick={()=>openConsultation(appointment)} className="text-left font-semibold hover:underline">{appointment.patient}</button></td>
                 <td>{appointment.doctor}</td>
                 <td>
                   <Badge>{appointment.status}</Badge>
@@ -161,6 +190,13 @@ export function TokenQueue({
                   <Badge tone={appointment.tokenType === 'Emergency' ? 'red' : 'slate'}>{appointment.queueStatus}</Badge>
                 </td>
                 <td className="space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => openConsultation(appointment)}
+                    className="rounded-2xl border px-5 py-3 font-bold"
+                  >
+                    Details
+                  </button>
                   <button
                     disabled={busyId === appointment.id}
                     onClick={() => {

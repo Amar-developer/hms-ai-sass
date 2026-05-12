@@ -27,6 +27,7 @@ from app.modules.pharmacy.models import (
     PharmacySupplier,
     StockLedgerMovement,
 )
+from app.modules.pharmacy.dosing import prescription_quantity
 from app.modules.pharmacy.schemas import (
     LowStockRead,
     MedicineBatchRead,
@@ -51,6 +52,17 @@ from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch
 
 router = APIRouter(prefix="/pharmacy")
+
+
+def _refresh_consultation_invoice_if_exists(session: Session, tenant_id: str, consultation_id: str | None) -> None:
+    if not consultation_id:
+        return
+    from app.modules.billing.models import Invoice
+    from app.modules.billing.service import refresh_consultation_invoice
+
+    invoice = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.consultation_id == consultation_id)).first()
+    if invoice:
+        refresh_consultation_invoice(session, invoice)
 
 
 def _validate_patient_branch(session: Session, tenant_id: str, patient_id: str, branch_id: str) -> None:
@@ -445,6 +457,7 @@ def create_pharmacy_issue(
         resource_id=issue.id,
         purpose="pharmacy",
     )
+    _refresh_consultation_invoice_if_exists(session, tenant_id, issue.consultation_id)
     return issue
 
 
@@ -492,8 +505,9 @@ def create_pharmacy_issue_from_consultation(
     for med in medicines:
         catalog = session.exec(select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id, MedicineCatalog.name == med.medicine_name)).first()
         unit_price = catalog.default_sale_price if catalog else 0
-        total += unit_price
-        item = PharmacyIssueItem(tenant_id=tenant_id, branch_id=issue.branch_id, pharmacy_issue_id=issue.id, medicine_id=catalog.id if catalog else None, medicine_name=med.medicine_name, quantity=1, unit_price=unit_price)
+        quantity = prescription_quantity(med.dosage, med.frequency, med.duration)
+        total += unit_price * quantity
+        item = PharmacyIssueItem(tenant_id=tenant_id, branch_id=issue.branch_id, pharmacy_issue_id=issue.id, medicine_id=catalog.id if catalog else None, medicine_name=med.medicine_name, quantity=quantity, unit_price=unit_price)
         session.add(item)
     if medicines and issue.amount == 0:
         issue.amount = total
@@ -509,6 +523,7 @@ def create_pharmacy_issue_from_consultation(
         resource_id=issue.id,
         purpose="pharmacy",
     )
+    _refresh_consultation_invoice_if_exists(session, tenant_id, consultation.id)
     return issue
 
 
@@ -602,6 +617,7 @@ def update_pharmacy_issue_status(
         resource_id=issue.id,
         purpose="pharmacy",
     )
+    _refresh_consultation_invoice_if_exists(session, tenant_id, issue.consultation_id)
     return issue
 
 

@@ -51,6 +51,7 @@ from app.modules.billing.schemas import (
 from app.modules.billing.service import (
     create_consultation_invoice,
     next_credit_note_number,
+    refresh_consultation_invoice,
     refundable_paid_total,
     update_invoice_payment_status,
 )
@@ -63,6 +64,24 @@ from app.modules.patients.models import Patient
 from app.modules.subscriptions.service import enforce_module_enabled
 
 router = APIRouter(prefix="/billing")
+
+
+def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
+    if not invoice.physiotherapy_case_id:
+        return
+    from app.modules.physiotherapy.models import PhysiotherapyCase
+    from app.modules.tenants.models import now_utc
+
+    case = session.get(PhysiotherapyCase, invoice.physiotherapy_case_id)
+    if not case or case.tenant_id != invoice.tenant_id:
+        return
+    target_status = "paid" if invoice.balance_amount <= 0 and invoice.total_amount > 0 else "completed"
+    if case.status == target_status:
+        return
+    case.status = target_status
+    case.updated_at = now_utc()
+    session.add(case)
+    session.commit()
 
 
 def _simple_pdf(lines: list[str]) -> bytes:
@@ -289,10 +308,7 @@ def create_invoice_from_consultation(
         )
     ).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Invoice already exists for this consultation",
-        )
+        return _read_invoice_detail(session, refresh_consultation_invoice(session, existing))
     if payload.discount_amount > 0:
         approval = session.get(DiscountApproval, payload.discount_approval_id) if payload.discount_approval_id else None
         if (
@@ -321,6 +337,7 @@ def create_invoice_from_consultation(
         created_by_user_id=payload.created_by_user_id,
         treatment_type=consultation.treatment_type,
     )
+    invoice = refresh_consultation_invoice(session, invoice)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -486,6 +503,7 @@ def record_payment(
     session.commit()
     session.refresh(payment)
     invoice = update_invoice_payment_status(session, invoice)
+    _sync_physiotherapy_case_status(session, invoice)
     patient = session.get(Patient, invoice.patient_id)
     if invoice.balance_amount > 0 and patient:
         for provider in (NotificationProvider.WHATSAPP, NotificationProvider.SMS):
@@ -541,6 +559,7 @@ def refund_payment(
     session.commit()
     session.refresh(payment)
     invoice = update_invoice_payment_status(session, invoice)
+    _sync_physiotherapy_case_status(session, invoice)
     if refundable_paid_total(session, invoice) == 0:
         invoice.status = InvoiceStatus.REFUNDED
         session.add(invoice)

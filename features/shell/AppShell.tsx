@@ -36,6 +36,8 @@ export function AppShell(props:any) {
     departmentId,
     setDepartmentId,
     allowedDepartments,
+    isDoctorUser,
+    doctorScope,
     apiSession,
     role,
     demoUsers,
@@ -67,7 +69,7 @@ export function AppShell(props:any) {
       case 'appointments':
         return <AppointmentCalendarBooking {...ctx} />;
       case 'queue':
-        return <TokenQueue {...ctx} />;
+        return <TokenQueue {...ctx} setActive={setActive} />;
       case 'patients':
         return <Patient {...ctx} />;
       case 'practitioners':
@@ -299,18 +301,30 @@ export function AppShell(props:any) {
                     )}
                   </Field>
                   <Field label="Branch">
-                    <Select value={branchId} onChange={(e:any) => setBranchId(e.target.value)}>
-                      {clinic.branches.map((b:any) => (
-                        <option key={b.id} value={b.id}>{b.name}</option>
-                      ))}
-                    </Select>
+                    {isDoctorUser ? (
+                      <div className="min-h-[46px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        {clinic.branches.find((b:any)=>b.id===branchId)?.name || clinic.branches[0]?.name || 'Assigned branch only'}
+                      </div>
+                    ) : (
+                      <Select value={branchId} onChange={(e:any) => setBranchId(e.target.value)}>
+                        {clinic.branches.map((b:any) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </Select>
+                    )}
                   </Field>
                   <Field label="Department / Specialty">
-                    <Select value={departmentId} onChange={(e:any) => setDepartmentId(e.target.value)}>
-                      {allowedDepartments.map((d:any) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </Select>
+                    {isDoctorUser ? (
+                      <div className="min-h-[46px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+                        {allowedDepartments.find((d:any)=>d.id===departmentId)?.name || allowedDepartments[0]?.name || 'Assigned specialty only'}
+                      </div>
+                    ) : (
+                      <Select value={departmentId} onChange={(e:any) => setDepartmentId(e.target.value)}>
+                        {allowedDepartments.map((d:any) => (
+                          <option key={d.id} value={d.id}>{d.name}</option>
+                        ))}
+                      </Select>
+                    )}
                   </Field>
                 </div>
               )}
@@ -318,6 +332,7 @@ export function AppShell(props:any) {
               <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
                 <Badge tone={apiSession ? 'green' : 'amber'}>{liveStatus}</Badge>
                 {apiSession && <span className="break-all">Tenant: {apiSession.tenantId}</span>}
+                {isDoctorUser && doctorScope?.practitionerId && <span>Practitioner: {doctorScope.practitionerId}</span>}
               </div>
             </div>
           </header>

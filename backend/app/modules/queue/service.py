@@ -25,16 +25,24 @@ def next_token_number(
     *,
     tenant_id: str,
     branch_id: str,
+    practitioner_id: str | None,
+    department_id: str | None,
     appointment_date,
     emergency: bool,
 ) -> str:
-    count = session.exec(
+    statement = (
         select(func.count())
         .select_from(QueueEntry)
         .join(Appointment, Appointment.id == QueueEntry.appointment_id)
         .where(QueueEntry.tenant_id == tenant_id, QueueEntry.branch_id == branch_id)
         .where(Appointment.appointment_date == appointment_date)
-    ).one()
+        .where(QueueEntry.priority == (QueuePriority.EMERGENCY if emergency else QueuePriority.NORMAL))
+    )
+    if practitioner_id:
+        statement = statement.where(Appointment.practitioner_id == practitioner_id)
+    elif department_id:
+        statement = statement.where(Appointment.department_id == department_id)
+    count = session.exec(statement).one()
     if emergency:
         return f"E-{count + 1:03d}"
     return f"N-{count + 1:03d}"
@@ -73,6 +81,8 @@ def create_queue_entry_for_appointment(session: Session, appointment: Appointmen
             session,
             tenant_id=appointment.tenant_id,
             branch_id=appointment.branch_id,
+            practitioner_id=appointment.practitioner_id,
+            department_id=appointment.department_id,
             appointment_date=appointment.appointment_date,
             emergency=emergency,
         ),

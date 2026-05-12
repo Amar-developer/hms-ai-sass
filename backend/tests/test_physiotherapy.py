@@ -104,6 +104,22 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
     assert invoice.json()["invoice"]["total_amount"] == 735
     assert invoice.json()["items"][0]["item_type"] == "physiotherapy"
 
+    blocked_session = client.post(
+        f"/api/v1/physiotherapy/cases/{case_body['id']}/sessions",
+        headers=headers,
+        json={
+            "modality_type": "exercise",
+            "duration_minutes": 15,
+            "charge_amount": 200,
+        },
+    )
+    assert blocked_session.status_code == 409
+    assert blocked_session.json()["detail"] == "Cannot add sessions after physiotherapy invoice is generated"
+
+    with Session(test_engine) as db:
+        invoiced_case = db.get(PhysiotherapyCase, case_body["id"])
+        assert invoiced_case.status == "completed"
+
     payment = client.post(
         f"/api/v1/billing/invoices/{invoice.json()['invoice']['id']}/payments",
         headers=headers,
@@ -119,6 +135,7 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
     with Session(test_engine) as db:
         case_row = db.get(PhysiotherapyCase, case_body["id"])
         assert case_row.body_region == "Knee"
+        assert case_row.status == "paid"
         actions = {row.action for row in db.exec(select(AuditEvent).where(AuditEvent.tenant_id == tenant_id)).all()}
         assert "physiotherapy_case.created" in actions
         assert "physiotherapy_invoice.generated" in actions

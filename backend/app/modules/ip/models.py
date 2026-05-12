@@ -5,6 +5,23 @@ from sqlmodel import Field, SQLModel
 from app.modules.tenants.models import new_id, now_utc
 
 
+class IPRoom(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("iproom"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    ward_type: str = Field(default="general", index=True, max_length=80)
+    ward_name: str = Field(index=True, min_length=2, max_length=120)
+    room_type: str = Field(default="shared", index=True, max_length=80)
+    room_number: str = Field(index=True, min_length=1, max_length=80)
+    bed_number: str = Field(index=True, min_length=1, max_length=80)
+    daily_rate: int = Field(default=0, ge=0)
+    is_active: bool = Field(default=True, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+    updated_at: datetime = Field(default_factory=now_utc)
+
+
 class IPAdmission(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("ipadm"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
@@ -13,11 +30,13 @@ class IPAdmission(SQLModel, table=True):
     source_appointment_id: str | None = Field(default=None, index=True, foreign_key="appointment.id")
     department_id: str | None = Field(default=None, index=True, foreign_key="department.id")
     admitting_practitioner_id: str | None = Field(default=None, index=True)
+    room_id: str | None = Field(default=None, index=True, foreign_key="iproom.id")
     admission_number: str = Field(index=True, min_length=3, max_length=60)
     ward: str = Field(index=True, min_length=2, max_length=120)
     room: str | None = Field(default=None, max_length=80)
     bed: str = Field(index=True, min_length=1, max_length=80)
     admission_date: date = Field(default_factory=date.today, index=True)
+    expected_discharge_date: date | None = Field(default=None, index=True)
     reason: str | None = Field(default=None, max_length=1000)
     provisional_diagnosis: str | None = Field(default=None, max_length=1000)
     status: str = Field(default="admitted", index=True, max_length=40)
@@ -49,6 +68,9 @@ class IPConsultation(SQLModel, table=True):
     admission_id: str = Field(index=True, foreign_key="ipadmission.id")
     practitioner_id: str | None = Field(default=None, index=True)
     consultation_date: date = Field(default_factory=date.today, index=True)
+    consultation_type: str = Field(default="ward_round", index=True, max_length=80)
+    fee_amount: int = Field(default=0, ge=0)
+    billing_item_id: str | None = Field(default=None, index=True)
     vitals_json: str = Field(default="{}", max_length=2000)
     complaints: str | None = Field(default=None, max_length=2000)
     diagnosis: str | None = Field(default=None, max_length=2000)
@@ -111,4 +133,53 @@ class IPCharge(SQLModel, table=True):
     unit_amount: int = Field(ge=0)
     total_amount: int = Field(ge=0)
     created_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+
+
+class IPBillingItem(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("ipbill"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    admission_id: str = Field(index=True, foreign_key="ipadmission.id")
+    source_type: str = Field(default="manual", index=True, max_length=80)
+    source_id: str | None = Field(default=None, index=True)
+    description: str = Field(min_length=2, max_length=260)
+    quantity: int = Field(default=1, ge=1)
+    unit_amount: int = Field(ge=0)
+    total_amount: int = Field(ge=0)
+    status: str = Field(default="billable", index=True, max_length=40)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+
+
+class IPMedicationOrder(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("ipmed"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    admission_id: str = Field(index=True, foreign_key="ipadmission.id")
+    practitioner_id: str | None = Field(default=None, index=True)
+    medicine_name: str = Field(index=True, min_length=2, max_length=180)
+    dosage: str | None = Field(default=None, max_length=120)
+    frequency: str | None = Field(default=None, max_length=120)
+    route: str | None = Field(default=None, max_length=80)
+    start_date: date = Field(default_factory=date.today, index=True)
+    end_date: date | None = Field(default=None, index=True)
+    unit_amount: int = Field(default=0, ge=0)
+    status: str = Field(default="active", index=True, max_length=40)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+
+
+class IPMedicationAdministration(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("ipmar"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    admission_id: str = Field(index=True, foreign_key="ipadmission.id")
+    medication_order_id: str = Field(index=True, foreign_key="ipmedicationorder.id")
+    administered_at: datetime = Field(default_factory=now_utc, index=True)
+    quantity: int = Field(default=1, ge=1)
+    status: str = Field(default="given", index=True, max_length=40)
+    notes: str | None = Field(default=None, max_length=1000)
+    administered_by_user_id: str | None = Field(default=None, index=True)
+    billing_item_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)

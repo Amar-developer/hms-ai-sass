@@ -8,6 +8,49 @@ function today(){return new Date().toISOString().slice(0,10)}
 function patientName(p:any){return p?.name||p?.full_name||p?.patient_name||p?.id||'Patient'}
 function admissionLabel(row:any){return `${row.admission_number||row.id} · ${row.ward||'Ward'} · Bed ${row.bed||'-'}`}
 function inr(value:any){return `Rs. ${Number(value||0).toLocaleString('en-IN')}`}
+function chargeableDays(start:any,end:any){const s=new Date(`${start||today()}T00:00:00`);const e=new Date(`${end||today()}T00:00:00`);if(Number.isNaN(s.getTime())||Number.isNaN(e.getTime())||e<s)return 1;return Math.max(Math.floor((e.getTime()-s.getTime())/86400000)+1,1)}
+function datetimeLocal(){const d=new Date();d.setMinutes(d.getMinutes()-d.getTimezoneOffset());return d.toISOString().slice(0,16)}
+function doseUnits(dosage:string){
+  const normalized=String(dosage||'').toLowerCase();
+  if(!/(tab|tablet|cap|capsule|sachet|vial|amp|drop|puff|spoon)/.test(normalized))return 1;
+  const fraction=normalized.match(/(\d+)\s*\/\s*(\d+)/);
+  if(fraction&&Number(fraction[2])>0)return Math.max(Number(fraction[1])/Number(fraction[2]),0.5);
+  const match=normalized.match(/\d+(\.\d+)?/);
+  return Math.max(match?Number(match[0]):1,0.5);
+}
+function dailyDoseQuantity(dosage:string,frequency:string){
+  const normalized=String(frequency||'').trim().toLowerCase();
+  const compact=normalized.replace(/[\s._]+/g,'');
+  let doses=1;
+  if(/^\d+(-\d+)+$/.test(compact))doses=compact.split('-').reduce((sum,part)=>sum+Number(part||0),0);
+  else if(['bd','bid','twice','twiceaday','twicedaily'].includes(compact))doses=2;
+  else if(['tds','tid','thrice','thriceaday','thricedaily'].includes(compact))doses=3;
+  else if(['qid','qds','fourtimesaday'].includes(compact))doses=4;
+  else {
+    const every=normalized.match(/(?:q|every)\s*(\d+)\s*(h|hr|hour)/);
+    const times=normalized.match(/(\d+)\s*(times|time|x)\s*(a|per)?\s*day/);
+    if(every&&Number(every[1])>0)doses=Math.max(24/Number(every[1]),1);
+    else if(times)doses=Number(times[1]);
+    else {
+      const numbers=[...normalized.matchAll(/\d+/g)].map((m)=>Number(m[0]));
+      if(numbers.length)doses=numbers.reduce((sum,row)=>sum+row,0);
+    }
+  }
+  return Math.max(Math.ceil(doseUnits(dosage)*Math.max(doses,1)),1);
+}
+function defaultRooms(branchId:string){
+  return [
+    ['general','General Ward','shared','GW-001','GW-001-A',800],
+    ['general','General Ward','shared','GW-001','GW-001-B',800],
+    ['general','General Ward','shared','GW-002','GW-002-A',800],
+    ['private','Private Room','single','PR-101','PR-101',2500],
+    ['private','Private Room','single','PR-102','PR-102',2500],
+    ['icu','ICU','critical_care','ICU-01','ICU-01',6000],
+    ['icu','ICU','critical_care','ICU-02','ICU-02',6000],
+    ['emergency','Emergency Ward','observation','ER-01','ER-01-A',1500],
+    ['emergency','Emergency Ward','observation','ER-01','ER-01-B',1500],
+  ].map(([ward_type,ward_name,room_type,room_number,bed_number,daily_rate])=>({branch_id:branchId,ward_type,ward_name,room_type,room_number,bed_number,daily_rate}));
+}
 type IPView='list'|'convert'|'direct'|'detail';
 
 export function IPAdmission({
@@ -26,17 +69,39 @@ export function IPAdmission({
   const [error,setError]=useState('');
   const [treatments,setTreatments]=useState<any[]>([]);
   const [charges,setCharges]=useState<any[]>([]);
+  const [billingItems,setBillingItems]=useState<any[]>([]);
+  const [medicationOrders,setMedicationOrders]=useState<any[]>([]);
+  const [medicationAdministrations,setMedicationAdministrations]=useState<any[]>([]);
+  const [medicineCatalog,setMedicineCatalog]=useState<any[]>([]);
+  const [labCatalog,setLabCatalog]=useState<any[]>([]);
   const [latestConsultation,setLatestConsultation]=useState<any>(null);
   const [latestConsent,setLatestConsent]=useState<any>(null);
   const [latestDischarge,setLatestDischarge]=useState<any>(null);
+  const [ipRooms,setIpRooms]=useState<any[]>([]);
+  const [roomSeedAttempted,setRoomSeedAttempted]=useState(false);
+  const [admissionDate,setAdmissionDate]=useState(today());
+  const [expectedDischargeDate,setExpectedDischargeDate]=useState(today());
   const [view,setView]=useState<IPView>('list');
 
   const selectedAdmission=ipAdmissions.find((row:any)=>row.id===selectedId)||ipAdmissions[0];
   const patientMap=useMemo(()=>new Map(patients.map((p:any)=>[p.id,p])),[patients]);
   const opCandidates=appointments.filter((a:any)=>['consultation_completed','checked_in','waiting','called','in_consultation'].includes(a.status)||a.consultationStatus==='signed');
+  const selectedRoom=ipRooms.find((room:any)=>room.id===selectedAdmission?.room_id);
+  const selectedDischargeDate=latestDischarge?.discharge_date||selectedAdmission?.expected_discharge_date||today();
+  const autoRoomCharge=selectedAdmission?.room_id&&selectedRoom?{
+    description:`${selectedRoom.ward_name} ${selectedRoom.room_number} Bed ${selectedRoom.bed_number}`,
+    quantity:chargeableDays(selectedAdmission.admission_date,selectedDischargeDate),
+    unit_amount:Number(selectedRoom.daily_rate||0),
+  }:null;
+  const autoRoomTotal=autoRoomCharge?autoRoomCharge.quantity*autoRoomCharge.unit_amount:0;
+  const legacyChargeTotal=charges.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+  const eventBillingTotal=billingItems.filter((row:any)=>row.status==='billable').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
+  const runningBillTotal=legacyChargeTotal+eventBillingTotal+autoRoomTotal;
 
   useEffect(()=>{if(!selectedId&&ipAdmissions[0]?.id)setSelectedId(ipAdmissions[0].id)},[ipAdmissions,selectedId]);
   useEffect(()=>{if(selectedAdmission?.id)loadAdmissionWork(selectedAdmission.id)},[selectedAdmission?.id]);
+  useEffect(()=>{loadRooms()},[apiSession?.token,apiSession?.tenantId,branchId,admissionDate,expectedDischargeDate]);
+  useEffect(()=>{loadCatalogs()},[apiSession?.token,apiSession?.tenantId,branchId]);
 
   async function refresh(){
     if(apiSession&&loadLiveData) await loadLiveData(apiSession);
@@ -46,19 +111,59 @@ export function IPAdmission({
     if(!apiSession)return;
     setError('');
     try{
-      const [treatmentRows,chargeRows]=await Promise.all([
+      const [treatmentRows,chargeRows,billingRows,medOrderRows,medAdministrationRows]=await Promise.all([
         apiFetch(`/ip/admissions/${admissionId}/treatments`,apiSession),
         apiFetch(`/ip/admissions/${admissionId}/charges`,apiSession),
+        apiFetch(`/ip/admissions/${admissionId}/billing-items`,apiSession),
+        apiFetch(`/ip/admissions/${admissionId}/medication-orders`,apiSession),
+        apiFetch(`/ip/admissions/${admissionId}/medication-administrations`,apiSession),
       ]);
       setTreatments(treatmentRows);
       setCharges(chargeRows);
+      setBillingItems(billingRows);
+      setMedicationOrders(medOrderRows);
+      setMedicationAdministrations(medAdministrationRows);
     }catch(err:any){
       setError(err.message||'Unable to load IP admission details.');
     }
   }
 
+  async function loadRooms(){
+    if(!apiSession||!branchId)return;
+    try{
+      const params=new URLSearchParams({branch_id:branchId,available_from:admissionDate,available_to:expectedDischargeDate||admissionDate,include_occupied:'true'});
+      const rows=await apiFetch(`/ip/rooms?${params.toString()}`,apiSession);
+      if(rows.length===0&&!roomSeedAttempted){
+        setRoomSeedAttempted(true);
+        await Promise.all(defaultRooms(branchId).map((room)=>apiFetch('/ip/rooms',apiSession,{method:'POST',body:JSON.stringify(room)}).catch(()=>null)));
+        const seededRows=await apiFetch(`/ip/rooms?${params.toString()}`,apiSession);
+        setIpRooms(seededRows);
+        return;
+      }
+      setIpRooms(rows);
+    }catch{
+      setIpRooms([]);
+    }
+  }
+
+  async function loadCatalogs(){
+    if(!apiSession)return;
+    try{
+      const [medicines,tests]=await Promise.all([
+        apiFetch('/pharmacy/medicines',apiSession).catch(()=>[]),
+        apiFetch('/lab/catalog/tests',apiSession).catch(()=>[]),
+      ]);
+      setMedicineCatalog(medicines);
+      setLabCatalog(tests);
+    }catch{
+      setMedicineCatalog([]);
+      setLabCatalog([]);
+    }
+  }
+
   async function submitAdmission(e:any,fromAppointment=false){
     e.preventDefault();
+    const form=e.currentTarget;
     const fd=new FormData(e.currentTarget);
     const sourceAppointmentId=String(fd.get('source_appointment_id')||'');
     const patientId=String(fd.get('patient_id')||'');
@@ -68,10 +173,12 @@ export function IPAdmission({
       source_appointment_id: sourceAppointmentId||undefined,
       department_id: String(fd.get('department_id')||departmentId||'')||undefined,
       admitting_practitioner_id: String(fd.get('practitioner_id')||'')||undefined,
+      room_id:String(fd.get('room_id')||'')||undefined,
       ward: String(fd.get('ward')||'General Ward'),
       room: String(fd.get('room')||'')||undefined,
       bed: String(fd.get('bed')||''),
       admission_date: String(fd.get('admission_date')||today()),
+      expected_discharge_date:String(fd.get('expected_discharge_date')||'')||undefined,
       reason: String(fd.get('reason')||'')||undefined,
       provisional_diagnosis: String(fd.get('provisional_diagnosis')||'')||undefined,
     };
@@ -91,15 +198,16 @@ export function IPAdmission({
         setSelectedId(row.id);
         setView('detail');
       }
-      e.currentTarget.reset();
+      form.reset();
     }catch(err:any){setError(err.message||'Unable to create IP admission.')}
     finally{setBusy('')}
   }
 
   async function postWork(e:any,type:'treatment'|'consultation'|'consent'|'discharge'|'charge'){
     e.preventDefault();
+    const form=e.currentTarget;
     if(!selectedAdmission)return;
-    const fd=new FormData(e.currentTarget);
+    const fd=new FormData(form);
     const bodies:any={
       treatment:{
         treatment_date:String(fd.get('treatment_date')||today()),
@@ -112,6 +220,8 @@ export function IPAdmission({
       consultation:{
         practitioner_id:String(fd.get('practitioner_id')||'')||undefined,
         consultation_date:String(fd.get('consultation_date')||today()),
+        consultation_type:String(fd.get('consultation_type')||'ward_round'),
+        fee_amount:Number(fd.get('fee_amount')||0),
         vitals_json:JSON.stringify({bp:String(fd.get('bp')||''),pulse:String(fd.get('pulse')||''),temperature:String(fd.get('temperature')||'')}),
         complaints:String(fd.get('complaints')||'')||undefined,
         diagnosis:String(fd.get('diagnosis')||'')||undefined,
@@ -158,7 +268,7 @@ export function IPAdmission({
       await loadAdmissionWork(selectedAdmission.id);
       await refresh();
       setMessage(`${type.replace('_',' ')} saved successfully.`);
-      e.currentTarget.reset();
+      form.reset();
     }catch(err:any){setError(err.message||`Unable to save ${type}.`)}
     finally{setBusy('')}
   }
@@ -169,8 +279,57 @@ export function IPAdmission({
       const row=await apiFetch(path,apiSession,{method:'POST'});
       setter(row);
       setMessage(`${label} completed.`);
+      if(selectedAdmission?.id)await loadAdmissionWork(selectedAdmission.id);
       await refresh();
     }catch(err:any){setError(err.message||`Unable to complete ${label}.`)}
+    finally{setBusy('')}
+  }
+
+  async function createMedicationOrder(e:any){
+    e.preventDefault();
+    const form=e.currentTarget;
+    if(!selectedAdmission)return;
+    const fd=new FormData(form);
+    const payload={
+      medicine_name:String(fd.get('medicine_name')||''),
+      dosage:String(fd.get('dosage')||'')||undefined,
+      frequency:String(fd.get('frequency')||'')||undefined,
+      route:String(fd.get('route')||'')||undefined,
+      start_date:String(fd.get('start_date')||today()),
+      end_date:String(fd.get('end_date')||'')||undefined,
+      unit_amount:Number(fd.get('unit_amount')||0),
+    };
+    setBusy('medication order');setError('');setMessage('');
+    try{
+      if(!apiSession)throw new Error('Backend login is required for medication orders.');
+      await apiFetch(`/ip/admissions/${selectedAdmission.id}/medication-orders`,apiSession,{method:'POST',body:JSON.stringify(payload)});
+      await loadAdmissionWork(selectedAdmission.id);
+      setMessage('Medication order saved.');
+      form.reset();
+    }catch(err:any){setError(err.message||'Unable to save medication order.')}
+    finally{setBusy('')}
+  }
+
+  async function administerMedication(e:any){
+    e.preventDefault();
+    const form=e.currentTarget;
+    if(!selectedAdmission)return;
+    const fd=new FormData(form);
+    const orderId=String(fd.get('medication_order_id')||'');
+    const payload={
+      administered_at:String(fd.get('administered_at')||'')||undefined,
+      quantity:Number(fd.get('quantity')||1),
+      status:String(fd.get('status')||'given'),
+      notes:String(fd.get('notes')||'')||undefined,
+    };
+    setBusy('medication administration');setError('');setMessage('');
+    try{
+      if(!apiSession)throw new Error('Backend login is required for medication administration.');
+      await apiFetch(`/ip/admissions/${selectedAdmission.id}/medication-orders/${orderId}/administrations`,apiSession,{method:'POST',body:JSON.stringify(payload)});
+      await loadAdmissionWork(selectedAdmission.id);
+      setMessage('Medicine administration recorded.');
+      form.reset();
+    }catch(err:any){setError(err.message||'Unable to record medicine administration.')}
     finally{setBusy('')}
   }
 
@@ -204,7 +363,7 @@ export function IPAdmission({
               </Select>
             </Field>
             {opCandidates.length===0&&<div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">No eligible OP appointments are currently loaded for conversion.</div>}
-            <AdmissionFields patients={patients} departmentId={departmentId} hidePatient/>
+            <AdmissionFields patients={patients} departmentId={departmentId} rooms={ipRooms} admissionDate={admissionDate} setAdmissionDate={setAdmissionDate} expectedDischargeDate={expectedDischargeDate} setExpectedDischargeDate={setExpectedDischargeDate} hidePatient/>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button type="button" onClick={()=>setView('list')} className="rounded-2xl border px-5 py-3 text-sm font-bold">Cancel</button>
               <Button disabled={busy==='admission'}>Create IP Admission</Button>
@@ -227,7 +386,7 @@ export function IPAdmission({
             <p className="text-sm text-slate-500">Use this for direct admission, emergency admission, or referred IP cases without an OP appointment.</p>
           </div>
           <form onSubmit={(e)=>submitAdmission(e,false)} className="mt-5 grid gap-4">
-            <AdmissionFields patients={patients} departmentId={departmentId}/>
+            <AdmissionFields patients={patients} departmentId={departmentId} rooms={ipRooms} admissionDate={admissionDate} setAdmissionDate={setAdmissionDate} expectedDischargeDate={expectedDischargeDate} setExpectedDischargeDate={setExpectedDischargeDate}/>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button type="button" onClick={()=>setView('list')} className="rounded-2xl border px-5 py-3 text-sm font-bold">Cancel</button>
               <Button disabled={busy==='admission'}>Admit Patient</Button>
@@ -280,113 +439,380 @@ export function IPAdmission({
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <Info title="Admission" value={selectedAdmission?admissionLabel(selectedAdmission):'No admission selected'}/>
             <Info title="Treatments" value={treatments.length}/>
-            <Info title="Charges" value={inr(charges.reduce((sum,row)=>sum+Number(row.total_amount||0),0))}/>
+            <Info title="Running Bill" value={inr(runningBillTotal)}/>
           </div>
           <p className="mt-4 text-sm text-slate-500">Select an IP admission from the left to manage treatment, consultation, consent, discharge, and billing.</p>
         </Card>
       </div>
 
       {selectedAdmission&&(
-        <div className="grid gap-6 xl:grid-cols-2">
-          <Card>
-            <h4 className="text-lg font-bold">Treatment Notes</h4>
-            <form onSubmit={(e)=>postWork(e,'treatment')} className="mt-4 grid gap-3">
-              <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Date"><Input name="treatment_date" type="date" defaultValue={today()}/></Field>
-                <Field label="Type"><Select name="treatment_type"><option value="ward_round">Ward Round</option><option value="procedure">Procedure</option><option value="nursing">Nursing Note</option><option value="medication">Medication</option></Select></Field>
-              </div>
-              <Field label="Treatment Notes"><Input name="notes" required placeholder="Clinical progress, care plan, response"/></Field>
-              <Field label="Medication Summary"><Input name="medication_summary" placeholder="IV fluids, injections, medicines"/></Field>
-              <Field label="Orders"><Input name="orders" placeholder="Lab, scan, diet, monitoring orders"/></Field>
-              <Button disabled={busy==='treatment'}>Save Treatment</Button>
-            </form>
-            <div className="mt-4 grid gap-2">
-              {treatments.slice(0,4).map((row:any)=><div key={row.id} className="rounded-2xl bg-slate-50 p-3 text-sm"><b>{row.treatment_date} · {row.treatment_type}</b><p className="text-slate-500">{row.notes}</p></div>)}
-            </div>
-          </Card>
-
-          <Card>
-            <h4 className="text-lg font-bold">IP Doctor Consultation</h4>
-            <form onSubmit={(e)=>postWork(e,'consultation')} className="mt-4 grid gap-3">
-              <div className="grid gap-3 md:grid-cols-3">
-                <Field label="BP"><Input name="bp" placeholder="120/80"/></Field>
-                <Field label="Pulse"><Input name="pulse" placeholder="78"/></Field>
-                <Field label="Temp"><Input name="temperature" placeholder="98.6 F"/></Field>
-              </div>
-              <Field label="Complaints"><Input name="complaints" placeholder="Current IP complaints"/></Field>
-              <Field label="Diagnosis"><Input name="diagnosis" placeholder="Working diagnosis"/></Field>
-              <Field label="Notes"><Input name="notes" placeholder="Assessment and care plan"/></Field>
-              <Field label="Prescription"><Input name="prescription_text" placeholder="Medicine rows can be structured next"/></Field>
-              <div className="flex flex-wrap gap-3">
-                <Button disabled={busy==='consultation'}>Save Draft</Button>
-                <Button type="button" disabled={!latestConsultation||busy==='consultation sign'} onClick={()=>sign(`/ip/consultations/${latestConsultation.id}/sign`,'consultation sign',setLatestConsultation)} className="bg-emerald-700">Sign Consultation</Button>
-              </div>
-            </form>
-          </Card>
-
-          <Card>
-            <h4 className="text-lg font-bold">Patient Consent Form</h4>
-            <form onSubmit={(e)=>postWork(e,'consent')} className="mt-4 grid gap-3">
-              <Field label="Consent Type"><Select name="consent_type"><option value="general_admission">General Admission</option><option value="procedure">Procedure Consent</option><option value="anaesthesia">Anaesthesia Consent</option><option value="high_risk">High Risk Consent</option></Select></Field>
-              <Field label="Title"><Input name="title" defaultValue="General IP Admission Consent"/></Field>
-              <Field label="Consent Text"><Input name="content" defaultValue="Patient/guardian consent received for in-patient admission, investigation, treatment, billing, and discharge process."/></Field>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Patient / Guardian"><Input name="patient_or_guardian_name"/></Field>
-                <Field label="Relationship"><Input name="relationship"/></Field>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <Button disabled={busy==='consent'}>Save Consent</Button>
-                <Button type="button" disabled={!latestConsent||busy==='consent sign'} onClick={()=>sign(`/ip/consents/${latestConsent.id}/sign`,'consent sign',setLatestConsent)} className="bg-emerald-700">Mark Signed</Button>
-              </div>
-            </form>
-          </Card>
-
-          <Card>
-            <h4 className="text-lg font-bold">Discharge Summary</h4>
-            <form onSubmit={(e)=>postWork(e,'discharge')} className="mt-4 grid gap-3">
-              <Field label="Discharge Date"><Input name="discharge_date" type="date" defaultValue={today()}/></Field>
-              <Field label="Final Diagnosis"><Input name="final_diagnosis" required/></Field>
-              <Field label="Course In Hospital"><Input name="course_in_hospital"/></Field>
-              <Field label="Procedures"><Input name="procedures"/></Field>
-              <Field label="Medications"><Input name="medications"/></Field>
-              <Field label="Follow-up Advice"><Input name="follow_up_advice"/></Field>
-              <Field label="Condition At Discharge"><Input name="condition_at_discharge"/></Field>
-              <div className="flex flex-wrap gap-3">
-                <Button disabled={busy==='discharge'}>Save Summary</Button>
-                <Button type="button" disabled={!latestDischarge||busy==='discharge finalize'} onClick={()=>sign(`/ip/discharge-summaries/${latestDischarge.id}/finalize`,'discharge finalize',setLatestDischarge)} className="bg-emerald-700">Finalize Discharge</Button>
-              </div>
-            </form>
-          </Card>
-
-          <Card className="xl:col-span-2">
-            <div className="grid gap-6 xl:grid-cols-[1fr_0.8fr]">
-              <div>
-                <h4 className="text-lg font-bold">IP Charges and Invoice</h4>
-                <form onSubmit={(e)=>postWork(e,'charge')} className="mt-4 grid gap-3 md:grid-cols-5">
-                  <Field label="Type"><Select name="charge_type"><option value="room">Room</option><option value="doctor">Doctor Visit</option><option value="procedure">Procedure</option><option value="nursing">Nursing</option><option value="medicine">Medicine</option><option value="lab">Lab</option></Select></Field>
-                  <Field label="Description"><Input name="description" required className="md:col-span-2"/></Field>
-                  <Field label="Qty"><Input name="quantity" type="number" min="1" defaultValue="1"/></Field>
-                  <Field label="Amount"><Input name="unit_amount" type="number" min="0" required/></Field>
-                  <Button disabled={busy==='charge'} className="md:col-span-5">Add Charge</Button>
-                </form>
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-4">
-                <h5 className="font-bold">Charge Summary</h5>
-                <div className="mt-3 grid gap-2">
-                  {charges.map((row:any)=><div key={row.id} className="flex justify-between gap-3 text-sm"><span>{row.description}</span><b>{inr(row.total_amount)}</b></div>)}
-                  <div className="border-t pt-3 text-right text-lg font-bold">{inr(charges.reduce((sum,row)=>sum+Number(row.total_amount||0),0))}</div>
-                </div>
-                <Button type="button" disabled={!charges.length||busy==='invoice'} onClick={generateInvoice} className="mt-4 w-full">Generate IP Invoice</Button>
-              </div>
-            </div>
-          </Card>
-        </div>
+        <IPCareWorkspace
+          admission={selectedAdmission}
+          treatments={treatments}
+          charges={charges}
+          billingItems={billingItems}
+          medicationOrders={medicationOrders}
+          medicationAdministrations={medicationAdministrations}
+          medicineCatalog={medicineCatalog}
+          labCatalog={labCatalog}
+          autoRoomCharge={autoRoomCharge}
+          autoRoomTotal={autoRoomTotal}
+          runningBillTotal={runningBillTotal}
+          apiSession={apiSession}
+          busy={busy}
+          setBusy={setBusy}
+          setError={setError}
+          setMessage={setMessage}
+          loadAdmissionWork={loadAdmissionWork}
+          refresh={refresh}
+          generateInvoice={generateInvoice}
+          postWork={postWork}
+          latestConsent={latestConsent}
+          latestDischarge={latestDischarge}
+          setLatestConsent={setLatestConsent}
+          setLatestDischarge={setLatestDischarge}
+          sign={sign}
+        />
       )}
     </div>
   );
 }
 
-function AdmissionFields({patients,departmentId,hidePatient=false}:any){
+function splitRows(value:string){return value.split('\n').map((line)=>line.trim()).filter(Boolean)}
+function appendLine(value:string,line:string){return [...splitRows(value),line].join('\n')}
+function parseAmount(value:any){const amount=Number(String(value||'').replace(/[^\d.]/g,''));return Number.isFinite(amount)?amount:0}
+function isClosedAdmission(admission:any){return ['discharged','cancelled'].includes(String(admission?.status||'').toLowerCase())}
+
+function IPCareWorkspace({
+  admission,
+  treatments,
+  charges,
+  billingItems,
+  medicationOrders,
+  medicationAdministrations,
+  medicineCatalog,
+  labCatalog,
+  autoRoomCharge,
+  autoRoomTotal,
+  runningBillTotal,
+  apiSession,
+  busy,
+  setBusy,
+  setError,
+  setMessage,
+  loadAdmissionWork,
+  refresh,
+  generateInvoice,
+  postWork,
+  latestConsent,
+  latestDischarge,
+  setLatestConsent,
+  setLatestDischarge,
+  sign,
+}:any){
+  const [medicineRows,setMedicineRows]=useState('Paracetamol | 500 mg | 1-0-1 | oral | 15');
+  const [referralRows,setReferralRows]=useState('lab | CBC | routine | Fever workup | 350');
+  const [medName,setMedName]=useState('');
+  const [selectedMedicineId,setSelectedMedicineId]=useState('');
+  const [medDose,setMedDose]=useState('');
+  const [medFrequency,setMedFrequency]=useState('1-0-1');
+  const [medRoute,setMedRoute]=useState('oral');
+  const [medCharge,setMedCharge]=useState('0');
+  const [refType,setRefType]=useState('lab');
+  const [selectedLabTestId,setSelectedLabTestId]=useState('');
+  const [refName,setRefName]=useState('');
+  const [refPriority,setRefPriority]=useState('routine');
+  const [refCharge,setRefCharge]=useState('0');
+  const closed=isClosedAdmission(admission);
+
+  useEffect(()=>{
+    if(!selectedMedicineId&&medicineCatalog[0]?.id){
+      const first=medicineCatalog[0];
+      setSelectedMedicineId(first.id);
+      setMedName(first.name||'');
+      setMedDose(first.strength||'');
+      setMedCharge(String(first.default_sale_price||0));
+    }
+  },[medicineCatalog,selectedMedicineId]);
+  useEffect(()=>{
+    if(!selectedLabTestId&&labCatalog[0]?.id){
+      const first=labCatalog[0];
+      setSelectedLabTestId(first.id);
+      setRefName(first.name||'');
+      setRefCharge(String(first.default_price||0));
+      setRefType(String(first.category||first.test_type||first.sample_type||'').toLowerCase().includes('scan')?'scan':'lab');
+    }
+  },[labCatalog,selectedLabTestId]);
+
+  function selectMedicine(id:string){
+    setSelectedMedicineId(id);
+    const medicine=medicineCatalog.find((row:any)=>row.id===id);
+    if(!medicine)return;
+    setMedName(medicine.name||'');
+    setMedDose(medicine.strength||'');
+    setMedCharge(String(medicine.default_sale_price||0));
+  }
+
+  function selectLabTest(id:string){
+    setSelectedLabTestId(id);
+    const test=labCatalog.find((row:any)=>row.id===id);
+    if(!test)return;
+    setRefName(test.name||'');
+    setRefCharge(String(test.default_price||0));
+    const text=[test.category,test.test_type,test.sample_type,test.name].join(' ').toLowerCase();
+    setRefType(text.includes('x-ray')||text.includes('ecg')||text.includes('scan')||text.includes('procedure')?'scan':'lab');
+  }
+
+  function addMedicineRow(){
+    if(!medName.trim())return;
+    setMedicineRows(appendLine(medicineRows,[medName,medDose,medFrequency,medRoute,medCharge].map((part)=>String(part||'').trim()).join(' | ')));
+    setMedName('');setMedDose('');setMedCharge('0');
+  }
+
+  function addReferralRow(){
+    if(!refName.trim())return;
+    setReferralRows(appendLine(referralRows,[refType,refName,refPriority,'',refCharge].map((part)=>String(part||'').trim()).join(' | ')));
+    setRefName('');setRefCharge('0');
+  }
+
+  async function submitCare(e:any){
+    e.preventDefault();
+    if(closed){
+      setError('This IP admission is discharged. New care entries and billing items are locked.');
+      return;
+    }
+    const fd=new FormData(e.currentTarget);
+    const careDate=String(fd.get('care_date')||today());
+    const roundType=String(fd.get('round_type')||'ward_round');
+    const notes=String(fd.get('notes')||'');
+    const complaints=String(fd.get('complaints')||'')||undefined;
+    const diagnosis=String(fd.get('diagnosis')||'')||undefined;
+    const feeAmount=Number(fd.get('fee_amount')||0);
+    const markGiven=Boolean(fd.get('mark_given'));
+    const vitals={bp:String(fd.get('bp')||''),pulse:String(fd.get('pulse')||''),temperature:String(fd.get('temperature')||'')};
+    setBusy('ip care');setError('');setMessage('');
+    try{
+      if(!apiSession)throw new Error('Backend login is required for IP care.');
+      await apiFetch(`/ip/admissions/${admission.id}/treatments`,apiSession,{method:'POST',body:JSON.stringify({
+        treatment_date:careDate,
+        treatment_type:roundType,
+        notes,
+        medication_summary:medicineRows||undefined,
+        orders:referralRows||undefined,
+      })});
+      const consultation=await apiFetch(`/ip/admissions/${admission.id}/consultations`,apiSession,{method:'POST',body:JSON.stringify({
+        consultation_date:careDate,
+        consultation_type:roundType,
+        fee_amount:feeAmount,
+        vitals_json:JSON.stringify(vitals),
+        complaints,
+        diagnosis,
+        notes,
+        prescription_text:medicineRows||undefined,
+      })});
+      await apiFetch(`/ip/consultations/${consultation.id}/sign`,apiSession,{method:'POST'});
+
+      const knownOrders=[...medicationOrders];
+      for(const line of splitRows(medicineRows)){
+        const [medicine_name,dosage,frequency,route,amountText]=line.split('|').map((part)=>part.trim());
+        if(!medicine_name)continue;
+        const unitAmount=parseAmount(amountText);
+        let order=knownOrders.find((row:any)=>
+          String(row.status||'active')==='active'
+          && String(row.medicine_name||'').toLowerCase()===medicine_name.toLowerCase()
+          && String(row.dosage||'')===String(dosage||'')
+          && String(row.frequency||'')===String(frequency||'')
+          && String(row.route||'')===String(route||'')
+          && Number(row.unit_amount||0)===unitAmount
+        );
+        if(!order){
+          order=await apiFetch(`/ip/admissions/${admission.id}/medication-orders`,apiSession,{method:'POST',body:JSON.stringify({
+            medicine_name,
+            dosage:dosage||undefined,
+            frequency:frequency||undefined,
+            route:route||undefined,
+            start_date:careDate,
+            unit_amount:unitAmount,
+          })});
+          knownOrders.push(order);
+        }
+        if(markGiven){
+          await apiFetch(`/ip/admissions/${admission.id}/medication-orders/${order.id}/administrations`,apiSession,{method:'POST',body:JSON.stringify({quantity:dailyDoseQuantity(dosage,frequency),status:'given',notes:'Given from IP care entry'})});
+        }
+      }
+
+      for(const line of splitRows(referralRows)){
+        const [sourceType,itemName,priority,instructions,amountText]=line.split('|').map((part)=>part.trim());
+        if(!itemName)continue;
+        const normalizedType=sourceType==='scan'?'scan_referral':'lab_referral';
+        const amount=parseAmount(amountText);
+        if(amount>0){
+          await apiFetch(`/ip/admissions/${admission.id}/billing-items`,apiSession,{method:'POST',body:JSON.stringify({
+            source_type:normalizedType,
+            description:`${sourceType?.toUpperCase()||'LAB'} - ${itemName}${priority?` (${priority})`:''}${instructions?` - ${instructions}`:''}`,
+            quantity:1,
+            unit_amount:amount,
+          })});
+        }
+      }
+
+      await loadAdmissionWork(admission.id);
+      await refresh();
+      setMessage('IP care entry saved, signed, and billable items updated.');
+    }catch(err:any){
+      setError(err.message||'Unable to save IP care entry.');
+    }finally{
+      setBusy('');
+    }
+  }
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+      <Card>
+        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+          <div>
+            <h4 className="text-lg font-bold">Daily IP Care Entry</h4>
+            <p className="text-sm text-slate-500">One entry saves the clinical round, medicines, lab/scan referrals, and running bill updates.</p>
+          </div>
+          <Badge tone={closed?'green':'blue'}>{closed?'Discharged':admission.admission_number}</Badge>
+        </div>
+        {closed&&<div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">This IP admission is discharged and locked. Use Invoices to view or collect against the final bill.</div>}
+        <form onSubmit={submitCare} className="mt-5 grid gap-4">
+          <div className="grid gap-3 md:grid-cols-4">
+            <Field label="Date"><Input name="care_date" type="date" defaultValue={today()}/></Field>
+            <Field label="Round"><Select name="round_type"><option value="ward_round">Ward Round</option><option value="admission_visit">Admission Visit</option><option value="emergency_visit">Emergency Visit</option><option value="procedure">Procedure</option><option value="discharge_round">Discharge Round</option></Select></Field>
+            <Field label="Visit Fee"><Input name="fee_amount" type="number" min="0" defaultValue="500"/></Field>
+            <label className="flex items-end gap-2 pb-3 text-sm font-bold text-slate-700"><input name="mark_given" type="checkbox" defaultChecked/> Give medicines now</label>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <Field label="BP"><Input name="bp" placeholder="120/80"/></Field>
+            <Field label="Pulse"><Input name="pulse" placeholder="78"/></Field>
+            <Field label="Temp"><Input name="temperature" placeholder="98.6 F"/></Field>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Complaints"><Input name="complaints" placeholder="Current IP complaints"/></Field>
+            <Field label="Diagnosis"><Input name="diagnosis" placeholder="Working diagnosis"/></Field>
+          </div>
+          <Field label="Clinical Notes"><textarea name="notes" required className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Progress, assessment, care plan, response"/></Field>
+
+          <div className="rounded-3xl bg-slate-50 p-4">
+            <Field label="Medicine Rows"><textarea value={medicineRows} onChange={(e:any)=>setMedicineRows(e.target.value)} className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none" placeholder="Medicine | dose | frequency | route | charge per dose"/></Field>
+            <div className="mt-3 grid gap-2 lg:grid-cols-[1.2fr_.8fr_.7fr_.7fr_.6fr_auto] lg:items-end">
+              <Field label="Medicine">
+                {medicineCatalog.length>0?(
+                  <Select value={selectedMedicineId} onChange={(e:any)=>selectMedicine(e.target.value)}>
+                    <option value="">Select medicine</option>
+                    {medicineCatalog.map((medicine:any)=><option key={medicine.id} value={medicine.id}>{medicine.name}{medicine.strength?` · ${medicine.strength}`:''} · {inr(medicine.default_sale_price||0)}</option>)}
+                  </Select>
+                ):(
+                  <Input value={medName} onChange={(e:any)=>setMedName(e.target.value)} placeholder="Ceftriaxone"/>
+                )}
+              </Field>
+              <Field label="Dose"><Input value={medDose} onChange={(e:any)=>setMedDose(e.target.value)} placeholder="1 g"/></Field>
+              <Field label="Freq"><Input value={medFrequency} onChange={(e:any)=>setMedFrequency(e.target.value)}/></Field>
+              <Field label="Route"><Select value={medRoute} onChange={(e:any)=>setMedRoute(e.target.value)}><option value="oral">Oral</option><option value="iv">IV</option><option value="im">IM</option><option value="sc">SC</option></Select></Field>
+              <Field label="Charge"><Input value={medCharge} onChange={(e:any)=>setMedCharge(e.target.value)} type="number" min="0"/></Field>
+              <Button type="button" onClick={addMedicineRow} disabled={closed}>Add</Button>
+            </div>
+            {medicineCatalog.length>0&&<div className="mt-3 flex flex-wrap gap-2">{medicineCatalog.slice(0,8).map((medicine:any)=><button key={medicine.id} type="button" onClick={()=>selectMedicine(medicine.id)} className="rounded-xl border bg-white px-3 py-2 text-xs font-bold">{medicine.name}</button>)}</div>}
+          </div>
+
+          <div className="rounded-3xl bg-slate-50 p-4">
+            <Field label="Lab / Scan Rows"><textarea value={referralRows} onChange={(e:any)=>setReferralRows(e.target.value)} className="min-h-20 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none" placeholder="lab | CBC | routine | instructions | charge&#10;scan | X-Ray Chest | urgent | instructions | charge"/></Field>
+            <div className="mt-3 grid gap-2 lg:grid-cols-[.7fr_1.2fr_.7fr_.6fr_auto] lg:items-end">
+              <Field label="Type"><Select value={refType} onChange={(e:any)=>setRefType(e.target.value)}><option value="lab">Lab</option><option value="scan">Scan</option></Select></Field>
+              <Field label="Item">
+                {labCatalog.length>0?(
+                  <Select value={selectedLabTestId} onChange={(e:any)=>selectLabTest(e.target.value)}>
+                    <option value="">Select lab / scan</option>
+                    {labCatalog.map((test:any)=><option key={test.id} value={test.id}>{test.name} · {test.sample_type||test.category||'service'} · {inr(test.default_price||0)}</option>)}
+                  </Select>
+                ):(
+                  <Input value={refName} onChange={(e:any)=>setRefName(e.target.value)} placeholder="CBC / X-Ray"/>
+                )}
+              </Field>
+              <Field label="Priority"><Select value={refPriority} onChange={(e:any)=>setRefPriority(e.target.value)}><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></Select></Field>
+              <Field label="Charge"><Input value={refCharge} onChange={(e:any)=>setRefCharge(e.target.value)} type="number" min="0"/></Field>
+              <Button type="button" onClick={addReferralRow} disabled={closed}>Add</Button>
+            </div>
+            {labCatalog.length>0&&<div className="mt-3 flex flex-wrap gap-2">{labCatalog.slice(0,8).map((test:any)=><button key={test.id} type="button" onClick={()=>selectLabTest(test.id)} className="rounded-xl border bg-white px-3 py-2 text-xs font-bold">{test.name}</button>)}</div>}
+          </div>
+
+          <Button disabled={closed||busy==='ip care'}>{busy==='ip care'?'Saving...':closed?'Admission Locked':'Save IP Care Entry'}</Button>
+        </form>
+      </Card>
+
+      <div className="grid gap-6">
+        <Card>
+          <h4 className="text-lg font-bold">Running Bill</h4>
+          <div className="mt-3 grid gap-2">
+            {autoRoomCharge&&<div className="flex justify-between gap-3 rounded-xl bg-slate-50 p-2 text-sm"><span>Room · {autoRoomCharge.quantity} day(s)</span><b>{inr(autoRoomTotal)}</b></div>}
+            {billingItems.map((row:any)=><div key={row.id} className="flex justify-between gap-3 text-sm"><span>{row.description}</span><b>{inr(row.total_amount)}</b></div>)}
+            {charges.map((row:any)=><div key={row.id} className="flex justify-between gap-3 text-sm"><span>{row.description}</span><b>{inr(row.total_amount)}</b></div>)}
+            <div className="border-t pt-3 text-right text-xl font-black">{inr(runningBillTotal)}</div>
+          </div>
+          <Button type="button" disabled={closed||runningBillTotal<=0||busy==='invoice'} onClick={generateInvoice} className="mt-4 w-full">{closed?'Final Bill Locked':'Generate IP Invoice'}</Button>
+        </Card>
+
+        <Card>
+          <h4 className="text-lg font-bold">Care History</h4>
+          <div className="mt-3 grid gap-2">
+            {treatments.slice(0,4).map((row:any)=><div key={row.id} className="rounded-2xl bg-slate-50 p-3 text-sm"><b>{row.treatment_date} · {row.treatment_type}</b><p className="text-slate-500">{row.notes}</p></div>)}
+            {treatments.length===0&&<p className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-500">No care entries yet.</p>}
+          </div>
+          <div className="mt-4 grid gap-2 text-sm text-slate-500">
+            <p>{medicationOrders.length} medication orders</p>
+            <p>{medicationAdministrations.length} medicine administrations</p>
+          </div>
+        </Card>
+
+        <details className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm" open={closed}>
+          <summary className="cursor-pointer font-bold">Consent / Discharge</summary>
+          <div className="mt-4 grid gap-5">
+            <form onSubmit={(e)=>postWork(e,'consent')} className="grid gap-3">
+              <Field label="Consent"><Input name="title" defaultValue="General IP Admission Consent"/></Field>
+              <Input name="content" defaultValue="Patient/guardian consent received for in-patient admission, investigation, treatment, billing, and discharge process."/>
+              <div className="flex flex-wrap gap-2"><Button disabled={closed||busy==='consent'}>Save Consent</Button><Button type="button" disabled={closed||!latestConsent||busy==='consent sign'} onClick={()=>sign(`/ip/consents/${latestConsent.id}/sign`,'consent sign',setLatestConsent)} className="bg-emerald-700">Mark Signed</Button></div>
+            </form>
+            <form onSubmit={(e)=>postWork(e,'discharge')} className="grid gap-3">
+              <Field label="Discharge Date"><Input name="discharge_date" type="date" defaultValue={today()}/></Field>
+              <Field label="Final Diagnosis"><Input name="final_diagnosis" required/></Field>
+              <Field label="Advice"><Input name="follow_up_advice"/></Field>
+              <div className="flex flex-wrap gap-2"><Button disabled={closed||busy==='discharge'}>Save Summary</Button><Button type="button" disabled={closed||!latestDischarge||busy==='discharge finalize'} onClick={()=>sign(`/ip/discharge-summaries/${latestDischarge.id}/finalize`,'discharge finalize',setLatestDischarge)} className="bg-emerald-700">{closed?'Discharged':'Finalize'}</Button></div>
+            </form>
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+}
+
+function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmissionDate,expectedDischargeDate,setExpectedDischargeDate,hidePatient=false}:any){
+  const availableRooms=rooms.filter((room:any)=>room.available);
+  const wardNames=Array.from(new Set(rooms.map((room:any)=>room.ward_name).filter(Boolean)));
+  const [ward,setWard]=useState('');
+  const [roomNumber,setRoomNumber]=useState('');
+  const [roomId,setRoomId]=useState('');
+  const wardRooms=rooms.filter((room:any)=>!ward||room.ward_name===ward);
+  const roomNumbers=Array.from(new Set(wardRooms.map((room:any)=>room.room_number).filter(Boolean)));
+  const bedRows=wardRooms.filter((room:any)=>!roomNumber||room.room_number===roomNumber);
+  const selectedRoom=rooms.find((room:any)=>room.id===roomId)||bedRows.find((room:any)=>room.available)||availableRooms[0]||rooms[0];
+  useEffect(()=>{
+    if(!rooms.length)return;
+    const next=selectedRoom||rooms[0];
+    if(!ward)setWard(next.ward_name||'');
+    if(!roomNumber)setRoomNumber(next.room_number||'');
+    if(!roomId&&next.available)setRoomId(next.id);
+  },[rooms.length,ward,roomNumber,roomId,selectedRoom?.id]);
+  useEffect(()=>{
+    const nextRoom=rooms.find((room:any)=>room.ward_name===ward&&room.available)||rooms.find((room:any)=>room.ward_name===ward);
+    setRoomNumber(nextRoom?.room_number||'');
+    setRoomId(nextRoom?.available?nextRoom.id:'');
+  },[ward]);
+  useEffect(()=>{
+    const nextBed=rooms.find((room:any)=>room.ward_name===ward&&room.room_number===roomNumber&&room.available);
+    setRoomId(nextBed?.id||'');
+  },[roomNumber,ward]);
   return (
     <>
       {!hidePatient&&(
@@ -399,13 +825,45 @@ function AdmissionFields({patients,departmentId,hidePatient=false}:any){
       )}
       <input type="hidden" name="department_id" value={departmentId||''}/>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Ward"><Select name="ward"><option>General Ward</option><option>Private Room</option><option>ICU</option><option>Emergency Ward</option></Select></Field>
-        <Field label="Bed"><Input name="bed" required/></Field>
+        <Field label="Admission Date"><Input name="admission_date" type="date" value={admissionDate} onChange={(e:any)=>setAdmissionDate(e.target.value)} required/></Field>
+        <Field label="Planned Discharge"><Input name="expected_discharge_date" type="date" value={expectedDischargeDate} min={admissionDate} onChange={(e:any)=>setExpectedDischargeDate(e.target.value)}/></Field>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Room"><Input name="room"/></Field>
-        <Field label="Admission Date"><Input name="admission_date" type="date" defaultValue={today()}/></Field>
-      </div>
+      {rooms.length>0?(
+        <>
+          <div className="grid gap-3 md:grid-cols-3">
+            <Field label="Ward">
+              <Select value={ward} onChange={(e:any)=>setWard(e.target.value)} required>
+                {wardNames.map((name:any)=><option key={name} value={name}>{name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Room">
+              <Select value={roomNumber} onChange={(e:any)=>setRoomNumber(e.target.value)} required>
+                <option value="">Select room</option>
+                {roomNumbers.map((number:any)=><option key={number} value={number}>Room {number}</option>)}
+              </Select>
+            </Field>
+            <Field label="Bed">
+              <Select name="room_id" value={roomId} onChange={(e:any)=>setRoomId(e.target.value)} required>
+                <option value="">Select available bed</option>
+                {bedRows.map((room:any)=><option key={room.id} value={room.id} disabled={!room.available}>{room.bed_number} · {inr(room.daily_rate)}/day{room.available?'':' · occupied'}</option>)}
+              </Select>
+            </Field>
+          </div>
+          <input type="hidden" name="ward" value={selectedRoom?.ward_name||'General Ward'}/>
+          <input type="hidden" name="room" value={selectedRoom?.room_number||''}/>
+          <input type="hidden" name="bed" value={selectedRoom?.bed_number||''}/>
+          {availableRooms.length===0&&<div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">No beds are available for the selected date range in this branch.</div>}
+        </>
+      ):(
+        <>
+          <div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">No IP room master is configured for this branch. Add ward/room/bed records from the backend room API before using availability-based admission.</div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Ward"><Select name="ward"><option>General Ward</option><option>Private Room</option><option>ICU</option><option>Emergency Ward</option></Select></Field>
+            <Field label="Bed"><Input name="bed" required/></Field>
+          </div>
+          <Field label="Room"><Input name="room"/></Field>
+        </>
+      )}
       <Field label="Reason"><Input name="reason" placeholder="Reason for IP admission"/></Field>
       <Field label="Provisional Diagnosis"><Input name="provisional_diagnosis"/></Field>
     </>

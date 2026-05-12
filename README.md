@@ -93,3 +93,7 @@ docker compose down
 
 # 7. Stop and DELETE all data volumes (careful!)
 docker compose down -v
+
+# 8. Migration cmd
+docker compose -f docker-compose.dev.yml exec backend alembic -c alembic/alembic.ini upgrade head
+

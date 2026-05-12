@@ -94,6 +94,17 @@ def _resolve_tax_rule(session: Session, tenant_id: str, branch_id: str, tax_rule
     ).first()
 
 
+def _sync_case_status_from_invoice(session: Session, case: PhysiotherapyCase, invoice: Invoice) -> PhysiotherapyCase:
+    target_status = "paid" if invoice.balance_amount <= 0 and invoice.total_amount > 0 else "completed"
+    if case.status != target_status:
+        case.status = target_status
+        case.updated_at = now_utc()
+        session.add(case)
+        session.commit()
+        session.refresh(case)
+    return case
+
+
 @router.get("/equipment", response_model=list[PhysiotherapyEquipmentRead])
 def list_equipment(
     branch_id: str | None = None,
@@ -233,6 +244,11 @@ def create_session(
 ) -> PhysiotherapySession:
     _assert_enabled(session, tenant_id)
     case = _get_case(session, tenant_id, case_id, current_user)
+    existing_invoice = session.exec(
+        select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.physiotherapy_case_id == case.id)
+    ).first()
+    if existing_invoice:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot add sessions after physiotherapy invoice is generated")
     if payload.equipment_id:
         equipment = session.get(PhysiotherapyEquipment, payload.equipment_id)
         if not equipment or equipment.tenant_id != tenant_id:
@@ -271,6 +287,7 @@ def get_case_invoice(
     ).first()
     if not invoice:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Physiotherapy invoice not found")
+    _sync_case_status_from_invoice(session, case, invoice)
     return _invoice_detail(session, invoice)
 
 
@@ -287,6 +304,7 @@ def generate_invoice(
     case = _get_case(session, tenant_id, case_id, current_user)
     existing = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.physiotherapy_case_id == case.id)).first()
     if existing:
+        _sync_case_status_from_invoice(session, case, existing)
         return _invoice_detail(session, existing)
     rows = list(
         session.exec(
@@ -347,6 +365,7 @@ def generate_invoice(
         )
     session.commit()
     session.refresh(invoice)
+    _sync_case_status_from_invoice(session, case, invoice)
     record_audit_event(
         session,
         tenant_id=tenant_id,

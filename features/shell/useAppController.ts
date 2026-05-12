@@ -18,6 +18,8 @@ export function useAppController() {
   const [liveBranchId, setLiveBranchId] = useState('');
   const [liveBranches, setLiveBranches] = useState<any[]>([]);
   const [liveDepartments, setLiveDepartments] = useState<any[]>([]);
+  const [doctorScope, setDoctorScope] = useState<any | null>(null);
+  const [livePractitioners, setLivePractitioners] = useState<any[]>([]);
   const [liveInvoices, setLiveInvoices] = useState<any[]>([]);
   const [liveStatus, setLiveStatus] = useState('Not connected');
   const [role, setRole] = useState('tenant_admin');
@@ -75,23 +77,47 @@ export function useAppController() {
       apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/branches`, session, referenceReadPermissions, []),
       apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/departments`, session, referenceReadPermissions, []),
     ]);
-    setLiveBranches(branchRows);
-    setLiveDepartments(departmentRows);
-    const backendBranchId = session.user?.branch_id || branchRows[0]?.id || liveBranchId || branchId;
-    if (backendBranchId) setLiveBranchId(backendBranchId);
-    if (departmentRows.length && !departmentRows.some((row: any) => row.id === departmentId)) {
-      setDepartmentId(departmentRows[0].id);
-    }
+    const isDoctorUser = session.user?.user_type === 'doctor' || session.user?.roles?.includes('doctor');
+    let scopedBranchRows = branchRows;
+    let scopedDepartmentRows = departmentRows;
 
     const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows] = await Promise.all([
       apiFetchIfAllowed<any[]>('/patients', session, 'patients.read', []),
-      apiFetchIfAllowed<any[]>('/appointments', session, 'appointments.manage', []),
+      apiFetchIfAllowed<any[]>('/appointments', session, ['appointments.manage', 'appointments.read'], []),
       apiFetchIfAllowed<any[]>('/queue?include_completed=true', session, 'queue.manage', []),
       apiFetchIfAllowed<any[]>('/consultations', session, 'consultations.read', []),
       apiFetchIfAllowed<any[]>('/billing/invoices', session, 'billing.manage', []),
       apiFetchIfAllowed<any[]>('/ip/admissions', session, ['ip.manage', 'ip.read'], []),
       apiFetchIfAllowed<any[]>('/practitioners', session, referenceReadPermissions, []),
     ]);
+
+    const linkedPractitioner = isDoctorUser
+      ? practitionerRows.find((practitioner: any) => practitioner.user_id === session.user?.id)
+      : null;
+    const doctorBranchIds = new Set([
+      ...(linkedPractitioner?.branch_ids || []),
+      session.user?.branch_id,
+    ].filter(Boolean));
+    const doctorDepartmentIds = new Set((linkedPractitioner?.department_ids || []).filter(Boolean));
+    if (isDoctorUser) {
+      scopedBranchRows = doctorBranchIds.size ? branchRows.filter((row: any) => doctorBranchIds.has(row.id)) : [];
+      scopedDepartmentRows = doctorDepartmentIds.size ? departmentRows.filter((row: any) => doctorDepartmentIds.has(row.id)) : [];
+      setDoctorScope({
+        practitionerId: linkedPractitioner?.id || null,
+        branchIds: Array.from(doctorBranchIds),
+        departmentIds: Array.from(doctorDepartmentIds),
+      });
+    } else {
+      setDoctorScope(null);
+    }
+
+    setLiveBranches(scopedBranchRows);
+    setLiveDepartments(scopedDepartmentRows);
+    const backendBranchId = session.user?.branch_id || scopedBranchRows[0]?.id || liveBranchId || branchId;
+    if (backendBranchId) setLiveBranchId(backendBranchId);
+    if (scopedDepartmentRows.length && !scopedDepartmentRows.some((row: any) => row.id === departmentId)) {
+      setDepartmentId(scopedDepartmentRows[0].id);
+    }
 
     const mappedPatients = patientRows.map(mapPatient);
     const patientMap = new Map<string, any>(mappedPatients.map((p: any) => [p.id, p]));
@@ -101,6 +127,7 @@ export function useAppController() {
     );
 
     setPatients(mappedPatients);
+    setLivePractitioners(practitionerRows);
     setAppointments(mappedAppointments);
     setIpAdmissions(ipRows);
     setLiveInvoices(invoiceRows);
@@ -211,6 +238,8 @@ export function useAppController() {
     setLiveBranchId('');
     setLiveBranches([]);
     setLiveDepartments([]);
+    setDoctorScope(null);
+    setLivePractitioners([]);
     setPatients([]);
     setAppointments([]);
     setIpAdmissions([]);
@@ -243,6 +272,7 @@ export function useAppController() {
   }
 
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const isDoctorUser = Boolean(apiSession && (apiSession.user?.user_type === 'doctor' || apiSession.user?.roles?.includes('doctor')));
   const branchOptions = liveBranches.length
     ? liveBranches.map((row: any) => ({id: row.id, name: row.name, city: row.city}))
     : apiSession ? [] : [defaultBranch];
@@ -283,6 +313,8 @@ export function useAppController() {
     departmentId,
     setDepartmentId,
     allowedDepartments,
+    doctorScope,
+    livePractitioners,
     patients,
     setPatients,
     appointments,
@@ -334,6 +366,8 @@ export function useAppController() {
       departmentId,
       setDepartmentId,
       allowedDepartments,
+      isDoctorUser,
+      doctorScope,
       apiSession,
       role,
       demoUsers,

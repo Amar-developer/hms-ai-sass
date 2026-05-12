@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core.access_control import current_doctor_practitioner_id
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
@@ -170,7 +171,7 @@ def list_practitioners(
     branch_id: str | None = None,
     department_id: str | None = None,
     session: Session = Depends(get_session),
-    _current_user=Depends(
+    current_user: User = Depends(
         require_any_permission(
             permissions.PRACTITIONERS_MANAGE,
             permissions.PRACTITIONERS_READ,
@@ -185,6 +186,9 @@ def list_practitioners(
     ),
 ) -> list[PractitionerRead]:
     statement = select(Practitioner).where(Practitioner.tenant_id == tenant_id).order_by(Practitioner.full_name)
+    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+    if doctor_practitioner_id:
+        statement = statement.where(Practitioner.id == doctor_practitioner_id)
     practitioners = list(session.exec(statement).all())
     if branch_id:
         practitioners = [

@@ -1,7 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.access_control import enforce_entitlement, require_user_branch_access, scoped_branch_id
+from app.core.access_control import (
+    current_doctor_practitioner_id,
+    enforce_entitlement,
+    require_doctor_practitioner_access,
+    require_user_branch_access,
+    scoped_branch_id,
+)
 from app.core.auth import require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
@@ -75,7 +81,12 @@ def list_queue(
 ) -> list[QueueEntry]:
     enforce_entitlement(session, tenant_id, "queue")
     branch_id = scoped_branch_id(current_user, branch_id)
+    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
     statement = select(QueueEntry).where(QueueEntry.tenant_id == tenant_id)
+    if doctor_practitioner_id:
+        statement = statement.join(Appointment, Appointment.id == QueueEntry.appointment_id).where(
+            Appointment.practitioner_id == doctor_practitioner_id
+        )
     if branch_id:
         statement = statement.where(QueueEntry.branch_id == branch_id)
     if not include_completed:
@@ -106,7 +117,12 @@ def queue_display(
 ) -> list[QueueDisplayRead]:
     enforce_entitlement(session, tenant_id, "queue")
     branch_id = scoped_branch_id(current_user, branch_id)
+    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
     statement = select(QueueEntry).where(QueueEntry.tenant_id == tenant_id)
+    if doctor_practitioner_id:
+        statement = statement.join(Appointment, Appointment.id == QueueEntry.appointment_id).where(
+            Appointment.practitioner_id == doctor_practitioner_id
+        )
     if branch_id:
         statement = statement.where(QueueEntry.branch_id == branch_id)
     statement = statement.where(
@@ -142,6 +158,7 @@ def call_token(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
+    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
     updated = sync_transition(
         session,
         entry=entry,
@@ -184,6 +201,7 @@ def mark_not_available(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
+    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
     return sync_transition(
         session,
         entry=entry,
@@ -211,6 +229,7 @@ def requeue(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
+    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
     return requeue_entry(
         session,
         entry=entry,
@@ -237,6 +256,7 @@ def cancel(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
+    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
     return sync_transition(
         session,
         entry=entry,
@@ -264,6 +284,7 @@ def mark_no_show(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
+    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
     enforce_no_show_threshold(session, entry)
     return sync_transition(
         session,
@@ -292,6 +313,7 @@ def start_consultation(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
+    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
     return sync_transition(
         session,
         entry=entry,

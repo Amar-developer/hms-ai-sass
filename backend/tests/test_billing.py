@@ -314,7 +314,7 @@ def test_invoice_requires_signed_consultation(client: TestClient):
     assert response.json()["detail"] == "Invoice can be generated only after consultation is signed"
 
 
-def test_duplicate_invoice_for_consultation_is_rejected(client: TestClient):
+def test_existing_consultation_invoice_is_returned_for_refresh(client: TestClient):
     data = setup_signed_consultation(client, "op")
     tenant_id = data["tenant"]["id"]
     create_fee_rule(client, tenant_id, "op", 500)
@@ -324,15 +324,16 @@ def test_duplicate_invoice_for_consultation_is_rejected(client: TestClient):
         headers={"X-Tenant-ID": tenant_id},
         json={"consultation_id": data["consultation"]["id"]},
     )
-    duplicate = client.post(
+    refreshed = client.post(
         "/api/v1/billing/invoices/from-consultation",
         headers={"X-Tenant-ID": tenant_id},
         json={"consultation_id": data["consultation"]["id"]},
     )
 
     assert first.status_code == 201
-    assert duplicate.status_code == 409
-    assert duplicate.json()["detail"] == "Invoice already exists for this consultation"
+    assert refreshed.status_code == 201
+    assert refreshed.json()["invoice"]["id"] == first.json()["invoice"]["id"]
+    assert refreshed.json()["invoice"]["total_amount"] == 500
 
 
 def test_invoice_generation_requires_matching_fee_rule(client: TestClient):

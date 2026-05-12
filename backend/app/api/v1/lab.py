@@ -51,6 +51,17 @@ from app.modules.tenants.models import Branch
 router = APIRouter(prefix="/lab")
 
 
+def _refresh_consultation_invoice_if_exists(session: Session, tenant_id: str, consultation_id: str | None) -> None:
+    if not consultation_id:
+        return
+    from app.modules.billing.models import Invoice
+    from app.modules.billing.service import refresh_consultation_invoice
+
+    invoice = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.consultation_id == consultation_id)).first()
+    if invoice:
+        refresh_consultation_invoice(session, invoice)
+
+
 def _simple_pdf(lines: list[str]) -> bytes:
     escaped_lines = [line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") for line in lines]
     text_commands = ["BT", "/F1 12 Tf", "50 780 Td"]
@@ -416,6 +427,7 @@ def create_lab_order(
         resource_id=order.id,
         purpose="diagnostics",
     )
+    _refresh_consultation_invoice_if_exists(session, tenant_id, order.consultation_id)
     return order
 
 
@@ -502,6 +514,7 @@ def create_lab_order_from_consultation(
         resource_id=order.id,
         purpose="diagnostics",
     )
+    _refresh_consultation_invoice_if_exists(session, tenant_id, order.consultation_id)
     return order
 
 
@@ -576,6 +589,7 @@ def update_lab_order_status(
         resource_id=order.id,
         purpose="diagnostics",
     )
+    _refresh_consultation_invoice_if_exists(session, tenant_id, order.consultation_id)
     return order
 
 

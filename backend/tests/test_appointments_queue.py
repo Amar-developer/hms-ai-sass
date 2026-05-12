@@ -112,6 +112,126 @@ def test_list_appointments_supports_patient_search_date_and_department_filters(c
     assert department.json()[0]["patient_id"] == other_patient["id"]
 
 
+def _create_doctor_login(client: TestClient, tenant_id: str, branch_id: str, name: str, email: str) -> tuple[dict, dict, dict]:
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": f"{name} Role",
+            "key": email.split("@")[0].replace(".", "_"),
+            "permission_keys": ["appointments.manage", "queue.manage", "consultations.read", "consultations.write", "consultations.sign"],
+        },
+    ).json()
+    user = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": name,
+            "email": email,
+            "password": "DoctorPass123",
+            "user_type": "doctor",
+            "branch_id": branch_id,
+            "role_keys": [role["key"]],
+        },
+    ).json()
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "user_id": user["id"],
+            "full_name": name,
+            "primary_specialty": "ENT",
+            "branch_ids": [branch_id],
+            "department_ids": ["ent"],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": "DoctorPass123", "tenant_id": tenant_id},
+    ).json()
+    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant_id}
+    return user, practitioner, headers
+
+
+def test_doctor_login_sees_and_operates_only_own_appointments_in_same_department(client: TestClient):
+    tenant = create_tenant(client)
+    branch = create_branch(client, tenant["id"])
+    arun_user, arun, arun_headers = _create_doctor_login(
+        client,
+        tenant["id"],
+        branch["id"],
+        "Dr. Arun ENT",
+        "dr.arun.ent@test.local",
+    )
+    _guru_user, guru, guru_headers = _create_doctor_login(
+        client,
+        tenant["id"],
+        branch["id"],
+        "Dr. Guru ENT",
+        "dr.guru.ent@test.local",
+    )
+    arun_patient = create_patient(client, tenant["id"], "Arun Patient")
+    guru_patient = create_patient(client, tenant["id"], "Guru Patient")
+
+    arun_booking = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "department_id": "ent",
+            "patient_id": arun_patient["id"],
+            "practitioner_id": arun["id"],
+            "appointment_type": "op",
+            "appointment_date": date.today().isoformat(),
+        },
+    ).json()
+    guru_booking = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "department_id": "ent",
+            "patient_id": guru_patient["id"],
+            "practitioner_id": guru["id"],
+            "appointment_type": "op",
+            "appointment_date": date.today().isoformat(),
+        },
+    ).json()
+
+    arun_appointments = client.get("/api/v1/appointments?department_id=ent", headers=arun_headers)
+    guru_appointments = client.get("/api/v1/appointments?department_id=ent", headers=guru_headers)
+    arun_practitioners = client.get("/api/v1/practitioners?department_id=ent", headers=arun_headers)
+    arun_queue = client.get("/api/v1/queue?include_completed=true", headers=arun_headers)
+    guru_call_by_arun = client.post(
+        f"/api/v1/queue/{guru_booking['queue_entry']['id']}/call",
+        headers=arun_headers,
+        json={"reason": "Wrong doctor attempt", "actor_user_id": arun_user["id"]},
+    )
+    guru_consult_by_arun = client.post(
+        "/api/v1/consultations",
+        headers=arun_headers,
+        json={
+            "appointment_id": guru_booking["appointment"]["id"],
+            "created_by_user_id": arun_user["id"],
+        },
+    )
+
+    assert arun_appointments.status_code == 200
+    assert [row["id"] for row in arun_appointments.json()] == [arun_booking["appointment"]["id"]]
+    assert guru_appointments.status_code == 200
+    assert [row["id"] for row in guru_appointments.json()] == [guru_booking["appointment"]["id"]]
+    assert arun_booking["queue_entry"]["token_number"] == "N-001"
+    assert guru_booking["queue_entry"]["token_number"] == "N-001"
+    assert arun_practitioners.status_code == 200
+    assert [row["id"] for row in arun_practitioners.json()] == [arun["id"]]
+    assert arun_queue.status_code == 200
+    assert [row["appointment_id"] for row in arun_queue.json()] == [arun_booking["appointment"]["id"]]
+    assert guru_call_by_arun.status_code == 403
+    assert guru_call_by_arun.json()["detail"] == "Doctor access denied"
+    assert guru_consult_by_arun.status_code == 403
+    assert guru_consult_by_arun.json()["detail"] == "Doctor access denied"
+
+
 def test_super_admin_can_view_combined_appointment_grid_across_tenants(client: TestClient):
     first_tenant = create_tenant(client)
     first_branch = create_branch(client, first_tenant["id"])
@@ -166,7 +286,7 @@ def test_emergency_queue_sorts_before_normal_tokens(client: TestClient):
     queue = client.get("/api/v1/queue", headers={"X-Tenant-ID": tenant["id"]}).json()
 
     assert normal["queue_entry"]["token_number"] == "N-001"
-    assert emergency["queue_entry"]["token_number"] == "E-002"
+    assert emergency["queue_entry"]["token_number"] == "E-001"
     assert [entry["id"] for entry in queue] == [
         emergency["queue_entry"]["id"],
         normal["queue_entry"]["id"],

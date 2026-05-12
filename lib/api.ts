@@ -23,7 +23,7 @@ export async function apiFetch(path: string, session: ApiSession, options: Reque
     });
   } catch {
     throw new Error(
-      `Could not connect to MedizinHub HMS backend at ${API_BASE}. Start the FastAPI server, confirm /health opens, and check NEXT_PUBLIC_MEDIZINHUB_API_URL/CORS settings.`
+      `Could not connect to MedizinHub HMS backend at ${API_BASE}. Start the FastAPI server, confirm /health or /api/v1/health opens, and check NEXT_PUBLIC_MEDIZINHUB_API_URL/CORS settings.`
     );
   }
   if (!res.ok) {
@@ -50,7 +50,7 @@ export async function apiBlob(path: string, session: ApiSession, options: Reques
     });
   } catch {
     throw new Error(
-      `Could not connect to MedizinHub HMS backend at ${API_BASE}. Start the FastAPI server, confirm /health opens, and check NEXT_PUBLIC_MEDIZINHUB_API_URL/CORS settings.`
+      `Could not connect to MedizinHub HMS backend at ${API_BASE}. Start the FastAPI server, confirm /health or /api/v1/health opens, and check NEXT_PUBLIC_MEDIZINHUB_API_URL/CORS settings.`
     );
   }
   if (!res.ok) {

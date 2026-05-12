@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
@@ -188,6 +189,119 @@ def create_consultation_invoice(
     session.refresh(item)
     session.refresh(invoice)
     return invoice, item
+
+
+def _consultation_invoice_extra_items(session: Session, invoice: Invoice) -> list[InvoiceItem]:
+    if not invoice.consultation_id:
+        return []
+    from app.modules.lab.models import LabOrder, LabOrderStatus
+    from app.modules.pharmacy.models import PharmacyIssue, PharmacyIssueItem, PharmacyIssueStatus
+
+    items: list[InvoiceItem] = []
+    lab_orders = session.exec(
+        select(LabOrder).where(
+            LabOrder.tenant_id == invoice.tenant_id,
+            LabOrder.consultation_id == invoice.consultation_id,
+            LabOrder.status != LabOrderStatus.CANCELLED,
+        )
+    ).all()
+    for order in lab_orders:
+        amount = int(order.amount or 0)
+        if amount <= 0:
+            continue
+        items.append(
+            InvoiceItem(
+                tenant_id=invoice.tenant_id,
+                invoice_id=invoice.id,
+                item_type="lab",
+                description=f"Lab order {order.id}: {order.tests}",
+                quantity=1,
+                unit_amount=amount,
+                total_amount=amount,
+            )
+        )
+
+    pharmacy_issues = session.exec(
+        select(PharmacyIssue).where(
+            PharmacyIssue.tenant_id == invoice.tenant_id,
+            PharmacyIssue.consultation_id == invoice.consultation_id,
+            PharmacyIssue.status != PharmacyIssueStatus.CANCELLED,
+        )
+    ).all()
+    for issue in pharmacy_issues:
+        issue_items = session.exec(
+            select(PharmacyIssueItem).where(
+                PharmacyIssueItem.tenant_id == invoice.tenant_id,
+                PharmacyIssueItem.pharmacy_issue_id == issue.id,
+            )
+        ).all()
+        if issue_items:
+            for row in issue_items:
+                amount = int(row.quantity or 0) * int(row.unit_price or 0)
+                if amount <= 0:
+                    continue
+                items.append(
+                    InvoiceItem(
+                        tenant_id=invoice.tenant_id,
+                        invoice_id=invoice.id,
+                        item_type="pharmacy",
+                        description=f"Medicine {row.medicine_name}",
+                        quantity=row.quantity,
+                        unit_amount=row.unit_price,
+                        total_amount=amount,
+                    )
+                )
+        elif issue.amount > 0:
+            items.append(
+                InvoiceItem(
+                    tenant_id=invoice.tenant_id,
+                    invoice_id=invoice.id,
+                    item_type="pharmacy",
+                    description=f"Pharmacy issue {issue.id}: {issue.medicine_text}",
+                    quantity=1,
+                    unit_amount=issue.amount,
+                    total_amount=issue.amount,
+                )
+            )
+        if issue.billing_invoice_id != invoice.id:
+            issue.billing_invoice_id = invoice.id
+            session.add(issue)
+    return items
+
+
+def refresh_consultation_invoice(session: Session, invoice: Invoice) -> Invoice:
+    if not invoice.consultation_id:
+        return update_invoice_payment_status(session, invoice)
+
+    existing_items = list(
+        session.exec(
+            select(InvoiceItem).where(
+                InvoiceItem.tenant_id == invoice.tenant_id,
+                InvoiceItem.invoice_id == invoice.id,
+            )
+        ).all()
+    )
+    for item in existing_items:
+        if item.item_type in {"lab", "pharmacy"}:
+            session.delete(item)
+    session.flush()
+
+    consultation_total = sum(item.total_amount for item in existing_items if item.item_type == "consultation")
+    extra_items = _consultation_invoice_extra_items(session, invoice)
+    for item in extra_items:
+        session.add(item)
+    extras_total = sum(item.total_amount for item in extra_items)
+    subtotal = consultation_total + extras_total
+
+    invoice.subtotal_amount = subtotal
+    invoice.taxable_amount = max(subtotal - invoice.discount_amount, 0)
+    invoice.total_amount = invoice.taxable_amount + invoice.tax_amount
+    invoice.clinic_share_amount = max(invoice.total_amount - invoice.doctor_share_amount, 0)
+    invoice.updated_at = datetime.now(timezone.utc)
+    session.add(invoice)
+    session.commit()
+    session.refresh(invoice)
+    return update_invoice_payment_status(session, invoice)
 
 
 def update_invoice_payment_status(session: Session, invoice: Invoice) -> Invoice:

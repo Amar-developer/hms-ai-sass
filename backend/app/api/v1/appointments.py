@@ -4,7 +4,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
-from app.core.access_control import enforce_entitlement, require_branch_in_tenant, require_user_branch_access, scoped_branch_id
+from app.core.access_control import (
+    current_doctor_practitioner_id,
+    enforce_entitlement,
+    require_branch_in_tenant,
+    require_doctor_practitioner_access,
+    require_user_branch_access,
+    scoped_branch_id,
+)
 from app.core.auth import require_permission, require_super_admin
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
@@ -195,6 +202,9 @@ def book_appointment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
+    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+    if doctor_practitioner_id and payload.practitioner_id != doctor_practitioner_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Doctor access denied")
     patient = session.get(Patient, payload.patient_id)
     if not patient or patient.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient")
@@ -330,6 +340,7 @@ def book_follow_up_appointment(
     if not source or source.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
     require_user_branch_access(current_user, source.branch_id)
+    require_doctor_practitioner_access(session, tenant_id, current_user, source.practitioner_id)
     follow_up_payload = AppointmentCreate(
         branch_id=source.branch_id,
         patient_id=source.patient_id,
@@ -378,6 +389,7 @@ def list_appointments(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     department_id: str | None = None,
+    practitioner_id: str | None = None,
     appointment_date: date | None = None,
     q: str | None = Query(default=None, max_length=120),
     skip: int = Query(default=0, ge=0),
@@ -388,11 +400,16 @@ def list_appointments(
     enforce_entitlement(session, tenant_id, "appointments")
     branch_id = scoped_branch_id(current_user, branch_id)
     require_branch_in_tenant(session, tenant_id, branch_id)
+    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
     statement = select(Appointment).where(Appointment.tenant_id == tenant_id)
     if branch_id:
         statement = statement.where(Appointment.branch_id == branch_id)
     if department_id:
         statement = statement.where(Appointment.department_id == department_id)
+    if doctor_practitioner_id:
+        statement = statement.where(Appointment.practitioner_id == doctor_practitioner_id)
+    elif practitioner_id:
+        statement = statement.where(Appointment.practitioner_id == practitioner_id)
     if appointment_date:
         statement = statement.where(Appointment.appointment_date == appointment_date)
     if q:
@@ -469,4 +486,5 @@ def get_appointment(
     if not appointment or appointment.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
     require_user_branch_access(current_user, appointment.branch_id)
+    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
     return appointment
