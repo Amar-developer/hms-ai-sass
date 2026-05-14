@@ -69,6 +69,10 @@ def _department_code(session: Session, tenant_id: str, name: str, current_depart
         suffix += 1
 
 
+def _normal_key(value: str | None) -> str:
+    return re.sub(r"\s+", " ", (value or "").strip()).lower()
+
+
 def _get_department_or_404(session: Session, tenant_id: str, department_id: str) -> Department:
     department = session.get(Department, department_id)
     if not department or department.tenant_id != tenant_id:
@@ -491,6 +495,37 @@ def create_department(
         branch = session.get(Branch, payload.branch_id)
         if not branch or branch.tenant_id != tenant_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Branch is not part of this tenant")
+
+    existing_departments = session.exec(select(Department).where(Department.tenant_id == tenant_id)).all()
+    existing = next(
+        (
+            department
+            for department in existing_departments
+            if department.branch_id == payload.branch_id and _normal_key(department.name) == _normal_key(payload.name)
+        ),
+        None,
+    )
+    if existing:
+        _assert_department_editable_by_actor(existing, current_user)
+        existing.description = payload.description if payload.description is not None else existing.description
+        existing.is_active = payload.is_active
+        existing.updated_by_user_id = current_user.id
+        existing.updated_at = now_utc()
+        session.add(existing)
+        session.add(
+            AuditEvent(
+                tenant_id=tenant_id,
+                branch_id=existing.branch_id,
+                actor_user_id=current_user.id,
+                action="department.reused_existing_mapping",
+                resource_type="department",
+                resource_id=existing.id,
+                purpose="tenant_department_management",
+            )
+        )
+        session.commit()
+        session.refresh(existing)
+        return existing
 
     department = Department(
         tenant_id=tenant_id,

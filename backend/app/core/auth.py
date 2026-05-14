@@ -82,6 +82,10 @@ def user_permission_keys(session: Session, user: User) -> list[str]:
     return [permission.key for permission in rows]
 
 
+def is_tenant_admin_user(session: Session, user: User) -> bool:
+    return user.user_type == "tenant_admin" or "tenant_admin" in user_role_keys(session, user)
+
+
 def require_super_admin(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required")
@@ -97,7 +101,7 @@ def require_tenant_admin(
         return current_user
     if current_user.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied")
-    if "tenant_admin" not in user_role_keys(session, current_user):
+    if not is_tenant_admin_user(session, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant admin access required")
     return current_user
 
@@ -120,7 +124,7 @@ def require_permission(permission_key: str):
         if tenant.status == TenantStatus.SUSPENDED:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended")
         if permission_key not in user_permission_keys(session, current_user):
-            if permission_key == "settings.manage" and "tenant_admin" in user_role_keys(session, current_user):
+            if permission_key == "settings.manage" and is_tenant_admin_user(session, current_user):
                 return current_user
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
         return current_user
@@ -147,7 +151,7 @@ def require_any_permission(*permission_keys: str):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended")
         user_permissions = set(user_permission_keys(session, current_user))
         if not user_permissions.intersection(permission_keys):
-            if "tenant_admin" in user_role_keys(session, current_user) and any(
+            if is_tenant_admin_user(session, current_user) and any(
                 not permission_key.startswith("platform.") for permission_key in permission_keys
             ):
                 return current_user

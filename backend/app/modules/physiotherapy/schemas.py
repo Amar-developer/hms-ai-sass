@@ -61,6 +61,11 @@ class PhysiotherapyCaseRead(PhysiotherapyCaseCreate):
     case_number: str
     assessment_date: date
     status: str
+    consent_form_url: str | None = None
+    consent_form_name: str | None = None
+    consent_files_json: str = "[]"
+    consent_notes: str | None = None
+    consent_submitted_at: datetime | None = None
     created_by_user_id: str | None
     updated_by_user_id: str | None
     created_at: datetime
@@ -68,6 +73,7 @@ class PhysiotherapyCaseRead(PhysiotherapyCaseCreate):
 
 
 class PhysiotherapySessionCreate(BaseModel):
+    physiotherapist_id: str | None = None
     session_date: date | None = None
     equipment_id: str | None = None
     modality_type: str = Field(max_length=80)

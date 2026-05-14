@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from datetime import date
 
 from sqlmodel import Session, select
@@ -65,6 +66,21 @@ def test_ip_admission_treatment_consent_discharge_and_invoice(client, test_engin
     admission_body = admission.json()
     assert admission_body["admission_number"].startswith("IP-")
     assert admission_body["status"] == "admitted"
+    aadhaar_update = client.patch(
+        f"/api/v1/ip/admissions/{admission_body['id']}",
+        headers=headers,
+        json={"aadhaar_number": "123456789012"},
+    )
+    assert aadhaar_update.status_code == 200
+    assert aadhaar_update.json()["aadhaar_number"] == "123456789012"
+    document = client.post(
+        f"/api/v1/ip/admissions/{admission_body['id']}/document",
+        headers=headers,
+        files={"file": ("aadhaar.pdf", BytesIO(b"%PDF-1.4 admission proof"), "application/pdf")},
+    )
+    assert document.status_code == 200
+    assert document.json()["admission_document_name"] == "aadhaar.pdf"
+    assert document.json()["admission_document_url"].startswith("/uploads/")
 
     treatment = client.post(
         f"/api/v1/ip/admissions/{admission_body['id']}/treatments",

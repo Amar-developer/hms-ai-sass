@@ -227,8 +227,8 @@ def enforce_module_enabled(
     current_user=None,
 ) -> None:
 
-    # SUPER ADMIN BYPASS
-    if current_user and current_user.is_super_admin:
+    # Platform and tenant admins are not blocked by module entitlements.
+    if current_user and (current_user.is_super_admin or current_user.user_type == "tenant_admin"):
         return
 
     _subscription, plan = get_active_subscription(session, tenant_id)

@@ -2,6 +2,8 @@ export const API_BASE = (
   process.env.NEXT_PUBLIC_MEDIZINHUB_API_URL || 'http://127.0.0.1:8000/api/v1'
 ).replace(/\/$/, '');
 
+export const UPLOADS_BASE = API_BASE.replace(/\/api\/v1$/, '');
+
 export type ApiSession = {
   token: string;
   tenantId: string;
@@ -62,6 +64,31 @@ export async function apiBlob(path: string, session: ApiSession, options: Reques
     throw new Error(`${path}: ${detail}`);
   }
   return res.blob();
+}
+
+export async function apiUpload(path: string, session: ApiSession, formData: FormData) {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${session.token}`,
+        'X-Tenant-ID': session.tenantId,
+      },
+      body: formData,
+    });
+  } catch {
+    throw new Error(`Could not connect to MedizinHub HMS backend at ${API_BASE}.`);
+  }
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      detail = body.detail || detail;
+    } catch {}
+    throw new Error(`${path}: ${detail}`);
+  }
+  return res.json();
 }
 
 export type PhysiotherapyInvoicePayload = {

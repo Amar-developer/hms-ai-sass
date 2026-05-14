@@ -8,6 +8,11 @@ from app.modules.tenants.models import Branch
 
 
 DOCTOR_USER_TYPES = {"doctor"}
+TENANT_UNRESTRICTED_USER_TYPES = {"tenant_admin"}
+
+
+def _has_tenant_wide_access(current_user: User) -> bool:
+    return current_user.is_super_admin or current_user.user_type in TENANT_UNRESTRICTED_USER_TYPES
 
 
 def enforce_entitlement(session: Session,
@@ -32,14 +37,14 @@ def require_branch_in_tenant(session: Session, tenant_id: str, branch_id: str | 
 
 
 def require_user_branch_access(current_user: User, branch_id: str | None) -> None:
-    if current_user.is_super_admin or not current_user.branch_id or not branch_id:
+    if _has_tenant_wide_access(current_user) or not current_user.branch_id or not branch_id:
         return
     if current_user.branch_id != branch_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Branch access denied")
 
 
 def scoped_branch_id(current_user: User, branch_id: str | None) -> str | None:
-    if current_user.is_super_admin or not current_user.branch_id:
+    if _has_tenant_wide_access(current_user) or not current_user.branch_id:
         return branch_id
     if branch_id and current_user.branch_id != branch_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Branch access denied")

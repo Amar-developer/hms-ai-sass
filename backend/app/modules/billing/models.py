@@ -76,6 +76,7 @@ class DoctorFeeRule(SQLModel, table=True):
     share_type: FeeShareType = Field(default=FeeShareType.PERCENTAGE, index=True)
     doctor_share_percentage: int | None = Field(default=None, ge=0, le=100)
     doctor_fixed_amount: int | None = Field(default=None, ge=0)
+    share_tax_with_doctor: bool = Field(default=False, index=True)
     is_active: bool = Field(default=True, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
 

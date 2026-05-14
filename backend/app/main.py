@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlmodel import Session
 
 from app.api.router import api_router
@@ -9,6 +11,7 @@ from app.api.v1.health import HealthResponse, ReadinessResponse, health, readine
 from app.core.config import get_settings
 from app.core.database import engine, get_session
 from app.core.middleware import TenantContextMiddleware
+from app.core.schema_repair import ensure_upload_schema
 from app.modules.subscriptions.service import ensure_default_plans
 
 
@@ -20,6 +23,7 @@ async def lifespan(app: FastAPI):
         session_generator = override()
         session = next(session_generator)
         try:
+            ensure_upload_schema(session)
             ensure_default_plans(session)
         finally:
             try:
@@ -28,6 +32,7 @@ async def lifespan(app: FastAPI):
                 pass
     else:
         with Session(engine) as session:
+            ensure_upload_schema(session)
             ensure_default_plans(session)
 
     yield
@@ -56,7 +61,12 @@ def create_app() -> FastAPI:
     app.add_api_route("/readiness", readiness, methods=["GET"], response_model=ReadinessResponse, tags=["platform"])
     app.include_router(api_router, prefix=settings.api_prefix)
 
+    uploads_dir = Path("uploads")
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+
     return app
 
 
 app = create_app()
+

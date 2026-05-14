@@ -61,6 +61,8 @@ class PatientRead(BaseModel):
     area: str | None
     address: str | None
     blood_group: str | None
+    photo_url: str | None = None
+    photo_file_name: str | None = None
     status: PatientStatus
     created_at: datetime
     updated_at: datetime

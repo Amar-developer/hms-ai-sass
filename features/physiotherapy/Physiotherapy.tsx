@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Field, Input, Select } from "@/components/ui";
 import {
+  UPLOADS_BASE,
   apiFetch,
+  apiUpload,
   generatePhysiotherapyInvoice,
   getPhysiotherapyInvoice,
 } from "@/lib/api";
@@ -29,6 +31,15 @@ function patientName(p: any) {
 function inr(value: any) {
   return `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
 }
+function consentFiles(row: any) {
+  try {
+    const parsed = JSON.parse(row?.consent_files_json || "[]");
+    if (Array.isArray(parsed)) return parsed;
+  } catch {}
+  return row?.consent_form_url
+    ? [{ url: row.consent_form_url, name: row.consent_form_name || "Consent Form" }]
+    : [];
+}
 
 export function Physiotherapy({
   branchId,
@@ -42,9 +53,12 @@ export function Physiotherapy({
   const [view, setView] = useState<View>("list");
   const [cases, setCases] = useState<any[]>([]);
   const [equipment, setEquipment] = useState<any[]>([]);
+  const [practitioners, setPractitioners] = useState<any[]>([]);
+  const [feeRules, setFeeRules] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [invoiceDetail, setInvoiceDetail] = useState<any>(null);
   const [selectedId, setSelectedId] = useState("");
+  const [sessionPhysiotherapistId, setSessionPhysiotherapistId] = useState("");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -54,6 +68,18 @@ export function Physiotherapy({
     [patients],
   );
   const selected = cases.find((row) => row.id === selectedId) || cases[0];
+  const physiotherapists = useMemo(
+    () =>
+      practitioners.filter(
+        (row: any) => row.practitioner_type === "physiotherapist",
+      ),
+    [practitioners],
+  );
+  const selectedSessionFee = activePhysiotherapyFeeRule(
+    feeRules,
+    sessionPhysiotherapistId || selected?.physiotherapist_id,
+    branchId,
+  );
   const opAppointments = appointments.filter(
     (row: any) => row.patientId || row.patient_id,
   );
@@ -70,17 +96,25 @@ export function Physiotherapy({
   useEffect(() => {
     if (!selectedId && cases[0]?.id) setSelectedId(cases[0].id);
   }, [cases, selectedId]);
+  useEffect(() => {
+    setSessionPhysiotherapistId(selected?.physiotherapist_id || "");
+  }, [selected?.id, selected?.physiotherapist_id]);
 
   async function loadPhysio() {
     if (!apiSession) return;
     setError("");
     try {
-      const [caseRows, equipmentRows] = await Promise.all([
+      const [caseRows, equipmentRows, practitionerRows, feeRuleRows] =
+        await Promise.all([
         apiFetch("/physiotherapy/cases", apiSession),
         apiFetch("/physiotherapy/equipment", apiSession),
+        apiFetch("/practitioners", apiSession).catch(() => []),
+        apiFetch("/billing/doctor-fee-rules", apiSession).catch(() => []),
       ]);
       setCases(caseRows);
       setEquipment(equipmentRows);
+      setPractitioners(practitionerRows);
+      setFeeRules(feeRuleRows);
     } catch (err: any) {
       setError(err.message || "Unable to load physiotherapy module.");
     }
@@ -113,7 +147,8 @@ export function Physiotherapy({
 
   async function submitCase(e: any, careContext: "op" | "ip") {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const appointmentId = String(fd.get("source_appointment_id") || "");
     const admissionId = String(fd.get("ip_admission_id") || "");
     const appointment = appointments.find(
@@ -134,6 +169,7 @@ export function Physiotherapy({
       source_appointment_id: appointmentId || undefined,
       ip_admission_id: admissionId || undefined,
       department_id: departmentId || undefined,
+      physiotherapist_id: String(fd.get("physiotherapist_id") || "") || undefined,
       care_context: careContext,
       assessment_date: String(fd.get("assessment_date") || today()),
       body_region: String(fd.get("body_region") || "") || undefined,
@@ -158,7 +194,7 @@ export function Physiotherapy({
       setSelectedId(row.id);
       setView("detail");
       setMessage("Physiotherapy case created successfully.");
-      e.currentTarget.reset();
+      form.reset();
     } catch (err: any) {
       setError(err.message || "Unable to create physiotherapy case.");
     } finally {
@@ -168,7 +204,8 @@ export function Physiotherapy({
 
   async function submitEquipment(e: any) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const payload = {
       branch_id:
         String(fd.get("branch_scope") || "branch") === "branch"
@@ -191,7 +228,7 @@ export function Physiotherapy({
       });
       await refresh();
       setMessage("Physiotherapy equipment saved.");
-      e.currentTarget.reset();
+      form.reset();
     } catch (err: any) {
       setError(err.message || "Unable to save equipment.");
     } finally {
@@ -202,11 +239,16 @@ export function Physiotherapy({
   async function submitSession(e: any) {
     e.preventDefault();
     if (!selected) return;
-    const fd = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const fd = new FormData(form);
     const payload = {
       session_date: String(fd.get("session_date") || today()),
       equipment_id: String(fd.get("equipment_id") || "") || undefined,
       modality_type: String(fd.get("modality_type") || "exercise"),
+      physiotherapist_id:
+        String(fd.get("physiotherapist_id") || "") ||
+        selected.physiotherapist_id ||
+        undefined,
       treatment_area: String(fd.get("treatment_area") || "") || undefined,
       intensity: String(fd.get("intensity") || "") || undefined,
       duration_minutes: Number(fd.get("duration_minutes") || 15),
@@ -235,9 +277,35 @@ export function Physiotherapy({
       await loadSessions(selected.id);
       await loadInvoice(selected.id);
       setMessage("Physiotherapy session saved.");
-      e.currentTarget.reset();
+      form.reset();
     } catch (err: any) {
       setError(err.message || "Unable to save physiotherapy session.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function submitConsent(e: any) {
+    e.preventDefault();
+    if (!selected) return;
+    const form = e.currentTarget;
+    const fd = new FormData(form);
+    const files = Array.from(fd.getAll("consent_files")).filter((file: any) => file?.size) as File[];
+    if (files.length === 0) { setError("Please select at least one file to upload."); return; }
+    const upload = new FormData();
+    files.forEach((file) => upload.append("files", file));
+    const notes = fd.get("consent_notes") as string | null;
+    if (notes) upload.append("notes", notes);
+    setBusy("consent");
+    setError("");
+    setMessage("");
+    try {
+      const updated = await apiUpload(`/physiotherapy/cases/${selected.id}/consent`, apiSession, upload);
+      setCases((prev: any[]) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      setMessage("Consent files uploaded successfully.");
+      form.reset();
+    } catch (err: any) {
+      setError(err.message || "Unable to upload consent form.");
     } finally {
       setBusy("");
     }
@@ -289,6 +357,7 @@ export function Physiotherapy({
           subtitle="Assessment, pain mapping, electrotherapy plan, and rehab exercise plan for outpatients."
           patients={patients}
           appointments={opAppointments}
+          physiotherapists={physiotherapists}
           onSubmit={(e: any) => submitCase(e, "op")}
           busy={busy === "case"}
           onCancel={() => setView("list")}
@@ -298,6 +367,7 @@ export function Physiotherapy({
         <IPCaseForm
           admissions={ipAdmissions}
           patientMap={patientMap}
+          physiotherapists={physiotherapists}
           onSubmit={(e: any) => submitCase(e, "ip")}
           busy={busy === "case"}
           onCancel={() => setView("list")}
@@ -392,6 +462,34 @@ export function Physiotherapy({
                 <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
                   {selected.treatment_goal || "No treatment goal recorded."}
                 </p>
+                <div className="mt-4 rounded-2xl border border-slate-200 p-4">
+                  <p className="text-xs font-bold uppercase text-slate-500">Consent Files</p>
+                  {consentFiles(selected).length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      {consentFiles(selected).map((file:any,index:number)=>(
+                        <a
+                          key={`${file.url}-${index}`}
+                          href={`${UPLOADS_BASE}${file.url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block break-all text-sm font-semibold text-blue-700 underline"
+                        >
+                          {file.name || `Consent file ${index + 1}`}
+                        </a>
+                      ))}
+                      {selected.consent_submitted_at && (
+                        <p className="text-xs text-slate-500">
+                          Submitted: {new Date(selected.consent_submitted_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                        </p>
+                      )}
+                      {selected.consent_notes && (
+                        <p className="text-xs text-slate-600">{selected.consent_notes}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500">No consent files uploaded yet.</p>
+                  )}
+                </div>
               </>
             ) : (
               <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
@@ -400,6 +498,35 @@ export function Physiotherapy({
             )}
           </Card>
         </div>
+      )}
+
+      {selected && view === "detail" && (
+        <Card>
+          <h4 className="text-lg font-bold">Upload Consent Forms</h4>
+          <p className="text-sm text-slate-500">Patient-signed consent files (PDF or image, max 10 MB each).</p>
+          <form onSubmit={submitConsent} className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Consent Files">
+                <input
+                  name="consent_files"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  multiple
+                  required
+                  className="block w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-xs file:font-bold"
+                />
+              </Field>
+              <Field label="Notes (optional)">
+                <input
+                  name="consent_notes"
+                  placeholder="Consent obtained by, date, remarks"
+                  className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-400"
+                />
+              </Field>
+            </div>
+            <Button disabled={busy === "consent"}>{busy === "consent" ? "Uploading..." : "Upload Consent Files"}</Button>
+          </form>
+        </Card>
       )}
 
       {selected && view === "detail" && (
@@ -425,6 +552,22 @@ export function Physiotherapy({
                   </Select>
                 </Field>
               </div>
+              <Field label="Physiotherapist">
+                <Select
+                  name="physiotherapist_id"
+                  value={sessionPhysiotherapistId}
+                  onChange={(event: any) =>
+                    setSessionPhysiotherapistId(event.target.value)
+                  }
+                >
+                  <option value="">Select physiotherapist</option>
+                  {physiotherapists.map((row: any) => (
+                    <option key={row.id} value={row.id}>
+                      {formatPhysiotherapistName(row)}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
               <Field label="Equipment">
                 <Select name="equipment_id">
                   <option value="">Manual / No equipment</option>
@@ -468,10 +611,11 @@ export function Physiotherapy({
                 </Field>
                 <Field label="Charge">
                   <Input
+                    key={selectedSessionFee?.id || sessionPhysiotherapistId || "charge"}
                     name="charge_amount"
                     type="number"
                     min="0"
-                    defaultValue="0"
+                    defaultValue={selectedSessionFee?.fee_amount ?? 0}
                   />
                 </Field>
               </div>
@@ -513,6 +657,15 @@ export function Physiotherapy({
                   <p className="text-slate-500">
                     {row.session_date} · {row.duration_minutes} mins · Pain{" "}
                     {row.pre_pain_score ?? "-"} to {row.post_pain_score ?? "-"}
+                  </p>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {formatPhysiotherapistName(
+                      physiotherapists.find(
+                        (therapist: any) =>
+                          therapist.id ===
+                          (row.physiotherapist_id || selected.physiotherapist_id),
+                      ),
+                    )}
                   </p>
                   <p className="mt-1 font-bold">{inr(row.charge_amount)}</p>
                 </div>
@@ -659,6 +812,38 @@ function Info({ title, value }: any) {
   );
 }
 
+function formatPhysiotherapistName(row: any) {
+  const name = row?.full_name || row?.name || "";
+  if (!name) return "No physiotherapist selected";
+  const withoutSuffix = name.replace(/,\s*PT$/i, "");
+  return `${withoutSuffix}, PT`;
+}
+
+function activePhysiotherapyFeeRule(
+  feeRules: any[],
+  physiotherapistId: string | undefined,
+  branchId: string | undefined,
+) {
+  if (!physiotherapistId) return null;
+  return (
+    [...(feeRules || [])]
+      .filter(
+        (rule: any) =>
+          rule.is_active &&
+          rule.practitioner_id === physiotherapistId &&
+          rule.appointment_type === "op" &&
+          rule.treatment_type === "physiotherapy_session" &&
+          (!rule.branch_id || !branchId || rule.branch_id === branchId),
+      )
+      .sort(
+        (a: any, b: any) =>
+          Number(Boolean(b.branch_id)) - Number(Boolean(a.branch_id)) ||
+          new Date(b.created_at || 0).getTime() -
+            new Date(a.created_at || 0).getTime(),
+      )[0] || null
+  );
+}
+
 function CaseFields() {
   return (
     <>
@@ -718,6 +903,7 @@ function CaseForm({
   subtitle,
   patients,
   appointments,
+  physiotherapists,
   onSubmit,
   busy,
   onCancel,
@@ -749,6 +935,16 @@ function CaseForm({
             ))}
           </Select>
         </Field>
+        <Field label="Physiotherapist">
+          <Select name="physiotherapist_id" required>
+            <option value="">Select physiotherapist</option>
+            {physiotherapists.map((row: any) => (
+              <option key={row.id} value={row.id}>
+                {formatPhysiotherapistName(row)}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <CaseFields />
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
@@ -765,7 +961,14 @@ function CaseForm({
   );
 }
 
-function IPCaseForm({ admissions, patientMap, onSubmit, busy, onCancel }: any) {
+function IPCaseForm({
+  admissions,
+  patientMap,
+  physiotherapists,
+  onSubmit,
+  busy,
+  onCancel,
+}: any) {
   return (
     <Card>
       <div>
@@ -783,6 +986,16 @@ function IPCaseForm({ admissions, patientMap, onSubmit, busy, onCancel }: any) {
               <option key={row.id} value={row.id}>
                 {patientName(patientMap.get(row.patient_id || row.patientId))} ·{" "}
                 {row.admission_number || row.id} · Bed {row.bed}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Physiotherapist">
+          <Select name="physiotherapist_id" required>
+            <option value="">Select physiotherapist</option>
+            {physiotherapists.map((row: any) => (
+              <option key={row.id} value={row.id}>
+                {formatPhysiotherapistName(row)}
               </option>
             ))}
           </Select>

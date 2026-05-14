@@ -1,7 +1,63 @@
 'use client';
 
-import {Building2,CalendarDays,Clock,IndianRupee,Users} from 'lucide-react';
+import {CalendarDays,Clock,IndianRupee,Users} from 'lucide-react';
 import {Badge,Card} from '@/components/ui';
-import {Info} from '@/features/shared/Info';
 
-export function Dashboard({clinic,branch,scopedAppointments,patients,ipAdmissions,liveSummary}:any){const cards=[['Clinic Type',clinic.type,Building2],['Branch',branch.name,Building2],['Appointments',liveSummary?.appointments??scopedAppointments.length,CalendarDays],['Patients',liveSummary?.patients??patients.length,Users],['Queue',liveSummary?.queue??0,Clock],['Due','₹'+(liveSummary?.invoiceBalance??48700),IndianRupee]];return <div className="space-y-6"><div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">{cards.map(([t,v,Icon]:any)=><Card key={t}><Icon className="mb-3 text-slate-500"/><p className="text-sm text-slate-500">{t}</p><p className="mt-1 text-2xl font-bold">{v}</p></Card>)}</div>{liveSummary&&<Card><h3 className="text-lg font-bold">Live Backend Data</h3><div className="mt-4 grid gap-3 md:grid-cols-4"><Info k="Patients" v={liveSummary.patients}/><Info k="Appointments" v={liveSummary.appointments}/><Info k="Invoices" v={liveSummary.invoices}/><Info k="Balance" v={`₹${liveSummary.invoiceBalance}`}/></div></Card>}<Card><h3 className="text-lg font-bold">Enabled Plug-and-Play Modules</h3><div className="mt-4 flex flex-wrap gap-2">{clinic.modules.map((m:string)=><Badge key={m} tone="green">{m}</Badge>)}</div></Card></div>}
+function rupees(value:any){return `₹${Number(value||0).toLocaleString('en-IN')}`}
+
+export function Dashboard({clinic,scopedAppointments,patients,liveSummary,setActive}:any){
+  const cards=[
+    ['Appointments',liveSummary?.appointments??scopedAppointments.length,CalendarDays,'appointments'],
+    ['Patients',liveSummary?.patients??patients.length,Users,'patients'],
+    ['Queue',liveSummary?.queue??0,Clock,'queue'],
+    ['Due',rupees(liveSummary?.invoiceBalance??0),IndianRupee,'billing'],
+  ];
+  const liveCards=[
+    ['Patients',liveSummary?.patients??patients.length,'patients'],
+    ['Appointments',liveSummary?.appointments??scopedAppointments.length,'appointments'],
+    ['Invoices',liveSummary?.invoices??0,'billing'],
+    ['Balance',rupees(liveSummary?.invoiceBalance??0),'billing'],
+  ];
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {cards.map(([title,value,Icon,target]:any)=>(
+          <button
+            key={title}
+            type="button"
+            onClick={()=>setActive?.(target)}
+            className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+          >
+            <Icon className="mb-3 text-slate-500"/>
+            <p className="text-sm text-slate-500">{title}</p>
+            <p className="mt-1 text-2xl font-bold">{value}</p>
+          </button>
+        ))}
+      </div>
+
+      {liveSummary&&(
+        <Card>
+          <h3 className="text-lg font-bold">Live Backend Data</h3>
+          <div className="mt-4 grid gap-3 md:grid-cols-4">
+            {liveCards.map(([title,value,target]:any)=>(
+              <button
+                key={title}
+                type="button"
+                onClick={()=>setActive?.(target)}
+                className="rounded-2xl bg-slate-50 p-4 text-left transition hover:bg-slate-100"
+              >
+                <p className="text-sm text-slate-500">{title}</p>
+                <p className="font-bold">{value}</p>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <Card>
+        <h3 className="text-lg font-bold">Enabled Plug-and-Play Modules</h3>
+        <div className="mt-4 flex flex-wrap gap-2">{clinic.modules.map((m:string)=><Badge key={m} tone="green">{m}</Badge>)}</div>
+      </Card>
+    </div>
+  );
+}

@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from datetime import date
 
 from sqlmodel import Session, select
@@ -73,6 +74,22 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
     assert case.status_code == 201
     case_body = case.json()
     assert case_body["case_number"].startswith("PHY-")
+
+    consent = client.post(
+        f"/api/v1/physiotherapy/cases/{case_body['id']}/consent",
+        headers=headers,
+        data={"notes": "Signed intake and treatment risk consent"},
+        files=[
+            ("files", ("physio-consent.pdf", BytesIO(b"%PDF-1.4 consent"), "application/pdf")),
+            ("files", ("guardian-consent.png", BytesIO(b"fake-png"), "image/png")),
+        ],
+    )
+    assert consent.status_code == 200
+    consent_body = consent.json()
+    consent_files = json.loads(consent_body["consent_files_json"])
+    assert [row["name"] for row in consent_files] == ["physio-consent.pdf", "guardian-consent.png"]
+    assert consent_body["consent_form_name"] == "guardian-consent.png"
+    assert consent_body["consent_notes"] == "Signed intake and treatment risk consent"
 
     session = client.post(
         f"/api/v1/physiotherapy/cases/{case_body['id']}/sessions",

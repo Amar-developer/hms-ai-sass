@@ -144,7 +144,8 @@ def create_consultation_invoice(
     tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
     total = taxable + tax_amount
     if subtotal and calculation:
-        doctor_share = round(calculation.doctor_share_amount * total / subtotal)
+        share_basis = total if calculation.fee_rule.share_tax_with_doctor else taxable
+        doctor_share = round(calculation.doctor_share_amount * share_basis / subtotal)
     else:
         doctor_share = 0
     clinic_share = total - doctor_share

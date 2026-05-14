@@ -2,8 +2,9 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {Building2,ClipboardList,Plus,Settings,ShieldCheck,Users} from 'lucide-react';
-import {Badge,Button,Card,Field,Input,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Button,Card,Field,Input,Select} from '@/components/ui';
 import {apiFetch} from '@/lib/api';
+import {normalizeOptionLabel} from '@/lib/options';
 
 const sections = [
   ['users','Users',Users],
@@ -83,6 +84,7 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
  const [providers,setProviders]=useState('whatsapp,sms,voice');
  const selectedRole=roles.find((row:any)=>row.id===selectedId);
  const selectedUser=users.find((row:any)=>row.id===selectedId);
+ const departmentGroups=useMemo(()=>groupDepartmentsByName(departments,branches),[departments,branches]);
  const selectedDepartment=departments.find((row:any)=>row.id===selectedId);
  const selectedBranch=branches.find((row:any)=>row.id===selectedId);
  const visibleSections=sections.filter(([sectionId])=>canUseTenantAdminSection(sectionId,apiSession?.user));
@@ -279,7 +281,7 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
   {section==='roles'&&view==='create'&&<RoleForm title="Create Role" permissions={permissions} busy={busy} onSubmit={createRole} back={()=>open('roles')}/>}
   {section==='roles'&&view==='edit'&&selectedRole&&<RoleForm title="Edit Role" role={selectedRole} permissions={permissions} busy={busy} onSubmit={updateRole} back={()=>open('roles')}/>}
 
-  {section==='departments'&&view==='list'&&<ListCard title="Departments" rows={departments} searchKeys={['name','code','description','id']} createLabel="Create Department" onCreate={()=>setView('create')} columns={['Department','Code','Branch','Status','Actions']} render={(department:any)=><DepartmentRow key={department.id} department={department} branches={branches} onEdit={()=>{setSelectedId(department.id);setView('edit')}} onStatus={()=>setConfirm({entity:'departments',kind:'status',row:department})} onDelete={()=>setConfirm({entity:'departments',kind:'delete',row:department})}/>}/>}
+  {section==='departments'&&view==='list'&&<ListCard title="Departments" rows={departmentGroups} searchKeys={['name','code','branch_names','description','id']} createLabel="Create Department" onCreate={()=>setView('create')} columns={['Department','Code','Branches','Status','Actions']} render={(department:any)=><DepartmentRow key={department.id} department={department} branches={branches} onEdit={()=>{setSelectedId(department.primary.id);setView('edit')}} onStatus={()=>setConfirm({entity:'departments',kind:'status',row:department.primary})} onDelete={()=>setConfirm({entity:'departments',kind:'delete',row:department.primary})}/>}/>}
   {section==='departments'&&view==='create'&&<DepartmentForm title="Create Department" branches={branches} busy={busy} onSubmit={createDepartment} back={()=>open('departments')}/>}
   {section==='departments'&&view==='edit'&&selectedDepartment&&<DepartmentForm title="Edit Department" department={selectedDepartment} branches={branches} busy={busy} onSubmit={updateDepartment} back={()=>open('departments')}/>}
 
@@ -301,8 +303,8 @@ function ListCard({title,rows,searchKeys,createLabel,onCreate,columns,render}:an
  const safePage=Math.min(page,totalPages);
  const pageRows=filtered.slice((safePage-1)*pageSize,safePage*pageSize);
  useEffect(()=>{setPage(1)},[query,rows.length]);
- const gridClass=columns.length===7?'grid-cols-[1.05fr_1.15fr_.8fr_1fr_.7fr_.75fr_1.05fr]':columns.length===6?'grid-cols-[1.2fr_1.2fr_1fr_.7fr_.75fr_1.05fr]':'grid-cols-[1.2fr_.8fr_1fr_.7fr_1.05fr]';
- return <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h3 className="text-lg font-bold">{title}</h3><p className="text-sm text-slate-500">Latest created or updated records appear first. Search, edit, activate, deactivate, or delete from this page.</p></div><button type="button" onClick={onCreate} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"><Plus size={16}/>{createLabel}</button></div><div className="mt-4 max-w-md"><Field label={`Search ${title}`}><Input value={query} onChange={(e:any)=>setQuery(e.target.value)} placeholder={`Search ${title.toLowerCase()}`}/></Field></div><div className="mt-4 overflow-hidden rounded-2xl border border-slate-200"><div className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${gridClass}`}>{columns.map((column:string)=><span key={column}>{column}</span>)}</div><div className="divide-y divide-slate-200">{pageRows.length===0&&<Empty text="No records match your search."/>}{pageRows.map(render)}</div></div><Pagination page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPage={setPage}/></Card>
+ const gridClass=columns.length===7?'grid-cols-[1.05fr_1.15fr_.75fr_1fr_.65fr_.7fr_1.45fr]':columns.length===6?'grid-cols-[1.2fr_1.2fr_1fr_.7fr_.75fr_1.45fr]':'grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]';
+ return <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h3 className="text-lg font-bold">{title}</h3><p className="text-sm text-slate-500">Latest created or updated records appear first. Click a row to open it, or use the action buttons.</p></div><button type="button" onClick={onCreate} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"><Plus size={16}/>{createLabel}</button></div><div className="mt-4 max-w-md"><Field label={`Search ${title}`}><Input value={query} onChange={(e:any)=>setQuery(e.target.value)} placeholder={`Search ${title.toLowerCase()}`}/></Field></div><div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200"><div className="min-w-[1040px]"><div className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${gridClass}`}>{columns.map((column:string,index:number)=><span key={column} className={index===columns.length-1?'text-right':''}>{column}</span>)}</div><div className="divide-y divide-slate-200">{pageRows.length===0&&<Empty text="No records match your search."/>}{pageRows.map(render)}</div></div></div><Pagination page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPage={setPage}/></Card>
 }
 
 function RoleForm({title,role,permissions,busy,onSubmit,back}:any){
@@ -310,7 +312,9 @@ function RoleForm({title,role,permissions,busy,onSubmit,back}:any){
 }
 
 function UserForm({title,user,roles,branches,busy,onSubmit,back}:any){
- return <Card><Header title={title} subtitle={user?.email||'Create tenant-scoped users only.'} back={back}/><form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Name"><Input name="name" defaultValue={user?.name||''} required/></Field><Field label="Email"><Input name="email" type="email" defaultValue={user?.email||''} required/></Field><Field label="User Type"><Select name="userType" defaultValue={user?.user_type||'staff'}>{userTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Mobile"><Input name="mobile" defaultValue={user?.mobile||''}/></Field><Field label="Branch"><Select name="branchId" defaultValue={user?.branch_id||''}><option value="">All branches</option>{branches.map((branch:any)=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select></Field>{!user&&<Field label="Temporary Password"><Input name="password" type="text" defaultValue="TempPass123" required/></Field>}<Field label="Must Change Password"><Select name="mustChangePassword" defaultValue={String(user?.must_change_password??true)}><option value="true">Yes</option><option value="false">No</option></Select></Field>{user&&<Field label="Status"><Select name="isActive" defaultValue={String(user.is_active)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field>}<div className="md:col-span-2"><CheckboxList title="Role Access" name="roleKeys" rows={roles} selected={user?.roles||[]} valueKey="key" labelKey="name"/></div><Actions busy={busy} back={back} label={user?'Save User':'Create User'}/></form></Card>
+ const [selectedBranch,setSelectedBranch]=useState(user?.branch_id||'');
+ const roleOptions=useMemo(()=>filterRolesForBranch(roles,branches,selectedBranch,user?.roles||[]),[roles,branches,selectedBranch,user?.roles]);
+ return <Card><Header title={title} subtitle={user?.email||'Create tenant-scoped users only.'} back={back}/><form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Name"><Input name="name" defaultValue={user?.name||''} required/></Field><Field label="Email"><Input name="email" type="email" defaultValue={user?.email||''} required/></Field><Field label="User Type"><Select name="userType" defaultValue={user?.user_type||'staff'}>{userTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Mobile"><Input name="mobile" defaultValue={user?.mobile||''}/></Field><Field label="Branch"><Select name="branchId" value={selectedBranch} onChange={(event:any)=>setSelectedBranch(event.target.value)}><option value="">All branches</option>{branches.map((branch:any)=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select></Field>{!user&&<Field label="Temporary Password"><Input name="password" type="text" defaultValue="TempPass123" required/></Field>}<Field label="Must Change Password"><Select name="mustChangePassword" defaultValue={String(user?.must_change_password??true)}><option value="true">Yes</option><option value="false">No</option></Select></Field>{user&&<Field label="Status"><Select name="isActive" defaultValue={String(user.is_active)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field>}<div className="md:col-span-2"><CheckboxList title="Role Access" name="roleKeys" rows={roleOptions} selected={user?.roles||[]} valueKey="key" labelKey="name"/></div><Actions busy={busy} back={back} label={user?'Save User':'Create User'}/></form></Card>
 }
 
 function DepartmentForm({title,department,branches,busy,onSubmit,back}:any){
@@ -348,14 +352,15 @@ function PermissionCheckboxes({permissions,selected,disabled}:any){
 }
 
 function CheckboxList({title,name,rows,selected,valueKey,labelKey}:any){
- return <div><p className="mb-2 text-xs font-bold uppercase text-slate-500">{title}</p><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{rows.map((row:any)=><label key={row.id} className="flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-sm"><input name={name} type="checkbox" value={row[valueKey]} defaultChecked={selected.includes(row[valueKey])} className="mt-1 h-4 w-4"/><span><b>{row[labelKey]}</b><span className="block break-all text-xs text-slate-500">{row[valueKey]}</span>{isLocked(row)&&<span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700">Template</span>}</span></label>)}</div></div>
+ return <div><p className="mb-2 text-xs font-bold uppercase text-slate-500">{title}</p><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{rows.map((row:any)=><label key={row.id} className="flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-sm"><input name={name} type="checkbox" value={row[valueKey]} defaultChecked={selected.includes(row[valueKey])} className="mt-1 h-4 w-4"/><span><b>{row[labelKey]}</b>{row.branchLabel&&<span className="block text-xs text-slate-500">{row.branchLabel}</span>}{isLocked(row)&&<span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700">Template</span>}</span></label>)}</div></div>
 }
 
-function UserRow({user,branches,onEdit,onStatus,onDelete}:any){const branch=branches.find((row:any)=>row.id===user.branch_id);const typeLabel=userTypes.find(([value])=>value===user.user_type)?.[1]||user.user_type||'Staff';return <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.05fr_1.15fr_.8fr_1fr_.7fr_.75fr_1.05fr] xl:items-center"><div><b>{user.name}</b><p className="break-all text-xs text-slate-500">{user.id}</p></div><span className="break-all">{user.email}</span><span>{typeLabel}</span><span>{branch?.name||'All branches'}</span><Badge tone={user.is_active?'green':'red'}>{user.is_active?'Active':'Inactive'}</Badge><span>{formatDate(user.created_at)}</span><RowActions row={user} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></div>}
-function RoleRow({role,onEdit,onStatus,onDelete}:any){return <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.2fr_.8fr_1fr_.7fr_1.05fr] xl:items-center"><div><b>{role.name}</b>{isLocked(role)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{role.key}</span><Badge tone={role.is_active?'green':'red'}>{role.is_active?'Active':'Inactive'}</Badge><span>{formatDate(role.updated_at||role.created_at)}</span><RowActions row={role} locked={isLocked(role)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></div>}
-function DepartmentRow({department,branches,onEdit,onStatus,onDelete}:any){const branch=branches.find((row:any)=>row.id===department.branch_id);return <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.2fr_.8fr_1fr_.7fr_1.05fr] xl:items-center"><div><b>{department.name}</b>{isLocked(department)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{department.code}</span><span>{branch?.name||'All branches'}</span><Badge tone={department.is_active?'green':'red'}>{department.is_active?'Active':'Inactive'}</Badge><RowActions row={department} locked={isLocked(department)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></div>}
-function BranchRow({branch,onEdit,onStatus,onDelete}:any){return <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.2fr_.8fr_1fr_.7fr_1.05fr] xl:items-center"><div><b>{branch.name}</b>{isLocked(branch)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{branch.code}</span><span>{[branch.city,branch.state].filter(Boolean).join(', ')||'-'}</span><Badge tone={branch.is_active?'green':'red'}>{branch.is_active?'Active':'Inactive'}</Badge><RowActions row={branch} locked={isLocked(branch)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></div>}
-function RowActions({row,locked,onEdit,onStatus,onDelete}:any){return <div className="flex flex-wrap gap-2"><button type="button" onClick={onEdit} className="rounded-xl border px-3 py-2 text-xs font-bold">{locked?'View':'Edit'}</button>{!locked&&<button type="button" onClick={onStatus} className="rounded-xl border px-3 py-2 text-xs font-bold">{row.is_active?'Inactive':'Active'}</button>}{!locked&&<button type="button" onClick={onDelete} className="rounded-xl border px-3 py-2 text-xs font-bold text-red-600">Delete</button>}</div>}
+function UserRow({user,branches,onEdit,onStatus,onDelete}:any){const branch=branches.find((row:any)=>row.id===user.branch_id);const typeLabel=userTypes.find(([value])=>value===user.user_type)?.[1]||user.user_type||'Staff';return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.05fr_1.15fr_.75fr_1fr_.65fr_.7fr_1.45fr]"><div><b>{user.name}</b><p className="break-all text-xs text-slate-500">{user.id}</p></div><span className="break-all">{user.email}</span><span>{typeLabel}</span><span>{branch?.name||'All branches'}</span><Badge tone={user.is_active?'green':'red'}>{user.is_active?'Active':'Inactive'}</Badge><span>{formatDate(user.created_at)}</span><RowActions row={user} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function RoleRow({role,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{role.name}</b>{isLocked(role)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{role.key}</span><Badge tone={role.is_active?'green':'red'}>{role.is_active?'Active':'Inactive'}</Badge><span>{formatDate(role.updated_at||role.created_at)}</span><RowActions row={role} locked={isLocked(role)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function DepartmentRow({department,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{department.name}</b>{department.locked&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}<p className="text-xs text-slate-500">{department.rows?.length>1?`${department.rows.length} branch mappings`:'Single branch mapping'}</p></div><span>{department.code}</span><span>{department.branch_names||'All branches'}</span><Badge tone={department.is_active?'green':'red'}>{department.is_active?'Active':'Inactive'}</Badge><RowActions row={department.primary||department} locked={department.locked} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function BranchRow({branch,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{branch.name}</b>{isLocked(branch)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{branch.code}</span><span>{[branch.city,branch.state].filter(Boolean).join(', ')||'-'}</span><Badge tone={branch.is_active?'green':'red'}>{branch.is_active?'Active':'Inactive'}</Badge><RowActions row={branch} locked={isLocked(branch)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function RowActions({row,locked,onEdit,onStatus,onDelete}:any){const stop=(handler:any)=>(event:any)=>{event.stopPropagation();handler()};return <ActionGroup className="justify-start xl:justify-end"><ActionButton onClick={stop(onEdit)}>{locked?'View':'Edit'}</ActionButton>{!locked&&<ActionButton onClick={stop(onStatus)}>{row.is_active?'Inactive':'Active'}</ActionButton>}{!locked&&<ActionButton tone="danger" onClick={stop(onDelete)}>Delete</ActionButton>}</ActionGroup>}
+function ClickableRow({children,onClick,className}:any){return <div role="button" tabIndex={0} onClick={onClick} onKeyDown={(event:any)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onClick()}}} className={`grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:items-center ${className}`}>{children}</div>}
 
 function Header({title,subtitle,back}:any){return <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">{title}</h3><p className="text-sm text-slate-500">{subtitle}</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back</button></div>}
 function Actions({busy,back,disabled,label}:any){return <div className="flex flex-wrap gap-2 md:col-span-2"><Button disabled={busy||disabled}>{busy?'Saving...':label}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div>}
@@ -365,3 +370,59 @@ function Pagination({page,totalPages,total,pageSize,onPage}:any){const start=tot
 function title(value:string){return value.split(' ').filter(Boolean).map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')}
 function formatDate(value:any){return value?new Date(value).toLocaleDateString():'-'}
 function isLocked(row:any){return Boolean(row?.is_template_locked||row?.source_template_role_id||row?.source_template_department_id||row?.source_template_branch_id)}
+
+function groupDepartmentsByName(departments:any[],branches:any[]){
+ const branchName=(id:string)=>branches.find((branch:any)=>branch.id===id)?.name||'All branches';
+ const groups=new Map<string,any[]>();
+ for(const department of departments||[]){
+  const key=normalizeOptionLabel(department.name||department.code||department.id);
+  if(!key)continue;
+  groups.set(key,[...(groups.get(key)||[]),department]);
+ }
+ return Array.from(groups.values()).map((rows:any[])=>{
+  const sorted=[...rows].sort((a:any,b:any)=>String(a.branch_id||'').localeCompare(String(b.branch_id||'')));
+  const primary=sorted.find((row:any)=>row.is_active)!==undefined?sorted.find((row:any)=>row.is_active):sorted[0];
+  const branchNames=Array.from(new Set(sorted.map((row:any)=>branchName(row.branch_id)).filter(Boolean)));
+  return {
+   ...primary,
+   id: sorted.map((row:any)=>row.id).join('|'),
+   primary,
+   rows: sorted,
+   branch_names: branchNames.join(', '),
+   is_active: sorted.some((row:any)=>row.is_active),
+   locked: sorted.some((row:any)=>isLocked(row)),
+  };
+ });
+}
+
+function roleBranchToken(branch:any){
+ const code=String(branch?.code||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+ const name=String(branch?.name||'').toLowerCase().replace(/sunrise|centre|center|clinic|branch|wing/g,' ').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+ return [code,name].filter(Boolean);
+}
+
+function roleMatchesBranch(role:any,branch:any){
+ if(!branch)return true;
+ const key=String(role.key||'').toLowerCase();
+ const tokens=roleBranchToken(branch);
+ if(tokens.length===0)return true;
+ const hasBranchToken=tokens.some(token=>token&&key.includes(token));
+ const isBranchSpecific=/(_main_|_north_|_south_|_east_|_west_|main_|north_|south_|east_|west_)/.test(`_${key}_`);
+ return hasBranchToken||!isBranchSpecific;
+}
+
+function filterRolesForBranch(roles:any[],branches:any[],selectedBranchId:string,selectedKeys:string[]){
+ const branch=branches.find((row:any)=>row.id===selectedBranchId);
+ const selectedSet=new Set(selectedKeys||[]);
+ const byName=new Map<string,any>();
+ for(const role of roles||[]){
+  if(!roleMatchesBranch(role,branch)&&!selectedSet.has(role.key))continue;
+  const key=normalizeOptionLabel(role.name||role.key);
+  const next={...role,branchLabel:selectedBranchId?branch?.name:''};
+  const existing=byName.get(key);
+  if(!existing||selectedSet.has(role.key)||roleMatchesBranch(role,branch)){
+   byName.set(key,next);
+  }
+ }
+ return Array.from(byName.values()).sort((a:any,b:any)=>String(a.name).localeCompare(String(b.name)));
+}

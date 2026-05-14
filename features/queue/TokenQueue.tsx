@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useState} from 'react';
-import {Badge,Card,Field,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Card,Field,Select} from '@/components/ui';
 import {apiFetch,type ApiSession} from '@/lib/api';
 import {sortQueue} from '@/lib/hmsLogic';
 
@@ -82,6 +82,13 @@ export function TokenQueue({
     if(!appointment?.id)return;
     sessionStorage.setItem('medizinhub.consultationAppointmentId',appointment.id);
     setActive?.('consultation');
+  }
+
+  function openPatient(appointment:any){
+    const patientId=appointment?.patientId||appointment?.patient_id;
+    if(!patientId)return;
+    sessionStorage.setItem('medizinhub.patientId',patientId);
+    setActive?.('patients');
   }
 
   async function transition(appointment: any, action: QueueAction) {
@@ -174,12 +181,12 @@ export function TokenQueue({
               <th>Doctor</th>
               <th>Status</th>
               <th>Queue</th>
-              <th>Actions</th>
+              <th className="text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {visibleQueue.map((appointment: any) => (
-              <tr key={appointment.id} className="border-t">
+              <tr key={appointment.id} onClick={()=>openConsultation(appointment)} className="cursor-pointer border-t transition hover:bg-slate-50">
                 <td className="p-3 font-bold"><button type="button" onClick={()=>openConsultation(appointment)} className="rounded-xl border px-3 py-2 font-bold hover:bg-slate-50">{appointment.token}</button></td>
                 <td><button type="button" onClick={()=>openConsultation(appointment)} className="text-left font-semibold hover:underline">{appointment.patient}</button></td>
                 <td>{appointment.doctor}</td>
@@ -189,15 +196,15 @@ export function TokenQueue({
                 <td>
                   <Badge tone={appointment.tokenType === 'Emergency' ? 'red' : 'slate'}>{appointment.queueStatus}</Badge>
                 </td>
-                <td className="space-x-2">
-                  <button
-                    type="button"
-                    onClick={() => openConsultation(appointment)}
-                    className="rounded-2xl border px-5 py-3 font-bold"
-                  >
+                <td className="px-3 py-3" onClick={(event)=>event.stopPropagation()}>
+                  <ActionGroup>
+                  <ActionButton onClick={() => openConsultation(appointment)}>
                     Details
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton onClick={() => openPatient(appointment)}>
+                    Patient
+                  </ActionButton>
+                  <ActionButton
                     disabled={busyId === appointment.id}
                     onClick={() => {
                       const tamil=`Token ${appointment.token}, maruththuva aalosanai araikku varavum.`;
@@ -205,31 +212,30 @@ export function TokenQueue({
                       setMessage(tokenLanguage==='tamil'?tamil:tokenLanguage==='both'?`${english} ${tamil}`:english);
                       transition(appointment, 'call');
                     }}
-                    className="rounded-2xl border px-5 py-3 font-bold disabled:text-slate-300"
                   >
                     Call
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
                     disabled={busyId === appointment.id}
                     onClick={() => transition(appointment, 'skip')}
-                    className="rounded-2xl border px-5 py-3 font-bold disabled:text-slate-300"
                   >
                     Skip
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
+                    tone="primary"
                     disabled={busyId === appointment.id}
                     onClick={() => transition(appointment, 'requeue')}
-                    className="rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white disabled:bg-slate-300"
                   >
                     Requeue
-                  </button>
-                  <button
+                  </ActionButton>
+                  <ActionButton
+                    tone="danger"
                     disabled={busyId === appointment.id}
                     onClick={() => transition(appointment, 'cancel')}
-                    className="rounded-2xl border px-5 py-3 font-bold text-red-600 disabled:text-slate-300"
                   >
                     Cancel
-                  </button>
+                  </ActionButton>
+                  </ActionGroup>
                 </td>
               </tr>
             ))}

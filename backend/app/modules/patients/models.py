@@ -50,6 +50,8 @@ class Patient(SQLModel, table=True):
     area: str | None = Field(default=None, index=True, max_length=160)
     address: str | None = Field(default=None, max_length=500)
     blood_group: str | None = Field(default=None, max_length=8)
+    photo_url: str | None = Field(default=None, max_length=500)
+    photo_file_name: str | None = Field(default=None, max_length=220)
     status: PatientStatus = Field(default=PatientStatus.ACTIVE)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)

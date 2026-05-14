@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {Badge,Button,Card,Input,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Button,Card,Input,Select} from '@/components/ui';
 import {apiBlob,apiFetch} from '@/lib/api';
 
 function invoiceSource(invoice:any){
@@ -224,7 +224,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       <Card>
         <h3 className="text-lg font-bold">Invoices & Payments</h3>
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1280px] text-left text-sm">
+          <table className="w-full min-w-[1440px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Invoice</th>
@@ -237,7 +237,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                 <th>Balance</th>
                 <th>Doctor Share</th>
                 <th>Payment</th>
-                <th>Actions</th>
+                <th className="pr-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -266,22 +266,20 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                         </div>
                       ):<Badge tone="green">Settled</Badge>}
                     </td>
-                    <td onClick={(event)=>event.stopPropagation()}>
-                      <div className="flex flex-wrap gap-2">
-                        <button type="button" onClick={()=>openInvoiceDetail(invoice)} disabled={detailLoading===invoice.id} className="rounded-xl border px-3 py-2 text-xs font-bold">{detailLoading===invoice.id?'Loading...':'View'}</button>
+                    <td className="pr-4" onClick={(event)=>event.stopPropagation()}>
+                      <ActionGroup>
+                        <ActionButton onClick={()=>openInvoiceDetail(invoice)} disabled={detailLoading===invoice.id}>{detailLoading===invoice.id?'Loading...':'View'}</ActionButton>
                         {invoice.consultation_id&&!invoice.ip_admission_id&&!invoice.physiotherapy_case_id&&(
-                          <button
-                            type="button"
+                          <ActionButton
                             onClick={()=>refreshConsultationInvoice(invoice)}
                             disabled={busy===`refresh-${invoice.id}`}
-                            className="rounded-xl border px-3 py-2 text-xs font-bold"
                           >
                             {busy===`refresh-${invoice.id}`?'Refreshing...':'Refresh Items'}
-                          </button>
+                          </ActionButton>
                         )}
-                        <button type="button" onClick={()=>openReceipt(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Receipt</button>
-                        <button type="button" onClick={()=>issueCreditNote(invoice)} className="rounded-xl border px-3 py-2 text-xs font-bold">Credit Note</button>
-                      </div>
+                        <ActionButton onClick={()=>openReceipt(invoice)}>Receipt</ActionButton>
+                        <ActionButton onClick={()=>issueCreditNote(invoice)}>Credit Note</ActionButton>
+                      </ActionGroup>
                     </td>
                   </tr>
                 );

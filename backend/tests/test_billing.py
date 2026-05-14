@@ -84,6 +84,7 @@ def create_fee_rule(
     practitioner_id: str | None = None,
     department_id: str | None = None,
     treatment_type: str | None = None,
+    share_tax_with_doctor: bool = False,
 ) -> dict:
     payload = {
         "appointment_type": appointment_type,
@@ -95,6 +96,7 @@ def create_fee_rule(
         "practitioner_id": practitioner_id,
         "department_id": department_id,
         "treatment_type": treatment_type,
+        "share_tax_with_doctor": share_tax_with_doctor,
     }
     response = client.post(
         "/api/v1/billing/doctor-fee-rules",
@@ -262,8 +264,32 @@ def test_tax_rule_applies_gst_to_invoice_and_receipt_pdf(client: TestClient):
     assert response.status_code == 201
     assert response.json()["invoice"]["tax_amount"] == 180
     assert response.json()["invoice"]["total_amount"] == 1180
+    assert response.json()["invoice"]["doctor_share_amount"] == 600
+    assert response.json()["invoice"]["clinic_share_amount"] == 580
     assert receipt.status_code == 200
     assert receipt.headers["content-type"] == "application/pdf"
+
+
+def test_tax_can_be_shared_with_doctor_when_fee_rule_allows_it(client: TestClient):
+    data = setup_signed_consultation(client, "op")
+    tenant_id = data["tenant"]["id"]
+    create_fee_rule(client, tenant_id, "op", 1000, doctor_share_percentage=60, share_tax_with_doctor=True)
+    tax_rule = client.post(
+        "/api/v1/billing/tax-rules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"name": "GST 18", "tax_percentage": 18, "tax_label": "GST"},
+    ).json()
+
+    response = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"consultation_id": data["consultation"]["id"], "tax_rule_id": tax_rule["id"]},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["invoice"]["total_amount"] == 1180
+    assert response.json()["invoice"]["doctor_share_amount"] == 708
+    assert response.json()["invoice"]["clinic_share_amount"] == 472
 
 
 def test_invoice_requires_signed_consultation(client: TestClient):

@@ -47,6 +47,7 @@ class IPAdmissionCreate(BaseModel):
     bed: str = Field(min_length=1, max_length=80)
     admission_date: date | None = None
     expected_discharge_date: date | None = None
+    aadhaar_number: str | None = Field(default=None, max_length=20)
     reason: str | None = Field(default=None, max_length=1000)
     provisional_diagnosis: str | None = Field(default=None, max_length=1000)
 
@@ -57,6 +58,7 @@ class IPAdmissionUpdate(BaseModel):
     bed: str | None = Field(default=None, min_length=1, max_length=80)
     room_id: str | None = None
     expected_discharge_date: date | None = None
+    aadhaar_number: str | None = Field(default=None, max_length=20)
     department_id: str | None = None
     admitting_practitioner_id: str | None = None
     reason: str | None = Field(default=None, max_length=1000)
@@ -70,6 +72,9 @@ class IPAdmissionRead(IPAdmissionCreate):
     admission_number: str
     admission_date: date
     status: str
+    admission_document_url: str | None = None
+    admission_document_name: str | None = None
+    admission_document_uploaded_at: datetime | None = None
     created_by_user_id: str | None
     updated_by_user_id: str | None
     created_at: datetime

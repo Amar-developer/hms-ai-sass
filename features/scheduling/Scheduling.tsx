@@ -2,8 +2,9 @@
 
 import {useEffect,useState} from 'react';
 import {Plus} from 'lucide-react';
-import {Badge,Button,Card,Field,Input,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Button,Card,Field,Input,Select} from '@/components/ui';
 import {apiFetch} from '@/lib/api';
+import {uniqueDepartmentRows} from '@/lib/options';
 
 const weekdays=[
  ['0','Monday'],['1','Tuesday'],['2','Wednesday'],['3','Thursday'],['4','Friday'],['5','Saturday'],['6','Sunday'],
@@ -64,7 +65,7 @@ export function Scheduling({apiSession,branchId}:any){
     apiFetch('/practitioners',session),
     apiFetch(`/practitioners/schedules${filterStatus==='all'?'':`?is_active=${filterStatus==='active'}`}`,session),
    ]);
-   setBranches(branchRows);setDepartments(departmentRows);setDoctors(doctorRows);setRows(scheduleRows);
+   setBranches(branchRows);setDepartments(uniqueDepartmentRows(departmentRows, filterDepartment));setDoctors(doctorRows);setRows(scheduleRows);
   }catch(err:any){setMessage(err.message||'Could not load schedules.')}finally{setBusy(false)}
  }
 
@@ -138,7 +139,7 @@ export function Scheduling({apiSession,branchId}:any){
    <Field label="Weekday"><Select value={filterWeekday} onChange={(e:any)=>{setFilterWeekday(e.target.value);setPage(1)}}><option value="all">All days</option>{weekdays.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field>
    <Field label="Status"><Select value={filterStatus} onChange={(e:any)=>{setFilterStatus(e.target.value);setPage(1)}}><option value="active">Active</option><option value="inactive">Inactive</option><option value="all">All</option></Select></Field>
   </div>
-  <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200"><div className="hidden grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid"><span>Doctor</span><span>Branch</span><span>Department</span><span>Day</span><span>Timing</span><span>Slots</span><span>Status</span><span>Actions</span></div><div className="divide-y divide-slate-200">{pageRows.length===0&&<Empty text={busy?'Loading schedules...':'No schedules match your search.'}/>} {pageRows.map((row:any)=><ScheduleRow key={row.id} row={row} branches={branches} departments={departments} doctors={doctors} onEdit={()=>open('edit',row.id)} onDelete={()=>setConfirm({row})}/>)}</div></div>
+  <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200"><div className="min-w-[1120px]"><div className="hidden grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid"><span>Doctor</span><span>Branch</span><span>Department</span><span>Day</span><span>Timing</span><span>Slots</span><span>Status</span><span className="text-right">Actions</span></div><div className="divide-y divide-slate-200">{pageRows.length===0&&<Empty text={busy?'Loading schedules...':'No schedules match your search.'}/>} {pageRows.map((row:any)=><ScheduleRow key={row.id} row={row} branches={branches} departments={departments} doctors={doctors} onEdit={()=>open('edit',row.id)} onDelete={()=>setConfirm({row})}/>)}</div></div></div>
   <Pagination page={safePage} totalPages={totalPages} total={filtered.length} onPage={setPage}/>
   {confirm&&<ConfirmModal busy={busy} row={confirm.row} onClose={()=>setConfirm(null)} onConfirm={()=>deleteSchedule(confirm.row)}/>}
  </Card>
@@ -165,7 +166,8 @@ function ScheduleRow({row,branches,departments,doctors,onEdit,onDelete}:any){
  const branch=branches.find((item:any)=>item.id===row.branch_id);
  const department=departments.find((item:any)=>item.id===row.department_id);
  const weekday=weekdays.find(([value])=>Number(value)===row.weekday)?.[1]||row.weekday;
- return <div className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1fr] xl:items-center"><div><b>{doctor?.full_name||row.practitioner_id}</b><p className="break-all text-xs text-slate-500">{row.id}</p></div><span>{branch?.name||row.branch_id}</span><span>{department?.name||'All departments'}</span><span>{weekday}</span><span>{formatDisplayRange(row.start_time,row.end_time)}<p className="text-xs text-slate-500">{row.room_name||'No room'}</p></span><span>{row.slot_minutes} min</span><Badge tone={row.is_active?'green':'red'}>{row.is_active?'Active':'Inactive'}</Badge><div className="flex flex-wrap gap-2"><button type="button" onClick={onEdit} className="rounded-xl border px-3 py-2 text-xs font-bold">Edit</button><button type="button" onClick={onDelete} className="rounded-xl border px-3 py-2 text-xs font-bold text-red-600">Delete</button></div></div>
+ const stop=(handler:any)=>(event:any)=>{event.stopPropagation();handler()};
+ return <div role="button" tabIndex={0} onClick={onEdit} onKeyDown={(event:any)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onEdit()}}} className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] xl:items-center"><div><b>{doctor?.full_name||row.practitioner_id}</b><p className="break-all text-xs text-slate-500">{row.id}</p></div><span>{branch?.name||row.branch_id}</span><span>{department?.name||'All departments'}</span><span>{weekday}</span><span>{formatDisplayRange(row.start_time,row.end_time)}<p className="text-xs text-slate-500">{row.room_name||'No room'}</p></span><span>{row.slot_minutes} min</span><Badge tone={row.is_active?'green':'red'}>{row.is_active?'Active':'Inactive'}</Badge><ActionGroup><ActionButton onClick={stop(onEdit)}>Edit</ActionButton><ActionButton tone="danger" onClick={stop(onDelete)}>Delete</ActionButton></ActionGroup></div>
 }
 
 function Empty({text}:any){return <div className="px-4 py-8 text-center text-sm text-slate-500">{text}</div>}

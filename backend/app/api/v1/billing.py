@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.access_control import enforce_entitlement, require_branch_in_tenant, require_user_branch_access, scoped_branch_id
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.appointments.models import Appointment
@@ -129,9 +129,15 @@ def create_doctor_fee_rule(
     payload: DoctorFeeRuleCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_EDIT,
+        )
+    ),
 ) -> DoctorFeeRule:
-    enforce_entitlement(session, tenant_id, "billing_basic")
+    enforce_entitlement(session, tenant_id, "billing_basic", current_user=current_user)
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
     if payload.share_type.value == "percentage" and payload.doctor_share_percentage is None:
@@ -144,6 +150,20 @@ def create_doctor_fee_rule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="doctor_fixed_amount is required for fixed share",
         )
+    existing_rules = session.exec(
+        select(DoctorFeeRule).where(
+            DoctorFeeRule.tenant_id == tenant_id,
+            DoctorFeeRule.branch_id == payload.branch_id,
+            DoctorFeeRule.department_id == payload.department_id,
+            DoctorFeeRule.practitioner_id == payload.practitioner_id,
+            DoctorFeeRule.appointment_type == payload.appointment_type,
+            DoctorFeeRule.treatment_type == payload.treatment_type,
+            DoctorFeeRule.is_active == True,  # noqa: E712
+        )
+    ).all()
+    for existing in existing_rules:
+        existing.is_active = False
+        session.add(existing)
 
     rule = DoctorFeeRule.model_validate(payload, update={"tenant_id": tenant_id})
     session.add(rule)
@@ -166,9 +186,18 @@ def list_doctor_fee_rules(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_READ,
+            permissions.PRACTITIONERS_EDIT,
+            permissions.PHYSIOTHERAPY_READ,
+            permissions.PHYSIOTHERAPY_EDIT,
+        )
+    ),
 ) -> list[DoctorFeeRule]:
-    enforce_entitlement(session, tenant_id, "billing_basic")
+    enforce_entitlement(session, tenant_id, "billing_basic", current_user=current_user)
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(DoctorFeeRule).where(DoctorFeeRule.tenant_id == tenant_id)
     if branch_id:

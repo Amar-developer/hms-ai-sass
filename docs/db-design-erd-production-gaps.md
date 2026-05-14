@@ -275,6 +275,8 @@ It tracks tests, source, status, priority, external referrer, amount, ordered us
 
 `labresulttemplate` stores reusable result-entry templates. `labresult` stores template reference, result summary, abnormal flag, report URL/file metadata, releasing user, and release time. Result release can queue report-ready notifications when provider settings and entitlements allow them. Consultation detail includes linked lab orders so doctors can see diagnostic status and result readiness.
 
+IP admission stores optional `aadhaar_number` plus `admission_document_url`, `admission_document_name`, and upload timestamp for admission identity/proof files. Physiotherapy case stores `consent_files_json` for multiple consent-file metadata entries while preserving the latest file in `consent_form_url` and `consent_form_name` for backwards-compatible summaries.
+
 Production gaps:
 
 - Add report file storage table.

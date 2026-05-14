@@ -1,16 +1,18 @@
+import json
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.access_control import require_branch_in_tenant, require_user_branch_access, scoped_branch_id
+from app.core.uploads import save_upload
 from app.core.auth import require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
-from app.modules.appointments.models import Appointment
+from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import Invoice, InvoiceItem, Payment, TaxRule
+from app.modules.billing.models import DoctorFeeRule, FeeShareType, Invoice, InvoiceItem, Payment, TaxRule
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceItemRead, InvoiceRead, PaymentRead
 from app.modules.billing.service import next_invoice_number
 from app.modules.identity import permissions
@@ -92,6 +94,52 @@ def _resolve_tax_rule(session: Session, tenant_id: str, branch_id: str, tax_rule
             (TaxRule.branch_id == branch_id) | (TaxRule.branch_id.is_(None)),
         )
     ).first()
+
+
+def _resolve_physiotherapist_fee_rule(
+    session: Session,
+    tenant_id: str,
+    branch_id: str,
+    physiotherapist_id: str | None,
+) -> DoctorFeeRule | None:
+    if not physiotherapist_id:
+        return None
+    rules = list(
+        session.exec(
+            select(DoctorFeeRule).where(
+                DoctorFeeRule.tenant_id == tenant_id,
+                DoctorFeeRule.appointment_type == AppointmentType.OP,
+                DoctorFeeRule.is_active == True,  # noqa: E712
+                DoctorFeeRule.practitioner_id == physiotherapist_id,
+            )
+        ).all()
+    )
+
+    def score(rule: DoctorFeeRule) -> int:
+        value = 0
+        if rule.branch_id == branch_id:
+            value += 4
+        elif rule.branch_id is not None:
+            value -= 100
+        if rule.treatment_type == "physiotherapy_session":
+            value += 10
+        elif rule.treatment_type is not None:
+            value -= 100
+        return value
+
+    eligible = [rule for rule in rules if score(rule) >= 0]
+    if not eligible:
+        return None
+    return sorted(eligible, key=score, reverse=True)[0]
+
+
+def _doctor_share_for_amount(rule: DoctorFeeRule | None, amount: int) -> int:
+    if not rule or amount <= 0:
+        return 0
+    if rule.share_type == FeeShareType.FIXED:
+        return min(rule.doctor_fixed_amount or 0, amount)
+    percentage = rule.doctor_share_percentage if rule.doctor_share_percentage is not None else 0
+    return round(amount * percentage / 100)
 
 
 def _sync_case_status_from_invoice(session: Session, case: PhysiotherapyCase, invoice: Invoice) -> PhysiotherapyCase:
@@ -183,6 +231,16 @@ def create_case(
         admission = session.get(IPAdmission, payload.ip_admission_id)
         if not admission or admission.tenant_id != tenant_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IP admission not found")
+    if payload.physiotherapist_id:
+        from app.modules.practitioners.models import Practitioner, PractitionerType
+
+        practitioner = session.get(Practitioner, payload.physiotherapist_id)
+        if (
+            not practitioner
+            or practitioner.tenant_id != tenant_id
+            or practitioner.practitioner_type != PractitionerType.PHYSIOTHERAPIST
+        ):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid physiotherapist")
     case = PhysiotherapyCase.model_validate(
         payload,
         update={
@@ -222,6 +280,60 @@ def update_case(
     return case
 
 
+@router.post("/cases/{case_id}/consent", response_model=PhysiotherapyCaseRead)
+async def upload_consent_form(
+    case_id: str,
+    files: list[UploadFile] = File(...),
+    notes: str | None = Form(default=None),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_EDIT)),
+) -> PhysiotherapyCase:
+    _assert_enabled(session, tenant_id)
+    case = _get_case(session, tenant_id, case_id, current_user)
+    if not files:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload at least one consent file")
+    try:
+        existing_files = json.loads(case.consent_files_json or "[]")
+        if not isinstance(existing_files, list):
+            existing_files = []
+    except json.JSONDecodeError:
+        existing_files = []
+    uploaded_files = []
+    for upload_file in files:
+        saved_filename, url_path = await save_upload(upload_file, f"physio_consent_{case_id[:12]}")
+        uploaded_files.append(
+            {
+                "url": url_path,
+                "name": upload_file.filename or saved_filename,
+                "uploaded_at": now_utc().isoformat(),
+            }
+        )
+    all_files = [*existing_files, *uploaded_files]
+    primary = all_files[-1]
+    case.consent_form_url = primary["url"]
+    case.consent_form_name = primary["name"]
+    case.consent_files_json = json.dumps(all_files)
+    case.consent_notes = notes or None
+    case.consent_submitted_at = now_utc()
+    case.updated_at = now_utc()
+    case.updated_by_user_id = current_user.id
+    session.add(case)
+    session.commit()
+    session.refresh(case)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=case.branch_id,
+        actor_user_id=current_user.id,
+        action="physiotherapy_consent.uploaded",
+        resource_type="physiotherapy_case",
+        resource_id=case.id,
+        purpose="physiotherapy",
+    )
+    return case
+
+
 @router.get("/cases/{case_id}/sessions", response_model=list[PhysiotherapySessionRead])
 def list_sessions(
     case_id: str,
@@ -254,6 +366,17 @@ def create_session(
         if not equipment or equipment.tenant_id != tenant_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Physiotherapy equipment not found")
         require_user_branch_access(current_user, equipment.branch_id)
+    physiotherapist_id = payload.physiotherapist_id or case.physiotherapist_id
+    if physiotherapist_id:
+        from app.modules.practitioners.models import Practitioner, PractitionerType
+
+        practitioner = session.get(Practitioner, physiotherapist_id)
+        if (
+            not practitioner
+            or practitioner.tenant_id != tenant_id
+            or practitioner.practitioner_type != PractitionerType.PHYSIOTHERAPIST
+        ):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid physiotherapist")
     count = session.exec(select(func.count()).select_from(PhysiotherapySession).where(PhysiotherapySession.tenant_id == tenant_id, PhysiotherapySession.case_id == case.id)).one()
     treatment = PhysiotherapySession.model_validate(
         payload,
@@ -261,6 +384,7 @@ def create_session(
             "tenant_id": tenant_id,
             "branch_id": case.branch_id,
             "case_id": case.id,
+            "physiotherapist_id": physiotherapist_id,
             "session_date": payload.session_date or date.today(),
             "session_number": int(count or 0) + 1,
             "created_by_user_id": current_user.id,
@@ -273,7 +397,7 @@ def create_session(
     return treatment
 
 
-@router.get("/cases/{case_id}/invoice", response_model=InvoiceDetailRead)
+@router.get("/cases/{case_id}/invoice", response_model=InvoiceDetailRead | None)
 def get_case_invoice(
     case_id: str,
     tenant_id: str = Depends(require_tenant_id),
@@ -286,7 +410,7 @@ def get_case_invoice(
         select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.physiotherapy_case_id == case.id)
     ).first()
     if not invoice:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Physiotherapy invoice not found")
+        return None
     _sync_case_status_from_invoice(session, case, invoice)
     return _invoice_detail(session, invoice)
 
@@ -323,6 +447,19 @@ def generate_invoice(
     tax_rule = _resolve_tax_rule(session, tenant_id, case.branch_id, payload.tax_rule_id)
     tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
     total = taxable + tax_amount
+    discount_ratio = discount / subtotal if subtotal else 0
+    doctor_share = 0
+    first_fee_rule_id = None
+    for row in rows:
+        therapist_id = row.physiotherapist_id or case.physiotherapist_id
+        fee_rule = _resolve_physiotherapist_fee_rule(session, tenant_id, case.branch_id, therapist_id)
+        if fee_rule and not first_fee_rule_id:
+            first_fee_rule_id = fee_rule.id
+        session_taxable = max(row.charge_amount - round(row.charge_amount * discount_ratio), 0)
+        session_tax = round(session_taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+        share_basis = session_taxable + session_tax if fee_rule and fee_rule.share_tax_with_doctor else session_taxable
+        doctor_share += _doctor_share_for_amount(fee_rule, share_basis)
+    clinic_share = max(total - doctor_share, 0)
     invoice_prefix, _scope, _scope_id = resolve_setting(
         session,
         tenant_id=tenant_id,
@@ -345,7 +482,9 @@ def generate_invoice(
         tax_rule_id=tax_rule.id if tax_rule else None,
         total_amount=total,
         balance_amount=total,
-        clinic_share_amount=total,
+        doctor_share_amount=doctor_share,
+        clinic_share_amount=clinic_share,
+        fee_rule_id=first_fee_rule_id,
         created_by_user_id=payload.created_by_user_id or current_user.id,
     )
     session.add(invoice)

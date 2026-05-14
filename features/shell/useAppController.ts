@@ -6,6 +6,7 @@ import {demoUsers,loginPresets} from '@/lib/authPresets';
 import {type LiveSummary,mapAppointment,mapPatient} from '@/lib/liveData';
 import {canOpenModule} from '@/lib/moduleAccess';
 import {nav,roleModules} from '@/lib/navigation';
+import {uniqueDepartmentRows} from '@/lib/options';
 
 const allModuleIds = nav.map(([id]) => id);
 const defaultBranch = {id: 'default-branch', name: 'Default Branch', city: ''};
@@ -18,6 +19,7 @@ export function useAppController() {
   const [liveBranchId, setLiveBranchId] = useState('');
   const [liveBranches, setLiveBranches] = useState<any[]>([]);
   const [liveDepartments, setLiveDepartments] = useState<any[]>([]);
+  const [liveTenants, setLiveTenants] = useState<any[]>([]);
   const [doctorScope, setDoctorScope] = useState<any | null>(null);
   const [livePractitioners, setLivePractitioners] = useState<any[]>([]);
   const [liveInvoices, setLiveInvoices] = useState<any[]>([]);
@@ -73,13 +75,17 @@ export function useAppController() {
       'practitioners.manage',
       'practitioners.read',
     ];
-    const [branchRows, departmentRows] = await Promise.all([
+    const tenantRowsPromise = session.user?.is_super_admin
+      ? apiFetchIfAllowed<any[]>('/tenants', session, 'platform.tenants.manage', [])
+      : Promise.resolve<any[]>([]);
+    const [tenantRows, branchRows, departmentRows] = await Promise.all([
+      tenantRowsPromise,
       apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/branches`, session, referenceReadPermissions, []),
       apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/departments`, session, referenceReadPermissions, []),
     ]);
     const isDoctorUser = session.user?.user_type === 'doctor' || session.user?.roles?.includes('doctor');
     let scopedBranchRows = branchRows;
-    let scopedDepartmentRows = departmentRows;
+    let scopedDepartmentRows = uniqueDepartmentRows(departmentRows, departmentId);
 
     const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows] = await Promise.all([
       apiFetchIfAllowed<any[]>('/patients', session, 'patients.read', []),
@@ -101,7 +107,7 @@ export function useAppController() {
     const doctorDepartmentIds = new Set((linkedPractitioner?.department_ids || []).filter(Boolean));
     if (isDoctorUser) {
       scopedBranchRows = doctorBranchIds.size ? branchRows.filter((row: any) => doctorBranchIds.has(row.id)) : [];
-      scopedDepartmentRows = doctorDepartmentIds.size ? departmentRows.filter((row: any) => doctorDepartmentIds.has(row.id)) : [];
+      scopedDepartmentRows = doctorDepartmentIds.size ? uniqueDepartmentRows(departmentRows.filter((row: any) => doctorDepartmentIds.has(row.id)), departmentId) : [];
       setDoctorScope({
         practitionerId: linkedPractitioner?.id || null,
         branchIds: Array.from(doctorBranchIds),
@@ -111,9 +117,12 @@ export function useAppController() {
       setDoctorScope(null);
     }
 
+    setLiveTenants(tenantRows);
     setLiveBranches(scopedBranchRows);
     setLiveDepartments(scopedDepartmentRows);
-    const backendBranchId = session.user?.branch_id || scopedBranchRows[0]?.id || liveBranchId || branchId;
+    const backendBranchId = session.user?.is_super_admin
+      ? (scopedBranchRows[0]?.id || liveBranchId || branchId)
+      : (session.user?.branch_id || scopedBranchRows[0]?.id || liveBranchId || branchId);
     if (backendBranchId) setLiveBranchId(backendBranchId);
     if (scopedDepartmentRows.length && !scopedDepartmentRows.some((row: any) => row.id === departmentId)) {
       setDepartmentId(scopedDepartmentRows[0].id);
@@ -238,6 +247,7 @@ export function useAppController() {
     setLiveBranchId('');
     setLiveBranches([]);
     setLiveDepartments([]);
+    setLiveTenants([]);
     setDoctorScope(null);
     setLivePractitioners([]);
     setPatients([]);
@@ -281,9 +291,10 @@ export function useAppController() {
     : apiSession ? [] : [defaultDepartment];
   const effectiveClinicId = apiSession && !isSuperAdmin ? apiSession.tenantId : clinicId;
   const effectiveBranchId = liveBranchId || branchId;
+  const selectedTenant = liveTenants.find((tenant: any) => tenant.id === apiSession?.tenantId);
   const clinic = {
     id: apiSession ? apiSession.tenantId : clinicId,
-    name: apiSession?.user?.tenant_name || (isSuperAdmin ? 'MedizinHub HMS' : 'Current Tenant'),
+    name: selectedTenant?.name || apiSession?.user?.tenant_name || (isSuperAdmin ? 'MedizinHub HMS' : 'Current Tenant'),
     type: branchOptions.length > 1 ? 'Multi Branch Tenant' : 'Single Branch Tenant',
     multiBranch: branchOptions.length > 1,
     modules: allModuleIds,
@@ -359,6 +370,7 @@ export function useAppController() {
       enabled,
       clinic,
       clinics: [clinic],
+      tenants: liveTenants,
       clinicId: effectiveClinicId,
       changeClinic,
       branchId: effectiveBranchId,

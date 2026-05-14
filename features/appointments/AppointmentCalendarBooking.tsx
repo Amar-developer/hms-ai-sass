@@ -6,6 +6,7 @@ import {CalendarPlus, Search, X} from 'lucide-react';
 import {Badge, Button, Card, Field, Input, Select} from '@/components/ui';
 import {apiFetch, type ApiSession} from '@/lib/api';
 import {generatePatientId, generateToken, searchPatients} from '@/lib/hmsLogic';
+import {uniqueDepartmentRows} from '@/lib/options';
 
 type Props = {
   clinic: any;
@@ -19,6 +20,7 @@ type Props = {
   setAppointments: (value: any[]) => void;
   apiSession: ApiSession | null;
   loadLiveData: (session: ApiSession) => Promise<void>;
+  setActive?: (page: string) => void;
 };
 
 type BookingStep = 'search' | 'newPatient' | 'appointment' | 'success';
@@ -52,6 +54,7 @@ export function AppointmentCalendarBooking(props: Props) {
     setAppointments,
     apiSession,
     loadLiveData,
+    setActive,
   } = props;
   const [mode, setMode] = useState<'list' | 'book'>('list');
   const [query, setQuery] = useState('');
@@ -85,6 +88,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
 
   const patientMap = useMemo(() => new Map(patients.map((patient: any) => [patient.id, patient])), [patients]);
+  const departmentOptions = useMemo(() => uniqueDepartmentRows(allowedDepartments, departmentId), [allowedDepartments, departmentId]);
   const platformDepartmentOptions = Array.from(
     new Set(platformRows.map((row: any) => row.department_name || row.department_id).filter(Boolean)),
   );
@@ -114,6 +118,19 @@ export function AppointmentCalendarBooking(props: Props) {
   const totalPages = Math.max(1, Math.ceil(listRecords.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const rows = listRecords.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  function openConsultation(appointment: any) {
+    if (!appointment?.id || isSuperAdmin) return;
+    sessionStorage.setItem('medizinhub.consultationAppointmentId', appointment.id);
+    setActive?.('consultation');
+  }
+
+  function openPatient(appointment: any) {
+    const patientId = appointment?.patientId || appointment?.patient_id;
+    if (!patientId || isSuperAdmin) return;
+    sessionStorage.setItem('medizinhub.patientId', patientId);
+    setActive?.('patients');
+  }
 
   const doctors = liveDoctors;
   const doctor = doctors.find((item: any) => item.id === doctorId) || doctors[0];
@@ -627,7 +644,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <div className="mt-4 grid gap-3 md:grid-cols-4">
               <Field label="Department">
                 <Select value={departmentId} onChange={(e: any) => setDepartmentId(e.target.value)}>
-                  {allowedDepartments.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                  {departmentOptions.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
                 </Select>
               </Field>
               <Field label="Doctor">
@@ -769,14 +786,14 @@ export function AppointmentCalendarBooking(props: Props) {
             </Select>
           ) : (
             <Select value={departmentId} onChange={(e: any) => setDepartmentId(e.target.value)}>
-              {allowedDepartments.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
+              {departmentOptions.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
             </Select>
           )}
         </Field>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-        <div className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${isSuperAdmin ? 'grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]' : 'grid-cols-[1.1fr_.8fr_.9fr_1fr_.9fr_.9fr]'}`}>
-          {isSuperAdmin && <span>Tenant</span>}<span>Patient</span><span>Mobile</span><span>Department</span><span>Doctor</span><span>Appointment Date</span><span>Consultation Status</span>
+        <div className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${isSuperAdmin ? 'grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]' : 'grid-cols-[1.05fr_.75fr_.85fr_1fr_.85fr_.8fr_1.1fr]'}`}>
+          {isSuperAdmin && <span>Tenant</span>}<span>Patient</span><span>Mobile</span><span>Department</span><span>Doctor</span><span>Appointment Date</span><span>Consultation Status</span>{!isSuperAdmin && <span className="text-right">Links</span>}
         </div>
         <div className="divide-y divide-slate-200">
           {rows.length === 0 && <div className="p-4 text-sm text-slate-500">No appointments found.</div>}
@@ -796,13 +813,29 @@ export function AppointmentCalendarBooking(props: Props) {
             }
             const patient = patientMap.get(appointment.patientId);
             return (
-              <div key={appointment.id} className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.1fr_.8fr_.9fr_1fr_.9fr_.9fr] xl:items-center">
+              <div
+                key={appointment.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => openConsultation(appointment)}
+                onKeyDown={(event: any) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openConsultation(appointment);
+                  }
+                }}
+                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1.05fr_.75fr_.85fr_1fr_.85fr_.8fr_1.1fr] xl:items-center"
+              >
                 <div><b>{appointment.patient}</b><p className="text-xs text-slate-500">{appointment.token || appointment.id}</p></div>
                 <span>{patient?.mobile || '-'}</span>
-                <span>{allowedDepartments.find((d: any) => d.id === appointment.departmentId)?.name || appointment.departmentId || '-'}</span>
+                <span>{departmentOptions.find((d: any) => d.id === appointment.departmentId)?.name || appointment.departmentId || '-'}</span>
                 <span>{appointment.doctor || appointment.doctorId || '-'}</span>
                 <span>{appointment.appointmentDate || appointment.time || '-'}</span>
                 <Badge tone={appointment.consultationStatus === 'signed' ? 'green' : appointment.status === 'cancelled' ? 'red' : 'slate'}>{appointment.consultationStatus || appointment.status || '-'}</Badge>
+                <div className="flex flex-wrap justify-start gap-2 xl:justify-end" onClick={(event) => event.stopPropagation()}>
+                  <button type="button" onClick={() => openConsultation(appointment)} className="rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50">Consultation</button>
+                  <button type="button" onClick={() => openPatient(appointment)} className="rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50">Patient Details</button>
+                </div>
               </div>
             );
           })}

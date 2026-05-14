@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from app.core.access_control import enforce_entitlement, require_branch_in_tenant, require_user_branch_access, scoped_branch_id
+from app.core.uploads import save_upload
 from app.core.auth import require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
@@ -467,3 +468,34 @@ def get_patient_summary(
             }
         ],
     )
+
+
+@router.post("/{patient_id}/photo", response_model=PatientRead)
+async def upload_patient_photo(
+    patient_id: str,
+    file: UploadFile = File(...),
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(require_permission(permissions.PATIENTS_EDIT)),
+    session: Session = Depends(get_session),
+) -> Patient:
+    enforce_entitlement(session, tenant_id, "patients")
+    patient = _get_patient_or_404(session, tenant_id, patient_id)
+    require_user_branch_access(current_user, patient.branch_id)
+    _filename, url_path = await save_upload(file, f"patient_{patient_id[:12]}")
+    patient.photo_url = url_path
+    patient.photo_file_name = file.filename or _filename
+    patient.updated_at = now_utc()
+    session.add(patient)
+    session.commit()
+    session.refresh(patient)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=patient.branch_id,
+        actor_user_id=current_user.id,
+        action="patient.photo.uploaded",
+        resource_type="patient",
+        resource_id=patient.id,
+        purpose="patient_management",
+    )
+    return patient

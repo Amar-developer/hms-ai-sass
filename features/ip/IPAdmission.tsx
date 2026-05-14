@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {Badge,Button,Card,Field,Input,Select} from '@/components/ui';
-import {apiFetch} from '@/lib/api';
+import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';
 
 function today(){return new Date().toISOString().slice(0,10)}
 function patientName(p:any){return p?.name||p?.full_name||p?.patient_name||p?.id||'Patient'}
@@ -179,6 +179,7 @@ export function IPAdmission({
       bed: String(fd.get('bed')||''),
       admission_date: String(fd.get('admission_date')||today()),
       expected_discharge_date:String(fd.get('expected_discharge_date')||'')||undefined,
+      aadhaar_number:String(fd.get('aadhaar_number')||'').replace(/\D/g,'')||undefined,
       reason: String(fd.get('reason')||'')||undefined,
       provisional_diagnosis: String(fd.get('provisional_diagnosis')||'')||undefined,
     };
@@ -187,6 +188,12 @@ export function IPAdmission({
       if(apiSession){
         const path=fromAppointment&&sourceAppointmentId?`/ip/admissions/from-appointment/${sourceAppointmentId}`:'/ip/admissions';
         const row=await apiFetch(path,apiSession,{method:'POST',body:JSON.stringify(payload)});
+        const documentFile=fd.get('admission_document') as File | null;
+        if(documentFile?.size){
+          const upload=new FormData();
+          upload.append('file',documentFile);
+          await apiUpload(`/ip/admissions/${row.id}/document`,apiSession,upload);
+        }
         await refresh();
         setSelectedId(row.id);
         setView('detail');
@@ -441,6 +448,21 @@ export function IPAdmission({
             <Info title="Treatments" value={treatments.length}/>
             <Info title="Running Bill" value={inr(runningBillTotal)}/>
           </div>
+          {selectedAdmission&&(
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Info title="Aadhaar" value={selectedAdmission.aadhaar_number||'Not captured'}/>
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <div className="text-xs font-bold uppercase text-slate-500">Admission File</div>
+                {selectedAdmission.admission_document_url?(
+                  <a href={`${UPLOADS_BASE}${selectedAdmission.admission_document_url}`} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex break-all text-sm font-bold text-blue-700 underline">
+                    {selectedAdmission.admission_document_name||'View uploaded file'}
+                  </a>
+                ):(
+                  <div className="mt-1 text-sm font-bold text-slate-500">Not uploaded</div>
+                )}
+              </div>
+            </div>
+          )}
           <p className="mt-4 text-sm text-slate-500">Select an IP admission from the left to manage treatment, consultation, consent, discharge, and billing.</p>
         </Card>
       </div>
@@ -797,6 +819,7 @@ function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmiss
   const roomNumbers=Array.from(new Set(wardRooms.map((room:any)=>room.room_number).filter(Boolean)));
   const bedRows=wardRooms.filter((room:any)=>!roomNumber||room.room_number===roomNumber);
   const selectedRoom=rooms.find((room:any)=>room.id===roomId)||bedRows.find((room:any)=>room.available)||availableRooms[0]||rooms[0];
+  const selectedBed=rooms.find((room:any)=>room.id===roomId);
   useEffect(()=>{
     if(!rooms.length)return;
     const next=selectedRoom||rooms[0];
@@ -828,6 +851,12 @@ function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmiss
         <Field label="Admission Date"><Input name="admission_date" type="date" value={admissionDate} onChange={(e:any)=>setAdmissionDate(e.target.value)} required/></Field>
         <Field label="Planned Discharge"><Input name="expected_discharge_date" type="date" value={expectedDischargeDate} min={admissionDate} onChange={(e:any)=>setExpectedDischargeDate(e.target.value)}/></Field>
       </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="Aadhaar Number"><Input name="aadhaar_number" inputMode="numeric" pattern="\d{12}" maxLength={12} placeholder="12 digit Aadhaar number"/></Field>
+        <Field label="Admission File">
+          <input name="admission_document" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" className="block w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-xs file:font-bold"/>
+        </Field>
+      </div>
       {rooms.length>0?(
         <>
           <div className="grid gap-3 md:grid-cols-3">
@@ -844,10 +873,17 @@ function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmiss
             </Field>
             <Field label="Bed">
               <Select name="room_id" value={roomId} onChange={(e:any)=>setRoomId(e.target.value)} required>
-                <option value="">Select available bed</option>
-                {bedRows.map((room:any)=><option key={room.id} value={room.id} disabled={!room.available}>{room.bed_number} · {inr(room.daily_rate)}/day{room.available?'':' · occupied'}</option>)}
+                <option value="">Select bed by availability</option>
+                {bedRows.map((room:any)=><option key={room.id} value={room.id} disabled={!room.available}>{room.bed_number} · {room.available?'Available':'Occupied'} · {inr(room.daily_rate)}/day</option>)}
               </Select>
             </Field>
+          </div>
+          <div className="grid gap-2 rounded-2xl bg-slate-50 p-3 text-sm sm:grid-cols-3">
+            <div><b>{availableRooms.length}</b> available bed(s)</div>
+            <div><b>{Math.max(rooms.length-availableRooms.length,0)}</b> occupied bed(s)</div>
+            <div className={selectedBed?.available?'text-emerald-700':'text-amber-700'}>
+              {selectedBed?`Selected ${selectedBed.bed_number}: ${selectedBed.available?'available':'occupied'}`:'Select an available bed'}
+            </div>
           </div>
           <input type="hidden" name="ward" value={selectedRoom?.ward_name||'General Ward'}/>
           <input type="hidden" name="room" value={selectedRoom?.room_number||''}/>

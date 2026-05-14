@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import func
 from sqlmodel import Session, delete, select
 
@@ -8,6 +8,7 @@ from app.core.access_control import require_branch_in_tenant, require_user_branc
 from app.core.auth import require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
+from app.core.uploads import save_upload
 from app.modules.appointments.models import Appointment, AppointmentStatus
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
@@ -252,6 +253,15 @@ def _create_billing_item(
     return item
 
 
+def _validate_aadhaar_number(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = "".join(ch for ch in value if ch.isdigit())
+    if len(normalized) != 12:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aadhaar number must be exactly 12 digits")
+    return normalized
+
+
 @router.post("/rooms", response_model=IPRoomRead, status_code=status.HTTP_201_CREATED)
 def create_room(
     payload: IPRoomCreate,
@@ -372,6 +382,7 @@ def create_admission(
     if appointment and appointment.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source appointment not found")
     admission_date = payload.admission_date or date.today()
+    aadhaar_number = _validate_aadhaar_number(payload.aadhaar_number)
     if payload.expected_discharge_date and payload.expected_discharge_date < admission_date:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Expected discharge date cannot be before admission date")
     room, room_updates = _resolve_room_for_admission(
@@ -388,6 +399,7 @@ def create_admission(
             "tenant_id": tenant_id,
             "admission_number": _next_admission_number(session, tenant_id),
             "admission_date": admission_date,
+            "aadhaar_number": aadhaar_number,
             "room_id": room.id if room else payload.room_id,
             **room_updates,
             "created_by_user_id": current_user.id,
@@ -461,6 +473,8 @@ def update_admission(
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     _ensure_admission_open(admission)
     updates = payload.model_dump(exclude_unset=True)
+    if "aadhaar_number" in updates:
+        updates["aadhaar_number"] = _validate_aadhaar_number(updates["aadhaar_number"])
     next_admission_date = admission.admission_date
     next_expected_discharge_date = updates.get("expected_discharge_date", admission.expected_discharge_date)
     if next_expected_discharge_date and next_expected_discharge_date < next_admission_date:
@@ -488,6 +502,39 @@ def update_admission(
         branch_id=admission.branch_id,
         actor_user_id=current_user.id,
         action="ip_admission.updated",
+        resource_type="ip_admission",
+        resource_id=admission.id,
+        purpose="ip_management",
+    )
+    return admission
+
+
+@router.post("/admissions/{admission_id}/document", response_model=IPAdmissionRead)
+async def upload_admission_document(
+    admission_id: str,
+    file: UploadFile = File(...),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.IP_EDIT)),
+) -> IPAdmission:
+    _assert_ip_enabled(session, tenant_id)
+    admission = _get_admission(session, tenant_id, admission_id, current_user)
+    _ensure_admission_open(admission)
+    saved_filename, url_path = await save_upload(file, f"ip_admission_{admission_id[:12]}")
+    admission.admission_document_url = url_path
+    admission.admission_document_name = file.filename or saved_filename
+    admission.admission_document_uploaded_at = now_utc()
+    admission.updated_at = now_utc()
+    admission.updated_by_user_id = current_user.id
+    session.add(admission)
+    session.commit()
+    session.refresh(admission)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_admission.document_uploaded",
         resource_type="ip_admission",
         resource_id=admission.id,
         purpose="ip_management",

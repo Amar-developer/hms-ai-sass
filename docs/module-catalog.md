@@ -15,8 +15,8 @@
 | Doctor Fee & Settlement | Doctor revenue model | Fixed fee, percentage split, visit-type fee, monthly settlement |
 | Lab & Diagnostics | Test workflow | Orders, sample collection, results, reports, doctor visibility |
 | Pharmacy | Medicine workflow | Prescription issue, medicine inventory, substitutes, stock alerts |
-| IP Admission | Hospital inpatient flow | Admission, bed, ward, treatment, discharge, package billing |
-| Physiotherapy | OP/IP rehabilitation | Assessment, pain score, electrotherapy equipment, IFT, ultrasound, TENS, laser, SWD, CPM, muscle stimulation, rehab exercises, home program, session packages, progress tracking, tax/discount-aware invoice generation, payment capture, and receipt access |
+| IP Admission | Hospital inpatient flow | Admission, Aadhaar capture, admission proof upload, bed, ward, treatment, discharge, package billing |
+| Physiotherapy | OP/IP rehabilitation | Assessment, pain score, consent multi-file upload, electrotherapy equipment, IFT, ultrasound, TENS, laser, SWD, CPM, muscle stimulation, rehab exercises, home program, session packages, progress tracking, tax/discount-aware invoice generation, payment capture, and receipt access |
 | Reports & Analytics | Business intelligence | Revenue, doctor utilization, branch performance, patient volume |
 | Staff & Roles | Access control | Roles, permissions, shifts, staff audit |
 | Subscription | SaaS billing | Plans, patient limits, module limits, add-ons, invoices |

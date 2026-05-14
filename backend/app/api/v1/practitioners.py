@@ -182,6 +182,8 @@ def list_practitioners(
             permissions.SCHEDULING_CREATE,
             permissions.SCHEDULING_READ,
             permissions.SCHEDULING_EDIT,
+            permissions.PHYSIOTHERAPY_READ,
+            permissions.PHYSIOTHERAPY_EDIT,
         )
     ),
 ) -> list[PractitionerRead]:

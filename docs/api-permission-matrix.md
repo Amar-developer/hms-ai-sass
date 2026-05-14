@@ -208,6 +208,7 @@ Consultation APIs enforce the `consultations` module entitlement and branch scop
 | `POST` | `/api/v1/ip/admissions` | `ip.create` | Admit patient into an available room/bed for selected date range |
 | `POST` | `/api/v1/ip/admissions/from-appointment/{appointment_id}` | `ip.create` | Convert OP appointment to IP admission |
 | `GET` | `/api/v1/ip/admissions` | `ip.read` | List branch-scoped IP admissions |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/document` | `ip.edit` | Upload admission proof, referral, or Aadhaar document |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/consultations` | `ip.edit` | Record IP doctor visit/round with optional visit fee |
 | `POST` | `/api/v1/ip/consultations/{consultation_id}/sign` | `ip.edit` | Sign doctor visit and create a billable consultation line when fee is configured |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/medication-orders` | `ip.edit` | Create IP medication order with per-dose charge |
@@ -218,7 +219,7 @@ Consultation APIs enforce the `consultations` module entitlement and branch scop
 | `POST` | `/api/v1/ip/admissions/{admission_id}/billing-items` | `ip.edit` | Add manual running-bill line |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/invoice` | `billing.manage` | Generates IP invoice including automatic room charge, billable clinical events, and manual charges |
 
-IP admission APIs enforce tenant, branch, room availability, and module entitlement checks. A room/bed cannot be reused for overlapping active admission date ranges. Room rent is calculated from admission date through discharge summary date, or planned discharge/current date when discharge is not finalized. Treatment notes remain clinical documentation; signed IP consultations and given MAR doses create linked billable items for the running bill and final invoice.
+IP admission APIs enforce tenant, branch, room availability, and module entitlement checks. Admissions can capture a validated 12-digit Aadhaar number and one admission proof/identity document. A room/bed cannot be reused for overlapping active admission date ranges. Room rent is calculated from admission date through discharge summary date, or planned discharge/current date when discharge is not finalized. Treatment notes remain clinical documentation; signed IP consultations and given MAR doses create linked billable items for the running bill and final invoice.
 
 ## Billing, Payments, and Settlements
 
@@ -290,12 +291,13 @@ Lab APIs enforce module entitlement and branch scope for catalog, packages, temp
 | `GET` | `/api/v1/physiotherapy/cases` | `physiotherapy.read` |
 | `POST` | `/api/v1/physiotherapy/cases` | `physiotherapy.create` |
 | `PATCH` | `/api/v1/physiotherapy/cases/{case_id}` | `physiotherapy.edit` |
+| `POST` | `/api/v1/physiotherapy/cases/{case_id}/consent` | `physiotherapy.edit` |
 | `GET` | `/api/v1/physiotherapy/cases/{case_id}/sessions` | `physiotherapy.read` |
 | `POST` | `/api/v1/physiotherapy/cases/{case_id}/sessions` | `physiotherapy.edit` |
 | `GET` | `/api/v1/physiotherapy/cases/{case_id}/invoice` | `billing.manage` |
 | `POST` | `/api/v1/physiotherapy/cases/{case_id}/invoice` | `billing.manage` |
 
-Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection and receipt PDFs use the shared billing endpoints.
+Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, multiple consent-file upload, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection and receipt PDFs use the shared billing endpoints.
 
 ## Settings, Notifications, and Audit
 

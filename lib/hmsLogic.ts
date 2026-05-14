@@ -11,6 +11,8 @@ export function getDoctorFeeSetting(settings:any[], clinicId:string, doctorId:st
       || settings.find(s=>s.clinicId===clinicId && s.doctorId===doctorId)
       || settings.find(s=>s.clinicId===clinicId && s.departmentId===departmentId)
 }
+
+
 export function calculateConsultationCharge(setting:any, feeType:string, baseIpAmount=0){
   if(!setting) return 0;
   if(feeType==='IP Fixed') return setting.ipFixedFee || setting.opFee || 0;

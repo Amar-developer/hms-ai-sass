@@ -17,6 +17,7 @@ class DoctorFeeRuleCreate(BaseModel):
     share_type: FeeShareType = FeeShareType.PERCENTAGE
     doctor_share_percentage: int | None = Field(default=None, ge=0, le=100)
     doctor_fixed_amount: int | None = Field(default=None, ge=0)
+    share_tax_with_doctor: bool = False
 
 
 class DoctorFeeRuleRead(DoctorFeeRuleCreate):
