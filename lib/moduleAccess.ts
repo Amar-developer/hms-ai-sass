@@ -6,6 +6,7 @@ export function canOpenModule(id: string, roleAllowedModules: string[], clinic: 
     (id === 'dashboard' ||
       id === 'queue' ||
       id === 'reports' ||
+      id === 'items' ||
       id === 'admin' ||
       id === 'superadmin' ||
       isModuleEnabled(clinic, id))

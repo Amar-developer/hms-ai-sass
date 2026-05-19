@@ -17,6 +17,19 @@ class LabTestCatalogCreate(BaseModel):
     created_by_user_id: str | None = None
 
 
+class LabTestCatalogUpdate(BaseModel):
+    branch_id: str | None = None
+    code: str | None = Field(default=None, min_length=2, max_length=40)
+    name: str | None = Field(default=None, min_length=2, max_length=220)
+    department: str | None = Field(default=None, max_length=120)
+    sample_type: str | None = Field(default=None, max_length=120)
+    default_price: int | None = Field(default=None, ge=0)
+    turnaround_minutes: int | None = Field(default=None, ge=0)
+    instructions: str | None = Field(default=None, max_length=1000)
+    is_active: bool | None = None
+    updated_by_user_id: str | None = None
+
+
 class LabTestCatalogRead(LabTestCatalogCreate):
     id: str
     tenant_id: str
@@ -34,6 +47,17 @@ class LabTestPackageCreate(BaseModel):
     package_price: int = Field(default=0, ge=0)
     test_ids: list[str] = Field(default_factory=list)
     created_by_user_id: str | None = None
+
+
+class LabTestPackageUpdate(BaseModel):
+    branch_id: str | None = None
+    code: str | None = Field(default=None, min_length=2, max_length=40)
+    name: str | None = Field(default=None, min_length=2, max_length=220)
+    description: str | None = Field(default=None, max_length=1000)
+    package_price: int | None = Field(default=None, ge=0)
+    test_ids: list[str] | None = None
+    is_active: bool | None = None
+    updated_by_user_id: str | None = None
 
 
 class LabTestPackageRead(BaseModel):

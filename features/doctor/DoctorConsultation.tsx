@@ -10,6 +10,13 @@ import {
   Video,
 } from "lucide-react";
 import { Badge, Button, Card, Field, Input, Select } from "@/components/ui";
+import {
+  SearchPicker,
+  TagEntryBox,
+  medicineDurationOptions,
+  medicineFrequencyOptions,
+  medicineInstructionOptions,
+} from "@/components/clinicalRows";
 import { apiFetch } from "@/lib/api";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
 
@@ -205,7 +212,11 @@ export function DoctorConsultation({
   const [medicineCatalog, setMedicineCatalog] = useState<any[]>([]);
   const [labCatalog, setLabCatalog] = useState<any[]>([]);
   const scanCatalog: any[] = [];
-  const [doctorId, setDoctorId] = useState("");
+  const [doctorId, setDoctorId] = useState(() =>
+    typeof window === "undefined"
+      ? ""
+      : sessionStorage.getItem("medizinhub.consultationDoctorId") || "",
+  );
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(() =>
     typeof window === "undefined"
       ? ""
@@ -223,8 +234,10 @@ export function DoctorConsultation({
   const [vitals, setVitals] = useState("");
   const [complaints, setComplaints] = useState("");
   const [diagnosisRows, setDiagnosisRows] = useState("");
-  const [medicineRows, setMedicineRows] = useState("");
-  const [referralRows, setReferralRows] = useState("");
+  const [medicineItems, setMedicineItems] = useState<any[]>([]);
+  const [referralItems, setReferralItems] = useState<any[]>([]);
+  const medicineRows = medicineItems.map((m: any) => [m.name, m.dosage, m.frequency, m.duration, m.instructions].map((s: any) => String(s || "").trim()).filter(Boolean).join(" | ")).join("\n");
+  const referralRows = referralItems.map((r: any) => [r.type, r.name, r.priority, r.instructions].map((s: any) => String(s || "").trim()).filter(Boolean).join(" | ")).join("\n");
   const [selectedMedicineId, setSelectedMedicineId] = useState("");
   const [medicineDosage, setMedicineDosage] = useState("");
   const [medicineFrequency, setMedicineFrequency] = useState("1-0-1");
@@ -251,29 +264,50 @@ export function DoctorConsultation({
   const [dashboardFilter, setDashboardFilter] = useState<
     "booked" | "waiting" | "completed" | "seen"
   >("booked");
+  const [selectedPatientDetail, setSelectedPatientDetail] = useState<any>(null);
   useEffect(() => {
     const id = setInterval(() => setTick((v) => v + 1), 5000);
     return () => clearInterval(id);
   }, []);
   useEffect(() => {
     const scopedDoctorId = doctorScope?.practitionerId || "";
+    const selectedAppointment = scopedAppointments.find(
+      (appointment: any) => appointment.id === selectedAppointmentId,
+    );
+    const selectedAppointmentDoctorId =
+      selectedAppointment?.doctorId || selectedAppointment?.practitioner_id || "";
+    const selectedAppointmentDepartmentId =
+      selectedAppointment?.departmentId || selectedAppointment?.department_id || "";
+    const selectedAppointmentDoctorAvailable = doctorList.some(
+      (doctor: any) => doctor.id === selectedAppointmentDoctorId,
+    );
+    const selectedAppointmentFits = Boolean(
+      selectedAppointment &&
+        selectedAppointmentDoctorId &&
+        selectedAppointmentDoctorAvailable &&
+        (!departmentId ||
+          !selectedAppointmentDepartmentId ||
+          selectedAppointmentDepartmentId === departmentId),
+    );
     const nextDoctorId =
       scopedDoctorId ||
+      (selectedAppointmentFits ? selectedAppointmentDoctorId : "") ||
       doctorList.find((doctor: any) => doctor.id === doctorId)?.id ||
       doctorList[0]?.id ||
       "";
     if (nextDoctorId !== doctorId) {
-      const selectedAppointment = scopedAppointments.find(
-        (appointment: any) => appointment.id === selectedAppointmentId,
-      );
       const keepSelection = Boolean(
         selectedAppointment &&
-        (!departmentId || selectedAppointment.departmentId === departmentId) &&
-        (selectedAppointment.doctorId === nextDoctorId ||
-          selectedAppointment.practitioner_id === nextDoctorId),
+          (!departmentId ||
+            !selectedAppointmentDepartmentId ||
+            selectedAppointmentDepartmentId === departmentId) &&
+          selectedAppointmentDoctorId === nextDoctorId,
       );
       setDoctorId(nextDoctorId);
-      if (!keepSelection) setSelectedAppointmentId("");
+      if (nextDoctorId) {
+        sessionStorage.setItem("medizinhub.consultationDoctorId", nextDoctorId);
+      }
+      if (selectedAppointment && !keepSelection) setSelectedAppointmentId("");
     }
   }, [
     doctorId,
@@ -341,8 +375,8 @@ export function DoctorConsultation({
     setVitals("");
     setComplaints("");
     setDiagnosisRows("");
-    setMedicineRows("");
-    setReferralRows("");
+    setMedicineItems([]);
+    setReferralItems([]);
     setNotes("");
     setRemarks("");
     setDiagnosis("");
@@ -400,34 +434,15 @@ export function DoctorConsultation({
           );
         }
         if (detail.medicines?.length) {
-          setMedicineRows(
-            detail.medicines
-              .map((r: any) =>
-                [
-                  r.medicine_name,
-                  r.dosage,
-                  r.frequency,
-                  r.duration,
-                  r.instructions,
-                ]
-                  .filter(Boolean)
-                  .join(" | "),
-              )
-              .join("\n"),
-          );
+          setMedicineItems(detail.medicines.map((r: any) => ({name: r.medicine_name || '', dosage: r.dosage || '', frequency: r.frequency || '', duration: r.duration || '', instructions: r.instructions || ''})));
         } else if (c.prescription_text) {
-          setMedicineRows(c.prescription_text);
+          setMedicineItems(String(c.prescription_text || '').split(/\n|,\s+(?=[A-Za-z])/).map((l: string) => l.trim()).filter(Boolean).map((line: string) => {
+            const [name = '', dosage = '', frequency = '', duration = '', instructions = ''] = line.split(/\s*\|\s*/);
+            return {name, dosage, frequency, duration, instructions};
+          }));
         }
         if (detail.referrals?.length) {
-          setReferralRows(
-            detail.referrals
-              .map((r: any) =>
-                [r.referral_type, r.item_name, r.priority, r.instructions]
-                  .filter(Boolean)
-                  .join(" | "),
-              )
-              .join("\n"),
-          );
+          setReferralItems(detail.referrals.map((r: any) => ({type: r.referral_type || 'lab', name: r.item_name || '', priority: r.priority || 'routine', instructions: r.instructions || ''})));
           const labRefs = detail.referrals.filter(
             (r: any) => r.referral_type === "lab",
           );
@@ -461,9 +476,44 @@ export function DoctorConsultation({
       alive = false;
     };
   }, [selected?.consultationId, apiSession?.token]);
-  const patient = patients.find(
-    (p: any) => p.id === (selected?.patientId || selected?.patient_id),
-  );
+  const selectedPatientId =
+    selected?.patientId ||
+    selected?.patient_id ||
+    selected?.patientID ||
+    selected?.patient?.id ||
+    "";
+  const localPatient = patients.find((p: any) => p.id === selectedPatientId);
+  const patient =
+    localPatient ||
+    (selectedPatientDetail?.id === selectedPatientId
+      ? selectedPatientDetail
+      : null) ||
+    (selectedPatientId
+      ? {
+          id: selectedPatientId,
+          full_name: selected?.patient_name || selected?.patient || "",
+          name: selected?.patient_name || selected?.patient || "",
+        }
+      : null);
+  useEffect(() => {
+    let alive = true;
+    async function loadSelectedPatient() {
+      if (!apiSession || !selectedPatientId || localPatient) {
+        if (!selectedPatientId && alive) setSelectedPatientDetail(null);
+        return;
+      }
+      try {
+        const detail = await apiFetch(`/patients/${selectedPatientId}`, apiSession);
+        if (alive) setSelectedPatientDetail(detail);
+      } catch {
+        if (alive) setSelectedPatientDetail(null);
+      }
+    }
+    loadSelectedPatient();
+    return () => {
+      alive = false;
+    };
+  }, [selectedPatientId, Boolean(localPatient), apiSession?.token]);
   const completedToday = selectedDateQueue.filter(
     isCompletedAppointment,
   ).length;
@@ -522,7 +572,7 @@ export function DoctorConsultation({
           const itemPatientId = item.patientId || item.patient_id;
           return (
             itemPatientId &&
-            itemPatientId === (selected.patientId || selected.patient_id) &&
+            itemPatientId === selectedPatientId &&
             item.id !== selected.id
           );
         })
@@ -588,57 +638,108 @@ export function DoctorConsultation({
   function appendLine(value: string, line: string) {
     return [...splitRows(value), line].join("\n");
   }
+  function labTestNames(value: string) {
+    return value
+      .split(/,|\n/)
+      .map((item: string) => item.trim())
+      .filter(Boolean);
+  }
   function labReferralSummary() {
     const labNames = structuredPayload()
       .referrals.filter((row: any) => row.referral_type === "lab")
       .map((row: any) => row.item_name);
     const manual = labNeeded
-      ? labTests
-          .split(",")
-          .map((item: string) => item.trim())
-          .filter(Boolean)
+      ? labTestNames(labTests)
       : [];
     return Array.from(new Set([...labNames, ...manual])).join(", ");
   }
-  function addMedicineSuggestion() {
-    const med = medicineCatalog.find(
-      (row: any) => row.id === selectedMedicineId,
-    );
-    if (!med) return;
-    const dosage = medicineDosage || med.strength || "";
+  function addMedicineRow(name: string, dosage = "") {
+    const medicineName = String(name || "").trim();
+    if (!medicineName) return;
+    const row = {
+      name: medicineName,
+      dosage: dosage || medicineDosage,
+      frequency: medicineFrequency,
+      duration: medicineDuration,
+      instructions: medicineInstructions,
+    };
+    setMedicineItems((items: any[]) => [...items, row]);
     const line = [
-      med.name,
-      dosage,
-      medicineFrequency,
-      medicineDuration,
-      medicineInstructions,
+      row.name,
+      row.dosage,
+      row.frequency,
+      row.duration,
+      row.instructions,
     ]
       .map((part: any) => String(part || "").trim())
       .join(" | ");
-    setMedicineRows(appendLine(medicineRows, line));
-    setPrescription((value) => appendLine(value, line));
+    setPrescription((value: any) => appendLine(value, line));
+    setSelectedMedicineId("");
     setMedicineDosage("");
+  }
+  function addMedicineSuggestion() {
+    const med = medicineCatalog.find((row: any) => row.id === selectedMedicineId);
+    if (med) addMedicineRow(med.name, medicineDosage || med.strength || "");
+  }
+  function addMedicineFromText(value: string, option?: any) {
+    const med = option?.item || medicineCatalog.find((row: any) => row.id === option?.value);
+    addMedicineRow(med?.name || value, medicineDosage || med?.strength || "");
+  }
+  function addLabRow(name: string) {
+    const testName = String(name || "").trim();
+    if (!testName) return;
+    setReferralItems((items: any[]) => {
+      const exists = items.some(
+        (item: any) =>
+          item.type === "lab" &&
+          String(item.name || "").toLowerCase() === testName.toLowerCase() &&
+          String(item.priority || "") === String(labPriority || ""),
+      );
+      if (exists) return items;
+      return [
+        ...items,
+        {
+          type: "lab",
+          name: testName,
+          priority: labPriority,
+          instructions: labInstructions,
+        },
+      ];
+    });
+    setLabNeeded(true);
+    setLabTests((value: string) =>
+      Array.from(new Set([...labTestNames(value), testName])).join(", "),
+    );
+    setSelectedLabTestId("");
+    setLabInstructions("");
   }
   function addLabSuggestion() {
     const test = labCatalog.find((row: any) => row.id === selectedLabTestId);
-    if (!test) return;
-    const line = ["lab", test.name, labPriority, labInstructions]
-      .map((part: any) => String(part || "").trim())
-      .join(" | ");
-    setReferralRows(appendLine(referralRows, line));
-    setLabNeeded(true);
-    setLabTests((value: string) =>
-      Array.from(
-        new Set([
-          ...value
-            .split(",")
-            .map((item: string) => item.trim())
-            .filter(Boolean),
-          test.name,
-        ]),
-      ).join(", "),
-    );
-    setLabInstructions("");
+    if (test) addLabRow(test.name);
+  }
+  function addLabFromText(value: string, option?: any) {
+    const test = option?.item || labCatalog.find((row: any) => row.id === option?.value);
+    addLabRow(test?.name || value);
+  }
+  function removeMedicineItem(index: number) {
+    setMedicineItems((items: any[]) => items.filter((_: any, i: number) => i !== index));
+  }
+  function removeReferralItem(index: number) {
+    setReferralItems((items: any[]) => {
+      const removed = items[index];
+      if (removed?.type === "lab") {
+        setLabTests((value: string) =>
+          labTestNames(value)
+            .filter(
+              (name: string) =>
+                name.toLowerCase() !==
+                String(removed.name || "").trim().toLowerCase(),
+            )
+            .join(", "),
+        );
+      }
+      return items.filter((_: any, i: number) => i !== index);
+    });
   }
   function structuredPayload() {
     return {
@@ -730,6 +831,16 @@ export function DoctorConsultation({
   function openConsultation(id: string) {
     setSelectedAppointmentId(id);
     sessionStorage.setItem("medizinhub.consultationAppointmentId", id);
+    const appointment = appointments.find((row: any) => row.id === id);
+    const appointmentDoctorId =
+      appointment?.doctorId || appointment?.practitioner_id || "";
+    if (appointmentDoctorId) {
+      setDoctorId(appointmentDoctorId);
+      sessionStorage.setItem(
+        "medizinhub.consultationDoctorId",
+        appointmentDoctorId,
+      );
+    }
     setActive?.("consultation");
   }
   function openPatientDetails(patientId?: string) {
@@ -1084,7 +1195,8 @@ export function DoctorConsultation({
           notes={notes}
           setNotes={setNotes}
           medicineRows={medicineRows}
-          setMedicineRows={setMedicineRows}
+          medicineItems={medicineItems}
+          removeMedicineItem={removeMedicineItem}
           medicineCatalog={medicineCatalog}
           selectedMedicineId={selectedMedicineId}
           setSelectedMedicineId={setSelectedMedicineId}
@@ -1097,8 +1209,10 @@ export function DoctorConsultation({
           medicineInstructions={medicineInstructions}
           setMedicineInstructions={setMedicineInstructions}
           addMedicineSuggestion={addMedicineSuggestion}
+          addMedicineFromText={addMedicineFromText}
           referralRows={referralRows}
-          setReferralRows={setReferralRows}
+          referralItems={referralItems}
+          removeReferralItem={removeReferralItem}
           labNeeded={labNeeded}
           setLabNeeded={setLabNeeded}
           labTests={labTests}
@@ -1111,6 +1225,7 @@ export function DoctorConsultation({
           labInstructions={labInstructions}
           setLabInstructions={setLabInstructions}
           addLabSuggestion={addLabSuggestion}
+          addLabFromText={addLabFromText}
           scanNeeded={scanNeeded}
           setScanNeeded={setScanNeeded}
           scanTests={scanTests}
@@ -1551,7 +1666,8 @@ function ConsultationWorkspace(props: any) {
     notes,
     setNotes,
     medicineRows,
-    setMedicineRows,
+    medicineItems,
+    removeMedicineItem,
     medicineCatalog,
     selectedMedicineId,
     setSelectedMedicineId,
@@ -1564,8 +1680,10 @@ function ConsultationWorkspace(props: any) {
     medicineInstructions,
     setMedicineInstructions,
     addMedicineSuggestion,
+    addMedicineFromText,
     referralRows,
-    setReferralRows,
+    referralItems,
+    removeReferralItem,
     labNeeded,
     setLabNeeded,
     labTests,
@@ -1578,6 +1696,7 @@ function ConsultationWorkspace(props: any) {
     labInstructions,
     setLabInstructions,
     addLabSuggestion,
+    addLabFromText,
     scanNeeded,
     setScanNeeded,
     scanTests,
@@ -1605,6 +1724,18 @@ function ConsultationWorkspace(props: any) {
     callNextInWorkspace,
     setActive,
   } = props;
+  const medicineOptions = medicineCatalog.map((medicine: any) => ({
+    value: medicine.id,
+    label: medicine.name,
+    item: medicine,
+  }));
+  const labOptions = labCatalog.map((test: any) => ({
+    value: test.id,
+    label: test.name,
+    item: test,
+  }));
+  const [medicineTagText, setMedicineTagText] = useState("");
+  const [labTagText, setLabTagText] = useState("");
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -1766,29 +1897,45 @@ function ConsultationWorkspace(props: any) {
             />
           </Field>
           <Field label="Prescription Medicine Rows">
-            <textarea
-              value={medicineRows}
-              onChange={(e: any) => setMedicineRows(e.target.value)}
-              className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
-              placeholder="Medicine | dosage | frequency | duration | instructions"
+            <TagEntryBox
+              tags={medicineItems}
+              value={medicineTagText}
+              onChange={setMedicineTagText}
+              onSubmit={addMedicineFromText}
+              onRemove={removeMedicineItem}
+              placeholder="Type medicine and press Enter"
+              getLabel={(m: any) =>
+                [m.name, m.dosage, m.frequency, m.duration, m.instructions]
+                  .map((part: any) => String(part || "").trim())
+                  .filter(Boolean)
+                  .join(" · ")
+              }
             />
           </Field>
           <div className="rounded-3xl bg-slate-50 p-4">
             <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr_auto] lg:items-end">
               <Field label="Medicine">
-                <Select
+                <SearchPicker
                   value={selectedMedicineId}
-                  onChange={(e: any) => setSelectedMedicineId(e.target.value)}
-                >
-                  <option value="">Select medicine</option>
-                  {medicineCatalog.map((medicine: any) => (
-                    <option key={medicine.id} value={medicine.id}>
-                      {medicine.name}
-                      {medicine.strength ? ` · ${medicine.strength}` : ""} · ₹
-                      {medicine.default_sale_price || 0}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(medicineId: string, medicine: any) => {
+                    setSelectedMedicineId(medicineId);
+                    if (medicine?.strength) setMedicineDosage(medicine.strength);
+                  }}
+                  options={medicineOptions}
+                  placeholder="Type medicine name"
+                  onEnterQuery={addMedicineFromText}
+                  getSearchText={(medicine: any) =>
+                    [
+                      medicine?.name,
+                      medicine?.strength,
+                      medicine?.generic_name,
+                      medicine?.brand_name,
+                      medicine?.category,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                  }
+                />
               </Field>
               <Field label="Dosage">
                 <Input
@@ -1798,25 +1945,45 @@ function ConsultationWorkspace(props: any) {
                 />
               </Field>
               <Field label="Frequency">
-                <Input
+                <Select
                   value={medicineFrequency}
                   onChange={(e: any) => setMedicineFrequency(e.target.value)}
-                  placeholder="1-0-1"
-                />
+                >
+                  {[...new Set([medicineFrequency, ...medicineFrequencyOptions])]
+                    .filter(Boolean)
+                    .map((value: string) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                </Select>
               </Field>
               <Field label="Duration">
                 <Input
+                  list="medicine-duration-options"
                   value={medicineDuration}
                   onChange={(e: any) => setMedicineDuration(e.target.value)}
                   placeholder="3 days"
                 />
+                <datalist id="medicine-duration-options">
+                  {medicineDurationOptions.map((value: string) => (
+                    <option key={value} value={value} />
+                  ))}
+                </datalist>
               </Field>
               <Field label="Instructions">
-                <Input
+                <Select
                   value={medicineInstructions}
                   onChange={(e: any) => setMedicineInstructions(e.target.value)}
-                  placeholder="After food"
-                />
+                >
+                  {[...new Set([medicineInstructions, ...medicineInstructionOptions])]
+                    .filter(Boolean)
+                    .map((value: string) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                </Select>
               </Field>
               <Button
                 type="button"
@@ -1842,14 +2009,6 @@ function ConsultationWorkspace(props: any) {
               ))}
             </div>
           </div>
-          <Field label="Lab / Scan Referral Rows">
-            <textarea
-              value={referralRows}
-              onChange={(e: any) => setReferralRows(e.target.value)}
-              className="min-h-20 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
-              placeholder="lab | CBC | routine | instructions&#10;scan | X-Ray | urgent | instructions"
-            />
-          </Field>
           <div className="grid gap-3">
             <div className="rounded-3xl bg-slate-50 p-4">
               <label className="flex items-center gap-3 font-bold">
@@ -1862,27 +2021,48 @@ function ConsultationWorkspace(props: any) {
               </label>
               {labNeeded && (
                 <Field label="Lab Tests">
-                  <Input
-                    value={labTests}
-                    onChange={(e: any) => setLabTests(e.target.value)}
-                    placeholder="CBC, FBS, HbA1c"
+                  <TagEntryBox
+                    tags={referralItems.filter((item: any) => item.type === "lab")}
+                    value={labTagText}
+                    onChange={setLabTagText}
+                    onSubmit={addLabFromText}
+                    onRemove={(labIndex: number) => {
+                      const indexes = referralItems
+                        .map((item: any, index: number) =>
+                          item.type === "lab" ? index : -1,
+                        )
+                        .filter((index: number) => index >= 0);
+                      removeReferralItem(indexes[labIndex]);
+                    }}
+                    placeholder="Type lab test and press Enter"
+                    getLabel={(r: any) =>
+                      [r.name, r.priority, r.instructions]
+                        .map((part: any) => String(part || "").trim())
+                        .filter(Boolean)
+                        .join(" · ")
+                    }
                   />
                 </Field>
               )}
               <div className="mt-3 grid gap-2">
                 <Field label="Available Lab Test">
-                  <Select
+                  <SearchPicker
                     value={selectedLabTestId}
-                    onChange={(e: any) => setSelectedLabTestId(e.target.value)}
-                  >
-                    <option value="">Select lab test</option>
-                    {labCatalog.map((test: any) => (
-                      <option key={test.id} value={test.id}>
-                        {test.name} · {test.sample_type || "sample"} · ₹
-                        {test.default_price || 0}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={setSelectedLabTestId}
+                    options={labOptions}
+                    placeholder="Type lab test name"
+                    onEnterQuery={addLabFromText}
+                    getSearchText={(test: any) =>
+                      [
+                        test?.name,
+                        test?.sample_type,
+                        test?.category,
+                        test?.code,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
+                    }
+                  />
                 </Field>
                 <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
                   <Select

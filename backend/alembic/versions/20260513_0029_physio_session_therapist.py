@@ -1,5 +1,4 @@
 """Add physiotherapist to therapy sessions.
-
 Revision ID: 20260513_0029
 Revises: 20260513_0028
 Create Date: 2026-05-13
@@ -35,7 +34,6 @@ def upgrade() -> None:
             ["physiotherapist_id"],
             unique=False,
         )
-
 
 def downgrade() -> None:
     index_name = op.f("ix_physiotherapysession_physiotherapist_id")

@@ -5,10 +5,22 @@ import {ActionButton,ActionGroup,Badge,Button,Card,Input,Select} from '@/compone
 import {apiBlob,apiFetch} from '@/lib/api';
 
 function invoiceSource(invoice:any){
+  if(invoice.lab_order_id) return {label:'Lab / Scan',tone:'blue'};
+  if(invoice.pharmacy_issue_id) return {label:'Pharmacy',tone:'amber'};
   if(invoice.physiotherapy_case_id) return {label:'Physiotherapy',tone:'purple'};
   if(invoice.ip_admission_id) return {label:'IP Billing',tone:'blue'};
   if(invoice.consultation_id||invoice.appointment_id) return {label:'Consultation',tone:'slate'};
   return {label:'Direct',tone:'amber'};
+}
+
+function invoiceLinkedRecord(invoice:any){
+  if(invoice.ip_admission_id) return {label:'IP Admission',value:invoice.ip_admission_id};
+  if(invoice.physiotherapy_case_id) return {label:'Physiotherapy Case',value:invoice.physiotherapy_case_id};
+  if(invoice.pharmacy_issue_id) return {label:'Pharmacy Issue',value:invoice.pharmacy_issue_id};
+  if(invoice.lab_order_id) return {label:'Lab / Scan Order',value:invoice.lab_order_id};
+  if(invoice.consultation_id) return {label:'Consultation',value:invoice.consultation_id};
+  if(invoice.appointment_id) return {label:'Appointment',value:invoice.appointment_id};
+  return {label:'Invoice Record',value:invoice.id};
 }
 
 function money(value:any){
@@ -222,54 +234,67 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       </Card>
 
       <Card>
-        <h3 className="text-lg font-bold">Invoices & Payments</h3>
-        <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1440px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+        <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
+          <div>
+            <h3 className="text-lg font-bold">Invoices & Payments</h3>
+            <p className="text-sm text-slate-500">Track invoice source, patient dues, doctor share, and payment collection in one list.</p>
+          </div>
+          <Badge tone="slate">{invoices.length} invoices</Badge>
+        </div>
+        <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
+          <table className="w-full min-w-[1740px] table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-[180px]" />
+              <col className="w-[170px]" />
+              <col className="w-[170px]" />
+              <col className="w-[120px]" />
+              <col className="w-[105px]" />
+              <col className="w-[105px]" />
+              <col className="w-[130px]" />
+              <col className="w-[560px]" />
+              <col className="w-[420px]" />
+            </colgroup>
+            <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Invoice</th>
-                <th>Source</th>
-                <th>Patient</th>
-                <th>Status</th>
-                <th>Tax</th>
-                <th>Total</th>
-                <th>Paid</th>
-                <th>Balance</th>
-                <th>Doctor Share</th>
-                <th>Payment</th>
-                <th className="pr-4 text-right">Actions</th>
+                <th className="px-3 py-3">Source</th>
+                <th className="px-3 py-3">Patient</th>
+                <th className="px-3 py-3">Status</th>
+                <th className="px-3 py-3 text-right">Total</th>
+                <th className="px-3 py-3 text-right">Paid</th>
+                <th className="px-3 py-3 text-right">Doctor Share</th>
+                <th className="px-3 py-3">Payment</th>
+                <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {invoices.length===0&&<tr><td colSpan={11} className="px-4 py-4 text-slate-500">No invoices yet.</td></tr>}
+              {invoices.length===0&&<tr><td colSpan={9} className="px-4 py-4 text-slate-500">No invoices yet.</td></tr>}
               {invoices.map((invoice:any)=>{
                 const p:any=patientMap.get(invoice.patient_id);
                 const source=invoiceSource(invoice);
                 return (
-                  <tr key={invoice.id} onClick={()=>openInvoiceDetail(invoice)} className="cursor-pointer hover:bg-slate-50">
+                  <tr key={invoice.id} onClick={()=>openInvoiceDetail(invoice)} className="group cursor-pointer align-middle hover:bg-slate-50">
                     <td className="px-4 py-4"><b>{invoice.invoice_number}</b><p className="text-xs text-slate-500">{invoice.id}</p></td>
-                    <td><Badge tone={source.tone as any}>{source.label}</Badge>{invoice.physiotherapy_case_id&&<p className="mt-1 text-xs text-slate-500">{invoice.physiotherapy_case_id}</p>}</td>
-                    <td>{p?.name||invoice.patient_id}</td>
-                    <td><Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge></td>
-                    <td>{money(invoice.tax_amount)}</td>
-                    <td>{money(invoice.total_amount)}</td>
-                    <td>{money(invoice.paid_amount)}</td>
-                    <td>{money(invoice.balance_amount)}</td>
-                    <td>{money(invoice.doctor_share_amount)}</td>
-                    <td onClick={(event)=>event.stopPropagation()}>
+                    <td className="px-3 py-4"><Badge tone={source.tone as any}>{source.label}</Badge>{invoice.physiotherapy_case_id&&<p className="mt-1 truncate text-xs text-slate-500">{invoice.physiotherapy_case_id}</p>}</td>
+                    <td className="px-3 py-4 font-medium">{p?.name||invoice.patient_id}</td>
+                    <td className="px-3 py-4"><Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge></td>
+                    <td className="px-3 py-4 text-right font-semibold tabular-nums">{money(invoice.total_amount)}</td>
+                    <td className="px-3 py-4 text-right tabular-nums">{money(invoice.paid_amount)}</td>
+                    <td className="px-3 py-4 text-right tabular-nums">{money(invoice.doctor_share_amount)}</td>
+                    <td className="px-3 py-3 pr-10" onClick={(event)=>event.stopPropagation()}>
                       {invoice.balance_amount>0?(
-                        <div className="grid min-w-[360px] gap-2 md:grid-cols-[90px_1fr_1fr_auto] md:items-center">
+                        <div className="grid w-[440px] grid-cols-[108px_108px_132px_68px] items-center gap-2">
                           <Select value={methods[invoice.id]||'cash'} onChange={(e:any)=>setMethods({...methods,[invoice.id]:e.target.value})}><option value="cash">Cash</option><option value="upi">UPI</option><option value="gpay">GPay</option><option value="paytm">Paytm</option><option value="credit_card">Credit Card</option><option value="debit_card">Debit Card</option><option value="bank_transfer">Bank</option></Select>
-                          <Input type="number" min="1" max={invoice.balance_amount} value={amounts[invoice.id]??invoice.balance_amount} onChange={(e:any)=>setAmounts({...amounts,[invoice.id]:e.target.value})}/>
+                          <Input className="text-right tabular-nums" type="number" min="1" max={invoice.balance_amount} value={amounts[invoice.id]??invoice.balance_amount} onChange={(e:any)=>setAmounts({...amounts,[invoice.id]:e.target.value})}/>
                           <Input placeholder="Reference" value={references[invoice.id]||''} onChange={(e:any)=>setReferences({...references,[invoice.id]:e.target.value})}/>
-                          <Button disabled={busy===invoice.id} onClick={()=>collectPayment(invoice)}>{busy===invoice.id?'Saving...':'Pay'}</Button>
+                          <Button className="px-3" disabled={busy===invoice.id} onClick={()=>collectPayment(invoice)}>{busy===invoice.id?'Saving...':'Pay'}</Button>
                         </div>
-                      ):<Badge tone="green">Settled</Badge>}
+                      ):<div className="flex items-center"><Badge tone="green">Settled</Badge></div>}
                     </td>
-                    <td className="pr-4" onClick={(event)=>event.stopPropagation()}>
-                      <ActionGroup>
+                    <td className="px-4 py-3 text-right" onClick={(event)=>event.stopPropagation()}>
+                      <ActionGroup className="min-w-[380px]">
                         <ActionButton onClick={()=>openInvoiceDetail(invoice)} disabled={detailLoading===invoice.id}>{detailLoading===invoice.id?'Loading...':'View'}</ActionButton>
-                        {invoice.consultation_id&&!invoice.ip_admission_id&&!invoice.physiotherapy_case_id&&(
+                        {invoice.consultation_id&&!invoice.lab_order_id&&!invoice.pharmacy_issue_id&&!invoice.ip_admission_id&&!invoice.physiotherapy_case_id&&(
                           <ActionButton
                             onClick={()=>refreshConsultationInvoice(invoice)}
                             disabled={busy===`refresh-${invoice.id}`}
@@ -297,23 +322,34 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
   const items=detail.items||[];
   const payments=detail.payments||[];
   const source=invoiceSource(invoice);
+  const linkedRecord=invoiceLinkedRecord(invoice);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <Card className="max-h-[90vh] w-full max-w-5xl overflow-auto">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xl font-bold">{invoice.invoice_number}</h3>
-              <Badge tone={source.tone as any}>{source.label}</Badge>
-              <Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge>
+      <Card className="scrollbar-hidden max-h-[90vh] w-full max-w-6xl overflow-auto">
+        <div className="sticky top-0 z-10 -mx-6 -mt-6 border-b border-slate-200 bg-white/95 px-6 py-5 backdrop-blur">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-xl font-bold">{source.label} Invoice</h3>
+                <Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                <b>{invoice.invoice_number}</b>
+                <span className="text-slate-500">{patient?.name||patient?.full_name||invoice.patient_id}</span>
+                <span className="text-slate-500">{invoice.id}</span>
+              </div>
             </div>
-            <p className="mt-1 text-sm text-slate-500">{patient?.name||patient?.full_name||invoice.patient_id}</p>
-            <p className="mt-1 text-xs text-slate-500">{invoice.id}</p>
+            <button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold hover:bg-slate-50">Close</button>
           </div>
-          <button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold">Close</button>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <DetailStat title="Invoice Type" value={source.label}/>
+          <DetailStat title={linkedRecord.label} value={linkedRecord.value}/>
+          <DetailStat title="Patient" value={patient?.name||patient?.full_name||invoice.patient_id}/>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
           <DetailStat title="Subtotal" value={money(invoice.subtotal_amount)}/>
           <DetailStat title="Discount" value={money(invoice.discount_amount)}/>
           <DetailStat title="Tax" value={money(invoice.tax_amount)}/>
@@ -324,20 +360,20 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
           <DetailStat title="Clinic Share" value={money(invoice.clinic_share_amount)}/>
         </div>
 
-        <div className="mt-5 rounded-2xl border">
-          <div className="border-b bg-slate-50 px-4 py-3">
-            <h4 className="font-bold">Bill Items</h4>
-            <p className="text-xs text-slate-500">Consultation, lab/scan, medicine, IP, and physiotherapy services included in this invoice.</p>
+        <div className="mt-5 rounded-2xl border border-slate-200">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <h4 className="font-bold">{source.label} Bill Items</h4>
+            <p className="text-xs text-slate-500">Items are shown only for this invoice source and linked record.</p>
           </div>
-          <div className="overflow-auto">
+          <div className="scrollbar-hidden overflow-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Service</th>
-                  <th>Description</th>
-                  <th>Qty</th>
-                  <th>Rate</th>
-                  <th>Total</th>
+                  <th className="px-3 py-3">Description</th>
+                  <th className="px-3 py-3 text-right">Qty</th>
+                  <th className="px-3 py-3 text-right">Rate</th>
+                  <th className="px-4 py-3 text-right">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -345,10 +381,10 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
                 {items.map((item:any)=>(
                   <tr key={item.id}>
                     <td className="px-4 py-4"><Badge tone="slate">{itemTypeLabel(item.item_type)}</Badge></td>
-                    <td className="max-w-[420px] py-4">{item.description}</td>
-                    <td>{item.quantity}</td>
-                    <td>{money(item.unit_amount)}</td>
-                    <td className="font-bold">{money(item.total_amount)}</td>
+                    <td className="max-w-[520px] px-3 py-4">{item.description}</td>
+                    <td className="px-3 py-4 text-right tabular-nums">{item.quantity}</td>
+                    <td className="px-3 py-4 text-right tabular-nums">{money(item.unit_amount)}</td>
+                    <td className="px-4 py-4 text-right font-bold tabular-nums">{money(item.total_amount)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -356,8 +392,8 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
           </div>
         </div>
 
-        <div className="mt-5 rounded-2xl border">
-          <div className="border-b bg-slate-50 px-4 py-3">
+        <div className="mt-5 rounded-2xl border border-slate-200">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
             <h4 className="font-bold">Payments</h4>
           </div>
           <div className="grid gap-2 p-4">
@@ -365,7 +401,7 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
             {payments.map((payment:any)=>(
               <div key={payment.id} className="flex flex-col justify-between gap-2 rounded-2xl bg-slate-50 p-3 text-sm md:flex-row md:items-center">
                 <div>
-                  <b>{payment.method}</b>
+                  <b className="capitalize">{String(payment.method||'payment').replaceAll('_',' ')}</b>
                   <p className="text-xs text-slate-500">{payment.reference_number||payment.id}</p>
                 </div>
                 <Badge tone={payment.status==='recorded'?'green':'amber'}>{payment.status}</Badge>

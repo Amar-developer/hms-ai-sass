@@ -810,6 +810,71 @@ function fmtDate(val: string | null | undefined) {
   }
 }
 
+function splitListText(value: any) {
+  const seen = new Set<string>();
+  return String(value || "")
+    .split(/\n|,/)
+    .map((item: string) => item.trim())
+    .filter((item: string) => {
+      if (!item) return false;
+      const key = item.toLowerCase().replace(/\s+/g, " ");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+const hiddenScrollbar = "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+
+function ClinicalItemList({ value, items: providedItems, empty = "-" }: any) {
+  const items = providedItems || splitListText(value);
+  if (items.length === 0) return <p className="mt-1 text-slate-700">{empty}</p>;
+  return (
+    <div className="mt-2 space-y-1.5">
+      {items.map((item: string, index: number) => (
+        <div
+          key={`${item}-${index}`}
+          className="rounded-xl bg-white/70 px-3 py-2 text-sm leading-relaxed text-slate-700"
+        >
+          {item}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function uniqueClinicalRecords(rows: any[], getKey: (row: any) => string) {
+  const seen = new Set<string>();
+  return rows.filter((row: any) => {
+    const key = getKey(row).toLowerCase().replace(/\s+/g, " ").trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeClinicalText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function clinicalRecordsWithUniqueItems(
+  rows: any[],
+  getValue: (row: any) => any,
+) {
+  const seen = new Set<string>();
+  return rows
+    .map((row: any) => {
+      const items = splitListText(getValue(row)).filter((item: string) => {
+        const key = normalizeClinicalText(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      return { row, items };
+    })
+    .filter(({ items }: any) => items.length > 0);
+}
+
 function StatusBadge({ status }: any) {
   const tone =
     status === "completed" ||
@@ -846,6 +911,24 @@ function PatientDetail({
   const risks = [...(summary?.risk_alerts || []), ...(summary?.notes || [])];
   const isAdmitted = patientIpAdmissions.some(
     (a: any) => a.status === "admitted" || a.status === "active",
+  );
+  const uniqueLabOrders = uniqueClinicalRecords(
+    labOrders,
+    (order: any) =>
+      `${fmtDate(order.created_at)}|${order.status || ""}|${order.tests || ""}|${order.notes || ""}`,
+  );
+  const uniquePharmacyIssues = uniqueClinicalRecords(
+    pharmacyIssues,
+    (issue: any) =>
+      `${fmtDate(issue.created_at)}|${issue.status || ""}|${issue.medicine_text || ""}|${issue.notes || ""}|${issue.amount || ""}`,
+  );
+  const labRows = clinicalRecordsWithUniqueItems(
+    uniqueLabOrders,
+    (order: any) => order.tests,
+  );
+  const medicineRows = clinicalRecordsWithUniqueItems(
+    uniquePharmacyIssues,
+    (issue: any) => issue.medicine_text,
   );
 
   return (
@@ -981,12 +1064,6 @@ function PatientDetail({
               {c.clinical_notes && (
                 <Row label="Clinical Notes" value={c.clinical_notes} />
               )}
-              {c.prescription_text && (
-                <Row label="Prescription" value={c.prescription_text} />
-              )}
-              {c.lab_referral_text && (
-                <Row label="Lab Referral" value={c.lab_referral_text} />
-              )}
               {c.scan_referral_text && (
                 <Row label="Scan Referral" value={c.scan_referral_text} />
               )}
@@ -1008,17 +1085,21 @@ function PatientDetail({
           {labOrders.length === 0 && (
             <SectionEmpty text="No lab orders found." />
           )}
-          <div className="mt-3 space-y-3">
-            {labOrders.map((order: any) => (
+          <div
+            className={`mt-3 max-h-[260px] space-y-3 overflow-y-auto pr-1 ${hiddenScrollbar}`}
+          >
+            {labRows.map(({ row: order, items }: any) => (
               <div
                 key={order.id}
                 className="rounded-2xl bg-slate-50 p-3 text-sm"
               >
-                <div className="flex flex-wrap items-center justify-between gap-1">
+                <div className="flex items-center justify-between gap-3">
                   <span className="font-bold">{fmtDate(order.created_at)}</span>
-                  <StatusBadge status={order.status} />
+                  <span className="shrink-0">
+                    <StatusBadge status={order.status} />
+                  </span>
                 </div>
-                <p className="mt-1 text-slate-700">{order.tests || "-"}</p>
+                <ClinicalItemList items={items} />
                 {order.notes && (
                   <p className="mt-1 text-xs text-slate-500">{order.notes}</p>
                 )}
@@ -1038,19 +1119,21 @@ function PatientDetail({
           {pharmacyIssues.length === 0 && (
             <SectionEmpty text="No pharmacy records found." />
           )}
-          <div className="mt-3 space-y-3">
-            {pharmacyIssues.map((issue: any) => (
+          <div
+            className={`mt-3 max-h-[260px] space-y-3 overflow-y-auto pr-1 ${hiddenScrollbar}`}
+          >
+            {medicineRows.map(({ row: issue, items }: any) => (
               <div
                 key={issue.id}
                 className="rounded-2xl bg-slate-50 p-3 text-sm"
               >
-                <div className="flex flex-wrap items-center justify-between gap-1">
+                <div className="flex items-center justify-between gap-3">
                   <span className="font-bold">{fmtDate(issue.created_at)}</span>
-                  <StatusBadge status={issue.status} />
+                  <span className="shrink-0">
+                    <StatusBadge status={issue.status} />
+                  </span>
                 </div>
-                <p className="mt-1 text-slate-700">
-                  {issue.medicine_text || "-"}
-                </p>
+                <ClinicalItemList items={items} />
                 {issue.notes && (
                   <p className="mt-1 text-xs text-slate-500">{issue.notes}</p>
                 )}

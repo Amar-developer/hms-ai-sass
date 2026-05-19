@@ -275,6 +275,7 @@ def delete_practitioner_schedule(
     current_user: User = Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_DELETE)),
 ) -> dict[str, bool | str]:
     schedule = _get_schedule(session, tenant_id, schedule_id)
+    branch_id = schedule.branch_id
     schedule.is_active = False
     schedule.updated_at = datetime.now(timezone.utc)
     session.add(schedule)
@@ -282,14 +283,14 @@ def delete_practitioner_schedule(
     record_audit_event(
         session,
         tenant_id=tenant_id,
-        branch_id=schedule.branch_id,
+        branch_id=branch_id,
         actor_user_id=current_user.id,
         action="practitioner.schedule.deleted",
         resource_type="practitioner_schedule",
-        resource_id=schedule.id,
+        resource_id=schedule_id,
         purpose="practitioner_setup",
     )
-    return {"deleted": True, "mode": "deactivated", "schedule_id": schedule.id}
+    return {"deleted": True, "mode": "deactivated", "schedule_id": schedule_id}
 
 
 @router.get("/{practitioner_id}", response_model=PractitionerRead)

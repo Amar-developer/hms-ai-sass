@@ -35,6 +35,16 @@ class InvoiceCreateFromConsultation(BaseModel):
     created_by_user_id: str | None = None
 
 
+class InvoiceCreateFromLabOrder(BaseModel):
+    lab_order_id: str
+    created_by_user_id: str | None = None
+
+
+class InvoiceCreateFromPharmacyIssue(BaseModel):
+    pharmacy_issue_id: str
+    created_by_user_id: str | None = None
+
+
 class InvoiceItemRead(BaseModel):
     id: str
     tenant_id: str
@@ -54,6 +64,8 @@ class InvoiceRead(BaseModel):
     patient_id: str
     appointment_id: str | None
     consultation_id: str | None
+    lab_order_id: str | None = None
+    pharmacy_issue_id: str | None = None
     ip_admission_id: str | None = None
     physiotherapy_case_id: str | None = None
     invoice_number: str

@@ -2,6 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {Badge,Button,Card,Field,Input,Select} from '@/components/ui';
+import {SearchPicker,TagEntryBox,medicineFrequencyOptions,rowTagLabel} from '@/components/clinicalRows';
 import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';
 
 function today(){return new Date().toISOString().slice(0,10)}
@@ -70,6 +71,7 @@ export function IPAdmission({
   const [treatments,setTreatments]=useState<any[]>([]);
   const [charges,setCharges]=useState<any[]>([]);
   const [billingItems,setBillingItems]=useState<any[]>([]);
+  const [ipDocuments,setIpDocuments]=useState<any[]>([]);
   const [medicationOrders,setMedicationOrders]=useState<any[]>([]);
   const [medicationAdministrations,setMedicationAdministrations]=useState<any[]>([]);
   const [medicineCatalog,setMedicineCatalog]=useState<any[]>([]);
@@ -82,6 +84,7 @@ export function IPAdmission({
   const [admissionDate,setAdmissionDate]=useState(today());
   const [expectedDischargeDate,setExpectedDischargeDate]=useState(today());
   const [view,setView]=useState<IPView>('list');
+  const [admissionPage,setAdmissionPage]=useState(1);
 
   const selectedAdmission=ipAdmissions.find((row:any)=>row.id===selectedId)||ipAdmissions[0];
   const patientMap=useMemo(()=>new Map(patients.map((p:any)=>[p.id,p])),[patients]);
@@ -97,8 +100,14 @@ export function IPAdmission({
   const legacyChargeTotal=charges.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
   const eventBillingTotal=billingItems.filter((row:any)=>row.status==='billable').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
   const runningBillTotal=legacyChargeTotal+eventBillingTotal+autoRoomTotal;
+  const pageSize=10;
+  const activeAdmissions=ipAdmissions.filter((row:any)=>!isClosedAdmission(row));
+  const totalAdmissionPages=Math.max(1,Math.ceil(activeAdmissions.length/pageSize));
+  const safeAdmissionPage=Math.min(admissionPage,totalAdmissionPages);
+  const admissionRows=activeAdmissions.slice((safeAdmissionPage-1)*pageSize,safeAdmissionPage*pageSize);
 
   useEffect(()=>{if(!selectedId&&ipAdmissions[0]?.id)setSelectedId(ipAdmissions[0].id)},[ipAdmissions,selectedId]);
+  useEffect(()=>{if(admissionPage>totalAdmissionPages)setAdmissionPage(totalAdmissionPages)},[admissionPage,totalAdmissionPages]);
   useEffect(()=>{if(selectedAdmission?.id)loadAdmissionWork(selectedAdmission.id)},[selectedAdmission?.id]);
   useEffect(()=>{loadRooms()},[apiSession?.token,apiSession?.tenantId,branchId,admissionDate,expectedDischargeDate]);
   useEffect(()=>{loadCatalogs()},[apiSession?.token,apiSession?.tenantId,branchId]);
@@ -107,20 +116,31 @@ export function IPAdmission({
     if(apiSession&&loadLiveData) await loadLiveData(apiSession);
   }
 
+  async function uploadIpDocuments(admissionId:string,documentType:string,files:any[]){
+    const selectedFiles=files.filter((file:any)=>file?.name);
+    if(!selectedFiles.length||!apiSession)return;
+    const upload=new FormData();
+    upload.append('document_type',documentType);
+    selectedFiles.forEach((file:any)=>upload.append('files',file));
+    await apiUpload(`/ip/admissions/${admissionId}/documents`,apiSession,upload);
+  }
+
   async function loadAdmissionWork(admissionId:string){
     if(!apiSession)return;
     setError('');
     try{
-      const [treatmentRows,chargeRows,billingRows,medOrderRows,medAdministrationRows]=await Promise.all([
+      const [treatmentRows,chargeRows,billingRows,documentRows,medOrderRows,medAdministrationRows]=await Promise.all([
         apiFetch(`/ip/admissions/${admissionId}/treatments`,apiSession),
         apiFetch(`/ip/admissions/${admissionId}/charges`,apiSession),
         apiFetch(`/ip/admissions/${admissionId}/billing-items`,apiSession),
+        apiFetch(`/ip/admissions/${admissionId}/documents`,apiSession).catch(()=>[]),
         apiFetch(`/ip/admissions/${admissionId}/medication-orders`,apiSession),
         apiFetch(`/ip/admissions/${admissionId}/medication-administrations`,apiSession),
       ]);
       setTreatments(treatmentRows);
       setCharges(chargeRows);
       setBillingItems(billingRows);
+      setIpDocuments(documentRows);
       setMedicationOrders(medOrderRows);
       setMedicationAdministrations(medAdministrationRows);
     }catch(err:any){
@@ -269,6 +289,9 @@ export function IPAdmission({
     try{
       if(!apiSession)throw new Error('Backend login is required for IP workflow actions.');
       const row=await apiFetch(paths[type],apiSession,{method:'POST',body:JSON.stringify(bodies[type])});
+      if(type==='consent'||type==='discharge'){
+        await uploadIpDocuments(selectedAdmission.id,type,fd.getAll('documents'));
+      }
       if(type==='consultation')setLatestConsultation(row);
       if(type==='consent')setLatestConsent(row);
       if(type==='discharge')setLatestDischarge(row);
@@ -350,7 +373,6 @@ export function IPAdmission({
     }catch(err:any){setError(err.message||'Unable to generate IP invoice.')}
     finally{setBusy('')}
   }
-
   if(view==='convert'){
     return (
       <div className="space-y-6">
@@ -410,35 +432,26 @@ export function IPAdmission({
       {message&&<div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{message}</div>}
       {error&&<div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</div>}
 
-      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+      <div className="grid gap-6">
         <Card>
           <div className="flex items-center justify-between gap-3">
             <h4 className="text-lg font-bold">Current IP Admissions</h4>
-            <Badge tone="blue">{ipAdmissions.length} active</Badge>
+            <Badge tone="blue">{activeAdmissions.length} active</Badge>
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <button type="button" onClick={()=>setView('convert')} className="rounded-2xl bg-slate-900 p-4 text-left text-white">
-              <div className="font-bold">Convert OP to IP</div>
-              <div className="mt-1 text-sm text-slate-300">Admit from existing OP appointment.</div>
-            </button>
-            <button type="button" onClick={()=>setView('direct')} className="rounded-2xl border border-slate-200 bg-white p-4 text-left">
-              <div className="font-bold">Direct IP Admission</div>
-              <div className="mt-1 text-sm text-slate-500">Emergency, referral, or direct admission.</div>
-            </button>
-          </div>
-          <div className="mt-4 grid gap-3">
-            {ipAdmissions.length===0&&<p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No IP admissions yet.</p>}
-            {ipAdmissions.map((row:any)=>{
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {activeAdmissions.length===0&&<p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No active IP admissions.</p>}
+            {admissionRows.map((row:any)=>{
               const p=patientMap.get(row.patient_id)||patientMap.get(row.patientId);
               return (
-                <button key={row.id} type="button" onClick={()=>{setSelectedId(row.id);setView('detail')}} className={`rounded-2xl p-4 text-left ${selectedAdmission?.id===row.id?'bg-slate-900 text-white':'bg-slate-50 text-slate-900'}`}>
-                  <div className="font-bold">{patientName(p)||row.patient||row.patient_id}</div>
-                  <div className={`text-sm ${selectedAdmission?.id===row.id?'text-slate-300':'text-slate-500'}`}>{admissionLabel(row)}</div>
+                <button key={row.id} type="button" onClick={()=>{setSelectedId(row.id);setView('detail')}} className={`min-h-32 rounded-2xl p-4 text-left transition ${selectedAdmission?.id===row.id?'bg-slate-900 text-white':'bg-slate-50 text-slate-900 hover:bg-slate-100'}`}>
+                  <div className="line-clamp-2 font-bold">{patientName(p)||row.patient||row.patient_id}</div>
+                  <div className={`mt-1 line-clamp-2 text-sm ${selectedAdmission?.id===row.id?'text-slate-300':'text-slate-500'}`}>{admissionLabel(row)}</div>
                   <div className="mt-2 text-xs font-bold uppercase">{row.status}</div>
                 </button>
               );
             })}
           </div>
+          <Pagination page={safeAdmissionPage} totalPages={totalAdmissionPages} total={activeAdmissions.length} pageSize={pageSize} onPage={setAdmissionPage}/>
         </Card>
 
         <Card>
@@ -450,7 +463,12 @@ export function IPAdmission({
           </div>
           {selectedAdmission&&(
             <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <Info title="Patient" value={patientName(patientMap.get(selectedAdmission.patient_id)||patientMap.get(selectedAdmission.patientId))}/>
+              <Info title="Status" value={String(selectedAdmission.status||'-').toUpperCase()}/>
+              <Info title="Admission Date" value={selectedAdmission.admission_date||'-'}/>
+              <Info title="Planned Discharge" value={selectedAdmission.expected_discharge_date||'-'}/>
               <Info title="Aadhaar" value={selectedAdmission.aadhaar_number||'Not captured'}/>
+              <Info title="Payable Amount" value={inr(runningBillTotal)}/>
               <div className="rounded-2xl bg-slate-50 p-4">
                 <div className="text-xs font-bold uppercase text-slate-500">Admission File</div>
                 {selectedAdmission.admission_document_url?(
@@ -463,6 +481,13 @@ export function IPAdmission({
               </div>
             </div>
           )}
+          {selectedAdmission&&(
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              <Info title="Room Amount" value={inr(autoRoomTotal)}/>
+              <Info title="Billable Items" value={inr(eventBillingTotal)}/>
+              <Info title="Legacy Charges" value={inr(legacyChargeTotal)}/>
+            </div>
+          )}
           <p className="mt-4 text-sm text-slate-500">Select an IP admission from the left to manage treatment, consultation, consent, discharge, and billing.</p>
         </Card>
       </div>
@@ -473,6 +498,7 @@ export function IPAdmission({
           treatments={treatments}
           charges={charges}
           billingItems={billingItems}
+          ipDocuments={ipDocuments}
           medicationOrders={medicationOrders}
           medicationAdministrations={medicationAdministrations}
           medicineCatalog={medicineCatalog}
@@ -510,6 +536,7 @@ function IPCareWorkspace({
   treatments,
   charges,
   billingItems,
+  ipDocuments,
   medicationOrders,
   medicationAdministrations,
   medicineCatalog,
@@ -532,20 +559,25 @@ function IPCareWorkspace({
   setLatestDischarge,
   sign,
 }:any){
-  const [medicineRows,setMedicineRows]=useState('Paracetamol | 500 mg | 1-0-1 | oral | 15');
-  const [referralRows,setReferralRows]=useState('lab | CBC | routine | Fever workup | 350');
+  const [medicineRows,setMedicineRows]=useState('Paracetamol | 500 mg | 1-0-1 | oral');
+  const [referralRows,setReferralRows]=useState('lab | CBC | routine | Fever workup');
+  const [medicineTagText,setMedicineTagText]=useState('');
+  const [referralTagText,setReferralTagText]=useState('');
   const [medName,setMedName]=useState('');
   const [selectedMedicineId,setSelectedMedicineId]=useState('');
   const [medDose,setMedDose]=useState('');
   const [medFrequency,setMedFrequency]=useState('1-0-1');
   const [medRoute,setMedRoute]=useState('oral');
-  const [medCharge,setMedCharge]=useState('0');
   const [refType,setRefType]=useState('lab');
   const [selectedLabTestId,setSelectedLabTestId]=useState('');
   const [refName,setRefName]=useState('');
   const [refPriority,setRefPriority]=useState('routine');
-  const [refCharge,setRefCharge]=useState('0');
+  const [detailTab,setDetailTab]=useState<'consent'|'discharge'>('consent');
   const closed=isClosedAdmission(admission);
+  const consentDocuments=ipDocuments.filter((doc:any)=>doc.document_type==='consent');
+  const dischargeDocuments=ipDocuments.filter((doc:any)=>doc.document_type==='discharge');
+  const medicineOptions=medicineCatalog.map((medicine:any)=>({value:medicine.id,label:medicine.name,item:medicine}));
+  const labOptions=labCatalog.map((test:any)=>({value:test.id,label:test.name,item:test}));
 
   useEffect(()=>{
     if(!selectedMedicineId&&medicineCatalog[0]?.id){
@@ -553,7 +585,6 @@ function IPCareWorkspace({
       setSelectedMedicineId(first.id);
       setMedName(first.name||'');
       setMedDose(first.strength||'');
-      setMedCharge(String(first.default_sale_price||0));
     }
   },[medicineCatalog,selectedMedicineId]);
   useEffect(()=>{
@@ -561,7 +592,6 @@ function IPCareWorkspace({
       const first=labCatalog[0];
       setSelectedLabTestId(first.id);
       setRefName(first.name||'');
-      setRefCharge(String(first.default_price||0));
       setRefType(String(first.category||first.test_type||first.sample_type||'').toLowerCase().includes('scan')?'scan':'lab');
     }
   },[labCatalog,selectedLabTestId]);
@@ -572,7 +602,6 @@ function IPCareWorkspace({
     if(!medicine)return;
     setMedName(medicine.name||'');
     setMedDose(medicine.strength||'');
-    setMedCharge(String(medicine.default_sale_price||0));
   }
 
   function selectLabTest(id:string){
@@ -580,21 +609,38 @@ function IPCareWorkspace({
     const test=labCatalog.find((row:any)=>row.id===id);
     if(!test)return;
     setRefName(test.name||'');
-    setRefCharge(String(test.default_price||0));
     const text=[test.category,test.test_type,test.sample_type,test.name].join(' ').toLowerCase();
     setRefType(text.includes('x-ray')||text.includes('ecg')||text.includes('scan')||text.includes('procedure')?'scan':'lab');
   }
 
   function addMedicineRow(){
     if(!medName.trim())return;
-    setMedicineRows(appendLine(medicineRows,[medName,medDose,medFrequency,medRoute,medCharge].map((part)=>String(part||'').trim()).join(' | ')));
-    setMedName('');setMedDose('');setMedCharge('0');
+    setMedicineRows(appendLine(medicineRows,[medName,medDose,medFrequency,medRoute].map((part)=>String(part||'').trim()).join(' | ')));
+    setMedName('');setMedDose('');
+  }
+  function addMedicineFromText(value:string){
+    const text=String(value||'').trim();
+    if(!text)return;
+    const line=text.includes('|')?text:[text,medDose,medFrequency,medRoute].map((part)=>String(part||'').trim()).join(' | ');
+    setMedicineRows((rows:string)=>appendLine(rows,line));
+  }
+  function removeMedicineRow(index:number){
+    setMedicineRows((rows:string)=>splitRows(rows).filter((_:string,i:number)=>i!==index).join('\n'));
   }
 
   function addReferralRow(){
     if(!refName.trim())return;
-    setReferralRows(appendLine(referralRows,[refType,refName,refPriority,'',refCharge].map((part)=>String(part||'').trim()).join(' | ')));
-    setRefName('');setRefCharge('0');
+    setReferralRows(appendLine(referralRows,[refType,refName,refPriority,''].map((part)=>String(part||'').trim()).join(' | ')));
+    setRefName('');
+  }
+  function addReferralFromText(value:string){
+    const text=String(value||'').trim();
+    if(!text)return;
+    const line=text.includes('|')?text:[refType,text,refPriority,''].map((part)=>String(part||'').trim()).join(' | ');
+    setReferralRows((rows:string)=>appendLine(rows,line));
+  }
+  function removeReferralRow(index:number){
+    setReferralRows((rows:string)=>splitRows(rows).filter((_:string,i:number)=>i!==index).join('\n'));
   }
 
   async function submitCare(e:any){
@@ -689,7 +735,8 @@ function IPCareWorkspace({
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+    <div className="grid gap-6">
+      <div className="grid gap-6">
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
@@ -718,43 +765,92 @@ function IPCareWorkspace({
           <Field label="Clinical Notes"><textarea name="notes" required className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Progress, assessment, care plan, response"/></Field>
 
           <div className="rounded-3xl bg-slate-50 p-4">
-            <Field label="Medicine Rows"><textarea value={medicineRows} onChange={(e:any)=>setMedicineRows(e.target.value)} className="min-h-24 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none" placeholder="Medicine | dose | frequency | route | charge per dose"/></Field>
-            <div className="mt-3 grid gap-2 lg:grid-cols-[1.2fr_.8fr_.7fr_.7fr_.6fr_auto] lg:items-end">
+            <Field label="Medicine Rows">
+              <TagEntryBox
+                tags={splitRows(medicineRows)}
+                value={medicineTagText}
+                onChange={setMedicineTagText}
+                onSubmit={addMedicineFromText}
+                onRemove={removeMedicineRow}
+                getLabel={rowTagLabel}
+                placeholder="Type medicine and press Enter"
+                disabled={closed}
+                submitOnComma={false}
+              />
+            </Field>
+            <div className="mt-3 grid gap-2 lg:grid-cols-[1.2fr_.8fr_.7fr_.7fr_auto] lg:items-end">
               <Field label="Medicine">
                 {medicineCatalog.length>0?(
-                  <Select value={selectedMedicineId} onChange={(e:any)=>selectMedicine(e.target.value)}>
-                    <option value="">Select medicine</option>
-                    {medicineCatalog.map((medicine:any)=><option key={medicine.id} value={medicine.id}>{medicine.name}{medicine.strength?` · ${medicine.strength}`:''} · {inr(medicine.default_sale_price||0)}</option>)}
-                  </Select>
+                  <SearchPicker
+                    value={selectedMedicineId}
+                    onChange={(medicineId:string)=>selectMedicine(medicineId)}
+                    options={medicineOptions}
+                    placeholder="Type medicine name"
+                    disabled={closed}
+                    onEnterQuery={(value:string,option:any)=>{
+                      const medicine=option?.item;
+                      if(medicine){
+                        setSelectedMedicineId(medicine.id);
+                        setMedName(medicine.name||'');
+                        setMedicineRows((rows:string)=>appendLine(rows,[medicine.name,medicine.strength||medDose,medFrequency,medRoute].map((part)=>String(part||'').trim()).join(' | ')));
+                        setMedDose('');
+                      }else addMedicineFromText(value);
+                    }}
+                    getSearchText={(medicine:any)=>[medicine?.name,medicine?.strength,medicine?.generic_name,medicine?.brand_name,medicine?.category].filter(Boolean).join(' ')}
+                  />
                 ):(
                   <Input value={medName} onChange={(e:any)=>setMedName(e.target.value)} placeholder="Ceftriaxone"/>
                 )}
               </Field>
               <Field label="Dose"><Input value={medDose} onChange={(e:any)=>setMedDose(e.target.value)} placeholder="1 g"/></Field>
-              <Field label="Freq"><Input value={medFrequency} onChange={(e:any)=>setMedFrequency(e.target.value)}/></Field>
+              <Field label="Freq"><Select value={medFrequency} onChange={(e:any)=>setMedFrequency(e.target.value)}>{[...new Set([medFrequency,...medicineFrequencyOptions])].filter(Boolean).map((value:string)=><option key={value} value={value}>{value}</option>)}</Select></Field>
               <Field label="Route"><Select value={medRoute} onChange={(e:any)=>setMedRoute(e.target.value)}><option value="oral">Oral</option><option value="iv">IV</option><option value="im">IM</option><option value="sc">SC</option></Select></Field>
-              <Field label="Charge"><Input value={medCharge} onChange={(e:any)=>setMedCharge(e.target.value)} type="number" min="0"/></Field>
               <Button type="button" onClick={addMedicineRow} disabled={closed}>Add</Button>
             </div>
             {medicineCatalog.length>0&&<div className="mt-3 flex flex-wrap gap-2">{medicineCatalog.slice(0,8).map((medicine:any)=><button key={medicine.id} type="button" onClick={()=>selectMedicine(medicine.id)} className="rounded-xl border bg-white px-3 py-2 text-xs font-bold">{medicine.name}</button>)}</div>}
           </div>
 
           <div className="rounded-3xl bg-slate-50 p-4">
-            <Field label="Lab / Scan Rows"><textarea value={referralRows} onChange={(e:any)=>setReferralRows(e.target.value)} className="min-h-20 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none" placeholder="lab | CBC | routine | instructions | charge&#10;scan | X-Ray Chest | urgent | instructions | charge"/></Field>
-            <div className="mt-3 grid gap-2 lg:grid-cols-[.7fr_1.2fr_.7fr_.6fr_auto] lg:items-end">
+            <Field label="Lab / Scan Rows">
+              <TagEntryBox
+                tags={splitRows(referralRows)}
+                value={referralTagText}
+                onChange={setReferralTagText}
+                onSubmit={addReferralFromText}
+                onRemove={removeReferralRow}
+                getLabel={rowTagLabel}
+                placeholder="Type lab / scan and press Enter"
+                disabled={closed}
+                submitOnComma={false}
+              />
+            </Field>
+            <div className="mt-3 grid gap-2 lg:grid-cols-[.7fr_1.2fr_.7fr_auto] lg:items-end">
               <Field label="Type"><Select value={refType} onChange={(e:any)=>setRefType(e.target.value)}><option value="lab">Lab</option><option value="scan">Scan</option></Select></Field>
               <Field label="Item">
                 {labCatalog.length>0?(
-                  <Select value={selectedLabTestId} onChange={(e:any)=>selectLabTest(e.target.value)}>
-                    <option value="">Select lab / scan</option>
-                    {labCatalog.map((test:any)=><option key={test.id} value={test.id}>{test.name} · {test.sample_type||test.category||'service'} · {inr(test.default_price||0)}</option>)}
-                  </Select>
+                  <SearchPicker
+                    value={selectedLabTestId}
+                    onChange={(testId:string)=>selectLabTest(testId)}
+                    options={labOptions}
+                    placeholder="Type lab / scan name"
+                    disabled={closed}
+                    onEnterQuery={(value:string,option:any)=>{
+                      const test=option?.item;
+                      if(test){
+                        const text=[test.category,test.test_type,test.sample_type,test.name].join(' ').toLowerCase();
+                        const sourceType=text.includes('x-ray')||text.includes('ecg')||text.includes('scan')||text.includes('procedure')?'scan':'lab';
+                        setSelectedLabTestId(test.id);
+                        setReferralRows((rows:string)=>appendLine(rows,[sourceType,test.name,refPriority,''].map((part)=>String(part||'').trim()).join(' | ')));
+                        setRefName('');
+                      }else addReferralFromText(value);
+                    }}
+                    getSearchText={(test:any)=>[test?.name,test?.sample_type,test?.category,test?.code].filter(Boolean).join(' ')}
+                  />
                 ):(
                   <Input value={refName} onChange={(e:any)=>setRefName(e.target.value)} placeholder="CBC / X-Ray"/>
                 )}
               </Field>
               <Field label="Priority"><Select value={refPriority} onChange={(e:any)=>setRefPriority(e.target.value)}><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></Select></Field>
-              <Field label="Charge"><Input value={refCharge} onChange={(e:any)=>setRefCharge(e.target.value)} type="number" min="0"/></Field>
               <Button type="button" onClick={addReferralRow} disabled={closed}>Add</Button>
             </div>
             {labCatalog.length>0&&<div className="mt-3 flex flex-wrap gap-2">{labCatalog.slice(0,8).map((test:any)=><button key={test.id} type="button" onClick={()=>selectLabTest(test.id)} className="rounded-xl border bg-white px-3 py-2 text-xs font-bold">{test.name}</button>)}</div>}
@@ -764,7 +860,41 @@ function IPCareWorkspace({
         </form>
       </Card>
 
-      <div className="grid gap-6">
+        <Card>
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-50 p-1">
+            <button type="button" onClick={()=>setDetailTab('consent')} className={`rounded-xl px-3 py-2 text-sm font-bold ${detailTab==='consent'?'bg-slate-900 text-white':'text-slate-600'}`}>Consent Form</button>
+            <button type="button" onClick={()=>setDetailTab('discharge')} className={`rounded-xl px-3 py-2 text-sm font-bold ${detailTab==='discharge'?'bg-slate-900 text-white':'text-slate-600'}`}>Discharge Summary</button>
+          </div>
+          {detailTab==='consent'?(
+            <form onSubmit={(e)=>postWork(e,'consent')} className="mt-4 grid gap-3">
+              <Field label="Consent Title"><Input name="title" defaultValue="General IP Admission Consent"/></Field>
+              <Field label="Consent Text"><Input name="content" defaultValue="Patient/guardian consent received for in-patient admission, investigation, treatment, billing, and discharge process."/></Field>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Guardian Name"><Input name="patient_or_guardian_name" placeholder="Patient / guardian name"/></Field>
+                <Field label="Relationship"><Input name="relationship" placeholder="Self / spouse / parent"/></Field>
+              </div>
+              <Field label="Consent Files">
+                <Input name="documents" type="file" multiple accept="image/*,.pdf,.doc,.docx"/>
+              </Field>
+              {consentDocuments.length>0&&<div className="flex flex-wrap gap-2">{consentDocuments.map((doc:any)=><a key={doc.id} href={`${UPLOADS_BASE}${doc.file_url}`} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-xs font-bold text-blue-700 underline">{doc.file_name}</a>)}</div>}
+              <div className="flex flex-wrap gap-2"><Button disabled={closed||busy==='consent'}>Save Consent</Button><Button type="button" disabled={closed||!latestConsent||busy==='consent sign'} onClick={()=>sign(`/ip/consents/${latestConsent.id}/sign`,'consent sign',setLatestConsent)} className="bg-emerald-700">Mark Signed</Button></div>
+            </form>
+          ):(
+            <form onSubmit={(e)=>postWork(e,'discharge')} className="mt-4 grid gap-3">
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="Discharge Date"><Input name="discharge_date" type="date" defaultValue={today()}/></Field>
+                <Field label="Final Diagnosis"><Input name="final_diagnosis" required/></Field>
+              </div>
+              <Field label="Advice"><Input name="follow_up_advice"/></Field>
+              <Field label="Discharge Files">
+                <Input name="documents" type="file" multiple accept="image/*,.pdf,.doc,.docx"/>
+              </Field>
+              {dischargeDocuments.length>0&&<div className="flex flex-wrap gap-2">{dischargeDocuments.map((doc:any)=><a key={doc.id} href={`${UPLOADS_BASE}${doc.file_url}`} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-xs font-bold text-blue-700 underline">{doc.file_name}</a>)}</div>}
+              <div className="flex flex-wrap gap-2"><Button disabled={closed||busy==='discharge'}>Save Summary</Button><Button type="button" disabled={closed||!latestDischarge||busy==='discharge finalize'} onClick={()=>sign(`/ip/discharge-summaries/${latestDischarge.id}/finalize`,'discharge finalize',setLatestDischarge)} className="bg-emerald-700">{closed?'Discharged':'Finalize'}</Button></div>
+            </form>
+          )}
+        </Card>
+
         <Card>
           <h4 className="text-lg font-bold">Running Bill</h4>
           <div className="mt-3 grid gap-2">
@@ -774,6 +904,40 @@ function IPCareWorkspace({
             <div className="border-t pt-3 text-right text-xl font-black">{inr(runningBillTotal)}</div>
           </div>
           <Button type="button" disabled={closed||runningBillTotal<=0||busy==='invoice'} onClick={generateInvoice} className="mt-4 w-full">{closed?'Final Bill Locked':'Generate IP Invoice'}</Button>
+        </Card>
+
+        <Card>
+          <h4 className="text-lg font-bold">Medicine / Lab Details</h4>
+          <div className="mt-3 grid gap-3">
+            <div className="rounded-2xl bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase text-slate-500">Medicine Suggestions</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {medicineCatalog.slice(0,6).map((medicine:any)=><span key={medicine.id} className="rounded-xl bg-white px-3 py-2 text-xs font-bold">{medicine.name}</span>)}
+                {medicineCatalog.length===0&&<span className="text-sm text-slate-500">No medicine catalog loaded.</span>}
+              </div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase text-slate-500">Medication Orders</p>
+              <div className="mt-2 grid gap-2">
+                {medicationOrders.slice(0,5).map((row:any)=><div key={row.id} className="rounded-xl bg-white p-2 text-sm"><b>{row.medicine_name}</b><p className="text-xs text-slate-500">{[row.dosage,row.frequency,row.route,row.status].filter(Boolean).join(' · ')}</p></div>)}
+                {medicationOrders.length===0&&<span className="text-sm text-slate-500">No medication orders yet.</span>}
+              </div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase text-slate-500">Lab / Scan Suggestions</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {labCatalog.slice(0,6).map((test:any)=><span key={test.id} className="rounded-xl bg-white px-3 py-2 text-xs font-bold">{test.name}</span>)}
+                {labCatalog.length===0&&<span className="text-sm text-slate-500">No lab catalog loaded.</span>}
+              </div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-3">
+              <p className="text-xs font-bold uppercase text-slate-500">Lab / Scan Billing Details</p>
+              <div className="mt-2 grid gap-2">
+                {billingItems.filter((row:any)=>String(row.source_type||'').includes('lab')||String(row.source_type||'').includes('scan')).slice(0,5).map((row:any)=><div key={row.id} className="flex justify-between gap-2 rounded-xl bg-white p-2 text-sm"><span>{row.description}</span><b>{inr(row.total_amount)}</b></div>)}
+                {billingItems.filter((row:any)=>String(row.source_type||'').includes('lab')||String(row.source_type||'').includes('scan')).length===0&&<span className="text-sm text-slate-500">No lab/scan billing rows yet.</span>}
+              </div>
+            </div>
+          </div>
         </Card>
 
         <Card>
@@ -787,26 +951,22 @@ function IPCareWorkspace({
             <p>{medicationAdministrations.length} medicine administrations</p>
           </div>
         </Card>
-
-        <details className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm" open={closed}>
-          <summary className="cursor-pointer font-bold">Consent / Discharge</summary>
-          <div className="mt-4 grid gap-5">
-            <form onSubmit={(e)=>postWork(e,'consent')} className="grid gap-3">
-              <Field label="Consent"><Input name="title" defaultValue="General IP Admission Consent"/></Field>
-              <Input name="content" defaultValue="Patient/guardian consent received for in-patient admission, investigation, treatment, billing, and discharge process."/>
-              <div className="flex flex-wrap gap-2"><Button disabled={closed||busy==='consent'}>Save Consent</Button><Button type="button" disabled={closed||!latestConsent||busy==='consent sign'} onClick={()=>sign(`/ip/consents/${latestConsent.id}/sign`,'consent sign',setLatestConsent)} className="bg-emerald-700">Mark Signed</Button></div>
-            </form>
-            <form onSubmit={(e)=>postWork(e,'discharge')} className="grid gap-3">
-              <Field label="Discharge Date"><Input name="discharge_date" type="date" defaultValue={today()}/></Field>
-              <Field label="Final Diagnosis"><Input name="final_diagnosis" required/></Field>
-              <Field label="Advice"><Input name="follow_up_advice"/></Field>
-              <div className="flex flex-wrap gap-2"><Button disabled={closed||busy==='discharge'}>Save Summary</Button><Button type="button" disabled={closed||!latestDischarge||busy==='discharge finalize'} onClick={()=>sign(`/ip/discharge-summaries/${latestDischarge.id}/finalize`,'discharge finalize',setLatestDischarge)} className="bg-emerald-700">{closed?'Discharged':'Finalize'}</Button></div>
-            </form>
-          </div>
-        </details>
       </div>
     </div>
   );
+}
+
+function Pagination({page,totalPages,total,pageSize,onPage}:any){
+  const start=total===0?0:(page-1)*pageSize+1;
+  const end=Math.min(page*pageSize,total);
+  return <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center">
+    <span>Showing {start}-{end} of {total}</span>
+    <div className="flex gap-2">
+      <button type="button" onClick={()=>onPage(Math.max(1,page-1))} disabled={page<=1} className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300">Previous</button>
+      <span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-700">Page {page} / {totalPages}</span>
+      <button type="button" onClick={()=>onPage(Math.min(totalPages,page+1))} disabled={page>=totalPages} className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300">Next</button>
+    </div>
+  </div>
 }
 
 function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmissionDate,expectedDischargeDate,setExpectedDischargeDate,hidePatient=false}:any){

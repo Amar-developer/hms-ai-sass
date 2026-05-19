@@ -81,6 +81,19 @@ class IPAdmissionRead(IPAdmissionCreate):
     updated_at: datetime
 
 
+class IPDocumentRead(BaseModel):
+    id: str
+    tenant_id: str
+    branch_id: str
+    admission_id: str
+    document_type: str
+    file_name: str
+    file_url: str
+    content_type: str | None = None
+    uploaded_by_user_id: str | None = None
+    created_at: datetime
+
+
 class IPTreatmentCreate(BaseModel):
     treatment_date: date | None = None
     practitioner_id: str | None = None

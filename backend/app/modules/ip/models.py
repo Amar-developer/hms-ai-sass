@@ -50,6 +50,19 @@ class IPAdmission(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=now_utc)
 
 
+class IPDocument(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("ipdoc"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    admission_id: str = Field(index=True, foreign_key="ipadmission.id")
+    document_type: str = Field(default="admission", index=True, max_length=80)
+    file_name: str = Field(max_length=220)
+    file_url: str = Field(max_length=500)
+    content_type: str | None = Field(default=None, max_length=120)
+    uploaded_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+
+
 class IPTreatment(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("iptreat"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")

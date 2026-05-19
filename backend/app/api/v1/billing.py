@@ -38,6 +38,8 @@ from app.modules.billing.schemas import (
     DoctorSettlementSummary,
     DueCollectionReport,
     InvoiceCreateFromConsultation,
+    InvoiceCreateFromLabOrder,
+    InvoiceCreateFromPharmacyIssue,
     InvoiceDetailRead,
     InvoiceItemRead,
     InvoiceRead,
@@ -51,6 +53,7 @@ from app.modules.billing.schemas import (
 from app.modules.billing.service import (
     create_consultation_invoice,
     next_credit_note_number,
+    next_invoice_number,
     refresh_consultation_invoice,
     refundable_paid_total,
     update_invoice_payment_status,
@@ -118,6 +121,69 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
         items=[InvoiceItemRead.model_validate(item, from_attributes=True) for item in items],
         payments=[PaymentRead.model_validate(payment, from_attributes=True) for payment in payments],
     )
+
+
+def _create_service_invoice(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str,
+    patient_id: str,
+    appointment_id: str | None,
+    consultation_id: str | None,
+    lab_order_id: str | None = None,
+    pharmacy_issue_id: str | None = None,
+    item_type: str,
+    description: str,
+    amount: int,
+    created_by_user_id: str | None,
+    line_items: list[dict[str, int | str]] | None = None,
+) -> Invoice:
+    invoice = Invoice(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        appointment_id=appointment_id,
+        consultation_id=consultation_id,
+        lab_order_id=lab_order_id,
+        pharmacy_issue_id=pharmacy_issue_id,
+        invoice_number=next_invoice_number(session, tenant_id),
+        subtotal_amount=amount,
+        taxable_amount=amount,
+        tax_amount=0,
+        total_amount=amount,
+        balance_amount=amount,
+        doctor_share_amount=0,
+        clinic_share_amount=amount,
+        created_by_user_id=created_by_user_id,
+    )
+    session.add(invoice)
+    session.commit()
+    session.refresh(invoice)
+    rows = line_items or [
+        {
+            "item_type": item_type,
+            "description": description,
+            "quantity": 1,
+            "unit_amount": amount,
+            "total_amount": amount,
+        }
+    ]
+    for row in rows:
+        session.add(
+            InvoiceItem(
+                tenant_id=tenant_id,
+                invoice_id=invoice.id,
+                item_type=str(row.get("item_type") or item_type),
+                description=str(row.get("description") or description),
+                quantity=int(row.get("quantity") or 1),
+                unit_amount=int(row.get("unit_amount") or 0),
+                total_amount=int(row.get("total_amount") or 0),
+            )
+        )
+    session.commit()
+    session.refresh(invoice)
+    return invoice
 
 
 @router.post(
@@ -334,6 +400,10 @@ def create_invoice_from_consultation(
         select(Invoice).where(
             Invoice.tenant_id == tenant_id,
             Invoice.consultation_id == consultation.id,
+            Invoice.lab_order_id.is_(None),
+            Invoice.pharmacy_issue_id.is_(None),
+            Invoice.ip_admission_id.is_(None),
+            Invoice.physiotherapy_case_id.is_(None),
         )
     ).first()
     if existing:
@@ -393,6 +463,157 @@ def create_invoice_from_consultation(
                 resource_id=invoice.id,
                 queued_by_user_id=payload.created_by_user_id,
             )
+    return _read_invoice_detail(session, invoice)
+
+
+@router.post("/invoices/from-lab-order", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
+def create_invoice_from_lab_order(
+    payload: InvoiceCreateFromLabOrder,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    enforce_module_enabled(session, tenant_id, "billing_basic")
+    from app.modules.lab.models import LabOrder, LabOrderItem, LabOrderStatus
+
+    order = session.get(LabOrder, payload.lab_order_id)
+    if not order or order.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid lab order")
+    if order.status == LabOrderStatus.CANCELLED:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cancelled lab order cannot be invoiced")
+    require_user_branch_access(current_user, order.branch_id)
+    existing = session.exec(
+        select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.lab_order_id == order.id)
+    ).first()
+    if existing:
+        return _read_invoice_detail(session, update_invoice_payment_status(session, existing))
+
+    appointment_id = None
+    if order.consultation_id:
+        consultation = session.get(Consultation, order.consultation_id)
+        if consultation and consultation.tenant_id == tenant_id:
+            appointment_id = consultation.appointment_id
+    items = list(
+        session.exec(
+            select(LabOrderItem).where(LabOrderItem.tenant_id == tenant_id, LabOrderItem.lab_order_id == order.id)
+        ).all()
+    )
+    amount = int(order.amount or sum(item.price for item in items) or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Lab order amount is zero")
+    invoice = _create_service_invoice(
+        session,
+        tenant_id=tenant_id,
+        branch_id=order.branch_id,
+        patient_id=order.patient_id,
+        appointment_id=appointment_id,
+        consultation_id=order.consultation_id,
+        lab_order_id=order.id,
+        item_type="lab",
+        description=f"Lab order {order.id}: {order.tests}",
+        amount=amount,
+        line_items=[
+            {
+                "item_type": "lab",
+                "description": item.test_name,
+                "quantity": 1,
+                "unit_amount": item.price,
+                "total_amount": item.price,
+            }
+            for item in items
+        ] or None,
+        created_by_user_id=payload.created_by_user_id,
+    )
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        actor_user_id=payload.created_by_user_id,
+        action="lab_invoice.generated",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        purpose="lab_billing",
+    )
+    return _read_invoice_detail(session, invoice)
+
+
+@router.post("/invoices/from-pharmacy-issue", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
+def create_invoice_from_pharmacy_issue(
+    payload: InvoiceCreateFromPharmacyIssue,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    enforce_module_enabled(session, tenant_id, "billing_basic")
+    from app.modules.pharmacy.models import PharmacyIssue, PharmacyIssueItem, PharmacyIssueStatus
+
+    issue = session.get(PharmacyIssue, payload.pharmacy_issue_id)
+    if not issue or issue.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid pharmacy issue")
+    if issue.status == PharmacyIssueStatus.CANCELLED:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cancelled pharmacy issue cannot be invoiced")
+    require_user_branch_access(current_user, issue.branch_id)
+    existing = session.exec(
+        select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.pharmacy_issue_id == issue.id)
+    ).first()
+    if existing:
+        issue.billing_invoice_id = existing.id
+        session.add(issue)
+        session.commit()
+        return _read_invoice_detail(session, update_invoice_payment_status(session, existing))
+
+    appointment_id = None
+    if issue.consultation_id:
+        consultation = session.get(Consultation, issue.consultation_id)
+        if consultation and consultation.tenant_id == tenant_id:
+            appointment_id = consultation.appointment_id
+    items = list(
+        session.exec(
+            select(PharmacyIssueItem).where(
+                PharmacyIssueItem.tenant_id == tenant_id,
+                PharmacyIssueItem.pharmacy_issue_id == issue.id,
+            )
+        ).all()
+    )
+    amount = int(issue.amount or sum(item.quantity * item.unit_price for item in items) or 0)
+    if amount <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pharmacy issue amount is zero")
+    invoice = _create_service_invoice(
+        session,
+        tenant_id=tenant_id,
+        branch_id=issue.branch_id,
+        patient_id=issue.patient_id,
+        appointment_id=appointment_id,
+        consultation_id=issue.consultation_id,
+        pharmacy_issue_id=issue.id,
+        item_type="pharmacy",
+        description=f"Pharmacy issue {issue.id}: {issue.medicine_text}",
+        amount=amount,
+        line_items=[
+            {
+                "item_type": "pharmacy",
+                "description": item.medicine_name,
+                "quantity": item.quantity,
+                "unit_amount": item.unit_price,
+                "total_amount": item.quantity * item.unit_price,
+            }
+            for item in items
+        ] or None,
+        created_by_user_id=payload.created_by_user_id,
+    )
+    issue.billing_invoice_id = invoice.id
+    session.add(issue)
+    session.commit()
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        actor_user_id=payload.created_by_user_id,
+        action="pharmacy_invoice.generated",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        purpose="pharmacy_billing",
+    )
     return _read_invoice_detail(session, invoice)
 
 

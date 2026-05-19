@@ -10,6 +10,7 @@ import {Billing} from '@/features/billing/Billing';
 import {Dashboard} from '@/features/dashboard/Dashboard';
 import {DoctorConsultation} from '@/features/doctor/DoctorConsultation';
 import {IPAdmission} from '@/features/ip/IPAdmission';
+import {Items} from '@/features/items/Items';
 import {Lab} from '@/features/lab/Lab';
 import {Patient} from '@/features/patients/Patient';
 import {Pharmacy} from '@/features/pharmacy/Pharmacy';
@@ -131,6 +132,8 @@ export function AppShell(props:any) {
         return <Doctors {...ctx} />;
       case 'scheduling':
         return <Scheduling {...ctx} />;
+      case 'items':
+        return <Items {...ctx} />;
       case 'ip':
         return <IPAdmission {...ctx} />;
       case 'doctor':
@@ -421,7 +424,7 @@ export function AppShell(props:any) {
                 <button
                   type="button"
                   onClick={() => navigatePage('dashboard')}
-                  disabled={activePage === 'dashboard'}
+                  disabled={activePage === 'dashboard' || !enabled('dashboard')}
                   className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
                 >
                   <Home size={14} /> Dashboard

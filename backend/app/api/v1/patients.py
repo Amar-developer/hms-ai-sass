@@ -2,14 +2,21 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
-from app.core.access_control import enforce_entitlement, require_branch_in_tenant, require_user_branch_access, scoped_branch_id
+from app.core.access_control import (
+    current_doctor_practitioner_id,
+    enforce_entitlement,
+    require_branch_in_tenant,
+    require_user_branch_access,
+    scoped_branch_id,
+)
 from app.core.uploads import save_upload
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission, user_permission_keys
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.audit.service import record_audit_event
+from app.modules.appointments.models import Appointment
 from app.modules.patients.models import AlertSeverity, AlertType, Patient, PatientAlert, PatientStatus
 from app.modules.patients.schemas import (
     PatientAlertCreate,
@@ -280,17 +287,38 @@ def search_patients(
 @router.get(
     "/{patient_id}",
     response_model=PatientRead,
-    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
 )
 def get_patient(
     patient_id: str,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.PATIENTS_READ)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.PATIENTS_READ,
+            permissions.CONSULTATIONS_READ,
+            permissions.APPOINTMENTS_READ,
+            permissions.APPOINTMENTS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Patient:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
     require_user_branch_access(current_user, patient.branch_id)
+    user_permissions = set(user_permission_keys(session, current_user))
+    has_patient_read = current_user.is_super_admin or permissions.PATIENTS_READ in user_permissions
+    if not has_patient_read:
+        doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+        if not doctor_practitioner_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+        appointment = session.exec(
+            select(Appointment).where(
+                Appointment.tenant_id == tenant_id,
+                Appointment.patient_id == patient.id,
+                Appointment.practitioner_id == doctor_practitioner_id,
+            )
+        ).first()
+        if not appointment:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Doctor patient access denied")
     record_audit_event(
         session,
         tenant_id=tenant_id,

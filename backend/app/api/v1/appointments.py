@@ -173,17 +173,6 @@ def _review_billing_defaults(
     return True, payload.billing_note
 
 
-def _slot_intervals_enabled(session: Session, *, tenant_id: str, branch_id: str) -> bool:
-    value, _scope, _scope_id = resolve_setting(
-        session,
-        tenant_id=tenant_id,
-        module="appointments",
-        key=SettingKey.APPOINTMENT_SLOT_INTERVALS_ENABLED,
-        branch_id=branch_id,
-    )
-    return bool(value)
-
-
 @router.post(
     "",
     response_model=AppointmentBookingRead,
@@ -230,7 +219,6 @@ def book_appointment(
             if (
                 payload.appointment_time
                 and payload.appointment_type.value != "emergency"
-                and _slot_intervals_enabled(session, tenant_id=tenant_id, branch_id=payload.branch_id)
             ):
                 availability = check_practitioner_availability(
                     session,

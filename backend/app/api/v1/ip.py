@@ -1,6 +1,7 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy import func
 from sqlmodel import Session, delete, select
 
@@ -9,6 +10,7 @@ from app.core.auth import require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.core.uploads import save_upload
+from app.core.schema_repair import ensure_upload_schema
 from app.modules.appointments.models import Appointment, AppointmentStatus
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
@@ -23,6 +25,7 @@ from app.modules.ip.models import (
     IPConsentForm,
     IPConsultation,
     IPDischargeSummary,
+    IPDocument,
     IPMedicationAdministration,
     IPMedicationOrder,
     IPRoom,
@@ -42,6 +45,7 @@ from app.modules.ip.schemas import (
     IPConsultationRead,
     IPDischargeSummaryCreate,
     IPDischargeSummaryRead,
+    IPDocumentRead,
     IPMedicationAdministrationCreate,
     IPMedicationAdministrationRead,
     IPMedicationOrderCreate,
@@ -540,6 +544,81 @@ async def upload_admission_document(
         purpose="ip_management",
     )
     return admission
+
+
+@router.get("/admissions/{admission_id}/documents", response_model=list[IPDocumentRead])
+def list_admission_documents(
+    admission_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.IP_READ)),
+) -> list[IPDocument]:
+    _assert_ip_enabled(session, tenant_id)
+    ensure_upload_schema(session)
+    admission = _get_admission(session, tenant_id, admission_id, current_user)
+    try:
+        return list(
+            session.exec(
+                select(IPDocument)
+                .where(IPDocument.tenant_id == tenant_id, IPDocument.admission_id == admission.id)
+                .order_by(IPDocument.created_at.desc())
+            ).all()
+        )
+    except (OperationalError, ProgrammingError):
+        session.rollback()
+        ensure_upload_schema(session)
+        return []
+
+
+@router.post("/admissions/{admission_id}/documents", response_model=list[IPDocumentRead], status_code=status.HTTP_201_CREATED)
+async def upload_admission_documents(
+    admission_id: str,
+    document_type: str = Form(default="admission"),
+    files: list[UploadFile] = File(...),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.IP_EDIT)),
+) -> list[IPDocument]:
+    _assert_ip_enabled(session, tenant_id)
+    ensure_upload_schema(session)
+    admission = _get_admission(session, tenant_id, admission_id, current_user)
+    _ensure_admission_open(admission)
+    normalized_type = (document_type or "admission").strip().lower()[:80]
+    if normalized_type not in {"admission", "aadhaar", "consent", "discharge", "clinical"}:
+        normalized_type = "clinical"
+    rows: list[IPDocument] = []
+    for file in files:
+        if not file.filename:
+            continue
+        saved_filename, url_path = await save_upload(file, f"ip_{normalized_type}_{admission_id[:12]}")
+        row = IPDocument(
+            tenant_id=tenant_id,
+            branch_id=admission.branch_id,
+            admission_id=admission.id,
+            document_type=normalized_type,
+            file_name=file.filename or saved_filename,
+            file_url=url_path,
+            content_type=file.content_type,
+            uploaded_by_user_id=current_user.id,
+        )
+        session.add(row)
+        rows.append(row)
+    if not rows:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload at least one file")
+    session.commit()
+    for row in rows:
+        session.refresh(row)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_document.uploaded",
+        resource_type="ip_admission",
+        resource_id=admission.id,
+        purpose="ip_management",
+    )
+    return rows
 
 
 @router.post("/admissions/{admission_id}/treatments", response_model=IPTreatmentRead, status_code=status.HTTP_201_CREATED)

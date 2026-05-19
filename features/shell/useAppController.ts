@@ -348,6 +348,7 @@ export function useAppController() {
   if (navHasAnyPermission('patients.read', 'patients.write', 'patients.create', 'patients.edit')) permissionModules.add('patients');
   if (navHasAnyPermission('practitioners.manage', 'practitioners.read', 'practitioners.create', 'practitioners.edit')) permissionModules.add('practitioners');
   if (navHasAnyPermission('scheduling.manage', 'scheduling.read', 'scheduling.create', 'scheduling.edit', 'scheduling.delete')) permissionModules.add('scheduling');
+  if (navHasAnyPermission('pharmacy.manage', 'pharmacy.read', 'pharmacy.create', 'pharmacy.edit', 'lab.manage', 'lab.read', 'lab.create', 'lab.edit', 'physiotherapy.manage', 'physiotherapy.read', 'physiotherapy.create', 'physiotherapy.edit')) permissionModules.add('items');
   if (navHasAnyPermission('ip.manage', 'ip.read', 'ip.create', 'ip.edit', 'ip.delete')) permissionModules.add('ip');
   if (navHasAnyPermission('consultations.read', 'consultations.write', 'consultations.sign')) {
     permissionModules.add('doctor');
@@ -357,8 +358,14 @@ export function useAppController() {
   if (navHasAnyPermission('pharmacy.manage', 'pharmacy.read', 'pharmacy.create', 'pharmacy.edit')) permissionModules.add('pharmacy');
   if (navHasAnyPermission('physiotherapy.manage', 'physiotherapy.read', 'physiotherapy.create', 'physiotherapy.edit', 'physiotherapy.delete')) permissionModules.add('physiotherapy');
   if (navHasAnyPermission('billing.manage', 'invoices.read', 'invoices.create', 'payments.manage')) permissionModules.add('billing');
-  if (navHasAnyPermission('reports.read', 'audit.read')) permissionModules.add('reports');
-  const enabled = (id: string) => canOpenModule(id, Array.from(new Set([...allowedForRole, ...Array.from(permissionModules)])), clinic);
+  const isTenantAdminUser = Boolean(!isSuperAdmin && (role === 'tenant_admin' || apiSession?.user?.roles?.includes('tenant_admin') || apiSession?.user?.user_type === 'tenant_admin'));
+  if ((isSuperAdmin || isTenantAdminUser) && navHasAnyPermission('reports.read', 'audit.read')) permissionModules.add('reports');
+  const isTenantAdminDashboardUser = Boolean(!isSuperAdmin && (role === 'tenant_admin' || apiSession?.user?.roles?.includes('tenant_admin') || apiSession?.user?.user_type === 'tenant_admin'));
+  const enabled = (id: string) => {
+    if (id === 'dashboard') return isTenantAdminDashboardUser;
+    if (id === 'reports') return Boolean(isSuperAdmin || isTenantAdminUser) && canOpenModule(id, Array.from(new Set([...allowedForRole, ...Array.from(permissionModules)])), clinic);
+    return canOpenModule(id, Array.from(new Set([...allowedForRole, ...Array.from(permissionModules)])), clinic);
+  };
 
   return {
     authenticated,

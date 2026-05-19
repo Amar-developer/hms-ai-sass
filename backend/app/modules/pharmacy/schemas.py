@@ -18,6 +18,20 @@ class MedicineCreate(BaseModel):
     created_by_user_id: str | None = None
 
 
+class MedicineUpdate(BaseModel):
+    branch_id: str | None = None
+    code: str | None = Field(default=None, min_length=2, max_length=60)
+    name: str | None = Field(default=None, min_length=2, max_length=220)
+    generic_name: str | None = Field(default=None, max_length=220)
+    form: str | None = Field(default=None, max_length=80)
+    strength: str | None = Field(default=None, max_length=80)
+    manufacturer: str | None = Field(default=None, max_length=220)
+    default_sale_price: int | None = Field(default=None, ge=0)
+    reorder_level: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+    updated_by_user_id: str | None = None
+
+
 class MedicineRead(MedicineCreate):
     id: str
     tenant_id: str

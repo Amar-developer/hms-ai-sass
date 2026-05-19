@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -33,6 +34,7 @@ from app.modules.pharmacy.schemas import (
     MedicineBatchRead,
     MedicineCreate,
     MedicineRead,
+    MedicineUpdate,
     PharmacyBillingLink,
     PharmacyIssueCreate,
     PharmacyIssueDetailRead,
@@ -49,7 +51,7 @@ from app.modules.pharmacy.schemas import (
     SupplierRead,
 )
 from app.modules.subscriptions.service import enforce_module_enabled
-from app.modules.tenants.models import Branch
+from app.modules.tenants.models import Branch, now_utc
 
 router = APIRouter(prefix="/pharmacy")
 
@@ -60,9 +62,73 @@ def _refresh_consultation_invoice_if_exists(session: Session, tenant_id: str, co
     from app.modules.billing.models import Invoice
     from app.modules.billing.service import refresh_consultation_invoice
 
-    invoice = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.consultation_id == consultation_id)).first()
+    invoice = session.exec(
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.consultation_id == consultation_id,
+            Invoice.lab_order_id.is_(None),
+            Invoice.pharmacy_issue_id.is_(None),
+            Invoice.ip_admission_id.is_(None),
+            Invoice.physiotherapy_case_id.is_(None),
+        )
+    ).first()
     if invoice:
         refresh_consultation_invoice(session, invoice)
+
+
+def _catalog_key(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def _find_catalog_medicine(session: Session, tenant_id: str, branch_id: str, medicine_name: str) -> MedicineCatalog | None:
+    requested = _catalog_key(medicine_name)
+    if not requested:
+        return None
+    medicines = list(
+        session.exec(
+            select(MedicineCatalog).where(
+                MedicineCatalog.tenant_id == tenant_id,
+                MedicineCatalog.is_active == True,  # noqa: E712
+            )
+        ).all()
+    )
+
+    def score(row: MedicineCatalog) -> int:
+        keys = [_catalog_key(row.name), _catalog_key(row.generic_name), _catalog_key(row.strength)]
+        value = 0
+        for key in keys:
+            if not key:
+                continue
+            if key == requested:
+                value = max(value, 100)
+            elif requested in key or key in requested:
+                value = max(value, 70)
+        if row.branch_id == branch_id:
+            value += 10
+        elif row.branch_id is not None:
+            value -= 20
+        return value
+
+    matches = sorted(((score(row), row) for row in medicines), key=lambda item: item[0], reverse=True)
+    return matches[0][1] if matches and matches[0][0] > 0 else None
+
+
+def _fallback_medicine_rows(text: str | None) -> list[dict[str, str | None]]:
+    rows = []
+    for line in re.split(r"\n+", text or ""):
+        parts = [part.strip() for part in line.split("|")]
+        if not parts or not parts[0]:
+            continue
+        rows.append(
+            {
+                "medicine_name": parts[0],
+                "dosage": parts[1] if len(parts) > 1 else None,
+                "frequency": parts[2] if len(parts) > 2 else None,
+                "duration": parts[3] if len(parts) > 3 else None,
+                "instructions": parts[4] if len(parts) > 4 else None,
+            }
+        )
+    return rows
 
 
 def _validate_patient_branch(session: Session, tenant_id: str, patient_id: str, branch_id: str) -> None:
@@ -198,13 +264,64 @@ def list_medicines(
 ) -> list[MedicineCatalog]:
     enforce_module_enabled(session, tenant_id, "pharmacy")
     branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id)
+    statement = select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id, MedicineCatalog.is_active == True)  # noqa: E712
     if branch_id:
         statement = statement.where((MedicineCatalog.branch_id == branch_id) | (MedicineCatalog.branch_id.is_(None)))
     if search:
         pattern = f"%{search}%"
         statement = statement.where((MedicineCatalog.name.ilike(pattern)) | (MedicineCatalog.generic_name.ilike(pattern)) | (MedicineCatalog.code.ilike(pattern)))
     return list(session.exec(statement.order_by(MedicineCatalog.name)).all())
+
+
+@router.patch("/medicines/{medicine_id}", response_model=MedicineRead)
+def update_medicine(
+    medicine_id: str,
+    payload: MedicineUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+) -> MedicineCatalog:
+    enforce_module_enabled(session, tenant_id, "pharmacy")
+    medicine = session.get(MedicineCatalog, medicine_id)
+    if not medicine or medicine.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medicine not found")
+    require_user_branch_access(current_user, medicine.branch_id)
+    data = payload.model_dump(exclude_unset=True)
+    next_branch_id = data.get("branch_id", medicine.branch_id)
+    if next_branch_id:
+        require_user_branch_access(current_user, next_branch_id)
+    for key, value in data.items():
+        setattr(medicine, key, value)
+    medicine.updated_at = now_utc()
+    if payload.updated_by_user_id:
+        medicine.updated_by_user_id = payload.updated_by_user_id
+    session.add(medicine)
+    session.commit()
+    session.refresh(medicine)
+    record_audit_event(session, tenant_id=tenant_id, branch_id=medicine.branch_id, actor_user_id=payload.updated_by_user_id, action="medicine.updated", resource_type="medicine_catalog", resource_id=medicine.id, purpose="pharmacy")
+    return medicine
+
+
+@router.delete("/medicines/{medicine_id}", response_model=MedicineRead)
+def delete_medicine(
+    medicine_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+) -> MedicineCatalog:
+    enforce_module_enabled(session, tenant_id, "pharmacy")
+    medicine = session.get(MedicineCatalog, medicine_id)
+    if not medicine or medicine.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medicine not found")
+    require_user_branch_access(current_user, medicine.branch_id)
+    medicine.is_active = False
+    medicine.updated_at = now_utc()
+    medicine.updated_by_user_id = current_user.id
+    session.add(medicine)
+    session.commit()
+    session.refresh(medicine)
+    record_audit_event(session, tenant_id=tenant_id, branch_id=medicine.branch_id, actor_user_id=current_user.id, action="medicine.deleted", resource_type="medicine_catalog", resource_id=medicine.id, purpose="pharmacy")
+    return medicine
 
 
 @router.post("/suppliers", response_model=SupplierRead, status_code=status.HTTP_201_CREATED)
@@ -501,15 +618,36 @@ def create_pharmacy_issue_from_consultation(
     from app.modules.consultations.models import ConsultationMedicine
 
     medicines = list(session.exec(select(ConsultationMedicine).where(ConsultationMedicine.consultation_id == consultation.id)).all())
+    rows = [
+        {
+            "medicine_name": med.medicine_name,
+            "dosage": med.dosage,
+            "frequency": med.frequency,
+            "duration": med.duration,
+            "instructions": med.instructions,
+        }
+        for med in medicines
+    ] or _fallback_medicine_rows(consultation.prescription_text)
     total = 0
-    for med in medicines:
-        catalog = session.exec(select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id, MedicineCatalog.name == med.medicine_name)).first()
+    names = []
+    for med in rows:
+        medicine_name = str(med["medicine_name"] or "").strip()
+        if not medicine_name:
+            continue
+        catalog = _find_catalog_medicine(session, tenant_id, consultation.branch_id, medicine_name)
         unit_price = catalog.default_sale_price if catalog else 0
-        quantity = prescription_quantity(med.dosage, med.frequency, med.duration)
+        quantity = prescription_quantity(
+            str(med.get("dosage") or ""),
+            str(med.get("frequency") or ""),
+            str(med.get("duration") or ""),
+        )
         total += unit_price * quantity
-        item = PharmacyIssueItem(tenant_id=tenant_id, branch_id=issue.branch_id, pharmacy_issue_id=issue.id, medicine_id=catalog.id if catalog else None, medicine_name=med.medicine_name, quantity=quantity, unit_price=unit_price)
+        names.append(catalog.name if catalog else medicine_name)
+        item = PharmacyIssueItem(tenant_id=tenant_id, branch_id=issue.branch_id, pharmacy_issue_id=issue.id, medicine_id=catalog.id if catalog else None, medicine_name=catalog.name if catalog else medicine_name, quantity=quantity, unit_price=unit_price)
         session.add(item)
-    if medicines and issue.amount == 0:
+    if names:
+        issue.medicine_text = ", ".join(names)
+    if rows and issue.amount == 0:
         issue.amount = total
         session.add(issue)
     session.commit()

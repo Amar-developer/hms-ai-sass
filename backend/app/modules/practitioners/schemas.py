@@ -64,6 +64,7 @@ class PractitionerScheduleCreate(BaseModel):
     end_time: time
     slot_minutes: int = Field(default=15, ge=1, le=240)
     room_name: str | None = Field(default=None, max_length=120)
+    is_active: bool = True
     actor_user_id: str | None = None
 
 

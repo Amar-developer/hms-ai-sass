@@ -10,7 +10,7 @@ import {
   getPhysiotherapyInvoice,
 } from "@/lib/api";
 
-type View = "list" | "op" | "ip" | "equipment" | "detail";
+type View = "list" | "op" | "ip" | "detail";
 const modalities = [
   ["ift", "IFT / Interferential Therapy"],
   ["ultrasound", "Ultrasound Therapy"],
@@ -27,6 +27,22 @@ function today() {
 }
 function patientName(p: any) {
   return p?.name || p?.full_name || p?.patient_name || p?.id || "Patient";
+}
+function patientLabel(p: any) {
+  return `${patientName(p)} · ${p?.mobile || p?.patientNumber || p?.patient_number || p?.id || ""}`;
+}
+function appointmentPatientId(row: any) {
+  return row?.patientId || row?.patient_id || "";
+}
+function appointmentLabel(row: any) {
+  if (!row?.id) return "No linked appointment";
+  return [
+    row.patient,
+    row.appointmentDate || row.appointment_date || row.date,
+    row.doctor,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 function inr(value: any) {
   return `Rs. ${Number(value || 0).toLocaleString("en-IN")}`;
@@ -373,13 +389,6 @@ export function Physiotherapy({
           onCancel={() => setView("list")}
         />
       )}
-      {view === "equipment" && (
-        <EquipmentPage
-          equipment={equipment}
-          onSubmit={submitEquipment}
-          busy={busy === "equipment"}
-        />
-      )}
       {(view === "list" || view === "detail") && (
         <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <Card>
@@ -553,20 +562,27 @@ export function Physiotherapy({
                 </Field>
               </div>
               <Field label="Physiotherapist">
-                <Select
+                <SearchSelect
                   name="physiotherapist_id"
                   value={sessionPhysiotherapistId}
-                  onChange={(event: any) =>
-                    setSessionPhysiotherapistId(event.target.value)
+                  onChange={setSessionPhysiotherapistId}
+                  options={physiotherapists.map((row: any) => ({
+                    value: row.id,
+                    label: formatPhysiotherapistName(row),
+                    item: row,
+                  }))}
+                  placeholder="Type physiotherapist name"
+                  getSearchText={(row: any) =>
+                    [
+                      formatPhysiotherapistName(row),
+                      row?.primary_specialty,
+                      row?.registration_number,
+                      row?.id,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
                   }
-                >
-                  <option value="">Select physiotherapist</option>
-                  {physiotherapists.map((row: any) => (
-                    <option key={row.id} value={row.id}>
-                      {formatPhysiotherapistName(row)}
-                    </option>
-                  ))}
-                </Select>
+                />
               </Field>
               <Field label="Equipment">
                 <Select name="equipment_id">
@@ -772,7 +788,7 @@ function Header({ view, setView }: any) {
           progress, and billing.
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-3">
         <Tab
           active={view === "list" || view === "detail"}
           onClick={() => setView("list")}
@@ -784,9 +800,6 @@ function Header({ view, setView }: any) {
         </Tab>
         <Tab active={view === "ip"} onClick={() => setView("ip")}>
           IP Case
-        </Tab>
-        <Tab active={view === "equipment"} onClick={() => setView("equipment")}>
-          Equipment
         </Tab>
       </div>
     </div>
@@ -817,6 +830,78 @@ function formatPhysiotherapistName(row: any) {
   if (!name) return "No physiotherapist selected";
   const withoutSuffix = name.replace(/,\s*PT$/i, "");
   return `${withoutSuffix}, PT`;
+}
+
+function SearchSelect({
+  name,
+  value,
+  onChange,
+  options,
+  placeholder,
+  required,
+  getLabel,
+  getSearchText,
+}: any) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = options.find((row: any) => row.value === value);
+  const search = query.trim().toLowerCase();
+  const rows = options.filter((row: any) => {
+    if (!search) return true;
+    const text = getSearchText ? getSearchText(row.item) : row.label;
+    return String(text || row.label).toLowerCase().includes(search);
+  });
+
+  return (
+    <div className="relative">
+      {name && <input type="hidden" name={name} value={value || ""} />}
+      <Input
+        value={open ? query : selected?.label || ""}
+        onFocus={() => {
+          setOpen(true);
+          setQuery("");
+        }}
+        onChange={(event: any) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(event: any) => {
+          if (event.key === "Enter") event.preventDefault();
+        }}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        placeholder={placeholder}
+        required={required && !value}
+      />
+      {open && (
+        <div className="absolute z-40 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-xl">
+          {rows.length === 0 && (
+            <div className="px-3 py-3 text-sm text-slate-500">
+              No matching records.
+            </div>
+          )}
+          {rows.map((row: any) => (
+            <button
+              key={row.value || "empty"}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => {
+                onChange(row.value, row.item);
+                setQuery("");
+                setOpen(false);
+              }}
+              className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                row.value === value
+                  ? "bg-slate-900 text-white hover:bg-slate-900"
+                  : ""
+              }`}
+            >
+              {getLabel ? getLabel(row.item, row.value === value) : row.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function activePhysiotherapyFeeRule(
@@ -908,6 +993,28 @@ function CaseForm({
   busy,
   onCancel,
 }: any) {
+  const [patientId, setPatientId] = useState("");
+  const [appointmentId, setAppointmentId] = useState("");
+  const [physiotherapistId, setPhysiotherapistId] = useState("");
+  const patientOptions = patients.map((p: any) => ({
+    value: p.id,
+    label: patientLabel(p),
+    item: p,
+  }));
+  const appointmentOptions = [
+    { value: "", label: "No linked appointment", item: null },
+    ...appointments.map((a: any) => ({
+      value: a.id,
+      label: appointmentLabel(a),
+      item: a,
+    })),
+  ];
+  const physiotherapistOptions = physiotherapists.map((row: any) => ({
+    value: row.id,
+    label: formatPhysiotherapistName(row),
+    item: row,
+  }));
+
   return (
     <Card>
       <div>
@@ -916,34 +1023,73 @@ function CaseForm({
       </div>
       <form onSubmit={onSubmit} className="mt-5 grid gap-4">
         <Field label="Patient">
-          <Select name="patient_id" required>
-            <option value="">Select patient</option>
-            {patients.map((p: any) => (
-              <option key={p.id} value={p.id}>
-                {patientName(p)} · {p.mobile || p.patientNumber || p.id}
-              </option>
-            ))}
-          </Select>
+          <SearchSelect
+            name="patient_id"
+            value={patientId}
+            onChange={setPatientId}
+            options={patientOptions}
+            placeholder="Type patient name, mobile, or number"
+            required
+            getSearchText={(p: any) =>
+              [
+                patientName(p),
+                p?.mobile,
+                p?.patientNumber,
+                p?.patient_number,
+                p?.id,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            }
+          />
         </Field>
         <Field label="Linked OP Appointment">
-          <Select name="source_appointment_id">
-            <option value="">No linked appointment</option>
-            {appointments.map((a: any) => (
-              <option key={a.id} value={a.id}>
-                {a.patient} · {a.appointmentDate} · {a.doctor}
-              </option>
-            ))}
-          </Select>
+          <SearchSelect
+            name="source_appointment_id"
+            value={appointmentId}
+            onChange={(nextAppointmentId: string, appointment: any) => {
+              setAppointmentId(nextAppointmentId);
+              const nextPatientId = appointmentPatientId(appointment);
+              if (nextPatientId) setPatientId(nextPatientId);
+            }}
+            options={appointmentOptions}
+            placeholder="Type patient, date, or doctor"
+            getSearchText={(a: any) =>
+              a
+                ? [
+                    a.patient,
+                    a.appointmentDate,
+                    a.appointment_date,
+                    a.date,
+                    a.doctor,
+                    appointmentPatientId(a),
+                    a.id,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                : "No linked appointment"
+            }
+          />
         </Field>
         <Field label="Physiotherapist">
-          <Select name="physiotherapist_id" required>
-            <option value="">Select physiotherapist</option>
-            {physiotherapists.map((row: any) => (
-              <option key={row.id} value={row.id}>
-                {formatPhysiotherapistName(row)}
-              </option>
-            ))}
-          </Select>
+          <SearchSelect
+            name="physiotherapist_id"
+            value={physiotherapistId}
+            onChange={setPhysiotherapistId}
+            options={physiotherapistOptions}
+            placeholder="Type physiotherapist name"
+            required
+            getSearchText={(row: any) =>
+              [
+                formatPhysiotherapistName(row),
+                row?.primary_specialty,
+                row?.registration_number,
+                row?.id,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            }
+          />
         </Field>
         <CaseFields />
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -969,6 +1115,22 @@ function IPCaseForm({
   busy,
   onCancel,
 }: any) {
+  const [admissionId, setAdmissionId] = useState("");
+  const [physiotherapistId, setPhysiotherapistId] = useState("");
+  const admissionOptions = admissions.map((row: any) => {
+    const patient = patientMap.get(row.patient_id || row.patientId);
+    return {
+      value: row.id,
+      label: `${patientName(patient)} · ${row.admission_number || row.id} · Bed ${row.bed || "-"}`,
+      item: row,
+    };
+  });
+  const physiotherapistOptions = physiotherapists.map((row: any) => ({
+    value: row.id,
+    label: formatPhysiotherapistName(row),
+    item: row,
+  }));
+
   return (
     <Card>
       <div>
@@ -980,25 +1142,45 @@ function IPCaseForm({
       </div>
       <form onSubmit={onSubmit} className="mt-5 grid gap-4">
         <Field label="IP Admission">
-          <Select name="ip_admission_id" required>
-            <option value="">Select IP admission</option>
-            {admissions.map((row: any) => (
-              <option key={row.id} value={row.id}>
-                {patientName(patientMap.get(row.patient_id || row.patientId))} ·{" "}
-                {row.admission_number || row.id} · Bed {row.bed}
-              </option>
-            ))}
-          </Select>
+          <SearchSelect
+            name="ip_admission_id"
+            value={admissionId}
+            onChange={setAdmissionId}
+            options={admissionOptions}
+            placeholder="Type patient, admission, or bed"
+            required
+            getSearchText={(row: any) => {
+              const patient = patientMap.get(row?.patient_id || row?.patientId);
+              return [
+                patientName(patient),
+                row?.admission_number,
+                row?.bed,
+                row?.id,
+              ]
+                .filter(Boolean)
+                .join(" ");
+            }}
+          />
         </Field>
         <Field label="Physiotherapist">
-          <Select name="physiotherapist_id" required>
-            <option value="">Select physiotherapist</option>
-            {physiotherapists.map((row: any) => (
-              <option key={row.id} value={row.id}>
-                {formatPhysiotherapistName(row)}
-              </option>
-            ))}
-          </Select>
+          <SearchSelect
+            name="physiotherapist_id"
+            value={physiotherapistId}
+            onChange={setPhysiotherapistId}
+            options={physiotherapistOptions}
+            placeholder="Type physiotherapist name"
+            required
+            getSearchText={(row: any) =>
+              [
+                formatPhysiotherapistName(row),
+                row?.primary_specialty,
+                row?.registration_number,
+                row?.id,
+              ]
+                .filter(Boolean)
+                .join(" ")
+            }
+          />
         </Field>
         {admissions.length === 0 && (
           <div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">

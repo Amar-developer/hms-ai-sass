@@ -31,6 +31,15 @@ function isActiveQueueStatus(value:any){
   return !['cancelled','canceled','no_show','consultation_completed','billed','completed','done'].includes(status);
 }
 
+function isActiveQueueAppointment(appointment:any){
+  return (
+    isActiveQueueStatus(appointment.queueStatus||appointment.queue_status) &&
+    isActiveQueueStatus(appointment.status) &&
+    isActiveQueueStatus(appointment.consultationStatus||appointment.consultation_status) &&
+    String(appointment.consultationStatus||appointment.consultation_status||'').trim().toLowerCase()!=='signed'
+  );
+}
+
 export function TokenQueue({
   scopedAppointments,
   appointments,
@@ -48,7 +57,7 @@ export function TokenQueue({
   const [displayRows,setDisplayRows]=useState<any[]>([]);
   const queue = sortByTokenNumber(sortQueue(scopedAppointments.filter((appointment:any)=>{
     if(departmentId&&appointment.departmentId!==departmentId)return false;
-    if(!isActiveQueueStatus(appointment.queueStatus||appointment.status))return false;
+    if(!isActiveQueueAppointment(appointment))return false;
     if(doctorScope?.practitionerId){
       return appointment.doctorId===doctorScope.practitionerId||appointment.practitioner_id===doctorScope.practitionerId;
     }
@@ -81,6 +90,8 @@ export function TokenQueue({
   function openConsultation(appointment:any){
     if(!appointment?.id)return;
     sessionStorage.setItem('medizinhub.consultationAppointmentId',appointment.id);
+    const doctorId=appointment.doctorId||appointment.practitioner_id;
+    if(doctorId)sessionStorage.setItem('medizinhub.consultationDoctorId',doctorId);
     setActive?.('consultation');
   }
 

@@ -122,6 +122,8 @@ export function AppointmentCalendarBooking(props: Props) {
   function openConsultation(appointment: any) {
     if (!appointment?.id || isSuperAdmin) return;
     sessionStorage.setItem('medizinhub.consultationAppointmentId', appointment.id);
+    const doctorId = appointment.doctorId || appointment.practitioner_id;
+    if (doctorId) sessionStorage.setItem('medizinhub.consultationDoctorId', doctorId);
     setActive?.('consultation');
   }
 
@@ -636,6 +638,7 @@ export function AppointmentCalendarBooking(props: Props) {
 
         {bookingStep === 'appointment' && selectedPatient && (
           <Card>
+            <form onSubmit={(event: any) => { event.preventDefault(); bookAppointment(); }}>
             <h4 className="font-bold">Appointment Details</h4>
             <div className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm">
               <b>{selectedPatient.full_name}</b>
@@ -723,9 +726,10 @@ export function AppointmentCalendarBooking(props: Props) {
               </div>
             )}
             <div className="mt-5 flex flex-wrap gap-2">
-              <Button onClick={bookAppointment} disabled={busy || (appointmentType !== 'emergency' && !selectedTimingSlot)}>{busy ? 'Booking...' : 'Save & Generate Token'}</Button>
+              <Button disabled={busy || (appointmentType !== 'emergency' && !selectedTimingSlot)}>{busy ? 'Booking...' : 'Save & Generate Token'}</Button>
               <button type="button" onClick={() => setBookingStep('search')} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button>
             </div>
+            </form>
           </Card>
         )}
 
@@ -792,7 +796,7 @@ export function AppointmentCalendarBooking(props: Props) {
         </Field>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-        <div className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${isSuperAdmin ? 'grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]' : 'grid-cols-[1.05fr_.75fr_.85fr_1fr_.85fr_.8fr_1.1fr]'}`}>
+        <div className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${isSuperAdmin ? 'grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]' : 'grid-cols-[1fr_.7fr_.8fr_.95fr_.78fr_.72fr_1.55fr]'}`}>
           {isSuperAdmin && <span>Tenant</span>}<span>Patient</span><span>Mobile</span><span>Department</span><span>Doctor</span><span>Appointment Date</span><span>Consultation Status</span>{!isSuperAdmin && <span className="text-right">Links</span>}
         </div>
         <div className="divide-y divide-slate-200">
@@ -824,7 +828,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     openConsultation(appointment);
                   }
                 }}
-                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1.05fr_.75fr_.85fr_1fr_.85fr_.8fr_1.1fr] xl:items-center"
+                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1fr_.7fr_.8fr_.95fr_.78fr_.72fr_1.55fr] xl:items-center"
               >
                 <div><b>{appointment.patient}</b><p className="text-xs text-slate-500">{appointment.token || appointment.id}</p></div>
                 <span>{patient?.mobile || '-'}</span>
@@ -832,9 +836,9 @@ export function AppointmentCalendarBooking(props: Props) {
                 <span>{appointment.doctor || appointment.doctorId || '-'}</span>
                 <span>{appointment.appointmentDate || appointment.time || '-'}</span>
                 <Badge tone={appointment.consultationStatus === 'signed' ? 'green' : appointment.status === 'cancelled' ? 'red' : 'slate'}>{appointment.consultationStatus || appointment.status || '-'}</Badge>
-                <div className="flex flex-wrap justify-start gap-2 xl:justify-end" onClick={(event) => event.stopPropagation()}>
-                  <button type="button" onClick={() => openConsultation(appointment)} className="rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50">Consultation</button>
-                  <button type="button" onClick={() => openPatient(appointment)} className="rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50">Patient Details</button>
+                <div className="flex flex-nowrap items-center justify-start gap-2 xl:justify-end" onClick={(event) => event.stopPropagation()}>
+                  <button type="button" onClick={() => openConsultation(appointment)} className="whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50">Consultation</button>
+                  <button type="button" onClick={() => openPatient(appointment)} className="whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50">Patient Details</button>
                 </div>
               </div>
             );

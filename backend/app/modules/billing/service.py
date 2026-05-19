@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
@@ -271,34 +270,40 @@ def _consultation_invoice_extra_items(session: Session, invoice: Invoice) -> lis
 
 
 def refresh_consultation_invoice(session: Session, invoice: Invoice) -> Invoice:
-    if not invoice.consultation_id:
-        return update_invoice_payment_status(session, invoice)
+    existing_extra_items = session.exec(
+        select(InvoiceItem).where(
+            InvoiceItem.tenant_id == invoice.tenant_id,
+            InvoiceItem.invoice_id == invoice.id,
+            InvoiceItem.item_type.in_(("lab", "pharmacy")),
+        )
+    ).all()
+    for item in existing_extra_items:
+        session.delete(item)
 
-    existing_items = list(
-        session.exec(
-            select(InvoiceItem).where(
-                InvoiceItem.tenant_id == invoice.tenant_id,
-                InvoiceItem.invoice_id == invoice.id,
-            )
-        ).all()
-    )
-    for item in existing_items:
-        if item.item_type in {"lab", "pharmacy"}:
-            session.delete(item)
-    session.flush()
-
-    consultation_total = sum(item.total_amount for item in existing_items if item.item_type == "consultation")
     extra_items = _consultation_invoice_extra_items(session, invoice)
     for item in extra_items:
         session.add(item)
-    extras_total = sum(item.total_amount for item in extra_items)
-    subtotal = consultation_total + extras_total
+    session.commit()
+
+    items = session.exec(
+        select(InvoiceItem).where(
+            InvoiceItem.tenant_id == invoice.tenant_id,
+            InvoiceItem.invoice_id == invoice.id,
+        )
+    ).all()
+    subtotal = sum(item.total_amount for item in items)
+    discount = min(invoice.discount_amount, subtotal)
+    taxable = subtotal - discount
+    tax_rule = session.get(TaxRule, invoice.tax_rule_id) if invoice.tax_rule_id else None
+    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    total = taxable + tax_amount
 
     invoice.subtotal_amount = subtotal
-    invoice.taxable_amount = max(subtotal - invoice.discount_amount, 0)
-    invoice.total_amount = invoice.taxable_amount + invoice.tax_amount
-    invoice.clinic_share_amount = max(invoice.total_amount - invoice.doctor_share_amount, 0)
-    invoice.updated_at = datetime.now(timezone.utc)
+    invoice.discount_amount = discount
+    invoice.taxable_amount = taxable
+    invoice.tax_amount = tax_amount
+    invoice.total_amount = total
+    invoice.clinic_share_amount = max(total - invoice.doctor_share_amount, 0)
     session.add(invoice)
     session.commit()
     session.refresh(invoice)

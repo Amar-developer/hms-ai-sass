@@ -13,6 +13,17 @@ class PhysiotherapyEquipmentCreate(BaseModel):
     is_portable: bool = False
 
 
+class PhysiotherapyEquipmentUpdate(BaseModel):
+    branch_id: str | None = None
+    name: str | None = Field(default=None, min_length=2, max_length=160)
+    modality_type: str | None = Field(default=None, max_length=80)
+    manufacturer: str | None = Field(default=None, max_length=120)
+    model_number: str | None = Field(default=None, max_length=120)
+    serial_number: str | None = Field(default=None, max_length=120)
+    is_portable: bool | None = None
+    is_active: bool | None = None
+
+
 class PhysiotherapyEquipmentRead(PhysiotherapyEquipmentCreate):
     id: str
     tenant_id: str

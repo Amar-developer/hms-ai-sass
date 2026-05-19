@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -39,14 +40,16 @@ from app.modules.lab.schemas import (
     LabSampleRead,
     LabTestCatalogCreate,
     LabTestCatalogRead,
+    LabTestCatalogUpdate,
     LabTestPackageCreate,
     LabTestPackageRead,
+    LabTestPackageUpdate,
 )
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
 from app.modules.subscriptions.service import enforce_module_enabled
-from app.modules.tenants.models import Branch
+from app.modules.tenants.models import Branch, now_utc
 
 router = APIRouter(prefix="/lab")
 
@@ -57,9 +60,74 @@ def _refresh_consultation_invoice_if_exists(session: Session, tenant_id: str, co
     from app.modules.billing.models import Invoice
     from app.modules.billing.service import refresh_consultation_invoice
 
-    invoice = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.consultation_id == consultation_id)).first()
+    invoice = session.exec(
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.consultation_id == consultation_id,
+            Invoice.lab_order_id.is_(None),
+            Invoice.pharmacy_issue_id.is_(None),
+            Invoice.ip_admission_id.is_(None),
+            Invoice.physiotherapy_case_id.is_(None),
+        )
+    ).first()
     if invoice:
         refresh_consultation_invoice(session, invoice)
+
+
+def _catalog_key(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def _find_lab_test(session: Session, tenant_id: str, branch_id: str, test_name: str) -> LabTestCatalog | None:
+    requested = _catalog_key(test_name)
+    if not requested:
+        return None
+    tests = list(
+        session.exec(
+            select(LabTestCatalog).where(
+                LabTestCatalog.tenant_id == tenant_id,
+                LabTestCatalog.is_active == True,  # noqa: E712
+            )
+        ).all()
+    )
+
+    def score(row: LabTestCatalog) -> int:
+        keys = [_catalog_key(row.name), _catalog_key(row.code)]
+        value = 0
+        for key in keys:
+            if not key:
+                continue
+            if key == requested:
+                value = max(value, 100)
+            elif requested in key or key in requested:
+                value = max(value, 70)
+        if row.branch_id == branch_id:
+            value += 10
+        elif row.branch_id is not None:
+            value -= 20
+        return value
+
+    matches = sorted(((score(row), row) for row in tests), key=lambda item: item[0], reverse=True)
+    return matches[0][1] if matches and matches[0][0] > 0 else None
+
+
+def _fallback_lab_referrals(text: str | None) -> list[dict[str, str | None]]:
+    rows = []
+    for line in re.split(r"\n|,(?=\s*[A-Za-z0-9])", text or ""):
+        parts = [part.strip() for part in line.split("|")]
+        if not parts:
+            continue
+        if parts[0].lower() in {"lab", "scan"} and len(parts) > 1:
+            item_name = parts[1]
+            priority = parts[2] if len(parts) > 2 else "routine"
+            instructions = parts[3] if len(parts) > 3 else None
+        else:
+            item_name = parts[0]
+            priority = "routine"
+            instructions = None
+        if item_name:
+            rows.append({"item_name": item_name, "priority": priority, "instructions": instructions})
+    return rows
 
 
 def _simple_pdf(lines: list[str]) -> bytes:
@@ -289,13 +357,62 @@ def list_lab_tests(
 ) -> list[LabTestCatalog]:
     enforce_module_enabled(session, tenant_id, "lab")
     branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id)
+    statement = select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id, LabTestCatalog.is_active == True)  # noqa: E712
     if branch_id:
         statement = statement.where((LabTestCatalog.branch_id == branch_id) | (LabTestCatalog.branch_id.is_(None)))
     if search:
         pattern = f"%{search}%"
         statement = statement.where((LabTestCatalog.name.ilike(pattern)) | (LabTestCatalog.code.ilike(pattern)))
     return list(session.exec(statement.order_by(LabTestCatalog.name)).all())
+
+
+@router.patch("/catalog/tests/{test_id}", response_model=LabTestCatalogRead)
+def update_lab_test(
+    test_id: str,
+    payload: LabTestCatalogUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+) -> LabTestCatalog:
+    enforce_module_enabled(session, tenant_id, "lab")
+    test = session.get(LabTestCatalog, test_id)
+    if not test or test.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lab test not found")
+    require_user_branch_access(current_user, test.branch_id)
+    data = payload.model_dump(exclude_unset=True)
+    next_branch_id = data.get("branch_id", test.branch_id)
+    if next_branch_id:
+        require_user_branch_access(current_user, next_branch_id)
+    for key, value in data.items():
+        setattr(test, key, value)
+    test.updated_at = now_utc()
+    session.add(test)
+    session.commit()
+    session.refresh(test)
+    record_audit_event(session, tenant_id=tenant_id, branch_id=test.branch_id, actor_user_id=payload.updated_by_user_id, action="lab_test.updated", resource_type="lab_test_catalog", resource_id=test.id, purpose="diagnostics")
+    return test
+
+
+@router.delete("/catalog/tests/{test_id}", response_model=LabTestCatalogRead)
+def delete_lab_test(
+    test_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+) -> LabTestCatalog:
+    enforce_module_enabled(session, tenant_id, "lab")
+    test = session.get(LabTestCatalog, test_id)
+    if not test or test.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lab test not found")
+    require_user_branch_access(current_user, test.branch_id)
+    test.is_active = False
+    test.updated_at = now_utc()
+    test.updated_by_user_id = current_user.id
+    session.add(test)
+    session.commit()
+    session.refresh(test)
+    record_audit_event(session, tenant_id=tenant_id, branch_id=test.branch_id, actor_user_id=current_user.id, action="lab_test.deleted", resource_type="lab_test_catalog", resource_id=test.id, purpose="diagnostics")
+    return test
 
 
 @router.post("/catalog/packages", response_model=LabTestPackageRead, status_code=status.HTTP_201_CREATED)
@@ -340,11 +457,71 @@ def list_lab_packages(
 ) -> list[LabTestPackageRead]:
     enforce_module_enabled(session, tenant_id, "lab")
     branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(LabTestPackage).where(LabTestPackage.tenant_id == tenant_id)
+    statement = select(LabTestPackage).where(LabTestPackage.tenant_id == tenant_id, LabTestPackage.is_active == True)  # noqa: E712
     if branch_id:
         statement = statement.where((LabTestPackage.branch_id == branch_id) | (LabTestPackage.branch_id.is_(None)))
     packages = list(session.exec(statement.order_by(LabTestPackage.name)).all())
     return [_package_read(session, package) for package in packages]
+
+
+@router.patch("/catalog/packages/{package_id}", response_model=LabTestPackageRead)
+def update_lab_package(
+    package_id: str,
+    payload: LabTestPackageUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+) -> LabTestPackageRead:
+    enforce_module_enabled(session, tenant_id, "lab")
+    package = session.get(LabTestPackage, package_id)
+    if not package or package.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lab package not found")
+    require_user_branch_access(current_user, package.branch_id)
+    data = payload.model_dump(exclude_unset=True, exclude={"test_ids"})
+    next_branch_id = data.get("branch_id", package.branch_id)
+    if next_branch_id:
+        require_user_branch_access(current_user, next_branch_id)
+    for key, value in data.items():
+        setattr(package, key, value)
+    package.updated_at = now_utc()
+    if payload.updated_by_user_id:
+        package.updated_by_user_id = payload.updated_by_user_id
+    if payload.test_ids is not None:
+        existing = list(session.exec(select(LabTestPackageItem).where(LabTestPackageItem.tenant_id == tenant_id, LabTestPackageItem.package_id == package.id)).all())
+        for row in existing:
+            session.delete(row)
+        for test_id in payload.test_ids:
+            test = session.get(LabTestCatalog, test_id)
+            if not test or test.tenant_id != tenant_id:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid package test")
+            session.add(LabTestPackageItem(tenant_id=tenant_id, package_id=package.id, test_id=test.id))
+    session.add(package)
+    session.commit()
+    session.refresh(package)
+    record_audit_event(session, tenant_id=tenant_id, branch_id=package.branch_id, actor_user_id=payload.updated_by_user_id, action="lab_package.updated", resource_type="lab_test_package", resource_id=package.id, purpose="diagnostics")
+    return _package_read(session, package)
+
+
+@router.delete("/catalog/packages/{package_id}", response_model=LabTestPackageRead)
+def delete_lab_package(
+    package_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+) -> LabTestPackageRead:
+    enforce_module_enabled(session, tenant_id, "lab")
+    package = session.get(LabTestPackage, package_id)
+    if not package or package.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lab package not found")
+    require_user_branch_access(current_user, package.branch_id)
+    package.is_active = False
+    package.updated_at = now_utc()
+    package.updated_by_user_id = current_user.id
+    session.add(package)
+    session.commit()
+    session.refresh(package)
+    record_audit_event(session, tenant_id=tenant_id, branch_id=package.branch_id, actor_user_id=current_user.id, action="lab_package.deleted", resource_type="lab_test_package", resource_id=package.id, purpose="diagnostics")
+    return _package_read(session, package)
 
 
 @router.post("/result-templates", response_model=LabResultTemplateRead, status_code=status.HTTP_201_CREATED)
@@ -469,7 +646,7 @@ def create_lab_order_from_consultation(
     session.add(order)
     session.commit()
     session.refresh(order)
-    referrals = list(
+    structured_referrals = list(
         session.exec(
             select(ConsultationReferral).where(
                 ConsultationReferral.tenant_id == tenant_id,
@@ -478,15 +655,16 @@ def create_lab_order_from_consultation(
             )
         ).all()
     )
+    referrals = [
+        {"item_name": row.item_name, "priority": row.priority, "instructions": row.instructions}
+        for row in structured_referrals
+    ] or _fallback_lab_referrals(consultation.lab_referral_text)
     total = 0
     for referral in referrals:
-        test = session.exec(
-            select(LabTestCatalog).where(
-                LabTestCatalog.tenant_id == tenant_id,
-                LabTestCatalog.name == referral.item_name,
-                LabTestCatalog.is_active == True,  # noqa: E712
-            )
-        ).first()
+        item_name = str(referral["item_name"] or "").strip()
+        if not item_name:
+            continue
+        test = _find_lab_test(session, tenant_id, consultation.branch_id, item_name)
         total += test.default_price if test else 0
         session.add(
             LabOrderItem(
@@ -494,7 +672,7 @@ def create_lab_order_from_consultation(
                 branch_id=order.branch_id,
                 lab_order_id=order.id,
                 test_id=test.id if test else None,
-                test_name=referral.item_name,
+                test_name=test.name if test else item_name,
                 sample_type=test.sample_type if test else None,
                 price=test.default_price if test else 0,
             )

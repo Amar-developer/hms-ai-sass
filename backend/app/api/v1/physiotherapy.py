@@ -26,6 +26,7 @@ from app.modules.physiotherapy.schemas import (
     PhysiotherapyCaseUpdate,
     PhysiotherapyEquipmentCreate,
     PhysiotherapyEquipmentRead,
+    PhysiotherapyEquipmentUpdate,
     PhysiotherapyInvoiceCreate,
     PhysiotherapySessionCreate,
     PhysiotherapySessionRead,
@@ -162,7 +163,7 @@ def list_equipment(
 ) -> list[PhysiotherapyEquipment]:
     _assert_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
-    statement = select(PhysiotherapyEquipment).where(PhysiotherapyEquipment.tenant_id == tenant_id)
+    statement = select(PhysiotherapyEquipment).where(PhysiotherapyEquipment.tenant_id == tenant_id, PhysiotherapyEquipment.is_active == True)  # noqa: E712
     if branch_scope:
         statement = statement.where((PhysiotherapyEquipment.branch_id == branch_scope) | (PhysiotherapyEquipment.branch_id.is_(None)))
     return list(session.exec(statement.order_by(PhysiotherapyEquipment.name)).all())
@@ -186,6 +187,56 @@ def create_equipment(
     session.commit()
     session.refresh(equipment)
     record_audit_event(session, tenant_id=tenant_id, branch_id=equipment.branch_id, actor_user_id=current_user.id, action="physiotherapy_equipment.created", resource_type="physiotherapy_equipment", resource_id=equipment.id, purpose="physiotherapy")
+    return equipment
+
+
+@router.patch("/equipment/{equipment_id}", response_model=PhysiotherapyEquipmentRead)
+def update_equipment(
+    equipment_id: str,
+    payload: PhysiotherapyEquipmentUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_EDIT)),
+) -> PhysiotherapyEquipment:
+    _assert_enabled(session, tenant_id)
+    equipment = session.get(PhysiotherapyEquipment, equipment_id)
+    if not equipment or equipment.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Physiotherapy equipment not found")
+    require_user_branch_access(current_user, equipment.branch_id)
+    data = payload.model_dump(exclude_unset=True)
+    next_branch_id = data.get("branch_id", equipment.branch_id)
+    require_branch_in_tenant(session, tenant_id, next_branch_id)
+    require_user_branch_access(current_user, next_branch_id)
+    for key, value in data.items():
+        setattr(equipment, key, value)
+    equipment.updated_at = now_utc()
+    equipment.updated_by_user_id = current_user.id
+    session.add(equipment)
+    session.commit()
+    session.refresh(equipment)
+    record_audit_event(session, tenant_id=tenant_id, branch_id=equipment.branch_id, actor_user_id=current_user.id, action="physiotherapy_equipment.updated", resource_type="physiotherapy_equipment", resource_id=equipment.id, purpose="physiotherapy")
+    return equipment
+
+
+@router.delete("/equipment/{equipment_id}", response_model=PhysiotherapyEquipmentRead)
+def delete_equipment(
+    equipment_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_DELETE)),
+) -> PhysiotherapyEquipment:
+    _assert_enabled(session, tenant_id)
+    equipment = session.get(PhysiotherapyEquipment, equipment_id)
+    if not equipment or equipment.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Physiotherapy equipment not found")
+    require_user_branch_access(current_user, equipment.branch_id)
+    equipment.is_active = False
+    equipment.updated_at = now_utc()
+    equipment.updated_by_user_id = current_user.id
+    session.add(equipment)
+    session.commit()
+    session.refresh(equipment)
+    record_audit_event(session, tenant_id=tenant_id, branch_id=equipment.branch_id, actor_user_id=current_user.id, action="physiotherapy_equipment.deleted", resource_type="physiotherapy_equipment", resource_id=equipment.id, purpose="physiotherapy")
     return equipment
 
 
