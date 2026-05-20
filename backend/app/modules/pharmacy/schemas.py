@@ -13,6 +13,8 @@ class MedicineCreate(BaseModel):
     form: str | None = Field(default=None, max_length=80)
     strength: str | None = Field(default=None, max_length=80)
     manufacturer: str | None = Field(default=None, max_length=220)
+    supplier_id: str | None = None
+    purchase_price: int = Field(default=0, ge=0)
     default_sale_price: int = Field(default=0, ge=0)
     reorder_level: int = Field(default=0, ge=0)
     created_by_user_id: str | None = None
@@ -26,6 +28,8 @@ class MedicineUpdate(BaseModel):
     form: str | None = Field(default=None, max_length=80)
     strength: str | None = Field(default=None, max_length=80)
     manufacturer: str | None = Field(default=None, max_length=220)
+    supplier_id: str | None = None
+    purchase_price: int | None = Field(default=None, ge=0)
     default_sale_price: int | None = Field(default=None, ge=0)
     reorder_level: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
@@ -48,6 +52,15 @@ class SupplierCreate(BaseModel):
     email: str | None = Field(default=None, max_length=160)
     address: str | None = Field(default=None, max_length=500)
     created_by_user_id: str | None = None
+
+
+class SupplierUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=220)
+    gstin: str | None = Field(default=None, max_length=40)
+    phone: str | None = Field(default=None, max_length=40)
+    email: str | None = Field(default=None, max_length=160)
+    address: str | None = Field(default=None, max_length=500)
+    is_active: bool | None = None
 
 
 class SupplierRead(SupplierCreate):

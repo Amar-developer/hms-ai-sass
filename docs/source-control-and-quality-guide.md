@@ -85,6 +85,23 @@ Or run the combined command:
 npm run quality
 ```
 
+## Ignore And Environment Rules
+
+Generated files, caches, uploads, and local secrets must stay out of Git:
+
+```text
+.next/
+.next-permission-backup/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+backend/uploads/
+.env
+.env.*
+```
+
+`.env.example` is intentionally tracked as the safe developer template. Add new configuration keys there without real credentials. Real SMTP passwords, app passwords, database URLs with private credentials, and local overrides belong only in `.env`.
+
 ## Database and Migration Rules
 
 When adding or changing a database column/table:

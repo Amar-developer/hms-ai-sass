@@ -14,6 +14,16 @@ class Settings(BaseSettings):
 
     database_url: str = Field(default="sqlite:///./medizinhub_hms.db")
     redis_url: str = Field(default="redis://localhost:6379/0")
+    report_queue_name: str = Field(default="medizinhub:reports:monthly")
+    report_scheduler_lock_key: str = Field(default="medizinhub:reports:monthly:scheduler")
+
+    smtp_host: str | None = Field(default=None)
+    smtp_port: int = Field(default=587)
+    smtp_username: str | None = Field(default=None)
+    smtp_password: str | None = Field(default=None)
+    smtp_from_email: str = Field(default="reports@medizinhub.local")
+    smtp_from_name: str = Field(default="MedizinHub HMS Reports")
+    smtp_use_tls: bool = Field(default=True)
 
     auto_create_tables: bool = Field(default=True)
 

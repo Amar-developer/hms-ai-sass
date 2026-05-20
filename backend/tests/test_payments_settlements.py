@@ -179,6 +179,27 @@ def test_doctor_settlement_finalization_and_reports(client):
     assert finalized.status_code == 200
     assert finalized.json()["settlement_amount"] == 420
     assert finalized.json()["status"] == "finalized"
+    assert finalized.json()["finalized_settlement_amount"] == 420
+    assert finalized.json()["payable_settlement_amount"] == 0
+    assert finalized.json()["can_finalize"] is False
+
+    summary_after = client.get(
+        "/api/v1/billing/doctor-settlements/summary?practitioner_id=doctor_demo",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+    duplicate = client.post(
+        "/api/v1/billing/doctor-settlements/finalize",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"practitioner_id": "doctor_demo", "finalized_by_user_id": "admin"},
+    )
+
+    assert summary_after.status_code == 200
+    assert summary_after.json()["doctor_share_paid_basis"] == 420
+    assert summary_after.json()["finalized_settlement_amount"] == 420
+    assert summary_after.json()["payable_settlement_amount"] == 0
+    assert summary_after.json()["can_finalize"] is False
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "Doctor settlement is already finalized."
 
 
 def test_payment_access_is_tenant_isolated(client):

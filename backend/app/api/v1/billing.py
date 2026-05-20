@@ -22,6 +22,7 @@ from app.modules.billing.models import (
     InvoiceStatus,
     Payment,
     PaymentStatus,
+    SettlementStatus,
     TaxRule,
 )
 from app.modules.billing.schemas import (
@@ -917,15 +918,36 @@ def doctor_settlement_summary(
     for invoice, _appointment in rows:
         if invoice.total_amount:
             doctor_share_paid_basis += round(invoice.doctor_share_amount * invoice.paid_amount / invoice.total_amount)
+    settlement_statement = select(DoctorSettlement).where(
+        DoctorSettlement.tenant_id == tenant_id,
+        DoctorSettlement.status == SettlementStatus.FINALIZED,
+    )
+    if branch_id:
+        settlement_statement = settlement_statement.where(DoctorSettlement.branch_id == branch_id)
+    else:
+        settlement_statement = settlement_statement.where(DoctorSettlement.branch_id.is_(None))
+    if practitioner_id:
+        settlement_statement = settlement_statement.where(DoctorSettlement.practitioner_id == practitioner_id)
+    else:
+        settlement_statement = settlement_statement.where(DoctorSettlement.practitioner_id.is_(None))
+    settlements = list(session.exec(settlement_statement).all())
+    finalized_amount = sum(row.settlement_amount for row in settlements)
+    payable_amount = max(doctor_share_paid_basis - finalized_amount, 0)
+    latest_finalized_at = max((row.finalized_at for row in settlements), default=None)
     return DoctorSettlementSummary(
         tenant_id=tenant_id,
         practitioner_id=practitioner_id,
+        branch_id=branch_id,
         invoice_count=invoice_count,
         total_invoice_amount=total_invoice_amount,
         total_paid_amount=total_paid_amount,
         total_doctor_share=total_doctor_share,
         doctor_share_paid_basis=doctor_share_paid_basis,
+        finalized_settlement_amount=finalized_amount,
+        payable_settlement_amount=payable_amount,
         pending_doctor_share=max(total_doctor_share - doctor_share_paid_basis, 0),
+        can_finalize=payable_amount > 0,
+        latest_finalized_at=latest_finalized_at,
     )
 
 
@@ -943,15 +965,17 @@ def finalize_doctor_settlement(
         session=session,
         current_user=current_user,
     )
+    if summary.payable_settlement_amount <= 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Doctor settlement is already finalized.")
     settlement = DoctorSettlement(
         tenant_id=tenant_id,
-        branch_id=payload.branch_id,
+        branch_id=summary.branch_id,
         practitioner_id=payload.practitioner_id,
         invoice_count=summary.invoice_count,
         total_invoice_amount=summary.total_invoice_amount,
         total_paid_amount=summary.total_paid_amount,
         total_doctor_share=summary.total_doctor_share,
-        settlement_amount=summary.doctor_share_paid_basis,
+        settlement_amount=summary.payable_settlement_amount,
         finalized_by_user_id=payload.finalized_by_user_id,
     )
     session.add(settlement)
@@ -967,8 +991,15 @@ def finalize_doctor_settlement(
         resource_id=settlement.id,
         purpose="doctor_settlement",
     )
+    updated_summary = doctor_settlement_summary(
+        tenant_id=tenant_id,
+        practitioner_id=payload.practitioner_id,
+        branch_id=summary.branch_id,
+        session=session,
+        current_user=current_user,
+    )
     return DoctorSettlementRead(
-        **summary.model_dump(),
+        **updated_summary.model_dump(exclude={"branch_id"}),
         id=settlement.id,
         branch_id=settlement.branch_id,
         settlement_amount=settlement.settlement_amount,

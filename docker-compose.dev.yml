@@ -61,11 +61,31 @@ services:
       - .env
     environment:
       PYTHONPATH: /app
+      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
     command: >
       bash -c "
       alembic -c alembic/alembic.ini upgrade head &&
       uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
       "
+
+  report-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: medizinhub-report-worker
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PYTHONPATH: /app
+      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+    command: python -m app.modules.reports.worker
 
 volumes:
   medizinhub_postgres_data:

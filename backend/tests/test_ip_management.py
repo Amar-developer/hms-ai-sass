@@ -6,7 +6,9 @@ from sqlmodel import Session, select
 
 from app.modules.audit.models import AuditEvent
 from app.modules.ip.models import IPAdmission
+from app.modules.lab.models import LabTestCatalog
 from app.modules.patients.models import Gender, Patient
+from app.modules.pharmacy.models import MedicineCatalog
 from app.modules.subscriptions.models import SubscriptionPlan, TenantSubscription
 from app.modules.tenants.models import Branch, Tenant, TenantStatus
 
@@ -322,6 +324,73 @@ def test_ip_invoice_refreshes_existing_invoice_when_running_bill_changes(client,
     assert refreshed_invoice.json()["invoice"]["id"] == room_only_invoice.json()["invoice"]["id"]
     assert refreshed_invoice.json()["invoice"]["total_amount"] == 2750
     assert {row["item_type"] for row in refreshed_invoice.json()["items"]} == {"ip_room", "ip_lab_referral"}
+
+
+def test_ip_invoice_backfills_care_medicines_and_lab_refs_from_catalog_prices(client, test_engine):
+    tenant_id, branch_id, patient_id = seed_ip_tenant(test_engine)
+    headers = {"X-Tenant-ID": tenant_id}
+    with Session(test_engine) as session:
+        session.add(
+            MedicineCatalog(
+                tenant_id=tenant_id,
+                branch_id=branch_id,
+                code="PCM",
+                name="Paracetamol",
+                strength="500 mg",
+                default_sale_price=15,
+            )
+        )
+        session.add(
+            LabTestCatalog(
+                tenant_id=tenant_id,
+                branch_id=branch_id,
+                code="CBC",
+                name="Complete Blood Count",
+                sample_type="Blood",
+                default_price=350,
+            )
+        )
+        session.commit()
+
+    admission = client.post(
+        "/api/v1/ip/admissions",
+        headers=headers,
+        json={"branch_id": branch_id, "patient_id": patient_id, "ward": "General Ward", "bed": "G4"},
+    )
+    assert admission.status_code == 201
+    admission_id = admission.json()["id"]
+
+    treatment = client.post(
+        f"/api/v1/ip/admissions/{admission_id}/treatments",
+        headers=headers,
+        json={
+            "notes": "Daily care entry",
+            "orders": "lab | CBC | routine | Fever workup",
+            "medication_summary": "Paracetamol | 500 mg | 1-0-1 | oral",
+        },
+    )
+    assert treatment.status_code == 201
+    order = client.post(
+        f"/api/v1/ip/admissions/{admission_id}/medication-orders",
+        headers=headers,
+        json={"medicine_name": "Paracetamol", "dosage": "500 mg", "frequency": "1-0-1", "route": "oral"},
+    )
+    assert order.status_code == 201
+    administration = client.post(
+        f"/api/v1/ip/admissions/{admission_id}/medication-orders/{order.json()['id']}/administrations",
+        headers=headers,
+        json={"quantity": 2, "status": "given", "notes": "Given from daily care"},
+    )
+    assert administration.status_code == 201
+    assert administration.json()["billing_item_id"] is None
+
+    invoice = client.post(f"/api/v1/ip/admissions/{admission_id}/invoice", headers=headers)
+
+    assert invoice.status_code == 201
+    assert invoice.json()["invoice"]["total_amount"] == 380
+    items = {row["item_type"]: row for row in invoice.json()["items"]}
+    assert items["ip_medication_administration"]["total_amount"] == 30
+    assert items["ip_lab_referral"]["total_amount"] == 350
 
 
 def test_discharged_ip_admission_rejects_new_items_and_invoice_refresh(client, test_engine):

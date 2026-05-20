@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {Building2,ClipboardList,Plus,Settings,ShieldCheck,Users} from 'lucide-react';
+import {Building2,ClipboardList,Plus,Settings,ShieldCheck,Truck,Users} from 'lucide-react';
 import {ActionButton,ActionGroup,Badge,Button,Card,Field,Input,Select} from '@/components/ui';
 import {apiFetch} from '@/lib/api';
 import {normalizeOptionLabel} from '@/lib/options';
@@ -11,6 +11,7 @@ const sections = [
   ['roles','Roles',ShieldCheck],
   ['departments','Departments',ClipboardList],
   ['branches','Branches',Building2],
+  ['suppliers','Suppliers',Truck],
   ['settings','Tenant & Branch Settings',Settings],
 ] as const;
 
@@ -22,6 +23,7 @@ export function canUseTenantAdminSection(section:string, user:any){
  if(section==='roles')return permissions.includes('identity.roles.manage')||permissions.includes('identity.roles.read');
  if(section==='departments')return ['departments.manage','departments.create','departments.read','departments.edit','departments.delete','settings.manage'].some(permission=>permissions.includes(permission));
  if(section==='branches')return ['branches.manage','branches.create','branches.read','branches.edit','branches.delete','settings.manage'].some(permission=>permissions.includes(permission));
+ if(section==='suppliers')return ['settings.manage','pharmacy.manage'].some(permission=>permissions.includes(permission));
  if(section==='settings')return permissions.includes('settings.manage');
  return false;
 }
@@ -69,6 +71,7 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
  const [users,setUsers]=useState<any[]>([]);
  const [departments,setDepartments]=useState<any[]>([]);
  const [branches,setBranches]=useState<any[]>([]);
+ const [suppliers,setSuppliers]=useState<any[]>([]);
  const [settings,setSettings]=useState<any[]>([]);
  const [permissions,setPermissions]=useState<any[]>([]);
  const [selectedId,setSelectedId]=useState('');
@@ -82,11 +85,19 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
  const [slotIntervalMinutes,setSlotIntervalMinutes]=useState(5);
  const [payments,setPayments]=useState('cash,credit_card,debit_card,upi,gpay,paytm');
  const [providers,setProviders]=useState('whatsapp,sms,voice');
+ const [reportEnabled,setReportEnabled]=useState(false);
+ const [reportRecipients,setReportRecipients]=useState('');
+ const [reportCc,setReportCc]=useState('');
+ const [reportSendDay,setReportSendDay]=useState(1);
+ const [reportFilters,setReportFilters]=useState<any>({overall:true,doctor:true,department:true,invoice:true});
+ const [reportJobs,setReportJobs]=useState<any[]>([]);
+ const [reportBusy,setReportBusy]=useState('');
  const selectedRole=roles.find((row:any)=>row.id===selectedId);
  const selectedUser=users.find((row:any)=>row.id===selectedId);
  const departmentGroups=useMemo(()=>groupDepartmentsByName(departments,branches),[departments,branches]);
  const selectedDepartment=departments.find((row:any)=>row.id===selectedId);
  const selectedBranch=branches.find((row:any)=>row.id===selectedId);
+ const selectedSupplier=suppliers.find((row:any)=>row.id===selectedId);
  const visibleSections=sections.filter(([sectionId])=>canUseTenantAdminSection(sectionId,apiSession?.user));
 
  function open(nextSection:string,nextView='list'){
@@ -105,17 +116,21 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
    const canRoles=canUseTenantAdminSection('roles',apiSession.user)||canUsers;
    const canDepartments=canUseTenantAdminSection('departments',apiSession.user);
    const canBranches=canUseTenantAdminSection('branches',apiSession.user);
+   const canSuppliers=canUseTenantAdminSection('suppliers',apiSession.user);
    const canSettings=canUseTenantAdminSection('settings',apiSession.user);
    const safeFetch=async(path:string,enabled=true)=>enabled?apiFetch(path,scoped).catch(()=>[]):Promise.resolve([]);
-   const [roleRows,userRows,departmentRows,branchRows,settingRows,permissionRows]=await Promise.all([
+   const [roleRows,userRows,departmentRows,branchRows,supplierRows,settingRows,permissionRows,reportConfig,reportJobRows]=await Promise.all([
     safeFetch('/identity/roles',canRoles),
     safeFetch('/identity/users',canUsers),
     safeFetch(`/tenants/${apiSession.tenantId}/departments`,canDepartments),
     safeFetch(`/tenants/${apiSession.tenantId}/branches`,canBranches),
+    safeFetch('/pharmacy/suppliers?include_inactive=true',canSuppliers),
     safeFetch('/settings',canSettings),
     apiFetch('/identity/permissions',scoped).catch(()=>[]),
+    canSettings?apiFetch('/reports/monthly-email/config',scoped).catch(()=>null):Promise.resolve(null),
+    canSettings?apiFetch('/reports/monthly-email/jobs?limit=5',scoped).catch(()=>[]):Promise.resolve([]),
    ]);
-   setRoles(roleRows);setUsers(userRows);setDepartments(departmentRows);setBranches(branchRows);setSettings(settingRows);setPermissions(permissionRows);
+   setRoles(roleRows);setUsers(userRows);setDepartments(departmentRows);setBranches(branchRows);setSuppliers(supplierRows);setSettings(settingRows);setPermissions(permissionRows);
    const find=(key:string)=>settingRows.find((x:any)=>x.key===key);
    if(find('invoice.prefix'))setInvoicePrefix(find('invoice.prefix').value);
    if(find('queue.requeue_after_patients'))setRequeueAfter(Number(find('queue.requeue_after_patients').value));
@@ -124,6 +139,14 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
    if(find('appointment.slot_interval_minutes'))setSlotIntervalMinutes(Number(find('appointment.slot_interval_minutes').value||5));
    if(find('payment.methods_enabled'))setPayments((find('payment.methods_enabled').value||[]).join(','));
    if(find('communication.providers_enabled'))setProviders((find('communication.providers_enabled').value||[]).join(','));
+   if(reportConfig){
+    setReportEnabled(Boolean(reportConfig.enabled));
+    setReportRecipients((reportConfig.recipients||[]).join(','));
+    setReportCc((reportConfig.cc||[]).join(','));
+    setReportSendDay(Number(reportConfig.send_day||1));
+    setReportFilters(reportConfig.filters||{overall:true,doctor:true,department:true,invoice:true});
+   }
+   setReportJobs(reportJobRows||[]);
   }catch(err:any){setMessage(err.message||'Could not load tenant admin data.')}finally{setBusy(false)}
  }
 
@@ -236,15 +259,44 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
   }catch(err:any){setMessage(err.message||'Could not update branch.')}finally{setBusy(false)}
  }
 
+ async function createSupplier(e:any){
+  e.preventDefault();const form=e.currentTarget;const fd=new FormData(form);
+  setBusy(true);setMessage('');
+  try{
+   const created=await apiFetch('/pharmacy/suppliers',apiSession,{method:'POST',body:JSON.stringify({
+    name:fd.get('name'),gstin:fd.get('gstin')||null,phone:fd.get('phone')||null,email:fd.get('email')||null,address:fd.get('address')||null,created_by_user_id:apiSession.user?.id
+   })});
+   form.reset();setSuppliers(previous=>[created,...previous.filter((row:any)=>row.id!==created.id)]);
+   open('suppliers');await loadAdmin();setMessage(`Supplier created: ${created.name}`);
+  }catch(err:any){setMessage(err.message||'Could not create supplier.')}finally{setBusy(false)}
+ }
+
+ async function updateSupplier(e:any){
+  e.preventDefault();if(!selectedSupplier)return;
+  const fd=new FormData(e.currentTarget);
+  setBusy(true);setMessage('');
+  try{
+   const updated=await apiFetch(`/pharmacy/suppliers/${selectedSupplier.id}`,apiSession,{method:'PATCH',body:JSON.stringify({
+    name:fd.get('name'),gstin:fd.get('gstin')||null,phone:fd.get('phone')||null,email:fd.get('email')||null,address:fd.get('address')||null,is_active:fd.get('isActive')==='true'
+   })});
+   setSuppliers(previous=>[updated,...previous.filter((row:any)=>row.id!==updated.id)]);
+   open('suppliers');await loadAdmin();setMessage('Supplier updated.');
+  }catch(err:any){setMessage(err.message||'Could not update supplier.')}finally{setBusy(false)}
+ }
+
  async function changeStatus(entity:string,row:any){
   const paths:any={roles:`/identity/roles/${row.id}/status`,users:`/identity/users/${row.id}/status`,departments:`/tenants/${apiSession.tenantId}/departments/${row.id}/status`,branches:`/tenants/${apiSession.tenantId}/branches/${row.id}/status`};
   setBusy(true);setMessage('');
-  try{await apiFetch(paths[entity],apiSession,{method:'POST',body:JSON.stringify({is_active:!row.is_active})});await loadAdmin();setMessage(`${title(entity)} status updated.`)}
+  try{
+   if(entity==='suppliers')await apiFetch(`/pharmacy/suppliers/${row.id}`,apiSession,{method:'PATCH',body:JSON.stringify({is_active:!row.is_active})});
+   else await apiFetch(paths[entity],apiSession,{method:'POST',body:JSON.stringify({is_active:!row.is_active})});
+   await loadAdmin();setMessage(`${title(entity)} status updated.`)
+  }
   catch(err:any){setMessage(err.message||'Could not change status.')}finally{setBusy(false);setConfirm(null)}
  }
 
  async function deleteRow(entity:string,row:any){
-  const paths:any={roles:`/identity/roles/${row.id}`,users:`/identity/users/${row.id}`,departments:`/tenants/${apiSession.tenantId}/departments/${row.id}`,branches:`/tenants/${apiSession.tenantId}/branches/${row.id}`};
+  const paths:any={roles:`/identity/roles/${row.id}`,users:`/identity/users/${row.id}`,departments:`/tenants/${apiSession.tenantId}/departments/${row.id}`,branches:`/tenants/${apiSession.tenantId}/branches/${row.id}`,suppliers:`/pharmacy/suppliers/${row.id}`};
   setBusy(true);setMessage('');
   try{await apiFetch(paths[entity],apiSession,{method:'DELETE'});await loadAdmin();setMessage(`${title(entity)} deactivated.`)}
   catch(err:any){setMessage(err.message||'Could not delete record.')}finally{setBusy(false);setConfirm(null)}
@@ -265,6 +317,34 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
    ]);
    await loadAdmin();setMessage('Settings saved.');
   }catch(err:any){setMessage(err.message||'Could not save settings.')}finally{setBusy(false)}
+ }
+
+ async function saveReportSettings(){
+  const list=(v:string)=>v.split(',').map(x=>x.trim()).filter(Boolean);
+  setReportBusy('save');setMessage('');
+  try{
+   await apiFetch('/reports/monthly-email/config',apiSession,{method:'PUT',body:JSON.stringify({
+    enabled:reportEnabled,
+    recipients:list(reportRecipients),
+    cc:list(reportCc),
+    send_day:Number(reportSendDay||1),
+    filters:reportFilters,
+   })});
+   await loadAdmin();setMessage('Monthly report email settings saved.');
+  }catch(err:any){setMessage(err.message||'Could not save monthly report settings.')}finally{setReportBusy('')}
+ }
+
+ async function sendMonthlyReportNow(){
+  const list=(v:string)=>v.split(',').map(x=>x.trim()).filter(Boolean);
+  setReportBusy('send');setMessage('');
+  try{
+   const job=await apiFetch('/reports/monthly-email/send',apiSession,{method:'POST',body:JSON.stringify({
+    recipients:list(reportRecipients),
+    cc:list(reportCc),
+    filters:reportFilters,
+   })});
+   await loadAdmin();setMessage(job.status==='failed'?`Report job failed to queue: ${job.failure_reason}`:`Monthly report job queued: ${job.id}`);
+  }catch(err:any){setMessage(err.message||'Could not queue monthly report.')}finally{setReportBusy('')}
  }
 
  if(!apiSession)return <Card><h3 className="text-lg font-bold">Tenant Admin</h3><p className="mt-2 text-sm text-slate-500">Login to manage tenant settings.</p></Card>;
@@ -289,7 +369,11 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
   {section==='branches'&&view==='create'&&<BranchForm title="Create Branch" branchCount={branches.length} busy={busy} onSubmit={createBranch} back={()=>open('branches')}/>}
   {section==='branches'&&view==='edit'&&selectedBranch&&<BranchForm title="Edit Branch" branch={selectedBranch} busy={busy} onSubmit={updateBranch} back={()=>open('branches')}/>}
 
-  {section==='settings'&&<SettingsPanel settings={settings} invoicePrefix={invoicePrefix} setInvoicePrefix={setInvoicePrefix} requeueAfter={requeueAfter} setRequeueAfter={setRequeueAfter} noShowAfter={noShowAfter} setNoShowAfter={setNoShowAfter} slotIntervalsEnabled={slotIntervalsEnabled} setSlotIntervalsEnabled={setSlotIntervalsEnabled} slotIntervalMinutes={slotIntervalMinutes} setSlotIntervalMinutes={setSlotIntervalMinutes} payments={payments} setPayments={setPayments} providers={providers} setProviders={setProviders} busy={busy} saveSettings={saveSettings}/>}
+  {section==='suppliers'&&view==='list'&&<ListCard title="Suppliers" rows={suppliers} searchKeys={['name','gstin','phone','email','address','id']} createLabel="Create Supplier" onCreate={()=>setView('create')} columns={['Supplier','GSTIN','Contact','Status','Actions']} render={(supplier:any)=><SupplierRow key={supplier.id} supplier={supplier} onEdit={()=>{setSelectedId(supplier.id);setView('edit')}} onStatus={()=>setConfirm({entity:'suppliers',kind:'status',row:supplier})} onDelete={()=>setConfirm({entity:'suppliers',kind:'delete',row:supplier})}/>}/>}
+  {section==='suppliers'&&view==='create'&&<SupplierForm title="Create Supplier" busy={busy} onSubmit={createSupplier} back={()=>open('suppliers')}/>}
+  {section==='suppliers'&&view==='edit'&&selectedSupplier&&<SupplierForm title="Edit Supplier" supplier={selectedSupplier} busy={busy} onSubmit={updateSupplier} back={()=>open('suppliers')}/>}
+
+  {section==='settings'&&<SettingsPanel settings={settings} invoicePrefix={invoicePrefix} setInvoicePrefix={setInvoicePrefix} requeueAfter={requeueAfter} setRequeueAfter={setRequeueAfter} noShowAfter={noShowAfter} setNoShowAfter={setNoShowAfter} slotIntervalsEnabled={slotIntervalsEnabled} setSlotIntervalsEnabled={setSlotIntervalsEnabled} slotIntervalMinutes={slotIntervalMinutes} setSlotIntervalMinutes={setSlotIntervalMinutes} payments={payments} setPayments={setPayments} providers={providers} setProviders={setProviders} busy={busy} saveSettings={saveSettings} reportEnabled={reportEnabled} setReportEnabled={setReportEnabled} reportRecipients={reportRecipients} setReportRecipients={setReportRecipients} reportCc={reportCc} setReportCc={setReportCc} reportSendDay={reportSendDay} setReportSendDay={setReportSendDay} reportFilters={reportFilters} setReportFilters={setReportFilters} reportJobs={reportJobs} reportBusy={reportBusy} saveReportSettings={saveReportSettings} sendMonthlyReportNow={sendMonthlyReportNow}/>}
   {confirm&&<ConfirmModal action={confirm} busy={busy} onCancel={()=>setConfirm(null)} onConfirm={()=>confirm.kind==='delete'?deleteRow(confirm.entity,confirm.row):changeStatus(confirm.entity,confirm.row)}/>}
  </div>
 }
@@ -325,9 +409,14 @@ function BranchForm({title,branch,branchCount,busy,onSubmit,back}:any){
  return <Card><Header title={title} subtitle={branch?'Update branch details.':'Branch creation is checked against the active subscription limit.'} back={back}/>{!branch&&branchCount>=1&&<div className="mb-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">Single-clinic plans usually allow one branch. If this tenant is on a single-branch plan, the API will ask for a subscription upgrade before creating another branch.</div>}<form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Branch Name"><Input name="name" defaultValue={branch?.name||''} required disabled={isLocked(branch)}/></Field><Field label="Code"><Input name="code" defaultValue={branch?.code||''} required disabled={isLocked(branch)}/></Field><Field label="City"><Input name="city" defaultValue={branch?.city||''} disabled={isLocked(branch)}/></Field><Field label="State"><Input name="state" defaultValue={branch?.state||''} disabled={isLocked(branch)}/></Field>{branch&&<Field label="Status"><Select name="isActive" defaultValue={String(branch.is_active)} disabled={isLocked(branch)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field>}<div className="md:col-span-2"><Field label="Address"><Input name="address" defaultValue={branch?.address||''} disabled={isLocked(branch)}/></Field></div><Actions busy={busy} back={back} disabled={isLocked(branch)} label={branch?'Save Branch':'Create Branch'}/></form></Card>
 }
 
+function SupplierForm({title,supplier,busy,onSubmit,back}:any){
+ return <Card><Header title={title} subtitle={supplier?.id||'Suppliers can be used by medicines, lab tests, lab packages, and physiotherapy equipment.'} back={back}/><form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Supplier Name"><Input name="name" defaultValue={supplier?.name||''} required/></Field><Field label="GSTIN"><Input name="gstin" defaultValue={supplier?.gstin||''}/></Field><Field label="Phone"><Input name="phone" defaultValue={supplier?.phone||''}/></Field><Field label="Email"><Input name="email" type="email" defaultValue={supplier?.email||''}/></Field>{supplier&&<Field label="Status"><Select name="isActive" defaultValue={String(supplier.is_active)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field>}<div className="md:col-span-2"><Field label="Address"><Input name="address" defaultValue={supplier?.address||''}/></Field></div><Actions busy={busy} back={back} label={supplier?'Save Supplier':'Create Supplier'}/></form></Card>
+}
+
 function SettingsPanel(props:any){
- const {settings,invoicePrefix,setInvoicePrefix,requeueAfter,setRequeueAfter,noShowAfter,setNoShowAfter,slotIntervalsEnabled,setSlotIntervalsEnabled,slotIntervalMinutes,setSlotIntervalMinutes,payments,setPayments,providers,setProviders,busy,saveSettings}=props;
- return <Card><h3 className="text-lg font-bold">Tenant & Branch Settings</h3><p className="text-sm text-slate-500">Configuration affects invoice numbering, queue behavior, appointment slots, payments, and communications for this tenant.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Invoice Prefix"><Input value={invoicePrefix} onChange={(e:any)=>setInvoicePrefix(e.target.value)}/></Field><Field label="Requeue After"><Input type="number" value={requeueAfter} onChange={(e:any)=>setRequeueAfter(Number(e.target.value))}/></Field><Field label="No-show Calls"><Input type="number" value={noShowAfter} onChange={(e:any)=>setNoShowAfter(Number(e.target.value))}/></Field><Field label="Slot Display"><Select value={slotIntervalsEnabled?'intervals':'sessions'} onChange={(e:any)=>setSlotIntervalsEnabled(e.target.value==='intervals')}><option value="sessions">Consultation timings only</option><option value="intervals">Detailed interval slots</option></Select></Field><Field label="Interval Minutes"><Input type="number" min="5" step="5" value={slotIntervalMinutes} onChange={(e:any)=>setSlotIntervalMinutes(Number(e.target.value))} disabled={!slotIntervalsEnabled}/></Field><Field label="Payment Methods"><Input value={payments} onChange={(e:any)=>setPayments(e.target.value)}/></Field><Field label="Communication"><Input value={providers} onChange={(e:any)=>setProviders(e.target.value)}/></Field></div><div className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Default booking mode shows only doctor consultation timings, such as Morning 10 AM - 1 PM. Enable interval slots only for clinics that want fine-grained booking times.</div><Button onClick={saveSettings} disabled={busy} className="mt-4">Save Settings</Button><div className="mt-5 grid gap-2 md:grid-cols-2">{settings.slice(0,10).map((setting:any)=><div key={setting.id} className="rounded-2xl bg-slate-50 p-3 text-sm"><b>{setting.key}</b><p className="break-all text-slate-500">{JSON.stringify(setting.value)}</p></div>)}</div></Card>
+ const {settings,invoicePrefix,setInvoicePrefix,requeueAfter,setRequeueAfter,noShowAfter,setNoShowAfter,slotIntervalsEnabled,setSlotIntervalsEnabled,slotIntervalMinutes,setSlotIntervalMinutes,payments,setPayments,providers,setProviders,busy,saveSettings,reportEnabled,setReportEnabled,reportRecipients,setReportRecipients,reportCc,setReportCc,reportSendDay,setReportSendDay,reportFilters,setReportFilters,reportJobs,reportBusy,saveReportSettings,sendMonthlyReportNow}=props;
+ const toggleReportFilter=(key:string)=>(event:any)=>setReportFilters({...reportFilters,[key]:event.target.checked});
+ return <div className="space-y-5"><Card><h3 className="text-lg font-bold">Tenant & Branch Settings</h3><p className="text-sm text-slate-500">Configuration affects invoice numbering, queue behavior, appointment slots, payments, and communications for this tenant.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Invoice Prefix"><Input value={invoicePrefix} onChange={(e:any)=>setInvoicePrefix(e.target.value)}/></Field><Field label="Requeue After"><Input type="number" value={requeueAfter} onChange={(e:any)=>setRequeueAfter(Number(e.target.value))}/></Field><Field label="No-show Calls"><Input type="number" value={noShowAfter} onChange={(e:any)=>setNoShowAfter(Number(e.target.value))}/></Field><Field label="Slot Display"><Select value={slotIntervalsEnabled?'intervals':'sessions'} onChange={(e:any)=>setSlotIntervalsEnabled(e.target.value==='intervals')}><option value="sessions">Consultation timings only</option><option value="intervals">Detailed interval slots</option></Select></Field><Field label="Interval Minutes"><Input type="number" min="5" step="5" value={slotIntervalMinutes} onChange={(e:any)=>setSlotIntervalMinutes(Number(e.target.value))} disabled={!slotIntervalsEnabled}/></Field><Field label="Payment Methods"><Input value={payments} onChange={(e:any)=>setPayments(e.target.value)}/></Field><Field label="Communication"><Input value={providers} onChange={(e:any)=>setProviders(e.target.value)}/></Field></div><div className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Default booking mode shows only doctor consultation timings, such as Morning 10 AM - 1 PM. Enable interval slots only for clinics that want fine-grained booking times.</div><Button onClick={saveSettings} disabled={busy} className="mt-4">Save Settings</Button><div className="mt-5 grid gap-2 md:grid-cols-2">{settings.slice(0,10).map((setting:any)=><div key={setting.id} className="rounded-2xl bg-slate-50 p-3 text-sm"><b>{setting.key}</b><p className="break-all text-slate-500">{JSON.stringify(setting.value)}</p></div>)}</div></Card><Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start"><div><h3 className="text-lg font-bold">Monthly Email Reports</h3><p className="text-sm text-slate-500">Send last month revenue, doctor settlement, department revenue, and paid invoice profit as an Excel-compatible spreadsheet through the Redis report worker.</p></div><Badge tone={reportEnabled?'green':'slate'}>{reportEnabled?'Automatic':'Manual'}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Target Emails"><Input value={reportRecipients} onChange={(e:any)=>setReportRecipients(e.target.value)} placeholder="owner@clinic.com, accounts@clinic.com"/></Field><Field label="CC Emails"><Input value={reportCc} onChange={(e:any)=>setReportCc(e.target.value)} placeholder="Optional"/></Field><Field label="Send Day"><Input type="number" min="1" max="28" value={reportSendDay} onChange={(e:any)=>setReportSendDay(Number(e.target.value))}/></Field><Field label="Auto Send"><Select value={reportEnabled?'enabled':'disabled'} onChange={(e:any)=>setReportEnabled(e.target.value==='enabled')}><option value="disabled">Manual only</option><option value="enabled">Every month</option></Select></Field></div><div className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">{[['overall','Overall summary'],['doctor','Doctor revenue'],['department','Department revenue'],['invoice','Paid invoice details']].map(([key,label])=><label key={key} className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="checkbox" checked={Boolean(reportFilters?.[key])} onChange={toggleReportFilter(key)}/>{label}</label>)}</div><div className="mt-4 flex flex-wrap gap-2"><Button type="button" onClick={saveReportSettings} disabled={reportBusy==='save'}>{reportBusy==='save'?'Saving...':'Save Report Settings'}</Button><button type="button" onClick={sendMonthlyReportNow} disabled={reportBusy==='send'} className="rounded-2xl border px-4 py-3 text-sm font-bold text-slate-700 disabled:text-slate-300">{reportBusy==='send'?'Queueing...':'Send Last Month Now'}</button></div><div className="mt-5 overflow-auto rounded-2xl border border-slate-200"><table className="w-full min-w-[860px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Job</th><th>Status</th><th>Period</th><th>Recipients</th><th>Result</th></tr></thead><tbody className="divide-y">{reportJobs.length===0&&<tr><td colSpan={5} className="px-4 py-4 text-slate-500">No monthly report jobs yet.</td></tr>}{reportJobs.map((job:any)=><tr key={job.id}><td className="px-4 py-4"><b>{job.id}</b><p className="text-xs text-slate-500">{new Date(job.created_at).toLocaleString()}</p></td><td><Badge tone={job.status==='sent'?'green':job.status==='failed'?'red':job.status==='running'?'blue':'amber'}>{job.status}</Badge></td><td>{job.period_start} to {job.period_end}</td><td>{(job.recipients||[]).join(', ')}</td><td className="pr-4 text-slate-500">{job.failure_reason||job.attachment_filename||'-'}</td></tr>)}</tbody></table></div></Card></div>
 }
 
 function PermissionCheckboxes({permissions,selected,disabled}:any){
@@ -359,6 +448,7 @@ function UserRow({user,branches,onEdit,onStatus,onDelete}:any){const branch=bran
 function RoleRow({role,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{role.name}</b>{isLocked(role)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{role.key}</span><Badge tone={role.is_active?'green':'red'}>{role.is_active?'Active':'Inactive'}</Badge><span>{formatDate(role.updated_at||role.created_at)}</span><RowActions row={role} locked={isLocked(role)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
 function DepartmentRow({department,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{department.name}</b>{department.locked&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}<p className="text-xs text-slate-500">{department.rows?.length>1?`${department.rows.length} branch mappings`:'Single branch mapping'}</p></div><span>{department.code}</span><span>{department.branch_names||'All branches'}</span><Badge tone={department.is_active?'green':'red'}>{department.is_active?'Active':'Inactive'}</Badge><RowActions row={department.primary||department} locked={department.locked} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
 function BranchRow({branch,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{branch.name}</b>{isLocked(branch)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{branch.code}</span><span>{[branch.city,branch.state].filter(Boolean).join(', ')||'-'}</span><Badge tone={branch.is_active?'green':'red'}>{branch.is_active?'Active':'Inactive'}</Badge><RowActions row={branch} locked={isLocked(branch)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function SupplierRow({supplier,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{supplier.name}</b><p className="break-all text-xs text-slate-500">{supplier.id}</p></div><span>{supplier.gstin||'-'}</span><span><b>{supplier.phone||'-'}</b><p className="break-all text-xs text-slate-500">{supplier.email||supplier.address||'-'}</p></span><Badge tone={supplier.is_active?'green':'red'}>{supplier.is_active?'Active':'Inactive'}</Badge><RowActions row={supplier} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
 function RowActions({row,locked,onEdit,onStatus,onDelete}:any){const stop=(handler:any)=>(event:any)=>{event.stopPropagation();handler()};return <ActionGroup className="justify-start xl:justify-end"><ActionButton onClick={stop(onEdit)}>{locked?'View':'Edit'}</ActionButton>{!locked&&<ActionButton onClick={stop(onStatus)}>{row.is_active?'Inactive':'Active'}</ActionButton>}{!locked&&<ActionButton tone="danger" onClick={stop(onDelete)}>Delete</ActionButton>}</ActionGroup>}
 function ClickableRow({children,onClick,className}:any){return <div role="button" tabIndex={0} onClick={onClick} onKeyDown={(event:any)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onClick()}}} className={`grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:items-center ${className}`}>{children}</div>}
 

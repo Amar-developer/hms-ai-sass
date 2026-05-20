@@ -32,7 +32,12 @@ export async function apiFetch(path: string, session: ApiSession, options: Reque
     let detail = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
-      detail = body.detail || detail;
+      detail =
+        typeof body.detail === 'string'
+          ? body.detail
+          : body.detail
+            ? JSON.stringify(body.detail)
+            : detail;
     } catch {}
     throw new Error(`${path}: ${detail}`);
   }
@@ -59,7 +64,12 @@ export async function apiBlob(path: string, session: ApiSession, options: Reques
     let detail = `${res.status} ${res.statusText}`;
     try {
       const body = await res.json();
-      detail = body.detail || detail;
+      detail =
+        typeof body.detail === 'string'
+          ? body.detail
+          : body.detail
+            ? JSON.stringify(body.detail)
+            : detail;
     } catch {}
     throw new Error(`${path}: ${detail}`);
   }

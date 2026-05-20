@@ -755,39 +755,46 @@ export function DoctorConsultation({
             value: parts[0] || rest.trim(),
             unit: parts.slice(1).join(" ") || null,
           };
-        }),
-      complaints: splitRows(complaints).map((line: string) => {
-        const [complaint, duration, severity] = line
-          .split("|")
-          .map((part: string) => part.trim());
-        return {
-          complaint,
-          duration: duration || null,
-          severity: severity || null,
-        };
-      }),
-      diagnoses: splitRows(diagnosisRows).map((line: string) => {
-        const [dx, type, dxNotes] = line
-          .split("|")
-          .map((part: string) => part.trim());
-        return {
-          diagnosis: dx,
-          diagnosis_type: type || "primary",
-          notes: dxNotes || null,
-        };
-      }),
-      medicines: splitRows(medicineRows).map((line: string) => {
-        const [medicine_name, dosage, frequency, duration, instructions] = line
-          .split("|")
-          .map((part: string) => part.trim());
-        return {
-          medicine_name,
-          dosage: dosage || null,
-          frequency: frequency || null,
-          duration: duration || null,
-          instructions: instructions || null,
-        };
-      }),
+        })
+        .filter((row: any) => row.name && row.value),
+      complaints: splitRows(complaints)
+        .map((line: string) => {
+          const [complaint, duration, severity] = line
+            .split("|")
+            .map((part: string) => part.trim());
+          return {
+            complaint,
+            duration: duration || null,
+            severity: severity || null,
+          };
+        })
+        .filter((row: any) => row.complaint),
+      diagnoses: splitRows(diagnosisRows)
+        .map((line: string) => {
+          const [dx, type, dxNotes] = line
+            .split("|")
+            .map((part: string) => part.trim());
+          return {
+            diagnosis: dx,
+            diagnosis_type: type || "primary",
+            notes: dxNotes || null,
+          };
+        })
+        .filter((row: any) => row.diagnosis),
+      medicines: splitRows(medicineRows)
+        .map((line: string) => {
+          const [medicine_name, dosage, frequency, duration, instructions] = line
+            .split("|")
+            .map((part: string) => part.trim());
+          return {
+            medicine_name,
+            dosage: dosage || null,
+            frequency: frequency || null,
+            duration: duration || null,
+            instructions: instructions || null,
+          };
+        })
+        .filter((row: any) => row.medicine_name),
       referrals: splitRows(referralRows)
         .map((line: string) => {
           const [referral_type, item_name, priority, instructions] = line

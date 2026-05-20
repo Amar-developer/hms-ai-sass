@@ -57,7 +57,21 @@ services:
       uvicorn app.main:app --host 0.0.0.0 --port 8080
       " 
     environment:
-      PYTHONPATH: /app 
+      PYTHONPATH: /app
+      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+
+  report-worker:
+    build: ./backend
+    container_name: medizinhub-report-worker
+    depends_on:
+      - postgres
+      - redis
+    env_file:
+    - .env
+    command: python -m app.modules.reports.worker
+    environment:
+      PYTHONPATH: /app
+      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
 
 volumes:
   medizinhub_postgres_data:

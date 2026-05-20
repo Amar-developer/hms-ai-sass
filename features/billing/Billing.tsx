@@ -1,16 +1,30 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Button,Card,Input,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Button,Card,Field,Input,Select} from '@/components/ui';
 import {apiBlob,apiFetch} from '@/lib/api';
 
+const pageSize=10;
+
+function invoiceSourceKey(invoice:any){
+  if(invoice.lab_order_id) return 'lab_scan';
+  if(invoice.pharmacy_issue_id) return 'pharmacy';
+  if(invoice.physiotherapy_case_id) return 'physiotherapy';
+  if(invoice.ip_admission_id) return 'ip_billing';
+  if(invoice.consultation_id||invoice.appointment_id) return 'consultation';
+  return 'direct';
+}
+
 function invoiceSource(invoice:any){
-  if(invoice.lab_order_id) return {label:'Lab / Scan',tone:'blue'};
-  if(invoice.pharmacy_issue_id) return {label:'Pharmacy',tone:'amber'};
-  if(invoice.physiotherapy_case_id) return {label:'Physiotherapy',tone:'purple'};
-  if(invoice.ip_admission_id) return {label:'IP Billing',tone:'blue'};
-  if(invoice.consultation_id||invoice.appointment_id) return {label:'Consultation',tone:'slate'};
-  return {label:'Direct',tone:'amber'};
+  const sources:Record<string,{label:string,tone:'slate'|'blue'|'amber'|'purple'}>={
+    lab_scan:{label:'Lab / Scan',tone:'blue'},
+    pharmacy:{label:'Pharmacy',tone:'amber'},
+    physiotherapy:{label:'Physiotherapy',tone:'purple'},
+    ip_billing:{label:'IP Billing',tone:'blue'},
+    consultation:{label:'Consultation',tone:'slate'},
+    direct:{label:'Direct',tone:'amber'},
+  };
+  return sources[invoiceSourceKey(invoice)]||sources.direct;
 }
 
 function invoiceLinkedRecord(invoice:any){
@@ -25,6 +39,30 @@ function invoiceLinkedRecord(invoice:any){
 
 function money(value:any){
   return `₹${Number(value||0).toLocaleString('en-IN')}`;
+}
+
+function invoiceDateKey(invoice:any){
+  const raw=invoice.invoice_date||invoice.created_at||invoice.updated_at||invoice.paid_at;
+  if(!raw)return '';
+  if(typeof raw==='string')return raw.slice(0,10);
+  const date=new Date(raw);
+  return Number.isNaN(date.getTime())?'':date.toISOString().slice(0,10);
+}
+
+function formatInvoiceDate(invoice:any){
+  const key=invoiceDateKey(invoice);
+  if(!key)return '-';
+  const date=new Date(`${key}T00:00:00`);
+  return Number.isNaN(date.getTime())?key:date.toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'});
+}
+
+function invoicePaidStatus(invoice:any){
+  const paid=Number(invoice.paid_amount||0);
+  const balance=Number(invoice.balance_amount||0);
+  const status=String(invoice.status||'').toLowerCase();
+  if(status==='paid'||balance<=0)return 'paid';
+  if(status==='partially_paid'||paid>0)return 'partially_paid';
+  return 'unpaid';
 }
 
 function itemTypeLabel(type:any){
@@ -53,6 +91,14 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
   const [settlement,setSettlement]=useState<any>(null);
   const [detail,setDetail]=useState<any>(null);
   const [detailLoading,setDetailLoading]=useState('');
+  const [filters,setFilters]=useState({
+    query:'',
+    source:'all',
+    paidStatus:'all',
+    fromDate:'',
+    toDate:'',
+  });
+  const [page,setPage]=useState(1);
 
   const patientMap=useMemo(()=>new Map(patients.map((p:any)=>[p.id,p])),[patients]);
   const invoices=useMemo(
@@ -62,10 +108,59 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       ),
     [liveInvoices],
   );
+  const sourceOptions=useMemo(()=>{
+    const seen=new Set<string>();
+    return invoices
+      .map((invoice:any)=>({key:invoiceSourceKey(invoice),...invoiceSource(invoice)}))
+      .filter((source:any)=>{
+        if(seen.has(source.key))return false;
+        seen.add(source.key);
+        return true;
+      });
+  },[invoices]);
+  const filteredInvoices=useMemo(()=>invoices.filter((invoice:any)=>{
+    const source=invoiceSource(invoice);
+    const patient:any=patientMap.get(invoice.patient_id);
+    const haystack=[
+      invoice.invoice_number,
+      invoice.id,
+      invoice.patient_id,
+      patient?.name,
+      patient?.full_name,
+      source.label,
+      invoice.status,
+    ].filter(Boolean).join(' ').toLowerCase();
+    const query=filters.query.trim().toLowerCase();
+    if(query&&!haystack.includes(query))return false;
+    if(filters.source!=='all'&&invoiceSourceKey(invoice)!==filters.source)return false;
+    if(filters.paidStatus==='due'){
+      if(Number(invoice.balance_amount||0)<=0)return false;
+    }else if(filters.paidStatus!=='all'&&invoicePaidStatus(invoice)!==filters.paidStatus)return false;
+    const dateKey=invoiceDateKey(invoice);
+    if(filters.fromDate&&(!dateKey||dateKey<filters.fromDate))return false;
+    if(filters.toDate&&(!dateKey||dateKey>filters.toDate))return false;
+    return true;
+  }),[filters,invoices,patientMap]);
+  const totalPages=Math.max(1,Math.ceil(filteredInvoices.length/pageSize));
+  const safePage=Math.min(page,totalPages);
+  const invoicePageRows=filteredInvoices.slice((safePage-1)*pageSize,safePage*pageSize);
   const invoicedConsultations=new Set(invoices.map((i:any)=>i.consultation_id).filter(Boolean));
   const signedReady=appointments.filter((a:any)=>a.consultationId&&a.consultationStatus==='signed'&&!invoicedConsultations.has(a.consultationId));
+  const payableSettlement=Number(settlement?.payable_settlement_amount??settlement?.doctor_share_paid_basis??settlement?.settlement_amount??0);
+  const finalizedSettlement=Number(settlement?.finalized_settlement_amount??0);
+  const canFinalizeSettlement=Boolean(settlement?.can_finalize??payableSettlement>0);
 
   useEffect(()=>{if(apiSession)loadReports()},[apiSession?.token,apiSession?.tenantId,invoices.length]);
+  useEffect(()=>{setPage(1)},[filters.query,filters.source,filters.paidStatus,filters.fromDate,filters.toDate]);
+  useEffect(()=>{if(page!==safePage)setPage(safePage)},[page,safePage]);
+
+  function updateFilter(key:string,value:string){
+    setFilters((current)=>({...current,[key]:value}));
+  }
+
+  function clearFilters(){
+    setFilters({query:'',source:'all',paidStatus:'all',fromDate:'',toDate:''});
+  }
 
   async function loadReports(){
     if(!apiSession)return;
@@ -193,6 +288,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         body:JSON.stringify({finalized_by_user_id:apiSession.user?.id}),
       });
       setSettlement(saved);
+      await loadReports();
       setMessage(`Doctor settlement finalized for ${money(saved.settlement_amount)}.`);
     }catch(err:any){setMessage(err.message||'Could not finalize settlement.')}
     finally{setBusy('')}
@@ -215,7 +311,20 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         <Card><p className="text-sm text-slate-500">Due Collection</p><p className="mt-1 text-2xl font-bold">{money(dueReport?.total_due_amount)}</p><p className="text-xs text-slate-500">{dueReport?.invoice_count??0} invoices</p></Card>
         <Card><p className="text-sm text-slate-500">Revenue</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_invoice_amount)}</p><p className="text-xs text-slate-500">Tax {money(revenueReport?.total_tax_amount)}</p></Card>
         <Card><p className="text-sm text-slate-500">Paid</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_paid_amount)}</p><p className="text-xs text-slate-500">Doctor share {money(revenueReport?.total_doctor_share)}</p></Card>
-        <Card><p className="text-sm text-slate-500">Settlement</p><p className="mt-1 text-2xl font-bold">{money(settlement?.doctor_share_paid_basis??settlement?.settlement_amount)}</p><button type="button" onClick={finalizeSettlement} className="mt-2 rounded-xl border px-3 py-2 text-xs font-bold" disabled={busy==='settlement'}>Finalize</button></Card>
+        <Card>
+          <p className="text-sm text-slate-500">Settlement</p>
+          <p className="mt-1 text-2xl font-bold">{money(payableSettlement)}</p>
+          <p className="text-xs text-slate-500">
+            {finalizedSettlement>0?`Finalized ${money(finalizedSettlement)}`:'No finalized settlement yet'}
+          </p>
+          {canFinalizeSettlement?(
+            <button type="button" onClick={finalizeSettlement} className="mt-2 rounded-xl border px-3 py-2 text-xs font-bold" disabled={busy==='settlement'}>
+              {busy==='settlement'?'Finalizing...':'Finalize'}
+            </button>
+          ):(
+            <Badge tone="green">Finalized</Badge>
+          )}
+        </Card>
       </div>
 
       <Card>
@@ -239,7 +348,36 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
             <h3 className="text-lg font-bold">Invoices & Payments</h3>
             <p className="text-sm text-slate-500">Track invoice source, patient dues, doctor share, and payment collection in one list.</p>
           </div>
-          <Badge tone="slate">{invoices.length} invoices</Badge>
+          <Badge tone="slate">{filteredInvoices.length} of {invoices.length} invoices</Badge>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_.85fr_.85fr_.75fr_.75fr_auto] xl:items-end">
+          <Field label="Search">
+            <Input value={filters.query} onChange={(e:any)=>updateFilter('query',e.target.value)} placeholder="Invoice, patient, source"/>
+          </Field>
+          <Field label="Source">
+            <Select value={filters.source} onChange={(e:any)=>updateFilter('source',e.target.value)}>
+              <option value="all">All sources</option>
+              {sourceOptions.map((source:any)=><option key={source.key} value={source.key}>{source.label}</option>)}
+            </Select>
+          </Field>
+          <Field label="Paid Status">
+            <Select value={filters.paidStatus} onChange={(e:any)=>updateFilter('paidStatus',e.target.value)}>
+              <option value="all">All payments</option>
+              <option value="paid">Paid</option>
+              <option value="due">Due</option>
+              <option value="partially_paid">Partially paid</option>
+              <option value="unpaid">Unpaid</option>
+            </Select>
+          </Field>
+          <Field label="From Date">
+            <Input type="date" value={filters.fromDate} onChange={(e:any)=>updateFilter('fromDate',e.target.value)}/>
+          </Field>
+          <Field label="To Date">
+            <Input type="date" value={filters.toDate} onChange={(e:any)=>updateFilter('toDate',e.target.value)}/>
+          </Field>
+          <button type="button" onClick={clearFilters} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
+            Clear
+          </button>
         </div>
         <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
           <table className="w-full min-w-[1740px] table-fixed text-left text-sm">
@@ -268,13 +406,13 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
               </tr>
             </thead>
             <tbody className="divide-y">
-              {invoices.length===0&&<tr><td colSpan={9} className="px-4 py-4 text-slate-500">No invoices yet.</td></tr>}
-              {invoices.map((invoice:any)=>{
+              {filteredInvoices.length===0&&<tr><td colSpan={9} className="px-4 py-4 text-slate-500">{invoices.length===0?'No invoices yet.':'No invoices match the selected filters.'}</td></tr>}
+              {invoicePageRows.map((invoice:any)=>{
                 const p:any=patientMap.get(invoice.patient_id);
                 const source=invoiceSource(invoice);
                 return (
                   <tr key={invoice.id} onClick={()=>openInvoiceDetail(invoice)} className="group cursor-pointer align-middle hover:bg-slate-50">
-                    <td className="px-4 py-4"><b>{invoice.invoice_number}</b><p className="text-xs text-slate-500">{invoice.id}</p></td>
+                    <td className="px-4 py-4"><b>{invoice.invoice_number}</b><p className="text-xs text-slate-500">{invoice.id}</p><p className="mt-1 text-xs font-semibold text-slate-400">{formatInvoiceDate(invoice)}</p></td>
                     <td className="px-3 py-4"><Badge tone={source.tone as any}>{source.label}</Badge>{invoice.physiotherapy_case_id&&<p className="mt-1 truncate text-xs text-slate-500">{invoice.physiotherapy_case_id}</p>}</td>
                     <td className="px-3 py-4 font-medium">{p?.name||invoice.patient_id}</td>
                     <td className="px-3 py-4"><Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge></td>
@@ -312,6 +450,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
             </tbody>
           </table>
         </div>
+        <Pagination page={safePage} totalPages={totalPages} total={filteredInvoices.length} onPage={setPage}/>
       </Card>
     </div>
   );
@@ -417,4 +556,10 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
 
 function DetailStat({title,value}:any){
   return <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">{title}</p><p className="mt-1 break-words text-lg font-bold">{value}</p></div>;
+}
+
+function Pagination({page,totalPages,total,onPage}:any){
+  const start=total===0?0:(page-1)*pageSize+1;
+  const end=Math.min(page*pageSize,total);
+  return <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center"><span>Showing {start}-{end} of {total}</span><div className="flex gap-2"><button type="button" onClick={()=>onPage(Math.max(1,page-1))} disabled={page<=1} className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300">Previous</button><span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-700">Page {page} / {totalPages}</span><button type="button" onClick={()=>onPage(Math.min(totalPages,page+1))} disabled={page>=totalPages} className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300">Next</button></div></div>;
 }

@@ -257,6 +257,112 @@ def _create_billing_item(
     return item
 
 
+def _catalog_key(value: str | None) -> str:
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+def _medicine_catalog_price(session: Session, tenant_id: str, medicine_name: str) -> int:
+    from app.modules.pharmacy.models import MedicineCatalog
+
+    requested = _catalog_key(medicine_name)
+    if not requested:
+        return 0
+    medicines = list(session.exec(select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id)).all())
+    for medicine in medicines:
+        keys = [_catalog_key(medicine.name), _catalog_key(medicine.code), _catalog_key(medicine.generic_name)]
+        if requested in keys or any(requested and (requested in key or key in requested) for key in keys):
+            return int(medicine.default_sale_price or 0)
+    return 0
+
+
+def _lab_catalog_price(session: Session, tenant_id: str, test_name: str) -> int:
+    from app.modules.lab.models import LabTestCatalog
+
+    requested = _catalog_key(test_name)
+    if not requested:
+        return 0
+    tests = list(session.exec(select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id)).all())
+    for test in tests:
+        keys = [_catalog_key(test.name), _catalog_key(test.code)]
+        if requested in keys or any(requested and (requested in key or key in requested) for key in keys):
+            return int(test.default_price or 0)
+    return 0
+
+
+def _ip_care_invoice_items(session: Session, admission: IPAdmission, billing_items: list[IPBillingItem]) -> list[dict[str, int | str]]:
+    existing_sources = {(item.source_type, item.source_id) for item in billing_items if item.source_id}
+    existing_descriptions = {item.description for item in billing_items}
+    rows: list[dict[str, int | str]] = []
+
+    administrations = list(
+        session.exec(
+            select(IPMedicationAdministration, IPMedicationOrder)
+            .join(IPMedicationOrder, IPMedicationAdministration.medication_order_id == IPMedicationOrder.id)
+            .where(
+                IPMedicationAdministration.tenant_id == admission.tenant_id,
+                IPMedicationAdministration.admission_id == admission.id,
+                IPMedicationAdministration.status == "given",
+            )
+            .order_by(IPMedicationAdministration.administered_at)
+        ).all()
+    )
+    for administration, order in administrations:
+        if administration.billing_item_id or ("medication_administration", administration.id) in existing_sources:
+            continue
+        unit_amount = int(order.unit_amount or 0) or _medicine_catalog_price(session, admission.tenant_id, order.medicine_name)
+        if unit_amount <= 0:
+            continue
+        description = f"Medicine given - {order.medicine_name}{f' {order.dosage}' if order.dosage else ''}"
+        rows.append(
+            {
+                "item_type": "ip_medication_administration",
+                "description": description,
+                "quantity": int(administration.quantity or 1),
+                "unit_amount": unit_amount,
+                "total_amount": int(administration.quantity or 1) * unit_amount,
+            }
+        )
+
+    treatments = list(
+        session.exec(
+            select(IPTreatment)
+            .where(IPTreatment.tenant_id == admission.tenant_id, IPTreatment.admission_id == admission.id)
+            .order_by(IPTreatment.treatment_date, IPTreatment.created_at)
+        ).all()
+    )
+    for treatment in treatments:
+        for line in (treatment.orders or "").splitlines():
+            parts = [part.strip() for part in line.split("|")]
+            if len(parts) < 2:
+                continue
+            source_type = parts[0] or "lab"
+            item_name = parts[1]
+            priority = parts[2] if len(parts) > 2 else ""
+            instructions = parts[3] if len(parts) > 3 else ""
+            amount_text = parts[4] if len(parts) > 4 else ""
+            if not item_name:
+                continue
+            normalized_type = "scan_referral" if source_type == "scan" else "lab_referral"
+            description = f"{source_type.upper()} - {item_name}{f' ({priority})' if priority else ''}{f' - {instructions}' if instructions else ''}"
+            if description in existing_descriptions:
+                continue
+            amount = int("".join(ch for ch in amount_text if ch.isdigit()) or 0) or _lab_catalog_price(
+                session, admission.tenant_id, item_name
+            )
+            if amount <= 0:
+                continue
+            rows.append(
+                {
+                    "item_type": f"ip_{normalized_type}",
+                    "description": description,
+                    "quantity": 1,
+                    "unit_amount": amount,
+                    "total_amount": amount,
+                }
+            )
+    return rows
+
+
 def _validate_aadhaar_number(value: str | None) -> str | None:
     if value is None:
         return None
@@ -1041,6 +1147,21 @@ def list_medication_administrations(
     )
 
 
+@router.get("/admissions/{admission_id}/invoice", response_model=InvoiceDetailRead)
+def get_ip_invoice(
+    admission_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    _assert_ip_enabled(session, tenant_id)
+    admission = _get_admission(session, tenant_id, admission_id, current_user)
+    invoice = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id)).first()
+    if not invoice:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No invoice found for this admission")
+    return _invoice_detail(session, invoice)
+
+
 @router.post("/admissions/{admission_id}/invoice", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
 def generate_ip_invoice(
     admission_id: str,
@@ -1061,6 +1182,35 @@ def generate_ip_invoice(
             )
         ).all()
     )
+    # Persist any care items not yet in billing_items so the running bill stays in sync
+    computed_care_items = _ip_care_invoice_items(session, admission, billing_items)
+    if computed_care_items:
+        for item in computed_care_items:
+            source_type = str(item["item_type"]).removeprefix("ip_")
+            session.add(
+                IPBillingItem(
+                    tenant_id=tenant_id,
+                    branch_id=admission.branch_id,
+                    admission_id=admission.id,
+                    source_type=source_type,
+                    source_id=None,
+                    description=str(item["description"]),
+                    quantity=int(item["quantity"]),
+                    unit_amount=int(item["unit_amount"]),
+                    total_amount=int(item["total_amount"]),
+                    created_by_user_id=current_user.id,
+                )
+            )
+        session.flush()
+        billing_items = list(
+            session.exec(
+                select(IPBillingItem).where(
+                    IPBillingItem.tenant_id == tenant_id,
+                    IPBillingItem.admission_id == admission.id,
+                    IPBillingItem.status == "billable",
+                )
+            ).all()
+        )
     existing = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id)).first()
     room_charge: tuple[str, int, int, int] | None = None
     if admission.room_id:
@@ -1074,7 +1224,11 @@ def generate_ip_invoice(
                 room.daily_rate,
                 days * room.daily_rate,
             )
-    subtotal = sum(charge.total_amount for charge in charges) + sum(item.total_amount for item in billing_items) + (room_charge[3] if room_charge else 0)
+    subtotal = (
+        sum(charge.total_amount for charge in charges)
+        + sum(item.total_amount for item in billing_items)
+        + (room_charge[3] if room_charge else 0)
+    )
     if subtotal <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add at least one IP charge, billable clinical event, or assign a chargeable room before generating invoice")
     if existing:

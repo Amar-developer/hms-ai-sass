@@ -26,7 +26,7 @@ export const loginPresets: Record<
 
   // ── Tenant 1: Sunrise Multispeciality Clinic ──────────────────────────────
   tenant_admin: {
-    email:       'preethi.sundarajan@sunriseclinic.in',
+    email:       'linuxuser206@gmail.com',
     password:    'Tenant@Admin1',
     needsTenant: true,
   },

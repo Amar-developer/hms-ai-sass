@@ -47,7 +47,7 @@ DEMO_PATIENT_NUMBER = "DEMO-0001"
 DEMO_DOCTOR_ID = "doctor_demo"
 DEMO_SUPER_ADMIN_EMAIL = "super.admin@demo.medizinhub.local"
 DEMO_SUPER_ADMIN_PASSWORD = "SuperPass123"
-DEMO_ADMIN_EMAIL = "tenant.admin@demo.medizinhub.local"
+DEMO_ADMIN_EMAIL = "linuxuser206@gmail.com"
 DEMO_ADMIN_PASSWORD = "DemoPass123"
 DEMO_USER_PASSWORD = "DemoUser123"
 

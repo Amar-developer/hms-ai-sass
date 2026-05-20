@@ -15,6 +15,7 @@ from app.api.v1.pharmacy import router as pharmacy_router
 from app.api.v1.physiotherapy import router as physiotherapy_router
 from app.api.v1.practitioners import router as practitioners_router
 from app.api.v1.queue import router as queue_router
+from app.api.v1.reports import router as reports_router
 from app.api.v1.settings import router as settings_router
 from app.api.v1.subscriptions import router as subscriptions_router
 from app.api.v1.tenants import router as tenants_router
@@ -30,6 +31,7 @@ api_router.include_router(patients_router, tags=["patients"])
 api_router.include_router(practitioners_router, tags=["practitioners"])
 api_router.include_router(appointments_router, tags=["appointments"])
 api_router.include_router(queue_router, tags=["queue"])
+api_router.include_router(reports_router, tags=["reports"])
 api_router.include_router(consultations_router, tags=["consultations"])
 api_router.include_router(billing_router, tags=["billing"])
 api_router.include_router(ip_router, tags=["ip"])

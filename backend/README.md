@@ -38,6 +38,10 @@ Alembic migrations live in `backend/alembic`.
 - Doctor consultation workflow with draft edits, prescription/referral placeholders, signed-record immutability, and addendums.
 - Billing foundation with doctor fee rules, invoice generation from signed consultations, and doctor/clinic split calculation.
 - Payment foundation with cash/card/UPI/GPay/Paytm methods, partial payments, refunds, invoice cancellation guardrails, and settlement summary.
+- Doctor settlement finalization stores settlement snapshots and prevents duplicate finalization by calculating only remaining payable doctor share.
+- Lab, pharmacy, IP, and physiotherapy service invoices are separately linked so billing screens can filter and display source-specific invoices.
+- IP running bill and final invoice include room rent, signed IP consultation fees, manual charges, medication administrations, and lab/scan care-entry referrals.
+- Redis-backed monthly email report jobs generate Excel-compatible revenue, doctor settlement, department revenue, and paid invoice profit reports through SMTP.
 - SaaS subscription enforcement with seeded Free Trial and Starter plans, automatic trial subscription on tenant creation, and patient-limit enforcement.
 - Module entitlement enforcement with plan-enabled modules such as billing, lab, pharmacy, WhatsApp, voice, AI, and IP.
 - Admin settings foundation for tenant/branch configuration of queue rules, payment methods, invoice prefix, follow-up validity, token language, and communication providers.
@@ -49,6 +53,14 @@ Alembic migrations live in `backend/alembic`.
 - Practitioner master foundation with branch assignment, department/specialty mapping, weekly schedules, leave blocks, room assignment, timed appointment availability checks, demo doctor mapping, and RBAC enforcement.
 - Generated practitioner calendar API that turns schedules, leave, room assignments, and booked appointments into frontend-ready available/booked/leave slots.
 - Initial pytest contract tests.
+
+Background report worker:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d redis report-worker
+```
+
+Monthly report email requires `MEDIZINHUB_SMTP_*` values in `.env`. Keep `.env.example` tracked as the template and never commit real credentials.
 
 ## Run Locally
 
@@ -159,12 +171,19 @@ Demo users:
 - `POST /api/v1/billing/doctor-fee-rules`
 - `GET /api/v1/billing/doctor-fee-rules`
 - `POST /api/v1/billing/invoices/from-consultation`
+- `POST /api/v1/billing/invoices/from-lab-order`
+- `POST /api/v1/billing/invoices/from-pharmacy-issue`
 - `GET /api/v1/billing/invoices`
 - `GET /api/v1/billing/invoices/{invoice_id}`
 - `POST /api/v1/billing/invoices/{invoice_id}/payments`
 - `POST /api/v1/billing/payments/{payment_id}/refund`
 - `POST /api/v1/billing/invoices/{invoice_id}/cancel`
 - `GET /api/v1/billing/doctor-settlements/summary`
+- `POST /api/v1/billing/doctor-settlements/finalize`
+- `GET /api/v1/reports/monthly-email/config`
+- `PUT /api/v1/reports/monthly-email/config`
+- `POST /api/v1/reports/monthly-email/send`
+- `GET /api/v1/reports/monthly-email/jobs`
 - `GET /api/v1/subscription-plans`
 - `POST /api/v1/subscription-plans/tenant-subscriptions`
 - `GET /api/v1/subscription-plans/tenant-subscriptions/active`

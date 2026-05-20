@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
@@ -49,6 +49,7 @@ from app.modules.pharmacy.schemas import (
     StockLedgerRead,
     SupplierCreate,
     SupplierRead,
+    SupplierUpdate,
 )
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, now_utc
@@ -329,9 +330,8 @@ def create_supplier(
     payload: SupplierCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> PharmacySupplier:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
     supplier = PharmacySupplier.model_validate(payload, update={"tenant_id": tenant_id})
     session.add(supplier)
     session.commit()
@@ -342,11 +342,52 @@ def create_supplier(
 @router.get("/suppliers", response_model=list[SupplierRead])
 def list_suppliers(
     tenant_id: str = Depends(require_tenant_id),
+    include_inactive: bool = False,
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> list[PharmacySupplier]:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    return list(session.exec(select(PharmacySupplier).where(PharmacySupplier.tenant_id == tenant_id).order_by(PharmacySupplier.name)).all())
+    statement = select(PharmacySupplier).where(PharmacySupplier.tenant_id == tenant_id)
+    if not include_inactive:
+        statement = statement.where(PharmacySupplier.is_active == True)  # noqa: E712
+    return list(session.exec(statement.order_by(PharmacySupplier.name)).all())
+
+
+@router.patch("/suppliers/{supplier_id}", response_model=SupplierRead)
+def update_supplier(
+    supplier_id: str,
+    payload: SupplierUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
+) -> PharmacySupplier:
+    supplier = session.get(PharmacySupplier, supplier_id)
+    if not supplier or supplier.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found")
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(supplier, key, value)
+    supplier.updated_at = datetime.now(timezone.utc)
+    session.add(supplier)
+    session.commit()
+    session.refresh(supplier)
+    return supplier
+
+
+@router.delete("/suppliers/{supplier_id}", response_model=SupplierRead)
+def delete_supplier(
+    supplier_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
+) -> PharmacySupplier:
+    supplier = session.get(PharmacySupplier, supplier_id)
+    if not supplier or supplier.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found")
+    supplier.is_active = False
+    supplier.updated_at = datetime.now(timezone.utc)
+    session.add(supplier)
+    session.commit()
+    session.refresh(supplier)
+    return supplier
 
 
 @router.post("/purchases", response_model=PurchaseRead, status_code=status.HTTP_201_CREATED)

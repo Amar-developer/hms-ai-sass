@@ -5,7 +5,7 @@ This guide helps developers run **MedizinHub HMS** locally on macOS, Windows, an
 The project currently has two parts:
 
 - Frontend: Next.js, React, TypeScript, Tailwind.
-- Backend: FastAPI, SQLModel, SQLite quick-start, PostgreSQL for team development, Alembic migrations.
+- Backend: FastAPI, SQLModel, SQLite quick-start, PostgreSQL for team development, Redis for background jobs, Alembic migrations.
 
 ## Prerequisites
 
@@ -22,7 +22,7 @@ Optional for later production-like development:
 
 - Docker Desktop
 
-Docker Desktop is recommended for team development because it starts PostgreSQL and Redis with the same local configuration for everyone.
+Docker Desktop is recommended for team development because it starts PostgreSQL, Redis, the API, frontend, and the monthly report worker with the same local configuration for everyone.
 
 ## macOS Setup
 
@@ -89,7 +89,7 @@ Use this backend environment variable:
 
 ```bash
 export MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms"
-export MEDIZINHUB_REDIS_URL="redis://localhost:6379/0"
+export MEDIZINHUB_REDIS_URL="redis://localhost:6380/0"
 ```
 
 Run migrations:
@@ -125,6 +125,16 @@ The frontend calls `http://localhost:8000/api/v1` by default. To override it:
 NEXT_PUBLIC_MEDIZINHUB_API_URL="http://localhost:8000/api/v1" npm run dev -- --hostname 127.0.0.1 --port 3000
 ```
 
+For Docker dev, the checked-in `.env.example` uses the compose network URLs:
+
+```env
+MEDIZINHUB_DATABASE_URL=postgresql+psycopg://medizinhub:medizinhub_dev@postgres:5432/medizinhub_hms
+MEDIZINHUB_REDIS_URL=redis://redis:6379/0
+NEXT_PUBLIC_MEDIZINHUB_API_URL=http://localhost:8080/api/v1
+```
+
+Copy it to `.env` and fill only local secrets there. `.env` is ignored by Git; `.env.example` stays tracked as the safe template.
+
 ### 6. Run Backend
 
 In a second terminal:
@@ -140,6 +150,35 @@ Open:
 ```text
 http://localhost:8000/api/v1/health
 http://localhost:8000/docs
+```
+
+### 7. Run Monthly Report Worker
+
+Monthly email reports use Redis plus SMTP. In Docker dev the worker service is:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d redis report-worker
+docker compose -f docker-compose.dev.yml logs -f report-worker
+```
+
+Required `.env` values:
+
+```env
+MEDIZINHUB_REDIS_URL=redis://redis:6379/0
+MEDIZINHUB_REPORT_QUEUE_NAME=medizinhub:reports:monthly
+MEDIZINHUB_SMTP_HOST=smtp.gmail.com
+MEDIZINHUB_SMTP_PORT=587
+MEDIZINHUB_SMTP_USERNAME=your-mailbox@example.com
+MEDIZINHUB_SMTP_PASSWORD=your-app-password
+MEDIZINHUB_SMTP_FROM_EMAIL=your-mailbox@example.com
+MEDIZINHUB_SMTP_FROM_NAME=MedizinHub HMS Reports
+MEDIZINHUB_SMTP_USE_TLS=true
+```
+
+After editing `.env`, recreate backend and worker so Docker reloads env values:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --force-recreate backend report-worker
 ```
 
 ## Windows Setup

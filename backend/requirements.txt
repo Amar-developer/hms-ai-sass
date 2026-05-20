@@ -6,3 +6,4 @@ sqlmodel==0.0.24
 alembic==1.14.1
 psycopg[binary]==3.2.4
 python-multipart==0.0.20
+redis==5.2.1

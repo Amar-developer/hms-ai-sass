@@ -83,6 +83,8 @@ Tenant
        -> CreditNote
        -> DiscountApproval
        -> DoctorSettlement
+  -> Reports
+       -> ReportJob
   -> Lab catalog/order/result tables
   -> Pharmacy catalog/purchase/stock/issue tables
   -> AuditEvent
@@ -189,7 +191,7 @@ Source: `backend/app/modules/billing/models.py`
 | `payment` | `invoice_id`, method, amount, reference | `invoice` | Updates paid and balance totals. |
 | `discountapproval` | source ids, requested amount, status | appointment/consultation ids | Discount workflow. |
 | `creditnote` | `invoice_id`, amount, reason | `invoice` | Refund/credit tracking. |
-| `doctorsettlement` | `practitioner_id`, invoice totals, settlement amount | practitioner by id | Finalized doctor settlement summary. |
+| `doctorsettlement` | `branch_id`, `practitioner_id`, invoice totals, settlement amount | practitioner by id | Finalized settlement snapshot. Summary subtracts already-finalized rows from paid-basis doctor share so the same amount cannot be finalized repeatedly. |
 
 Doctor fee calculation source:
 
@@ -261,9 +263,9 @@ Source: `backend/app/modules/ip/models.py`
 | `ipconsentform` | `admission_id`, consent fields | admission | IP consent forms. |
 | `ipdischargesummary` | `admission_id`, summary/status | admission | Discharge workflow. |
 | `ipcharge` | `admission_id`, charge fields | admission | Charge capture. |
-| `ipbillingitem` | `admission_id`, bill item fields | admission | Billable IP items. |
-| `ipmedicationorder` | `admission_id`, medication order | admission | Medication plan. |
-| `ipmedicationadministration` | `medication_order_id`, given status | medication order | MAR tracking. |
+| `ipbillingitem` | `admission_id`, source fields, description, amount/status | admission | Running bill items from signed IP consultation, medication administration, lab/scan referrals, and manual charges. |
+| `ipmedicationorder` | `admission_id`, medication order, `unit_amount` | admission | Medication plan. `unit_amount` is per administered dose/unit. |
+| `ipmedicationadministration` | `medication_order_id`, given status, `billing_item_id` | medication order | MAR tracking. Given administrations can create billable medicine rows. IP invoice generation can also backfill from catalog price when older rows have no billing item. |
 
 ### Physiotherapy
 
@@ -303,6 +305,18 @@ Source: `backend/app/modules/subscriptions/models.py`
 | `adminsetting` | `backend/app/modules/settings/models.py` | Tenant or branch settings. |
 | `notificationevent` | `backend/app/modules/notifications/models.py` | Queued/sent notification records. |
 | `auditevent` | `backend/app/modules/audit/models.py` | Business audit log. |
+| `reportjob` | `backend/app/modules/reports/models.py` | Redis-backed monthly report email job state: queued, running, sent, failed. |
+
+Report settings are stored in `adminsetting` with these keys:
+
+```text
+REPORT_MONTHLY_EMAIL_ENABLED
+REPORT_MONTHLY_EMAIL_RECIPIENTS
+REPORT_MONTHLY_EMAIL_CC
+REPORT_MONTHLY_EMAIL_SEND_DAY
+REPORT_MONTHLY_EMAIL_FILTERS
+REPORT_MONTHLY_EMAIL_LAST_SENT_PERIOD
+```
 
 ## Common Flow Joins
 
@@ -341,6 +355,16 @@ If doctor fee is wrong, check:
 3. `invoice.fee_rule_id` points to the expected rule.
 4. `share_tax_with_doctor` matches clinic agreement.
 
+Settlement finalization flow:
+
+```text
+paid-basis doctor share
+  - finalized doctorsettlement.settlement_amount rows
+  = payable settlement amount
+```
+
+When payable settlement amount is `0`, the API blocks another finalize call with `409`.
+
 ### Lab Worklist
 
 ```text
@@ -369,9 +393,23 @@ consultation
 appointment
   -> ipadmission.source_appointment_id
   -> iproom.id
-  -> iptreatment / ipconsultation / ipcharge / ipbillingitem
+  -> iptreatment
+       -> treatment.orders may contain lab/scan rows
+  -> ipconsultation
+       -> signed consultation creates doctor billable item
+  -> ipmedicationorder
+       -> ipmedicationadministration may create medicine billable item
+  -> ipcharge / ipbillingitem
   -> invoice.ip_admission_id
 ```
+
+IP invoice generation includes:
+
+1. Automatic room rent from admission date to discharge/planned/current date.
+2. Manual `ipcharge` rows.
+3. Existing billable `ipbillingitem` rows.
+4. Backfilled given medicine administrations using `ipmedicationorder.unit_amount` or `medicinecatalog.default_sale_price`.
+5. Backfilled lab/scan rows from `iptreatment.orders` using explicit row amount or `labtestcatalog.default_price`.
 
 ### Physiotherapy
 
@@ -629,3 +667,126 @@ Invoice captures money.
 DoctorFeeRule controls doctor fee and settlement split.
 AuditEvent records important changes.
 ```
+
+
+
+# Latest Feature And Schema Update - 2026-05-19
+
+This document captures the latest implemented behavior across billing, reports, IP care, lab/pharmacy invoicing, tenant admin reporting, environment setup, and source-control hygiene. It is intentionally operational: use it to understand what the system does now, what tables/API routes are involved, and what tests guard the flow.
+
+## Frontend Feature Updates
+
+| Area | Files | Current behavior |
+|---|---|---|
+| Invoices & Payments | `features/billing/Billing.tsx` | Invoice list has search, source filter, paid-status filter, date range filter, and 10-record pagination. Invoice rows show source, patient, status, totals, paid amount, and doctor share. |
+| Invoice detail | `features/billing/Billing.tsx` | Modal shows invoice source, linked record, totals, line items, and payments. Lab/scan, pharmacy, IP, physiotherapy, and consultation invoices are source-labelled. |
+| Doctor settlement card | `features/billing/Billing.tsx` | Settlement card now shows only remaining payable settlement. Once finalized, the button is hidden and a finalized badge is shown until new paid doctor-share revenue appears. |
+| Reports | `features/reports/Reports.tsx` | Invoice Profit Details shows only paid invoices, includes patient name, uses 10-record pagination, and exports paid-basis settlement/profit details. |
+| Tenant admin monthly reports | `features/admin/TenantAdmin.tsx` | Tenant admin can configure monthly report recipients, CC, send day, automatic/manual mode, report sections, and recent Redis job status. |
+| Lab invoices | `features/lab/Lab.tsx` | Lab Invoice button creates/refreshes billing invoice and reloads global invoice data so the Invoices module immediately shows Lab / Scan invoices. |
+| IP care billing | `features/ip/IPAdmission.tsx` | Daily care medicine/lab selectors now carry catalog prices into care rows. Care entries can create billable medicine administrations and lab/scan items. |
+| Consultation payload | `features/doctor/DoctorConsultation.tsx` | Empty structured clinical rows are removed before API submission to avoid FastAPI 422 validation errors. |
+| API error messages | `lib/api.ts` | FastAPI validation details are surfaced instead of generic `422 Unprocessable Entity`. |
+
+## Backend Feature Updates
+
+| Area | Files | Current behavior |
+|---|---|---|
+| Redis monthly report jobs | `backend/app/modules/reports/*`, `backend/app/api/v1/reports.py` | Monthly report send/config/job APIs create `ReportJob` rows and enqueue job ids in Redis. Worker generates Excel-compatible `.xls` reports and sends via SMTP. |
+| Report worker | `backend/app/modules/reports/worker.py`, Docker compose files | `report-worker` service consumes Redis queue and auto-enqueues monthly reports when tenant report settings are enabled. |
+| SMTP reports | `backend/app/modules/reports/service.py` | SMTP settings are required in real `.env`; missing SMTP causes job failure with a clear `failure_reason`. |
+| Paid-only profit report | `backend/app/modules/reports/service.py` | Email report uses only paid invoices for profit/settlement sections. |
+| Doctor settlement finalization | `backend/app/api/v1/billing.py` | Summary subtracts already-finalized settlements from paid-basis doctor share. Duplicate finalization returns `409`. |
+| IP invoice refresh | `backend/app/api/v1/ip.py` | IP invoice generation refreshes existing invoices and includes room, manual charges, signed consultation billables, billable running items, medication administrations, and lab/scan referrals. |
+| IP care backfill | `backend/app/api/v1/ip.py` | Existing care entries without explicit billing items are still billed by looking up pharmacy/lab catalog prices where possible. |
+| Lab invoice generation | `backend/app/api/v1/billing.py` | `/billing/invoices/from-lab-order` creates/returns lab-order invoices and rejects zero-amount lab orders. |
+
+## Database And Schema Updates
+
+| Table / setting | Source | Purpose |
+|---|---|---|
+| `reportjob` | `backend/app/modules/reports/models.py` | Stores queued/running/sent/failed monthly report email jobs. |
+| `adminsetting` report keys | `backend/app/modules/settings/models.py` | Stores monthly report enabled flag, recipients, CC, send day, filters, and last sent period. |
+| `doctorsettlement` | `backend/app/modules/billing/models.py` | Stores finalized settlement snapshots. Settlement summary now treats rows as finalized payments and calculates remaining payable amount. |
+| `ipbillingitem` | `backend/app/modules/ip/models.py` | Running bill lines from IP consultation, medication administration, lab/scan referrals, and manual billables. |
+| `ipmedicationorder` / `ipmedicationadministration` | `backend/app/modules/ip/models.py` | Medication plan and MAR dose history; given doses can become invoice lines. |
+| `invoice.lab_order_id`, `invoice.pharmacy_issue_id`, `invoice.ip_admission_id`, `invoice.physiotherapy_case_id` | `backend/app/modules/billing/models.py` | Separate source links prevent mixed invoice records and allow source filters. |
+
+Latest migration:
+
+```text
+backend/alembic/versions/20260519_0032_report_jobs.py
+```
+
+It creates `reportjob` and adds report monthly email setting enum values.
+
+## API Updates
+
+| Endpoint | Method | Notes |
+|---|---|---|
+| `/api/v1/reports/monthly-email/config` | `GET`, `PUT` | Tenant monthly report settings. Requires `X-Tenant-ID`. |
+| `/api/v1/reports/monthly-email/send` | `POST` | Creates a report job for previous month by default. Supports `from_date` and `to_date` for manual testing/current-month reports. |
+| `/api/v1/reports/monthly-email/jobs` | `GET` | Lists report jobs. Use GET, not POST. |
+| `/api/v1/billing/doctor-settlements/summary` | `GET` | Returns paid-basis doctor share, finalized amount, payable amount, and `can_finalize`. |
+| `/api/v1/billing/doctor-settlements/finalize` | `POST` | Finalizes only remaining payable amount; duplicate finalization returns `409`. |
+| `/api/v1/billing/invoices/from-lab-order` | `POST` | Creates/returns lab-order invoice. |
+| `/api/v1/billing/invoices/from-pharmacy-issue` | `POST` | Creates/returns pharmacy invoice. |
+| `/api/v1/ip/admissions/{admission_id}/invoice` | `POST` | Creates or refreshes IP invoice with room, consultation, medicine, lab/scan, and manual billable items. |
+
+## Environment And Runtime
+
+`.env.example` documents the expected local values. Real credentials belong in `.env`, which is ignored by Git.
+
+Required for monthly email reports:
+
+```env
+MEDIZINHUB_REDIS_URL=redis://redis:6379/0
+MEDIZINHUB_REPORT_QUEUE_NAME=medizinhub:reports:monthly
+MEDIZINHUB_SMTP_HOST=smtp.gmail.com
+MEDIZINHUB_SMTP_PORT=587
+MEDIZINHUB_SMTP_USERNAME=your-mailbox@example.com
+MEDIZINHUB_SMTP_PASSWORD=your-app-password
+MEDIZINHUB_SMTP_FROM_EMAIL=your-mailbox@example.com
+MEDIZINHUB_SMTP_FROM_NAME=MedizinHub HMS Reports
+MEDIZINHUB_SMTP_USE_TLS=true
+```
+
+Docker services:
+
+```bash
+sudo docker compose -f docker-compose.dev.yml up -d --force-recreate backend report-worker
+sudo docker compose -f docker-compose.dev.yml logs -f report-worker
+```
+
+## Source Control Hygiene
+
+`.gitignore` keeps generated/cache/secret files out of commits:
+
+```text
+.next/
+.next-permission-backup/
+.env
+.env.*
+!.env.example
+backend/uploads/
+```
+
+`.env.example` remains tracked because it is the safe template for developers. Real SMTP/password values must never be committed.
+
+## Tests Added Or Updated
+
+| Test file | Coverage |
+|---|---|
+| `backend/tests/test_payments_settlements.py` | Settlement summary after finalization, payable balance, duplicate finalize rejection. |
+| `backend/tests/test_ip_management.py` | IP invoice backfills medicine administrations and lab referrals from catalog prices when care rows had no explicit amount. |
+
+Recommended verification:
+
+```bash
+npx tsc --noEmit
+npm test
+cd backend && pytest
+```
+
+If Python bytecode cache directories are owned by another user, `py_compile` may fail to write `__pycache__`; use AST parse or fix file ownership before relying on bytecode compilation.
+

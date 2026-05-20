@@ -31,6 +31,7 @@ from app.modules.physiotherapy.models import PhysiotherapyCase, PhysiotherapyEqu
 from app.modules.practitioners.models import Practitioner, PractitionerBranch, PractitionerDepartment, PractitionerLeave
 from app.modules.practitioners.models import PractitionerRoomAssignment, PractitionerSchedule
 from app.modules.queue.models import QueueEntry, QueueEvent
+from app.modules.reports.models import ReportJob
 from app.modules.settings.models import AdminSetting
 from app.modules.subscriptions.models import SubscriptionCredit, SubscriptionInvoice, SubscriptionPlan, TenantSubscription
 from app.modules.tenants.models import Branch, Department, Tenant
@@ -102,6 +103,7 @@ __all__ = [
     "PractitionerSchedule",
     "QueueEntry",
     "QueueEvent",
+    "ReportJob",
     "Role",
     "RolePermission",
     "SubscriptionPlan",

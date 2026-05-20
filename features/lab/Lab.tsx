@@ -6,7 +6,7 @@ import {apiBlob,apiFetch} from '@/lib/api';
 
 const pageSize=10;
 
-export function Lab({apiSession,branchId,patients,appointments}:any){
+export function Lab({apiSession,branchId,patients,appointments,loadLiveData}:any){
  const [orders,setOrders]=useState<any[]>([]);
  const [tests,setTests]=useState<any[]>([]);
  const [packages,setPackages]=useState<any[]>([]);
@@ -109,7 +109,7 @@ export function Lab({apiSession,branchId,patients,appointments}:any){
    const order=await apiFetch(`/lab/orders/from-consultation/${a.consultationId}`,apiSession,{method:'POST',body:JSON.stringify({amount:0,priority:a.tokenType==='Emergency'?'urgent':'routine',ordered_by_user_id:apiSession.user?.id})});
    try{
     const detail=await apiFetch('/billing/invoices/from-lab-order',apiSession,{method:'POST',body:JSON.stringify({lab_order_id:order.id,created_by_user_id:apiSession.user?.id})});
-    await load();setMessage(`Lab order created and invoice ${detail.invoice?.invoice_number||''} linked.`);
+    await load();await loadLiveData?.(apiSession);setMessage(`Lab order created and invoice ${detail.invoice?.invoice_number||''} linked.`);
    }catch(invoiceErr:any){
     await load();setMessage(`Lab order created. ${invoiceErr.message||'Invoice can be generated from the worklist.'}`);
    }
@@ -152,7 +152,7 @@ export function Lab({apiSession,branchId,patients,appointments}:any){
   setBusy(`invoice-${order.id}`);setMessage('');
   try{
    const detail=await apiFetch('/billing/invoices/from-lab-order',apiSession,{method:'POST',body:JSON.stringify({lab_order_id:order.id,created_by_user_id:apiSession.user?.id})});
-   await load();setMessage(`Lab invoice ${detail.invoice?.invoice_number||''} generated.`);
+   await load();await loadLiveData?.(apiSession);setMessage(`Lab invoice ${detail.invoice?.invoice_number||''} generated.`);
   }catch(err:any){setMessage(err.message||'Could not generate lab invoice.')}finally{setBusy('')}
  }
 

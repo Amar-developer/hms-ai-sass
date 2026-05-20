@@ -8,7 +8,7 @@ from sqlmodel import SQLModel
 
 import app.models  # noqa: F401
 from app.core.database import engine, init_db
-from scripts.seed_demo import seed_demo_data
+from scripts.seed_demo_new import seed
 
 CONFIRM_VALUE = "RESET_MEDIZINHUB_DEV"
 
@@ -35,7 +35,7 @@ def main() -> None:
     from sqlmodel import Session
 
     with Session(engine) as session:
-        summary = seed_demo_data(session)
+        summary = seed(session)
     print(json.dumps({"reset": True, "seed": summary}, indent=2, sort_keys=True))
 
 

@@ -6,6 +6,7 @@ backend/.venv/
 
 # Build outputs
 .next/
+.next-permission-backup/
 out/
 dist/
 build/
@@ -24,6 +25,7 @@ __pycache__/
 # Environment
 .env
 .env.*
+# Keep only the safe template in Git; never commit real local secrets.
 !.env.example
 
 # Local OS and database files

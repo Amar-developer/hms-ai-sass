@@ -1,16 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   CalendarDays,
+  ChevronDown,
   Download,
   IndianRupee,
+  Mail,
   Percent,
   ReceiptIndianRupee,
   Stethoscope,
 } from "lucide-react";
 import { Badge, Card, Field, Input, Select } from "@/components/ui";
+import { apiFetch } from "@/lib/api";
+
+const pageSize = 10;
 
 function money(value: any) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -93,6 +98,25 @@ function rowDate(invoice: any) {
   return dateKey(invoice.created_at || invoice.invoice_date || invoice.updated_at);
 }
 
+function isPaidInvoice(invoice: any) {
+  const status = normalized(invoice.status);
+  const paid = numberValue(invoice.paid_amount);
+  const balance = numberValue(invoice.balance_amount);
+  return status === "paid" || (paid > 0 && balance <= 0);
+}
+
+function invoiceType(invoice: any) {
+  if (invoice.pharmacy_issue_id) return "pharmacy";
+  if (invoice.lab_order_id) return "lab";
+  return "consultation";
+}
+
+function invoiceTypeLabel(type: string) {
+  if (type === "pharmacy") return "Pharmacy";
+  if (type === "lab") return "Lab";
+  return "Consultation";
+}
+
 function csvCell(value: any) {
   const text = String(value ?? "");
   return `"${text.replaceAll('"', '""')}"`;
@@ -125,25 +149,65 @@ function htmlEscape(value: any) {
 }
 
 function htmlTable(headers: string[], rows: any[][]) {
+  const headerStyle =
+    "background-color:#2f6b52;color:#ffffff;font-family:Roboto,Arial,sans-serif;font-size:13px;font-weight:bold;border:1px solid #b7c5bd;padding:9px 10px;text-align:left;white-space:nowrap;";
+  const textStyle =
+    "font-family:Roboto,Arial,sans-serif;font-size:13px;color:#1f2937;border:1px solid #d9e2dd;padding:8px 10px;text-align:left;";
+  const numberStyle =
+    "font-family:Roboto,Arial,sans-serif;font-size:13px;color:#1f2937;border:1px solid #d9e2dd;padding:8px 10px;text-align:right;";
+  const emptyStyle =
+    "font-family:Roboto,Arial,sans-serif;font-size:13px;color:#64748b;border:1px solid #d9e2dd;padding:12px 10px;text-align:left;";
   return `
-    <table>
+    <table style="border-collapse:collapse;width:100%;margin-bottom:22px;">
       <thead>
-        <tr>${headers.map((header) => `<th>${htmlEscape(header)}</th>`).join("")}</tr>
+        <tr>${headers.map((header) => `<th style="${headerStyle}">${htmlEscape(header)}</th>`).join("")}</tr>
       </thead>
       <tbody>
         ${
           rows.length
             ? rows
-                .map(
-                  (row) =>
-                    `<tr>${row.map((cell) => `<td>${htmlEscape(cell)}</td>`).join("")}</tr>`,
-                )
+                .map((row, index) => {
+                  const isTotal = row[0] === "Total";
+                  const background = isTotal ? "#e6f2ec" : index % 2 ? "#f8faf9" : "#ffffff";
+                  return (
+                    `<tr>${row
+                      .map((cell) => {
+                        const style = `${typeof cell === "number" ? numberStyle : textStyle}${isTotal ? "font-weight:bold;" : ""}`;
+                        return `<td style="${style}background-color:${background};">${htmlEscape(cell)}</td>`;
+                      })
+                      .join("")}</tr>`
+                  );
+                })
                 .join("")
-            : `<tr><td colspan="${headers.length}">No rows</td></tr>`
+            : `<tr><td colspan="${headers.length}" style="${emptyStyle}">No rows</td></tr>`
         }
       </tbody>
     </table>
   `;
+}
+
+function titledHtmlTable(title: string, headers: string[], rows: any[][]) {
+  const titleStyle =
+    "font-family:Roboto,Arial,sans-serif;font-size:16px;font-weight:bold;color:#0f172a;background-color:#eef6f1;border:1px solid #b7c5bd;padding:10px 12px;text-align:left;";
+  return `
+    <table style="border-collapse:collapse;width:100%;margin-bottom:22px;">
+      <thead>
+        <tr><th colspan="${headers.length}" style="${titleStyle}">${htmlEscape(title)}</th></tr>
+      </thead>
+    </table>
+    ${htmlTable(headers, rows)}
+  `;
+}
+
+function parseEmailList(value: string) {
+  return value
+    .split(/[,\n;]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function isEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
 export function Reports({
@@ -151,6 +215,7 @@ export function Reports({
   patients,
   ipAdmissions,
   apiSession,
+  branchId,
   liveInvoices = [],
   livePractitioners = [],
 }: any) {
@@ -159,6 +224,26 @@ export function Reports({
   const [fromDate, setFromDate] = useState(rangeStart);
   const [toDate, setToDate] = useState(rangeEnd);
   const [doctorId, setDoctorId] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("overall");
+  const [supplierFilter, setSupplierFilter] = useState("all");
+  const [openSections, setOpenSections] = useState<any>({doctor: true, lab: true, pharmacy: true});
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sendMessage, setSendMessage] = useState("");
+  const [sendError, setSendError] = useState("");
+  const [sendPanelOpen, setSendPanelOpen] = useState(false);
+  const [recipientInput, setRecipientInput] = useState("");
+  const [recentEmails, setRecentEmails] = useState<string[]>([]);
+  const [labTests, setLabTests] = useState<any[]>([]);
+  const [labPackages, setLabPackages] = useState<any[]>([]);
+  const [labOrderDetails, setLabOrderDetails] = useState<any[]>([]);
+  const [medicineRows, setMedicineRows] = useState<any[]>([]);
+  const [pharmacyIssueDetails, setPharmacyIssueDetails] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const patientById = useMemo(
+    () => new Map<string, any>(patients.map((row: any) => [row.id, row])),
+    [patients],
+  );
   const appointmentById = useMemo(
     () => new Map<string, any>(scopedAppointments.map((row: any) => [row.id, row])),
     [scopedAppointments],
@@ -173,27 +258,135 @@ export function Reports({
       ),
     [livePractitioners],
   );
-  const doctorOptions = Array.from(
-    new Map(
-      scopedAppointments
-        .map((row: any) => [
-          row.doctorId || row.practitioner_id,
-          row.doctor || row.practitioner_name || doctorById.get(row.doctorId || row.practitioner_id),
-        ])
-        .filter(([id]) => Boolean(id)),
-    ).entries(),
+  const branchDoctorOptions = livePractitioners
+    .filter((row: any) => {
+      const type = normalized(row.practitioner_type || row.type || "doctor");
+      const status = normalized(row.status || "active");
+      const branchIds = row.branch_ids || [];
+      return type === "doctor" && status !== "inactive" && (!branchId || branchIds.length === 0 || branchIds.includes(branchId));
+    })
+    .map((row: any) => [row.id, row.full_name || row.name || row.id]);
+  const appointmentDoctorOptions = scopedAppointments
+    .map((row: any) => [
+      row.doctorId || row.practitioner_id,
+      row.doctor || row.practitioner_name || doctorById.get(row.doctorId || row.practitioner_id),
+    ])
+    .filter(([id]) => Boolean(id));
+  const doctorOptions = Array.from(new Map([...branchDoctorOptions, ...appointmentDoctorOptions]).entries()).sort((a: any, b: any) =>
+    String(a[1]).localeCompare(String(b[1])),
   );
   const filteredInvoices = liveInvoices.filter((invoice: any) => {
     const invoiceDate = rowDate(invoice);
     const appointment = appointmentById.get(invoice.appointment_id);
     const invoiceDoctorId =
       appointment?.doctorId || appointment?.practitioner_id || invoice.practitioner_id;
+    const invoiceBranchId = invoice.branch_id || appointment?.branchId || appointment?.branch_id;
+    const type = invoiceType(invoice);
     return (
+      isPaidInvoice(invoice) &&
+      (!branchId || invoiceBranchId === branchId) &&
       (!fromDate || invoiceDate >= fromDate) &&
       (!toDate || invoiceDate <= toDate) &&
-      (doctorId === "all" || invoiceDoctorId === doctorId)
+      (doctorId === "all" || invoiceDoctorId === doctorId) &&
+      (typeFilter === "overall" || type === typeFilter)
     );
   });
+  const totalInvoicePages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
+  const safeInvoicePage = Math.min(invoicePage, totalInvoicePages);
+  const invoicePageRows = filteredInvoices.slice(
+    (safeInvoicePage - 1) * pageSize,
+    safeInvoicePage * pageSize,
+  );
+
+  useEffect(() => {
+    setInvoicePage(1);
+  }, [fromDate, toDate, doctorId, typeFilter, branchId]);
+
+  useEffect(() => {
+    if (doctorId !== "all" && !doctorOptions.some(([id]: any) => id === doctorId)) {
+      setDoctorId("all");
+    }
+  }, [branchId, doctorId, doctorOptions.length]);
+
+  useEffect(() => {
+    if (invoicePage !== safeInvoicePage) setInvoicePage(safeInvoicePage);
+  }, [invoicePage, safeInvoicePage]);
+
+  useEffect(() => {
+    if (!apiSession?.tenantId || typeof window === "undefined") return;
+    try {
+      const saved = JSON.parse(
+        window.localStorage.getItem(`medizinhub.reportEmails.${apiSession.tenantId}`) || "[]",
+      );
+      if (Array.isArray(saved)) setRecentEmails(saved.filter((item) => typeof item === "string").slice(0, 6));
+    } catch {}
+  }, [apiSession?.tenantId]);
+
+  useEffect(() => {
+    if (!apiSession?.token) return;
+    let cancelled = false;
+    async function loadLabSettlementData() {
+      const [testRows, packageRows, supplierRows, orderRows] = await Promise.all([
+        apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
+        apiFetch("/lab/catalog/packages", apiSession).catch(() => []),
+        apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
+        apiFetch("/lab/orders", apiSession).catch(() => []),
+      ]);
+      if (cancelled) return;
+      setLabTests(testRows || []);
+      setLabPackages(packageRows || []);
+      setSuppliers(supplierRows || []);
+      const relevantOrderIds = Array.from(
+        new Set(
+          liveInvoices
+            .filter((invoice: any) => invoice.lab_order_id)
+            .map((invoice: any) => invoice.lab_order_id),
+        ),
+      );
+      const sourceOrderIds = relevantOrderIds.length
+        ? relevantOrderIds
+        : (orderRows || []).slice(0, 200).map((order: any) => order.id);
+      const details = await Promise.all(
+        sourceOrderIds.map((orderId: any) => apiFetch(`/lab/orders/${orderId}`, apiSession).catch(() => null)),
+      );
+      if (!cancelled) setLabOrderDetails(details.filter(Boolean));
+    }
+    loadLabSettlementData();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiSession?.token, apiSession?.tenantId, liveInvoices.length]);
+
+  useEffect(() => {
+    if (!apiSession?.token) return;
+    let cancelled = false;
+    async function loadPharmacySettlementData() {
+      const [medicines, issueRows] = await Promise.all([
+        apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
+        apiFetch("/pharmacy/issues", apiSession).catch(() => []),
+      ]);
+      if (cancelled) return;
+      setMedicineRows(medicines || []);
+      const relevantIssueIds = Array.from(
+        new Set(
+          liveInvoices
+            .filter((invoice: any) => invoice.pharmacy_issue_id)
+            .map((invoice: any) => invoice.pharmacy_issue_id),
+        ),
+      );
+      const sourceIssueIds = relevantIssueIds.length
+        ? relevantIssueIds
+        : (issueRows || []).slice(0, 200).map((issue: any) => issue.id);
+      const details = await Promise.all(
+        sourceIssueIds.map((issueId: any) => apiFetch(`/pharmacy/issues/${issueId}`, apiSession).catch(() => null)),
+      );
+      if (!cancelled) setPharmacyIssueDetails(details.filter(Boolean));
+    }
+    loadPharmacySettlementData();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiSession?.token, apiSession?.tenantId, liveInvoices.length]);
   const completedAppointments = scopedAppointments.filter((row: any) => {
     const appointmentDate = dateKey(row.appointmentDate || row.appointment_date);
     const rowDoctorId = row.doctorId || row.practitioner_id;
@@ -219,6 +412,10 @@ export function Reports({
       acc.settlement += settlement;
       acc.clinicFee += numberValue(invoice.clinic_share_amount) || Math.max(total - doctorShare, 0);
       acc.tax += numberValue(invoice.tax_amount);
+      const type = invoiceType(invoice);
+      if (type === "lab") acc.labRevenue += paid;
+      if (type === "pharmacy") acc.pharmacyRevenue += paid;
+      if (type === "consultation") acc.consultationRevenue += paid;
       return acc;
     },
     {
@@ -230,6 +427,9 @@ export function Reports({
       settlement: 0,
       clinicFee: 0,
       tax: 0,
+      consultationRevenue: 0,
+      labRevenue: 0,
+      pharmacyRevenue: 0,
     },
   );
   const grossProfit = Math.max(totals.grossRevenue - totals.doctorFee, 0);
@@ -307,9 +507,180 @@ export function Reports({
     percent(Math.max(row.grossRevenue - row.doctorFee, 0), row.grossRevenue),
     row.finalProfit,
   ]);
+  const settlementExportRows = settlementRows.length
+    ? [
+        ...settlementRows,
+        [
+          "Total",
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.consultations), 0),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.invoices), 0),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.grossRevenue), 0),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.paidRevenue), 0),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.doctorFee), 0),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.settlement), 0),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.clinicFee), 0),
+          percent(grossProfit, totals.grossRevenue),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.finalProfit), 0),
+        ],
+      ]
+    : settlementRows;
+
+  const labTestById = useMemo(() => new Map(labTests.map((row: any) => [row.id, row])), [labTests]);
+  const labPackageById = useMemo(() => new Map(labPackages.map((row: any) => [row.id, row])), [labPackages]);
+  const medicineById = useMemo(() => new Map(medicineRows.map((row: any) => [row.id, row])), [medicineRows]);
+  const supplierById = useMemo(() => new Map(suppliers.map((row: any) => [row.id, row.name])), [suppliers]);
+  const labOrderDetailById = useMemo(
+    () => new Map(labOrderDetails.map((detail: any) => [detail.order?.id, detail])),
+    [labOrderDetails],
+  );
+  const labSettlementRows = Array.from(
+    filteredInvoices
+      .filter((invoice: any) => invoiceType(invoice) === "lab" && invoice.lab_order_id)
+      .reduce((acc: Map<string, any>, invoice: any) => {
+        const detail: any = labOrderDetailById.get(invoice.lab_order_id);
+        const items = detail?.items?.length ? detail.items : [{test_name: "Unmapped Lab Invoice", price: invoice.paid_amount}];
+        for (const item of items) {
+          const catalogItem = item.package_id ? labPackageById.get(item.package_id) : labTestById.get(item.test_id);
+          const supplierId = catalogItem?.supplier_id || "none";
+          const key = `${supplierId}:${item.test_name || item.id}`;
+          const row =
+            acc.get(key) ||
+            {
+              id: key,
+              supplierId,
+              supplier: supplierById.get(supplierId) || "No supplier",
+              item: item.test_name || catalogItem?.name || "Lab item",
+              orders: new Set(),
+              invoices: new Set(),
+              revenue: 0,
+              purchaseCost: 0,
+            };
+          row.orders.add(invoice.lab_order_id);
+          row.invoices.add(invoice.id);
+          row.revenue += numberValue(item.price);
+          row.purchaseCost += numberValue(catalogItem?.purchase_price);
+          acc.set(key, row);
+        }
+        return acc;
+      }, new Map<string, any>())
+      .values(),
+  )
+    .map((row: any) => ({
+      ...row,
+      orderCount: row.orders.size,
+      invoiceCount: row.invoices.size,
+      profit: Math.max(row.revenue - row.purchaseCost, 0),
+    }))
+    .filter((row: any) => supplierFilter === "all" || row.supplierId === supplierFilter)
+    .sort((a: any, b: any) => b.profit - a.profit);
+  const pharmacyIssueDetailById = useMemo(
+    () => new Map(pharmacyIssueDetails.map((detail: any) => [detail.issue?.id, detail])),
+    [pharmacyIssueDetails],
+  );
+  const pharmacySettlementRows = Array.from(
+    filteredInvoices
+      .filter((invoice: any) => invoiceType(invoice) === "pharmacy" && invoice.pharmacy_issue_id)
+      .reduce((acc: Map<string, any>, invoice: any) => {
+        const detail: any = pharmacyIssueDetailById.get(invoice.pharmacy_issue_id);
+        const items = detail?.items?.length ? detail.items : [{medicine_name: "Unmapped Pharmacy Invoice", unit_price: invoice.paid_amount, quantity: 1}];
+        for (const item of items) {
+          const medicine = medicineById.get(item.medicine_id);
+          const supplierId = medicine?.supplier_id || "none";
+          const key = `${supplierId}:${item.medicine_name || item.id}`;
+          const quantity = numberValue(item.dispensed_quantity || item.quantity || 1);
+          const revenue = numberValue(item.unit_price) * quantity;
+          const purchaseCost = numberValue(medicine?.purchase_price) * quantity;
+          const row =
+            acc.get(key) ||
+            {
+              id: key,
+              supplierId,
+              supplier: supplierById.get(supplierId) || "No supplier",
+              item: item.medicine_name || medicine?.name || "Medicine",
+              issues: new Set(),
+              invoices: new Set(),
+              quantity: 0,
+              revenue: 0,
+              purchaseCost: 0,
+            };
+          row.issues.add(invoice.pharmacy_issue_id);
+          row.invoices.add(invoice.id);
+          row.quantity += quantity;
+          row.revenue += revenue;
+          row.purchaseCost += purchaseCost;
+          acc.set(key, row);
+        }
+        return acc;
+      }, new Map<string, any>())
+      .values(),
+  )
+    .map((row: any) => ({
+      ...row,
+      issueCount: row.issues.size,
+      invoiceCount: row.invoices.size,
+      profit: Math.max(row.revenue - row.purchaseCost, 0),
+    }))
+    .filter((row: any) => supplierFilter === "all" || row.supplierId === supplierFilter)
+    .sort((a: any, b: any) => b.profit - a.profit);
+  const labSettlementHeaders = [
+    "Supplier",
+    "Lab Test / Package",
+    "Orders",
+    "Invoices",
+    "Revenue",
+    "Purchase Cost",
+    "Lab Profit",
+  ];
+  const labSettlementExportRows = labSettlementRows.map((row: any) => [
+    row.supplier,
+    row.item,
+    row.orderCount,
+    row.invoiceCount,
+    row.revenue,
+    row.purchaseCost,
+    row.profit,
+  ]);
+  const pharmacySettlementHeaders = [
+    "Supplier",
+    "Medicine",
+    "Issues",
+    "Invoices",
+    "Qty",
+    "Revenue",
+    "Purchase Cost",
+    "Pharmacy Profit",
+  ];
+  const pharmacySettlementExportRows = pharmacySettlementRows.map((row: any) => [
+    row.supplier,
+    row.item,
+    row.issueCount,
+    row.invoiceCount,
+    row.quantity,
+    row.revenue,
+    row.purchaseCost,
+    row.profit,
+  ]);
+  const labSettlementSummary = labSettlementRows.reduce(
+    (acc: any, row: any) => ({
+      revenue: acc.revenue + numberValue(row.revenue),
+      purchaseCost: acc.purchaseCost + numberValue(row.purchaseCost),
+      profit: acc.profit + numberValue(row.profit),
+    }),
+    {revenue: 0, purchaseCost: 0, profit: 0},
+  );
+  const pharmacySettlementSummary = pharmacySettlementRows.reduce(
+    (acc: any, row: any) => ({
+      revenue: acc.revenue + numberValue(row.revenue),
+      purchaseCost: acc.purchaseCost + numberValue(row.purchaseCost),
+      profit: acc.profit + numberValue(row.profit),
+    }),
+    {revenue: 0, purchaseCost: 0, profit: 0},
+  );
   const invoiceHeaders = [
     "Invoice",
     "Date",
+    "Type",
+    "Patient",
     "Doctor",
     "Status",
     "Total",
@@ -321,6 +692,7 @@ export function Reports({
   ];
   const invoiceRows = filteredInvoices.map((invoice: any) => {
     const appointment: any = appointmentById.get(invoice.appointment_id);
+    const patient: any = patientById.get(invoice.patient_id);
     const settlement = settlementPaidBasis(invoice);
     const paid = numberValue(invoice.paid_amount);
     const doctorName =
@@ -330,6 +702,8 @@ export function Reports({
     return [
       invoice.invoice_number,
       rowDate(invoice),
+      invoiceTypeLabel(invoiceType(invoice)),
+      patient?.name || patient?.full_name || invoice.patient_name || invoice.patient_id || "-",
       doctorName,
       invoice.status,
       numberValue(invoice.total_amount),
@@ -340,9 +714,31 @@ export function Reports({
       Math.max(paid - settlement, 0),
     ];
   });
+  const invoiceExportRows = invoiceRows.length
+    ? [
+        ...invoiceRows,
+        [
+          "Total",
+          "",
+          "",
+          "",
+          "",
+          "",
+          totals.grossRevenue,
+          totals.paidRevenue,
+          totals.balance,
+          totals.doctorFee,
+          totals.settlement,
+          finalProfit,
+        ],
+      ]
+    : invoiceRows;
   const summaryRows = [
     ["Gross Revenue", totals.grossRevenue],
     ["Paid Revenue", totals.paidRevenue],
+    ["Consultation Revenue", totals.consultationRevenue],
+    ["Lab Revenue", totals.labRevenue],
+    ["Pharmacy Revenue", totals.pharmacyRevenue],
     ["Balance", totals.balance],
     ["Doctor Fee", totals.doctorFee],
     ["Settlement", totals.settlement],
@@ -353,7 +749,13 @@ export function Reports({
     ["Final Profit %", percent(finalProfit, totals.paidRevenue)],
     ["Completed Consultations", completedAppointments.length],
   ];
-  const exportName = `healthcare-profit-report-${fromDate || "start"}-${toDate || "end"}`;
+  const exportName = `healthcare-profit-report-${fromDate || "start"}-${toDate || "end"}-${typeFilter}`;
+  const canSendEmail = Boolean(
+    apiSession?.user &&
+      !apiSession.user.is_super_admin &&
+      (apiSession.user.user_type === "tenant_admin" ||
+        apiSession.user.roles?.includes("tenant_admin")),
+  );
 
   function exportCsv() {
     const content = [
@@ -363,10 +765,16 @@ export function Reports({
       tableToCsv(["Metric", "Value"], summaryRows),
       "",
       "Doctor Settlement & Profitability",
-      tableToCsv(settlementHeaders, settlementRows),
+      tableToCsv(settlementHeaders, settlementExportRows),
+      "",
+      "Lab Test Settlement & Profitability",
+      tableToCsv(labSettlementHeaders, labSettlementExportRows),
+      "",
+      "Pharmacy Settlement & Profitability",
+      tableToCsv(pharmacySettlementHeaders, pharmacySettlementExportRows),
       "",
       "Invoice Profit Details",
-      tableToCsv(invoiceHeaders, invoiceRows),
+      tableToCsv(invoiceHeaders, invoiceExportRows),
     ].join("\n");
     downloadBlob(`${exportName}.csv`, "text/csv;charset=utf-8", content);
   }
@@ -374,15 +782,22 @@ export function Reports({
   function exportExcel() {
     const html = `
       <html>
-        <head><meta charset="utf-8" /></head>
+        <head>
+          <meta charset="utf-8" />
+          <style>
+            body { font-family: Roboto, Arial, sans-serif; color: #1f2937; font-size: 13px; }
+            h1 { margin: 0 0 6px; font-size: 22px; color: #0f172a; }
+            p { margin: 0 0 18px; color: #475569; font-size: 13px; }
+          </style>
+        </head>
         <body>
-          <h2>Healthcare Gross Profit Report</h2>
-          <p>Period: ${fromDate || "-"} to ${toDate || "-"}</p>
-          ${htmlTable(["Metric", "Value"], summaryRows)}
-          <h3>Doctor Settlement & Profitability</h3>
-          ${htmlTable(settlementHeaders, settlementRows)}
-          <h3>Invoice Profit Details</h3>
-          ${htmlTable(invoiceHeaders, invoiceRows)}
+          <h1 style="font-family:Roboto,Arial,sans-serif;font-size:22px;font-weight:bold;color:#0f172a;margin:0 0 6px;">Healthcare Gross Profit Report</h1>
+          <p style="font-family:Roboto,Arial,sans-serif;font-size:13px;color:#475569;margin:0 0 18px;">Period: ${fromDate || "-"} to ${toDate || "-"}</p>
+          ${titledHtmlTable("Summary", ["Metric", "Value"], summaryRows)}
+          ${titledHtmlTable("Doctor Settlement & Profitability", settlementHeaders, settlementExportRows)}
+          ${titledHtmlTable("Lab Test Settlement & Profitability", labSettlementHeaders, labSettlementExportRows)}
+          ${titledHtmlTable("Pharmacy Settlement & Profitability", pharmacySettlementHeaders, pharmacySettlementExportRows)}
+          ${titledHtmlTable("Invoice Profit Details", invoiceHeaders, invoiceExportRows)}
         </body>
       </html>
     `;
@@ -411,14 +826,74 @@ export function Reports({
           <h2>Summary</h2>
           ${htmlTable(["Metric", "Value"], summaryRows)}
           <h2>Doctor Settlement & Profitability</h2>
-          ${htmlTable(settlementHeaders, settlementRows)}
+          ${htmlTable(settlementHeaders, settlementExportRows)}
+          <h2>Lab Test Settlement & Profitability</h2>
+          ${htmlTable(labSettlementHeaders, labSettlementExportRows)}
+          <h2>Pharmacy Settlement & Profitability</h2>
+          ${htmlTable(pharmacySettlementHeaders, pharmacySettlementExportRows)}
           <h2>Invoice Profit Details</h2>
-          ${htmlTable(invoiceHeaders, invoiceRows)}
+          ${htmlTable(invoiceHeaders, invoiceExportRows)}
           <script>window.onload = () => window.print();</script>
         </body>
       </html>
     `);
     win.document.close();
+  }
+
+  async function sendEmailReport() {
+    setSendMessage("");
+    setSendError("");
+    if (!fromDate || !toDate) {
+      setSendError("Select from date and to date before sending.");
+      return;
+    }
+    const recipients = Array.from(new Set(parseEmailList(recipientInput)));
+    if (recipients.length === 0) {
+      setSendError("Enter at least one email address.");
+      return;
+    }
+    const invalidEmail = recipients.find((email) => !isEmail(email));
+    if (invalidEmail) {
+      setSendError(`Check email address: ${invalidEmail}`);
+      return;
+    }
+    setSendBusy(true);
+    try {
+      const result = await apiFetch("/reports/profit-email/send", apiSession, {
+        method: "POST",
+        body: JSON.stringify({
+          recipients,
+          from_date: fromDate,
+          to_date: toDate,
+          doctor_id: doctorId === "all" ? null : doctorId,
+          invoice_type: typeFilter,
+          supplier_id: supplierFilter === "all" ? null : supplierFilter,
+          branch_id: branchId || null,
+        }),
+      });
+      const nextRecent = Array.from(new Set([...recipients, ...recentEmails])).slice(0, 6);
+      setRecentEmails(nextRecent);
+      if (typeof window !== "undefined" && apiSession?.tenantId) {
+        window.localStorage.setItem(
+          `medizinhub.reportEmails.${apiSession.tenantId}`,
+          JSON.stringify(nextRecent),
+        );
+      }
+      setSendPanelOpen(false);
+      setSendMessage(
+        `Sent to ${result.recipients.join(", ")} with ${result.attachment_filenames.length} Excel files.`,
+      );
+    } catch (err: any) {
+      setSendError(err.message || "Could not send report email.");
+    } finally {
+      setSendBusy(false);
+    }
+  }
+
+  function addRecipientSuggestion(email: string) {
+    const current = parseEmailList(recipientInput);
+    if (current.includes(email)) return;
+    setRecipientInput([...current, email].join(", "));
   }
 
   return (
@@ -459,8 +934,77 @@ export function Reports({
           >
             PDF
           </button>
+          {canSendEmail && (
+            <button
+              type="button"
+              onClick={() => {
+                setSendPanelOpen((open) => !open);
+                setSendMessage("");
+                setSendError("");
+              }}
+              className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold disabled:text-slate-400"
+            >
+              <Mail size={15} />
+              Send
+            </button>
+          )}
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-4">
+        {canSendEmail && sendPanelOpen && (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <Field label="Email recipients">
+              <textarea
+                value={recipientInput}
+                onChange={(event: any) => setRecipientInput(event.target.value)}
+                placeholder="Enter one or more email IDs, separated by comma"
+                rows={3}
+                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
+              />
+            </Field>
+            {recentEmails.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {recentEmails.map((email) => (
+                  <button
+                    key={email}
+                    type="button"
+                    onClick={() => addRecipientSuggestion(email)}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                  >
+                    {email}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={sendEmailReport}
+                disabled={sendBusy}
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:bg-slate-300"
+              >
+                <Mail size={15} />
+                {sendBusy ? "Sending..." : "Send Excel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSendPanelOpen(false)}
+                disabled={sendBusy}
+                className="rounded-2xl border bg-white px-4 py-2 text-sm font-bold"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+        {(sendMessage || sendError) && (
+          <div
+            className={`mt-3 rounded-2xl p-3 text-sm font-semibold ${
+              sendError ? "bg-red-50 text-red-700" : "bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            {sendError || sendMessage}
+          </div>
+        )}
+        <div className="mt-4 grid gap-3 md:grid-cols-6">
           <Field label="Period">
             <Select value={period} onChange={(event: any) => changePeriod(event.target.value)}>
               <option value="daily">Daily</option>
@@ -499,6 +1043,25 @@ export function Reports({
               ))}
             </Select>
           </Field>
+          <Field label="Type">
+            <Select value={typeFilter} onChange={(event: any) => setTypeFilter(event.target.value)}>
+              <option value="overall">Overall</option>
+              <option value="consultation">Consultation</option>
+              <option value="lab">Lab</option>
+              <option value="pharmacy">Pharmacy</option>
+            </Select>
+          </Field>
+          <Field label="Supplier">
+            <Select value={supplierFilter} onChange={(event: any) => setSupplierFilter(event.target.value)}>
+              <option value="all">All suppliers</option>
+              <option value="none">No supplier</option>
+              {suppliers.map((supplier: any) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
       </Card>
 
@@ -515,12 +1078,24 @@ export function Reports({
         <Metric icon={CalendarDays} label="Completed Consultations" value={completedAppointments.length} hint={`${patients.length} patient records · ${ipAdmissions.length} IP records`} />
       </div>
 
-      <Card>
-        <h3 className="text-lg font-bold">Doctor Settlement & Profitability</h3>
-        <p className="text-sm text-slate-500">
-          Settlement is calculated only on collected amount, so unpaid invoice
-          balance does not overstate doctor payout or clinic profit.
-        </p>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Metric icon={ReceiptIndianRupee} label="Consultation Revenue" value={money(totals.consultationRevenue)} hint="Paid consultation invoices" />
+        <Metric icon={ReceiptIndianRupee} label="Lab Revenue" value={money(totals.labRevenue)} hint="Paid lab invoices" />
+        <Metric icon={ReceiptIndianRupee} label="Pharmacy Revenue" value={money(totals.pharmacyRevenue)} hint="Paid pharmacy invoices" />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Metric icon={ReceiptIndianRupee} label="Lab Settlement" value={money(labSettlementSummary.purchaseCost)} hint={`Lab profit ${money(labSettlementSummary.profit)}`} />
+        <Metric icon={ReceiptIndianRupee} label="Pharmacy Settlement" value={money(pharmacySettlementSummary.purchaseCost)} hint={`Pharmacy profit ${money(pharmacySettlementSummary.profit)}`} />
+      </div>
+
+      <CollapsibleReportSection
+        title="Doctor Settlement & Profitability"
+        subtitle="Profit and settlement use only fully paid invoices, so issued or due invoices do not overstate doctor payout or clinic profit."
+        badge={`${doctorRows.length} doctors`}
+        isOpen={openSections.doctor}
+        onToggle={() => setOpenSections((state: any) => ({...state, doctor: !state.doctor}))}
+      >
         <div className="mt-4 overflow-auto rounded-2xl border">
           <table className="w-full min-w-[1280px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -565,15 +1140,117 @@ export function Reports({
             </tbody>
           </table>
         </div>
-      </Card>
+      </CollapsibleReportSection>
+
+      <CollapsibleReportSection
+        title="Lab Test Settlement & Profitability"
+        subtitle="Outside lab purchase cost is taken from each lab test or package supplier setup."
+        badge={`${labSettlementRows.length} lab items`}
+        isOpen={openSections.lab}
+        onToggle={() => setOpenSections((state: any) => ({...state, lab: !state.lab}))}
+      >
+        <div className="mt-4 overflow-auto rounded-2xl border">
+          <table className="w-full min-w-[1120px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Supplier</th>
+                <th>Lab Test / Package</th>
+                <th>Orders</th>
+                <th>Invoices</th>
+                <th>Revenue</th>
+                <th>Purchase Cost</th>
+                <th>Lab Profit</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {labSettlementRows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-4 text-slate-500">
+                    No paid lab invoices match this filter.
+                  </td>
+                </tr>
+              )}
+              {labSettlementRows.map((row: any) => (
+                <tr key={row.id}>
+                  <td className="px-4 py-4">
+                    <b>{row.supplier}</b>
+                  </td>
+                  <td>{row.item}</td>
+                  <td>{row.orderCount}</td>
+                  <td>{row.invoiceCount}</td>
+                  <td>{money(row.revenue)}</td>
+                  <td>{money(row.purchaseCost)}</td>
+                  <td className="font-bold">{money(row.profit)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CollapsibleReportSection>
+
+      <CollapsibleReportSection
+        title="Pharmacy Settlement & Profitability"
+        subtitle="Medicine purchase cost is taken from each medicine supplier setup."
+        badge={`${pharmacySettlementRows.length} medicines`}
+        isOpen={openSections.pharmacy}
+        onToggle={() => setOpenSections((state: any) => ({...state, pharmacy: !state.pharmacy}))}
+      >
+        <div className="mt-4 overflow-auto rounded-2xl border">
+          <table className="w-full min-w-[1220px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-3">Supplier</th>
+                <th>Medicine</th>
+                <th>Issues</th>
+                <th>Invoices</th>
+                <th>Qty</th>
+                <th>Revenue</th>
+                <th>Purchase Cost</th>
+                <th>Pharmacy Profit</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {pharmacySettlementRows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-4 text-slate-500">
+                    No paid pharmacy invoices match this filter.
+                  </td>
+                </tr>
+              )}
+              {pharmacySettlementRows.map((row: any) => (
+                <tr key={row.id}>
+                  <td className="px-4 py-4">
+                    <b>{row.supplier}</b>
+                  </td>
+                  <td>{row.item}</td>
+                  <td>{row.issueCount}</td>
+                  <td>{row.invoiceCount}</td>
+                  <td>{row.quantity}</td>
+                  <td>{money(row.revenue)}</td>
+                  <td>{money(row.purchaseCost)}</td>
+                  <td className="font-bold">{money(row.profit)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CollapsibleReportSection>
 
       <Card>
-        <h3 className="text-lg font-bold">Invoice Profit Details</h3>
+        <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
+          <div>
+            <h3 className="text-lg font-bold">Invoice Profit Details</h3>
+            <p className="text-sm text-slate-500">Only paid invoices are shown in profit details.</p>
+          </div>
+          <Badge tone="green">{filteredInvoices.length} paid invoices</Badge>
+        </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1180px] text-left text-sm">
+          <table className="w-full min-w-[1420px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Invoice</th>
+                <th>Type</th>
+                <th>Patient</th>
                 <th>Doctor</th>
                 <th>Status</th>
                 <th>Total</th>
@@ -587,13 +1264,14 @@ export function Reports({
             <tbody className="divide-y">
               {filteredInvoices.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-4 text-slate-500">
-                    No invoices match this filter.
+                  <td colSpan={11} className="px-4 py-4 text-slate-500">
+                    No paid invoices match this filter.
                   </td>
                 </tr>
               )}
-              {filteredInvoices.map((invoice: any) => {
+              {invoicePageRows.map((invoice: any) => {
                 const appointment: any = appointmentById.get(invoice.appointment_id);
+                const patient: any = patientById.get(invoice.patient_id);
                 const settlement = settlementPaidBasis(invoice);
                 const paid = numberValue(invoice.paid_amount);
                 const doctorName =
@@ -605,6 +1283,11 @@ export function Reports({
                     <td className="px-4 py-4">
                       <b>{invoice.invoice_number}</b>
                       <p className="text-xs text-slate-500">{rowDate(invoice)}</p>
+                    </td>
+                    <td>{invoiceTypeLabel(invoiceType(invoice))}</td>
+                    <td>
+                      <b>{patient?.name || patient?.full_name || invoice.patient_name || invoice.patient_id || "-"}</b>
+                      <p className="text-xs text-slate-500">{invoice.patient_id || ""}</p>
                     </td>
                     <td>{doctorName}</td>
                     <td>
@@ -624,6 +1307,12 @@ export function Reports({
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={safeInvoicePage}
+          totalPages={totalInvoicePages}
+          total={filteredInvoices.length}
+          onPage={setInvoicePage}
+        />
       </Card>
     </div>
   );
@@ -637,5 +1326,60 @@ function Metric({ icon: Icon, label, value, hint }: any) {
       <p className="mt-1 text-2xl font-bold">{value}</p>
       <p className="mt-2 text-xs font-semibold text-slate-500">{hint}</p>
     </Card>
+  );
+}
+
+function CollapsibleReportSection({title, subtitle, badge, isOpen, onToggle, children}: any) {
+  return (
+    <Card>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full flex-col justify-between gap-3 text-left md:flex-row md:items-center"
+      >
+        <div>
+          <h3 className="text-lg font-bold">{title}</h3>
+          <p className="text-sm text-slate-500">{subtitle}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge tone="blue">{badge}</Badge>
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-600">
+            <ChevronDown size={17} className={`transition ${isOpen ? "rotate-180" : ""}`} />
+          </span>
+        </div>
+      </button>
+      {isOpen && children}
+    </Card>
+  );
+}
+
+function Pagination({ page, totalPages, total, onPage }: any) {
+  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const end = Math.min(page * pageSize, total);
+  return (
+    <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center">
+      <span>Showing {start}-{end} of {total}</span>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onPage(Math.max(1, page - 1))}
+          disabled={page <= 1}
+          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
+        >
+          Previous
+        </button>
+        <span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-700">
+          Page {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPage(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
+        >
+          Next
+        </button>
+      </div>
+    </div>
   );
 }

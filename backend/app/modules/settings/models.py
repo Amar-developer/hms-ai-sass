@@ -21,6 +21,12 @@ class SettingKey(str, Enum):
     APPOINTMENT_SLOT_INTERVAL_MINUTES = "appointment.slot_interval_minutes"
     TOKEN_LANGUAGE = "token.language"
     COMMUNICATION_PROVIDERS_ENABLED = "communication.providers_enabled"
+    REPORT_MONTHLY_EMAIL_ENABLED = "report.monthly_email_enabled"
+    REPORT_MONTHLY_EMAIL_RECIPIENTS = "report.monthly_email_recipients"
+    REPORT_MONTHLY_EMAIL_CC = "report.monthly_email_cc"
+    REPORT_MONTHLY_EMAIL_SEND_DAY = "report.monthly_email_send_day"
+    REPORT_MONTHLY_EMAIL_FILTERS = "report.monthly_email_filters"
+    REPORT_MONTHLY_EMAIL_LAST_SENT_PERIOD = "report.monthly_email_last_sent_period"
 
 
 class AdminSetting(SQLModel, table=True):

@@ -14,6 +14,8 @@ class PhysiotherapyEquipment(SQLModel, table=True):
     manufacturer: str | None = Field(default=None, max_length=120)
     model_number: str | None = Field(default=None, max_length=120)
     serial_number: str | None = Field(default=None, max_length=120)
+    supplier_id: str | None = Field(default=None, index=True, foreign_key="pharmacysupplier.id")
+    purchase_price: int = Field(default=0, ge=0)
     is_portable: bool = Field(default=False, index=True)
     is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)

@@ -192,7 +192,7 @@ TENANTS = [
         "state":       "Tamil Nadu",
         "admin": {
             "name":  "Preethi Sundarajan",
-            "email": "preethi.sundarajan@sunriseclinic.in",
+            "email": "linuxuser206@gmail.com",
         },
         "branches": [
             {

@@ -217,9 +217,9 @@ Consultation APIs enforce the `consultations` module entitlement and branch scop
 | `GET` | `/api/v1/ip/admissions/{admission_id}/medication-administrations` | `ip.read` | List MAR dose history |
 | `GET` | `/api/v1/ip/admissions/{admission_id}/billing-items` | `ip.read` | Running bill from clinical events |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/billing-items` | `ip.edit` | Add manual running-bill line |
-| `POST` | `/api/v1/ip/admissions/{admission_id}/invoice` | `billing.manage` | Generates IP invoice including automatic room charge, billable clinical events, and manual charges |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/invoice` | `billing.manage` | Creates or refreshes IP invoice with automatic room charge, manual charges, signed consultation billables, medication administrations, and lab/scan referrals |
 
-IP admission APIs enforce tenant, branch, room availability, and module entitlement checks. Admissions can capture a validated 12-digit Aadhaar number and one admission proof/identity document. A room/bed cannot be reused for overlapping active admission date ranges. Room rent is calculated from admission date through discharge summary date, or planned discharge/current date when discharge is not finalized. Treatment notes remain clinical documentation; signed IP consultations and given MAR doses create linked billable items for the running bill and final invoice.
+IP admission APIs enforce tenant, branch, room availability, and module entitlement checks. Admissions can capture a validated 12-digit Aadhaar number and one admission proof/identity document. A room/bed cannot be reused for overlapping active admission date ranges. Room rent is calculated from admission date through discharge summary date, or planned discharge/current date when discharge is not finalized. Signed IP consultations and given MAR doses create linked billable items for the running bill and final invoice. IP invoice generation also backfills older care entries by reading medicine administrations and lab/scan rows from treatment orders, using pharmacy/lab catalog prices when explicit row amounts are missing.
 
 ## Billing, Payments, and Settlements
 
@@ -232,6 +232,8 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/discount-approvals` | `billing.manage` |
 | `POST` | `/api/v1/billing/discount-approvals/{approval_id}/decision` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/from-consultation` | `billing.manage` |
+| `POST` | `/api/v1/billing/invoices/from-lab-order` | `billing.manage` |
+| `POST` | `/api/v1/billing/invoices/from-pharmacy-issue` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/receipt.pdf` | `billing.manage` |
@@ -240,11 +242,22 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/cancel` | `billing.manage` |
 | `GET` | `/api/v1/billing/doctor-settlements/summary` | `settlements.read` |
-| `POST` | `/api/v1/billing/doctor-settlements/finalize` | `settlements.read` |
+| `POST` | `/api/v1/billing/doctor-settlements/finalize` | `billing.manage` |
 | `GET` | `/api/v1/billing/reports/due-collection` | `reports.read` |
 | `GET` | `/api/v1/billing/reports/revenue` | `reports.read` |
 
-Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, payments, refunds, credit notes, and cancellations. Invoice generation, discount approval, settlement finalization, and revenue reporting enforce `billing_advanced`. Branch-scoped users can access only branch-matching invoices, payments, fee rules, tax rules, credit notes, reports, and settlements.
+Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, payments, refunds, credit notes, and cancellations. Invoice generation, discount approval, settlement finalization, and revenue reporting enforce `billing_advanced`. Branch-scoped users can access only branch-matching invoices, payments, fee rules, tax rules, credit notes, reports, and settlements. Doctor settlement summary returns paid-basis doctor share, finalized settlement amount, remaining payable amount, and `can_finalize`; duplicate finalization is rejected after the payable amount reaches zero.
+
+## Monthly Email Reports
+
+| Method | Endpoint | Permission |
+| --- | --- | --- |
+| `GET` | `/api/v1/reports/monthly-email/config` | `settings.manage` |
+| `PUT` | `/api/v1/reports/monthly-email/config` | `settings.manage` |
+| `POST` | `/api/v1/reports/monthly-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+| `GET` | `/api/v1/reports/monthly-email/jobs` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+
+Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `ReportJob`, pushes the job id to Redis, and returns `202 Accepted`. The worker sends an Excel-compatible `.xls` report through SMTP. Manual send defaults to previous month and supports `from_date` / `to_date` for testing current-month reports.
 
 ## Lab and Pharmacy
 

@@ -1,6 +1,7 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
+import {ChevronDown} from 'lucide-react';
 import {Badge,Button,Card,Field,Input,Select} from '@/components/ui';
 import {SearchPicker,TagEntryBox,medicineFrequencyOptions,rowTagLabel} from '@/components/clinicalRows';
 import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';
@@ -81,14 +82,20 @@ export function IPAdmission({
   const [latestDischarge,setLatestDischarge]=useState<any>(null);
   const [ipRooms,setIpRooms]=useState<any[]>([]);
   const [roomSeedAttempted,setRoomSeedAttempted]=useState(false);
+  const [ipInvoice,setIpInvoice]=useState<any>(null);
   const [admissionDate,setAdmissionDate]=useState(today());
   const [expectedDischargeDate,setExpectedDischargeDate]=useState(today());
   const [view,setView]=useState<IPView>('list');
   const [admissionPage,setAdmissionPage]=useState(1);
+  const [admissionFilter,setAdmissionFilter]=useState<'active'|'completed'|'all'>('active');
 
-  const selectedAdmission=ipAdmissions.find((row:any)=>row.id===selectedId)||ipAdmissions[0];
   const patientMap=useMemo(()=>new Map(patients.map((p:any)=>[p.id,p])),[patients]);
   const opCandidates=appointments.filter((a:any)=>['consultation_completed','checked_in','waiting','called','in_consultation'].includes(a.status)||a.consultationStatus==='signed');
+  const pageSize=10;
+  const activeAdmissions=ipAdmissions.filter((row:any)=>!isClosedAdmission(row));
+  const completedAdmissions=ipAdmissions.filter((row:any)=>isClosedAdmission(row));
+  const visibleAdmissions=admissionFilter==='completed'?completedAdmissions:admissionFilter==='all'?ipAdmissions:activeAdmissions;
+  const selectedAdmission=ipAdmissions.find((row:any)=>row.id===selectedId)||visibleAdmissions[0]||activeAdmissions[0]||ipAdmissions[0];
   const selectedRoom=ipRooms.find((room:any)=>room.id===selectedAdmission?.room_id);
   const selectedDischargeDate=latestDischarge?.discharge_date||selectedAdmission?.expected_discharge_date||today();
   const autoRoomCharge=selectedAdmission?.room_id&&selectedRoom?{
@@ -100,13 +107,12 @@ export function IPAdmission({
   const legacyChargeTotal=charges.reduce((sum,row)=>sum+Number(row.total_amount||0),0);
   const eventBillingTotal=billingItems.filter((row:any)=>row.status==='billable').reduce((sum,row)=>sum+Number(row.total_amount||0),0);
   const runningBillTotal=legacyChargeTotal+eventBillingTotal+autoRoomTotal;
-  const pageSize=10;
-  const activeAdmissions=ipAdmissions.filter((row:any)=>!isClosedAdmission(row));
-  const totalAdmissionPages=Math.max(1,Math.ceil(activeAdmissions.length/pageSize));
+  const totalAdmissionPages=Math.max(1,Math.ceil(visibleAdmissions.length/pageSize));
   const safeAdmissionPage=Math.min(admissionPage,totalAdmissionPages);
-  const admissionRows=activeAdmissions.slice((safeAdmissionPage-1)*pageSize,safeAdmissionPage*pageSize);
+  const admissionRows=visibleAdmissions.slice((safeAdmissionPage-1)*pageSize,safeAdmissionPage*pageSize);
 
-  useEffect(()=>{if(!selectedId&&ipAdmissions[0]?.id)setSelectedId(ipAdmissions[0].id)},[ipAdmissions,selectedId]);
+  useEffect(()=>{if(!selectedId&&(activeAdmissions[0]||ipAdmissions[0]))setSelectedId((activeAdmissions[0]||ipAdmissions[0]).id)},[activeAdmissions.length,ipAdmissions,selectedId]);
+  useEffect(()=>{setAdmissionPage(1)},[admissionFilter]);
   useEffect(()=>{if(admissionPage>totalAdmissionPages)setAdmissionPage(totalAdmissionPages)},[admissionPage,totalAdmissionPages]);
   useEffect(()=>{if(selectedAdmission?.id)loadAdmissionWork(selectedAdmission.id)},[selectedAdmission?.id]);
   useEffect(()=>{loadRooms()},[apiSession?.token,apiSession?.tenantId,branchId,admissionDate,expectedDischargeDate]);
@@ -129,13 +135,14 @@ export function IPAdmission({
     if(!apiSession)return;
     setError('');
     try{
-      const [treatmentRows,chargeRows,billingRows,documentRows,medOrderRows,medAdministrationRows]=await Promise.all([
+      const [treatmentRows,chargeRows,billingRows,documentRows,medOrderRows,medAdministrationRows,invoiceResult]=await Promise.all([
         apiFetch(`/ip/admissions/${admissionId}/treatments`,apiSession),
         apiFetch(`/ip/admissions/${admissionId}/charges`,apiSession),
         apiFetch(`/ip/admissions/${admissionId}/billing-items`,apiSession),
         apiFetch(`/ip/admissions/${admissionId}/documents`,apiSession).catch(()=>[]),
         apiFetch(`/ip/admissions/${admissionId}/medication-orders`,apiSession),
         apiFetch(`/ip/admissions/${admissionId}/medication-administrations`,apiSession),
+        apiFetch(`/ip/admissions/${admissionId}/invoice`,apiSession).catch(()=>null),
       ]);
       setTreatments(treatmentRows);
       setCharges(chargeRows);
@@ -143,6 +150,7 @@ export function IPAdmission({
       setIpDocuments(documentRows);
       setMedicationOrders(medOrderRows);
       setMedicationAdministrations(medAdministrationRows);
+      setIpInvoice(invoiceResult);
     }catch(err:any){
       setError(err.message||'Unable to load IP admission details.');
     }
@@ -368,8 +376,10 @@ export function IPAdmission({
     setBusy('invoice');setError('');setMessage('');
     try{
       const detail=await apiFetch(`/ip/admissions/${selectedAdmission.id}/invoice`,apiSession,{method:'POST'});
+      setIpInvoice(detail);
       setMessage(`IP invoice ${detail.invoice.invoice_number} generated for ${inr(detail.invoice.total_amount)}.`);
       await refresh();
+      await loadAdmissionWork(selectedAdmission.id);
     }catch(err:any){setError(err.message||'Unable to generate IP invoice.')}
     finally{setBusy('')}
   }
@@ -434,24 +444,50 @@ export function IPAdmission({
 
       <div className="grid gap-6">
         <Card>
-          <div className="flex items-center justify-between gap-3">
-            <h4 className="text-lg font-bold">Current IP Admissions</h4>
-            <Badge tone="blue">{activeAdmissions.length} active</Badge>
+          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+            <div>
+              <h4 className="text-lg font-bold">IP Admissions</h4>
+              <p className="text-sm text-slate-500">Select active or completed admissions to view the full IP workflow below.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="blue">{activeAdmissions.length} active</Badge>
+              <Badge tone="green">{completedAdmissions.length} completed</Badge>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-1 sm:grid-cols-3">
+            {[
+              ['active','Active',activeAdmissions.length],
+              ['completed','Completed',completedAdmissions.length],
+              ['all','All',ipAdmissions.length],
+            ].map(([key,label,count]:any)=>(
+              <button
+                key={key}
+                type="button"
+                onClick={()=>setAdmissionFilter(key)}
+                className={`rounded-xl px-3 py-2 text-sm font-bold transition ${admissionFilter===key?'bg-slate-900 text-white':'text-slate-600 hover:bg-white'}`}
+              >
+                {label} ({count})
+              </button>
+            ))}
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {activeAdmissions.length===0&&<p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No active IP admissions.</p>}
+            {visibleAdmissions.length===0&&<p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No {admissionFilter==='all'?'IP':admissionFilter} admissions.</p>}
             {admissionRows.map((row:any)=>{
               const p=patientMap.get(row.patient_id)||patientMap.get(row.patientId);
+              const closed=isClosedAdmission(row);
               return (
                 <button key={row.id} type="button" onClick={()=>{setSelectedId(row.id);setView('detail')}} className={`min-h-32 rounded-2xl p-4 text-left transition ${selectedAdmission?.id===row.id?'bg-slate-900 text-white':'bg-slate-50 text-slate-900 hover:bg-slate-100'}`}>
                   <div className="line-clamp-2 font-bold">{patientName(p)||row.patient||row.patient_id}</div>
                   <div className={`mt-1 line-clamp-2 text-sm ${selectedAdmission?.id===row.id?'text-slate-300':'text-slate-500'}`}>{admissionLabel(row)}</div>
-                  <div className="mt-2 text-xs font-bold uppercase">{row.status}</div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-2 py-1 text-xs font-bold uppercase ${selectedAdmission?.id===row.id?'bg-white/10 text-white':closed?'bg-emerald-100 text-emerald-700':'bg-blue-100 text-blue-700'}`}>{row.status}</span>
+                    <span className={`text-xs font-bold ${selectedAdmission?.id===row.id?'text-slate-300':'text-slate-500'}`}>{closed?'Completed details':'Active details'}</span>
+                  </div>
                 </button>
               );
             })}
           </div>
-          <Pagination page={safeAdmissionPage} totalPages={totalAdmissionPages} total={activeAdmissions.length} pageSize={pageSize} onPage={setAdmissionPage}/>
+          <Pagination page={safeAdmissionPage} totalPages={totalAdmissionPages} total={visibleAdmissions.length} pageSize={pageSize} onPage={setAdmissionPage}/>
         </Card>
 
         <Card>
@@ -506,6 +542,7 @@ export function IPAdmission({
           autoRoomCharge={autoRoomCharge}
           autoRoomTotal={autoRoomTotal}
           runningBillTotal={runningBillTotal}
+          ipInvoice={ipInvoice}
           apiSession={apiSession}
           busy={busy}
           setBusy={setBusy}
@@ -529,6 +566,7 @@ export function IPAdmission({
 function splitRows(value:string){return value.split('\n').map((line)=>line.trim()).filter(Boolean)}
 function appendLine(value:string,line:string){return [...splitRows(value),line].join('\n')}
 function parseAmount(value:any){const amount=Number(String(value||'').replace(/[^\d.]/g,''));return Number.isFinite(amount)?amount:0}
+function catalogKey(value:any){return String(value||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'')}
 function isClosedAdmission(admission:any){return ['discharged','cancelled'].includes(String(admission?.status||'').toLowerCase())}
 
 function IPCareWorkspace({
@@ -544,6 +582,7 @@ function IPCareWorkspace({
   autoRoomCharge,
   autoRoomTotal,
   runningBillTotal,
+  ipInvoice,
   apiSession,
   busy,
   setBusy,
@@ -573,11 +612,28 @@ function IPCareWorkspace({
   const [refName,setRefName]=useState('');
   const [refPriority,setRefPriority]=useState('routine');
   const [detailTab,setDetailTab]=useState<'consent'|'discharge'>('consent');
+  const [openSections,setOpenSections]=useState<any>({runningBill:true,details:false,history:false});
   const closed=isClosedAdmission(admission);
   const consentDocuments=ipDocuments.filter((doc:any)=>doc.document_type==='consent');
   const dischargeDocuments=ipDocuments.filter((doc:any)=>doc.document_type==='discharge');
+  const labScanBillingItems=billingItems.filter((row:any)=>String(row.source_type||'').includes('lab')||String(row.source_type||'').includes('scan'));
   const medicineOptions=medicineCatalog.map((medicine:any)=>({value:medicine.id,label:medicine.name,item:medicine}));
   const labOptions=labCatalog.map((test:any)=>({value:test.id,label:test.name,item:test}));
+  const toggleSection=(key:string)=>setOpenSections((state:any)=>({...state,[key]:!state[key]}));
+
+  function medicineUnitAmount(name:string){
+    const key=catalogKey(name);
+    const selected=medicineCatalog.find((row:any)=>row.id===selectedMedicineId);
+    const match=medicineCatalog.find((row:any)=>catalogKey(row.name)===key||catalogKey(row.code)===key||catalogKey(row.generic_name)===key);
+    return Number((match||selected)?.default_sale_price||0);
+  }
+
+  function labUnitAmount(name:string){
+    const key=catalogKey(name);
+    const selected=labCatalog.find((row:any)=>row.id===selectedLabTestId);
+    const match=labCatalog.find((row:any)=>catalogKey(row.name)===key||catalogKey(row.code)===key);
+    return Number((match||selected)?.default_price||0);
+  }
 
   useEffect(()=>{
     if(!selectedMedicineId&&medicineCatalog[0]?.id){
@@ -615,13 +671,13 @@ function IPCareWorkspace({
 
   function addMedicineRow(){
     if(!medName.trim())return;
-    setMedicineRows(appendLine(medicineRows,[medName,medDose,medFrequency,medRoute].map((part)=>String(part||'').trim()).join(' | ')));
+    setMedicineRows(appendLine(medicineRows,[medName,medDose,medFrequency,medRoute,medicineUnitAmount(medName)].map((part)=>String(part||'').trim()).join(' | ')));
     setMedName('');setMedDose('');
   }
   function addMedicineFromText(value:string){
     const text=String(value||'').trim();
     if(!text)return;
-    const line=text.includes('|')?text:[text,medDose,medFrequency,medRoute].map((part)=>String(part||'').trim()).join(' | ');
+    const line=text.includes('|')?text:[text,medDose,medFrequency,medRoute,medicineUnitAmount(text)].map((part)=>String(part||'').trim()).join(' | ');
     setMedicineRows((rows:string)=>appendLine(rows,line));
   }
   function removeMedicineRow(index:number){
@@ -630,13 +686,13 @@ function IPCareWorkspace({
 
   function addReferralRow(){
     if(!refName.trim())return;
-    setReferralRows(appendLine(referralRows,[refType,refName,refPriority,''].map((part)=>String(part||'').trim()).join(' | ')));
+    setReferralRows(appendLine(referralRows,[refType,refName,refPriority,'',labUnitAmount(refName)].map((part)=>String(part||'').trim()).join(' | ')));
     setRefName('');
   }
   function addReferralFromText(value:string){
     const text=String(value||'').trim();
     if(!text)return;
-    const line=text.includes('|')?text:[refType,text,refPriority,''].map((part)=>String(part||'').trim()).join(' | ');
+    const line=text.includes('|')?text:[refType,text,refPriority,'',labUnitAmount(text)].map((part)=>String(part||'').trim()).join(' | ');
     setReferralRows((rows:string)=>appendLine(rows,line));
   }
   function removeReferralRow(index:number){
@@ -684,7 +740,7 @@ function IPCareWorkspace({
       for(const line of splitRows(medicineRows)){
         const [medicine_name,dosage,frequency,route,amountText]=line.split('|').map((part)=>part.trim());
         if(!medicine_name)continue;
-        const unitAmount=parseAmount(amountText);
+        const unitAmount=parseAmount(amountText)||medicineUnitAmount(medicine_name);
         let order=knownOrders.find((row:any)=>
           String(row.status||'active')==='active'
           && String(row.medicine_name||'').toLowerCase()===medicine_name.toLowerCase()
@@ -713,7 +769,7 @@ function IPCareWorkspace({
         const [sourceType,itemName,priority,instructions,amountText]=line.split('|').map((part)=>part.trim());
         if(!itemName)continue;
         const normalizedType=sourceType==='scan'?'scan_referral':'lab_referral';
-        const amount=parseAmount(amountText);
+        const amount=parseAmount(amountText)||labUnitAmount(itemName);
         if(amount>0){
           await apiFetch(`/ip/admissions/${admission.id}/billing-items`,apiSession,{method:'POST',body:JSON.stringify({
             source_type:normalizedType,
@@ -792,7 +848,7 @@ function IPCareWorkspace({
                       if(medicine){
                         setSelectedMedicineId(medicine.id);
                         setMedName(medicine.name||'');
-                        setMedicineRows((rows:string)=>appendLine(rows,[medicine.name,medicine.strength||medDose,medFrequency,medRoute].map((part)=>String(part||'').trim()).join(' | ')));
+                        setMedicineRows((rows:string)=>appendLine(rows,[medicine.name,medicine.strength||medDose,medFrequency,medRoute,Number(medicine.default_sale_price||0)].map((part)=>String(part||'').trim()).join(' | ')));
                         setMedDose('');
                       }else addMedicineFromText(value);
                     }}
@@ -840,7 +896,7 @@ function IPCareWorkspace({
                         const text=[test.category,test.test_type,test.sample_type,test.name].join(' ').toLowerCase();
                         const sourceType=text.includes('x-ray')||text.includes('ecg')||text.includes('scan')||text.includes('procedure')?'scan':'lab';
                         setSelectedLabTestId(test.id);
-                        setReferralRows((rows:string)=>appendLine(rows,[sourceType,test.name,refPriority,''].map((part)=>String(part||'').trim()).join(' | ')));
+                        setReferralRows((rows:string)=>appendLine(rows,[sourceType,test.name,refPriority,'',Number(test.default_price||0)].map((part)=>String(part||'').trim()).join(' | ')));
                         setRefName('');
                       }else addReferralFromText(value);
                     }}
@@ -895,19 +951,36 @@ function IPCareWorkspace({
           )}
         </Card>
 
-        <Card>
-          <h4 className="text-lg font-bold">Running Bill</h4>
+        <CollapsibleIPSection
+          title="Running Bill"
+          badge={inr(runningBillTotal)}
+          summary={`${billingItems.length+charges.length+(autoRoomCharge?1:0)} bill row(s)`}
+          isOpen={openSections.runningBill}
+          onToggle={()=>toggleSection('runningBill')}
+        >
           <div className="mt-3 grid gap-2">
             {autoRoomCharge&&<div className="flex justify-between gap-3 rounded-xl bg-slate-50 p-2 text-sm"><span>Room · {autoRoomCharge.quantity} day(s)</span><b>{inr(autoRoomTotal)}</b></div>}
             {billingItems.map((row:any)=><div key={row.id} className="flex justify-between gap-3 text-sm"><span>{row.description}</span><b>{inr(row.total_amount)}</b></div>)}
             {charges.map((row:any)=><div key={row.id} className="flex justify-between gap-3 text-sm"><span>{row.description}</span><b>{inr(row.total_amount)}</b></div>)}
             <div className="border-t pt-3 text-right text-xl font-black">{inr(runningBillTotal)}</div>
           </div>
-          <Button type="button" disabled={closed||runningBillTotal<=0||busy==='invoice'} onClick={generateInvoice} className="mt-4 w-full">{closed?'Final Bill Locked':'Generate IP Invoice'}</Button>
-        </Card>
+          {ipInvoice&&!closed&&(
+            <div className="mt-4 rounded-2xl bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              <span className="font-bold">Invoice {ipInvoice.invoice?.invoice_number}</span> · {inr(ipInvoice.invoice?.total_amount)} · <span className="uppercase">{ipInvoice.invoice?.status}</span>
+            </div>
+          )}
+          <Button type="button" disabled={closed||runningBillTotal<=0||busy==='invoice'} onClick={generateInvoice} className="mt-4 w-full">
+            {busy==='invoice'?'Generating...':(closed?'Final Bill Locked':(ipInvoice?'Regenerate IP Invoice':'Generate IP Invoice'))}
+          </Button>
+        </CollapsibleIPSection>
 
-        <Card>
-          <h4 className="text-lg font-bold">Medicine / Lab Details</h4>
+        <CollapsibleIPSection
+          title="Medicine / Lab Details"
+          badge={`${medicationOrders.length} meds · ${labScanBillingItems.length} lab/scan`}
+          summary="Suggestions, active medication orders, and investigation bill rows"
+          isOpen={openSections.details}
+          onToggle={()=>toggleSection('details')}
+        >
           <div className="mt-3 grid gap-3">
             <div className="rounded-2xl bg-slate-50 p-3">
               <p className="text-xs font-bold uppercase text-slate-500">Medicine Suggestions</p>
@@ -933,15 +1006,20 @@ function IPCareWorkspace({
             <div className="rounded-2xl bg-slate-50 p-3">
               <p className="text-xs font-bold uppercase text-slate-500">Lab / Scan Billing Details</p>
               <div className="mt-2 grid gap-2">
-                {billingItems.filter((row:any)=>String(row.source_type||'').includes('lab')||String(row.source_type||'').includes('scan')).slice(0,5).map((row:any)=><div key={row.id} className="flex justify-between gap-2 rounded-xl bg-white p-2 text-sm"><span>{row.description}</span><b>{inr(row.total_amount)}</b></div>)}
-                {billingItems.filter((row:any)=>String(row.source_type||'').includes('lab')||String(row.source_type||'').includes('scan')).length===0&&<span className="text-sm text-slate-500">No lab/scan billing rows yet.</span>}
+                {labScanBillingItems.slice(0,5).map((row:any)=><div key={row.id} className="flex justify-between gap-2 rounded-xl bg-white p-2 text-sm"><span>{row.description}</span><b>{inr(row.total_amount)}</b></div>)}
+                {labScanBillingItems.length===0&&<span className="text-sm text-slate-500">No lab/scan billing rows yet.</span>}
               </div>
             </div>
           </div>
-        </Card>
+        </CollapsibleIPSection>
 
-        <Card>
-          <h4 className="text-lg font-bold">Care History</h4>
+        <CollapsibleIPSection
+          title="Care History"
+          badge={`${treatments.length} entries`}
+          summary={`${medicationOrders.length} medication order(s), ${medicationAdministrations.length} administration(s)`}
+          isOpen={openSections.history}
+          onToggle={()=>toggleSection('history')}
+        >
           <div className="mt-3 grid gap-2">
             {treatments.slice(0,4).map((row:any)=><div key={row.id} className="rounded-2xl bg-slate-50 p-3 text-sm"><b>{row.treatment_date} · {row.treatment_type}</b><p className="text-slate-500">{row.notes}</p></div>)}
             {treatments.length===0&&<p className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-500">No care entries yet.</p>}
@@ -950,9 +1028,34 @@ function IPCareWorkspace({
             <p>{medicationOrders.length} medication orders</p>
             <p>{medicationAdministrations.length} medicine administrations</p>
           </div>
-        </Card>
+        </CollapsibleIPSection>
       </div>
     </div>
+  );
+}
+
+function CollapsibleIPSection({title,badge,summary,isOpen,onToggle,children}:any){
+  return (
+    <Card className="overflow-hidden !p-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={isOpen}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-slate-50"
+      >
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-lg font-bold">{title}</h4>
+            {badge&&<Badge tone="blue">{badge}</Badge>}
+          </div>
+          {summary&&<p className="mt-1 truncate text-sm font-semibold text-slate-500">{summary}</p>}
+        </div>
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white">
+          <ChevronDown size={18} className={`transition ${isOpen?'rotate-180':'rotate-0'}`}/>
+        </span>
+      </button>
+      {isOpen&&<div className="border-t border-slate-100 px-5 py-4">{children}</div>}
+    </Card>
   );
 }
 
