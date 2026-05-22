@@ -28,13 +28,12 @@ export const nav = [
   ['scheduling', 'Scheduling', ClipboardList],
   ['items', 'Items', PackageOpen],
   ['ip', 'IP Admission', BedDouble],
-  ['doctor', 'Doctor Dashboard', Stethoscope],
-  ['consultation', 'Consultation Workspace', ClipboardList],
+  ['doctor', 'Doctor Workspace', Stethoscope],
+  ['consultation', 'Consultation Workflow', ClipboardList],
   ['lab', 'Lab', FlaskConical],
   ['pharmacy', 'Prescription', Pill],
   ['physiotherapy', 'Physiotherapy', Dumbbell],
   ['billing', 'Invoices', ReceiptIndianRupee],
-  ['subscriptions', 'Subscriptions', ShieldCheck],
   ['reports', 'Reports', BarChart3],
 ] as const;
 
@@ -54,7 +53,6 @@ export const roleModules: Record<string, string[]> = {
     'pharmacy',
     'physiotherapy',
     'billing',
-    'subscriptions',
     'reports',
   ],
   tenant_admin: [
@@ -73,7 +71,6 @@ export const roleModules: Record<string, string[]> = {
     'physiotherapy',
     'billing',
     'admin',
-    'subscriptions',
     'reports',
   ],
   reception: ['appointments', 'queue', 'patients'],
@@ -84,5 +81,5 @@ export const roleModules: Record<string, string[]> = {
   lab: ['patients', 'items', 'lab'],
   pharmacy: ['patients', 'items', 'pharmacy', 'billing'],
   billing: ['patients', 'billing'],
-  back_office: ['patients', 'billing', 'subscriptions'],
+  back_office: ['patients', 'billing'],
 };

@@ -15,6 +15,7 @@ from app.modules.billing.models import (
     DoctorFeeRule,
     CreditNote,
     DiscountApproval,
+    DiscountOffer,
     ApprovalStatus,
     DoctorSettlement,
     Invoice,
@@ -32,6 +33,9 @@ from app.modules.billing.schemas import (
     DiscountApprovalCreate,
     DiscountApprovalDecision,
     DiscountApprovalRead,
+    DiscountOfferCreate,
+    DiscountOfferRead,
+    DiscountOfferUpdate,
     DoctorFeeRuleCreate,
     DoctorFeeRuleRead,
     DoctorSettlementFinalize,
@@ -50,9 +54,12 @@ from app.modules.billing.schemas import (
     RefundRequest,
     TaxRuleCreate,
     TaxRuleRead,
+    TaxRuleUpdate,
 )
 from app.modules.billing.service import (
+    calculate_offer_discount,
     create_consultation_invoice,
+    find_tax_rule,
     next_credit_note_number,
     next_invoice_number,
     refresh_consultation_invoice,
@@ -139,7 +146,61 @@ def _create_service_invoice(
     amount: int,
     created_by_user_id: str | None,
     line_items: list[dict[str, int | str]] | None = None,
+    service_scope: str,
+    tax_rule_id: str | None = None,
+    discount_offer_id: str | None = None,
+    benefit_item_ids: list[str] | None = None,
 ) -> Invoice:
+    discount_amount, offer = calculate_offer_discount(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        service_scope=service_scope,
+        subtotal=amount,
+        discount_offer_id=discount_offer_id,
+    )
+    taxable_amount = amount - discount_amount
+    tax_rule = find_tax_rule(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        service_scope=service_scope,
+        tax_rule_id=tax_rule_id,
+    )
+    membership = None
+    membership_discount = 0
+    membership_enrollment_id = None
+    membership_plan_id = None
+    try:
+        from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
+
+        membership = active_patient_enrollment(
+            session,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=patient_id,
+        )
+        if membership:
+            enrollment, plan = membership
+            preview = benefit_preview(
+                plan=plan,
+                enrollment=enrollment,
+                service_type=service_scope,
+                item_ids=benefit_item_ids or [],
+                subtotal_amount=amount,
+            )
+            membership_discount = int(preview["discount_amount"] or 0)
+            if membership_discount > 0:
+                membership_enrollment_id = enrollment.id
+                membership_plan_id = plan.id
+            discount_amount = min(discount_amount + membership_discount, amount)
+            taxable_amount = amount - discount_amount
+            tax_amount = round(taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+            total_amount = taxable_amount + tax_amount
+    except Exception:
+        membership = None
+    tax_amount = round(taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    total_amount = taxable_amount + tax_amount
     invoice = Invoice(
         tenant_id=tenant_id,
         branch_id=branch_id,
@@ -150,12 +211,18 @@ def _create_service_invoice(
         pharmacy_issue_id=pharmacy_issue_id,
         invoice_number=next_invoice_number(session, tenant_id),
         subtotal_amount=amount,
-        taxable_amount=amount,
-        tax_amount=0,
-        total_amount=amount,
-        balance_amount=amount,
+        discount_amount=discount_amount,
+        membership_discount_amount=membership_discount,
+        taxable_amount=taxable_amount,
+        tax_amount=tax_amount,
+        tax_rule_id=tax_rule.id if tax_rule else None,
+        total_amount=total_amount,
+        balance_amount=total_amount,
         doctor_share_amount=0,
-        clinic_share_amount=amount,
+        clinic_share_amount=total_amount,
+        discount_offer_id=offer.id if offer else None,
+        patient_subscription_enrollment_id=membership_enrollment_id,
+        patient_subscription_plan_id=membership_plan_id,
         created_by_user_id=created_by_user_id,
     )
     session.add(invoice)
@@ -318,6 +385,114 @@ def list_tax_rules(
     return list(session.exec(statement.order_by(TaxRule.created_at.desc())).all())
 
 
+@router.patch("/tax-rules/{rule_id}", response_model=TaxRuleRead)
+def update_tax_rule(
+    rule_id: str,
+    payload: TaxRuleUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> TaxRule:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    rule = session.get(TaxRule, rule_id)
+    if not rule or rule.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tax rule not found")
+    if payload.branch_id:
+        require_branch_in_tenant(session, tenant_id, payload.branch_id)
+    require_user_branch_access(current_user, payload.branch_id or rule.branch_id)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(rule, key, value)
+    session.add(rule)
+    session.commit()
+    session.refresh(rule)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=rule.branch_id,
+        actor_user_id=current_user.id,
+        action="tax_rule.updated",
+        resource_type="tax_rule",
+        resource_id=rule.id,
+        purpose="billing_tax_configuration",
+    )
+    return rule
+
+
+@router.post("/discount-offers", response_model=DiscountOfferRead, status_code=status.HTTP_201_CREATED)
+def create_discount_offer(
+    payload: DiscountOfferCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> DiscountOffer:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    require_branch_in_tenant(session, tenant_id, payload.branch_id)
+    require_user_branch_access(current_user, payload.branch_id)
+    offer = DiscountOffer.model_validate(payload, update={"tenant_id": tenant_id})
+    session.add(offer)
+    session.commit()
+    session.refresh(offer)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=offer.branch_id,
+        actor_user_id=payload.created_by_user_id,
+        action="discount_offer.created",
+        resource_type="discount_offer",
+        resource_id=offer.id,
+        purpose="discount_offer_configuration",
+    )
+    return offer
+
+
+@router.get("/discount-offers", response_model=list[DiscountOfferRead])
+def list_discount_offers(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> list[DiscountOffer]:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    branch_id = scoped_branch_id(current_user, branch_id)
+    statement = select(DiscountOffer).where(DiscountOffer.tenant_id == tenant_id)
+    if branch_id:
+        statement = statement.where((DiscountOffer.branch_id == branch_id) | (DiscountOffer.branch_id.is_(None)))
+    return list(session.exec(statement.order_by(DiscountOffer.created_at.desc())).all())
+
+
+@router.patch("/discount-offers/{offer_id}", response_model=DiscountOfferRead)
+def update_discount_offer(
+    offer_id: str,
+    payload: DiscountOfferUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> DiscountOffer:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    offer = session.get(DiscountOffer, offer_id)
+    if not offer or offer.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discount offer not found")
+    if payload.branch_id:
+        require_branch_in_tenant(session, tenant_id, payload.branch_id)
+    require_user_branch_access(current_user, payload.branch_id or offer.branch_id)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(offer, key, value)
+    session.add(offer)
+    session.commit()
+    session.refresh(offer)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=offer.branch_id,
+        actor_user_id=current_user.id,
+        action="discount_offer.updated",
+        resource_type="discount_offer",
+        resource_id=offer.id,
+        purpose="discount_offer_configuration",
+    )
+    return offer
+
+
 @router.post("/discount-approvals", response_model=DiscountApprovalRead, status_code=status.HTTP_201_CREATED)
 def request_discount_approval(
     payload: DiscountApprovalCreate,
@@ -433,6 +608,7 @@ def create_invoice_from_consultation(
         consultation_id=consultation.id,
         discount_amount=payload.discount_amount,
         discount_approval_id=payload.discount_approval_id,
+        discount_offer_id=payload.discount_offer_id,
         tax_rule_id=payload.tax_rule_id,
         created_by_user_id=payload.created_by_user_id,
         treatment_type=consultation.treatment_type,
@@ -513,6 +689,10 @@ def create_invoice_from_lab_order(
         item_type="lab",
         description=f"Lab order {order.id}: {order.tests}",
         amount=amount,
+        service_scope="lab",
+        tax_rule_id=payload.tax_rule_id,
+        discount_offer_id=payload.discount_offer_id,
+        benefit_item_ids=[item.test_id for item in items if item.test_id],
         line_items=[
             {
                 "item_type": "lab",
@@ -590,6 +770,10 @@ def create_invoice_from_pharmacy_issue(
         item_type="pharmacy",
         description=f"Pharmacy issue {issue.id}: {issue.medicine_text}",
         amount=amount,
+        service_scope="pharmacy",
+        tax_rule_id=payload.tax_rule_id,
+        discount_offer_id=payload.discount_offer_id,
+        benefit_item_ids=[item.medicine_id for item in items if item.medicine_id],
         line_items=[
             {
                 "item_type": "pharmacy",
@@ -622,14 +806,17 @@ def create_invoice_from_pharmacy_issue(
 def list_invoices(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
+    patient_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.BILLING_MANAGE, permissions.INVOICES_READ, permissions.PATIENT_SUBSCRIPTIONS_READ, permissions.PATIENT_SUBSCRIPTIONS_MANAGE)),
 ) -> list[Invoice]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(Invoice).where(Invoice.tenant_id == tenant_id)
     if branch_id:
         statement = statement.where(Invoice.branch_id == branch_id)
+    if patient_id:
+        statement = statement.where(Invoice.patient_id == patient_id)
     return list(session.exec(statement.order_by(Invoice.created_at.desc())).all())
 
 
@@ -665,7 +852,6 @@ def invoice_receipt_pdf(
             f"Invoice: {invoice.invoice_number}",
             f"Subtotal: {invoice.subtotal_amount}",
             f"Discount: {invoice.discount_amount}",
-            f"Tax: {invoice.tax_amount}",
             f"Total: {invoice.total_amount}",
             f"Paid: {invoice.paid_amount}",
             f"Balance: {invoice.balance_amount}",

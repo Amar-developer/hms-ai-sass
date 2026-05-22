@@ -28,13 +28,13 @@ function invoiceSource(invoice:any){
 }
 
 function invoiceLinkedRecord(invoice:any){
-  if(invoice.ip_admission_id) return {label:'IP Admission',value:invoice.ip_admission_id};
-  if(invoice.physiotherapy_case_id) return {label:'Physiotherapy Case',value:invoice.physiotherapy_case_id};
-  if(invoice.pharmacy_issue_id) return {label:'Pharmacy Issue',value:invoice.pharmacy_issue_id};
-  if(invoice.lab_order_id) return {label:'Lab / Scan Order',value:invoice.lab_order_id};
-  if(invoice.consultation_id) return {label:'Consultation',value:invoice.consultation_id};
-  if(invoice.appointment_id) return {label:'Appointment',value:invoice.appointment_id};
-  return {label:'Invoice Record',value:invoice.id};
+  if(invoice.ip_admission_id) return 'IP admission';
+  if(invoice.physiotherapy_case_id) return 'Physiotherapy case';
+  if(invoice.pharmacy_issue_id) return 'Pharmacy issue';
+  if(invoice.lab_order_id) return 'Lab / Scan order';
+  if(invoice.consultation_id) return 'Consultation';
+  if(invoice.appointment_id) return 'Appointment';
+  return 'Direct invoice';
 }
 
 function money(value:any){
@@ -123,10 +123,9 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     const patient:any=patientMap.get(invoice.patient_id);
     const haystack=[
       invoice.invoice_number,
-      invoice.id,
-      invoice.patient_id,
       patient?.name,
       patient?.full_name,
+      patient?.patient_number,
       source.label,
       invoice.status,
     ].filter(Boolean).join(' ').toLowerCase();
@@ -309,8 +308,8 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       )}
       <div className="grid gap-4 md:grid-cols-4">
         <Card><p className="text-sm text-slate-500">Due Collection</p><p className="mt-1 text-2xl font-bold">{money(dueReport?.total_due_amount)}</p><p className="text-xs text-slate-500">{dueReport?.invoice_count??0} invoices</p></Card>
-        <Card><p className="text-sm text-slate-500">Revenue</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_invoice_amount)}</p><p className="text-xs text-slate-500">Tax {money(revenueReport?.total_tax_amount)}</p></Card>
-        <Card><p className="text-sm text-slate-500">Paid</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_paid_amount)}</p><p className="text-xs text-slate-500">Doctor share {money(revenueReport?.total_doctor_share)}</p></Card>
+        <Card><p className="text-sm text-slate-500">Revenue</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_invoice_amount)}</p><p className="text-xs text-slate-500">Collected invoice value</p></Card>
+        <Card><p className="text-sm text-slate-500">Paid</p><p className="mt-1 text-2xl font-bold">{money(revenueReport?.total_paid_amount)}</p><p className="text-xs text-slate-500">Settlement {money(revenueReport?.total_doctor_share)}</p></Card>
         <Card>
           <p className="text-sm text-slate-500">Settlement</p>
           <p className="mt-1 text-2xl font-bold">{money(payableSettlement)}</p>
@@ -335,7 +334,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
           {signedReady.length===0&&<div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No signed consultations waiting for invoice.</div>}
           {signedReady.map((a:any)=>(
             <div key={a.id} className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center">
-              <div><b>{a.token} · {a.patient}</b><p className="text-sm text-slate-500">Consultation: {a.consultationId}</p></div>
+              <div><b>{a.token} · {a.patient}</b><p className="text-sm text-slate-500">Signed consultation ready for billing</p></div>
               <Button disabled={busy===a.id} onClick={()=>generateInvoice(a)}>{busy===a.id?'Generating...':'Generate Invoice'}</Button>
             </div>
           ))}
@@ -346,7 +345,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
           <div>
             <h3 className="text-lg font-bold">Invoices & Payments</h3>
-            <p className="text-sm text-slate-500">Track invoice source, patient dues, doctor share, and payment collection in one list.</p>
+            <p className="text-sm text-slate-500">Track invoice source, patient dues, settlement share, and payment collection in one list.</p>
           </div>
           <Badge tone="slate">{filteredInvoices.length} of {invoices.length} invoices</Badge>
         </div>
@@ -382,7 +381,8 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
           <table className="w-full min-w-[1740px] table-fixed text-left text-sm">
             <colgroup>
-              <col className="w-[180px]" />
+              <col className="w-[80px]" />
+              <col className="w-[170px]" />
               <col className="w-[170px]" />
               <col className="w-[170px]" />
               <col className="w-[120px]" />
@@ -394,27 +394,30 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
             </colgroup>
             <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
               <tr>
+                <th className="px-4 py-3">#</th>
                 <th className="px-4 py-3">Invoice</th>
                 <th className="px-3 py-3">Source</th>
                 <th className="px-3 py-3">Patient</th>
                 <th className="px-3 py-3">Status</th>
                 <th className="px-3 py-3 text-right">Total</th>
                 <th className="px-3 py-3 text-right">Paid</th>
-                <th className="px-3 py-3 text-right">Doctor Share</th>
+                <th className="px-3 py-3 text-right">Settlement</th>
                 <th className="px-3 py-3">Payment</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredInvoices.length===0&&<tr><td colSpan={9} className="px-4 py-4 text-slate-500">{invoices.length===0?'No invoices yet.':'No invoices match the selected filters.'}</td></tr>}
-              {invoicePageRows.map((invoice:any)=>{
+              {filteredInvoices.length===0&&<tr><td colSpan={10} className="px-4 py-4 text-slate-500">{invoices.length===0?'No invoices yet.':'No invoices match the selected filters.'}</td></tr>}
+              {invoicePageRows.map((invoice:any,index:number)=>{
                 const p:any=patientMap.get(invoice.patient_id);
                 const source=invoiceSource(invoice);
+                const rowNumber=(safePage-1)*pageSize+index+1;
                 return (
                   <tr key={invoice.id} onClick={()=>openInvoiceDetail(invoice)} className="group cursor-pointer align-middle hover:bg-slate-50">
-                    <td className="px-4 py-4"><b>{invoice.invoice_number}</b><p className="text-xs text-slate-500">{invoice.id}</p><p className="mt-1 text-xs font-semibold text-slate-400">{formatInvoiceDate(invoice)}</p></td>
-                    <td className="px-3 py-4"><Badge tone={source.tone as any}>{source.label}</Badge>{invoice.physiotherapy_case_id&&<p className="mt-1 truncate text-xs text-slate-500">{invoice.physiotherapy_case_id}</p>}</td>
-                    <td className="px-3 py-4 font-medium">{p?.name||invoice.patient_id}</td>
+                    <td className="px-4 py-4 font-semibold text-slate-500">{rowNumber}</td>
+                    <td className="px-4 py-4"><b>{invoice.invoice_number}</b><p className="mt-1 text-xs font-semibold text-slate-400">{formatInvoiceDate(invoice)}</p></td>
+                    <td className="px-3 py-4"><Badge tone={source.tone as any}>{source.label}</Badge></td>
+                    <td className="px-3 py-4 font-medium">{p?.name||p?.full_name||'Patient'}</td>
                     <td className="px-3 py-4"><Badge tone={invoice.status==='paid'?'green':invoice.status==='partially_paid'?'amber':'slate'}>{invoice.status}</Badge></td>
                     <td className="px-3 py-4 text-right font-semibold tabular-nums">{money(invoice.total_amount)}</td>
                     <td className="px-3 py-4 text-right tabular-nums">{money(invoice.paid_amount)}</td>
@@ -474,8 +477,7 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <b>{invoice.invoice_number}</b>
-                <span className="text-slate-500">{patient?.name||patient?.full_name||invoice.patient_id}</span>
-                <span className="text-slate-500">{invoice.id}</span>
+                <span className="text-slate-500">{patient?.name||patient?.full_name||'Patient'}</span>
               </div>
             </div>
             <button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold hover:bg-slate-50">Close</button>
@@ -484,18 +486,18 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <DetailStat title="Invoice Type" value={source.label}/>
-          <DetailStat title={linkedRecord.label} value={linkedRecord.value}/>
-          <DetailStat title="Patient" value={patient?.name||patient?.full_name||invoice.patient_id}/>
+          <DetailStat title="Source Record" value={linkedRecord}/>
+          <DetailStat title="Patient" value={patient?.name||patient?.full_name||'Patient'}/>
         </div>
 
         <div className="mt-3 grid gap-3 md:grid-cols-4">
           <DetailStat title="Subtotal" value={money(invoice.subtotal_amount)}/>
           <DetailStat title="Discount" value={money(invoice.discount_amount)}/>
-          <DetailStat title="Tax" value={money(invoice.tax_amount)}/>
+          <DetailStat title="Membership Benefit" value={money(invoice.membership_discount_amount)}/>
           <DetailStat title="Total" value={money(invoice.total_amount)}/>
           <DetailStat title="Paid" value={money(invoice.paid_amount)}/>
           <DetailStat title="Balance" value={money(invoice.balance_amount)}/>
-          <DetailStat title="Doctor Share" value={money(invoice.doctor_share_amount)}/>
+          <DetailStat title="Settlement" value={money(invoice.doctor_share_amount)}/>
           <DetailStat title="Clinic Share" value={money(invoice.clinic_share_amount)}/>
         </div>
 
@@ -541,7 +543,7 @@ function InvoiceDetailModal({detail,patient,onClose}:any){
               <div key={payment.id} className="flex flex-col justify-between gap-2 rounded-2xl bg-slate-50 p-3 text-sm md:flex-row md:items-center">
                 <div>
                   <b className="capitalize">{String(payment.method||'payment').replaceAll('_',' ')}</b>
-                  <p className="text-xs text-slate-500">{payment.reference_number||payment.id}</p>
+                  {payment.reference_number&&<p className="text-xs text-slate-500">{payment.reference_number}</p>}
                 </div>
                 <Badge tone={payment.status==='recorded'?'green':'amber'}>{payment.status}</Badge>
                 <b>{money(payment.amount)}</b>

@@ -1,9 +1,10 @@
 'use client';
 
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {ActionButton,ActionGroup,Badge,Card,Field,Select} from '@/components/ui';
 import {apiFetch,type ApiSession} from '@/lib/api';
 import {sortQueue} from '@/lib/hmsLogic';
+import {humanizeOptionLabel,publicDisplayValue} from '@/lib/options';
 
 type TokenQueueProps = {
   scopedAppointments: any[];
@@ -18,6 +19,17 @@ type TokenQueueProps = {
 
 type QueueAction = 'call' | 'skip' | 'requeue' | 'cancel';
 
+function dateKey(value:any){
+  return String(value||'').slice(0,10);
+}
+
+function todayKey(){
+  const now=new Date();
+  const month=String(now.getMonth()+1).padStart(2,'0');
+  const day=String(now.getDate()).padStart(2,'0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
 function tokenSortValue(row:any){
   return String(row.token_number||row.token||'').trim();
 }
@@ -28,7 +40,7 @@ function sortByTokenNumber(rows:any[]){
 
 function isActiveQueueStatus(value:any){
   const status=String(value||'').trim().toLowerCase().replaceAll(' ','_');
-  return !['cancelled','canceled','no_show','consultation_completed','billed','completed','done'].includes(status);
+  return !['cancelled','canceled','no_show','patient_not_available','not_available','skipped','consultation_completed','billed','completed','done'].includes(status);
 }
 
 function isActiveQueueAppointment(appointment:any){
@@ -55,7 +67,10 @@ export function TokenQueue({
   const [displayMode,setDisplayMode]=useState<'reception'|'called_only'>('reception');
   const [tokenLanguage,setTokenLanguage]=useState<'english'|'tamil'|'both'>('english');
   const [displayRows,setDisplayRows]=useState<any[]>([]);
+  const autoClosedPastIds=useRef(new Set<string>());
+  const today=todayKey();
   const queue = sortByTokenNumber(sortQueue(scopedAppointments.filter((appointment:any)=>{
+    if(dateKey(appointment.appointmentDate||appointment.appointment_date)!==today)return false;
     if(departmentId&&appointment.departmentId!==departmentId)return false;
     if(!isActiveQueueAppointment(appointment))return false;
     if(doctorScope?.practitionerId){
@@ -82,6 +97,23 @@ export function TokenQueue({
     loadDisplay();
     return()=>{alive=false};
   },[apiSession?.token,apiSession?.tenantId,displayMode,scopedAppointments.length]);
+
+  useEffect(()=>{
+    if(!apiSession)return;
+    const stale=scopedAppointments.filter((appointment:any)=>{
+      const appointmentDate=dateKey(appointment.appointmentDate||appointment.appointment_date);
+      if(!appointmentDate||appointmentDate>=today)return false;
+      if(!appointment.queueEntryId||autoClosedPastIds.current.has(appointment.queueEntryId))return false;
+      if(departmentId&&appointment.departmentId!==departmentId)return false;
+      if(doctorScope?.practitionerId&&appointment.doctorId!==doctorScope.practitionerId&&appointment.practitioner_id!==doctorScope.practitionerId)return false;
+      return isActiveQueueAppointment(appointment);
+    });
+    if(stale.length===0)return;
+    stale.forEach((appointment:any)=>autoClosedPastIds.current.add(appointment.queueEntryId));
+    Promise.allSettled(stale.map((appointment:any)=>apiFetch(`/queue/${appointment.queueEntryId}/mark-not-available`,apiSession,{method:'POST',body:JSON.stringify({reason:'Automatically closed after appointment date ended',actor_user_id:apiSession.user?.id})})))
+      .then(()=>loadLiveData(apiSession))
+      .catch(()=>undefined);
+  },[apiSession?.token,apiSession?.tenantId,scopedAppointments.length,departmentId,doctorScope?.practitionerId,today]);
 
   function updateAppointment(id: string, patch: any) {
     setAppointments(appointments.map((a: any) => (a.id === id ? {...a, ...patch} : a)));
@@ -176,10 +208,13 @@ export function TokenQueue({
           const appointment=item.appointment||item;
           return (
           <button key={item.id} type="button" onClick={()=>openConsultation(appointment)} className="rounded-2xl bg-slate-900 p-4 text-left text-white transition hover:bg-slate-800">
-            <p className="text-xs font-bold uppercase text-slate-300">{item.priority||item.tokenType||'normal'}</p>
+            <p className="text-xs font-bold uppercase text-slate-300">{humanizeOptionLabel(item.priority||item.tokenType||'normal')}</p>
             <p className="mt-1 text-3xl font-black">{item.token_number||item.token}</p>
-            <p className="mt-1 text-sm font-semibold text-white">{appointment.patient||item.patient_id}</p>
-            <p className="mt-1 truncate text-xs text-slate-300">{appointment.doctor||'Doctor'} · {appointment.queueStatus||item.status}</p>
+            <p className="mt-1 text-sm font-semibold text-white">{appointment.patient||publicDisplayValue(item.patient_id,'Patient')}</p>
+            <p className="mt-1 truncate text-xs text-slate-300">{appointment.doctor||'Doctor'} · {humanizeOptionLabel(appointment.queueStatus||item.status)}</p>
+            {appointment.roomNumber && (
+              <p className="mt-1 text-xs font-bold text-slate-400">Room {Number(appointment.roomNumber)}</p>
+            )}
           </button>
         )})}
       </div>
@@ -202,10 +237,10 @@ export function TokenQueue({
                 <td><button type="button" onClick={()=>openConsultation(appointment)} className="text-left font-semibold hover:underline">{appointment.patient}</button></td>
                 <td>{appointment.doctor}</td>
                 <td>
-                  <Badge>{appointment.status}</Badge>
+                  <Badge>{humanizeOptionLabel(appointment.status)}</Badge>
                 </td>
                 <td>
-                  <Badge tone={appointment.tokenType === 'Emergency' ? 'red' : 'slate'}>{appointment.queueStatus}</Badge>
+                  <Badge tone={appointment.tokenType === 'Emergency' ? 'red' : 'slate'}>{humanizeOptionLabel(appointment.queueStatus)}</Badge>
                 </td>
                 <td className="px-3 py-3" onClick={(event)=>event.stopPropagation()}>
                   <ActionGroup>

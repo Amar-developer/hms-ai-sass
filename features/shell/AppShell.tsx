@@ -20,7 +20,7 @@ import {Doctors} from '@/features/doctors/Doctors';
 import {TokenQueue} from '@/features/queue/TokenQueue';
 import {Reports} from '@/features/reports/Reports';
 import {Scheduling} from '@/features/scheduling/Scheduling';
-import {Subscriptions} from '@/features/subscriptions/Subscriptions';
+import {PatientSubscriptions} from '@/features/patient_subscriptions/PatientSubscriptions';
 import {uniqueDepartmentRows} from '@/lib/options';
 
 function userInitials(user:any,email:string){
@@ -119,7 +119,7 @@ export function AppShell(props:any) {
   function renderPage() {
     switch (activePage) {
       case 'dashboard':
-        return <Dashboard {...ctx} liveSummary={liveSummary} setActive={navigatePage} />;
+        return <Dashboard {...ctx} liveSummary={liveSummary} setActive={navigatePage} nav={nav} enabled={enabled} />;
       case 'superadmin':
         return <SuperAdminDashboard apiSession={apiSession} switchTenant={switchTenant} section={superAdminSection} setSection={setSuperAdminSection} />;
       case 'appointments':
@@ -151,7 +151,7 @@ export function AppShell(props:any) {
       case 'admin':
         return <TenantAdmin {...ctx} section={tenantAdminSection} setSection={setTenantAdminSection} />;
       case 'subscriptions':
-        return <Subscriptions {...ctx} />;
+        return <PatientSubscriptions {...ctx} />;
       case 'reports':
         return <Reports {...ctx} />;
       default:

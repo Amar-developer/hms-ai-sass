@@ -2,7 +2,7 @@
 
 from app.modules.appointments.models import Appointment
 from app.modules.audit.models import AuditEvent
-from app.modules.billing.models import CreditNote, DiscountApproval, DoctorFeeRule, DoctorSettlement
+from app.modules.billing.models import CreditNote, DiscountApproval, DiscountOffer, DoctorFeeRule, DoctorSettlement
 from app.modules.billing.models import Invoice, InvoiceItem, Payment, TaxRule
 from app.modules.consultations.models import ClinicalTemplate, Consultation, ConsultationAddendum
 from app.modules.consultations.models import ConsultationComplaint, ConsultationDiagnosis, ConsultationMedicine
@@ -24,6 +24,7 @@ from app.modules.lab.models import LabOrder, LabOrderItem, LabResult, LabResultT
 from app.modules.lab.models import LabTestCatalog, LabTestPackage, LabTestPackageItem
 from app.modules.notifications.models import NotificationEvent
 from app.modules.patients.models import Patient, PatientAlert, PatientContact
+from app.modules.patient_subscriptions.models import PatientSubscriptionEnrollment, PatientSubscriptionPlan
 from app.modules.pharmacy.models import MedicineBatch, MedicineCatalog, PharmacyIssue, PharmacyIssueItem
 from app.modules.pharmacy.models import PharmacyPurchase, PharmacyPurchaseItem, PharmacyStockLedger, PharmacySupplier
 from app.modules.pharmacy.models import PharmacyReturn, PharmacyReturnItem
@@ -54,6 +55,7 @@ __all__ = [
     "DoctorFeeRule",
     "DoctorSettlement",
     "DiscountApproval",
+    "DiscountOffer",
     "CreditNote",
     "Invoice",
     "InvoiceItem",
@@ -79,6 +81,8 @@ __all__ = [
     "Patient",
     "PatientAlert",
     "PatientContact",
+    "PatientSubscriptionEnrollment",
+    "PatientSubscriptionPlan",
     "Payment",
     "MedicineBatch",
     "MedicineCatalog",

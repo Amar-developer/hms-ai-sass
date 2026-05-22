@@ -2,6 +2,27 @@ export function normalizeOptionLabel(value:any){
   return String(value||'').trim().replace(/\s+/g,' ').toLowerCase();
 }
 
+export function humanizeOptionLabel(value:any,fallback='-'){
+  const text=String(value??'').trim();
+  if(!text)return fallback;
+  return text
+    .replace(/[._-]+/g,' ')
+    .replace(/\s+/g,' ')
+    .trim()
+    .toLowerCase()
+    .replace(/\b\w/g,(letter)=>letter.toUpperCase());
+}
+
+export function isInternalId(value:any){
+  return /^(user|patient|invoice|consult|labord|pharm|medcat|labtest|taxrule|supplier|reportjob|branch|role|ptplan|ptsub|physiocase|ipadmission|payment|invitem)_[a-z0-9]/i.test(String(value||''));
+}
+
+export function publicDisplayValue(value:any,fallback='-'){
+  const text=String(value??'').trim();
+  if(!text||isInternalId(text))return fallback;
+  return text;
+}
+
 export function uniqueDepartmentRows<T extends {id?:string;name?:string;code?:string;is_active?:boolean}>(rows:T[], preferredId=''){
   const byLabel=new Map<string,T>();
   for(const row of rows||[]){

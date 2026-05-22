@@ -64,6 +64,7 @@ class PractitionerScheduleCreate(BaseModel):
     end_time: time
     slot_minutes: int = Field(default=15, ge=1, le=240)
     room_name: str | None = Field(default=None, max_length=120)
+    room_number: str | None = Field(default=None, max_length=10)
     is_active: bool = True
     actor_user_id: str | None = None
 
@@ -77,6 +78,7 @@ class PractitionerScheduleUpdate(BaseModel):
     end_time: time | None = None
     slot_minutes: int | None = Field(default=None, ge=1, le=240)
     room_name: str | None = Field(default=None, max_length=120)
+    room_number: str | None = Field(default=None, max_length=10)
     is_active: bool | None = None
     actor_user_id: str | None = None
 
@@ -92,6 +94,7 @@ class PractitionerScheduleRead(BaseModel):
     end_time: time
     slot_minutes: int
     room_name: str | None
+    room_number: str | None
     is_active: bool
     created_at: datetime
     updated_at: datetime

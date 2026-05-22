@@ -7,6 +7,8 @@ from sqlmodel import Session, select
 from app.modules.appointments.models import Appointment
 from app.modules.billing.models import (
     DoctorFeeRule,
+    DiscountOffer,
+    DiscountType,
     FeeShareType,
     Invoice,
     InvoiceItem,
@@ -17,6 +19,7 @@ from app.modules.billing.models import (
 )
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
+from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,92 @@ def calculate_fee_split(fee_rule: DoctorFeeRule) -> FeeCalculation:
     )
 
 
+def _service_matches(rule_scope: str | None, service_scope: str) -> bool:
+    return (rule_scope or "all") in {"all", service_scope}
+
+
+def find_tax_rule(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str,
+    service_scope: str,
+    tax_rule_id: str | None = None,
+) -> TaxRule | None:
+    if tax_rule_id:
+        tax_rule = session.get(TaxRule, tax_rule_id)
+        if (
+            tax_rule
+            and tax_rule.tenant_id == tenant_id
+            and tax_rule.is_active
+            and tax_rule.branch_id in {None, branch_id}
+            and _service_matches(tax_rule.service_scope, service_scope)
+        ):
+            return tax_rule
+        return None
+
+    rules = session.exec(
+        select(TaxRule).where(
+            TaxRule.tenant_id == tenant_id,
+            TaxRule.is_active == True,  # noqa: E712
+        )
+    ).all()
+    matching_rules = [
+        rule
+        for rule in rules
+        if rule.branch_id in {None, branch_id} and _service_matches(rule.service_scope, service_scope)
+    ]
+    if not matching_rules:
+        return None
+    matching_rules.sort(
+        key=lambda rule: (
+            rule.service_scope == service_scope,
+            rule.branch_id == branch_id,
+            rule.created_at,
+        ),
+        reverse=True,
+    )
+    return matching_rules[0]
+
+
+def calculate_offer_discount(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str,
+    service_scope: str,
+    subtotal: int,
+    discount_offer_id: str | None,
+) -> tuple[int, DiscountOffer | None]:
+    if not discount_offer_id or subtotal <= 0:
+        return 0, None
+    offer = session.get(DiscountOffer, discount_offer_id)
+    if (
+        not offer
+        or offer.tenant_id != tenant_id
+        or not offer.is_active
+        or not _service_matches(offer.service_scope, service_scope)
+        or (offer.branch_id and offer.branch_id != branch_id)
+    ):
+        return 0, None
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    valid_from = offer.valid_from.replace(tzinfo=timezone.utc) if offer.valid_from and offer.valid_from.tzinfo is None else offer.valid_from
+    valid_until = offer.valid_until.replace(tzinfo=timezone.utc) if offer.valid_until and offer.valid_until.tzinfo is None else offer.valid_until
+    if valid_from and valid_from > now:
+        return 0, None
+    if valid_until and valid_until < now:
+        return 0, None
+    if offer.discount_type == DiscountType.FIXED:
+        discount = offer.value
+    else:
+        discount = round(subtotal * offer.value / 100)
+    if offer.max_discount_amount is not None:
+        discount = min(discount, offer.max_discount_amount)
+    return min(discount, subtotal), offer
+
+
 def create_consultation_invoice(
     session: Session,
     *,
@@ -109,6 +198,7 @@ def create_consultation_invoice(
     discount_amount: int,
     created_by_user_id: str | None,
     discount_approval_id: str | None = None,
+    discount_offer_id: str | None = None,
     tax_rule_id: str | None = None,
     treatment_type: str | None = None,
 ) -> tuple[Invoice, InvoiceItem]:
@@ -127,19 +217,48 @@ def create_consultation_invoice(
         key=SettingKey.INVOICE_PREFIX,
         branch_id=appointment.branch_id,
     )
-    discount = min(discount_amount, subtotal)
+    membership_discount = 0
+    membership_enrollment_id = None
+    membership_plan_id = None
+    membership = active_patient_enrollment(
+        session,
+        tenant_id=appointment.tenant_id,
+        branch_id=appointment.branch_id,
+        patient_id=appointment.patient_id,
+    )
+    if membership:
+        enrollment, plan = membership
+        preview = benefit_preview(
+            plan=plan,
+            enrollment=enrollment,
+            service_type="consultation",
+            item_ids=[],
+            subtotal_amount=subtotal,
+        )
+        membership_discount = int(preview["discount_amount"] or 0)
+        if membership_discount > 0:
+            membership_enrollment_id = enrollment.id
+            membership_plan_id = plan.id
+            enrollment.used_consultations += 1
+            session.add(enrollment)
+
+    offer_discount, offer = calculate_offer_discount(
+        session,
+        tenant_id=appointment.tenant_id,
+        branch_id=appointment.branch_id,
+        service_scope="consultation",
+        subtotal=subtotal,
+        discount_offer_id=discount_offer_id,
+    )
+    discount = min(discount_amount + offer_discount + membership_discount, subtotal)
     taxable = subtotal - discount
-    tax_rule = session.get(TaxRule, tax_rule_id) if tax_rule_id else None
-    if tax_rule and tax_rule.tenant_id != appointment.tenant_id:
-        tax_rule = None
-    if not tax_rule:
-        tax_rule = session.exec(
-            select(TaxRule).where(
-                TaxRule.tenant_id == appointment.tenant_id,
-                TaxRule.is_active == True,  # noqa: E712
-                (TaxRule.branch_id == appointment.branch_id) | (TaxRule.branch_id.is_(None)),
-            )
-        ).first()
+    tax_rule = find_tax_rule(
+        session,
+        tenant_id=appointment.tenant_id,
+        branch_id=appointment.branch_id,
+        service_scope="consultation",
+        tax_rule_id=tax_rule_id,
+    )
     tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
     total = taxable + tax_amount
     if subtotal and calculation:
@@ -158,6 +277,7 @@ def create_consultation_invoice(
         invoice_number=next_invoice_number(session, appointment.tenant_id, str(invoice_prefix or "INV")),
         subtotal_amount=subtotal,
         discount_amount=discount,
+        membership_discount_amount=membership_discount,
         taxable_amount=taxable,
         tax_amount=tax_amount,
         tax_rule_id=tax_rule.id if tax_rule else None,
@@ -167,6 +287,9 @@ def create_consultation_invoice(
         clinic_share_amount=clinic_share,
         fee_rule_id=fee_rule_id,
         discount_approval_id=discount_approval_id,
+        discount_offer_id=offer.id if offer else None,
+        patient_subscription_enrollment_id=membership_enrollment_id,
+        patient_subscription_plan_id=membership_plan_id,
         created_by_user_id=created_by_user_id,
     )
     session.add(invoice)
@@ -294,7 +417,14 @@ def refresh_consultation_invoice(session: Session, invoice: Invoice) -> Invoice:
     subtotal = sum(item.total_amount for item in items)
     discount = min(invoice.discount_amount, subtotal)
     taxable = subtotal - discount
-    tax_rule = session.get(TaxRule, invoice.tax_rule_id) if invoice.tax_rule_id else None
+    service_scope = "consultation"
+    tax_rule = find_tax_rule(
+        session,
+        tenant_id=invoice.tenant_id,
+        branch_id=invoice.branch_id,
+        service_scope=service_scope,
+        tax_rule_id=invoice.tax_rule_id,
+    )
     tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
     total = taxable + tax_amount
 

@@ -9,6 +9,7 @@ import {nav,roleModules} from '@/lib/navigation';
 import {uniqueDepartmentRows} from '@/lib/options';
 
 const allModuleIds = nav.map(([id]) => id);
+const defaultEntitlementModuleIds = Array.from(new Set([...allModuleIds, 'patient_subscriptions']));
 const defaultBranch = {id: 'default-branch', name: 'Default Branch', city: ''};
 const defaultDepartment = {id: 'general', name: 'General Medicine', prefix: 'GEN'};
 
@@ -23,6 +24,7 @@ export function useAppController() {
   const [doctorScope, setDoctorScope] = useState<any | null>(null);
   const [livePractitioners, setLivePractitioners] = useState<any[]>([]);
   const [liveInvoices, setLiveInvoices] = useState<any[]>([]);
+  const [enabledModules, setEnabledModules] = useState<string[]>(defaultEntitlementModuleIds);
   const [liveStatus, setLiveStatus] = useState('Not connected');
   const [role, setRole] = useState('tenant_admin');
   const [showPassword, setShowPassword] = useState(false);
@@ -87,7 +89,20 @@ export function useAppController() {
     let scopedBranchRows = branchRows;
     let scopedDepartmentRows = uniqueDepartmentRows(departmentRows, departmentId);
 
-    const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows] = await Promise.all([
+    const entitlementsPromise = apiFetchIfAllowed<any>('/subscription-plans/entitlements', session, [
+      'reports.read',
+      'settings.manage',
+      'identity.users.manage',
+      'identity.users.read',
+      'identity.roles.manage',
+      'branches.manage',
+      'departments.manage',
+      'patient_subscriptions.manage',
+      'patient_subscriptions.read',
+      'patient_subscriptions.create',
+      'platform.subscriptions.manage',
+    ], null);
+    const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows, scheduleRows, entitlements] = await Promise.all([
       apiFetchIfAllowed<any[]>('/patients', session, 'patients.read', []),
       apiFetchIfAllowed<any[]>('/appointments', session, ['appointments.manage', 'appointments.read'], []),
       apiFetchIfAllowed<any[]>('/queue?include_completed=true', session, 'queue.manage', []),
@@ -95,6 +110,8 @@ export function useAppController() {
       apiFetchIfAllowed<any[]>('/billing/invoices', session, 'billing.manage', []),
       apiFetchIfAllowed<any[]>('/ip/admissions', session, ['ip.manage', 'ip.read'], []),
       apiFetchIfAllowed<any[]>('/practitioners', session, referenceReadPermissions, []),
+      apiFetchIfAllowed<any[]>('/practitioners/schedules?is_active=true', session, referenceReadPermissions, []),
+      entitlementsPromise,
     ]);
 
     const linkedPractitioner = isDoctorUser
@@ -132,7 +149,7 @@ export function useAppController() {
     const patientMap = new Map<string, any>(mappedPatients.map((p: any) => [p.id, p]));
     const practitionerMap = new Map<string, any>(practitionerRows.map((practitioner: any) => [practitioner.id, practitioner]));
     const mappedAppointments = appointmentRows.map((a: any) =>
-      mapAppointment(a, queueRows, consultationRows, patientMap, practitionerMap, session.tenantId, backendBranchId),
+      mapAppointment(a, queueRows, consultationRows, patientMap, practitionerMap, session.tenantId, backendBranchId, scheduleRows),
     );
 
     setPatients(mappedPatients);
@@ -140,6 +157,7 @@ export function useAppController() {
     setAppointments(mappedAppointments);
     setIpAdmissions(ipRows);
     setLiveInvoices(invoiceRows);
+    setEnabledModules(entitlements?.enabled_modules?.length ? entitlements.enabled_modules : defaultEntitlementModuleIds);
     setLiveSummary({
       patients: patientRows.length,
       appointments: appointmentRows.length,
@@ -177,6 +195,27 @@ export function useAppController() {
 
     return () => window.removeEventListener('unhandledrejection', handleUnhandled);
   }, []);
+
+  useEffect(() => {
+    if (!apiSession) return;
+    const refreshLiveData = () => {
+      if (document.visibilityState === 'hidden') return;
+      loadLiveData(apiSession).catch((err:any) => {
+        setLiveStatus(err.message || 'Connected, but live data could not be refreshed.');
+      });
+    };
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === 'medizinhub.entitlements.refresh') refreshLiveData();
+    };
+    window.addEventListener('focus', refreshLiveData);
+    window.addEventListener('storage', handleStorage);
+    document.addEventListener('visibilitychange', refreshLiveData);
+    return () => {
+      window.removeEventListener('focus', refreshLiveData);
+      window.removeEventListener('storage', handleStorage);
+      document.removeEventListener('visibilitychange', refreshLiveData);
+    };
+  }, [apiSession?.token, apiSession?.tenantId]);
 
   async function handleLogin(input: {email: string; password: string}) {
     setLiveStatus('Signing in...');
@@ -297,7 +336,7 @@ export function useAppController() {
     name: selectedTenant?.name || apiSession?.user?.tenant_name || (isSuperAdmin ? 'MedizinHub HMS' : 'Current Tenant'),
     type: branchOptions.length > 1 ? 'Multi Branch Tenant' : 'Single Branch Tenant',
     multiBranch: branchOptions.length > 1,
-    modules: allModuleIds,
+    modules: enabledModules,
     branches: branchOptions,
     departments: departmentOptions.map((department: any) => department.id),
     consultationFees: {},
@@ -342,7 +381,9 @@ export function useAppController() {
   const permissionKeys = apiSession?.user?.permissions || [];
   const navHasAnyPermission = (...keys: string[]) =>
     Boolean(apiSession?.user?.is_super_admin || permissionKeys.includes('*') || keys.some((key) => permissionKeys.includes(key)));
-  if (!isSuperAdmin && navHasAnyPermission('identity.users.manage', 'identity.users.create', 'identity.users.read', 'identity.users.edit', 'identity.users.delete', 'identity.roles.manage', 'identity.roles.read', 'settings.manage', 'branches.manage', 'branches.read', 'departments.manage', 'departments.read')) permissionModules.add('admin');
+  const isTenantAdminUser = Boolean(!isSuperAdmin && (role === 'tenant_admin' || apiSession?.user?.roles?.includes('tenant_admin') || apiSession?.user?.user_type === 'tenant_admin'));
+  const canOpenTenantAdmin = Boolean(!isSuperAdmin && navHasAnyPermission('identity.users.manage', 'identity.users.create', 'identity.users.read', 'identity.users.edit', 'identity.users.delete', 'identity.roles.manage', 'identity.roles.read', 'settings.manage', 'branches.manage', 'branches.read', 'departments.manage', 'departments.read'));
+  if (canOpenTenantAdmin) permissionModules.add('admin');
   if (navHasAnyPermission('appointments.manage', 'appointments.create', 'appointments.read', 'appointments.edit')) permissionModules.add('appointments');
   if (navHasAnyPermission('queue.manage')) permissionModules.add('queue');
   if (navHasAnyPermission('patients.read', 'patients.write', 'patients.create', 'patients.edit')) permissionModules.add('patients');
@@ -358,7 +399,7 @@ export function useAppController() {
   if (navHasAnyPermission('pharmacy.manage', 'pharmacy.read', 'pharmacy.create', 'pharmacy.edit')) permissionModules.add('pharmacy');
   if (navHasAnyPermission('physiotherapy.manage', 'physiotherapy.read', 'physiotherapy.create', 'physiotherapy.edit', 'physiotherapy.delete')) permissionModules.add('physiotherapy');
   if (navHasAnyPermission('billing.manage', 'invoices.read', 'invoices.create', 'payments.manage')) permissionModules.add('billing');
-  const isTenantAdminUser = Boolean(!isSuperAdmin && (role === 'tenant_admin' || apiSession?.user?.roles?.includes('tenant_admin') || apiSession?.user?.user_type === 'tenant_admin'));
+  if (isTenantAdminUser || canOpenTenantAdmin || navHasAnyPermission('patient_subscriptions.manage', 'patient_subscriptions.read', 'patient_subscriptions.create')) permissionModules.add('subscriptions');
   if ((isSuperAdmin || isTenantAdminUser) && navHasAnyPermission('reports.read', 'audit.read')) permissionModules.add('reports');
   const isTenantAdminDashboardUser = Boolean(!isSuperAdmin && (role === 'tenant_admin' || apiSession?.user?.roles?.includes('tenant_admin') || apiSession?.user?.user_type === 'tenant_admin'));
   const enabled = (id: string) => {

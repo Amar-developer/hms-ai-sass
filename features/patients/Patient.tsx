@@ -16,6 +16,7 @@ import { UPLOADS_BASE, apiFetch, apiUpload, type ApiSession } from "@/lib/api";
 
 type PatientProps = {
   apiSession: ApiSession | null;
+  branchId?: string;
 };
 
 const pageSize = 10;
@@ -26,7 +27,7 @@ const genders = [
   ["other", "Other"],
 ] as const;
 
-export function Patient({ apiSession }: PatientProps) {
+export function Patient({ apiSession, branchId }: PatientProps) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
@@ -41,6 +42,9 @@ export function Patient({ apiSession }: PatientProps) {
   const [pharmacyIssues, setPharmacyIssues] = useState<any[]>([]);
   const [physioCases, setPhysioCases] = useState<any[]>([]);
   const [patientIpAdmissions, setPatientIpAdmissions] = useState<any[]>([]);
+  const [membershipPlans, setMembershipPlans] = useState<any[]>([]);
+  const [membershipEnrollments, setMembershipEnrollments] = useState<any[]>([]);
+  const [patientInvoices, setPatientInvoices] = useState<any[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [gender, setGender] = useState("all");
@@ -100,6 +104,8 @@ export function Patient({ apiSession }: PatientProps) {
     setPharmacyIssues([]);
     setPhysioCases([]);
     setPatientIpAdmissions([]);
+    setMembershipEnrollments([]);
+    setPatientInvoices([]);
     try {
       const [
         detail,
@@ -109,6 +115,9 @@ export function Patient({ apiSession }: PatientProps) {
         pharmacyRows,
         physioRows,
         ipRows,
+        planRows,
+        enrollmentRows,
+        invoiceRows,
       ] = await Promise.all([
         apiFetch(`/patients/${id}`, scopedSession),
         apiFetch(`/patients/${id}/summary`, scopedSession),
@@ -131,6 +140,9 @@ export function Patient({ apiSession }: PatientProps) {
           `/ip/admissions?patient_id=${id}&limit=50`,
           scopedSession,
         ).catch(() => []),
+        apiFetch('/patient-subscriptions/plans?include_inactive=true', scopedSession).catch(() => []),
+        apiFetch(`/patient-subscriptions/enrollments?patient_id=${id}`, scopedSession).catch(() => []),
+        apiFetch(`/billing/invoices?patient_id=${id}`, scopedSession).catch(() => []),
       ]);
       setSelectedDetail(detail);
       setSummary(summaryData);
@@ -140,6 +152,9 @@ export function Patient({ apiSession }: PatientProps) {
       setPharmacyIssues(Array.isArray(pharmacyRows) ? pharmacyRows : []);
       setPhysioCases(Array.isArray(physioRows) ? physioRows : []);
       setPatientIpAdmissions(Array.isArray(ipRows) ? ipRows : []);
+      setMembershipPlans(Array.isArray(planRows) ? planRows : []);
+      setMembershipEnrollments(Array.isArray(enrollmentRows) ? enrollmentRows : []);
+      setPatientInvoices(Array.isArray(invoiceRows) ? invoiceRows : []);
     } catch (err: any) {
       setMessage(err.message || "Could not load patient details.");
     } finally {
@@ -286,6 +301,27 @@ export function Patient({ apiSession }: PatientProps) {
     }
   }
 
+  async function enrollMembership(e:any){
+    e.preventDefault();
+    if(!scopedSession||!selectedId)return;
+    const fd=new FormData(e.currentTarget);
+    const planId=String(fd.get('planId')||'');
+    if(!planId){setMessage('Select membership plan.');return}
+    setBusy(true);setMessage('');
+    try{
+      await apiFetch('/patient-subscriptions/enrollments',scopedSession,{method:'POST',body:JSON.stringify({
+        branch_id:fd.get('branchId')||selected?.branch_id||branchId,
+        patient_id:selectedId,
+        plan_id:planId,
+        starts_on:fd.get('startsOn')||new Date().toISOString().slice(0,10),
+        paid_amount:fd.get('paidAmount')!==''?Number(fd.get('paidAmount')):undefined,
+        created_by_user_id:apiSession.user?.id,
+      })});
+      await loadPatientDetail(selectedId);
+      setMessage('Patient membership enrolled and purchase invoice created.');
+    }catch(err:any){setMessage(err.message||'Could not enroll membership.')}finally{setBusy(false)}
+  }
+
   if (!apiSession)
     return (
       <Card>
@@ -327,8 +363,12 @@ export function Patient({ apiSession }: PatientProps) {
         labOrders={labOrders}
         pharmacyIssues={pharmacyIssues}
         physioCases={physioCases}
+        membershipPlans={membershipPlans}
+        membershipEnrollments={membershipEnrollments}
+        patientInvoices={patientInvoices}
         loading={busy}
         message={message}
+        onEnrollMembership={enrollMembership}
         onBack={() => open("list")}
         onEdit={() => open("edit", selected.id)}
         onUploadPhoto={uploadPhoto}
@@ -810,6 +850,8 @@ function fmtDate(val: string | null | undefined) {
   }
 }
 
+function money(value:any){return `₹${Number(value||0).toLocaleString("en-IN")}`}
+
 function splitListText(value: any) {
   const seen = new Set<string>();
   return String(value || "")
@@ -898,8 +940,12 @@ function PatientDetail({
   labOrders,
   pharmacyIssues,
   physioCases,
+  membershipPlans,
+  membershipEnrollments,
+  patientInvoices,
   loading,
   message,
+  onEnrollMembership,
   onBack,
   onEdit,
   onUploadPhoto,
@@ -930,6 +976,10 @@ function PatientDetail({
     uniquePharmacyIssues,
     (issue: any) => issue.medicine_text,
   );
+  const activeMembership = membershipEnrollments.find((row:any)=>row.status==="active");
+  const membershipInvoices = patientInvoices.filter((invoice:any)=>invoice.patient_subscription_enrollment_id||invoice.patient_subscription_plan_id);
+  const membershipUsageInvoices = patientInvoices.filter((invoice:any)=>Number(invoice.membership_discount_amount||0)>0);
+  const membershipSavings = membershipUsageInvoices.reduce((sum:number,invoice:any)=>sum+Number(invoice.membership_discount_amount||0),0);
 
   return (
     <div className="space-y-5">
@@ -999,6 +1049,45 @@ function PatientDetail({
           <Info k="Guardian" v={patient.guardian_name || "-"} />
           <Info k="IP Status" v={isAdmitted ? "Admitted" : "No"} />
         </div>
+      </Card>
+
+      <Card>
+        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+          <div>
+            <h4 className="font-bold">Patient Membership</h4>
+            <p className="text-xs text-slate-500">Subscription status, usage, purchase invoice, and benefit savings for this patient.</p>
+          </div>
+          <Badge tone={activeMembership?"green":"slate"}>{activeMembership?"Subscribed":"Not subscribed"}</Badge>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <Info k="Current Plan" v={activeMembership?.plan?.name||"-"}/>
+          <Info k="Valid Until" v={fmtDate(activeMembership?.ends_on)}/>
+          <Info k="Free Consult Used" v={activeMembership?`${activeMembership.used_consultations}/${activeMembership.plan?.free_consultations??0}`:"-"}/>
+          <Info k="Membership Savings" v={money(membershipSavings)}/>
+        </div>
+        <form onSubmit={onEnrollMembership} className="mt-4 grid gap-3 md:grid-cols-4">
+          <Field label="Plan">
+            <Select name="planId" defaultValue="">
+              <option value="">Select plan</option>
+              {membershipPlans.filter((plan:any)=>plan.is_active).map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name} · {money(plan.price_amount)}</option>)}
+            </Select>
+          </Field>
+          <Field label="Branch ID"><Input name="branchId" defaultValue={patient.branch_id||""}/></Field>
+          <Field label="Starts On"><Input name="startsOn" type="date" defaultValue={new Date().toISOString().slice(0,10)}/></Field>
+          <Field label="Paid Amount"><Input name="paidAmount" type="number" min="0" placeholder="Plan price"/></Field>
+          <div className="md:col-span-4"><Button disabled={loading||membershipPlans.length===0}>{loading?"Saving...":"Enroll Membership"}</Button></div>
+        </form>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border p-4">
+            <h5 className="font-bold">Membership History</h5>
+            <div className="mt-3 space-y-2">{membershipEnrollments.length===0&&<SectionEmpty text="No membership history."/>}{membershipEnrollments.map((row:any)=><div key={row.id} className="rounded-xl bg-slate-50 p-3 text-sm"><div className="flex justify-between gap-3"><b>{row.plan?.name||row.plan_id}</b><StatusBadge status={row.status}/></div><p className="text-xs text-slate-500">{fmtDate(row.starts_on)} to {fmtDate(row.ends_on)} · paid {money(row.paid_amount)}</p><p className="text-xs text-slate-500">Purchase invoice: {row.purchase_invoice_id||"-"}</p></div>)}</div>
+          </div>
+          <div className="rounded-2xl border p-4">
+            <h5 className="font-bold">Benefit Usage Invoices</h5>
+            <div className="mt-3 space-y-2">{membershipUsageInvoices.length===0&&<SectionEmpty text="No membership benefits used yet."/>}{membershipUsageInvoices.map((invoice:any)=><div key={invoice.id} className="rounded-xl bg-slate-50 p-3 text-sm"><div className="flex justify-between gap-3"><b>{invoice.invoice_number}</b><span>{money(invoice.membership_discount_amount)}</span></div><p className="text-xs text-slate-500">{fmtDate(invoice.created_at)} · total {money(invoice.total_amount)} · discount {money(invoice.discount_amount)}</p></div>)}</div>
+          </div>
+        </div>
+        {membershipInvoices.length>0&&<div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm"><b>Plan purchase invoices:</b> {membershipInvoices.map((invoice:any)=>invoice.invoice_number).join(", ")}</div>}
       </Card>
 
       {/* Alerts */}

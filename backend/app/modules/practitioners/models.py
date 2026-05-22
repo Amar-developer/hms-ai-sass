@@ -61,6 +61,7 @@ class PractitionerSchedule(SQLModel, table=True):
     end_time: time
     slot_minutes: int = Field(default=15, ge=1, le=240)
     room_name: str | None = Field(default=None, max_length=120)
+    room_number: str | None = Field(default=None, max_length=10)
     is_active: bool = Field(default=True, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)

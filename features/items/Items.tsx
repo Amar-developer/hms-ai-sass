@@ -12,6 +12,7 @@ import {
   Select,
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
+import { humanizeOptionLabel } from "@/lib/options";
 
 const itemTypes = [
   ["medicine", "Medicine"],
@@ -129,7 +130,7 @@ export function Items({ apiSession, branchId }: any) {
         type: "physio_equipment",
         kind: "Physio Equipment",
         name: row.name,
-        code: row.serial_number || row.id,
+        code: row.serial_number || row.code || "",
         price: null,
         purchase_price: row.purchase_price || 0,
         supplier: supplierName(row.supplier_id),
@@ -932,11 +933,10 @@ export function Items({ apiSession, branchId }: any) {
               {pagedRows.map((row: any) => (
                 <tr key={`${row.kind}-${row.id}`}>
                   <td className="px-4 py-3">
-                    <Badge>{row.kind}</Badge>
+                    <Badge>{humanizeOptionLabel(row.kind)}</Badge>
                   </td>
                   <td>
                     <b>{row.name}</b>
-                    <p className="text-xs text-slate-500">{row.id}</p>
                   </td>
                   <td>{row.code || "-"}</td>
                   <td>{row.meta}</td>

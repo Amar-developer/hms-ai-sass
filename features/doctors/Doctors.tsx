@@ -716,10 +716,6 @@ function DoctorRow({
     >
       <div>
         <b>{formatPractitionerName(row)}</b>
-        <p className="break-all text-xs text-slate-500">
-          {row.registration_number || row.id}
-        </p>
-        <p className="text-xs text-slate-500">{row.primary_specialty || "-"}</p>
       </div>
       <span>{typeLabel}</span>
       <span className="text-slate-600">

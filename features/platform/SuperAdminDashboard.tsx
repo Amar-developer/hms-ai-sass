@@ -521,7 +521,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
    {currentSection==='branchEdit'&&<EditBranch branch={tenantBranches.find((b:any)=>b.id===selectedBranchId)} busy={busy} updateBranch={updateBranch} back={()=>changeSection('branches')}/>}
    {currentSection==='branchAssign'&&<AssignTemplate title="Assign Branch Template" item={tenantBranches.find((b:any)=>b.id===selectedBranchId)} tenants={tenants.filter((tenant:any)=>tenant.id!==selectedId)} busy={busy} onSubmit={assignBranchTemplate} back={()=>changeSection('branches')}/>}
    {currentSection==='subscriptions'&&<SubscriptionManagement apiSession={apiSession} plans={plans} tenants={customerTenants} selectedId={selectedId} setSelectedId={setSelectedId} reloadPlans={loadPlatform}/>}
-   {currentSection==='settings'&&<TenantBranchSettings selected={selected} tenants={customerTenants} selectedId={selectedId} setSelectedId={setSelectedId}/>}
+   {currentSection==='settings'&&<TenantBranchSettings apiSession={apiSession} selected={selected} tenants={customerTenants} selectedId={selectedId} setSelectedId={setSelectedId} plans={plans} modules={moduleRegistry} reloadPlans={loadPlatform}/>}
    {confirmAction&&<ConfirmModal action={confirmAction} busy={busy} onCancel={()=>setConfirmAction(null)} onConfirm={()=>{
    if(confirmAction.entity==='branch')return confirmAction.kind==='delete'?deleteBranch(confirmAction.branch):changeBranchStatus(confirmAction.branch);
    if(confirmAction.entity==='department')return confirmAction.kind==='delete'?deleteDepartment(confirmAction.department):changeDepartmentStatus(confirmAction.department);
@@ -940,7 +940,7 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
 }
 
 function SubscriptionCreatePlan({loading,createPlan,back}:any){
- return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Create Custom Plan</h3><p className="text-sm text-slate-500">Create a reusable SaaS package with limits, pricing, and enabled modules.</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Subscriptions</button></div><form onSubmit={createPlan} className="mt-5 grid gap-3 md:grid-cols-2"><Field label="Plan Key"><Input name="key" required placeholder="growth_clinic"/></Field><Field label="Plan Name"><Input name="name" required placeholder="Growth Clinic"/></Field><Field label="Patient Limit"><Input name="monthlyPatientLimit" type="number" required min="1" defaultValue="300"/></Field><Field label="Monthly Price"><Input name="priceInrMonthly" type="number" required min="0" defaultValue="2999"/></Field><Field label="Included Branches"><Input name="includedBranches" type="number" min="1" defaultValue="1"/></Field><Field label="Included Doctors"><Input name="includedDoctors" type="number" min="1" defaultValue="3"/></Field><div className="md:col-span-2"><Field label="Enabled Modules"><Input name="enabledModules" defaultValue="patients,appointments,queue,consultations,billing_basic" placeholder="lab,pharmacy,whatsapp,voice,ai,ip"/></Field></div><div className="flex flex-wrap gap-2 md:col-span-2"><Button disabled={loading}>{loading?'Saving...':'Create Plan'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></form></Card>
+ return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Create Custom Plan</h3><p className="text-sm text-slate-500">Create a reusable SaaS package with limits, pricing, and enabled modules.</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Subscriptions</button></div><form onSubmit={createPlan} className="mt-5 grid gap-3 md:grid-cols-2"><Field label="Plan Key"><Input name="key" required placeholder="growth_clinic"/></Field><Field label="Plan Name"><Input name="name" required placeholder="Growth Clinic"/></Field><Field label="Patient Limit"><Input name="monthlyPatientLimit" type="number" required min="1" defaultValue="300"/></Field><Field label="Monthly Price"><Input name="priceInrMonthly" type="number" required min="0" defaultValue="2999"/></Field><Field label="Included Branches"><Input name="includedBranches" type="number" min="1" defaultValue="1"/></Field><Field label="Included Doctors"><Input name="includedDoctors" type="number" min="1" defaultValue="3"/></Field><div className="md:col-span-2"><Field label="Enabled Modules"><Input name="enabledModules" defaultValue="patients,appointments,queue,consultations,billing_basic,patient_subscriptions" placeholder="lab,pharmacy,patient_subscriptions,whatsapp,voice,ai,ip"/></Field></div><div className="flex flex-wrap gap-2 md:col-span-2"><Button disabled={loading}>{loading?'Saving...':'Create Plan'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></form></Card>
 }
 
 function SubscriptionAssignPlan({loading,tenants,selectedId,setSelectedId,plans,selectedTenant,assignSubscription,back}:any){
@@ -955,8 +955,79 @@ function SubscriptionTable({title,rows,columns}:any){
  return <Card><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{title}</h4><Badge tone="blue">{rows.length}</Badge></div><div className="mt-4 space-y-3">{rows.length===0&&<Empty text={`No ${title.toLowerCase()} yet.`}/>} {rows.slice(0,6).map((row:any)=><div key={row.id||row.invoice_number} className="rounded-2xl bg-slate-50 p-3 text-sm"><div className="grid gap-2 sm:grid-cols-2">{columns.map((column:string)=><div key={column}><p className="text-[11px] font-bold uppercase text-slate-500">{column.replaceAll('_',' ')}</p><p className="font-semibold">{String(row[column]??'-')}</p></div>)}</div></div>)}</div></Card>
 }
 
-function TenantBranchSettings({selected,tenants,selectedId,setSelectedId}:any){
- return <Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><h3 className="text-lg font-bold">Tenant & Branch Settings</h3><p className="text-sm text-slate-500">Configuration page for tenant type, enabled modules, branch settings, queue rules, invoice prefix, and communication providers.</p></div><TenantPicker tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId}/></div>{selected&&<div className="mt-5 grid gap-3 md:grid-cols-3"><Info label="Tenant" value={selected.name}/><Info label="Type" value={formatTenantType(selected.tenant_type)}/><Info label="Status" value={selected.status}/><Info label="Email" value={selected.email||'-'}/><Info label="Phone" value={selected.phone||'-'}/><Info label="Timezone" value={selected.timezone||'-'}/></div>}<p className="mt-5 text-xs text-slate-500">Detailed branch settings reuse the tenant admin settings APIs. A dedicated branch CRUD/settings API page can be added next.</p></Card>
+function TenantBranchSettings({apiSession,selected,tenants,selectedId,setSelectedId,plans,modules,reloadPlans}:any){
+ const [subscriptions,setSubscriptions]=useState<any[]>([]);
+ const [selectedModules,setSelectedModules]=useState<string[]>([]);
+ const [message,setMessage]=useState('');
+ const [loading,setLoading]=useState(false);
+ const planById=new Map((plans||[]).map((plan:any)=>[plan.id,plan]));
+ const activeSubscription=subscriptions.find((item:any)=>item.status==='active'||item.is_active)||subscriptions[0];
+ const activePlan=activeSubscription?planById.get(activeSubscription.plan_id) as any:null;
+ const editableModules=(modules||[]).filter((module:any)=>module.entitlement_key).sort((a:any,b:any)=>String(a.category||'').localeCompare(String(b.category||''))||String(a.name).localeCompare(String(b.name)));
+ const moduleByKey=new Map((modules||[]).map((module:any)=>[module.key,module]));
+ const moduleByEntitlement=new Map((modules||[]).filter((module:any)=>module.entitlement_key).map((module:any)=>[module.entitlement_key,module]));
+
+ async function loadTenantSubscription(){
+  if(!apiSession||!selectedId){setSubscriptions([]);setSelectedModules([]);return}
+  setLoading(true);setMessage('');
+  try{
+   const rows=await apiFetch('/subscription-plans/tenant-subscriptions',{...apiSession,tenantId:selectedId});
+   setSubscriptions(rows);
+   const current=rows.find((item:any)=>item.status==='active'||item.is_active)||rows[0];
+   const plan=current?(plans||[]).find((item:any)=>item.id===current.plan_id):null;
+   const enabled=plan?.enabled_modules?.length?plan.enabled_modules:editableModules.filter((module:any)=>module.default_enabled).map((module:any)=>module.entitlement_key);
+   setSelectedModules(enabled);
+  }catch(err:any){
+   setSubscriptions([]);setSelectedModules(editableModules.filter((module:any)=>module.default_enabled).map((module:any)=>module.entitlement_key));
+   setMessage(err.message||'Could not load tenant modules.');
+  }finally{setLoading(false)}
+ }
+
+ useEffect(()=>{loadTenantSubscription()},[apiSession?.token,selectedId,plans.length,modules.length]);
+
+ function toggleModule(key:string,checked:boolean){
+  setSelectedModules(previous=>checked?Array.from(new Set([...previous,key])):previous.filter(item=>item!==key));
+ }
+
+ async function saveModules(e:any){
+  e.preventDefault();if(!apiSession||!selected)return;
+  const withDependencies=new Set(selectedModules);
+  selectedModules.forEach(key=>{
+   const module=moduleByEntitlement.get(key) as any;
+   (module?.dependencies||[]).forEach((dependency:string)=>{
+    const dependencyModule=moduleByKey.get(dependency) as any;
+    if(dependencyModule?.entitlement_key)withDependencies.add(dependencyModule.entitlement_key);
+   });
+  });
+  const enabledModules=Array.from(withDependencies).filter(Boolean);
+  const basePlan=activePlan||(plans||[]).find((plan:any)=>plan.is_active)||plans?.[0];
+  setLoading(true);setMessage('');
+  try{
+   const safeTenantId=String(selected.id||'tenant').replace(/[^a-zA-Z0-9]/g,'_').slice(-24);
+   const plan=await apiFetch('/subscription-plans',apiSession,{method:'POST',body:JSON.stringify({
+    key:`tenant_modules_${safeTenantId}_${Date.now()}`.slice(0,80),
+    name:`${selected.name} Module Access`,
+    monthly_patient_limit:Number(basePlan?.monthly_patient_limit||300),
+    included_branches:Number(basePlan?.included_branches||1),
+    included_doctors:Number(basePlan?.included_doctors||1),
+    price_inr_monthly:Number(basePlan?.price_inr_monthly||0),
+    enabled_modules:enabledModules
+   })});
+   const subscription=await apiFetch('/subscription-plans/tenant-subscriptions',{...apiSession,tenantId:selected.id},{method:'POST',body:JSON.stringify({
+    plan_id:plan.id,
+    starts_on:new Date().toISOString().slice(0,10),
+    billing_amount:Number(activeSubscription?.billing_amount??basePlan?.price_inr_monthly??0),
+    notes:'Updated enabled modules from Tenant & Branch Settings'
+   })});
+   setSelectedModules(enabledModules);
+   setSubscriptions(previous=>[subscription,...previous.filter((item:any)=>item.id!==subscription.id)]);
+   window.localStorage.setItem('medizinhub.entitlements.refresh', String(Date.now()));
+   await reloadPlans?.();
+   setMessage('Tenant module access updated.');
+  }catch(err:any){setMessage(err.message||'Could not save tenant modules.')}finally{setLoading(false)}
+ }
+
+ return <div className="space-y-5"><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><h3 className="text-lg font-bold">Tenant & Branch Settings</h3><p className="text-sm text-slate-500">Configuration page for tenant type, enabled modules, branch settings, queue rules, invoice prefix, and communication providers.</p></div><TenantPicker tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId}/></div>{selected&&<div className="mt-5 grid gap-3 md:grid-cols-3"><Info label="Tenant" value={selected.name}/><Info label="Type" value={formatTenantType(selected.tenant_type)}/><Info label="Status" value={selected.status}/><Info label="Email" value={selected.email||'-'}/><Info label="Phone" value={selected.phone||'-'}/><Info label="Timezone" value={selected.timezone||'-'}/></div>}</Card><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><h4 className="font-bold">Enabled Modules</h4><p className="text-sm text-slate-500">Enable Patient Membership here for the selected tenant. Changes create a tenant-specific subscription package and apply immediately.</p></div><div className="text-right">{activePlan?<><Badge tone="blue">{activePlan.name}</Badge><p className="mt-1 text-xs text-slate-500">Current plan</p></>:<Badge tone="amber">No active plan</Badge>}</div></div>{message&&<div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}<form onSubmit={saveModules} className="mt-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{editableModules.length===0&&<Empty text={loading?'Loading modules...':'No entitlement modules found.'}/>} {editableModules.map((module:any)=>{const key=module.entitlement_key;const checked=selectedModules.includes(key);return <label key={module.key} className={`flex min-h-[92px] cursor-pointer gap-3 rounded-2xl border p-4 text-sm ${checked?'border-blue-300 bg-blue-50':'border-slate-200 bg-white'}`}><input type="checkbox" checked={checked} onChange={(e:any)=>toggleModule(key,e.target.checked)} className="mt-1 h-4 w-4"/><span><span className="flex flex-wrap items-center gap-2"><b>{module.name}</b>{key==='patient_subscriptions'&&<Badge tone="green">Patient Membership</Badge>}</span><span className="mt-1 block text-xs text-slate-500">{key}</span></span></label>})}</div><div className="mt-5 flex flex-wrap items-center gap-3"><Button disabled={loading||!selected}>{loading?'Saving...':'Save Module Access'}</Button><span className="text-xs text-slate-500">{selectedModules.length} selected</span></div></form></Card><p className="text-xs text-slate-500">Detailed branch settings reuse the tenant admin settings APIs. A dedicated branch CRUD/settings API page can be added next.</p></div>
 }
 
 function CreateActionButton({label,onClick}:any){return <button type="button" onClick={onClick} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"><Plus size={16}/><span>{label}</span></button>}

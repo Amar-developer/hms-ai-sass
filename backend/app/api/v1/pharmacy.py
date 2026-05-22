@@ -242,7 +242,7 @@ def create_medicine(
     payload: MedicineCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> MedicineCatalog:
     enforce_module_enabled(session, tenant_id, "pharmacy")
     if payload.branch_id:
@@ -261,7 +261,7 @@ def list_medicines(
     branch_id: str | None = None,
     search: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.PATIENT_SUBSCRIPTIONS_READ, permissions.SETTINGS_MANAGE)),
 ) -> list[MedicineCatalog]:
     enforce_module_enabled(session, tenant_id, "pharmacy")
     branch_id = scoped_branch_id(current_user, branch_id)

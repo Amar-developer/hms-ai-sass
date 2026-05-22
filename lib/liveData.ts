@@ -33,11 +33,30 @@ export function mapAppointment(
   practitionerMap: Map<string, any>,
   clinicId: string,
   branchId: string,
+  schedules?: any[],
 ) {
   const q = queue.find((x) => x.appointment_id === row.id);
   const c = consultations.find((x) => x.appointment_id === row.id);
   const p = patientMap.get(row.patient_id);
   const practitioner = practitionerMap.get(row.practitioner_id);
+
+  // Resolve room number from today's active schedule for this practitioner+branch
+  let roomNumber: string | null = null;
+  if (schedules?.length && row.practitioner_id) {
+    const apptDate = row.appointment_date ? new Date(row.appointment_date) : new Date();
+    // JS: 0=Sun … 6=Sat  →  backend: 0=Mon … 6=Sun
+    const weekday = (apptDate.getDay() + 6) % 7;
+    const match = schedules.find(
+      (s: any) =>
+        s.practitioner_id === row.practitioner_id &&
+        (!row.branch_id || s.branch_id === row.branch_id) &&
+        Number(s.weekday) === weekday &&
+        s.is_active !== false &&
+        s.room_number,
+    );
+    roomNumber = match?.room_number ?? null;
+  }
+
   return {
     id: row.id,
     queueEntryId: q?.id,
@@ -62,5 +81,6 @@ export function mapAppointment(
     visitPurpose: row.visit_purpose,
     isBillable: row.is_billable,
     visitType: row.appointment_type?.replaceAll?.('_', ' ')?.toUpperCase?.() || 'OP',
+    roomNumber,
   };
 }

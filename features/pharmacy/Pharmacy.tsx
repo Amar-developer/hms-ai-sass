@@ -1,12 +1,13 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Button,Card,Field,Input,Select} from '@/components/ui';
+import {ActionButton,Badge,Button,Card,Field,Input,Select} from '@/components/ui';
 import {apiFetch} from '@/lib/api';
+import {humanizeOptionLabel,publicDisplayValue} from '@/lib/options';
 
 const pageSize=10;
 
-export function Pharmacy({apiSession,branchId,patients,appointments}:any){
+export function Pharmacy({apiSession,branchId,patients,appointments,loadLiveData,liveInvoices=[]}:any){
  const [issues,setIssues]=useState<any[]>([]);
  const [medicines,setMedicines]=useState<any[]>([]);
  const [batches,setBatches]=useState<any[]>([]);
@@ -36,7 +37,7 @@ export function Pharmacy({apiSession,branchId,patients,appointments}:any){
  const [cgst,setCgst]=useState('6');
  const [sgst,setSgst]=useState('6');
  const [returnQty,setReturnQty]=useState('1');
- const [invoiceRef,setInvoiceRef]=useState<Record<string,string>>({});
+ const [localInvoicedIssueIds,setLocalInvoicedIssueIds]=useState<string[]>([]);
  const [selectedIssue,setSelectedIssue]=useState<any>(null);
  const [viewConsult,setViewConsult]=useState<any>(null);
  const [consultDetail,setConsultDetail]=useState<any>(null);
@@ -44,6 +45,7 @@ export function Pharmacy({apiSession,branchId,patients,appointments}:any){
  const [page,setPage]=useState(1);
  const issuedConsultationIds=useMemo(()=>new Set(issues.map((issue:any)=>issue.consultation_id).filter(Boolean)),[issues]);
  const prescriptionReady=useMemo(()=>appointments.filter((a:any)=>a.consultationId&&a.consultationStatus==='signed'&&!issuedConsultationIds.has(a.consultationId)),[appointments,issuedConsultationIds]);
+ const invoicedIssueIds=useMemo(()=>new Set([...(liveInvoices||[]).map((inv:any)=>inv.pharmacy_issue_id).filter(Boolean),...localInvoicedIssueIds]),[liveInvoices,localInvoicedIssueIds]);
  const totalPages=Math.max(1,Math.ceil(issues.length/pageSize));
  const safePage=Math.min(page,totalPages);
  const pharmacyPageRows=issues.slice((safePage-1)*pageSize,safePage*pageSize);
@@ -148,20 +150,21 @@ export function Pharmacy({apiSession,branchId,patients,appointments}:any){
   }catch(err:any){setMessage(err.message||'Could not update pharmacy issue.')}finally{setBusy('')}
  }
 
- async function linkBilling(issue:any){
-  const value=invoiceRef[issue.id];if(!value)return;setBusy(issue.id);setMessage('');
-  try{
-   await apiFetch(`/pharmacy/issues/${issue.id}/billing-link`,apiSession,{method:'POST',body:JSON.stringify({billing_invoice_id:value,actor_user_id:apiSession.user?.id})});
-   await load();setMessage('Pharmacy issue linked to billing invoice.');
-  }catch(err:any){setMessage(err.message||'Could not link billing.')}finally{setBusy('')}
- }
-
  async function generateInvoice(issue:any){
   setBusy(`invoice-${issue.id}`);setMessage('');
   try{
    const detail=await apiFetch('/billing/invoices/from-pharmacy-issue',apiSession,{method:'POST',body:JSON.stringify({pharmacy_issue_id:issue.id,created_by_user_id:apiSession.user?.id})});
-   await load();setMessage(`Pharmacy invoice ${detail.invoice?.invoice_number||''} generated.`);
+   setLocalInvoicedIssueIds(ids=>ids.includes(issue.id)?ids:[...ids,issue.id]);
+   await load();await loadLiveData?.(apiSession);setMessage(`Pharmacy invoice ${detail.invoice?.invoice_number||''} generated.`);
   }catch(err:any){setMessage(err.message||'Could not generate pharmacy invoice.')}finally{setBusy('')}
+ }
+
+ async function handleIssueAction(issue:any,action:string){
+  if(!action)return;
+  if(action==='partial')return updateStatus(issue,'partially_dispensed');
+  if(action==='dispense')return updateStatus(issue,'dispensed');
+  if(action==='invoice')return generateInvoice(issue);
+  if(action==='cancel')return updateStatus(issue,'cancelled');
  }
 
  async function loadConsultDetail(a:any){
@@ -173,13 +176,21 @@ export function Pharmacy({apiSession,branchId,patients,appointments}:any){
 
  if(!apiSession)return <Card><h3 className="text-lg font-bold">Electronic Prescriptions</h3><p className="mt-2 text-sm text-slate-500">Backend login is required to view pharmacy data.</p></Card>;
  return <div className="space-y-6">
-  {selectedIssue&&<MedicineDetailModal id={selectedIssue.id} patient={(patientMap.get(selectedIssue.patient_id) as any)?.name||selectedIssue.patient_id} createdAt={selectedIssue.created_at} medicineText={selectedIssue.medicine_text} onClose={()=>setSelectedIssue(null)}/>}
+  {selectedIssue&&<MedicineDetailModal id={selectedIssue.id} patient={(patientMap.get(selectedIssue.patient_id) as any)?.name||publicDisplayValue(selectedIssue.patient_id,'Patient')} createdAt={selectedIssue.created_at} medicineText={selectedIssue.medicine_text} onClose={()=>setSelectedIssue(null)}/>}
   {viewConsult&&<ConsultPrescriptionModal a={viewConsult} detail={consultDetail} loading={loadingDetail} busy={busy} onClose={()=>setViewConsult(null)} onCreate={(a:any)=>{setViewConsult(null);createFromConsultation(a);}}/>}
   {message&&<div className="rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
   <Card><h3 className="text-lg font-bold">Create Pharmacy Issue</h3><form onSubmit={createDirect} className="mt-4 grid gap-3 md:grid-cols-4"><Field label="Patient"><Select value={patientId} onChange={(e:any)=>setPatientId(e.target.value)}>{patients.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Source"><Select value={source} onChange={(e:any)=>setSource(e.target.value)}><option value="op_direct">OP Direct</option><option value="external_prescription">External Prescription</option></Select></Field><Field label="Medicine"><Select value={medicineId} onChange={(e:any)=>setMedicineId(e.target.value)}>{medicines.map((m:any)=><option key={m.id} value={m.id}>{m.name}</option>)}</Select></Field><Field label="Batch"><Select value={batchId} onChange={(e:any)=>setBatchId(e.target.value)}><option value="">Auto</option>{batches.filter((b:any)=>b.medicine_id===medicineId).map((b:any)=><option key={b.id} value={b.id}>{b.batch_number} · Qty {b.quantity_on_hand}</option>)}</Select></Field><Field label="Qty"><Input type="number" value={quantity} onChange={(e:any)=>setQuantity(e.target.value)}/></Field><div className="md:col-span-2"><Field label="External Prescriber"><Input value={externalPrescriber} onChange={(e:any)=>setExternalPrescriber(e.target.value)} disabled={source!=='external_prescription'}/></Field></div><div className="flex items-end gap-2"><ActionButton type="button" onClick={addIssueItem}>Add</ActionButton><Button disabled={busy==='create'}>{busy==='create'?'Saving...':'Create Issue'}</Button></div>{issueItems.length>0&&<div className="md:col-span-4 flex flex-wrap gap-2">{issueItems.map((item:any,index:number)=><button key={`${item.medicine_id}-${index}`} type="button" onClick={()=>removeIssueItem(index)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">{item.medicine_name} x {item.quantity} · ₹{item.quantity*item.unit_price} ×</button>)}</div>}</form></Card>
-  <Card><h3 className="text-lg font-bold">Doctor Prescriptions</h3><div className="mt-4 grid gap-3">{prescriptionReady.length===0&&<div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No signed prescriptions ready.</div>}{prescriptionReady.slice(0,6).map((a:any)=><div key={a.id} className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"><div><b>{a.token} · {a.patient}</b><p className="text-sm text-slate-500">Consultation: {a.consultationId}</p></div><div className="flex gap-2"><ActionButton onClick={()=>loadConsultDetail(a)}>View Rx</ActionButton><Button disabled={busy===a.consultationId} onClick={()=>createFromConsultation(a)}>{busy===a.consultationId?'Creating...':'Create Pharmacy Issue'}</Button></div></div>)}</div></Card>
-  <Card><h3 className="text-lg font-bold">Pharmacy Worklist</h3><div className="mt-4 overflow-auto rounded-2xl border"><table className="w-full min-w-[1840px] table-fixed text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="w-[190px] px-4 py-3">Issue</th><th className="w-[150px]">Patient</th><th className="w-[300px]">Medicine</th><th className="w-[160px]">Source</th><th className="w-[130px]">Status</th><th className="w-[90px]">Amount</th><th className="w-[520px]">Billing</th><th className="w-[400px] pr-4 text-right">Actions</th></tr></thead><tbody className="divide-y">{issues.length===0&&<tr><td colSpan={8} className="px-4 py-4 text-slate-500">No pharmacy issues yet.</td></tr>}{pharmacyPageRows.map((issue:any)=>{const p:any=patientMap.get(issue.patient_id);const selected=selectedIssue?.id===issue.id;return <tr key={issue.id} onClick={()=>setSelectedIssue(issue)} className={`cursor-pointer transition hover:bg-slate-50 ${selected?'bg-slate-50':''}`}><td className="px-4 py-4"><b>{issue.id}</b><p className="text-xs text-slate-500">{new Date(issue.created_at).toLocaleString()}</p></td><td>{p?.name||issue.patient_id}</td><td><p className="truncate" title={issue.medicine_text}>{issue.medicine_text}</p></td><td><Badge>{issue.source}</Badge></td><td><Badge tone={issue.status==='dispensed'?'green':issue.status==='cancelled'?'red':'amber'}>{issue.status}</Badge></td><td>₹{issue.amount}</td><td onClick={(event)=>event.stopPropagation()}><div className="flex min-w-[460px] items-center gap-2"><Input className="min-w-0" placeholder="Invoice ID" value={invoiceRef[issue.id]||issue.billing_invoice_id||''} onChange={(e:any)=>setInvoiceRef({...invoiceRef,[issue.id]:e.target.value})}/><ActionButton onClick={()=>linkBilling(issue)}>Link</ActionButton></div></td><td className="pr-4" onClick={(event)=>event.stopPropagation()}><ActionGroup><ActionButton disabled={busy===issue.id} onClick={()=>updateStatus(issue,'partially_dispensed')}>Partial</ActionButton><ActionButton tone="primary" disabled={busy===issue.id} onClick={()=>updateStatus(issue,'dispensed')}>Dispense</ActionButton><ActionButton disabled={busy===`invoice-${issue.id}`} onClick={()=>generateInvoice(issue)}>{busy===`invoice-${issue.id}`?'Billing...':'Invoice'}</ActionButton><ActionButton tone="danger" disabled={busy===issue.id} onClick={()=>updateStatus(issue,'cancelled')}>Cancel</ActionButton></ActionGroup></td></tr>})}</tbody></table></div><Pagination page={safePage} totalPages={totalPages} total={issues.length} onPage={setPage}/></Card>
+  <Card><h3 className="text-lg font-bold">Doctor Prescriptions</h3><div className="mt-4 grid gap-3">{prescriptionReady.length===0&&<div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No signed prescriptions ready.</div>}{prescriptionReady.slice(0,6).map((a:any)=><div key={a.id} className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"><div><b>{a.token} · {a.patient}</b><p className="text-sm text-slate-500">Signed prescription ready</p></div><div className="flex gap-2"><ActionButton onClick={()=>loadConsultDetail(a)}>View Rx</ActionButton><Button disabled={busy===a.consultationId} onClick={()=>createFromConsultation(a)}>{busy===a.consultationId?'Creating...':'Create Pharmacy Issue'}</Button></div></div>)}</div></Card>
+  <Card><h3 className="text-lg font-bold">Pharmacy Worklist</h3><div className="mt-4 overflow-auto rounded-2xl border"><table className="w-full min-w-[1240px] table-fixed text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="w-[80px] px-4 py-3">#</th><th className="w-[170px]">Date & Time</th><th className="w-[190px]">Patient</th><th className="w-[200px]">Medicine</th><th className="w-[150px]">Source</th><th className="w-[150px]">Status</th><th className="w-[90px]">Amount</th><th className="w-[210px] pr-4 text-right">Action</th></tr></thead><tbody className="divide-y">{issues.length===0&&<tr><td colSpan={8} className="px-4 py-4 text-slate-500">No pharmacy issues yet.</td></tr>}{pharmacyPageRows.map((issue:any,index:number)=>{const p:any=patientMap.get(issue.patient_id);const selected=selectedIssue?.id===issue.id;const dispensed=isDispensed(issue);const cancelled=isCancelledIssue(issue);const invoiced=invoicedIssueIds.has(issue.id);const rowBusy=busy===issue.id;const invoiceBusy=busy===`invoice-${issue.id}`;const statusLabel=invoiced?'Billed':humanizeOptionLabel(issue.status);const statusTone=invoiced?'green':dispensed?'green':cancelled?'red':'amber';return <tr key={issue.id} onClick={()=>setSelectedIssue(issue)} className={`cursor-pointer transition hover:bg-slate-50 ${selected?'bg-slate-50':''}`}><td className="px-4 py-4"><b>{(safePage-1)*pageSize+index+1}</b></td><td><b>{new Date(issue.created_at).toLocaleDateString()}</b><p className="text-xs text-slate-500">{new Date(issue.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p></td><td>{p?.name||publicDisplayValue(issue.patient_id,'Patient')}</td><td><p className="truncate pr-2" title={issue.medicine_text}>{issue.medicine_text}</p></td><td><Badge>{humanizeOptionLabel(issue.source)}</Badge></td><td><Badge tone={statusTone as any}>{statusLabel}</Badge></td><td>₹{issue.amount}</td><td className="pr-4" onClick={(event)=>event.stopPropagation()}><div className="ml-auto w-[190px]"><Select value="" disabled={rowBusy||invoiceBusy} onChange={(event:any)=>handleIssueAction(issue,event.target.value)}><option value="">{rowBusy||invoiceBusy?'Updating...':'Select action'}</option><option value="partial" disabled={dispensed||cancelled||invoiced}>Partial dispense</option><option value="dispense" disabled={dispensed||cancelled||invoiced}>Dispense</option>{dispensed&&!invoiced&&<option value="invoice">Generate invoice</option>}<option value="cancel" disabled={dispensed||cancelled||invoiced}>Cancel order</option></Select></div></td></tr>})}</tbody></table></div><Pagination page={safePage} totalPages={totalPages} total={issues.length} onPage={setPage}/></Card>
  </div>
+}
+
+function isDispensed(issue:any){
+ return ['dispensed'].includes(String(issue?.status||''));
+}
+
+function isCancelledIssue(issue:any){
+ return String(issue?.status||'')==='cancelled';
 }
 
 function splitList(value:any){
@@ -195,11 +206,11 @@ function parseMedicines(text:string){
 
 function MedicineDetailModal({id,patient,createdAt,medicineText,onClose}:any){
  const medicines=parseMedicines(medicineText);
- return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-3xl"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">Medicine List</h3><p className="mt-1 text-sm text-slate-500">{patient} · {id}</p><p className="text-xs text-slate-500">{createdAt?new Date(createdAt).toLocaleString():''}</p></div><ActionButton onClick={onClose}>Close</ActionButton></div>{medicines.length>0?<div className="mt-5 overflow-auto rounded-2xl border"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th className="pr-4">Instructions</th></tr></thead><tbody className="divide-y">{medicines.map((m:any,i:number)=><tr key={i}><td className="px-4 py-3 font-semibold">{m.name}</td><td>{m.dosage||'-'}</td><td>{m.frequency||'-'}</td><td>{m.duration||'-'}</td><td className="pr-4 text-slate-500">{m.instructions||'-'}</td></tr>)}</tbody></table></div>:<p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No medicines found.</p>}</Card></div>
+ return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-3xl"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">Medicine List</h3><p className="mt-1 text-sm text-slate-500">{patient}</p><p className="text-xs text-slate-500">{createdAt?new Date(createdAt).toLocaleString():''}</p></div><ActionButton onClick={onClose}>Close</ActionButton></div>{medicines.length>0?<div className="mt-5 overflow-auto rounded-2xl border"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th className="pr-4">Instructions</th></tr></thead><tbody className="divide-y">{medicines.map((m:any,i:number)=><tr key={i}><td className="px-4 py-3 font-semibold">{m.name}</td><td>{m.dosage||'-'}</td><td>{m.frequency||'-'}</td><td>{m.duration||'-'}</td><td className="pr-4 text-slate-500">{m.instructions||'-'}</td></tr>)}</tbody></table></div>:<p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No medicines found.</p>}</Card></div>
 }
 
 function ConsultPrescriptionModal({a,detail,loading,busy,onClose,onCreate}:any){
- return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-3xl"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">Prescription Detail</h3><p className="mt-1 text-sm text-slate-500">{a.token} · {a.patient}</p><p className="text-xs text-slate-500">Consultation: {a.consultationId}</p></div><ActionButton onClick={onClose}>Close</ActionButton></div>{loading&&<p className="mt-4 text-sm text-slate-500">Loading...</p>}{detail&&detail.medicines?.length>0&&<div className="mt-4 overflow-auto rounded-2xl border"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead><tbody className="divide-y">{detail.medicines.map((m:any,i:number)=><tr key={i}><td className="px-4 py-3 font-semibold">{m.medicine_name}</td><td>{m.dosage||'-'}</td><td>{m.frequency||'-'}</td><td>{m.duration||'-'}</td><td className="pr-4 text-slate-500">{m.instructions||'-'}</td></tr>)}</tbody></table></div>}{detail&&(!detail.medicines||detail.medicines.length===0)&&<p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No medicines in this prescription.</p>}<div className="mt-4 flex gap-2"><Button disabled={busy===a.consultationId||loading} onClick={()=>onCreate(a)}>{busy===a.consultationId?'Creating...':'Create Pharmacy Issue'}</Button><ActionButton onClick={onClose}>Cancel</ActionButton></div></Card></div>
+ return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-3xl"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">Prescription Detail</h3><p className="mt-1 text-sm text-slate-500">{a.token} · {a.patient}</p></div><ActionButton onClick={onClose}>Close</ActionButton></div>{loading&&<p className="mt-4 text-sm text-slate-500">Loading...</p>}{detail&&detail.medicines?.length>0&&<div className="mt-4 overflow-auto rounded-2xl border"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th>Instructions</th></tr></thead><tbody className="divide-y">{detail.medicines.map((m:any,i:number)=><tr key={i}><td className="px-4 py-3 font-semibold">{m.medicine_name}</td><td>{m.dosage||'-'}</td><td>{m.frequency||'-'}</td><td>{m.duration||'-'}</td><td className="pr-4 text-slate-500">{m.instructions||'-'}</td></tr>)}</tbody></table></div>}{detail&&(!detail.medicines||detail.medicines.length===0)&&<p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No medicines in this prescription.</p>}<div className="mt-4 flex gap-2"><Button disabled={busy===a.consultationId||loading} onClick={()=>onCreate(a)}>{busy===a.consultationId?'Creating...':'Create Pharmacy Issue'}</Button><ActionButton onClick={onClose}>Cancel</ActionButton></div></Card></div>
 }
 
 function Pagination({page,totalPages,total,onPage}:any){

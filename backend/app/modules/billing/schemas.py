@@ -3,7 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.modules.appointments.models import AppointmentType
-from app.modules.billing.models import ApprovalStatus, CreditNoteStatus, FeeShareType, InvoiceStatus, PaymentMethod, PaymentStatus
+from app.modules.billing.models import ApprovalStatus, CreditNoteStatus, DiscountType, FeeShareType, InvoiceStatus, PaymentMethod, PaymentStatus
 from app.modules.billing.models import SettlementStatus
 
 
@@ -31,17 +31,22 @@ class InvoiceCreateFromConsultation(BaseModel):
     consultation_id: str
     discount_amount: int = Field(default=0, ge=0)
     discount_approval_id: str | None = None
+    discount_offer_id: str | None = None
     tax_rule_id: str | None = None
     created_by_user_id: str | None = None
 
 
 class InvoiceCreateFromLabOrder(BaseModel):
     lab_order_id: str
+    discount_offer_id: str | None = None
+    tax_rule_id: str | None = None
     created_by_user_id: str | None = None
 
 
 class InvoiceCreateFromPharmacyIssue(BaseModel):
     pharmacy_issue_id: str
+    discount_offer_id: str | None = None
+    tax_rule_id: str | None = None
     created_by_user_id: str | None = None
 
 
@@ -68,10 +73,13 @@ class InvoiceRead(BaseModel):
     pharmacy_issue_id: str | None = None
     ip_admission_id: str | None = None
     physiotherapy_case_id: str | None = None
+    patient_subscription_enrollment_id: str | None = None
+    patient_subscription_plan_id: str | None = None
     invoice_number: str
     status: InvoiceStatus
     subtotal_amount: int
     discount_amount: int
+    membership_discount_amount: int = 0
     taxable_amount: int
     tax_amount: int
     tax_rule_id: str | None
@@ -82,6 +90,7 @@ class InvoiceRead(BaseModel):
     clinic_share_amount: int
     fee_rule_id: str | None
     discount_approval_id: str | None
+    discount_offer_id: str | None = None
     created_by_user_id: str | None
     created_at: datetime
     updated_at: datetime
@@ -146,10 +155,53 @@ class TaxRuleCreate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
     tax_percentage: int = Field(default=0, ge=0, le=100)
     tax_label: str = Field(default="GST", max_length=40)
+    service_scope: str = Field(default="all", max_length=40)
     created_by_user_id: str | None = None
 
 
 class TaxRuleRead(TaxRuleCreate):
+    id: str
+    tenant_id: str
+    is_active: bool
+    created_at: datetime
+
+
+class TaxRuleUpdate(BaseModel):
+    branch_id: str | None = None
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    tax_percentage: int | None = Field(default=None, ge=0, le=100)
+    tax_label: str | None = Field(default=None, max_length=40)
+    service_scope: str | None = Field(default=None, max_length=40)
+    is_active: bool | None = None
+
+
+class DiscountOfferCreate(BaseModel):
+    branch_id: str | None = None
+    name: str = Field(min_length=2, max_length=120)
+    code: str | None = Field(default=None, max_length=40)
+    service_scope: str = Field(default="all", max_length=40)
+    discount_type: DiscountType = DiscountType.PERCENTAGE
+    value: int = Field(ge=0)
+    max_discount_amount: int | None = Field(default=None, ge=0)
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+    created_by_user_id: str | None = None
+
+
+class DiscountOfferUpdate(BaseModel):
+    branch_id: str | None = None
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    code: str | None = Field(default=None, max_length=40)
+    service_scope: str | None = Field(default=None, max_length=40)
+    discount_type: DiscountType | None = None
+    value: int | None = Field(default=None, ge=0)
+    max_discount_amount: int | None = Field(default=None, ge=0)
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+    is_active: bool | None = None
+
+
+class DiscountOfferRead(DiscountOfferCreate):
     id: str
     tenant_id: str
     is_active: bool

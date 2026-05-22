@@ -71,7 +71,7 @@ Database:
 | `features/physiotherapy/Physiotherapy.tsx` | OP/IP physiotherapy cases, equipment, consent uploads, sessions, billing. |
 | `features/billing/Billing.tsx` | Invoices, payments, receipts, billing reports. |
 | `features/reports/Reports.tsx` | Reports and exports. |
-| `features/subscriptions/Subscriptions.tsx` | Subscription/plan UI. |
+| `features/patient_subscriptions/PatientSubscriptions.tsx` | Patient membership plan UI. |
 
 ### Important Frontend Functions
 

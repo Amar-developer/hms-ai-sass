@@ -1,0 +1,123 @@
+import json
+from datetime import date, timedelta
+
+from sqlmodel import Session, select
+
+from app.modules.patient_subscriptions.models import (
+    PatientSubscriptionEnrollment,
+    PatientSubscriptionEnrollmentStatus,
+    PatientSubscriptionPlan,
+)
+
+
+def ids_to_json(values: list[str] | None) -> str:
+    return json.dumps(sorted({str(value) for value in values or [] if value}))
+
+
+def ids_from_json(value: str | None) -> list[str]:
+    if not value:
+        return []
+    try:
+        raw = json.loads(value)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(raw, list):
+        return []
+    return [str(item) for item in raw]
+
+
+def plan_to_read_dict(plan: PatientSubscriptionPlan) -> dict:
+    data = plan.model_dump()
+    data["free_lab_test_ids"] = ids_from_json(plan.free_lab_test_ids_json)
+    data["discounted_lab_test_ids"] = ids_from_json(plan.discounted_lab_test_ids_json)
+    data["free_medicine_ids"] = ids_from_json(plan.free_medicine_ids_json)
+    data["discounted_medicine_ids"] = ids_from_json(plan.discounted_medicine_ids_json)
+    return data
+
+
+def active_patient_enrollment(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str,
+    patient_id: str,
+) -> tuple[PatientSubscriptionEnrollment, PatientSubscriptionPlan] | None:
+    today = date.today()
+    rows = session.exec(
+        select(PatientSubscriptionEnrollment)
+        .where(
+            PatientSubscriptionEnrollment.tenant_id == tenant_id,
+            PatientSubscriptionEnrollment.patient_id == patient_id,
+            PatientSubscriptionEnrollment.status == PatientSubscriptionEnrollmentStatus.ACTIVE,
+            PatientSubscriptionEnrollment.starts_on <= today,
+            PatientSubscriptionEnrollment.ends_on >= today,
+        )
+        .order_by(PatientSubscriptionEnrollment.created_at.desc())
+    ).all()
+    for enrollment in rows:
+        if enrollment.branch_id != branch_id:
+            continue
+        plan = session.get(PatientSubscriptionPlan, enrollment.plan_id)
+        if plan and plan.tenant_id == tenant_id and plan.is_active:
+            return enrollment, plan
+    return None
+
+
+def enrollment_end_date(starts_on: date, plan: PatientSubscriptionPlan) -> date:
+    return starts_on + timedelta(days=max(plan.duration_days, 1) - 1)
+
+
+def benefit_preview(
+    *,
+    plan: PatientSubscriptionPlan,
+    enrollment: PatientSubscriptionEnrollment,
+    service_type: str,
+    item_ids: list[str],
+    subtotal_amount: int,
+) -> dict:
+    item_set = set(item_ids or [])
+    discount_amount = 0
+    free_item_ids: list[str] = []
+    discounted_item_ids: list[str] = []
+    reason = None
+    if service_type == "consultation":
+        remaining = max(plan.free_consultations - enrollment.used_consultations, 0)
+        if remaining > 0:
+            discount_amount = subtotal_amount
+            reason = f"{remaining} free consultation remaining"
+        else:
+            reason = "No free consultations remaining"
+    elif service_type == "lab":
+        free_ids = set(ids_from_json(plan.free_lab_test_ids_json))
+        discounted_ids = set(ids_from_json(plan.discounted_lab_test_ids_json))
+        free_item_ids = sorted(item_set.intersection(free_ids))
+        discounted_item_ids = sorted(item_set.intersection(discounted_ids))
+        if free_item_ids:
+            discount_amount = subtotal_amount
+            reason = "Selected lab test is fully free in this plan"
+        elif plan.lab_discount_percentage > 0 and (not discounted_ids or discounted_item_ids):
+            discount_amount = round(subtotal_amount * plan.lab_discount_percentage / 100)
+            reason = f"{plan.lab_discount_percentage}% lab discount"
+    elif service_type == "pharmacy":
+        free_ids = set(ids_from_json(plan.free_medicine_ids_json))
+        discounted_ids = set(ids_from_json(plan.discounted_medicine_ids_json))
+        free_item_ids = sorted(item_set.intersection(free_ids))
+        discounted_item_ids = sorted(item_set.intersection(discounted_ids))
+        if free_item_ids:
+            discount_amount = subtotal_amount
+            reason = "Selected medicine is fully free in this plan"
+        elif plan.pharmacy_discount_percentage > 0 and (not discounted_ids or discounted_item_ids):
+            discount_amount = round(subtotal_amount * plan.pharmacy_discount_percentage / 100)
+            reason = f"{plan.pharmacy_discount_percentage}% pharmacy discount"
+    discount_amount = min(discount_amount, subtotal_amount)
+    return {
+        "plan_id": plan.id,
+        "plan_name": plan.name,
+        "service_type": service_type,
+        "subtotal_amount": subtotal_amount,
+        "discount_amount": discount_amount,
+        "payable_amount": max(subtotal_amount - discount_amount, 0),
+        "free_item_ids": free_item_ids,
+        "discounted_item_ids": discounted_item_ids,
+        "reason": reason,
+    }

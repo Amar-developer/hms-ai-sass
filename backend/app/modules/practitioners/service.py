@@ -231,6 +231,60 @@ def check_practitioner_availability(
     return PractitionerAvailability(True, schedule_id=schedule.id, room_name=room_name)
 
 
+def check_practitioner_date_availability(
+    session: Session,
+    *,
+    tenant_id: str,
+    practitioner_id: str,
+    branch_id: str,
+    department_id: str | None,
+    appointment_date: date,
+) -> PractitionerAvailability:
+    if not practitioner_is_eligible(
+        session,
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        department_id=department_id,
+    ):
+        return PractitionerAvailability(False, "Practitioner is not assigned to this branch and department")
+
+    schedules = session.exec(
+        select(PractitionerSchedule).where(
+            PractitionerSchedule.tenant_id == tenant_id,
+            PractitionerSchedule.practitioner_id == practitioner_id,
+            PractitionerSchedule.branch_id == branch_id,
+            PractitionerSchedule.weekday == appointment_date.weekday(),
+            PractitionerSchedule.is_active == True,  # noqa: E712
+        )
+    ).all()
+    matching_schedules = [
+        schedule
+        for schedule in schedules
+        if _department_matches(schedule.department_id, department_id)
+    ]
+    if not matching_schedules:
+        return PractitionerAvailability(False, "Practitioner is not scheduled on this date")
+
+    leave_rows = session.exec(
+        select(PractitionerLeave).where(
+            PractitionerLeave.tenant_id == tenant_id,
+            PractitionerLeave.practitioner_id == practitioner_id,
+            PractitionerLeave.start_date <= appointment_date,
+            PractitionerLeave.end_date >= appointment_date,
+            PractitionerLeave.is_active == True,  # noqa: E712
+        )
+    ).all()
+    for leave in leave_rows:
+        if leave.branch_id and leave.branch_id != branch_id:
+            continue
+        if leave.start_time is None or leave.end_time is None:
+            return PractitionerAvailability(False, "Practitioner is on leave on this date")
+
+    schedule = matching_schedules[0]
+    return PractitionerAvailability(True, schedule_id=schedule.id, room_name=schedule.room_name)
+
+
 def room_assignment_conflicts(
     session: Session,
     *,

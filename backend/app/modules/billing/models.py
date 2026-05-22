@@ -42,6 +42,11 @@ class ApprovalStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class DiscountType(str, Enum):
+    PERCENTAGE = "percentage"
+    FIXED = "fixed"
+
+
 class CreditNoteStatus(str, Enum):
     ISSUED = "issued"
     CANCELLED = "cancelled"
@@ -59,6 +64,7 @@ class TaxRule(SQLModel, table=True):
     name: str = Field(min_length=2, max_length=120)
     tax_percentage: int = Field(default=0, ge=0, le=100)
     tax_label: str = Field(default="GST", max_length=40)
+    service_scope: str = Field(default="all", index=True, max_length=40)
     is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
@@ -92,10 +98,13 @@ class Invoice(SQLModel, table=True):
     pharmacy_issue_id: str | None = Field(default=None, index=True, foreign_key="pharmacyissue.id")
     ip_admission_id: str | None = Field(default=None, index=True, foreign_key="ipadmission.id")
     physiotherapy_case_id: str | None = Field(default=None, index=True, foreign_key="physiotherapycase.id")
+    patient_subscription_enrollment_id: str | None = Field(default=None, index=True, foreign_key="patientsubscriptionenrollment.id")
+    patient_subscription_plan_id: str | None = Field(default=None, index=True, foreign_key="patientsubscriptionplan.id")
     invoice_number: str = Field(index=True, min_length=3, max_length=60)
     status: InvoiceStatus = Field(default=InvoiceStatus.ISSUED, index=True)
     subtotal_amount: int = Field(default=0, ge=0)
     discount_amount: int = Field(default=0, ge=0)
+    membership_discount_amount: int = Field(default=0, ge=0)
     taxable_amount: int = Field(default=0, ge=0)
     tax_amount: int = Field(default=0, ge=0)
     tax_rule_id: str | None = Field(default=None, index=True)
@@ -106,6 +115,7 @@ class Invoice(SQLModel, table=True):
     clinic_share_amount: int = Field(default=0, ge=0)
     fee_rule_id: str | None = Field(default=None, index=True, foreign_key="doctorfeerule.id")
     discount_approval_id: str | None = Field(default=None, index=True)
+    discount_offer_id: str | None = Field(default=None, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
@@ -151,6 +161,23 @@ class DiscountApproval(SQLModel, table=True):
     approved_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     decided_at: datetime | None = Field(default=None, index=True)
+
+
+class DiscountOffer(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("offer"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
+    name: str = Field(min_length=2, max_length=120)
+    code: str | None = Field(default=None, index=True, max_length=40)
+    service_scope: str = Field(default="all", index=True, max_length=40)
+    discount_type: DiscountType = Field(default=DiscountType.PERCENTAGE, index=True)
+    value: int = Field(ge=0)
+    max_discount_amount: int | None = Field(default=None, ge=0)
+    valid_from: datetime | None = Field(default=None, index=True)
+    valid_until: datetime | None = Field(default=None, index=True)
+    is_active: bool = Field(default=True, index=True)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
 
 
 class CreditNote(SQLModel, table=True):

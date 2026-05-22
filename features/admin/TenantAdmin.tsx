@@ -1,10 +1,11 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {Building2,ClipboardList,Plus,Settings,ShieldCheck,Truck,Users} from 'lucide-react';
+import {Building2,ClipboardList,Percent,Plus,Settings,ShieldCheck,Tags,Truck,Users} from 'lucide-react';
 import {ActionButton,ActionGroup,Badge,Button,Card,Field,Input,Select} from '@/components/ui';
+import {PatientSubscriptions} from '@/features/patient_subscriptions/PatientSubscriptions';
 import {apiFetch} from '@/lib/api';
-import {normalizeOptionLabel} from '@/lib/options';
+import {humanizeOptionLabel,normalizeOptionLabel,publicDisplayValue} from '@/lib/options';
 
 const sections = [
   ['users','Users',Users],
@@ -12,6 +13,9 @@ const sections = [
   ['departments','Departments',ClipboardList],
   ['branches','Branches',Building2],
   ['suppliers','Suppliers',Truck],
+  ['tax','Tax',Percent],
+  ['offers','Discounts & Offers',Tags],
+  ['membership','Patient Membership',ShieldCheck],
   ['settings','Tenant & Branch Settings',Settings],
 ] as const;
 
@@ -24,6 +28,9 @@ export function canUseTenantAdminSection(section:string, user:any){
  if(section==='departments')return ['departments.manage','departments.create','departments.read','departments.edit','departments.delete','settings.manage'].some(permission=>permissions.includes(permission));
  if(section==='branches')return ['branches.manage','branches.create','branches.read','branches.edit','branches.delete','settings.manage'].some(permission=>permissions.includes(permission));
  if(section==='suppliers')return ['settings.manage','pharmacy.manage'].some(permission=>permissions.includes(permission));
+ if(section==='tax')return ['billing.manage','settings.manage'].some(permission=>permissions.includes(permission));
+ if(section==='offers')return ['billing.manage','settings.manage'].some(permission=>permissions.includes(permission));
+ if(section==='membership')return ['patient_subscriptions.manage','patient_subscriptions.create','patient_subscriptions.read','settings.manage'].some(permission=>permissions.includes(permission));
  if(section==='settings')return permissions.includes('settings.manage');
  return false;
 }
@@ -55,6 +62,8 @@ const requiredRolePermissions = [
  {key:'branches.read',module:'branches',action:'read',description:'Branches Read'},
  {key:'branches.edit',module:'branches',action:'edit',description:'Branches Edit'},
  {key:'branches.delete',module:'branches',action:'delete',description:'Branches Delete'},
+ {key:'billing.manage',module:'billing',action:'manage',description:'Billing Manage'},
+ {key:'payments.manage',module:'payments',action:'manage',description:'Payments Manage'},
  {key:'scheduling.manage',module:'scheduling',action:'manage',description:'Scheduling Manage'},
  {key:'scheduling.create',module:'scheduling',action:'create',description:'Scheduling Create'},
  {key:'scheduling.read',module:'scheduling',action:'read',description:'Scheduling Read'},
@@ -62,7 +71,7 @@ const requiredRolePermissions = [
  {key:'scheduling.delete',module:'scheduling',action:'delete',description:'Scheduling Delete'},
 ] as const;
 
-export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,setSection:externalSetSection}:any){
+export function TenantAdmin({apiSession,clinic,branchId,patients,section:externalSection,setSection:externalSetSection}:any){
  const [localSection,setLocalSection]=useState('users');
  const section=externalSection||localSection;
  const setSection=externalSetSection||setLocalSection;
@@ -72,6 +81,8 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
  const [departments,setDepartments]=useState<any[]>([]);
  const [branches,setBranches]=useState<any[]>([]);
  const [suppliers,setSuppliers]=useState<any[]>([]);
+ const [taxRules,setTaxRules]=useState<any[]>([]);
+ const [discountOffers,setDiscountOffers]=useState<any[]>([]);
  const [settings,setSettings]=useState<any[]>([]);
  const [permissions,setPermissions]=useState<any[]>([]);
  const [selectedId,setSelectedId]=useState('');
@@ -98,6 +109,8 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
  const selectedDepartment=departments.find((row:any)=>row.id===selectedId);
  const selectedBranch=branches.find((row:any)=>row.id===selectedId);
  const selectedSupplier=suppliers.find((row:any)=>row.id===selectedId);
+ const selectedTaxRule=taxRules.find((row:any)=>row.id===selectedId);
+ const selectedOffer=discountOffers.find((row:any)=>row.id===selectedId);
  const visibleSections=sections.filter(([sectionId])=>canUseTenantAdminSection(sectionId,apiSession?.user));
 
  function open(nextSection:string,nextView='list'){
@@ -117,20 +130,24 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
    const canDepartments=canUseTenantAdminSection('departments',apiSession.user);
    const canBranches=canUseTenantAdminSection('branches',apiSession.user);
    const canSuppliers=canUseTenantAdminSection('suppliers',apiSession.user);
+   const canTax=canUseTenantAdminSection('tax',apiSession.user);
+   const canOffers=canUseTenantAdminSection('offers',apiSession.user);
    const canSettings=canUseTenantAdminSection('settings',apiSession.user);
    const safeFetch=async(path:string,enabled=true)=>enabled?apiFetch(path,scoped).catch(()=>[]):Promise.resolve([]);
-   const [roleRows,userRows,departmentRows,branchRows,supplierRows,settingRows,permissionRows,reportConfig,reportJobRows]=await Promise.all([
+   const [roleRows,userRows,departmentRows,branchRows,supplierRows,taxRows,offerRows,settingRows,permissionRows,reportConfig,reportJobRows]=await Promise.all([
     safeFetch('/identity/roles',canRoles),
     safeFetch('/identity/users',canUsers),
     safeFetch(`/tenants/${apiSession.tenantId}/departments`,canDepartments),
     safeFetch(`/tenants/${apiSession.tenantId}/branches`,canBranches),
     safeFetch('/pharmacy/suppliers?include_inactive=true',canSuppliers),
+    safeFetch('/billing/tax-rules',canTax),
+    safeFetch('/billing/discount-offers',canOffers),
     safeFetch('/settings',canSettings),
     apiFetch('/identity/permissions',scoped).catch(()=>[]),
     canSettings?apiFetch('/reports/monthly-email/config',scoped).catch(()=>null):Promise.resolve(null),
     canSettings?apiFetch('/reports/monthly-email/jobs?limit=5',scoped).catch(()=>[]):Promise.resolve([]),
    ]);
-   setRoles(roleRows);setUsers(userRows);setDepartments(departmentRows);setBranches(branchRows);setSuppliers(supplierRows);setSettings(settingRows);setPermissions(permissionRows);
+   setRoles(roleRows);setUsers(userRows);setDepartments(departmentRows);setBranches(branchRows);setSuppliers(supplierRows);setTaxRules(taxRows);setDiscountOffers(offerRows);setSettings(settingRows);setPermissions(permissionRows);
    const find=(key:string)=>settingRows.find((x:any)=>x.key===key);
    if(find('invoice.prefix'))setInvoicePrefix(find('invoice.prefix').value);
    if(find('queue.requeue_after_patients'))setRequeueAfter(Number(find('queue.requeue_after_patients').value));
@@ -284,11 +301,63 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
   }catch(err:any){setMessage(err.message||'Could not update supplier.')}finally{setBusy(false)}
  }
 
+ async function createTaxRule(e:any){
+  e.preventDefault();const form=e.currentTarget;const fd=new FormData(form);
+  setBusy(true);setMessage('');
+  try{
+   const created=await apiFetch('/billing/tax-rules',apiSession,{method:'POST',body:JSON.stringify({
+    branch_id:fd.get('branchId')||null,name:fd.get('name'),tax_percentage:Number(fd.get('taxPercentage')||0),tax_label:fd.get('taxLabel')||'GST',service_scope:fd.get('serviceScope')||'all',created_by_user_id:apiSession.user?.id
+   })});
+   form.reset();setTaxRules(previous=>[created,...previous.filter((row:any)=>row.id!==created.id)]);
+   open('tax');await loadAdmin();setMessage(`Tax rule created: ${created.name}`);
+  }catch(err:any){setMessage(err.message||'Could not create tax rule.')}finally{setBusy(false)}
+ }
+
+ async function updateTaxRule(e:any){
+  e.preventDefault();if(!selectedTaxRule)return;
+  const fd=new FormData(e.currentTarget);
+  setBusy(true);setMessage('');
+  try{
+   const updated=await apiFetch(`/billing/tax-rules/${selectedTaxRule.id}`,apiSession,{method:'PATCH',body:JSON.stringify({
+    branch_id:fd.get('branchId')||null,name:fd.get('name'),tax_percentage:Number(fd.get('taxPercentage')||0),tax_label:fd.get('taxLabel')||'GST',service_scope:fd.get('serviceScope')||'all',is_active:fd.get('isActive')==='true'
+   })});
+   setTaxRules(previous=>[updated,...previous.filter((row:any)=>row.id!==updated.id)]);
+   open('tax');await loadAdmin();setMessage('Tax rule updated.');
+  }catch(err:any){setMessage(err.message||'Could not update tax rule.')}finally{setBusy(false)}
+ }
+
+ async function createDiscountOffer(e:any){
+  e.preventDefault();const form=e.currentTarget;const fd=new FormData(form);
+  setBusy(true);setMessage('');
+  try{
+   const created=await apiFetch('/billing/discount-offers',apiSession,{method:'POST',body:JSON.stringify({
+    branch_id:fd.get('branchId')||null,name:fd.get('name'),code:fd.get('code')||null,service_scope:fd.get('serviceScope')||'all',discount_type:fd.get('discountType')||'percentage',value:Number(fd.get('value')||0),max_discount_amount:fd.get('maxDiscountAmount')?Number(fd.get('maxDiscountAmount')):null,valid_from:dateInputToIso(fd.get('validFrom')),valid_until:dateInputToIso(fd.get('validUntil')),created_by_user_id:apiSession.user?.id
+   })});
+   form.reset();setDiscountOffers(previous=>[created,...previous.filter((row:any)=>row.id!==created.id)]);
+   open('offers');await loadAdmin();setMessage(`Offer created: ${created.name}`);
+  }catch(err:any){setMessage(err.message||'Could not create discount offer.')}finally{setBusy(false)}
+ }
+
+ async function updateDiscountOffer(e:any){
+  e.preventDefault();if(!selectedOffer)return;
+  const fd=new FormData(e.currentTarget);
+  setBusy(true);setMessage('');
+  try{
+   const updated=await apiFetch(`/billing/discount-offers/${selectedOffer.id}`,apiSession,{method:'PATCH',body:JSON.stringify({
+    branch_id:fd.get('branchId')||null,name:fd.get('name'),code:fd.get('code')||null,service_scope:fd.get('serviceScope')||'all',discount_type:fd.get('discountType')||'percentage',value:Number(fd.get('value')||0),max_discount_amount:fd.get('maxDiscountAmount')?Number(fd.get('maxDiscountAmount')):null,valid_from:dateInputToIso(fd.get('validFrom')),valid_until:dateInputToIso(fd.get('validUntil')),is_active:fd.get('isActive')==='true'
+   })});
+   setDiscountOffers(previous=>[updated,...previous.filter((row:any)=>row.id!==updated.id)]);
+   open('offers');await loadAdmin();setMessage('Discount offer updated.');
+  }catch(err:any){setMessage(err.message||'Could not update discount offer.')}finally{setBusy(false)}
+ }
+
  async function changeStatus(entity:string,row:any){
   const paths:any={roles:`/identity/roles/${row.id}/status`,users:`/identity/users/${row.id}/status`,departments:`/tenants/${apiSession.tenantId}/departments/${row.id}/status`,branches:`/tenants/${apiSession.tenantId}/branches/${row.id}/status`};
   setBusy(true);setMessage('');
   try{
    if(entity==='suppliers')await apiFetch(`/pharmacy/suppliers/${row.id}`,apiSession,{method:'PATCH',body:JSON.stringify({is_active:!row.is_active})});
+   else if(entity==='tax')await apiFetch(`/billing/tax-rules/${row.id}`,apiSession,{method:'PATCH',body:JSON.stringify({is_active:!row.is_active})});
+   else if(entity==='offers')await apiFetch(`/billing/discount-offers/${row.id}`,apiSession,{method:'PATCH',body:JSON.stringify({is_active:!row.is_active})});
    else await apiFetch(paths[entity],apiSession,{method:'POST',body:JSON.stringify({is_active:!row.is_active})});
    await loadAdmin();setMessage(`${title(entity)} status updated.`)
   }
@@ -343,7 +412,7 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
     cc:list(reportCc),
     filters:reportFilters,
    })});
-   await loadAdmin();setMessage(job.status==='failed'?`Report job failed to queue: ${job.failure_reason}`:`Monthly report job queued: ${job.id}`);
+   await loadAdmin();setMessage(job.status==='failed'?`Report job failed to queue: ${job.failure_reason}`:'Monthly report job queued.');
   }catch(err:any){setMessage(err.message||'Could not queue monthly report.')}finally{setReportBusy('')}
  }
 
@@ -372,6 +441,16 @@ export function TenantAdmin({apiSession,clinic,branchId,section:externalSection,
   {section==='suppliers'&&view==='list'&&<ListCard title="Suppliers" rows={suppliers} searchKeys={['name','gstin','phone','email','address','id']} createLabel="Create Supplier" onCreate={()=>setView('create')} columns={['Supplier','GSTIN','Contact','Status','Actions']} render={(supplier:any)=><SupplierRow key={supplier.id} supplier={supplier} onEdit={()=>{setSelectedId(supplier.id);setView('edit')}} onStatus={()=>setConfirm({entity:'suppliers',kind:'status',row:supplier})} onDelete={()=>setConfirm({entity:'suppliers',kind:'delete',row:supplier})}/>}/>}
   {section==='suppliers'&&view==='create'&&<SupplierForm title="Create Supplier" busy={busy} onSubmit={createSupplier} back={()=>open('suppliers')}/>}
   {section==='suppliers'&&view==='edit'&&selectedSupplier&&<SupplierForm title="Edit Supplier" supplier={selectedSupplier} busy={busy} onSubmit={updateSupplier} back={()=>open('suppliers')}/>}
+
+  {section==='tax'&&view==='list'&&<ListCard title="Tax Rules" rows={taxRules} searchKeys={['name','tax_label','service_scope','id']} createLabel="Create Tax Rule" onCreate={()=>setView('create')} columns={['Tax Rule','Scope','Percentage','Status','Actions']} render={(rule:any)=><TaxRuleRow key={rule.id} rule={rule} branches={branches} onEdit={()=>{setSelectedId(rule.id);setView('edit')}} onStatus={()=>setConfirm({entity:'tax',kind:'status',row:rule})} onDelete={()=>setConfirm({entity:'tax',kind:'status',row:rule})}/>}/>}
+  {section==='tax'&&view==='create'&&<TaxRuleForm title="Create Tax Rule" branches={branches} busy={busy} onSubmit={createTaxRule} back={()=>open('tax')}/>}
+  {section==='tax'&&view==='edit'&&selectedTaxRule&&<TaxRuleForm title="Edit Tax Rule" rule={selectedTaxRule} branches={branches} busy={busy} onSubmit={updateTaxRule} back={()=>open('tax')}/>}
+
+  {section==='offers'&&view==='list'&&<ListCard title="Discounts & Offers" rows={discountOffers} searchKeys={['name','code','service_scope','discount_type','id']} createLabel="Create Offer" onCreate={()=>setView('create')} columns={['Offer','Scope','Value','Status','Actions']} render={(offer:any)=><DiscountOfferRow key={offer.id} offer={offer} branches={branches} onEdit={()=>{setSelectedId(offer.id);setView('edit')}} onStatus={()=>setConfirm({entity:'offers',kind:'status',row:offer})} onDelete={()=>setConfirm({entity:'offers',kind:'status',row:offer})}/>}/>}
+  {section==='offers'&&view==='create'&&<DiscountOfferForm title="Create Discount Offer" branches={branches} busy={busy} onSubmit={createDiscountOffer} back={()=>open('offers')}/>}
+  {section==='offers'&&view==='edit'&&selectedOffer&&<DiscountOfferForm title="Edit Discount Offer" offer={selectedOffer} branches={branches} busy={busy} onSubmit={updateDiscountOffer} back={()=>open('offers')}/>}
+
+  {section==='membership'&&<PatientSubscriptions apiSession={apiSession} branchId={branchId} branches={branches} patients={patients}/>}
 
   {section==='settings'&&<SettingsPanel settings={settings} invoicePrefix={invoicePrefix} setInvoicePrefix={setInvoicePrefix} requeueAfter={requeueAfter} setRequeueAfter={setRequeueAfter} noShowAfter={noShowAfter} setNoShowAfter={setNoShowAfter} slotIntervalsEnabled={slotIntervalsEnabled} setSlotIntervalsEnabled={setSlotIntervalsEnabled} slotIntervalMinutes={slotIntervalMinutes} setSlotIntervalMinutes={setSlotIntervalMinutes} payments={payments} setPayments={setPayments} providers={providers} setProviders={setProviders} busy={busy} saveSettings={saveSettings} reportEnabled={reportEnabled} setReportEnabled={setReportEnabled} reportRecipients={reportRecipients} setReportRecipients={setReportRecipients} reportCc={reportCc} setReportCc={setReportCc} reportSendDay={reportSendDay} setReportSendDay={setReportSendDay} reportFilters={reportFilters} setReportFilters={setReportFilters} reportJobs={reportJobs} reportBusy={reportBusy} saveReportSettings={saveReportSettings} sendMonthlyReportNow={sendMonthlyReportNow}/>}
   {confirm&&<ConfirmModal action={confirm} busy={busy} onCancel={()=>setConfirm(null)} onConfirm={()=>confirm.kind==='delete'?deleteRow(confirm.entity,confirm.row):changeStatus(confirm.entity,confirm.row)}/>}
@@ -413,10 +492,26 @@ function SupplierForm({title,supplier,busy,onSubmit,back}:any){
  return <Card><Header title={title} subtitle={supplier?.id||'Suppliers can be used by medicines, lab tests, lab packages, and physiotherapy equipment.'} back={back}/><form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Supplier Name"><Input name="name" defaultValue={supplier?.name||''} required/></Field><Field label="GSTIN"><Input name="gstin" defaultValue={supplier?.gstin||''}/></Field><Field label="Phone"><Input name="phone" defaultValue={supplier?.phone||''}/></Field><Field label="Email"><Input name="email" type="email" defaultValue={supplier?.email||''}/></Field>{supplier&&<Field label="Status"><Select name="isActive" defaultValue={String(supplier.is_active)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field>}<div className="md:col-span-2"><Field label="Address"><Input name="address" defaultValue={supplier?.address||''}/></Field></div><Actions busy={busy} back={back} label={supplier?'Save Supplier':'Create Supplier'}/></form></Card>
 }
 
+const serviceScopes=[
+ ['all','All billable modules'],
+ ['consultation','Consultation'],
+ ['lab','Lab / Scan'],
+ ['pharmacy','Pharmacy'],
+ ['items','Items'],
+] as const;
+
+function TaxRuleForm({title,rule,branches,busy,onSubmit,back}:any){
+ return <Card><Header title={title} subtitle="Tax is selected by branch and service scope during invoice generation." back={back}/><form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Name"><Input name="name" defaultValue={rule?.name||''} required/></Field><Field label="Branch"><Select name="branchId" defaultValue={rule?.branch_id||''}><option value="">All branches</option>{branches.map((branch:any)=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select></Field><Field label="Service Scope"><Select name="serviceScope" defaultValue={rule?.service_scope||'all'}>{serviceScopes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Tax Label"><Input name="taxLabel" defaultValue={rule?.tax_label||'GST'} required/></Field><Field label="Tax Percentage"><Input name="taxPercentage" type="number" min="0" max="100" defaultValue={rule?.tax_percentage??0} required/></Field>{rule&&<Field label="Status"><Select name="isActive" defaultValue={String(rule.is_active)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field>}<Actions busy={busy} back={back} label={rule?'Save Tax Rule':'Create Tax Rule'}/></form></Card>
+}
+
+function DiscountOfferForm({title,offer,branches,busy,onSubmit,back}:any){
+ return <Card><Header title={title} subtitle="Offers can be applied to consultation, lab, pharmacy, or item invoices." back={back}/><form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2"><Field label="Offer Name"><Input name="name" defaultValue={offer?.name||''} required/></Field><Field label="Code"><Input name="code" defaultValue={offer?.code||''} placeholder="HEALTH10"/></Field><Field label="Branch"><Select name="branchId" defaultValue={offer?.branch_id||''}><option value="">All branches</option>{branches.map((branch:any)=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select></Field><Field label="Service Scope"><Select name="serviceScope" defaultValue={offer?.service_scope||'all'}>{serviceScopes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Discount Type"><Select name="discountType" defaultValue={offer?.discount_type||'percentage'}><option value="percentage">Percentage</option><option value="fixed">Fixed amount</option></Select></Field><Field label="Value"><Input name="value" type="number" min="0" defaultValue={offer?.value??0} required/></Field><Field label="Max Discount"><Input name="maxDiscountAmount" type="number" min="0" defaultValue={offer?.max_discount_amount??''}/></Field><Field label="Valid From"><Input name="validFrom" type="date" defaultValue={dateToInput(offer?.valid_from)}/></Field><Field label="Valid Until"><Input name="validUntil" type="date" defaultValue={dateToInput(offer?.valid_until)}/></Field>{offer&&<Field label="Status"><Select name="isActive" defaultValue={String(offer.is_active)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field>}<Actions busy={busy} back={back} label={offer?'Save Offer':'Create Offer'}/></form></Card>
+}
+
 function SettingsPanel(props:any){
  const {settings,invoicePrefix,setInvoicePrefix,requeueAfter,setRequeueAfter,noShowAfter,setNoShowAfter,slotIntervalsEnabled,setSlotIntervalsEnabled,slotIntervalMinutes,setSlotIntervalMinutes,payments,setPayments,providers,setProviders,busy,saveSettings,reportEnabled,setReportEnabled,reportRecipients,setReportRecipients,reportCc,setReportCc,reportSendDay,setReportSendDay,reportFilters,setReportFilters,reportJobs,reportBusy,saveReportSettings,sendMonthlyReportNow}=props;
  const toggleReportFilter=(key:string)=>(event:any)=>setReportFilters({...reportFilters,[key]:event.target.checked});
- return <div className="space-y-5"><Card><h3 className="text-lg font-bold">Tenant & Branch Settings</h3><p className="text-sm text-slate-500">Configuration affects invoice numbering, queue behavior, appointment slots, payments, and communications for this tenant.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Invoice Prefix"><Input value={invoicePrefix} onChange={(e:any)=>setInvoicePrefix(e.target.value)}/></Field><Field label="Requeue After"><Input type="number" value={requeueAfter} onChange={(e:any)=>setRequeueAfter(Number(e.target.value))}/></Field><Field label="No-show Calls"><Input type="number" value={noShowAfter} onChange={(e:any)=>setNoShowAfter(Number(e.target.value))}/></Field><Field label="Slot Display"><Select value={slotIntervalsEnabled?'intervals':'sessions'} onChange={(e:any)=>setSlotIntervalsEnabled(e.target.value==='intervals')}><option value="sessions">Consultation timings only</option><option value="intervals">Detailed interval slots</option></Select></Field><Field label="Interval Minutes"><Input type="number" min="5" step="5" value={slotIntervalMinutes} onChange={(e:any)=>setSlotIntervalMinutes(Number(e.target.value))} disabled={!slotIntervalsEnabled}/></Field><Field label="Payment Methods"><Input value={payments} onChange={(e:any)=>setPayments(e.target.value)}/></Field><Field label="Communication"><Input value={providers} onChange={(e:any)=>setProviders(e.target.value)}/></Field></div><div className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Default booking mode shows only doctor consultation timings, such as Morning 10 AM - 1 PM. Enable interval slots only for clinics that want fine-grained booking times.</div><Button onClick={saveSettings} disabled={busy} className="mt-4">Save Settings</Button><div className="mt-5 grid gap-2 md:grid-cols-2">{settings.slice(0,10).map((setting:any)=><div key={setting.id} className="rounded-2xl bg-slate-50 p-3 text-sm"><b>{setting.key}</b><p className="break-all text-slate-500">{JSON.stringify(setting.value)}</p></div>)}</div></Card><Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start"><div><h3 className="text-lg font-bold">Monthly Email Reports</h3><p className="text-sm text-slate-500">Send last month revenue, doctor settlement, department revenue, and paid invoice profit as an Excel-compatible spreadsheet through the Redis report worker.</p></div><Badge tone={reportEnabled?'green':'slate'}>{reportEnabled?'Automatic':'Manual'}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Target Emails"><Input value={reportRecipients} onChange={(e:any)=>setReportRecipients(e.target.value)} placeholder="owner@clinic.com, accounts@clinic.com"/></Field><Field label="CC Emails"><Input value={reportCc} onChange={(e:any)=>setReportCc(e.target.value)} placeholder="Optional"/></Field><Field label="Send Day"><Input type="number" min="1" max="28" value={reportSendDay} onChange={(e:any)=>setReportSendDay(Number(e.target.value))}/></Field><Field label="Auto Send"><Select value={reportEnabled?'enabled':'disabled'} onChange={(e:any)=>setReportEnabled(e.target.value==='enabled')}><option value="disabled">Manual only</option><option value="enabled">Every month</option></Select></Field></div><div className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">{[['overall','Overall summary'],['doctor','Doctor revenue'],['department','Department revenue'],['invoice','Paid invoice details']].map(([key,label])=><label key={key} className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="checkbox" checked={Boolean(reportFilters?.[key])} onChange={toggleReportFilter(key)}/>{label}</label>)}</div><div className="mt-4 flex flex-wrap gap-2"><Button type="button" onClick={saveReportSettings} disabled={reportBusy==='save'}>{reportBusy==='save'?'Saving...':'Save Report Settings'}</Button><button type="button" onClick={sendMonthlyReportNow} disabled={reportBusy==='send'} className="rounded-2xl border px-4 py-3 text-sm font-bold text-slate-700 disabled:text-slate-300">{reportBusy==='send'?'Queueing...':'Send Last Month Now'}</button></div><div className="mt-5 overflow-auto rounded-2xl border border-slate-200"><table className="w-full min-w-[860px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Job</th><th>Status</th><th>Period</th><th>Recipients</th><th>Result</th></tr></thead><tbody className="divide-y">{reportJobs.length===0&&<tr><td colSpan={5} className="px-4 py-4 text-slate-500">No monthly report jobs yet.</td></tr>}{reportJobs.map((job:any)=><tr key={job.id}><td className="px-4 py-4"><b>{job.id}</b><p className="text-xs text-slate-500">{new Date(job.created_at).toLocaleString()}</p></td><td><Badge tone={job.status==='sent'?'green':job.status==='failed'?'red':job.status==='running'?'blue':'amber'}>{job.status}</Badge></td><td>{job.period_start} to {job.period_end}</td><td>{(job.recipients||[]).join(', ')}</td><td className="pr-4 text-slate-500">{job.failure_reason||job.attachment_filename||'-'}</td></tr>)}</tbody></table></div></Card></div>
+ return <div className="space-y-5"><Card><h3 className="text-lg font-bold">Tenant & Branch Settings</h3><p className="text-sm text-slate-500">Configuration affects invoice numbering, queue behavior, appointment slots, payments, and communications for this tenant.</p><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Invoice Prefix"><Input value={invoicePrefix} onChange={(e:any)=>setInvoicePrefix(e.target.value)}/></Field><Field label="Requeue After"><Input type="number" value={requeueAfter} onChange={(e:any)=>setRequeueAfter(Number(e.target.value))}/></Field><Field label="No-show Calls"><Input type="number" value={noShowAfter} onChange={(e:any)=>setNoShowAfter(Number(e.target.value))}/></Field><Field label="Slot Display"><Select value={slotIntervalsEnabled?'intervals':'sessions'} onChange={(e:any)=>setSlotIntervalsEnabled(e.target.value==='intervals')}><option value="sessions">Consultation timings only</option><option value="intervals">Detailed interval slots</option></Select></Field><Field label="Interval Minutes"><Input type="number" min="5" step="5" value={slotIntervalMinutes} onChange={(e:any)=>setSlotIntervalMinutes(Number(e.target.value))} disabled={!slotIntervalsEnabled}/></Field><Field label="Payment Methods"><Input value={payments} onChange={(e:any)=>setPayments(e.target.value)}/></Field><Field label="Communication"><Input value={providers} onChange={(e:any)=>setProviders(e.target.value)}/></Field></div><div className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Default booking mode shows only doctor consultation timings, such as Morning 10 AM - 1 PM. Enable interval slots only for clinics that want fine-grained booking times.</div><Button onClick={saveSettings} disabled={busy} className="mt-4">Save Settings</Button><div className="mt-5 grid gap-2 md:grid-cols-2">{settings.slice(0,10).map((setting:any)=><div key={setting.id} className="rounded-2xl bg-slate-50 p-3 text-sm"><b>{settingLabel(setting.key)}</b><p className="break-words text-slate-500">{settingValueLabel(setting.value)}</p></div>)}</div></Card><Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start"><div><h3 className="text-lg font-bold">Monthly Email Reports</h3><p className="text-sm text-slate-500">Send last month revenue, doctor settlement, department revenue, and paid invoice profit as an Excel-compatible spreadsheet through the Redis report worker.</p></div><Badge tone={reportEnabled?'green':'slate'}>{reportEnabled?'Automatic':'Manual'}</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Target Emails"><Input value={reportRecipients} onChange={(e:any)=>setReportRecipients(e.target.value)} placeholder="owner@clinic.com, accounts@clinic.com"/></Field><Field label="CC Emails"><Input value={reportCc} onChange={(e:any)=>setReportCc(e.target.value)} placeholder="Optional"/></Field><Field label="Send Day"><Input type="number" min="1" max="28" value={reportSendDay} onChange={(e:any)=>setReportSendDay(Number(e.target.value))}/></Field><Field label="Auto Send"><Select value={reportEnabled?'enabled':'disabled'} onChange={(e:any)=>setReportEnabled(e.target.value==='enabled')}><option value="disabled">Manual only</option><option value="enabled">Every month</option></Select></Field></div><div className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">{[['overall','Overall summary'],['doctor','Doctor revenue'],['department','Department revenue'],['invoice','Paid invoice details']].map(([key,label])=><label key={key} className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="checkbox" checked={Boolean(reportFilters?.[key])} onChange={toggleReportFilter(key)}/>{label}</label>)}</div><div className="mt-4 flex flex-wrap gap-2"><Button type="button" onClick={saveReportSettings} disabled={reportBusy==='save'}>{reportBusy==='save'?'Saving...':'Save Report Settings'}</Button><button type="button" onClick={sendMonthlyReportNow} disabled={reportBusy==='send'} className="rounded-2xl border px-4 py-3 text-sm font-bold text-slate-700 disabled:text-slate-300">{reportBusy==='send'?'Queueing...':'Send Last Month Now'}</button></div><div className="mt-5 overflow-auto rounded-2xl border border-slate-200"><table className="w-full min-w-[860px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Job</th><th>Status</th><th>Period</th><th>Recipients</th><th>Result</th></tr></thead><tbody className="divide-y">{reportJobs.length===0&&<tr><td colSpan={5} className="px-4 py-4 text-slate-500">No monthly report jobs yet.</td></tr>}{reportJobs.map((job:any,index:number)=><tr key={job.id}><td className="px-4 py-4"><b>Report {index+1}</b><p className="text-xs text-slate-500">{new Date(job.created_at).toLocaleString()}</p></td><td><Badge tone={job.status==='sent'?'green':job.status==='failed'?'red':job.status==='running'?'blue':'amber'}>{humanizeOptionLabel(job.status)}</Badge></td><td>{job.period_start} to {job.period_end}</td><td>{(job.recipients||[]).join(', ')}</td><td className="pr-4 text-slate-500">{job.failure_reason||job.attachment_filename||'-'}</td></tr>)}</tbody></table></div></Card></div>
 }
 
 function PermissionCheckboxes({permissions,selected,disabled}:any){
@@ -444,11 +539,13 @@ function CheckboxList({title,name,rows,selected,valueKey,labelKey}:any){
  return <div><p className="mb-2 text-xs font-bold uppercase text-slate-500">{title}</p><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{rows.map((row:any)=><label key={row.id} className="flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-sm"><input name={name} type="checkbox" value={row[valueKey]} defaultChecked={selected.includes(row[valueKey])} className="mt-1 h-4 w-4"/><span><b>{row[labelKey]}</b>{row.branchLabel&&<span className="block text-xs text-slate-500">{row.branchLabel}</span>}{isLocked(row)&&<span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700">Template</span>}</span></label>)}</div></div>
 }
 
-function UserRow({user,branches,onEdit,onStatus,onDelete}:any){const branch=branches.find((row:any)=>row.id===user.branch_id);const typeLabel=userTypes.find(([value])=>value===user.user_type)?.[1]||user.user_type||'Staff';return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.05fr_1.15fr_.75fr_1fr_.65fr_.7fr_1.45fr]"><div><b>{user.name}</b><p className="break-all text-xs text-slate-500">{user.id}</p></div><span className="break-all">{user.email}</span><span>{typeLabel}</span><span>{branch?.name||'All branches'}</span><Badge tone={user.is_active?'green':'red'}>{user.is_active?'Active':'Inactive'}</Badge><span>{formatDate(user.created_at)}</span><RowActions row={user} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
-function RoleRow({role,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{role.name}</b>{isLocked(role)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{role.key}</span><Badge tone={role.is_active?'green':'red'}>{role.is_active?'Active':'Inactive'}</Badge><span>{formatDate(role.updated_at||role.created_at)}</span><RowActions row={role} locked={isLocked(role)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function UserRow({user,branches,onEdit,onStatus,onDelete}:any){const branch=branches.find((row:any)=>row.id===user.branch_id);const typeLabel=userTypes.find(([value])=>value===user.user_type)?.[1]||humanizeOptionLabel(user.user_type,'Staff');return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.05fr_1.15fr_.75fr_1fr_.65fr_.7fr_1.45fr]"><div><b>{user.name}</b></div><span className="break-all">{user.email}</span><span>{typeLabel}</span><span>{branch?.name||'All branches'}</span><Badge tone={user.is_active?'green':'red'}>{user.is_active?'Active':'Inactive'}</Badge><span>{formatDate(user.created_at)}</span><RowActions row={user} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function RoleRow({role,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{role.name}</b>{isLocked(role)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{roleKeyLabel(role.key)}</span><Badge tone={role.is_active?'green':'red'}>{role.is_active?'Active':'Inactive'}</Badge><span>{formatDate(role.updated_at||role.created_at)}</span><RowActions row={role} locked={isLocked(role)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
 function DepartmentRow({department,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{department.name}</b>{department.locked&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}<p className="text-xs text-slate-500">{department.rows?.length>1?`${department.rows.length} branch mappings`:'Single branch mapping'}</p></div><span>{department.code}</span><span>{department.branch_names||'All branches'}</span><Badge tone={department.is_active?'green':'red'}>{department.is_active?'Active':'Inactive'}</Badge><RowActions row={department.primary||department} locked={department.locked} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
 function BranchRow({branch,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{branch.name}</b>{isLocked(branch)&&<span className="ml-2"><Badge tone="purple">Locked</Badge></span>}</div><span>{branch.code}</span><span>{[branch.city,branch.state].filter(Boolean).join(', ')||'-'}</span><Badge tone={branch.is_active?'green':'red'}>{branch.is_active?'Active':'Inactive'}</Badge><RowActions row={branch} locked={isLocked(branch)} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
-function SupplierRow({supplier,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{supplier.name}</b><p className="break-all text-xs text-slate-500">{supplier.id}</p></div><span>{supplier.gstin||'-'}</span><span><b>{supplier.phone||'-'}</b><p className="break-all text-xs text-slate-500">{supplier.email||supplier.address||'-'}</p></span><Badge tone={supplier.is_active?'green':'red'}>{supplier.is_active?'Active':'Inactive'}</Badge><RowActions row={supplier} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function SupplierRow({supplier,onEdit,onStatus,onDelete}:any){return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{supplier.name}</b></div><span>{supplier.gstin||'-'}</span><span><b>{supplier.phone||'-'}</b><p className="break-all text-xs text-slate-500">{supplier.email||supplier.address||'-'}</p></span><Badge tone={supplier.is_active?'green':'red'}>{supplier.is_active?'Active':'Inactive'}</Badge><RowActions row={supplier} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function TaxRuleRow({rule,branches,onEdit,onStatus,onDelete}:any){const branch=branches.find((row:any)=>row.id===rule.branch_id);return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{rule.name}</b></div><span>{scopeLabel(rule.service_scope)} · {branch?.name||'All branches'}</span><span><b>{rule.tax_percentage}%</b><p className="text-xs text-slate-500">{rule.tax_label||'GST'}</p></span><Badge tone={rule.is_active?'green':'red'}>{rule.is_active?'Active':'Inactive'}</Badge><RowActions row={rule} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
+function DiscountOfferRow({offer,branches,onEdit,onStatus,onDelete}:any){const branch=branches.find((row:any)=>row.id===offer.branch_id);const value=offer.discount_type==='fixed'?`₹${Number(offer.value||0).toLocaleString('en-IN')}`:`${offer.value}%`;const code=publicDisplayValue(offer.code,'');return <ClickableRow onClick={onEdit} className="xl:grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]"><div><b>{offer.name}</b>{code&&<p className="break-all text-xs text-slate-500">{code}</p>}</div><span>{scopeLabel(offer.service_scope)} · {branch?.name||'All branches'}</span><span><b>{value}</b><p className="text-xs text-slate-500">{offer.max_discount_amount?`Max ₹${Number(offer.max_discount_amount).toLocaleString('en-IN')}`:'No cap'}</p></span><Badge tone={offer.is_active?'green':'red'}>{offer.is_active?'Active':'Inactive'}</Badge><RowActions row={offer} onEdit={onEdit} onStatus={onStatus} onDelete={onDelete}/></ClickableRow>}
 function RowActions({row,locked,onEdit,onStatus,onDelete}:any){const stop=(handler:any)=>(event:any)=>{event.stopPropagation();handler()};return <ActionGroup className="justify-start xl:justify-end"><ActionButton onClick={stop(onEdit)}>{locked?'View':'Edit'}</ActionButton>{!locked&&<ActionButton onClick={stop(onStatus)}>{row.is_active?'Inactive':'Active'}</ActionButton>}{!locked&&<ActionButton tone="danger" onClick={stop(onDelete)}>Delete</ActionButton>}</ActionGroup>}
 function ClickableRow({children,onClick,className}:any){return <div role="button" tabIndex={0} onClick={onClick} onKeyDown={(event:any)=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onClick()}}} className={`grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:items-center ${className}`}>{children}</div>}
 
@@ -460,6 +557,25 @@ function Pagination({page,totalPages,total,pageSize,onPage}:any){const start=tot
 function title(value:string){return value.split(' ').filter(Boolean).map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')}
 function formatDate(value:any){return value?new Date(value).toLocaleDateString():'-'}
 function isLocked(row:any){return Boolean(row?.is_template_locked||row?.source_template_role_id||row?.source_template_department_id||row?.source_template_branch_id)}
+function scopeLabel(value:any){return serviceScopes.find(([scope])=>scope===value)?.[1]||title(String(value||'all').replaceAll('_',' '))}
+function roleKeyLabel(value:any){return humanizeOptionLabel(String(value||'').replace(/^sun_[a-z0-9]+_/i,'').replace(/^tenant_/i,'tenant '))}
+function settingLabel(value:any){return humanizeOptionLabel(String(value||'').split('.').pop()||value)}
+function settingValueLabel(value:any){
+ if(Array.isArray(value))return value.map((item:any)=>humanizeOptionLabel(item)).join(', ')||'-';
+ if(value&&typeof value==='object')return Object.entries(value).map(([key,item])=>`${humanizeOptionLabel(key)}: ${settingValueLabel(item)}`).join(', ');
+ if(typeof value==='string'){
+  const trimmed=value.trim();
+  if((trimmed.startsWith('[')&&trimmed.endsWith(']'))||(trimmed.startsWith('{')&&trimmed.endsWith('}'))){
+   try{return settingValueLabel(JSON.parse(trimmed))}catch{}
+  }
+  return humanizeOptionLabel(trimmed);
+ }
+ if(value===true)return 'Yes';
+ if(value===false)return 'No';
+ return value??'-';
+}
+function dateToInput(value:any){return value?String(value).slice(0,10):''}
+function dateInputToIso(value:any){const raw=String(value||'');return raw?`${raw}T00:00:00Z`:null}
 
 function groupDepartmentsByName(departments:any[],branches:any[]){
  const branchName=(id:string)=>branches.find((branch:any)=>branch.id===id)?.name||'All branches';

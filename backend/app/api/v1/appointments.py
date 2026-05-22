@@ -30,8 +30,12 @@ from app.modules.audit.service import record_audit_event
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
-from app.modules.practitioners.models import Practitioner
-from app.modules.practitioners.service import check_practitioner_availability, practitioner_is_eligible
+from app.modules.practitioners.models import Practitioner, PractitionerSchedule
+from app.modules.practitioners.service import (
+    check_practitioner_availability,
+    check_practitioner_date_availability,
+    practitioner_is_eligible,
+)
 from app.modules.consultations.models import Consultation
 from app.modules.queue.models import QueueEntry
 from app.modules.queue.service import create_queue_entry_for_appointment
@@ -216,23 +220,42 @@ def book_appointment(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Practitioner is not assigned to this branch and department",
                 )
-            if (
-                payload.appointment_time
-                and payload.appointment_type.value != "emergency"
-            ):
-                availability = check_practitioner_availability(
-                    session,
-                    tenant_id=tenant_id,
-                    practitioner_id=payload.practitioner_id,
-                    branch_id=payload.branch_id,
-                    department_id=payload.department_id,
-                    appointment_date=payload.appointment_date,
-                    appointment_time=payload.appointment_time,
-                )
-                if not availability.available:
+            if payload.appointment_type.value != "emergency":
+                if payload.appointment_time:
+                    availability = check_practitioner_availability(
+                        session,
+                        tenant_id=tenant_id,
+                        practitioner_id=payload.practitioner_id,
+                        branch_id=payload.branch_id,
+                        department_id=payload.department_id,
+                        appointment_date=payload.appointment_date,
+                        appointment_time=payload.appointment_time,
+                    )
+                else:
+                    has_schedules = session.exec(
+                        select(PractitionerSchedule).where(
+                            PractitionerSchedule.tenant_id == tenant_id,
+                            PractitionerSchedule.practitioner_id == payload.practitioner_id,
+                            PractitionerSchedule.branch_id == payload.branch_id,
+                            PractitionerSchedule.is_active == True,  # noqa: E712
+                        )
+                    ).first()
+                    availability = (
+                        check_practitioner_date_availability(
+                            session,
+                            tenant_id=tenant_id,
+                            practitioner_id=payload.practitioner_id,
+                            branch_id=payload.branch_id,
+                            department_id=payload.department_id,
+                            appointment_date=payload.appointment_date,
+                        )
+                        if has_schedules
+                        else None
+                    )
+                if availability and not availability.available:
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=availability.reason or "Practitioner is not available at this time",
+                        detail=availability.reason or "Practitioner is not available on this date",
                     )
 
     is_billable, billing_note = _review_billing_defaults(

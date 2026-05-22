@@ -13,7 +13,7 @@ import {
   Select,
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
-import { uniqueDepartmentRows } from "@/lib/options";
+import { publicDisplayValue, uniqueDepartmentRows } from "@/lib/options";
 
 const weekdays = [
   ["0", "Monday"],
@@ -58,6 +58,8 @@ function selectedSchedulePayloads(fd: FormData) {
       is_active: fd.get(`isActive_${index}`) !== "false",
     }),
   ).filter((range) => range.start_time && range.end_time);
+  const rawRoomNumber = String(fd.get("roomNumber") || "").replace(/\D/g, "");
+  const roomNumber = rawRoomNumber ? rawRoomNumber.padStart(3, "0").slice(0, 3) : null;
   return selectedWeekdays.flatMap((weekday) =>
     ranges.map((range) => ({
       branch_id: fd.get("branchId"),
@@ -67,7 +69,7 @@ function selectedSchedulePayloads(fd: FormData) {
       end_time: range.end_time,
       is_active: range.is_active,
       slot_minutes: Number(fd.get("slotMinutes") || 15),
-      room_name: fd.get("roomName") || null,
+      room_number: roomNumber,
     })),
   );
 }
@@ -77,7 +79,7 @@ function scheduleGroupKey(row: any) {
     row.practitioner_id,
     row.branch_id,
     row.department_id || "",
-    row.room_name || "",
+    row.room_number || "",
     row.slot_minutes,
   ].join("|");
 }
@@ -393,7 +395,7 @@ export function Scheduling({ apiSession, branchId }: any) {
       const department = departments.find(
         (item: any) => item.id === row.department_id,
       );
-      const text = [doctor?.full_name, row.room_name, department?.name, row.id]
+      const text = [doctor?.full_name, row.room_number, department?.name, row.id]
         .join(" ")
         .toLowerCase();
       return (
@@ -540,7 +542,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             <span>Doctor</span>
             <span>Branch</span>
             <span>Department</span>
-            <span>Room</span>
+            <span>Room No.</span>
             <span>Timing</span>
             <span>Slots</span>
             <span>Status</span>
@@ -688,7 +690,7 @@ function ScheduleForm({
         <div>
           <h3 className="text-lg font-bold">{title}</h3>
           <p className="text-sm text-slate-500">
-            {schedule?.id || "Create weekly consultation timing for a doctor."}
+            {schedule ? "Update weekly consultation timing for this doctor." : "Create weekly consultation timing for a doctor."}
           </p>
         </div>
         <button
@@ -871,11 +873,14 @@ function ScheduleForm({
             defaultValue={schedule?.slot_minutes || 15}
           />
         </Field>
-        <Field label="Room Name">
+        <Field label="Room Number">
           <Input
-            name="roomName"
-            defaultValue={schedule?.room_name || ""}
-            placeholder="Room 1"
+            name="roomNumber"
+            type="number"
+            min="1"
+            max="999"
+            defaultValue={schedule?.room_number ? String(Number(schedule.room_number)) : ""}
+            placeholder="012"
           />
         </Field>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
@@ -945,15 +950,15 @@ function ScheduleRow({
       className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] xl:items-center"
     >
       <div>
-        <b>{doctor?.full_name || row.practitioner_id}</b>
+        <b>{doctor?.full_name || publicDisplayValue(row.practitioner_id, "Doctor")}</b>
         <p className="break-all text-xs text-slate-500">
           {scheduleRows.length} schedule{" "}
           {scheduleRows.length === 1 ? "slot" : "slots"}
         </p>
       </div>
-      <span>{branch?.name || row.branch_id}</span>
+      <span>{branch?.name || publicDisplayValue(row.branch_id, "Assigned branch")}</span>
       <span>{department?.name || "All departments"}</span>
-      <span>{row.room_name || "No room"}</span>
+      <span>{row.room_number ? row.room_number.padStart(3, "0") : "-"}</span>
       <span>
         {formatDisplayRange(firstSchedule.start_time, firstSchedule.end_time)}
       </span>

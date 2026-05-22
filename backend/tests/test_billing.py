@@ -270,6 +270,63 @@ def test_tax_rule_applies_gst_to_invoice_and_receipt_pdf(client: TestClient):
     assert receipt.headers["content-type"] == "application/pdf"
 
 
+def test_consultation_invoice_uses_service_scoped_tax_rule(client: TestClient):
+    data = setup_signed_consultation(client, "op")
+    tenant_id = data["tenant"]["id"]
+    create_fee_rule(client, tenant_id, "op", 1000, doctor_share_percentage=60)
+    client.post(
+        "/api/v1/billing/tax-rules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"name": "Default GST 5", "tax_percentage": 5, "tax_label": "GST", "service_scope": "all"},
+    )
+    consultation_tax = client.post(
+        "/api/v1/billing/tax-rules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"name": "Consultation GST 12", "tax_percentage": 12, "tax_label": "GST", "service_scope": "consultation"},
+    )
+
+    response = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"consultation_id": data["consultation"]["id"]},
+    )
+
+    assert consultation_tax.status_code == 201
+    assert response.status_code == 201
+    assert response.json()["invoice"]["tax_rule_id"] == consultation_tax.json()["id"]
+    assert response.json()["invoice"]["tax_amount"] == 120
+    assert response.json()["invoice"]["total_amount"] == 1120
+
+
+def test_discount_offer_applies_to_consultation_invoice_before_tax(client: TestClient):
+    data = setup_signed_consultation(client, "op")
+    tenant_id = data["tenant"]["id"]
+    create_fee_rule(client, tenant_id, "op", 1000, doctor_share_percentage=60)
+    tax_rule = client.post(
+        "/api/v1/billing/tax-rules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"name": "GST 10", "tax_percentage": 10, "tax_label": "GST", "service_scope": "consultation"},
+    ).json()
+    offer = client.post(
+        "/api/v1/billing/discount-offers",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"name": "Health camp 10", "code": "HEALTH10", "service_scope": "consultation", "discount_type": "percentage", "value": 10},
+    ).json()
+
+    response = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"consultation_id": data["consultation"]["id"], "discount_offer_id": offer["id"], "tax_rule_id": tax_rule["id"]},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["invoice"]["discount_offer_id"] == offer["id"]
+    assert response.json()["invoice"]["discount_amount"] == 100
+    assert response.json()["invoice"]["taxable_amount"] == 900
+    assert response.json()["invoice"]["tax_amount"] == 90
+    assert response.json()["invoice"]["total_amount"] == 990
+
+
 def test_tax_can_be_shared_with_doctor_when_fee_rule_allows_it(client: TestClient):
     data = setup_signed_consultation(client, "op")
     tenant_id = data["tenant"]["id"]

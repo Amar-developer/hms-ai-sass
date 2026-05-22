@@ -6,6 +6,7 @@ backend/.venv/
 
 # Build outputs
 .next/
+.next.permission-backup/
 .next-permission-backup/
 out/
 dist/
@@ -35,4 +36,5 @@ __pycache__/
 *.sqlite3
 
 # Runtime uploads
+uploads/
 backend/uploads/

@@ -41,6 +41,7 @@ export async function apiFetch(path: string, session: ApiSession, options: Reque
     } catch {}
     throw new Error(`${path}: ${detail}`);
   }
+  if (res.status === 204 || res.headers.get('content-length') === '0') return null;
   return res.json();
 }
 

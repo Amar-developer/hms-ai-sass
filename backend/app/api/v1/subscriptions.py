@@ -5,7 +5,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
@@ -368,7 +368,20 @@ def get_active_tenant_subscription(
 def get_entitlements(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.REPORTS_READ)),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.REPORTS_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.IDENTITY_USERS_MANAGE,
+            permissions.IDENTITY_USERS_READ,
+            permissions.IDENTITY_ROLES_MANAGE,
+            permissions.BRANCHES_MANAGE,
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_CREATE,
+        )
+    ),
 ) -> EntitlementRead:
     subscription, plan = get_active_subscription(session, tenant_id)
     patient_count = current_patient_count(session, tenant_id)

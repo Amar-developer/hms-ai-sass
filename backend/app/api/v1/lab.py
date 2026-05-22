@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
@@ -325,7 +325,7 @@ def create_lab_test(
     payload: LabTestCatalogCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.LAB_MANAGE, permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> LabTestCatalog:
     enforce_module_enabled(session, tenant_id, "lab")
     if payload.branch_id:
@@ -353,7 +353,7 @@ def list_lab_tests(
     branch_id: str | None = None,
     search: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.LAB_MANAGE, permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.PATIENT_SUBSCRIPTIONS_READ, permissions.SETTINGS_MANAGE)),
 ) -> list[LabTestCatalog]:
     enforce_module_enabled(session, tenant_id, "lab")
     branch_id = scoped_branch_id(current_user, branch_id)

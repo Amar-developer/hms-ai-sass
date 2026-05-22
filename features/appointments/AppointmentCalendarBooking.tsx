@@ -6,7 +6,7 @@ import {CalendarPlus, Search, X} from 'lucide-react';
 import {Badge, Button, Card, Field, Input, Select} from '@/components/ui';
 import {apiFetch, type ApiSession} from '@/lib/api';
 import {generatePatientId, generateToken, searchPatients} from '@/lib/hmsLogic';
-import {uniqueDepartmentRows} from '@/lib/options';
+import {humanizeOptionLabel,publicDisplayValue,uniqueDepartmentRows} from '@/lib/options';
 
 type Props = {
   clinic: any;
@@ -85,6 +85,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const [platformDepartment, setPlatformDepartment] = useState('all');
   const [platformRows, setPlatformRows] = useState<any[]>([]);
   const [listRefreshKey, setListRefreshKey] = useState(0);
+  const [filterDepartment, setFilterDepartment] = useState('all');
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
 
   const patientMap = useMemo(() => new Map(patients.map((patient: any) => [patient.id, patient])), [patients]);
@@ -111,7 +112,7 @@ export function AppointmentCalendarBooking(props: Props) {
     return (
       (!query || text.includes(query.toLowerCase())) &&
       (!filterDate || String(appointment.appointmentDate || appointment.date || '').startsWith(filterDate) || String(appointment.time || '').startsWith(filterDate)) &&
-      (!departmentId || appointment.departmentId === departmentId)
+      (filterDepartment === 'all' || appointment.departmentId === filterDepartment)
     );
   });
   const listRecords = isSuperAdmin ? filteredPlatformRows : filteredAppointments;
@@ -165,7 +166,7 @@ export function AppointmentCalendarBooking(props: Props) {
         gender: patient.gender,
       }));
 
-  useEffect(() => setPage(1), [query, filterDate, departmentId, appointments.length]);
+  useEffect(() => setPage(1), [query, filterDate, filterDepartment, appointments.length]);
   useEffect(() => setPage(1), [platformTenantId, platformDepartment, platformRows.length]);
   useEffect(() => {
     let alive = true;
@@ -476,7 +477,7 @@ export function AppointmentCalendarBooking(props: Props) {
             practitioner_id: doctorId,
             appointment_type: appointmentType,
             appointment_date: appointmentType === 'emergency' ? appointmentDate : selectedTimingSlot.appointment_date,
-            appointment_time: appointmentType === 'emergency' ? null : selectedTimingSlot.start_time,
+            appointment_time: appointmentType !== 'emergency' && slotIntervalsEnabled ? selectedTimingSlot.start_time : null,
             reason: appointmentType === 'follow_up' || appointmentType === 'doctor_review'
               ? 'Doctor review appointment booked from MedizinHub HMS'
               : appointmentType === 'fitness_certificate'
@@ -527,16 +528,16 @@ export function AppointmentCalendarBooking(props: Props) {
   const day = calendar?.days?.[0];
   const allDaySlots = day?.slots || [];
   const consultationSessions = sessionOptionsFromSlots(allDaySlots, appointmentDate);
-  const timingOptions = apiSession && !slotIntervalsEnabled && consultationSessions.length ? consultationSessions : slotGroups;
-  const selectedGroup = timingOptions.find((group: any) => group.id === slotGroup) || timingOptions[0] || slotGroups[0];
+  const timingOptions = apiSession ? consultationSessions : slotGroups;
+  const selectedGroup = timingOptions.find((group: any) => group.id === slotGroup) || timingOptions[0] || null;
   const slots = allDaySlots.filter((slot: any) => {
     const start = String(slot.start_time || '').slice(0, 5);
-    return start >= selectedGroup.start && start < selectedGroup.end;
+    return selectedGroup && start >= selectedGroup.start && start < selectedGroup.end;
   });
   const mockSlots = ['10:00', '10:30', '11:00', '11:30', '12:00', '18:00', '18:30', '19:00', '19:30', '20:00']
-    .filter((time) => time >= selectedGroup.start && time < selectedGroup.end)
+    .filter((time) => selectedGroup && time >= selectedGroup.start && time < selectedGroup.end)
     .map((time) => ({appointment_date: appointmentDate, start_time: time, end_time: time, available: true, status: 'available'}));
-  const sessionChoices = (apiSession && consultationSessions.length ? consultationSessions : slotGroups).map((session: any) => ({
+  const sessionChoices = timingOptions.map((session: any) => ({
     ...session,
     appointment_date: appointmentDate,
     start_time: session.start,
@@ -545,7 +546,7 @@ export function AppointmentCalendarBooking(props: Props) {
     status: session.available === false ? 'unavailable' : 'available',
   }));
   const visibleSlots = slotIntervalsEnabled ? (apiSession ? slots : mockSlots) : sessionChoices;
-  const selectedSessionSlot = sessionChoices.find((slot: any) => slot.id === selectedGroup.id) || sessionChoices[0] || null;
+  const selectedSessionSlot = selectedGroup ? sessionChoices.find((slot: any) => slot.id === selectedGroup.id) || null : null;
   const selectedTimingSlot = slotIntervalsEnabled ? selectedSlot : selectedSessionSlot;
 
   if (mode === 'book') {
@@ -667,7 +668,8 @@ export function AppointmentCalendarBooking(props: Props) {
               </Field>
               <Field label="Appointment Date"><Input type="date" value={appointmentDate} onChange={(e: any) => setAppointmentDate(e.target.value)} /></Field>
               <Field label="Timing Slots">
-                <Select value={slotGroup} onChange={(e: any) => setSlotGroup(e.target.value)}>
+                <Select value={selectedGroup?.id || ''} onChange={(e: any) => setSlotGroup(e.target.value)} disabled={appointmentType !== 'emergency' && timingOptions.length === 0}>
+                  {timingOptions.length === 0 && <option value="">No timing available</option>}
                   {timingOptions.map((group: any) => <option key={group.id} value={group.id}>{group.label}</option>)}
                 </Select>
               </Field>
@@ -789,7 +791,8 @@ export function AppointmentCalendarBooking(props: Props) {
               {platformDepartmentOptions.map((department: string) => <option key={department} value={department}>{department}</option>)}
             </Select>
           ) : (
-            <Select value={departmentId} onChange={(e: any) => setDepartmentId(e.target.value)}>
+            <Select value={filterDepartment} onChange={(e: any) => setFilterDepartment(e.target.value)}>
+              <option value="all">All departments</option>
               {departmentOptions.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
             </Select>
           )}
@@ -811,7 +814,7 @@ export function AppointmentCalendarBooking(props: Props) {
                   <span>{appointment.department_name || '-'}</span>
                   <span>{appointment.practitioner_name || '-'}</span>
                   <span>{appointment.appointment_date}{appointment.appointment_time ? ` ${String(appointment.appointment_time).slice(0, 5)}` : ''}</span>
-                  <Badge tone={appointment.consultation_status === 'signed' ? 'green' : appointment.status === 'cancelled' ? 'red' : 'slate'}>{appointment.consultation_status || appointment.status || '-'}</Badge>
+                  <Badge tone={appointment.consultation_status === 'signed' ? 'green' : appointment.status === 'cancelled' ? 'red' : 'slate'}>{humanizeOptionLabel(appointment.consultation_status || appointment.status)}</Badge>
                 </div>
               );
             }
@@ -830,12 +833,12 @@ export function AppointmentCalendarBooking(props: Props) {
                 }}
                 className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1fr_.7fr_.8fr_.95fr_.78fr_.72fr_1.55fr] xl:items-center"
               >
-                <div><b>{appointment.patient}</b><p className="text-xs text-slate-500">{appointment.token || appointment.id}</p></div>
+                <div><b>{appointment.patient}</b><p className="text-xs text-slate-500">{appointment.token || publicDisplayValue(appointment.id,'-')}</p></div>
                 <span>{patient?.mobile || '-'}</span>
-                <span>{departmentOptions.find((d: any) => d.id === appointment.departmentId)?.name || appointment.departmentId || '-'}</span>
-                <span>{appointment.doctor || appointment.doctorId || '-'}</span>
+                <span>{departmentOptions.find((d: any) => d.id === appointment.departmentId)?.name || publicDisplayValue(appointment.departmentId)}</span>
+                <span>{appointment.doctor || publicDisplayValue(appointment.doctorId,'Doctor')}</span>
                 <span>{appointment.appointmentDate || appointment.time || '-'}</span>
-                <Badge tone={appointment.consultationStatus === 'signed' ? 'green' : appointment.status === 'cancelled' ? 'red' : 'slate'}>{appointment.consultationStatus || appointment.status || '-'}</Badge>
+                <Badge tone={appointment.consultationStatus === 'signed' ? 'green' : appointment.status === 'cancelled' ? 'red' : 'slate'}>{humanizeOptionLabel(appointment.consultationStatus || appointment.status)}</Badge>
                 <div className="flex flex-nowrap items-center justify-start gap-2 xl:justify-end" onClick={(event) => event.stopPropagation()}>
                   <button type="button" onClick={() => openConsultation(appointment)} className="whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50">Consultation</button>
                   <button type="button" onClick={() => openPatient(appointment)} className="whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50">Patient Details</button>

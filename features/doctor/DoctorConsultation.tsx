@@ -19,6 +19,7 @@ import {
 } from "@/components/clinicalRows";
 import { apiFetch } from "@/lib/api";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
+import { humanizeOptionLabel } from "@/lib/options";
 
 function displayTime(value: any) {
   const raw = String(value || "").slice(0, 5);
@@ -131,6 +132,7 @@ export function DoctorConsultation({
   branch,
   branchId,
   departmentId,
+  allowedDepartments = [],
   patients,
   scopedAppointments,
   appointments,
@@ -146,12 +148,20 @@ export function DoctorConsultation({
     apiSession?.user?.user_type === "doctor" ||
     apiSession?.user?.roles?.includes("doctor"),
   );
+  const [scopedPractitioners, setScopedPractitioners] = useState<any[]>([]);
+  const practitionerSource = scopedPractitioners.length ? scopedPractitioners : livePractitioners;
+  const departmentNameById = new Map(
+    (allowedDepartments || []).map((department: any) => [department.id, department.name]),
+  );
   const allDoctorList: any[] = Object.values(
     [
-      ...livePractitioners.map((practitioner: any) => ({
+      ...practitionerSource.map((practitioner: any) => ({
         doctorId: practitioner.id,
         doctor: practitioner.full_name || practitioner.name,
-        departmentName: practitioner.primary_specialty || "",
+        departmentName:
+          practitioner.primary_specialty ||
+          departmentNameById.get((practitioner.department_ids || [])[0]) ||
+          "",
         departmentId: (practitioner.department_ids || [])[0] || departmentId,
         departmentIds: practitioner.department_ids || [],
         branchIds: practitioner.branch_ids || [],
@@ -265,6 +275,19 @@ export function DoctorConsultation({
     "booked" | "waiting" | "completed" | "seen"
   >("booked");
   const [selectedPatientDetail, setSelectedPatientDetail] = useState<any>(null);
+  useEffect(() => {
+    if (!apiSession?.token) return;
+    if (doctorScope?.practitionerId) {
+      setScopedPractitioners([]);
+      return;
+    }
+    const params = new URLSearchParams();
+    if (branchId) params.set("branch_id", branchId);
+    if (departmentId) params.set("department_id", departmentId);
+    apiFetch(`/practitioners${params.toString() ? `?${params}` : ""}`, apiSession)
+      .then((rows: any) => setScopedPractitioners(Array.isArray(rows) ? rows : []))
+      .catch(() => setScopedPractitioners([]));
+  }, [apiSession?.token, apiSession?.tenantId, branchId, departmentId, doctorScope?.practitionerId]);
   useEffect(() => {
     const id = setInterval(() => setTick((v) => v + 1), 5000);
     return () => clearInterval(id);
@@ -570,10 +593,19 @@ export function DoctorConsultation({
     ? appointments
         .filter((item: any) => {
           const itemPatientId = item.patientId || item.patient_id;
+          const selectedDoctorId = selected.doctorId || selected.practitioner_id || doctorId;
+          const itemDoctorId = item.doctorId || item.practitioner_id;
+          const selectedDateKey = appointmentDateKey(selected);
+          const itemDateKey = appointmentDateKey(item);
           return (
             itemPatientId &&
             itemPatientId === selectedPatientId &&
-            item.id !== selected.id
+            item.id !== selected.id &&
+            itemDoctorId &&
+            selectedDoctorId &&
+            itemDoctorId === selectedDoctorId &&
+            isCompletedAppointment(item) &&
+            (!selectedDateKey || !itemDateKey || itemDateKey < selectedDateKey)
           );
         })
         .slice(0, 5)
@@ -1118,6 +1150,7 @@ export function DoctorConsultation({
                   setDoctorId(e.target.value);
                   setSelectedAppointmentId("");
                 }}
+                disabled={isDoctorUser}
               >
                 {doctorList.map((d: any) => (
                   <option key={d.id} value={d.id}>
@@ -1152,7 +1185,7 @@ export function DoctorConsultation({
                   >
                     <div className="mb-2 flex flex-wrap gap-1">
                       <Badge tone={a.tokenType === "Emergency" ? "red" : "amber"}>
-                        {a.tokenType}
+                        {humanizeOptionLabel(a.tokenType)}
                       </Badge>
                       {a.consultationStatus && (
                         <Badge
@@ -1160,7 +1193,7 @@ export function DoctorConsultation({
                             a.consultationStatus === "signed" ? "green" : "blue"
                           }
                         >
-                          {a.consultationStatus}
+                          {humanizeOptionLabel(a.consultationStatus)}
                         </Badge>
                       )}
                     </div>
@@ -1170,7 +1203,7 @@ export function DoctorConsultation({
                     <p className="mt-1 text-xs text-slate-500">
                       {displayTime(a.time || a.appointment_time)}
                     </p>
-                    <p className="text-xs text-slate-400">{a.queueStatus}</p>
+                    <p className="text-xs text-slate-400">{humanizeOptionLabel(a.queueStatus)}</p>
                   </button>
                 ))}
               {doctorQueue.filter(
@@ -1394,13 +1427,13 @@ export function DoctorConsultation({
                       {a.token} · {a.patient}
                     </b>
                     <p className="text-xs text-slate-500">
-                      {displayTime(a.time || a.appointment_time)} · {a.status} ·{" "}
-                      {a.queueStatus}
+                      {displayTime(a.time || a.appointment_time)} · {humanizeOptionLabel(a.status)} ·{" "}
+                      {humanizeOptionLabel(a.queueStatus)}
                     </p>
                   </button>
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
                     <Badge tone={a.tokenType === "Emergency" ? "red" : "amber"}>
-                      {a.tokenType}
+                      {humanizeOptionLabel(a.tokenType)}
                     </Badge>
                     {a.consultationStatus && (
                       <Badge
@@ -1408,7 +1441,7 @@ export function DoctorConsultation({
                           a.consultationStatus === "signed" ? "green" : "blue"
                         }
                       >
-                        {a.consultationStatus}
+                        {humanizeOptionLabel(a.consultationStatus)}
                       </Badge>
                     )}
                   </div>
@@ -1546,7 +1579,7 @@ function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
                     : toneForQueue(row.queueStatus)
                 }
               >
-                {row.visitType || row.tokenType || "OP"}
+                {humanizeOptionLabel(row.visitType || row.tokenType || "OP")}
               </Badge>
             </div>
             <div className="flex flex-wrap items-center gap-2 text-slate-600">
@@ -1636,7 +1669,7 @@ function PatientHistoryPanel({ history, onOpenPatient }: any) {
                     item.consultationStatus === "signed" ? "green" : "slate"
                   }
                 >
-                  {item.consultationStatus || item.status || "Visit"}
+                  {humanizeOptionLabel(item.consultationStatus || item.status || "Visit")}
                 </Badge>
               </div>
               <p className="mt-3 text-sm text-slate-700">
@@ -1644,7 +1677,7 @@ function PatientHistoryPanel({ history, onOpenPatient }: any) {
                   item.doctorNotes ||
                   item.patientRemarks ||
                   item.visitPurpose ||
-                  "Clinical details not captured yet."}
+                  "No clinical summary saved for this visit."}
               </p>
             </button>
           ))}
@@ -1798,8 +1831,8 @@ function ConsultationWorkspace(props: any) {
               onClick={() => openPatientDetails?.()}
               className="rounded-2xl bg-slate-50 p-4 text-left transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             >
-              <p className="text-xs text-slate-500">Patient ID</p>
-              <p className="font-bold">{patient?.id}</p>
+              <p className="text-xs text-slate-500">Patient</p>
+              <p className="font-bold">{patient?.name || selected?.patient || "-"}</p>
             </button>
             <div className="rounded-2xl bg-slate-50 p-4">
               <p className="text-xs text-slate-500">Age / Gender</p>

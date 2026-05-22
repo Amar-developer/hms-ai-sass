@@ -115,7 +115,7 @@ Frontend:
 - `features/shell/useAppController.ts`: shared app controller hook for auth/session state, tenant live-data loading, clinic/branch/department scope, and shell props.
 - `features/shared/SimpleList.tsx`: legacy shared list component; production modules should load backend data only.
 - `features/shared/Info.tsx`: shared compact key/value display component.
-- `features/subscriptions/Subscriptions.tsx`: extracted subscription plan display module.
+- `features/patient_subscriptions/PatientSubscriptions.tsx`: patient membership plan management module.
 - `components/ui.tsx`: shared Card/Input/Button/Badge UI.
 - `lib/api.ts`: shared API base URL, session type, and authenticated fetch helper.
 - `lib/authPresets.ts`: shared demo user labels and login presets.

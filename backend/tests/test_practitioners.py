@@ -519,6 +519,18 @@ def test_appointment_accepts_practitioner_assigned_to_branch_and_department(clie
             "department_ids": ["general", "ped"],
         },
     ).json()
+    client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "department_id": "ped",
+            "weekday": date.today().weekday(),
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
 
     response = client.post(
         "/api/v1/appointments",
@@ -536,6 +548,109 @@ def test_appointment_accepts_practitioner_assigned_to_branch_and_department(clie
     assert response.status_code == 201
     assert response.json()["appointment"]["practitioner_id"] == practitioner["id"]
     assert response.json()["appointment"]["department_id"] == "ped"
+
+
+def test_date_only_appointment_requires_practitioner_scheduled_weekday(client):
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Date Guard",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
+    ).json()
+    client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": 1,
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+
+    response = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "department_id": "general",
+            "practitioner_id": practitioner["id"],
+            "appointment_type": "op",
+            "appointment_date": "2026-05-21",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Practitioner is not scheduled on this date"
+
+
+def test_session_token_booking_allows_multiple_patients_before_exact_slot_selection(client):
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    second_patient = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"branch_id": branch["id"], "full_name": "Early Token Patient", "mobile": "9000000022"},
+    ).json()
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Session Token",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
+    ).json()
+    client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "department_id": "general",
+            "weekday": 1,
+            "start_time": "10:00:00",
+            "end_time": "13:00:00",
+            "slot_minutes": 15,
+        },
+    )
+
+    first = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "department_id": "general",
+            "practitioner_id": practitioner["id"],
+            "appointment_type": "op",
+            "appointment_date": "2026-05-19",
+        },
+    )
+    second = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": second_patient["id"],
+            "department_id": "general",
+            "practitioner_id": practitioner["id"],
+            "appointment_type": "op",
+            "appointment_date": "2026-05-19",
+        },
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["appointment"]["appointment_time"] is None
+    assert second.json()["appointment"]["appointment_time"] is None
+    assert first.json()["queue_entry"]["token_number"] == "N-001"
+    assert second.json()["queue_entry"]["token_number"] == "N-002"
 
 
 def test_timed_appointment_requires_active_practitioner_schedule(client):

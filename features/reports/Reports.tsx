@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Badge, Card, Field, Input, Select } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
+import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 
 const pageSize = 10;
 
@@ -412,6 +413,8 @@ export function Reports({
       acc.settlement += settlement;
       acc.clinicFee += numberValue(invoice.clinic_share_amount) || Math.max(total - doctorShare, 0);
       acc.tax += numberValue(invoice.tax_amount);
+      acc.membershipDiscount += numberValue(invoice.membership_discount_amount);
+      if (invoice.patient_subscription_enrollment_id || invoice.patient_subscription_plan_id) acc.membershipPurchases += 1;
       const type = invoiceType(invoice);
       if (type === "lab") acc.labRevenue += paid;
       if (type === "pharmacy") acc.pharmacyRevenue += paid;
@@ -427,6 +430,8 @@ export function Reports({
       settlement: 0,
       clinicFee: 0,
       tax: 0,
+      membershipDiscount: 0,
+      membershipPurchases: 0,
       consultationRevenue: 0,
       labRevenue: 0,
       pharmacyRevenue: 0,
@@ -686,6 +691,7 @@ export function Reports({
     "Total",
     "Paid",
     "Balance",
+    "Membership Discount",
     "Doctor Fee",
     "Settlement",
     "Clinic Profit",
@@ -703,12 +709,13 @@ export function Reports({
       invoice.invoice_number,
       rowDate(invoice),
       invoiceTypeLabel(invoiceType(invoice)),
-      patient?.name || patient?.full_name || invoice.patient_name || invoice.patient_id || "-",
+      patient?.name || patient?.full_name || invoice.patient_name || publicDisplayValue(invoice.patient_id),
       doctorName,
-      invoice.status,
+      humanizeOptionLabel(invoice.status),
       numberValue(invoice.total_amount),
       paid,
       numberValue(invoice.balance_amount),
+      numberValue(invoice.membership_discount_amount),
       numberValue(invoice.doctor_share_amount),
       settlement,
       Math.max(paid - settlement, 0),
@@ -727,6 +734,7 @@ export function Reports({
           totals.grossRevenue,
           totals.paidRevenue,
           totals.balance,
+          totals.membershipDiscount,
           totals.doctorFee,
           totals.settlement,
           finalProfit,
@@ -739,6 +747,8 @@ export function Reports({
     ["Consultation Revenue", totals.consultationRevenue],
     ["Lab Revenue", totals.labRevenue],
     ["Pharmacy Revenue", totals.pharmacyRevenue],
+    ["Membership Purchases", totals.membershipPurchases],
+    ["Membership Discounts Used", totals.membershipDiscount],
     ["Balance", totals.balance],
     ["Doctor Fee", totals.doctorFee],
     ["Settlement", totals.settlement],
@@ -1124,7 +1134,6 @@ export function Reports({
                 <tr key={row.id}>
                   <td className="px-4 py-4">
                     <b>{row.doctor}</b>
-                    <p className="text-xs text-slate-500">{row.id}</p>
                   </td>
                   <td>{row.consultations}</td>
                   <td>{row.invoices}</td>
@@ -1245,7 +1254,7 @@ export function Reports({
           <Badge tone="green">{filteredInvoices.length} paid invoices</Badge>
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1420px] text-left text-sm">
+          <table className="w-full min-w-[1520px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Invoice</th>
@@ -1256,6 +1265,7 @@ export function Reports({
                 <th>Total</th>
                 <th>Paid</th>
                 <th>Balance</th>
+                <th>Membership</th>
                 <th>Doctor Fee</th>
                 <th>Settlement</th>
                 <th>Clinic Profit</th>
@@ -1264,7 +1274,7 @@ export function Reports({
             <tbody className="divide-y">
               {filteredInvoices.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-4 text-slate-500">
+                  <td colSpan={12} className="px-4 py-4 text-slate-500">
                     No paid invoices match this filter.
                   </td>
                 </tr>
@@ -1286,18 +1296,18 @@ export function Reports({
                     </td>
                     <td>{invoiceTypeLabel(invoiceType(invoice))}</td>
                     <td>
-                      <b>{patient?.name || patient?.full_name || invoice.patient_name || invoice.patient_id || "-"}</b>
-                      <p className="text-xs text-slate-500">{invoice.patient_id || ""}</p>
+                      <b>{patient?.name || patient?.full_name || invoice.patient_name || publicDisplayValue(invoice.patient_id)}</b>
                     </td>
                     <td>{doctorName}</td>
                     <td>
                       <Badge tone={invoice.status === "paid" ? "green" : invoice.status === "partially_paid" ? "amber" : "slate"}>
-                        {invoice.status}
+                        {humanizeOptionLabel(invoice.status)}
                       </Badge>
                     </td>
                     <td>{money(invoice.total_amount)}</td>
                     <td>{money(paid)}</td>
                     <td>{money(invoice.balance_amount)}</td>
+                    <td>{money(invoice.membership_discount_amount)}</td>
                     <td>{money(invoice.doctor_share_amount)}</td>
                     <td>{money(settlement)}</td>
                     <td className="font-bold">{money(Math.max(paid - settlement, 0))}</td>

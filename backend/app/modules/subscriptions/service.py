@@ -45,6 +45,7 @@ DEFAULT_PLANS = [
                 "consultations",
                 "billing_basic",
                 "billing_advanced",
+                "patient_subscriptions",
             ]
         ),
     },
