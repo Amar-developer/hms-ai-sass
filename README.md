@@ -105,3 +105,36 @@ docker compose down -v
 
 # 8. Migration cmd
 docker compose -f docker-compose.dev.yml exec backend alembic -c alembic/alembic.ini upgrade head
+
+
+
+# Docker setup system requirements
+1. Install docker from browsers in windows
+
+2. wsl --install ---> install wsl in windows
+
+3. clone our woriking github repository
+
+4. check postgreSQL db and seed data
+
+5. wsl --install -d Ubuntu ---> install ubuntu in windows
+
+6. Open Ubuntu
+wsl -d Ubuntu ---> use this command 
+First time setup:
+create Linux username
+create password
+
+Open working repository in vs code via Ubuntu
+
+7. wsl --version ---> to check wsl installed or not and its version
+
+8. wsl -l -v   ---> List installed distros
+
+9. wsl --shutdown ---> Shutdown WSL
+
+10. wsl --terminate Ubuntu ---> Stop One Distro
+
+
+
+
