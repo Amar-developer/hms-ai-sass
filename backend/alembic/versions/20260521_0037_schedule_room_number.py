@@ -13,12 +13,22 @@ branch_labels = None
 depends_on = None
 
 
+def _tables() -> set[str]:
+    return set(sa.inspect(op.get_bind()).get_table_names())
+
+
+def _columns(table_name: str) -> set[str]:
+    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+
+
 def upgrade() -> None:
-    op.add_column(
-        "practitionerschedule",
-        sa.Column("room_number", sa.String(length=10), nullable=True),
-    )
+    if "practitionerschedule" in _tables() and "room_number" not in _columns("practitionerschedule"):
+        op.add_column(
+            "practitionerschedule",
+            sa.Column("room_number", sa.String(length=10), nullable=True),
+        )
 
 
 def downgrade() -> None:
-    op.drop_column("practitionerschedule", "room_number")
+    if "practitionerschedule" in _tables() and "room_number" in _columns("practitionerschedule"):
+        op.drop_column("practitionerschedule", "room_number")

@@ -18,6 +18,7 @@ from app.modules.billing.models import (
     TaxRule,
 )
 from app.modules.settings.models import SettingKey
+from app.modules.settings.numbering import next_document_number
 from app.modules.settings.service import resolve_setting
 from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
 
@@ -30,10 +31,8 @@ class FeeCalculation:
     clinic_share_amount: int
 
 
-def next_invoice_number(session: Session, tenant_id: str, prefix: str | None = None) -> str:
-    count = session.exec(select(func.count()).select_from(Invoice).where(Invoice.tenant_id == tenant_id)).one()
-    invoice_prefix = prefix or "INV"
-    return f"{invoice_prefix}-{count + 1:06d}"
+def next_invoice_number(session: Session, tenant_id: str, prefix: str | None = None, branch_id: str | None = None) -> str:
+    return next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="invoice", prefix_override=prefix)
 
 
 def next_credit_note_number(session: Session, tenant_id: str) -> str:
@@ -181,6 +180,8 @@ def calculate_offer_discount(
         return 0, None
     if valid_until and valid_until < now:
         return 0, None
+    if subtotal < offer.minimum_bill_amount:
+        return 0, None
     if offer.discount_type == DiscountType.FIXED:
         discount = offer.value
     else:
@@ -274,7 +275,7 @@ def create_consultation_invoice(
         patient_id=appointment.patient_id,
         appointment_id=appointment.id,
         consultation_id=consultation_id,
-        invoice_number=next_invoice_number(session, appointment.tenant_id, str(invoice_prefix or "INV")),
+        invoice_number=next_invoice_number(session, appointment.tenant_id, str(invoice_prefix or "INV"), appointment.branch_id),
         subtotal_amount=subtotal,
         discount_amount=discount,
         membership_discount_amount=membership_discount,
@@ -314,129 +315,7 @@ def create_consultation_invoice(
     return invoice, item
 
 
-def _consultation_invoice_extra_items(session: Session, invoice: Invoice) -> list[InvoiceItem]:
-    if not invoice.consultation_id:
-        return []
-    from app.modules.lab.models import LabOrder, LabOrderStatus
-    from app.modules.pharmacy.models import PharmacyIssue, PharmacyIssueItem, PharmacyIssueStatus
-
-    items: list[InvoiceItem] = []
-    lab_orders = session.exec(
-        select(LabOrder).where(
-            LabOrder.tenant_id == invoice.tenant_id,
-            LabOrder.consultation_id == invoice.consultation_id,
-            LabOrder.status != LabOrderStatus.CANCELLED,
-        )
-    ).all()
-    for order in lab_orders:
-        amount = int(order.amount or 0)
-        if amount <= 0:
-            continue
-        items.append(
-            InvoiceItem(
-                tenant_id=invoice.tenant_id,
-                invoice_id=invoice.id,
-                item_type="lab",
-                description=f"Lab order {order.id}: {order.tests}",
-                quantity=1,
-                unit_amount=amount,
-                total_amount=amount,
-            )
-        )
-
-    pharmacy_issues = session.exec(
-        select(PharmacyIssue).where(
-            PharmacyIssue.tenant_id == invoice.tenant_id,
-            PharmacyIssue.consultation_id == invoice.consultation_id,
-            PharmacyIssue.status != PharmacyIssueStatus.CANCELLED,
-        )
-    ).all()
-    for issue in pharmacy_issues:
-        issue_items = session.exec(
-            select(PharmacyIssueItem).where(
-                PharmacyIssueItem.tenant_id == invoice.tenant_id,
-                PharmacyIssueItem.pharmacy_issue_id == issue.id,
-            )
-        ).all()
-        if issue_items:
-            for row in issue_items:
-                amount = int(row.quantity or 0) * int(row.unit_price or 0)
-                if amount <= 0:
-                    continue
-                items.append(
-                    InvoiceItem(
-                        tenant_id=invoice.tenant_id,
-                        invoice_id=invoice.id,
-                        item_type="pharmacy",
-                        description=f"Medicine {row.medicine_name}",
-                        quantity=row.quantity,
-                        unit_amount=row.unit_price,
-                        total_amount=amount,
-                    )
-                )
-        elif issue.amount > 0:
-            items.append(
-                InvoiceItem(
-                    tenant_id=invoice.tenant_id,
-                    invoice_id=invoice.id,
-                    item_type="pharmacy",
-                    description=f"Pharmacy issue {issue.id}: {issue.medicine_text}",
-                    quantity=1,
-                    unit_amount=issue.amount,
-                    total_amount=issue.amount,
-                )
-            )
-        if issue.billing_invoice_id != invoice.id:
-            issue.billing_invoice_id = invoice.id
-            session.add(issue)
-    return items
-
-
 def refresh_consultation_invoice(session: Session, invoice: Invoice) -> Invoice:
-    existing_extra_items = session.exec(
-        select(InvoiceItem).where(
-            InvoiceItem.tenant_id == invoice.tenant_id,
-            InvoiceItem.invoice_id == invoice.id,
-            InvoiceItem.item_type.in_(("lab", "pharmacy")),
-        )
-    ).all()
-    for item in existing_extra_items:
-        session.delete(item)
-
-    extra_items = _consultation_invoice_extra_items(session, invoice)
-    for item in extra_items:
-        session.add(item)
-    session.commit()
-
-    items = session.exec(
-        select(InvoiceItem).where(
-            InvoiceItem.tenant_id == invoice.tenant_id,
-            InvoiceItem.invoice_id == invoice.id,
-        )
-    ).all()
-    subtotal = sum(item.total_amount for item in items)
-    discount = min(invoice.discount_amount, subtotal)
-    taxable = subtotal - discount
-    service_scope = "consultation"
-    tax_rule = find_tax_rule(
-        session,
-        tenant_id=invoice.tenant_id,
-        branch_id=invoice.branch_id,
-        service_scope=service_scope,
-        tax_rule_id=invoice.tax_rule_id,
-    )
-    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
-    total = taxable + tax_amount
-
-    invoice.subtotal_amount = subtotal
-    invoice.discount_amount = discount
-    invoice.taxable_amount = taxable
-    invoice.tax_amount = tax_amount
-    invoice.total_amount = total
-    invoice.clinic_share_amount = max(total - invoice.doctor_share_amount, 0)
-    session.add(invoice)
-    session.commit()
-    session.refresh(invoice)
     return update_invoice_payment_status(session, invoice)
 
 

@@ -13,10 +13,12 @@
 | Billing & Invoice | Revenue capture | Consultation billing, lab/pharmacy/procedure invoice, UPI/payment links |
 | Payment Collection | Payment workflow | Cash, credit card, debit card, UPI, GPay, Paytm, partial payments, refunds |
 | Doctor Fee & Settlement | Doctor revenue model | Fixed fee, percentage split, visit-type fee, monthly settlement |
+| Patient Memberships | Patient subscription benefits | Membership plans, enrollments, free consultations, lab/pharmacy discounts, benefit preview, invoice benefit application |
 | Lab & Diagnostics | Test workflow | Orders, sample collection, results, reports, doctor visibility |
 | Pharmacy | Medicine workflow | Prescription issue, medicine inventory, substitutes, stock alerts |
 | IP Admission | Hospital inpatient flow | Admission, Aadhaar capture, admission proof upload, bed, ward, treatment, discharge, package billing |
 | Physiotherapy | OP/IP rehabilitation | Assessment, pain score, consent multi-file upload, electrotherapy equipment, IFT, ultrasound, TENS, laser, SWD, CPM, muscle stimulation, rehab exercises, home program, session packages, progress tracking, tax/discount-aware invoice generation, payment capture, and receipt access |
+| File Registry | Document lifecycle | Tenant-scoped upload registry, linked owner entity, metadata sync, rename, archive |
 | Reports & Analytics | Business intelligence | Revenue, doctor utilization, branch performance, patient volume |
 | Staff & Roles | Access control | Roles, permissions, shifts, staff audit |
 | Subscription | SaaS billing | Plans, patient limits, module limits, add-ons, invoices |
@@ -152,6 +154,8 @@ Admin settings should include:
 - WhatsApp/SMS/voice templates.
 - Payment methods.
 - Invoice numbering.
+- Document numbering rules for patients, invoices, IP admissions, physiotherapy cases, lab orders, pharmacy issues, practitioners, users, and suppliers.
+- Invoice logo and patient photo/document uploads.
 - Data access policy.
 - Audit retention.
 - Subscription plan and add-ons.

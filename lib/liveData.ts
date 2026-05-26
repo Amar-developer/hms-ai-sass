@@ -79,6 +79,8 @@ export function mapAppointment(
     queueStatus: q?.status || row.status,
     fee: 0,
     visitPurpose: row.visit_purpose,
+    intakeVitals: row.intake_vitals || '',
+    intakeComplaints: row.intake_complaints || '',
     isBillable: row.is_billable,
     visitType: row.appointment_type?.replaceAll?.('_', ' ')?.toUpperCase?.() || 'OP',
     roomNumber,

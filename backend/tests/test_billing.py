@@ -327,6 +327,35 @@ def test_discount_offer_applies_to_consultation_invoice_before_tax(client: TestC
     assert response.json()["invoice"]["total_amount"] == 990
 
 
+def test_discount_offer_requires_minimum_bill_amount(client: TestClient):
+    data = setup_signed_consultation(client, "op")
+    tenant_id = data["tenant"]["id"]
+    create_fee_rule(client, tenant_id, "op", 600, doctor_share_percentage=60)
+    offer = client.post(
+        "/api/v1/billing/discount-offers",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": "Consultation 10 above 700",
+            "code": "CONSULT10",
+            "service_scope": "consultation",
+            "discount_type": "percentage",
+            "value": 10,
+            "minimum_bill_amount": 700,
+        },
+    ).json()
+
+    response = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"consultation_id": data["consultation"]["id"], "discount_offer_id": offer["id"]},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["invoice"]["discount_offer_id"] is None
+    assert response.json()["invoice"]["discount_amount"] == 0
+    assert response.json()["invoice"]["total_amount"] == 600
+
+
 def test_tax_can_be_shared_with_doctor_when_fee_rule_allows_it(client: TestClient):
     data = setup_signed_consultation(client, "op")
     tenant_id = data["tenant"]["id"]

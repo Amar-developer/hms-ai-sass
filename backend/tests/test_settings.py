@@ -1,3 +1,13 @@
+from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel.pool import StaticPool
+
+from app.main import create_app
+from app.modules.settings.models import SettingKey, SettingScope
+from app.modules.settings.numbering import next_document_number
+from app.modules.settings.service import upsert_setting
+from app.modules.tenants.models import Branch, Tenant
+
+
 def create_tenant_and_branch(client):
     tenant = client.post("/api/v1/tenants", json={"name": "Settings Clinic"}).json()
     branch = client.post(
@@ -129,6 +139,66 @@ def test_invalid_branch_scope_is_rejected(client):
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid branch scope"
+
+
+def test_default_document_numbering_keeps_legacy_formats():
+    create_app()
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SQLModel.metadata.create_all(engine)
+
+    with Session(engine) as session:
+        tenant = Tenant(name="Numbering Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        branch = Branch(tenant_id=tenant.id, name="Main Branch", code="MAIN")
+        session.add(branch)
+        session.commit()
+        session.refresh(branch)
+
+        upsert_setting(
+            session,
+            tenant_id=tenant.id,
+            scope=SettingScope.BRANCH,
+            scope_id=branch.id,
+            module="invoice",
+            key=SettingKey.INVOICE_PREFIX,
+            value="MZH",
+        )
+        patient_number = next_document_number(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            entity="patient",
+        )
+        invoice_number = next_document_number(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            entity="invoice",
+        )
+        admission_number = next_document_number(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            entity="ip_admission",
+        )
+        case_number = next_document_number(
+            session,
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            entity="physiotherapy_case",
+        )
+
+        assert patient_number == "PAT-000001"
+        assert invoice_number == "MZH-000001"
+        assert admission_number == "IP-000001"
+        assert case_number == "PHY-000001"
 
 
 def test_settings_bundle_returns_operational_defaults_and_overrides(client):

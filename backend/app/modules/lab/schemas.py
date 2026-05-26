@@ -196,6 +196,7 @@ class LabOrderRead(BaseModel):
     branch_id: str
     patient_id: str
     consultation_id: str | None
+    lab_order_number: str | None = None
     source: LabOrderSource
     status: LabOrderStatus
     priority: LabOrderPriority

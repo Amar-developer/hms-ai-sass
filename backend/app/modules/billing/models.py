@@ -172,6 +172,7 @@ class DiscountOffer(SQLModel, table=True):
     service_scope: str = Field(default="all", index=True, max_length=40)
     discount_type: DiscountType = Field(default=DiscountType.PERCENTAGE, index=True)
     value: int = Field(ge=0)
+    minimum_bill_amount: int = Field(default=0, ge=0)
     max_discount_amount: int | None = Field(default=None, ge=0)
     valid_from: datetime | None = Field(default=None, index=True)
     valid_until: datetime | None = Field(default=None, index=True)

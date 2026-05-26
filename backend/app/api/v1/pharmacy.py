@@ -51,30 +51,11 @@ from app.modules.pharmacy.schemas import (
     SupplierRead,
     SupplierUpdate,
 )
+from app.modules.settings.numbering import next_document_number
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, now_utc
 
 router = APIRouter(prefix="/pharmacy")
-
-
-def _refresh_consultation_invoice_if_exists(session: Session, tenant_id: str, consultation_id: str | None) -> None:
-    if not consultation_id:
-        return
-    from app.modules.billing.models import Invoice
-    from app.modules.billing.service import refresh_consultation_invoice
-
-    invoice = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id,
-            Invoice.consultation_id == consultation_id,
-            Invoice.lab_order_id.is_(None),
-            Invoice.pharmacy_issue_id.is_(None),
-            Invoice.ip_admission_id.is_(None),
-            Invoice.physiotherapy_case_id.is_(None),
-        )
-    ).first()
-    if invoice:
-        refresh_consultation_invoice(session, invoice)
 
 
 def _catalog_key(value: str | None) -> str:
@@ -332,7 +313,13 @@ def create_supplier(
     session: Session = Depends(get_session),
     _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> PharmacySupplier:
-    supplier = PharmacySupplier.model_validate(payload, update={"tenant_id": tenant_id})
+    supplier = PharmacySupplier.model_validate(
+        payload,
+        update={
+            "tenant_id": tenant_id,
+            "supplier_number": next_document_number(session, tenant_id=tenant_id, entity="supplier"),
+        },
+    )
     session.add(supplier)
     session.commit()
     session.refresh(supplier)
@@ -597,7 +584,13 @@ def create_pharmacy_issue(
         consultation = session.get(Consultation, payload.consultation_id)
         if not consultation or consultation.tenant_id != tenant_id or consultation.patient_id != payload.patient_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid consultation")
-    issue = PharmacyIssue.model_validate(payload, update={"tenant_id": tenant_id})
+    issue = PharmacyIssue.model_validate(
+        payload,
+        update={
+            "tenant_id": tenant_id,
+            "issue_number": next_document_number(session, tenant_id=tenant_id, branch_id=payload.branch_id, entity="pharmacy_issue"),
+        },
+    )
     session.add(issue)
     session.commit()
     session.refresh(issue)
@@ -615,7 +608,6 @@ def create_pharmacy_issue(
         resource_id=issue.id,
         purpose="pharmacy",
     )
-    _refresh_consultation_invoice_if_exists(session, tenant_id, issue.consultation_id)
     return issue
 
 
@@ -648,6 +640,7 @@ def create_pharmacy_issue_from_consultation(
         branch_id=consultation.branch_id,
         patient_id=consultation.patient_id,
         consultation_id=consultation.id,
+        issue_number=next_document_number(session, tenant_id=tenant_id, branch_id=consultation.branch_id, entity="pharmacy_issue"),
         source=PharmacyIssueSource.CONSULTATION,
         medicine_text=consultation.prescription_text,
         amount=payload.amount,
@@ -686,8 +679,22 @@ def create_pharmacy_issue_from_consultation(
         names.append(catalog.name if catalog else medicine_name)
         item = PharmacyIssueItem(tenant_id=tenant_id, branch_id=issue.branch_id, pharmacy_issue_id=issue.id, medicine_id=catalog.id if catalog else None, medicine_name=catalog.name if catalog else medicine_name, quantity=quantity, unit_price=unit_price)
         session.add(item)
-    if names:
-        issue.medicine_text = ", ".join(names)
+    if rows:
+        issue.medicine_text = "\n".join(
+            " | ".join(
+                str(part or "").strip()
+                for part in (
+                    row.get("medicine_name"),
+                    row.get("dosage"),
+                    row.get("frequency"),
+                    row.get("duration"),
+                    row.get("instructions"),
+                )
+                if str(part or "").strip()
+            )
+            for row in rows
+            if str(row.get("medicine_name") or "").strip()
+        ) or ", ".join(names)
     if rows and issue.amount == 0:
         issue.amount = total
         session.add(issue)
@@ -702,7 +709,6 @@ def create_pharmacy_issue_from_consultation(
         resource_id=issue.id,
         purpose="pharmacy",
     )
-    _refresh_consultation_invoice_if_exists(session, tenant_id, consultation.id)
     return issue
 
 
@@ -796,7 +802,6 @@ def update_pharmacy_issue_status(
         resource_id=issue.id,
         purpose="pharmacy",
     )
-    _refresh_consultation_invoice_if_exists(session, tenant_id, issue.consultation_id)
     return issue
 
 

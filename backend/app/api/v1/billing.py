@@ -1,4 +1,6 @@
 from datetime import date, datetime, timezone
+from pathlib import Path
+import zlib
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
@@ -47,6 +49,7 @@ from app.modules.billing.schemas import (
     InvoiceCreateFromPharmacyIssue,
     InvoiceDetailRead,
     InvoiceItemRead,
+    InvoiceMembershipBenefitRead,
     InvoiceRead,
     PaymentCreate,
     PaymentRead,
@@ -72,7 +75,10 @@ from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
+from app.modules.settings.models import SettingKey
+from app.modules.settings.service import resolve_setting
 from app.modules.subscriptions.service import enforce_module_enabled
+from app.modules.tenants.models import Tenant
 
 router = APIRouter(prefix="/billing")
 
@@ -95,18 +101,456 @@ def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
     session.commit()
 
 
-def _simple_pdf(lines: list[str]) -> bytes:
-    text = "\\n".join(lines).replace("(", "[").replace(")", "]")
-    stream = f"BT /F1 12 Tf 50 760 Td ({text}) Tj ET"
-    return (
-        b"%PDF-1.4\n"
-        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
-        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
-        b"3 0 obj << /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >> endobj\n"
-        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
-        + f"5 0 obj << /Length {len(stream)} >> stream\n{stream}\nendstream endobj\n".encode()
-        + b"xref\n0 6\n0000000000 65535 f \ntrailer << /Root 1 0 R /Size 6 >>\nstartxref\n0\n%%EOF"
+def _invoice_membership_service(invoice: Invoice) -> str | None:
+    if invoice.lab_order_id:
+        return "lab"
+    if invoice.pharmacy_issue_id:
+        return "pharmacy"
+    if invoice.consultation_id and not invoice.ip_admission_id and not invoice.physiotherapy_case_id:
+        return "consultation"
+    return None
+
+
+def _invoice_membership_item_ids(session: Session, invoice: Invoice, service_type: str) -> list[str]:
+    if service_type == "lab" and invoice.lab_order_id:
+        from app.modules.lab.models import LabOrderItem
+
+        return [
+            item.test_id
+            for item in session.exec(
+                select(LabOrderItem).where(
+                    LabOrderItem.tenant_id == invoice.tenant_id,
+                    LabOrderItem.lab_order_id == invoice.lab_order_id,
+                )
+            ).all()
+            if item.test_id
+        ]
+    if service_type == "pharmacy" and invoice.pharmacy_issue_id:
+        from app.modules.pharmacy.models import PharmacyIssueItem
+
+        return [
+            item.medicine_id
+            for item in session.exec(
+                select(PharmacyIssueItem).where(
+                    PharmacyIssueItem.tenant_id == invoice.tenant_id,
+                    PharmacyIssueItem.pharmacy_issue_id == invoice.pharmacy_issue_id,
+                )
+            ).all()
+            if item.medicine_id
+        ]
+    return []
+
+
+def _invoice_membership_benefit(session: Session, invoice: Invoice) -> InvoiceMembershipBenefitRead | None:
+    service_type = _invoice_membership_service(invoice)
+    if not service_type:
+        return None
+    applied_amount = int(invoice.membership_discount_amount or 0)
+    if applied_amount > 0:
+        return InvoiceMembershipBenefitRead(
+            has_active_subscription=True,
+            is_applied=True,
+            can_apply=False,
+            service_type=service_type,
+            plan_id=invoice.patient_subscription_plan_id,
+            discount_amount=applied_amount,
+            payable_amount=max(int(invoice.subtotal_amount or 0) - applied_amount, 0),
+            reason="Membership benefit applied",
+        )
+    try:
+        from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
+    except Exception:
+        return None
+    membership = active_patient_enrollment(
+        session,
+        tenant_id=invoice.tenant_id,
+        branch_id=invoice.branch_id,
+        patient_id=invoice.patient_id,
     )
+    if not membership:
+        return InvoiceMembershipBenefitRead(
+            has_active_subscription=False,
+            is_applied=False,
+            can_apply=False,
+            service_type=service_type,
+            discount_amount=0,
+            payable_amount=int(invoice.subtotal_amount or 0),
+            reason="No active patient subscription",
+        )
+    enrollment, plan = membership
+    preview = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type=service_type,
+        item_ids=_invoice_membership_item_ids(session, invoice, service_type),
+        subtotal_amount=int(invoice.subtotal_amount or 0),
+    )
+    discount_amount = int(preview["discount_amount"] or 0)
+    return InvoiceMembershipBenefitRead(
+        has_active_subscription=True,
+        is_applied=False,
+        can_apply=discount_amount > 0 and int(invoice.paid_amount or 0) <= 0,
+        service_type=service_type,
+        plan_id=preview.get("plan_id"),
+        plan_name=preview.get("plan_name"),
+        discount_amount=discount_amount,
+        payable_amount=int(preview.get("payable_amount") or 0),
+        reason=preview.get("reason"),
+    )
+
+
+def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invoice:
+    if int(invoice.membership_discount_amount or 0) > 0:
+        return update_invoice_payment_status(session, invoice)
+    if int(invoice.paid_amount or 0) > 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot apply membership benefit after payment is recorded")
+    service_type = _invoice_membership_service(invoice)
+    if not service_type:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Membership benefit is not available for this invoice type")
+    from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
+
+    membership = active_patient_enrollment(
+        session,
+        tenant_id=invoice.tenant_id,
+        branch_id=invoice.branch_id,
+        patient_id=invoice.patient_id,
+    )
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active patient membership found")
+    enrollment, plan = membership
+    preview = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type=service_type,
+        item_ids=_invoice_membership_item_ids(session, invoice, service_type),
+        subtotal_amount=int(invoice.subtotal_amount or 0),
+    )
+    membership_discount = int(preview["discount_amount"] or 0)
+    if membership_discount <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=preview.get("reason") or "No membership benefit available")
+    offer_discount = max(int(invoice.discount_amount or 0) - int(invoice.membership_discount_amount or 0), 0)
+    discount = min(offer_discount + membership_discount, int(invoice.subtotal_amount or 0))
+    taxable = max(int(invoice.subtotal_amount or 0) - discount, 0)
+    tax_rule = find_tax_rule(
+        session,
+        tenant_id=invoice.tenant_id,
+        branch_id=invoice.branch_id,
+        service_scope=service_type,
+        tax_rule_id=invoice.tax_rule_id,
+    )
+    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    total = taxable + tax_amount
+    invoice.discount_amount = discount
+    invoice.membership_discount_amount = membership_discount
+    invoice.taxable_amount = taxable
+    invoice.tax_amount = tax_amount
+    invoice.total_amount = total
+    invoice.balance_amount = max(total - int(invoice.paid_amount or 0), 0)
+    invoice.clinic_share_amount = max(total - int(invoice.doctor_share_amount or 0), 0)
+    invoice.patient_subscription_enrollment_id = enrollment.id
+    invoice.patient_subscription_plan_id = plan.id
+    if service_type == "consultation":
+        enrollment.used_consultations += 1
+        session.add(enrollment)
+    session.add(invoice)
+    session.commit()
+    session.refresh(invoice)
+    return update_invoice_payment_status(session, invoice)
+
+
+def _pdf_text(value: object) -> str:
+    return (
+        str(value or "")
+        .replace("\\", "\\\\")
+        .replace("(", "\\(")
+        .replace(")", "\\)")
+        .replace("\n", " ")
+        .encode("latin-1", "replace")
+        .decode("latin-1")
+    )
+
+
+def _money_pdf(value: object) -> str:
+    return f"Rs. {int(value or 0):,}"
+
+
+def _percent_pdf(amount: int, base: int) -> str:
+    if amount <= 0 or base <= 0:
+        return "0%"
+    percent = amount * 100 / base
+    return f"{percent:.1f}".rstrip("0").rstrip(".") + "%"
+
+
+def _jpeg_size(data: bytes) -> tuple[int, int] | None:
+    index = 2
+    while index + 9 < len(data):
+        if data[index] != 0xFF:
+            index += 1
+            continue
+        marker = data[index + 1]
+        block_length = int.from_bytes(data[index + 2 : index + 4], "big")
+        if marker in {0xC0, 0xC1, 0xC2} and index + 8 < len(data):
+            height = int.from_bytes(data[index + 5 : index + 7], "big")
+            width = int.from_bytes(data[index + 7 : index + 9], "big")
+            return width, height
+        index += 2 + block_length
+    return None
+
+
+def _png_logo_image(data: bytes) -> dict[str, object] | None:
+    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    offset = 8
+    width = height = color_type = bit_depth = interlace = None
+    compressed = bytearray()
+    while offset + 8 <= len(data):
+        length = int.from_bytes(data[offset : offset + 4], "big")
+        chunk_type = data[offset + 4 : offset + 8]
+        chunk_data = data[offset + 8 : offset + 8 + length]
+        offset += 12 + length
+        if chunk_type == b"IHDR":
+            width = int.from_bytes(chunk_data[0:4], "big")
+            height = int.from_bytes(chunk_data[4:8], "big")
+            bit_depth = chunk_data[8]
+            color_type = chunk_data[9]
+            interlace = chunk_data[12]
+        elif chunk_type == b"IDAT":
+            compressed.extend(chunk_data)
+        elif chunk_type == b"IEND":
+            break
+    if not width or not height or bit_depth != 8 or color_type not in {2, 6} or interlace != 0:
+        return None
+    channels = 4 if color_type == 6 else 3
+    stride = width * channels
+    try:
+        raw = zlib.decompress(bytes(compressed))
+    except zlib.error:
+        return None
+    previous = [0] * stride
+    rows: list[bytes] = []
+    index = 0
+    for _row in range(height):
+        if index >= len(raw):
+            return None
+        filter_type = raw[index]
+        index += 1
+        scan = list(raw[index : index + stride])
+        index += stride
+        for i, value in enumerate(scan):
+            left = scan[i - channels] if i >= channels else 0
+            up = previous[i]
+            up_left = previous[i - channels] if i >= channels else 0
+            if filter_type == 1:
+                scan[i] = (value + left) & 0xFF
+            elif filter_type == 2:
+                scan[i] = (value + up) & 0xFF
+            elif filter_type == 3:
+                scan[i] = (value + ((left + up) // 2)) & 0xFF
+            elif filter_type == 4:
+                p = left + up - up_left
+                pa, pb, pc = abs(p - left), abs(p - up), abs(p - up_left)
+                predictor = left if pa <= pb and pa <= pc else up if pb <= pc else up_left
+                scan[i] = (value + predictor) & 0xFF
+            elif filter_type != 0:
+                return None
+        previous = scan
+        if channels == 4:
+            composited = bytearray()
+            for pixel in range(0, len(scan), 4):
+                alpha = scan[pixel + 3]
+                for channel in scan[pixel : pixel + 3]:
+                    composited.append((channel * alpha + 255 * (255 - alpha)) // 255)
+            rows.append(bytes(composited))
+        else:
+            rows.append(bytes(scan))
+    image_data = zlib.compress(b"".join(rows))
+    return {"data": image_data, "width": width, "height": height, "filter": "FlateDecode"}
+
+
+def _local_logo_image(logo_url: str | None) -> dict[str, object] | None:
+    if not logo_url:
+        return None
+    path: Path | None = None
+    if logo_url.startswith("/uploads/"):
+        path = Path("uploads") / Path(logo_url).name
+    elif logo_url.startswith("uploads/"):
+        path = Path(logo_url)
+    if not path or not path.exists():
+        return None
+    data = path.read_bytes()
+    if path.suffix.lower() in {".jpg", ".jpeg"}:
+        size = _jpeg_size(data)
+        if not size:
+            return None
+        return {"data": data, "width": size[0], "height": size[1], "filter": "DCTDecode"}
+    if path.suffix.lower() == ".png":
+        return _png_logo_image(data)
+    return None
+
+
+def _build_receipt_pdf(
+    *,
+    tenant: Tenant | None,
+    patient: Patient | None,
+    invoice: Invoice,
+    items: list[InvoiceItem],
+    payments: list[Payment],
+    logo_url: str | None,
+) -> bytes:
+    width, height = 595, 842
+    ops: list[str] = []
+    logo = _local_logo_image((tenant.logo_url if tenant else "") or logo_url)
+
+    def color(stroke="0.86 0.90 0.95", fill: str | None = None) -> None:
+        ops.append(f"{stroke} RG")
+        if fill:
+            ops.append(f"{fill} rg")
+
+    def rect(x: int, y: int, w: int, h: int, fill: bool = False) -> None:
+        ops.append(f"{x} {y} {w} {h} re {'B' if fill else 'S'}")
+
+    def line(x1: int, y1: int, x2: int, y2: int, stroke: str = "0.20 0.20 0.20") -> None:
+        ops.append(f"{stroke} RG {x1} {y1} m {x2} {y2} l S")
+
+    def text(
+        x: int,
+        y: int,
+        value: object,
+        size: int = 10,
+        bold: bool = False,
+        align: str = "left",
+        fill: str = "0.02 0.03 0.08",
+    ) -> None:
+        value = _pdf_text(value)
+        if align == "right":
+            x -= int(len(value) * size * 0.48)
+        font = "F2" if bold else "F1"
+        ops.append(f"{fill} rg BT /{font} {size} Tf 1 0 0 1 {x} {y} Tm ({value}) Tj ET")
+
+    def wrap_text(value: object, max_chars: int) -> list[str]:
+        words = str(value or "").split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            next_value = f"{current} {word}".strip()
+            if len(next_value) > max_chars and current:
+                lines.append(current)
+                current = word
+            else:
+                current = next_value
+        if current:
+            lines.append(current)
+        return lines or [""]
+
+    tenant_name = tenant.name if tenant else "MedizinHub"
+    patient_name = getattr(patient, "full_name", None) or getattr(patient, "name", None) or "Patient"
+    color(stroke="1 1 1", fill="1 1 1")
+    rect(0, 0, width, height, True)
+    if logo:
+        image_w = 92
+        image_h = max(34, int(image_w * int(logo["height"]) / int(logo["width"])))
+        ops.append(f"q {image_w} 0 0 {image_h} 45 704 cm /Logo Do Q")
+    else:
+        text(45, 742, tenant_name, 22, True, fill="0.00 0.48 0.62")
+    text(535, 742, "Invoice", 21, True, "right", fill="0.80 0.00 0.00")
+    text(45, 665, "Order Status:", 11)
+    text(122, 665, "Completed", 11, True, fill="0.00 0.50 0.00")
+    text(535, 665, f"INVOICE #{invoice.invoice_number}", 11, False, "right")
+    text(535, 638, f"ORDER #{invoice.invoice_number}", 11, False, "right")
+    text(535, 611, invoice.created_at.strftime("%B %d %Y"), 11, False, "right")
+
+    y = 535
+    headers = [("Product Name", 45), ("SKU", 255), ("Price", 352), ("Qty Invoiced", 430), ("Subtotal", 535)]
+    for label, x in headers:
+        text(x, y, label, 10, False, "right" if label == "Subtotal" else "left", fill="0.32 0.32 0.36")
+    line(45, y - 16, 535, y - 16)
+
+    y -= 42
+    for item in items[:8]:
+        for offset, line_value in enumerate(wrap_text(item.description, 28)[:2]):
+            text(45, y - offset * 13, line_value, 11)
+        text(255, y, item.item_type.replace("_", " ").title(), 9)
+        text(352, y, _money_pdf(item.unit_amount), 10)
+        text(430, y, item.quantity, 10)
+        text(535, y, _money_pdf(item.total_amount), 10, False, "right")
+        y -= 30
+
+    if len(items) > 8:
+        text(45, y, f"+ {len(items) - 8} more item(s)", 10, True)
+        y -= 26
+
+    line(45, y + 8, 535, y + 8)
+    subtotal = int(invoice.subtotal_amount or 0)
+    membership = int(invoice.membership_discount_amount or 0)
+    offer = max(int(invoice.discount_amount or 0) - membership, 0)
+    tax = int(invoice.tax_amount or 0)
+    summary_rows = [("Subtotal", _money_pdf(subtotal), False)]
+    if offer > 0:
+        summary_rows.append((f"Offer Discount ({_percent_pdf(offer, subtotal)})", f"-{_money_pdf(offer)}", False))
+    if membership > 0:
+        summary_rows.append((f"Membership Benefit ({_percent_pdf(membership, subtotal)})", f"-{_money_pdf(membership)}", False))
+    summary_rows.extend(
+        [
+            ("Tax", _money_pdf(tax), False),
+            ("Grand Total (Incl.Tax)", _money_pdf(invoice.total_amount), True),
+            ("Paid Amount", _money_pdf(invoice.paid_amount), False),
+            ("Balance Due", _money_pdf(invoice.balance_amount), True),
+        ]
+    )
+    y -= 18
+    for label, value, note in summary_rows:
+        text(455, y, label, 10, bool(note), "right")
+        text(535, y, value, 10, bool(note), "right")
+        y -= 28
+
+    method = payments[-1].method.value.replace("_", " ").title() if payments else "-"
+    detail_y = max(155, y - 44)
+    text(45, detail_y, "Billing Details :", 13, True)
+    text(45, detail_y - 28, patient_name, 11)
+    if patient and patient.mobile:
+        text(45, detail_y - 56, f"Phone : {patient.mobile}", 10)
+    text(340, detail_y, "Payment Method:", 13, True)
+    text(340, detail_y - 28, method, 11)
+    text(45, 55, "Have a nice day...", 10)
+
+    content = "\n".join(ops).encode("latin-1", "replace")
+    objects: list[bytes] = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    ]
+    resources = b"/Font << /F1 4 0 R /F2 5 0 R >>"
+    image_object_id = None
+    if logo:
+        image_object_id = 6
+        resources += b" /XObject << /Logo 6 0 R >>"
+    objects.append(
+        f"<< /Type /Page /Parent 2 0 R /Resources << {resources.decode()} >> /MediaBox [0 0 {width} {height}] /Contents {'7' if logo else '6'} 0 R >>".encode()
+    )
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>")
+    if logo and image_object_id:
+        logo_data = bytes(logo["data"])
+        logo_filter = str(logo.get("filter") or "DCTDecode")
+        objects.append(
+            f"<< /Type /XObject /Subtype /Image /Width {logo['width']} /Height {logo['height']} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /{logo_filter} /Length {len(logo_data)} >>\nstream\n".encode()
+            + logo_data
+            + b"\nendstream"
+        )
+    objects.append(f"<< /Length {len(content)} >>\nstream\n".encode() + content + b"\nendstream")
+
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode())
+        pdf.extend(obj)
+        pdf.extend(b"\nendobj\n")
+    startxref = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode())
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode())
+    pdf.extend(f"trailer << /Root 1 0 R /Size {len(objects) + 1} >>\nstartxref\n{startxref}\n%%EOF".encode())
+    return bytes(pdf)
 
 
 def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
@@ -128,6 +572,7 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
         invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
         items=[InvoiceItemRead.model_validate(item, from_attributes=True) for item in items],
         payments=[PaymentRead.model_validate(payment, from_attributes=True) for payment in payments],
+        membership_benefit=_invoice_membership_benefit(session, invoice),
     )
 
 
@@ -209,7 +654,7 @@ def _create_service_invoice(
         consultation_id=consultation_id,
         lab_order_id=lab_order_id,
         pharmacy_issue_id=pharmacy_issue_id,
-        invoice_number=next_invoice_number(session, tenant_id),
+        invoice_number=next_invoice_number(session, tenant_id, branch_id=branch_id),
         subtotal_amount=amount,
         discount_amount=discount_amount,
         membership_discount_amount=membership_discount,
@@ -835,6 +1280,32 @@ def get_invoice(
     return _read_invoice_detail(session, invoice)
 
 
+@router.post("/invoices/{invoice_id}/membership-benefit/apply", response_model=InvoiceDetailRead)
+def apply_invoice_membership_benefit(
+    invoice_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    invoice = session.get(Invoice, invoice_id)
+    if not invoice or invoice.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+    require_user_branch_access(current_user, invoice.branch_id)
+    invoice = _apply_invoice_membership_benefit(session, invoice)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        actor_user_id=current_user.id,
+        action="invoice.membership_benefit_applied",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        purpose="billing",
+    )
+    return _read_invoice_detail(session, invoice)
+
+
 @router.get("/invoices/{invoice_id}/receipt.pdf")
 def invoice_receipt_pdf(
     invoice_id: str,
@@ -846,18 +1317,42 @@ def invoice_receipt_pdf(
     if not invoice or invoice.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
     require_user_branch_access(current_user, invoice.branch_id)
-    pdf = _simple_pdf(
-        [
-            "MedizinHub HMS Receipt",
-            f"Invoice: {invoice.invoice_number}",
-            f"Subtotal: {invoice.subtotal_amount}",
-            f"Discount: {invoice.discount_amount}",
-            f"Total: {invoice.total_amount}",
-            f"Paid: {invoice.paid_amount}",
-            f"Balance: {invoice.balance_amount}",
-        ]
+    tenant = session.get(Tenant, tenant_id)
+    patient = session.get(Patient, invoice.patient_id)
+    items = list(
+        session.exec(
+            select(InvoiceItem)
+            .where(InvoiceItem.tenant_id == invoice.tenant_id, InvoiceItem.invoice_id == invoice.id)
+            .order_by(InvoiceItem.created_at)
+        ).all()
     )
-    return Response(content=pdf, media_type="application/pdf")
+    payments = list(
+        session.exec(
+            select(Payment)
+            .where(Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id)
+            .order_by(Payment.collected_at)
+        ).all()
+    )
+    logo_url, _scope, _scope_id = resolve_setting(
+        session,
+        tenant_id=tenant_id,
+        module="invoice",
+        key=SettingKey.INVOICE_LOGO_URL,
+        branch_id=invoice.branch_id,
+    )
+    pdf = _build_receipt_pdf(
+        tenant=tenant,
+        patient=patient,
+        invoice=invoice,
+        items=items,
+        payments=payments,
+        logo_url=str(logo_url or ""),
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{invoice.invoice_number}-receipt.pdf"'},
+    )
 
 
 @router.post("/invoices/{invoice_id}/credit-notes", response_model=CreditNoteRead, status_code=status.HTTP_201_CREATED)

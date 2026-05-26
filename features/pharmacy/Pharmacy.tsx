@@ -176,7 +176,7 @@ export function Pharmacy({apiSession,branchId,patients,appointments,loadLiveData
 
  if(!apiSession)return <Card><h3 className="text-lg font-bold">Electronic Prescriptions</h3><p className="mt-2 text-sm text-slate-500">Backend login is required to view pharmacy data.</p></Card>;
  return <div className="space-y-6">
-  {selectedIssue&&<MedicineDetailModal id={selectedIssue.id} patient={(patientMap.get(selectedIssue.patient_id) as any)?.name||publicDisplayValue(selectedIssue.patient_id,'Patient')} createdAt={selectedIssue.created_at} medicineText={selectedIssue.medicine_text} onClose={()=>setSelectedIssue(null)}/>}
+  {selectedIssue&&<MedicineDetailModal issue={selectedIssue} apiSession={apiSession} patient={(patientMap.get(selectedIssue.patient_id) as any)?.name||publicDisplayValue(selectedIssue.patient_id,'Patient')} onClose={()=>setSelectedIssue(null)}/>}
   {viewConsult&&<ConsultPrescriptionModal a={viewConsult} detail={consultDetail} loading={loadingDetail} busy={busy} onClose={()=>setViewConsult(null)} onCreate={(a:any)=>{setViewConsult(null);createFromConsultation(a);}}/>}
   {message&&<div className="rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
   <Card><h3 className="text-lg font-bold">Create Pharmacy Issue</h3><form onSubmit={createDirect} className="mt-4 grid gap-3 md:grid-cols-4"><Field label="Patient"><Select value={patientId} onChange={(e:any)=>setPatientId(e.target.value)}>{patients.map((p:any)=><option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field><Field label="Source"><Select value={source} onChange={(e:any)=>setSource(e.target.value)}><option value="op_direct">OP Direct</option><option value="external_prescription">External Prescription</option></Select></Field><Field label="Medicine"><Select value={medicineId} onChange={(e:any)=>setMedicineId(e.target.value)}>{medicines.map((m:any)=><option key={m.id} value={m.id}>{m.name}</option>)}</Select></Field><Field label="Batch"><Select value={batchId} onChange={(e:any)=>setBatchId(e.target.value)}><option value="">Auto</option>{batches.filter((b:any)=>b.medicine_id===medicineId).map((b:any)=><option key={b.id} value={b.id}>{b.batch_number} · Qty {b.quantity_on_hand}</option>)}</Select></Field><Field label="Qty"><Input type="number" value={quantity} onChange={(e:any)=>setQuantity(e.target.value)}/></Field><div className="md:col-span-2"><Field label="External Prescriber"><Input value={externalPrescriber} onChange={(e:any)=>setExternalPrescriber(e.target.value)} disabled={source!=='external_prescription'}/></Field></div><div className="flex items-end gap-2"><ActionButton type="button" onClick={addIssueItem}>Add</ActionButton><Button disabled={busy==='create'}>{busy==='create'?'Saving...':'Create Issue'}</Button></div>{issueItems.length>0&&<div className="md:col-span-4 flex flex-wrap gap-2">{issueItems.map((item:any,index:number)=><button key={`${item.medicine_id}-${index}`} type="button" onClick={()=>removeIssueItem(index)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">{item.medicine_name} x {item.quantity} · ₹{item.quantity*item.unit_price} ×</button>)}</div>}</form></Card>
@@ -204,9 +204,31 @@ function parseMedicines(text:string){
  });
 }
 
-function MedicineDetailModal({id,patient,createdAt,medicineText,onClose}:any){
- const medicines=parseMedicines(medicineText);
- return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-3xl"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">Medicine List</h3><p className="mt-1 text-sm text-slate-500">{patient}</p><p className="text-xs text-slate-500">{createdAt?new Date(createdAt).toLocaleString():''}</p></div><ActionButton onClick={onClose}>Close</ActionButton></div>{medicines.length>0?<div className="mt-5 overflow-auto rounded-2xl border"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th className="pr-4">Instructions</th></tr></thead><tbody className="divide-y">{medicines.map((m:any,i:number)=><tr key={i}><td className="px-4 py-3 font-semibold">{m.name}</td><td>{m.dosage||'-'}</td><td>{m.frequency||'-'}</td><td>{m.duration||'-'}</td><td className="pr-4 text-slate-500">{m.instructions||'-'}</td></tr>)}</tbody></table></div>:<p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No medicines found.</p>}</Card></div>
+function MedicineDetailModal({issue,apiSession,patient,onClose}:any){
+ const [consultMedicines,setConsultMedicines]=useState<any[]>([]);
+ const [loading,setLoading]=useState(false);
+ useEffect(()=>{
+  let cancelled=false;
+  async function loadLinkedConsultation(){
+   if(!apiSession||!issue?.consultation_id)return;
+   setLoading(true);
+   try{
+    const detail=await apiFetch(`/consultations/${issue.consultation_id}`,apiSession);
+    if(!cancelled)setConsultMedicines(detail?.medicines||[]);
+   }catch{
+    if(!cancelled)setConsultMedicines([]);
+   }finally{
+    if(!cancelled)setLoading(false);
+   }
+  }
+  loadLinkedConsultation();
+  return()=>{cancelled=true};
+ },[apiSession?.token,issue?.consultation_id]);
+ const parsedMedicines=parseMedicines(issue?.medicine_text);
+ const medicines=consultMedicines.length
+  ? consultMedicines.map((m:any)=>({name:m.medicine_name,dosage:m.dosage,frequency:m.frequency,duration:m.duration,instructions:m.instructions}))
+  : parsedMedicines;
+ return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-3xl"><div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-bold">Medicine List</h3><p className="mt-1 text-sm text-slate-500">{patient}</p><p className="text-xs text-slate-500">{issue?.created_at?new Date(issue.created_at).toLocaleString():''}</p></div><ActionButton onClick={onClose}>Close</ActionButton></div>{loading&&<p className="mt-4 text-sm text-slate-500">Loading prescription details...</p>}{medicines.length>0?<div className="mt-5 overflow-auto rounded-2xl border"><table className="w-full text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Medicine</th><th>Dosage</th><th>Frequency</th><th>Duration</th><th className="pr-4">Instructions</th></tr></thead><tbody className="divide-y">{medicines.map((m:any,i:number)=><tr key={i}><td className="px-4 py-3 font-semibold">{m.name}</td><td>{m.dosage||'-'}</td><td>{m.frequency||'-'}</td><td>{m.duration||'-'}</td><td className="pr-4 text-slate-500">{m.instructions||'-'}</td></tr>)}</tbody></table></div>:<p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No medicines found.</p>}</Card></div>
 }
 
 function ConsultPrescriptionModal({a,detail,loading,busy,onClose,onCreate}:any){

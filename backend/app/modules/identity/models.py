@@ -9,6 +9,7 @@ class User(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("user"), primary_key=True)
     tenant_id: str | None = Field(default=None, index=True, foreign_key="tenant.id")
     branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
+    user_number: str | None = Field(default=None, index=True, max_length=60)
     user_type: str = Field(default="staff", index=True, max_length=60)
     name: str = Field(min_length=2, max_length=160)
     email: str = Field(index=True, max_length=220)

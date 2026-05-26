@@ -5,6 +5,7 @@ from app.api.v1.audit import router as audit_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.consultations import router as consultations_router
 from app.api.v1.health import router as health_router
+from app.api.v1.files import router as files_router
 from app.api.v1.identity import router as identity_router
 from app.api.v1.ip import router as ip_router
 from app.api.v1.lab import router as lab_router
@@ -23,6 +24,7 @@ from app.api.v1.tenants import router as tenants_router
 
 api_router = APIRouter()
 api_router.include_router(health_router, tags=["platform"])
+api_router.include_router(files_router, tags=["files"])
 api_router.include_router(modules_router, tags=["platform"])
 api_router.include_router(identity_router, tags=["identity"])
 api_router.include_router(tenants_router, tags=["tenants"])

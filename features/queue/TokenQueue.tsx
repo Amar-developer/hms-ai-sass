@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useState} from 'react';
 import {ActionButton,ActionGroup,Badge,Card,Field,Select} from '@/components/ui';
 import {apiFetch,type ApiSession} from '@/lib/api';
 import {sortQueue} from '@/lib/hmsLogic';
@@ -40,7 +40,7 @@ function sortByTokenNumber(rows:any[]){
 
 function isActiveQueueStatus(value:any){
   const status=String(value||'').trim().toLowerCase().replaceAll(' ','_');
-  return !['cancelled','canceled','no_show','patient_not_available','not_available','skipped','consultation_completed','billed','completed','done'].includes(status);
+  return !['cancelled','canceled','no_show','consultation_completed','billed','completed','done'].includes(status);
 }
 
 function isActiveQueueAppointment(appointment:any){
@@ -67,7 +67,6 @@ export function TokenQueue({
   const [displayMode,setDisplayMode]=useState<'reception'|'called_only'>('reception');
   const [tokenLanguage,setTokenLanguage]=useState<'english'|'tamil'|'both'>('english');
   const [displayRows,setDisplayRows]=useState<any[]>([]);
-  const autoClosedPastIds=useRef(new Set<string>());
   const today=todayKey();
   const queue = sortByTokenNumber(sortQueue(scopedAppointments.filter((appointment:any)=>{
     if(dateKey(appointment.appointmentDate||appointment.appointment_date)!==today)return false;
@@ -97,23 +96,6 @@ export function TokenQueue({
     loadDisplay();
     return()=>{alive=false};
   },[apiSession?.token,apiSession?.tenantId,displayMode,scopedAppointments.length]);
-
-  useEffect(()=>{
-    if(!apiSession)return;
-    const stale=scopedAppointments.filter((appointment:any)=>{
-      const appointmentDate=dateKey(appointment.appointmentDate||appointment.appointment_date);
-      if(!appointmentDate||appointmentDate>=today)return false;
-      if(!appointment.queueEntryId||autoClosedPastIds.current.has(appointment.queueEntryId))return false;
-      if(departmentId&&appointment.departmentId!==departmentId)return false;
-      if(doctorScope?.practitionerId&&appointment.doctorId!==doctorScope.practitionerId&&appointment.practitioner_id!==doctorScope.practitionerId)return false;
-      return isActiveQueueAppointment(appointment);
-    });
-    if(stale.length===0)return;
-    stale.forEach((appointment:any)=>autoClosedPastIds.current.add(appointment.queueEntryId));
-    Promise.allSettled(stale.map((appointment:any)=>apiFetch(`/queue/${appointment.queueEntryId}/mark-not-available`,apiSession,{method:'POST',body:JSON.stringify({reason:'Automatically closed after appointment date ended',actor_user_id:apiSession.user?.id})})))
-      .then(()=>loadLiveData(apiSession))
-      .catch(()=>undefined);
-  },[apiSession?.token,apiSession?.tenantId,scopedAppointments.length,departmentId,doctorScope?.practitionerId,today]);
 
   function updateAppointment(id: string, patch: any) {
     setAppointments(appointments.map((a: any) => (a.id === id ? {...a, ...patch} : a)));
@@ -150,8 +132,8 @@ export function TokenQueue({
                 : `/queue/${appointment.queueEntryId}/cancel`;
         const body =
           action === 'requeue'
-            ? {reason: 'Updated from MedizinHub web app', place_at_end: false}
-            : {reason: 'Updated from MedizinHub web app'};
+            ? {reason: 'Updated from MedizinHub web app', place_at_end: false, actor_user_id:apiSession.user?.id}
+            : {reason: 'Updated from MedizinHub web app', actor_user_id:apiSession.user?.id};
 
         await apiFetch(endpoint, apiSession, {method: 'POST', body: JSON.stringify(body)});
         await loadLiveData(apiSession);
@@ -175,6 +157,33 @@ export function TokenQueue({
     }
   }
 
+  async function cancelRemainingTokens(){
+    const remaining=queue.filter((appointment:any)=>isActiveQueueAppointment(appointment));
+    if(remaining.length===0){
+      setMessage('No active tokens to cancel.');
+      return;
+    }
+    const confirmed=window.confirm(`Cancel ${remaining.length} remaining token(s) for today? This will remove unattended tokens from the active queue.`);
+    if(!confirmed)return;
+    setBusyId('end-of-day');
+    setMessage('');
+    try{
+      if(apiSession){
+        const rowsWithQueue=remaining.filter((appointment:any)=>appointment.queueEntryId);
+        await Promise.all(rowsWithQueue.map((appointment:any)=>apiFetch(`/queue/${appointment.queueEntryId}/cancel`,apiSession,{method:'POST',body:JSON.stringify({reason:'End-of-day manual close by reception',actor_user_id:apiSession.user?.id})})));
+        await loadLiveData(apiSession);
+        setMessage(`${rowsWithQueue.length} remaining token(s) cancelled and removed from the active queue.`);
+      }else{
+        setAppointments(appointments.map((appointment:any)=>remaining.some((row:any)=>row.id===appointment.id)?{...appointment,queueStatus:'Cancelled',status:'Cancelled'}:appointment));
+        setMessage(`${remaining.length} remaining token(s) cancelled.`);
+      }
+    }catch(err:any){
+      setMessage(err.message||'Could not cancel remaining tokens.');
+    }finally{
+      setBusyId('');
+    }
+  }
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
@@ -182,11 +191,11 @@ export function TokenQueue({
           <h3 className="text-lg font-bold">Patient Queue & Token Priority</h3>
           <p className="text-sm text-slate-500">
             {apiSession
-              ? 'Queue actions are saved to backend and audited. Token display supports reception and called-token modes.'
+              ? 'Reception can manually call, skip, requeue, or close remaining tokens at end of day.'
               : 'Emergency tokens appear first. Skipped patients can be requeued.'}
           </p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           <Field label="Display Mode">
             <Select value={displayMode} onChange={(e:any)=>setDisplayMode(e.target.value)}>
               <option value="reception">Reception Queue</option>
@@ -200,11 +209,16 @@ export function TokenQueue({
               <option value="both">English + Tamil</option>
             </Select>
           </Field>
+          <Field label="Day Close">
+            <button type="button" onClick={cancelRemainingTokens} disabled={busyId==='end-of-day'||queue.length===0} className="h-[46px] w-full rounded-2xl border border-red-100 bg-white px-4 text-sm font-bold text-red-600 hover:bg-red-50 disabled:text-slate-300">
+              {busyId==='end-of-day'?'Closing...':'Cancel Remaining'}
+            </button>
+          </Field>
         </div>
       </div>
       {message && <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {(visibleDisplayRows.length?visibleDisplayRows:visibleQueue.slice(0,8)).map((item:any)=>{
+        {(visibleDisplayRows.length?visibleDisplayRows:visibleQueue).map((item:any)=>{
           const appointment=item.appointment||item;
           return (
           <button key={item.id} type="button" onClick={()=>openConsultation(appointment)} className="rounded-2xl bg-slate-900 p-4 text-left text-white transition hover:bg-slate-800">

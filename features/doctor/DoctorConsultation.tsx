@@ -395,8 +395,8 @@ export function DoctorConsultation({
     )
       setTreatmentType("doctor_review");
     else setTreatmentType("general_consultation");
-    setVitals("");
-    setComplaints("");
+    setVitals(selected?.intakeVitals || "");
+    setComplaints(selected?.intakeComplaints || "");
     setDiagnosisRows("");
     setMedicineItems([]);
     setReferralItems([]);
@@ -409,13 +409,25 @@ export function DoctorConsultation({
     setScanNeeded(false);
     setScanTests("");
   }, [selected?.id]);
+  async function resolveSelectedConsultationId() {
+    if (!apiSession || !selected?.id) return "";
+    if (selected.consultationId) return selected.consultationId;
+    const rows = await apiFetch(
+      `/consultations?appointment_id=${encodeURIComponent(selected.id)}`,
+      apiSession,
+    );
+    return rows?.[0]?.id || "";
+  }
+
   useEffect(() => {
-    if (!selected?.consultationId || !apiSession) return;
+    if (!selected?.id || !apiSession) return;
     let alive = true;
     async function loadConsultationData() {
       try {
+        const consultationId = await resolveSelectedConsultationId();
+        if (!consultationId) return;
         const detail = await apiFetch(
-          `/consultations/${selected.consultationId}`,
+          `/consultations/${consultationId}`,
           apiSession,
         );
         if (!alive) return;
@@ -491,14 +503,14 @@ export function DoctorConsultation({
           }
         }
       } catch {
-        // silently ignore — form stays blank, user can re-enter
+      // silently ignore — form stays blank, user can re-enter
       }
     }
     loadConsultationData();
     return () => {
       alive = false;
     };
-  }, [selected?.consultationId, apiSession?.token]);
+  }, [selected?.id, selected?.consultationId, apiSession?.token]);
   const selectedPatientId =
     selected?.patientId ||
     selected?.patient_id ||
@@ -550,9 +562,13 @@ export function DoctorConsultation({
     Number(consultationCharge || selected?.fee || 0) + Number(extraFee || 0);
   const emergencyToday = selectedDateQueue.filter(
     (a: any) =>
-      a.tokenType === "Emergency" ||
-      statusKey(a.queueStatus) === "emergency_queue" ||
-      String(a.visitType || "").toLowerCase() === "emergency",
+      !isCompletedAppointment(a) &&
+      !isCancelledAppointment(a) &&
+      (
+        a.tokenType === "Emergency" ||
+        statusKey(a.queueStatus) === "emergency_queue" ||
+        String(a.visitType || "").toLowerCase() === "emergency"
+      ),
   ).length;
   const uniquePatientCount = new Set(
     selectedDateQueue
@@ -567,7 +583,9 @@ export function DoctorConsultation({
     const count = doctorQueue.filter(
       (a: any) =>
         String(a.appointmentDate || a.appointment_date || "").slice(0, 10) ===
-        iso,
+        iso &&
+        !isCompletedAppointment(a) &&
+        !isCancelledAppointment(a),
     ).length;
     return {
       iso,
@@ -576,7 +594,7 @@ export function DoctorConsultation({
       count,
     };
   });
-  const scheduleRows = selectedDateQueue
+  const scheduleRows = activeQueue
     .filter((a: any) => {
       if (dashboardFilter === "waiting")
         return (
@@ -584,11 +602,10 @@ export function DoctorConsultation({
           !isCompletedAppointment(a) &&
           !isCancelledAppointment(a)
         );
-      if (dashboardFilter === "completed" || dashboardFilter === "seen")
-        return isCompletedAppointment(a);
       return true;
     })
     .slice(0, 8);
+  const appointmentListLabel = dashboardFilter === "waiting" ? "waiting" : "active";
   const selectedPatientHistory = selected
     ? appointments
         .filter((item: any) => {
@@ -1301,7 +1318,7 @@ export function DoctorConsultation({
         <DoctorMetric
           icon={CalendarClock}
           title="Today Booked"
-          value={selectedDateQueue.length}
+          value={activeQueue.length}
           caption={doctor.name}
           active={dashboardFilter === "booked"}
           onClick={() => setDashboardFilter("booked")}
@@ -1380,7 +1397,7 @@ export function DoctorConsultation({
             <div>
               <h3 className="text-lg font-bold">Today's Booked Appointments</h3>
               <p className="text-sm text-slate-500">
-                {displayDate(selectedDate)} · {dashboardFilter}
+                {displayDate(selectedDate)} · {appointmentListLabel}
               </p>
             </div>
             <Badge tone="blue">{branch.name}</Badge>
@@ -1953,13 +1970,14 @@ function ConsultationWorkspace(props: any) {
             />
           </Field>
           <div className="rounded-3xl bg-slate-50 p-4">
-            <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr_auto] lg:items-end">
+            <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr] lg:items-end">
               <Field label="Medicine">
                 <SearchPicker
                   value={selectedMedicineId}
-                  onChange={(medicineId: string, medicine: any) => {
-                    setSelectedMedicineId(medicineId);
-                    if (medicine?.strength) setMedicineDosage(medicine.strength);
+                  onChange={(_medicineId: string, medicine: any) => {
+                    if (medicine?.name) {
+                      addMedicineFromText(medicine.name, { item: medicine });
+                    }
                   }}
                   options={medicineOptions}
                   placeholder="Type medicine name"
@@ -2025,23 +2043,13 @@ function ConsultationWorkspace(props: any) {
                     ))}
                 </Select>
               </Field>
-              <Button
-                type="button"
-                onClick={addMedicineSuggestion}
-                disabled={!selectedMedicineId}
-              >
-                Add
-              </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {medicineCatalog.slice(0, 8).map((medicine: any) => (
                 <button
                   key={medicine.id}
                   type="button"
-                  onClick={() => {
-                    setSelectedMedicineId(medicine.id);
-                    setMedicineDosage(medicine.strength || "");
-                  }}
+                  onClick={() => addMedicineFromText(medicine.name, { item: medicine })}
                   className="rounded-xl border bg-white px-3 py-2 text-xs font-bold"
                 >
                   {medicine.name}
@@ -2088,7 +2096,9 @@ function ConsultationWorkspace(props: any) {
                 <Field label="Available Lab Test">
                   <SearchPicker
                     value={selectedLabTestId}
-                    onChange={setSelectedLabTestId}
+                    onChange={(_id: string, test: any) => {
+                      if (test?.name) addLabFromText(test.name, { item: test });
+                    }}
                     options={labOptions}
                     placeholder="Type lab test name"
                     onEnterQuery={addLabFromText}
@@ -2104,7 +2114,7 @@ function ConsultationWorkspace(props: any) {
                     }
                   />
                 </Field>
-                <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <div className="grid gap-2 sm:grid-cols-2">
                   <Select
                     value={labPriority}
                     onChange={(e: any) => setLabPriority(e.target.value)}
@@ -2118,13 +2128,6 @@ function ConsultationWorkspace(props: any) {
                     onChange={(e: any) => setLabInstructions(e.target.value)}
                     placeholder="Instructions"
                   />
-                  <Button
-                    type="button"
-                    onClick={addLabSuggestion}
-                    disabled={!selectedLabTestId}
-                  >
-                    Add
-                  </Button>
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
@@ -2132,7 +2135,7 @@ function ConsultationWorkspace(props: any) {
                   <button
                     key={l.id}
                     type="button"
-                    onClick={() => setSelectedLabTestId(l.id)}
+                    onClick={() => addLabFromText(l.name, { item: l })}
                     className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700"
                   >
                     {l.name}
@@ -2197,6 +2200,15 @@ function ConsultationWorkspace(props: any) {
           </div>
           {selected?.consultationStatus === "signed" && (
             <div className="rounded-3xl bg-emerald-50 p-4">
+              <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                <div>
+                  <p className="font-bold text-emerald-900">Signed consultation</p>
+                  <p className="text-sm text-emerald-700">
+                    Billing can generate the consultation invoice from the Invoices page.
+                  </p>
+                </div>
+                <Badge tone="green">Ready for billing</Badge>
+              </div>
               <Field label="Signed Record Addendum">
                 <textarea
                   value={addendumNote}

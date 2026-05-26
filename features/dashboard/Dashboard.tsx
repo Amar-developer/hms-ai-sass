@@ -127,11 +127,23 @@ function isCompletedAppointment(row: any) {
 }
 
 function invoiceAmount(row: any) {
-  return Number(row.total_amount ?? row.total ?? row.amount ?? 0);
+  return Number(row.paid_amount ?? row.total_amount ?? row.total ?? row.amount ?? 0);
 }
 
 function invoiceBalance(row: any) {
   return Number(row.balance_amount ?? row.balance ?? 0);
+}
+
+function invoiceItemTotal(row: any) {
+  return Number(row.subtotal_amount ?? row.total_amount ?? row.total ?? row.amount ?? 0);
+}
+
+function invoiceMembershipBenefit(row: any) {
+  return Number(row.membership_discount_amount || 0);
+}
+
+function invoiceOfferDiscount(row: any) {
+  return Math.max(Number(row.discount_amount || 0) - invoiceMembershipBenefit(row), 0);
 }
 
 function topRows(rows: any[], keyGetter: (row: any) => string, labelGetter: (key: string) => string) {
@@ -172,6 +184,10 @@ export function Dashboard({
     (sum: number, row: any) => sum + invoiceAmount(row),
     0,
   );
+  const monthlyItemTotal = monthlyInvoices.reduce(
+    (sum: number, row: any) => sum + invoiceItemTotal(row),
+    0,
+  );
   const monthlyDue = monthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceBalance(row),
     0,
@@ -180,7 +196,11 @@ export function Dashboard({
     (row: any) => row.patient_subscription_enrollment_id || row.patient_subscription_plan_id,
   );
   const membershipSavings = monthlyInvoices.reduce(
-    (sum: number, row: any) => sum + Number(row.membership_discount_amount || 0),
+    (sum: number, row: any) => sum + invoiceMembershipBenefit(row),
+    0,
+  );
+  const offerSavings = monthlyInvoices.reduce(
+    (sum: number, row: any) => sum + invoiceOfferDiscount(row),
     0,
   );
   const departmentById = new Map(
@@ -234,7 +254,7 @@ export function Dashboard({
     {
       title: "Monthly Revenue",
       value: rupees(monthlyRevenue),
-      detail: `${monthlyInvoices.length} invoices this month`,
+      detail: `Collected from ${rupees(monthlyItemTotal)} billed value`,
       icon: IndianRupee,
       target: "billing",
     },
@@ -248,7 +268,7 @@ export function Dashboard({
     {
       title: "Membership Usage",
       value: rupees(membershipSavings),
-      detail: `${membershipPurchaseInvoices.length} plan purchase invoices this month`,
+      detail: `${membershipPurchaseInvoices.length} plan purchases · offers ${rupees(offerSavings)}`,
       icon: ReceiptIndianRupee,
       target: "patients",
     },

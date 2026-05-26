@@ -69,6 +69,8 @@ export function AppointmentCalendarBooking(props: Props) {
   const [isBillable, setIsBillable] = useState(true);
   const [billingNote, setBillingNote] = useState('');
   const [emergencyReason, setEmergencyReason] = useState('');
+  const [intakeVitals, setIntakeVitals] = useState('');
+  const [intakeComplaints, setIntakeComplaints] = useState('');
   const [slotGroup, setSlotGroup] = useState('morning');
   const [slotIntervalsEnabled, setSlotIntervalsEnabled] = useState(false);
   const [slotIntervalMinutes, setSlotIntervalMinutes] = useState(5);
@@ -344,6 +346,8 @@ export function AppointmentCalendarBooking(props: Props) {
     setMessage('');
     setAppointmentType('op');
     setEmergencyReason('');
+    setIntakeVitals('');
+    setIntakeComplaints('');
   }
 
   async function refreshAppointmentList() {
@@ -487,6 +491,8 @@ export function AppointmentCalendarBooking(props: Props) {
             is_billable: isBillable,
             billing_note: billingNote || null,
             emergency_reason: appointmentType === 'emergency' ? emergencyReason || 'Emergency override from reception' : null,
+            intake_vitals: intakeVitals.trim() || null,
+            intake_complaints: intakeComplaints.trim() || null,
             created_by_user_id: apiSession.user?.id || null,
           }),
         });
@@ -727,6 +733,25 @@ export function AppointmentCalendarBooking(props: Props) {
                 No consultation timing available for this doctor/date.
               </div>
             )}
+            <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+              <div className="flex items-baseline justify-between">
+                <h5 className="text-sm font-bold uppercase text-slate-700">Intake (Optional)</h5>
+                <span className="text-xs text-slate-500">Pre-fills the doctor consultation page.</span>
+              </div>
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <Field label="Vitals">
+                  <Input value={intakeVitals} onChange={(e: any) => setIntakeVitals(e.target.value)} placeholder="BP=120/80 mmHg, Pulse=78 bpm" />
+                </Field>
+                <Field label="Complaint Rows">
+                  <textarea
+                    value={intakeComplaints}
+                    onChange={(e: any) => setIntakeComplaints(e.target.value)}
+                    className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                    placeholder={"Fever | 2 days | medium\nCough | 1 day | mild"}
+                  />
+                </Field>
+              </div>
+            </div>
             <div className="mt-5 flex flex-wrap gap-2">
               <Button disabled={busy || (appointmentType !== 'emergency' && !selectedTimingSlot)}>{busy ? 'Booking...' : 'Save & Generate Token'}</Button>
               <button type="button" onClick={() => setBookingStep('search')} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button>

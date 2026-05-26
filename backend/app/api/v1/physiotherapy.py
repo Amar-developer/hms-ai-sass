@@ -15,6 +15,7 @@ from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import DoctorFeeRule, FeeShareType, Invoice, InvoiceItem, Payment, TaxRule
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceItemRead, InvoiceRead, PaymentRead
 from app.modules.billing.service import next_invoice_number
+from app.modules.files.service import record_file_document
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.ip.models import IPAdmission
@@ -32,6 +33,7 @@ from app.modules.physiotherapy.schemas import (
     PhysiotherapySessionRead,
 )
 from app.modules.settings.models import SettingKey
+from app.modules.settings.numbering import next_document_number
 from app.modules.settings.service import resolve_setting
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
@@ -43,9 +45,8 @@ def _assert_enabled(session: Session, tenant_id: str) -> None:
     enforce_module_enabled(session, tenant_id, "physiotherapy")
 
 
-def _next_case_number(session: Session, tenant_id: str) -> str:
-    count = session.exec(select(func.count()).select_from(PhysiotherapyCase).where(PhysiotherapyCase.tenant_id == tenant_id)).one()
-    return f"PHY-{count + 1:06d}"
+def _next_case_number(session: Session, tenant_id: str, branch_id: str | None = None) -> str:
+    return next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="physiotherapy_case")
 
 
 def _get_case(session: Session, tenant_id: str, case_id: str, current_user: User) -> PhysiotherapyCase:
@@ -296,7 +297,7 @@ def create_case(
         payload,
         update={
             "tenant_id": tenant_id,
-            "case_number": _next_case_number(session, tenant_id),
+            "case_number": _next_case_number(session, tenant_id, payload.branch_id),
             "assessment_date": payload.assessment_date or date.today(),
             "care_context": payload.care_context.lower(),
             "created_by_user_id": current_user.id,
@@ -353,6 +354,22 @@ async def upload_consent_form(
     uploaded_files = []
     for upload_file in files:
         saved_filename, url_path = await save_upload(upload_file, f"physio_consent_{case_id[:12]}")
+        record_file_document(
+            session,
+            tenant_id=tenant_id,
+            branch_id=case.branch_id,
+            patient_id=case.patient_id,
+            file_name=upload_file.filename or saved_filename,
+            file_url=url_path,
+            content_type=upload_file.content_type,
+            category="consent",
+            source_module="physiotherapy",
+            attached_to_doctype="PhysiotherapyCase",
+            attached_to_name=case.id,
+            attached_to_field="consent_files_json",
+            attached_to_label="Physiotherapy Consent",
+            uploaded_by_user_id=current_user.id,
+        )
         uploaded_files.append(
             {
                 "url": url_path,
@@ -525,7 +542,7 @@ def generate_invoice(
         appointment_id=case.source_appointment_id,
         ip_admission_id=case.ip_admission_id,
         physiotherapy_case_id=case.id,
-        invoice_number=next_invoice_number(session, tenant_id, str(invoice_prefix or "INV")),
+        invoice_number=next_invoice_number(session, tenant_id, str(invoice_prefix or "INV"), case.branch_id),
         subtotal_amount=subtotal,
         discount_amount=discount,
         taxable_amount=taxable,

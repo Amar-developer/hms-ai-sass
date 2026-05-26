@@ -66,6 +66,7 @@ class SupplierUpdate(BaseModel):
 class SupplierRead(SupplierCreate):
     id: str
     tenant_id: str
+    supplier_number: str | None = None
     is_active: bool
     created_at: datetime
     updated_at: datetime
@@ -187,6 +188,7 @@ class PharmacyIssueRead(BaseModel):
     branch_id: str
     patient_id: str
     consultation_id: str | None
+    issue_number: str | None = None
     source: PharmacyIssueSource
     status: PharmacyIssueStatus
     medicine_text: str

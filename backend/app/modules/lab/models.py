@@ -90,6 +90,7 @@ class LabOrder(SQLModel, table=True):
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
     consultation_id: str | None = Field(default=None, index=True, foreign_key="consultation.id")
+    lab_order_number: str | None = Field(default=None, index=True, max_length=60)
     source: LabOrderSource = Field(default=LabOrderSource.CONSULTATION, index=True)
     status: LabOrderStatus = Field(default=LabOrderStatus.ORDERED, index=True)
     priority: LabOrderPriority = Field(default=LabOrderPriority.ROUTINE, index=True)

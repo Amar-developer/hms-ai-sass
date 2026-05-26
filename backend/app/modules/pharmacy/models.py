@@ -50,6 +50,7 @@ class MedicineCatalog(SQLModel, table=True):
 class PharmacySupplier(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("supplier"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    supplier_number: str | None = Field(default=None, index=True, max_length=60)
     name: str = Field(min_length=2, max_length=220, index=True)
     gstin: str | None = Field(default=None, max_length=40)
     phone: str | None = Field(default=None, max_length=40)
@@ -164,6 +165,7 @@ class PharmacyIssue(SQLModel, table=True):
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
     consultation_id: str | None = Field(default=None, index=True, foreign_key="consultation.id")
+    issue_number: str | None = Field(default=None, index=True, max_length=60)
     source: PharmacyIssueSource = Field(default=PharmacyIssueSource.CONSULTATION, index=True)
     status: PharmacyIssueStatus = Field(default=PharmacyIssueStatus.REQUESTED, index=True)
     medicine_text: str = Field(min_length=2, max_length=5000)

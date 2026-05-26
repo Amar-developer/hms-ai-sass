@@ -30,6 +30,7 @@ from app.modules.identity.schemas import (
 )
 from app.modules.identity.security import create_access_session, find_user_by_login, hash_password, verify_password
 from app.modules.identity import permissions
+from app.modules.settings.numbering import next_document_number
 from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
@@ -260,6 +261,7 @@ def bootstrap_super_admin(
     primary_tenant = _ensure_primary_tenant(session)
     user = User(
         tenant_id=primary_tenant.id,
+        user_number=next_document_number(session, tenant_id=primary_tenant.id, entity="user"),
         name=payload.name,
         email=_normalize_email(payload.email),
         password_hash=hash_password(payload.password),
@@ -629,6 +631,7 @@ def create_user(
     user = User(
         tenant_id=tenant_id,
         branch_id=payload.branch_id,
+        user_number=next_document_number(session, tenant_id=tenant_id, branch_id=payload.branch_id, entity="user"),
         user_type=payload.user_type,
         name=payload.name,
         email=_normalize_email(payload.email),

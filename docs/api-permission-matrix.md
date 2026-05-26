@@ -79,6 +79,13 @@ Current enforced guardrails:
 | `PATCH` | `/api/v1/tenants/{tenant_id}/branches/{branch_id}` | Tenant admin or super admin |
 | `POST` | `/api/v1/tenants/{tenant_id}/branches/{branch_id}/status` | Tenant admin or super admin |
 | `DELETE` | `/api/v1/tenants/{tenant_id}/branches/{branch_id}` | Tenant admin or super admin; soft deactivates |
+| `POST` | `/api/v1/tenants/{tenant_id}/logo` | Tenant admin or super admin |
+| `POST` | `/api/v1/tenants/{tenant_id}/departments` | Tenant admin or super admin |
+| `GET` | `/api/v1/tenants/{tenant_id}/departments` | `settings.manage` |
+| `GET` | `/api/v1/tenants/{tenant_id}/departments/{department_id}` | `settings.manage` |
+| `PATCH` | `/api/v1/tenants/{tenant_id}/departments/{department_id}` | Tenant admin or super admin |
+| `POST` | `/api/v1/tenants/{tenant_id}/departments/{department_id}/status` | Tenant admin or super admin |
+| `DELETE` | `/api/v1/tenants/{tenant_id}/departments/{department_id}` | Tenant admin or super admin; soft deactivates |
 | `POST` | `/api/v1/subscription-plans` | `platform.subscriptions.manage` |
 | `GET` | `/api/v1/subscription-plans` | `platform.subscriptions.manage` |
 | `PATCH` | `/api/v1/subscription-plans/{plan_id}` | `platform.subscriptions.manage` |
@@ -112,6 +119,9 @@ Current enforced guardrails:
 | `POST` | `/api/v1/identity/roles/{role_id}/assign/{target_tenant_id}` | Super admin only; copies/promotes reusable role by key across tenants |
 | `POST` | `/api/v1/identity/users` | `identity.users.manage` |
 | `GET` | `/api/v1/identity/users` | `identity.users.manage` |
+| `PATCH` | `/api/v1/identity/users/{user_id}` | `identity.users.manage` |
+| `POST` | `/api/v1/identity/users/{user_id}/status` | `identity.users.manage` |
+| `DELETE` | `/api/v1/identity/users/{user_id}` | `identity.users.manage` |
 
 ## Global Templates
 
@@ -136,9 +146,24 @@ Secondary tenant admins keep the existing tenant-scoped screens and APIs. They c
 | `DELETE` | `/api/v1/patients/{patient_id}` | `patients.delete` | Soft delete by deactivating patient audit |
 | `POST` | `/api/v1/patients/{patient_id}/alerts` | `patients.write` | Creates alert audit |
 | `GET` | `/api/v1/patients/{patient_id}/alerts` | `patients.read` | Alert list |
+| `POST` | `/api/v1/patients/{patient_id}/photo` | `patients.edit` | Uploads or replaces patient photo/document reference |
 | `GET` | `/api/v1/patients/{patient_id}/summary` | `patients.read` | Records patient history viewed audit |
 
 Patient APIs enforce the `patients` module entitlement and branch scope for branch-assigned users.
+
+## Patient Subscriptions
+
+| Method | Endpoint | Permission |
+| --- | --- | --- |
+| `POST` | `/api/v1/patient-subscriptions/plans` | `patient_subscriptions.create` |
+| `GET` | `/api/v1/patient-subscriptions/plans` | `patient_subscriptions.read` |
+| `PATCH` | `/api/v1/patient-subscriptions/plans/{plan_id}` | `patient_subscriptions.edit` |
+| `DELETE` | `/api/v1/patient-subscriptions/plans/{plan_id}` | `patient_subscriptions.delete` |
+| `POST` | `/api/v1/patient-subscriptions/enrollments` | `patient_subscriptions.create` |
+| `GET` | `/api/v1/patient-subscriptions/enrollments` | `patient_subscriptions.read` |
+| `POST` | `/api/v1/patient-subscriptions/benefits/preview` | `patient_subscriptions.read` |
+
+Patient subscription APIs enforce the `patient_subscriptions` module entitlement, tenant ownership, and branch scope. Plans define free consultations plus lab/pharmacy free or discounted benefits. Enrollments create the active patient membership window and can link to the purchase invoice; benefit preview is used before billing to calculate free items, discounted items, and payable amount.
 
 ## Practitioner, Schedule, and Calendar
 
@@ -172,6 +197,7 @@ For `user_type=doctor`, `GET /api/v1/practitioners` is restricted to the practit
 | `GET` | `/api/v1/appointments` | `appointments.manage` | List appointments |
 | `GET` | `/api/v1/appointments/{appointment_id}` | `appointments.manage` | Appointment detail |
 | `POST` | `/api/v1/appointments/{appointment_id}/follow-up` | `appointments.manage` | Books follow-up using source appointment context |
+| `GET` | `/api/v1/appointments/platform/all` | `platform.tenants.manage` | Cross-tenant platform appointment search |
 | `GET` | `/api/v1/queue` | `queue.manage` | Queue list |
 | `GET` | `/api/v1/queue/display` | `queue.manage` | Queue display rows for reception/called-token screens with language-aware call text |
 | `POST` | `/api/v1/queue/{entry_id}/call` | `queue.manage` | Token call and notification trigger |
@@ -188,6 +214,7 @@ Appointment APIs enforce the `appointments` module entitlement. Queue APIs enfor
 | Method | Endpoint | Permission |
 | --- | --- | --- |
 | `POST` | `/api/v1/consultations` | `consultations.write` |
+| `GET` | `/api/v1/consultations/clinical-templates` | `consultations.read` |
 | `GET` | `/api/v1/consultations` | `consultations.read` |
 | `POST` | `/api/v1/consultations/clinical-templates` | `consultations.write` |
 | `GET` | `/api/v1/consultations/by-department/{department_id}/clinical-templates` | `consultations.read` |
@@ -208,7 +235,14 @@ Consultation APIs enforce the `consultations` module entitlement and branch scop
 | `POST` | `/api/v1/ip/admissions` | `ip.create` | Admit patient into an available room/bed for selected date range |
 | `POST` | `/api/v1/ip/admissions/from-appointment/{appointment_id}` | `ip.create` | Convert OP appointment to IP admission |
 | `GET` | `/api/v1/ip/admissions` | `ip.read` | List branch-scoped IP admissions |
+| `PATCH` | `/api/v1/ip/admissions/{admission_id}` | `ip.edit` | Update admission demographics, room/bed, diagnosis, Aadhaar, or status fields |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/document` | `ip.edit` | Upload admission proof, referral, or Aadhaar document |
+| `GET` | `/api/v1/ip/admissions/{admission_id}/documents` | `ip.read` | List admission documents |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/documents` | `ip.edit` | Upload additional admission documents |
+| `GET` | `/api/v1/ip/admissions/{admission_id}/treatments` | `ip.read` | List treatment orders and care entries |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/treatments` | `ip.edit` | Create treatment order or care entry |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/consents` | `ip.edit` | Create consent request |
+| `POST` | `/api/v1/ip/consents/{consent_id}/sign` | `ip.edit` | Sign consent |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/consultations` | `ip.edit` | Record IP doctor visit/round with optional visit fee |
 | `POST` | `/api/v1/ip/consultations/{consultation_id}/sign` | `ip.edit` | Sign doctor visit and create a billable consultation line when fee is configured |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/medication-orders` | `ip.edit` | Create IP medication order with per-dose charge |
@@ -217,6 +251,12 @@ Consultation APIs enforce the `consultations` module entitlement and branch scop
 | `GET` | `/api/v1/ip/admissions/{admission_id}/medication-administrations` | `ip.read` | List MAR dose history |
 | `GET` | `/api/v1/ip/admissions/{admission_id}/billing-items` | `ip.read` | Running bill from clinical events |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/billing-items` | `ip.edit` | Add manual running-bill line |
+| `GET` | `/api/v1/ip/admissions/{admission_id}/charges` | `ip.read` | List legacy/manual IP charge rows |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/charges` | `ip.edit` | Add legacy/manual IP charge row |
+| `POST` | `/api/v1/ip/admissions/{admission_id}/discharge-summary` | `ip.edit` | Draft discharge summary |
+| `POST` | `/api/v1/ip/discharge-summaries/{summary_id}/finalize` | `ip.edit` | Finalize discharge summary |
+| `GET` | `/api/v1/ip/discharge-summaries/{summary_id}/pdf` | `ip.read` | Download discharge summary PDF |
+| `GET` | `/api/v1/ip/admissions/{admission_id}/invoice` | `billing.manage` | Read linked IP invoice when one exists |
 | `POST` | `/api/v1/ip/admissions/{admission_id}/invoice` | `billing.manage` | Creates or refreshes IP invoice with automatic room charge, manual charges, signed consultation billables, medication administrations, and lab/scan referrals |
 
 IP admission APIs enforce tenant, branch, room availability, and module entitlement checks. Admissions can capture a validated 12-digit Aadhaar number and one admission proof/identity document. A room/bed cannot be reused for overlapping active admission date ranges. Room rent is calculated from admission date through discharge summary date, or planned discharge/current date when discharge is not finalized. Signed IP consultations and given MAR doses create linked billable items for the running bill and final invoice. IP invoice generation also backfills older care entries by reading medicine administrations and lab/scan rows from treatment orders, using pharmacy/lab catalog prices when explicit row amounts are missing.
@@ -229,6 +269,10 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `GET` | `/api/v1/billing/doctor-fee-rules` | `billing.manage` |
 | `POST` | `/api/v1/billing/tax-rules` | `billing.manage` |
 | `GET` | `/api/v1/billing/tax-rules` | `billing.manage` |
+| `PATCH` | `/api/v1/billing/tax-rules/{rule_id}` | `billing.manage` |
+| `POST` | `/api/v1/billing/discount-offers` | `billing.manage` |
+| `GET` | `/api/v1/billing/discount-offers` | `billing.manage` |
+| `PATCH` | `/api/v1/billing/discount-offers/{offer_id}` | `billing.manage` |
 | `POST` | `/api/v1/billing/discount-approvals` | `billing.manage` |
 | `POST` | `/api/v1/billing/discount-approvals/{approval_id}/decision` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/from-consultation` | `billing.manage` |
@@ -237,6 +281,7 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `GET` | `/api/v1/billing/invoices` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/receipt.pdf` | `billing.manage` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |
@@ -256,6 +301,7 @@ Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, pa
 | `PUT` | `/api/v1/reports/monthly-email/config` | `settings.manage` |
 | `POST` | `/api/v1/reports/monthly-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-email/jobs` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+| `POST` | `/api/v1/reports/profit-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 
 Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `ReportJob`, pushes the job id to Redis, and returns `202 Accepted`. The worker sends an Excel-compatible `.xls` report through SMTP. Manual send defaults to previous month and supports `from_date` / `to_date` for testing current-month reports.
 
@@ -265,8 +311,12 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | --- | --- | --- |
 | `POST` | `/api/v1/lab/catalog/tests` | `lab.manage` |
 | `GET` | `/api/v1/lab/catalog/tests` | `lab.manage` |
+| `PATCH` | `/api/v1/lab/catalog/tests/{test_id}` | `lab.manage` |
+| `DELETE` | `/api/v1/lab/catalog/tests/{test_id}` | `lab.manage` |
 | `POST` | `/api/v1/lab/catalog/packages` | `lab.manage` |
 | `GET` | `/api/v1/lab/catalog/packages` | `lab.manage` |
+| `PATCH` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
+| `DELETE` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
 | `POST` | `/api/v1/lab/result-templates` | `lab.manage` |
 | `GET` | `/api/v1/lab/result-templates` | `lab.manage` |
 | `POST` | `/api/v1/lab/orders` | `lab.manage` |
@@ -279,8 +329,12 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `GET` | `/api/v1/lab/orders/{order_id}/report.pdf` | `lab.manage` |
 | `POST` | `/api/v1/pharmacy/medicines` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/medicines` | `pharmacy.manage` |
+| `PATCH` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
+| `DELETE` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
 | `POST` | `/api/v1/pharmacy/suppliers` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/suppliers` | `pharmacy.manage` |
+| `PATCH` | `/api/v1/pharmacy/suppliers/{supplier_id}` | `pharmacy.manage` |
+| `DELETE` | `/api/v1/pharmacy/suppliers/{supplier_id}` | `pharmacy.manage` |
 | `POST` | `/api/v1/pharmacy/purchases` | `pharmacy.manage` |
 | `POST` | `/api/v1/pharmacy/returns` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/batches` | `pharmacy.manage` |
@@ -301,6 +355,8 @@ Lab APIs enforce module entitlement and branch scope for catalog, packages, temp
 | --- | --- | --- |
 | `GET` | `/api/v1/physiotherapy/equipment` | `physiotherapy.read` |
 | `POST` | `/api/v1/physiotherapy/equipment` | `physiotherapy.create` |
+| `PATCH` | `/api/v1/physiotherapy/equipment/{equipment_id}` | `physiotherapy.edit` |
+| `DELETE` | `/api/v1/physiotherapy/equipment/{equipment_id}` | `physiotherapy.delete` |
 | `GET` | `/api/v1/physiotherapy/cases` | `physiotherapy.read` |
 | `POST` | `/api/v1/physiotherapy/cases` | `physiotherapy.create` |
 | `PATCH` | `/api/v1/physiotherapy/cases/{case_id}` | `physiotherapy.edit` |
@@ -312,10 +368,15 @@ Lab APIs enforce module entitlement and branch scope for catalog, packages, temp
 
 Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, multiple consent-file upload, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection and receipt PDFs use the shared billing endpoints.
 
-## Settings, Notifications, and Audit
+## Files, Settings, Notifications, and Audit
 
 | Method | Endpoint | Permission |
 | --- | --- | --- |
+| `POST` | `/api/v1/files` | Authenticated tenant user |
+| `GET` | `/api/v1/files` | Authenticated tenant user |
+| `PATCH` | `/api/v1/files/{file_id}` | Authenticated tenant user |
+| `DELETE` | `/api/v1/files/{file_id}` | Authenticated tenant user |
+| `POST` | `/api/v1/files/sync-uploads` | Authenticated tenant user |
 | `PUT` | `/api/v1/settings` | `settings.manage` |
 | `GET` | `/api/v1/settings` | `settings.manage` |
 | `GET` | `/api/v1/settings/resolve` | `settings.manage` |

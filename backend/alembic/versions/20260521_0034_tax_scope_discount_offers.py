@@ -23,16 +23,28 @@ def _columns(table_name: str) -> set[str]:
     return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
 
 
+def _indexes(table_name: str) -> set[str]:
+    return {index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)}
+
+
 def _add(table_name: str, column_name: str, column: sa.Column) -> None:
-    if column_name not in _columns(table_name):
+    if table_name in _tables() and column_name not in _columns(table_name):
         op.add_column(table_name, column)
 
 
 def _index(name: str, table_name: str, columns: list[str]) -> None:
-    try:
+    if table_name in _tables() and name not in _indexes(table_name):
         op.create_index(name, table_name, columns)
-    except Exception:
-        pass
+
+
+def _drop_index(name: str, table_name: str) -> None:
+    if table_name in _tables() and name in _indexes(table_name):
+        op.drop_index(name, table_name=table_name)
+
+
+def _drop_column(table_name: str, column_name: str) -> None:
+    if table_name in _tables() and column_name in _columns(table_name):
+        op.drop_column(table_name, column_name)
 
 
 def upgrade() -> None:
@@ -55,6 +67,7 @@ def upgrade() -> None:
             sa.Column("service_scope", sa.String(length=40), nullable=False, server_default="all"),
             sa.Column("discount_type", sa.String(length=10), nullable=False, server_default="percentage"),
             sa.Column("value", sa.Integer(), nullable=False),
+            sa.Column("minimum_bill_amount", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("max_discount_amount", sa.Integer(), nullable=True),
             sa.Column("valid_from", sa.DateTime(), nullable=True),
             sa.Column("valid_until", sa.DateTime(), nullable=True),
@@ -83,15 +96,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     if "discountoffer" in _tables():
         op.drop_table("discountoffer")
-    if "invoice" in _tables() and "discount_offer_id" in _columns("invoice"):
-        try:
-            op.drop_index("ix_invoice_discount_offer_id", table_name="invoice")
-        except Exception:
-            pass
-        op.drop_column("invoice", "discount_offer_id")
-    if "taxrule" in _tables() and "service_scope" in _columns("taxrule"):
-        try:
-            op.drop_index("ix_taxrule_service_scope", table_name="taxrule")
-        except Exception:
-            pass
-        op.drop_column("taxrule", "service_scope")
+    _drop_index("ix_invoice_discount_offer_id", "invoice")
+    _drop_column("invoice", "discount_offer_id")
+    _drop_index("ix_taxrule_service_scope", "taxrule")
+    _drop_column("taxrule", "service_scope")

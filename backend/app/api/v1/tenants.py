@@ -1,13 +1,15 @@
 import re
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
 from sqlmodel import Session, select
 
+from app.core.uploads import save_upload
 from app.core.auth import require_any_permission, require_permission, require_super_admin
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.models import AuditEvent
+from app.modules.files.service import record_file_document
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.subscriptions.service import create_default_trial_subscription, get_active_subscription
@@ -177,6 +179,55 @@ def update_tenant(
             tenant_id=tenant.id,
             actor_user_id=current_user.id,
             action="tenant.updated",
+            resource_type="tenant",
+            resource_id=tenant.id,
+            purpose="platform_management",
+        )
+    )
+    session.commit()
+    session.refresh(tenant)
+    return tenant
+
+
+@router.post(
+    "/{tenant_id}/logo",
+    response_model=TenantRead,
+)
+async def upload_tenant_logo(
+    tenant_id: str,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_permission(permissions.PLATFORM_TENANTS_MANAGE)),
+    session: Session = Depends(get_session),
+) -> Tenant:
+    tenant = session.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload an image logo")
+    _filename, url_path = await save_upload(file, f"tenant_logo_{tenant.id}")
+    tenant.logo_url = url_path
+    tenant.updated_by_user_id = current_user.id
+    tenant.updated_at = now_utc()
+    session.add(tenant)
+    record_file_document(
+        session,
+        tenant_id=tenant.id,
+        file_name=file.filename or _filename,
+        file_url=url_path,
+        content_type=file.content_type,
+        category="logo",
+        source_module="tenants",
+        attached_to_doctype="Tenant",
+        attached_to_name=tenant.id,
+        attached_to_field="logo_url",
+        attached_to_label="Tenant Logo",
+        uploaded_by_user_id=current_user.id,
+    )
+    session.add(
+        AuditEvent(
+            tenant_id=tenant.id,
+            actor_user_id=current_user.id,
+            action="tenant.logo_uploaded",
             resource_type="tenant",
             resource_id=tenant.id,
             purpose="platform_management",

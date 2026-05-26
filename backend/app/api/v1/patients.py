@@ -17,6 +17,7 @@ from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.audit.service import record_audit_event
 from app.modules.appointments.models import Appointment
+from app.modules.files.service import record_file_document
 from app.modules.patients.models import AlertSeverity, AlertType, Patient, PatientAlert, PatientStatus
 from app.modules.patients.schemas import (
     PatientAlertCreate,
@@ -29,14 +30,14 @@ from app.modules.patients.schemas import (
     PatientUpdate,
 )
 from app.modules.subscriptions.service import enforce_patient_limit
+from app.modules.settings.numbering import next_document_number
 from app.modules.tenants.models import Tenant, now_utc
 
 router = APIRouter(prefix="/patients")
 
 
-def _next_patient_number(session: Session, tenant_id: str) -> str:
-    count = session.exec(select(func.count()).select_from(Patient).where(Patient.tenant_id == tenant_id)).one()
-    return f"PAT-{count + 1:06d}"
+def _next_patient_number(session: Session, tenant_id: str, branch_id: str | None = None) -> str:
+    return next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="patient")
 
 
 def _get_patient_or_404(session: Session, tenant_id: str, patient_id: str) -> Patient:
@@ -172,7 +173,7 @@ def create_patient(
             detail="Possible duplicate patient found. Search and select existing patient instead.",
         )
 
-    patient_number = payload.patient_number or _next_patient_number(session, tenant_id)
+    patient_number = payload.patient_number or _next_patient_number(session, tenant_id, payload.branch_id)
     patient = Patient.model_validate(
         payload,
         update={
@@ -514,6 +515,22 @@ async def upload_patient_photo(
     patient.photo_file_name = file.filename or _filename
     patient.updated_at = now_utc()
     session.add(patient)
+    record_file_document(
+        session,
+        tenant_id=tenant_id,
+        branch_id=patient.branch_id,
+        patient_id=patient.id,
+        file_name=patient.photo_file_name or _filename,
+        file_url=url_path,
+        content_type=file.content_type,
+        category="patient_photo",
+        source_module="patients",
+        attached_to_doctype="Patient",
+        attached_to_name=patient.id,
+        attached_to_field="photo_url",
+        attached_to_label="Patient Photo",
+        uploaded_by_user_id=current_user.id,
+    )
     session.commit()
     session.refresh(patient)
     record_audit_event(

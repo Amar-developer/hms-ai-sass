@@ -78,6 +78,15 @@ Open:
 - `http://localhost:8000/api/v1/readiness`
 - `http://localhost:8000/api/v1/modules`
 
+## Before Pushing Backend Changes
+
+Run these checks from the project root before pushing to GitHub:
+
+```bash
+backend/.venv/bin/ruff check backend/app backend/tests
+backend/.venv/bin/pytest backend/tests -q
+```
+
 ## Seed Demo Data
 
 Create a complete local demo dataset with one command:

@@ -251,7 +251,7 @@ def enroll_patient(
         patient_id=enrollment.patient_id,
         patient_subscription_enrollment_id=enrollment.id,
         patient_subscription_plan_id=plan.id,
-        invoice_number=next_invoice_number(session, tenant_id),
+        invoice_number=next_invoice_number(session, tenant_id, branch_id=enrollment.branch_id),
         subtotal_amount=plan.price_amount,
         discount_amount=max(plan.price_amount - enrollment.paid_amount, 0),
         taxable_amount=enrollment.paid_amount,

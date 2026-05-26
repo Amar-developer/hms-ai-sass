@@ -25,6 +25,15 @@ npm run dev
 ```
 Open http://localhost:3000
 
+## Before pushing to GitHub
+
+Run these checks from the project root before pushing backend changes:
+
+```bash
+backend/.venv/bin/ruff check backend/app backend/tests
+backend/.venv/bin/pytest backend/tests -q
+```
+
 ## Backend scaffold
 
 The FastAPI backend foundation is in [backend](./backend). It currently includes health/readiness APIs, tenant context middleware, a plug-and-play module manifest, and starter tests.
@@ -96,4 +105,3 @@ docker compose down -v
 
 # 8. Migration cmd
 docker compose -f docker-compose.dev.yml exec backend alembic -c alembic/alembic.ini upgrade head
-

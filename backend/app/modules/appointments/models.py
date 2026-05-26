@@ -49,6 +49,8 @@ class Appointment(SQLModel, table=True):
     is_billable: bool = Field(default=True, index=True)
     billing_note: str | None = Field(default=None, max_length=500)
     emergency_reason: str | None = Field(default=None, max_length=500)
+    intake_vitals: str | None = Field(default=None, max_length=1000)
+    intake_complaints: str | None = Field(default=None, max_length=2000)
     created_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)

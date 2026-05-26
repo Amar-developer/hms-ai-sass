@@ -228,7 +228,7 @@ export function useAppController() {
       });
     } catch {
       throw new Error(
-        `Backend is not reachable at ${API_BASE}. Start the FastAPI backend on port 8000, then open ${API_BASE}/health.`
+        `Backend is not reachable at ${API_BASE}. Start the FastAPI backend, then open ${API_BASE}/health.`
       );
     }
     if (!res.ok) {

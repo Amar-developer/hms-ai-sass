@@ -1,0 +1,1 @@
+"""Tenant file registry module."""

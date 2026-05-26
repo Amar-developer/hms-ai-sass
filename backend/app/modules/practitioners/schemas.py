@@ -35,6 +35,7 @@ class PractitionerRead(BaseModel):
     id: str
     tenant_id: str
     user_id: str | None
+    practitioner_number: str | None = None
     full_name: str
     practitioner_type: PractitionerType
     primary_specialty: str | None

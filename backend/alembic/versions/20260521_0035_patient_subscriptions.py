@@ -19,11 +19,13 @@ def _tables() -> set[str]:
     return set(sa.inspect(op.get_bind()).get_table_names())
 
 
+def _indexes(table_name: str) -> set[str]:
+    return {index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)}
+
+
 def _index(name: str, table_name: str, columns: list[str]) -> None:
-    try:
+    if table_name in _tables() and name not in _indexes(table_name):
         op.create_index(name, table_name, columns)
-    except Exception:
-        pass
 
 
 def upgrade() -> None:

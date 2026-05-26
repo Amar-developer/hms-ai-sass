@@ -23,6 +23,7 @@ class Practitioner(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("prac"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     user_id: str | None = Field(default=None, index=True, foreign_key="user.id")
+    practitioner_number: str | None = Field(default=None, index=True, max_length=60)
     full_name: str = Field(index=True, min_length=2, max_length=180)
     practitioner_type: PractitionerType = Field(default=PractitionerType.DOCTOR, index=True)
     primary_specialty: str | None = Field(default=None, index=True, max_length=160)

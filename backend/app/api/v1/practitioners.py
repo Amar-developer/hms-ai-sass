@@ -35,6 +35,7 @@ from app.modules.practitioners.service import (
     practitioner_is_eligible,
     room_assignment_conflicts,
 )
+from app.modules.settings.numbering import next_document_number
 from app.modules.tenants.models import Branch, Department
 
 router = APIRouter(prefix="/practitioners")
@@ -142,7 +143,14 @@ def create_practitioner(
         if not user or user.tenant_id != tenant_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user")
     _validate_links(session, tenant_id, payload.branch_ids, payload.department_ids)
-    practitioner = Practitioner.model_validate(payload, update={"tenant_id": tenant_id})
+    branch_id = payload.branch_ids[0] if payload.branch_ids else None
+    practitioner = Practitioner.model_validate(
+        payload,
+        update={
+            "tenant_id": tenant_id,
+            "practitioner_number": next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="doctor"),
+        },
+    )
     session.add(practitioner)
     session.commit()
     session.refresh(practitioner)

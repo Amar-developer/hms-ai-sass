@@ -20,6 +20,8 @@ class AppointmentCreate(BaseModel):
     is_billable: bool | None = None
     billing_note: str | None = Field(default=None, max_length=500)
     emergency_reason: str | None = Field(default=None, max_length=500)
+    intake_vitals: str | None = Field(default=None, max_length=1000)
+    intake_complaints: str | None = Field(default=None, max_length=2000)
     created_by_user_id: str | None = None
 
 
@@ -49,6 +51,8 @@ class AppointmentRead(BaseModel):
     is_billable: bool
     billing_note: str | None
     emergency_reason: str | None
+    intake_vitals: str | None
+    intake_complaints: str | None
     created_by_user_id: str | None
     created_at: datetime
     updated_at: datetime

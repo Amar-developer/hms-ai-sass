@@ -47,6 +47,7 @@ class UserRead(BaseModel):
     tenant_id: str | None
     tenant_name: str | None = None
     branch_id: str | None
+    user_number: str | None = None
     user_type: str = "staff"
     name: str
     email: str

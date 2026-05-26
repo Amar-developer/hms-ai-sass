@@ -45,6 +45,8 @@ from app.modules.lab.schemas import (
     LabTestPackageRead,
     LabTestPackageUpdate,
 )
+from app.modules.files.service import record_file_document
+from app.modules.settings.numbering import next_document_number
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
@@ -52,26 +54,6 @@ from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, now_utc
 
 router = APIRouter(prefix="/lab")
-
-
-def _refresh_consultation_invoice_if_exists(session: Session, tenant_id: str, consultation_id: str | None) -> None:
-    if not consultation_id:
-        return
-    from app.modules.billing.models import Invoice
-    from app.modules.billing.service import refresh_consultation_invoice
-
-    invoice = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id,
-            Invoice.consultation_id == consultation_id,
-            Invoice.lab_order_id.is_(None),
-            Invoice.pharmacy_issue_id.is_(None),
-            Invoice.ip_admission_id.is_(None),
-            Invoice.physiotherapy_case_id.is_(None),
-        )
-    ).first()
-    if invoice:
-        refresh_consultation_invoice(session, invoice)
 
 
 def _catalog_key(value: str | None) -> str:
@@ -586,7 +568,13 @@ def create_lab_order(
         if not consultation or consultation.tenant_id != tenant_id or consultation.patient_id != payload.patient_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid consultation")
 
-    order = LabOrder.model_validate(payload, update={"tenant_id": tenant_id})
+    order = LabOrder.model_validate(
+        payload,
+        update={
+            "tenant_id": tenant_id,
+            "lab_order_number": next_document_number(session, tenant_id=tenant_id, branch_id=payload.branch_id, entity="lab_order"),
+        },
+    )
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -604,7 +592,6 @@ def create_lab_order(
         resource_id=order.id,
         purpose="diagnostics",
     )
-    _refresh_consultation_invoice_if_exists(session, tenant_id, order.consultation_id)
     return order
 
 
@@ -637,6 +624,7 @@ def create_lab_order_from_consultation(
         branch_id=consultation.branch_id,
         patient_id=consultation.patient_id,
         consultation_id=consultation.id,
+        lab_order_number=next_document_number(session, tenant_id=tenant_id, branch_id=consultation.branch_id, entity="lab_order"),
         source=LabOrderSource.CONSULTATION,
         priority=payload.priority,
         tests=consultation.lab_referral_text,
@@ -692,7 +680,6 @@ def create_lab_order_from_consultation(
         resource_id=order.id,
         purpose="diagnostics",
     )
-    _refresh_consultation_invoice_if_exists(session, tenant_id, order.consultation_id)
     return order
 
 
@@ -767,7 +754,6 @@ def update_lab_order_status(
         resource_id=order.id,
         purpose="diagnostics",
     )
-    _refresh_consultation_invoice_if_exists(session, tenant_id, order.consultation_id)
     return order
 
 
@@ -850,6 +836,22 @@ def add_lab_result(
         item.updated_at = now
         session.add(item)
     session.add(result)
+    if payload.report_url:
+        record_file_document(
+            session,
+            tenant_id=tenant_id,
+            branch_id=order.branch_id,
+            patient_id=order.patient_id,
+            file_name=payload.report_file_name or "Lab Report",
+            file_url=payload.report_url,
+            category="lab_report",
+            source_module="lab",
+            attached_to_doctype="LabOrder",
+            attached_to_name=order.id,
+            attached_to_field="report_url",
+            attached_to_label="Lab Report",
+            uploaded_by_user_id=payload.released_by_user_id or current_user.id,
+        )
     session.add(order)
     session.commit()
     session.refresh(order)

@@ -284,7 +284,7 @@ def test_create_pharmacy_issue_from_consultation_and_dispense(client):
     assert dispensed.json()["dispensed_at"] is not None
 
 
-def test_consultation_invoice_refresh_includes_lab_and_pharmacy_charges(client):
+def test_consultation_invoice_excludes_lab_and_pharmacy_charges(client):
     tenant, branch, patient = setup_lab_pharmacy_tenant(client)
     client.post(
         "/api/v1/billing/doctor-fee-rules",
@@ -389,10 +389,10 @@ def test_consultation_invoice_refresh_includes_lab_and_pharmacy_charges(client):
     assert refreshed.status_code == 201
     detail = refreshed.json()
     assert detail["invoice"]["id"] == first_invoice["invoice"]["id"]
-    assert detail["invoice"]["subtotal_amount"] == 980
-    assert detail["invoice"]["total_amount"] == 980
+    assert detail["invoice"]["subtotal_amount"] == 600
+    assert detail["invoice"]["total_amount"] == 600
     assert detail["invoice"]["doctor_share_amount"] == 360
-    assert {item["item_type"] for item in detail["items"]} == {"consultation", "lab", "pharmacy"}
+    assert {item["item_type"] for item in detail["items"]} == {"consultation"}
 
 
 def test_create_external_pharmacy_issue(client):

@@ -96,10 +96,23 @@ class InvoiceRead(BaseModel):
     updated_at: datetime
 
 
+class InvoiceMembershipBenefitRead(BaseModel):
+    has_active_subscription: bool = False
+    is_applied: bool = False
+    can_apply: bool = False
+    service_type: str | None = None
+    plan_id: str | None = None
+    plan_name: str | None = None
+    discount_amount: int = 0
+    payable_amount: int = 0
+    reason: str | None = None
+
+
 class InvoiceDetailRead(BaseModel):
     invoice: InvoiceRead
     items: list[InvoiceItemRead]
     payments: list["PaymentRead"] = []
+    membership_benefit: InvoiceMembershipBenefitRead | None = None
 
 
 class PaymentCreate(BaseModel):
@@ -182,6 +195,7 @@ class DiscountOfferCreate(BaseModel):
     service_scope: str = Field(default="all", max_length=40)
     discount_type: DiscountType = DiscountType.PERCENTAGE
     value: int = Field(ge=0)
+    minimum_bill_amount: int = Field(default=0, ge=0)
     max_discount_amount: int | None = Field(default=None, ge=0)
     valid_from: datetime | None = None
     valid_until: datetime | None = None
@@ -195,6 +209,7 @@ class DiscountOfferUpdate(BaseModel):
     service_scope: str | None = Field(default=None, max_length=40)
     discount_type: DiscountType | None = None
     value: int | None = Field(default=None, ge=0)
+    minimum_bill_amount: int | None = Field(default=None, ge=0)
     max_discount_amount: int | None = Field(default=None, ge=0)
     valid_from: datetime | None = None
     valid_until: datetime | None = None

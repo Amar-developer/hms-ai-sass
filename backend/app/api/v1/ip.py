@@ -2,7 +2,6 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from sqlalchemy.exc import OperationalError, ProgrammingError
-from sqlalchemy import func
 from sqlmodel import Session, delete, select
 
 from app.core.access_control import require_branch_in_tenant, require_user_branch_access, scoped_branch_id
@@ -16,6 +15,7 @@ from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceItemRead, InvoiceRead
 from app.modules.billing.service import next_invoice_number
+from app.modules.files.service import record_file_document
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.ip.models import (
@@ -58,6 +58,7 @@ from app.modules.ip.schemas import (
 )
 from app.modules.patients.models import Patient
 from app.modules.settings.models import SettingKey
+from app.modules.settings.numbering import next_document_number
 from app.modules.settings.service import resolve_setting
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
@@ -83,9 +84,8 @@ def _assert_ip_enabled(session: Session, tenant_id: str) -> None:
     enforce_module_enabled(session, tenant_id, "ip")
 
 
-def _next_admission_number(session: Session, tenant_id: str) -> str:
-    count = session.exec(select(func.count()).select_from(IPAdmission).where(IPAdmission.tenant_id == tenant_id)).one()
-    return f"IP-{count + 1:06d}"
+def _next_admission_number(session: Session, tenant_id: str, branch_id: str | None = None) -> str:
+    return next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="ip_admission")
 
 
 def _get_admission(session: Session, tenant_id: str, admission_id: str, current_user: User) -> IPAdmission:
@@ -507,7 +507,7 @@ def create_admission(
         payload,
         update={
             "tenant_id": tenant_id,
-            "admission_number": _next_admission_number(session, tenant_id),
+            "admission_number": _next_admission_number(session, tenant_id, payload.branch_id),
             "admission_date": admission_date,
             "aadhaar_number": aadhaar_number,
             "room_id": room.id if room else payload.room_id,
@@ -637,6 +637,22 @@ async def upload_admission_document(
     admission.updated_at = now_utc()
     admission.updated_by_user_id = current_user.id
     session.add(admission)
+    record_file_document(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        patient_id=admission.patient_id,
+        file_name=admission.admission_document_name or saved_filename,
+        file_url=url_path,
+        content_type=file.content_type,
+        category="admission",
+        source_module="ip",
+        attached_to_doctype="IPAdmission",
+        attached_to_name=admission.id,
+        attached_to_field="admission_document_url",
+        attached_to_label="Admission Document",
+        uploaded_by_user_id=current_user.id,
+    )
     session.commit()
     session.refresh(admission)
     record_audit_event(
@@ -708,6 +724,22 @@ async def upload_admission_documents(
             uploaded_by_user_id=current_user.id,
         )
         session.add(row)
+        record_file_document(
+            session,
+            tenant_id=tenant_id,
+            branch_id=admission.branch_id,
+            patient_id=admission.patient_id,
+            file_name=file.filename or saved_filename,
+            file_url=url_path,
+            content_type=file.content_type,
+            category=normalized_type,
+            source_module="ip",
+            attached_to_doctype="IPAdmission",
+            attached_to_name=admission.id,
+            attached_to_field=normalized_type,
+            attached_to_label=normalized_type.replace("_", " ").title(),
+            uploaded_by_user_id=current_user.id,
+        )
         rows.append(row)
     if not rows:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload at least one file")
@@ -1260,7 +1292,7 @@ def generate_ip_invoice(
             patient_id=admission.patient_id,
             appointment_id=admission.source_appointment_id,
             ip_admission_id=admission.id,
-            invoice_number=next_invoice_number(session, tenant_id, str(invoice_prefix or "INV")),
+            invoice_number=next_invoice_number(session, tenant_id, str(invoice_prefix or "INV"), admission.branch_id),
             subtotal_amount=subtotal,
             taxable_amount=subtotal,
             total_amount=subtotal,

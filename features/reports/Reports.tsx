@@ -95,6 +95,39 @@ function settlementPaidBasis(invoice: any) {
   return Math.min(Math.round((doctorShare * paid) / total), paid);
 }
 
+function invoiceItemTotal(invoice: any) {
+  return numberValue(invoice.subtotal_amount || invoice.total_amount);
+}
+
+function invoiceMembershipBenefit(invoice: any) {
+  return numberValue(invoice.membership_discount_amount);
+}
+
+function invoiceOfferDiscount(invoice: any) {
+  return Math.max(numberValue(invoice.discount_amount) - invoiceMembershipBenefit(invoice), 0);
+}
+
+function allocatedLineRevenue(invoice: any, lineAmount: number) {
+  const itemTotal = invoiceItemTotal(invoice);
+  const revenue = numberValue(invoice.paid_amount || invoice.total_amount);
+  if (!itemTotal || !lineAmount || !revenue) return 0;
+  return Math.round((lineAmount * revenue) / itemTotal);
+}
+
+function allocatedLineOfferDiscount(invoice: any, lineAmount: number) {
+  const itemTotal = invoiceItemTotal(invoice);
+  const offerDiscount = invoiceOfferDiscount(invoice);
+  if (!itemTotal || !lineAmount || !offerDiscount) return 0;
+  return Math.round((lineAmount * offerDiscount) / itemTotal);
+}
+
+function allocatedLineMembershipBenefit(invoice: any, lineAmount: number) {
+  const itemTotal = invoiceItemTotal(invoice);
+  const membershipBenefit = invoiceMembershipBenefit(invoice);
+  if (!itemTotal || !lineAmount || !membershipBenefit) return 0;
+  return Math.round((lineAmount * membershipBenefit) / itemTotal);
+}
+
 function rowDate(invoice: any) {
   return dateKey(invoice.created_at || invoice.invoice_date || invoice.updated_at);
 }
@@ -103,7 +136,9 @@ function isPaidInvoice(invoice: any) {
   const status = normalized(invoice.status);
   const paid = numberValue(invoice.paid_amount);
   const balance = numberValue(invoice.balance_amount);
-  return status === "paid" || (paid > 0 && balance <= 0);
+  const total = numberValue(invoice.total_amount);
+  const settledZeroInvoice = total === 0 && balance <= 0 && numberValue(invoice.discount_amount) > 0;
+  return status === "paid" || (paid > 0 && balance <= 0) || settledZeroInvoice;
 }
 
 function invoiceType(invoice: any) {
@@ -405,7 +440,11 @@ export function Reports({
       const balance = numberValue(invoice.balance_amount);
       const doctorShare = numberValue(invoice.doctor_share_amount);
       const settlement = settlementPaidBasis(invoice);
+      const itemTotal = invoiceItemTotal(invoice);
+      const offerDiscount = invoiceOfferDiscount(invoice);
+      const membershipBenefit = invoiceMembershipBenefit(invoice);
       acc.invoices += 1;
+      acc.itemTotal += itemTotal;
       acc.grossRevenue += total;
       acc.paidRevenue += paid;
       acc.balance += balance;
@@ -413,7 +452,9 @@ export function Reports({
       acc.settlement += settlement;
       acc.clinicFee += numberValue(invoice.clinic_share_amount) || Math.max(total - doctorShare, 0);
       acc.tax += numberValue(invoice.tax_amount);
-      acc.membershipDiscount += numberValue(invoice.membership_discount_amount);
+      acc.offerDiscount += offerDiscount;
+      acc.membershipDiscount += membershipBenefit;
+      acc.totalSavings += offerDiscount + membershipBenefit;
       if (invoice.patient_subscription_enrollment_id || invoice.patient_subscription_plan_id) acc.membershipPurchases += 1;
       const type = invoiceType(invoice);
       if (type === "lab") acc.labRevenue += paid;
@@ -423,6 +464,7 @@ export function Reports({
     },
     {
       invoices: 0,
+      itemTotal: 0,
       grossRevenue: 0,
       paidRevenue: 0,
       balance: 0,
@@ -430,7 +472,9 @@ export function Reports({
       settlement: 0,
       clinicFee: 0,
       tax: 0,
+      offerDiscount: 0,
       membershipDiscount: 0,
+      totalSavings: 0,
       membershipPurchases: 0,
       consultationRevenue: 0,
       labRevenue: 0,
@@ -453,6 +497,8 @@ export function Reports({
           consultations: 0,
           grossRevenue: 0,
           paidRevenue: 0,
+          offerDiscount: 0,
+          membershipDiscount: 0,
           doctorFee: 0,
           settlement: 0,
           clinicFee: 0,
@@ -465,6 +511,8 @@ export function Reports({
       row.invoices += 1;
       row.grossRevenue += total;
       row.paidRevenue += paid;
+      row.offerDiscount += invoiceOfferDiscount(invoice);
+      row.membershipDiscount += invoiceMembershipBenefit(invoice);
       row.doctorFee += doctorFee;
       row.settlement += settlement;
       row.clinicFee += numberValue(invoice.clinic_share_amount) || Math.max(total - doctorFee, 0);
@@ -494,6 +542,8 @@ export function Reports({
     "Invoices",
     "Gross Revenue",
     "Paid Revenue",
+    "Offer Discount",
+    "Membership Benefit",
     "Doctor Fee",
     "Settlement",
     "Clinic Fee",
@@ -506,6 +556,8 @@ export function Reports({
     row.invoices,
     row.grossRevenue,
     row.paidRevenue,
+    row.offerDiscount,
+    row.membershipDiscount,
     row.doctorFee,
     row.settlement,
     row.clinicFee,
@@ -521,6 +573,8 @@ export function Reports({
           doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.invoices), 0),
           doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.grossRevenue), 0),
           doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.paidRevenue), 0),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.offerDiscount), 0),
+          doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.membershipDiscount), 0),
           doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.doctorFee), 0),
           doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.settlement), 0),
           doctorRows.reduce((sum: number, row: any) => sum + numberValue(row.clinicFee), 0),
@@ -543,11 +597,12 @@ export function Reports({
       .filter((invoice: any) => invoiceType(invoice) === "lab" && invoice.lab_order_id)
       .reduce((acc: Map<string, any>, invoice: any) => {
         const detail: any = labOrderDetailById.get(invoice.lab_order_id);
-        const items = detail?.items?.length ? detail.items : [{test_name: "Unmapped Lab Invoice", price: invoice.paid_amount}];
+        const items = detail?.items?.length ? detail.items : [{test_name: "Unmapped Lab Invoice", price: invoiceItemTotal(invoice)}];
         for (const item of items) {
           const catalogItem = item.package_id ? labPackageById.get(item.package_id) : labTestById.get(item.test_id);
           const supplierId = catalogItem?.supplier_id || "none";
           const key = `${supplierId}:${item.test_name || item.id}`;
+          const lineAmount = numberValue(item.price);
           const row =
             acc.get(key) ||
             {
@@ -557,12 +612,18 @@ export function Reports({
               item: item.test_name || catalogItem?.name || "Lab item",
               orders: new Set(),
               invoices: new Set(),
+              itemTotal: 0,
+              offerDiscount: 0,
+              membershipBenefit: 0,
               revenue: 0,
               purchaseCost: 0,
             };
           row.orders.add(invoice.lab_order_id);
           row.invoices.add(invoice.id);
-          row.revenue += numberValue(item.price);
+          row.itemTotal += lineAmount;
+          row.offerDiscount += allocatedLineOfferDiscount(invoice, lineAmount);
+          row.membershipBenefit += allocatedLineMembershipBenefit(invoice, lineAmount);
+          row.revenue += allocatedLineRevenue(invoice, lineAmount);
           row.purchaseCost += numberValue(catalogItem?.purchase_price);
           acc.set(key, row);
         }
@@ -587,13 +648,14 @@ export function Reports({
       .filter((invoice: any) => invoiceType(invoice) === "pharmacy" && invoice.pharmacy_issue_id)
       .reduce((acc: Map<string, any>, invoice: any) => {
         const detail: any = pharmacyIssueDetailById.get(invoice.pharmacy_issue_id);
-        const items = detail?.items?.length ? detail.items : [{medicine_name: "Unmapped Pharmacy Invoice", unit_price: invoice.paid_amount, quantity: 1}];
+        const items = detail?.items?.length ? detail.items : [{medicine_name: "Unmapped Pharmacy Invoice", unit_price: invoiceItemTotal(invoice), quantity: 1}];
         for (const item of items) {
           const medicine = medicineById.get(item.medicine_id);
           const supplierId = medicine?.supplier_id || "none";
           const key = `${supplierId}:${item.medicine_name || item.id}`;
           const quantity = numberValue(item.dispensed_quantity || item.quantity || 1);
-          const revenue = numberValue(item.unit_price) * quantity;
+          const lineAmount = numberValue(item.unit_price) * quantity;
+          const revenue = allocatedLineRevenue(invoice, lineAmount);
           const purchaseCost = numberValue(medicine?.purchase_price) * quantity;
           const row =
             acc.get(key) ||
@@ -605,12 +667,18 @@ export function Reports({
               issues: new Set(),
               invoices: new Set(),
               quantity: 0,
+              itemTotal: 0,
+              offerDiscount: 0,
+              membershipBenefit: 0,
               revenue: 0,
               purchaseCost: 0,
             };
           row.issues.add(invoice.pharmacy_issue_id);
           row.invoices.add(invoice.id);
           row.quantity += quantity;
+          row.itemTotal += lineAmount;
+          row.offerDiscount += allocatedLineOfferDiscount(invoice, lineAmount);
+          row.membershipBenefit += allocatedLineMembershipBenefit(invoice, lineAmount);
           row.revenue += revenue;
           row.purchaseCost += purchaseCost;
           acc.set(key, row);
@@ -632,7 +700,10 @@ export function Reports({
     "Lab Test / Package",
     "Orders",
     "Invoices",
-    "Revenue",
+    "Item Total",
+    "Offer Discount",
+    "Membership Benefit",
+    "Net Revenue",
     "Purchase Cost",
     "Lab Profit",
   ];
@@ -641,6 +712,9 @@ export function Reports({
     row.item,
     row.orderCount,
     row.invoiceCount,
+    row.itemTotal,
+    row.offerDiscount,
+    row.membershipBenefit,
     row.revenue,
     row.purchaseCost,
     row.profit,
@@ -651,7 +725,10 @@ export function Reports({
     "Issues",
     "Invoices",
     "Qty",
-    "Revenue",
+    "Item Total",
+    "Offer Discount",
+    "Membership Benefit",
+    "Net Revenue",
     "Purchase Cost",
     "Pharmacy Profit",
   ];
@@ -661,25 +738,34 @@ export function Reports({
     row.issueCount,
     row.invoiceCount,
     row.quantity,
+    row.itemTotal,
+    row.offerDiscount,
+    row.membershipBenefit,
     row.revenue,
     row.purchaseCost,
     row.profit,
   ]);
   const labSettlementSummary = labSettlementRows.reduce(
     (acc: any, row: any) => ({
+      itemTotal: acc.itemTotal + numberValue(row.itemTotal),
+      offerDiscount: acc.offerDiscount + numberValue(row.offerDiscount),
+      membershipBenefit: acc.membershipBenefit + numberValue(row.membershipBenefit),
       revenue: acc.revenue + numberValue(row.revenue),
       purchaseCost: acc.purchaseCost + numberValue(row.purchaseCost),
       profit: acc.profit + numberValue(row.profit),
     }),
-    {revenue: 0, purchaseCost: 0, profit: 0},
+    {itemTotal: 0, offerDiscount: 0, membershipBenefit: 0, revenue: 0, purchaseCost: 0, profit: 0},
   );
   const pharmacySettlementSummary = pharmacySettlementRows.reduce(
     (acc: any, row: any) => ({
+      itemTotal: acc.itemTotal + numberValue(row.itemTotal),
+      offerDiscount: acc.offerDiscount + numberValue(row.offerDiscount),
+      membershipBenefit: acc.membershipBenefit + numberValue(row.membershipBenefit),
       revenue: acc.revenue + numberValue(row.revenue),
       purchaseCost: acc.purchaseCost + numberValue(row.purchaseCost),
       profit: acc.profit + numberValue(row.profit),
     }),
-    {revenue: 0, purchaseCost: 0, profit: 0},
+    {itemTotal: 0, offerDiscount: 0, membershipBenefit: 0, revenue: 0, purchaseCost: 0, profit: 0},
   );
   const invoiceHeaders = [
     "Invoice",
@@ -688,10 +774,12 @@ export function Reports({
     "Patient",
     "Doctor",
     "Status",
+    "Item Total",
+    "Offer Discount",
+    "Membership Benefit",
     "Total",
     "Paid",
     "Balance",
-    "Membership Discount",
     "Doctor Fee",
     "Settlement",
     "Clinic Profit",
@@ -712,10 +800,12 @@ export function Reports({
       patient?.name || patient?.full_name || invoice.patient_name || publicDisplayValue(invoice.patient_id),
       doctorName,
       humanizeOptionLabel(invoice.status),
+      invoiceItemTotal(invoice),
+      invoiceOfferDiscount(invoice),
+      invoiceMembershipBenefit(invoice),
       numberValue(invoice.total_amount),
       paid,
       numberValue(invoice.balance_amount),
-      numberValue(invoice.membership_discount_amount),
       numberValue(invoice.doctor_share_amount),
       settlement,
       Math.max(paid - settlement, 0),
@@ -731,10 +821,12 @@ export function Reports({
           "",
           "",
           "",
+          totals.itemTotal,
+          totals.offerDiscount,
+          totals.membershipDiscount,
           totals.grossRevenue,
           totals.paidRevenue,
           totals.balance,
-          totals.membershipDiscount,
           totals.doctorFee,
           totals.settlement,
           finalProfit,
@@ -742,13 +834,16 @@ export function Reports({
       ]
     : invoiceRows;
   const summaryRows = [
-    ["Gross Revenue", totals.grossRevenue],
+    ["Item Total", totals.itemTotal],
+    ["Offer Discounts Used", totals.offerDiscount],
+    ["Membership Benefits Used", totals.membershipDiscount],
+    ["Total Savings", totals.totalSavings],
+    ["Net Invoice Revenue", totals.grossRevenue],
     ["Paid Revenue", totals.paidRevenue],
     ["Consultation Revenue", totals.consultationRevenue],
     ["Lab Revenue", totals.labRevenue],
     ["Pharmacy Revenue", totals.pharmacyRevenue],
     ["Membership Purchases", totals.membershipPurchases],
-    ["Membership Discounts Used", totals.membershipDiscount],
     ["Balance", totals.balance],
     ["Doctor Fee", totals.doctorFee],
     ["Settlement", totals.settlement],
@@ -913,8 +1008,8 @@ export function Reports({
           <div>
             <h3 className="text-lg font-bold">Healthcare Gross Profit Report</h3>
             <p className="text-sm text-slate-500">
-              Consultation revenue, doctor settlement, clinic fee, gross profit,
-              final profit, and paid-basis settlement.
+              Item value, offer savings, membership benefits, collected revenue,
+              and paid-basis settlement.
             </p>
           </div>
           <Badge tone="blue">
@@ -1076,16 +1171,23 @@ export function Reports({
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Metric icon={IndianRupee} label="Gross Revenue" value={money(totals.grossRevenue)} hint={`${totals.invoices} invoices`} />
+        <Metric icon={IndianRupee} label="Item Total" value={money(totals.itemTotal)} hint={`${totals.invoices} settled invoices`} />
+        <Metric icon={Percent} label="Offer Discounts" value={money(totals.offerDiscount)} hint={`Membership benefits ${money(totals.membershipDiscount)}`} />
+        <Metric icon={ReceiptIndianRupee} label="Net Invoice Revenue" value={money(totals.grossRevenue)} hint={`Tax collected ${money(totals.tax)}`} />
         <Metric icon={ReceiptIndianRupee} label="Paid Revenue" value={money(totals.paidRevenue)} hint={`Due ${money(totals.balance)}`} />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Metric icon={Stethoscope} label="Doctor Fee" value={money(totals.doctorFee)} hint={`Settlement ${money(totals.settlement)}`} />
         <Metric icon={Activity} label="Final Profit" value={money(finalProfit)} hint={`Gross profit ${money(grossProfit)}`} />
+        <Metric icon={Percent} label="Gross Profit %" value={percent(grossProfit, totals.grossRevenue)} hint="After doctor fee on invoice value" />
+        <Metric icon={Percent} label="Final Profit %" value={percent(finalProfit, totals.paidRevenue)} hint="After paid-basis doctor settlement" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <Metric icon={Percent} label="Gross Profit %" value={percent(grossProfit, totals.grossRevenue)} hint="After doctor fee on invoice value" />
-        <Metric icon={Percent} label="Final Profit %" value={percent(finalProfit, totals.paidRevenue)} hint="After paid-basis doctor settlement" />
         <Metric icon={CalendarDays} label="Completed Consultations" value={completedAppointments.length} hint={`${patients.length} patient records · ${ipAdmissions.length} IP records`} />
+        <Metric icon={ReceiptIndianRupee} label="Membership Benefits" value={money(totals.membershipDiscount)} hint={`${totals.membershipPurchases} plan purchase invoices`} />
+        <Metric icon={ReceiptIndianRupee} label="Total Savings" value={money(totals.totalSavings)} hint="Offer discounts plus membership benefits" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -1095,8 +1197,8 @@ export function Reports({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <Metric icon={ReceiptIndianRupee} label="Lab Settlement" value={money(labSettlementSummary.purchaseCost)} hint={`Lab profit ${money(labSettlementSummary.profit)}`} />
-        <Metric icon={ReceiptIndianRupee} label="Pharmacy Settlement" value={money(pharmacySettlementSummary.purchaseCost)} hint={`Pharmacy profit ${money(pharmacySettlementSummary.profit)}`} />
+        <Metric icon={ReceiptIndianRupee} label="Lab Settlement" value={money(labSettlementSummary.purchaseCost)} hint={`Net ${money(labSettlementSummary.revenue)} · saved ${money(labSettlementSummary.offerDiscount + labSettlementSummary.membershipBenefit)}`} />
+        <Metric icon={ReceiptIndianRupee} label="Pharmacy Settlement" value={money(pharmacySettlementSummary.purchaseCost)} hint={`Net ${money(pharmacySettlementSummary.revenue)} · saved ${money(pharmacySettlementSummary.offerDiscount + pharmacySettlementSummary.membershipBenefit)}`} />
       </div>
 
       <CollapsibleReportSection
@@ -1107,7 +1209,7 @@ export function Reports({
         onToggle={() => setOpenSections((state: any) => ({...state, doctor: !state.doctor}))}
       >
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1280px] text-left text-sm">
+          <table className="w-full min-w-[1480px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Doctor</th>
@@ -1115,6 +1217,8 @@ export function Reports({
                 <th>Invoices</th>
                 <th>Gross Revenue</th>
                 <th>Paid</th>
+                <th>Offer Discount</th>
+                <th>Membership Benefit</th>
                 <th>Doctor Fee</th>
                 <th>Settlement</th>
                 <th>Clinic Fee</th>
@@ -1125,7 +1229,7 @@ export function Reports({
             <tbody className="divide-y">
               {doctorRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} className="px-4 py-4 text-slate-500">
+                  <td colSpan={12} className="px-4 py-4 text-slate-500">
                     No healthcare invoices match this filter.
                   </td>
                 </tr>
@@ -1139,6 +1243,8 @@ export function Reports({
                   <td>{row.invoices}</td>
                   <td>{money(row.grossRevenue)}</td>
                   <td>{money(row.paidRevenue)}</td>
+                  <td>{money(row.offerDiscount)}</td>
+                  <td>{money(row.membershipDiscount)}</td>
                   <td>{money(row.doctorFee)}</td>
                   <td>{money(row.settlement)}</td>
                   <td>{money(row.clinicFee)}</td>
@@ -1159,14 +1265,17 @@ export function Reports({
         onToggle={() => setOpenSections((state: any) => ({...state, lab: !state.lab}))}
       >
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1120px] text-left text-sm">
+          <table className="w-full min-w-[1480px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Supplier</th>
                 <th>Lab Test / Package</th>
                 <th>Orders</th>
                 <th>Invoices</th>
-                <th>Revenue</th>
+                <th>Item Total</th>
+                <th>Offer Discount</th>
+                <th>Membership Benefit</th>
+                <th>Net Revenue</th>
                 <th>Purchase Cost</th>
                 <th>Lab Profit</th>
               </tr>
@@ -1174,8 +1283,8 @@ export function Reports({
             <tbody className="divide-y">
               {labSettlementRows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-4 text-slate-500">
-                    No paid lab invoices match this filter.
+                  <td colSpan={10} className="px-4 py-4 text-slate-500">
+                    No settled lab invoices match this filter.
                   </td>
                 </tr>
               )}
@@ -1187,6 +1296,9 @@ export function Reports({
                   <td>{row.item}</td>
                   <td>{row.orderCount}</td>
                   <td>{row.invoiceCount}</td>
+                  <td>{money(row.itemTotal)}</td>
+                  <td>{money(row.offerDiscount)}</td>
+                  <td>{money(row.membershipBenefit)}</td>
                   <td>{money(row.revenue)}</td>
                   <td>{money(row.purchaseCost)}</td>
                   <td className="font-bold">{money(row.profit)}</td>
@@ -1205,7 +1317,7 @@ export function Reports({
         onToggle={() => setOpenSections((state: any) => ({...state, pharmacy: !state.pharmacy}))}
       >
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1220px] text-left text-sm">
+          <table className="w-full min-w-[1580px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Supplier</th>
@@ -1213,7 +1325,10 @@ export function Reports({
                 <th>Issues</th>
                 <th>Invoices</th>
                 <th>Qty</th>
-                <th>Revenue</th>
+                <th>Item Total</th>
+                <th>Offer Discount</th>
+                <th>Membership Benefit</th>
+                <th>Net Revenue</th>
                 <th>Purchase Cost</th>
                 <th>Pharmacy Profit</th>
               </tr>
@@ -1221,8 +1336,8 @@ export function Reports({
             <tbody className="divide-y">
               {pharmacySettlementRows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-4 text-slate-500">
-                    No paid pharmacy invoices match this filter.
+                  <td colSpan={11} className="px-4 py-4 text-slate-500">
+                    No settled pharmacy invoices match this filter.
                   </td>
                 </tr>
               )}
@@ -1235,6 +1350,9 @@ export function Reports({
                   <td>{row.issueCount}</td>
                   <td>{row.invoiceCount}</td>
                   <td>{row.quantity}</td>
+                  <td>{money(row.itemTotal)}</td>
+                  <td>{money(row.offerDiscount)}</td>
+                  <td>{money(row.membershipBenefit)}</td>
                   <td>{money(row.revenue)}</td>
                   <td>{money(row.purchaseCost)}</td>
                   <td className="font-bold">{money(row.profit)}</td>
@@ -1249,12 +1367,12 @@ export function Reports({
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
           <div>
             <h3 className="text-lg font-bold">Invoice Profit Details</h3>
-            <p className="text-sm text-slate-500">Only paid invoices are shown in profit details.</p>
+            <p className="text-sm text-slate-500">Paid invoices and fully discounted membership invoices are shown.</p>
           </div>
-          <Badge tone="green">{filteredInvoices.length} paid invoices</Badge>
+          <Badge tone="green">{filteredInvoices.length} settled invoices</Badge>
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1520px] text-left text-sm">
+          <table className="w-full min-w-[1760px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Invoice</th>
@@ -1262,10 +1380,12 @@ export function Reports({
                 <th>Patient</th>
                 <th>Doctor</th>
                 <th>Status</th>
+                <th>Item Total</th>
+                <th>Offer Discount</th>
+                <th>Membership Benefit</th>
                 <th>Total</th>
                 <th>Paid</th>
                 <th>Balance</th>
-                <th>Membership</th>
                 <th>Doctor Fee</th>
                 <th>Settlement</th>
                 <th>Clinic Profit</th>
@@ -1274,8 +1394,8 @@ export function Reports({
             <tbody className="divide-y">
               {filteredInvoices.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-4 text-slate-500">
-                    No paid invoices match this filter.
+                  <td colSpan={14} className="px-4 py-4 text-slate-500">
+                    No settled invoices match this filter.
                   </td>
                 </tr>
               )}
@@ -1304,10 +1424,12 @@ export function Reports({
                         {humanizeOptionLabel(invoice.status)}
                       </Badge>
                     </td>
+                    <td>{money(invoiceItemTotal(invoice))}</td>
+                    <td>{money(invoiceOfferDiscount(invoice))}</td>
+                    <td>{money(invoiceMembershipBenefit(invoice))}</td>
                     <td>{money(invoice.total_amount)}</td>
                     <td>{money(paid)}</td>
                     <td>{money(invoice.balance_amount)}</td>
-                    <td>{money(invoice.membership_discount_amount)}</td>
                     <td>{money(invoice.doctor_share_amount)}</td>
                     <td>{money(settlement)}</td>
                     <td className="font-bold">{money(Math.max(paid - settlement, 0))}</td>
