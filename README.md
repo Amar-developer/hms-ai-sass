@@ -8,6 +8,8 @@ This project now includes a practical documentation backbone for evolving the pr
 
 - [Documentation index](./docs/README.md)
 - [Developer setup guide](./docs/developer-setup.md)
+- [EC2 Docker deployment guide](./docs/ec2-docker-deployment.md)
+- [CI/CD testing strategy](./docs/ci-cd-testing-strategy.md)
 - [Product blueprint](./docs/product-blueprint.md)
 - [Development master prompt](./docs/development-master-prompt.md)
 - [Backend architecture spec](./docs/backend-architecture-spec.md)
@@ -134,7 +136,5 @@ Open working repository in vs code via Ubuntu
 9. wsl --shutdown ---> Shutdown WSL
 
 10. wsl --terminate Ubuntu ---> Stop One Distro
-
-
 
 
