@@ -138,3 +138,4 @@ Open working repository in vs code via Ubuntu
 10. wsl --terminate Ubuntu ---> Stop One Distro
 
 
+# verified
