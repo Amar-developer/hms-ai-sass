@@ -9,7 +9,8 @@ import {
   UsersRound,
   Video,
 } from "lucide-react";
-import { Badge, Button, Card, Field, Input, Select } from "@/components/ui";
+import { Badge, Button, Card, Input, Select } from "@/components/ui";
+import { FormField } from "@/components/FormElements";
 import {
   SearchPicker,
   TagEntryBox,
@@ -149,9 +150,14 @@ export function DoctorConsultation({
     apiSession?.user?.roles?.includes("doctor"),
   );
   const [scopedPractitioners, setScopedPractitioners] = useState<any[]>([]);
-  const practitionerSource = scopedPractitioners.length ? scopedPractitioners : livePractitioners;
+  const practitionerSource = scopedPractitioners.length
+    ? scopedPractitioners
+    : livePractitioners;
   const departmentNameById = new Map(
-    (allowedDepartments || []).map((department: any) => [department.id, department.name]),
+    (allowedDepartments || []).map((department: any) => [
+      department.id,
+      department.name,
+    ]),
   );
   const allDoctorList: any[] = Object.values(
     [
@@ -246,8 +252,22 @@ export function DoctorConsultation({
   const [diagnosisRows, setDiagnosisRows] = useState("");
   const [medicineItems, setMedicineItems] = useState<any[]>([]);
   const [referralItems, setReferralItems] = useState<any[]>([]);
-  const medicineRows = medicineItems.map((m: any) => [m.name, m.dosage, m.frequency, m.duration, m.instructions].map((s: any) => String(s || "").trim()).filter(Boolean).join(" | ")).join("\n");
-  const referralRows = referralItems.map((r: any) => [r.type, r.name, r.priority, r.instructions].map((s: any) => String(s || "").trim()).filter(Boolean).join(" | ")).join("\n");
+  const medicineRows = medicineItems
+    .map((m: any) =>
+      [m.name, m.dosage, m.frequency, m.duration, m.instructions]
+        .map((s: any) => String(s || "").trim())
+        .filter(Boolean)
+        .join(" | "),
+    )
+    .join("\n");
+  const referralRows = referralItems
+    .map((r: any) =>
+      [r.type, r.name, r.priority, r.instructions]
+        .map((s: any) => String(s || "").trim())
+        .filter(Boolean)
+        .join(" | "),
+    )
+    .join("\n");
   const [selectedMedicineId, setSelectedMedicineId] = useState("");
   const [medicineDosage, setMedicineDosage] = useState("");
   const [medicineFrequency, setMedicineFrequency] = useState("1-0-1");
@@ -261,6 +281,7 @@ export function DoctorConsultation({
   const [addendumNote, setAddendumNote] = useState("");
   const [medicineAmount, setMedicineAmount] = useState(250);
   const [labNeeded, setLabNeeded] = useState(false);
+  const [admissionNeeded, setAdmissionNeeded] = useState(false);
   const [labTests, setLabTests] = useState("");
   const [scanNeeded, setScanNeeded] = useState(false);
   const [scanTests, setScanTests] = useState("");
@@ -271,6 +292,7 @@ export function DoctorConsultation({
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
+
   const [dashboardFilter, setDashboardFilter] = useState<
     "booked" | "waiting" | "completed" | "seen"
   >("booked");
@@ -284,10 +306,21 @@ export function DoctorConsultation({
     const params = new URLSearchParams();
     if (branchId) params.set("branch_id", branchId);
     if (departmentId) params.set("department_id", departmentId);
-    apiFetch(`/practitioners${params.toString() ? `?${params}` : ""}`, apiSession)
-      .then((rows: any) => setScopedPractitioners(Array.isArray(rows) ? rows : []))
+    apiFetch(
+      `/practitioners${params.toString() ? `?${params}` : ""}`,
+      apiSession,
+    )
+      .then((rows: any) =>
+        setScopedPractitioners(Array.isArray(rows) ? rows : []),
+      )
       .catch(() => setScopedPractitioners([]));
-  }, [apiSession?.token, apiSession?.tenantId, branchId, departmentId, doctorScope?.practitionerId]);
+  }, [
+    apiSession?.token,
+    apiSession?.tenantId,
+    branchId,
+    departmentId,
+    doctorScope?.practitionerId,
+  ]);
   useEffect(() => {
     const id = setInterval(() => setTick((v) => v + 1), 5000);
     return () => clearInterval(id);
@@ -298,19 +331,23 @@ export function DoctorConsultation({
       (appointment: any) => appointment.id === selectedAppointmentId,
     );
     const selectedAppointmentDoctorId =
-      selectedAppointment?.doctorId || selectedAppointment?.practitioner_id || "";
+      selectedAppointment?.doctorId ||
+      selectedAppointment?.practitioner_id ||
+      "";
     const selectedAppointmentDepartmentId =
-      selectedAppointment?.departmentId || selectedAppointment?.department_id || "";
+      selectedAppointment?.departmentId ||
+      selectedAppointment?.department_id ||
+      "";
     const selectedAppointmentDoctorAvailable = doctorList.some(
       (doctor: any) => doctor.id === selectedAppointmentDoctorId,
     );
     const selectedAppointmentFits = Boolean(
       selectedAppointment &&
-        selectedAppointmentDoctorId &&
-        selectedAppointmentDoctorAvailable &&
-        (!departmentId ||
-          !selectedAppointmentDepartmentId ||
-          selectedAppointmentDepartmentId === departmentId),
+      selectedAppointmentDoctorId &&
+      selectedAppointmentDoctorAvailable &&
+      (!departmentId ||
+        !selectedAppointmentDepartmentId ||
+        selectedAppointmentDepartmentId === departmentId),
     );
     const nextDoctorId =
       scopedDoctorId ||
@@ -321,10 +358,10 @@ export function DoctorConsultation({
     if (nextDoctorId !== doctorId) {
       const keepSelection = Boolean(
         selectedAppointment &&
-          (!departmentId ||
-            !selectedAppointmentDepartmentId ||
-            selectedAppointmentDepartmentId === departmentId) &&
-          selectedAppointmentDoctorId === nextDoctorId,
+        (!departmentId ||
+          !selectedAppointmentDepartmentId ||
+          selectedAppointmentDepartmentId === departmentId) &&
+        selectedAppointmentDoctorId === nextDoctorId,
       );
       setDoctorId(nextDoctorId);
       if (nextDoctorId) {
@@ -440,8 +477,7 @@ export function DoctorConsultation({
           setVitals(
             detail.vitals
               .map(
-                (v: any) =>
-                  `${v.name}=${v.value}${v.unit ? " " + v.unit : ""}`,
+                (v: any) => `${v.name}=${v.value}${v.unit ? " " + v.unit : ""}`,
               )
               .join(", "),
           );
@@ -469,15 +505,42 @@ export function DoctorConsultation({
           );
         }
         if (detail.medicines?.length) {
-          setMedicineItems(detail.medicines.map((r: any) => ({name: r.medicine_name || '', dosage: r.dosage || '', frequency: r.frequency || '', duration: r.duration || '', instructions: r.instructions || ''})));
+          setMedicineItems(
+            detail.medicines.map((r: any) => ({
+              name: r.medicine_name || "",
+              dosage: r.dosage || "",
+              frequency: r.frequency || "",
+              duration: r.duration || "",
+              instructions: r.instructions || "",
+            })),
+          );
         } else if (c.prescription_text) {
-          setMedicineItems(String(c.prescription_text || '').split(/\n|,\s+(?=[A-Za-z])/).map((l: string) => l.trim()).filter(Boolean).map((line: string) => {
-            const [name = '', dosage = '', frequency = '', duration = '', instructions = ''] = line.split(/\s*\|\s*/);
-            return {name, dosage, frequency, duration, instructions};
-          }));
+          setMedicineItems(
+            String(c.prescription_text || "")
+              .split(/\n|,\s+(?=[A-Za-z])/)
+              .map((l: string) => l.trim())
+              .filter(Boolean)
+              .map((line: string) => {
+                const [
+                  name = "",
+                  dosage = "",
+                  frequency = "",
+                  duration = "",
+                  instructions = "",
+                ] = line.split(/\s*\|\s*/);
+                return { name, dosage, frequency, duration, instructions };
+              }),
+          );
         }
         if (detail.referrals?.length) {
-          setReferralItems(detail.referrals.map((r: any) => ({type: r.referral_type || 'lab', name: r.item_name || '', priority: r.priority || 'routine', instructions: r.instructions || ''})));
+          setReferralItems(
+            detail.referrals.map((r: any) => ({
+              type: r.referral_type || "lab",
+              name: r.item_name || "",
+              priority: r.priority || "routine",
+              instructions: r.instructions || "",
+            })),
+          );
           const labRefs = detail.referrals.filter(
             (r: any) => r.referral_type === "lab",
           );
@@ -503,7 +566,7 @@ export function DoctorConsultation({
           }
         }
       } catch {
-      // silently ignore — form stays blank, user can re-enter
+        // silently ignore — form stays blank, user can re-enter
       }
     }
     loadConsultationData();
@@ -538,7 +601,10 @@ export function DoctorConsultation({
         return;
       }
       try {
-        const detail = await apiFetch(`/patients/${selectedPatientId}`, apiSession);
+        const detail = await apiFetch(
+          `/patients/${selectedPatientId}`,
+          apiSession,
+        );
         if (alive) setSelectedPatientDetail(detail);
       } catch {
         if (alive) setSelectedPatientDetail(null);
@@ -564,11 +630,9 @@ export function DoctorConsultation({
     (a: any) =>
       !isCompletedAppointment(a) &&
       !isCancelledAppointment(a) &&
-      (
-        a.tokenType === "Emergency" ||
+      (a.tokenType === "Emergency" ||
         statusKey(a.queueStatus) === "emergency_queue" ||
-        String(a.visitType || "").toLowerCase() === "emergency"
-      ),
+        String(a.visitType || "").toLowerCase() === "emergency"),
   ).length;
   const uniquePatientCount = new Set(
     selectedDateQueue
@@ -583,7 +647,7 @@ export function DoctorConsultation({
     const count = doctorQueue.filter(
       (a: any) =>
         String(a.appointmentDate || a.appointment_date || "").slice(0, 10) ===
-        iso &&
+          iso &&
         !isCompletedAppointment(a) &&
         !isCancelledAppointment(a),
     ).length;
@@ -605,12 +669,14 @@ export function DoctorConsultation({
       return true;
     })
     .slice(0, 8);
-  const appointmentListLabel = dashboardFilter === "waiting" ? "waiting" : "active";
+  const appointmentListLabel =
+    dashboardFilter === "waiting" ? "waiting" : "active";
   const selectedPatientHistory = selected
     ? appointments
         .filter((item: any) => {
           const itemPatientId = item.patientId || item.patient_id;
-          const selectedDoctorId = selected.doctorId || selected.practitioner_id || doctorId;
+          const selectedDoctorId =
+            selected.doctorId || selected.practitioner_id || doctorId;
           const itemDoctorId = item.doctorId || item.practitioner_id;
           const selectedDateKey = appointmentDateKey(selected);
           const itemDateKey = appointmentDateKey(item);
@@ -697,9 +763,7 @@ export function DoctorConsultation({
     const labNames = structuredPayload()
       .referrals.filter((row: any) => row.referral_type === "lab")
       .map((row: any) => row.item_name);
-    const manual = labNeeded
-      ? labTestNames(labTests)
-      : [];
+    const manual = labNeeded ? labTestNames(labTests) : [];
     return Array.from(new Set([...labNames, ...manual])).join(", ");
   }
   function addMedicineRow(name: string, dosage = "") {
@@ -727,11 +791,15 @@ export function DoctorConsultation({
     setMedicineDosage("");
   }
   function addMedicineSuggestion() {
-    const med = medicineCatalog.find((row: any) => row.id === selectedMedicineId);
+    const med = medicineCatalog.find(
+      (row: any) => row.id === selectedMedicineId,
+    );
     if (med) addMedicineRow(med.name, medicineDosage || med.strength || "");
   }
   function addMedicineFromText(value: string, option?: any) {
-    const med = option?.item || medicineCatalog.find((row: any) => row.id === option?.value);
+    const med =
+      option?.item ||
+      medicineCatalog.find((row: any) => row.id === option?.value);
     addMedicineRow(med?.name || value, medicineDosage || med?.strength || "");
   }
   function addLabRow(name: string) {
@@ -767,11 +835,14 @@ export function DoctorConsultation({
     if (test) addLabRow(test.name);
   }
   function addLabFromText(value: string, option?: any) {
-    const test = option?.item || labCatalog.find((row: any) => row.id === option?.value);
+    const test =
+      option?.item || labCatalog.find((row: any) => row.id === option?.value);
     addLabRow(test?.name || value);
   }
   function removeMedicineItem(index: number) {
-    setMedicineItems((items: any[]) => items.filter((_: any, i: number) => i !== index));
+    setMedicineItems((items: any[]) =>
+      items.filter((_: any, i: number) => i !== index),
+    );
   }
   function removeReferralItem(index: number) {
     setReferralItems((items: any[]) => {
@@ -782,7 +853,9 @@ export function DoctorConsultation({
             .filter(
               (name: string) =>
                 name.toLowerCase() !==
-                String(removed.name || "").trim().toLowerCase(),
+                String(removed.name || "")
+                  .trim()
+                  .toLowerCase(),
             )
             .join(", "),
         );
@@ -832,9 +905,8 @@ export function DoctorConsultation({
         .filter((row: any) => row.diagnosis),
       medicines: splitRows(medicineRows)
         .map((line: string) => {
-          const [medicine_name, dosage, frequency, duration, instructions] = line
-            .split("|")
-            .map((part: string) => part.trim());
+          const [medicine_name, dosage, frequency, duration, instructions] =
+            line.split("|").map((part: string) => part.trim());
           return {
             medicine_name,
             dosage: dosage || null,
@@ -1201,7 +1273,9 @@ export function DoctorConsultation({
                     }`}
                   >
                     <div className="mb-2 flex flex-wrap gap-1">
-                      <Badge tone={a.tokenType === "Emergency" ? "red" : "amber"}>
+                      <Badge
+                        tone={a.tokenType === "Emergency" ? "red" : "amber"}
+                      >
                         {humanizeOptionLabel(a.tokenType)}
                       </Badge>
                       {a.consultationStatus && (
@@ -1220,7 +1294,9 @@ export function DoctorConsultation({
                     <p className="mt-1 text-xs text-slate-500">
                       {displayTime(a.time || a.appointment_time)}
                     </p>
-                    <p className="text-xs text-slate-400">{humanizeOptionLabel(a.queueStatus)}</p>
+                    <p className="text-xs text-slate-400">
+                      {humanizeOptionLabel(a.queueStatus)}
+                    </p>
                   </button>
                 ))}
               {doctorQueue.filter(
@@ -1272,6 +1348,8 @@ export function DoctorConsultation({
           removeReferralItem={removeReferralItem}
           labNeeded={labNeeded}
           setLabNeeded={setLabNeeded}
+          admissionNeeded={admissionNeeded}
+          setAdmissionNeeded={setAdmissionNeeded}
           labTests={labTests}
           setLabTests={setLabTests}
           labCatalog={labCatalog}
@@ -1408,7 +1486,7 @@ export function DoctorConsultation({
             </div>
           )}
           <div className="mt-4 grid gap-3">
-            <Field label="Doctor">
+            <FormField label="Doctor">
               <Select
                 value={doctorId}
                 onChange={(e: any) => {
@@ -1423,7 +1501,7 @@ export function DoctorConsultation({
                   </option>
                 ))}
               </Select>
-            </Field>
+            </FormField>
             <Button onClick={callNext} disabled={!current || busy}>
               Call Next Patient
             </Button>
@@ -1444,7 +1522,8 @@ export function DoctorConsultation({
                       {a.token} · {a.patient}
                     </b>
                     <p className="text-xs text-slate-500">
-                      {displayTime(a.time || a.appointment_time)} · {humanizeOptionLabel(a.status)} ·{" "}
+                      {displayTime(a.time || a.appointment_time)} ·{" "}
+                      {humanizeOptionLabel(a.status)} ·{" "}
                       {humanizeOptionLabel(a.queueStatus)}
                     </p>
                   </button>
@@ -1686,7 +1765,9 @@ function PatientHistoryPanel({ history, onOpenPatient }: any) {
                     item.consultationStatus === "signed" ? "green" : "slate"
                   }
                 >
-                  {humanizeOptionLabel(item.consultationStatus || item.status || "Visit")}
+                  {humanizeOptionLabel(
+                    item.consultationStatus || item.status || "Visit",
+                  )}
                 </Badge>
               </div>
               <p className="mt-3 text-sm text-slate-700">
@@ -1743,6 +1824,8 @@ function ConsultationWorkspace(props: any) {
     removeReferralItem,
     labNeeded,
     setLabNeeded,
+    admissionNeeded,
+    setAdmissionNeeded,
     labTests,
     setLabTests,
     labCatalog,
@@ -1849,7 +1932,9 @@ function ConsultationWorkspace(props: any) {
               className="rounded-2xl bg-slate-50 p-4 text-left transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
             >
               <p className="text-xs text-slate-500">Patient</p>
-              <p className="font-bold">{patient?.name || selected?.patient || "-"}</p>
+              <p className="font-bold">
+                {patient?.name || selected?.patient || "-"}
+              </p>
             </button>
             <div className="rounded-2xl bg-slate-50 p-4">
               <p className="text-xs text-slate-500">Age / Gender</p>
@@ -1892,7 +1977,7 @@ function ConsultationWorkspace(props: any) {
             </div>
           )}
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Treatment Type">
+            <FormField label="Treatment Type">
               <Select
                 value={treatmentType}
                 onChange={(e: any) => setTreatmentType(e.target.value)}
@@ -1911,49 +1996,49 @@ function ConsultationWorkspace(props: any) {
                 <option value="procedure_review">Procedure Review</option>
                 <option value="follow_up">Follow-up</option>
               </Select>
-            </Field>
-            <Field label="Follow-up Advice">
+            </FormField>
+            <FormField label="Follow-up Advice">
               <Input
                 value={remarks}
                 onChange={(e: any) => setRemarks(e.target.value)}
                 placeholder="Review after 3 days"
               />
-            </Field>
+            </FormField>
           </div>
-          <Field label="Vitals">
+          <FormField label="Vitals">
             <Input
               value={vitals}
               onChange={(e: any) => setVitals(e.target.value)}
               placeholder="BP=120/80 mmHg, Pulse=78 bpm"
             />
-          </Field>
+          </FormField>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Complaints Rows">
+            <FormField label="Complaints Rows">
               <textarea
                 value={complaints}
                 onChange={(e: any) => setComplaints(e.target.value)}
                 className="min-h-20 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
                 placeholder="Fever | 2 days | medium"
               />
-            </Field>
-            <Field label="Diagnosis Rows">
+            </FormField>
+            <FormField label="Diagnosis Rows">
               <textarea
                 value={diagnosisRows}
                 onChange={(e: any) => setDiagnosisRows(e.target.value)}
                 className="min-h-20 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
                 placeholder="Viral fever | primary | notes"
               />
-            </Field>
+            </FormField>
           </div>
-          <Field label="Doctor Notes">
+          <FormField label="Doctor Notes">
             <textarea
               value={notes}
               onChange={(e: any) => setNotes(e.target.value)}
               className="min-h-20 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
               placeholder="Clinical notes, advice..."
             />
-          </Field>
-          <Field label="Prescription Medicine Rows">
+          </FormField>
+          <FormField label="Prescription Medicine Rows">
             <TagEntryBox
               tags={medicineItems}
               value={medicineTagText}
@@ -1968,10 +2053,10 @@ function ConsultationWorkspace(props: any) {
                   .join(" · ")
               }
             />
-          </Field>
+          </FormField>
           <div className="rounded-3xl bg-slate-50 p-4">
             <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr] lg:items-end">
-              <Field label="Medicine">
+              <FormField label="Medicine">
                 <SearchPicker
                   value={selectedMedicineId}
                   onChange={(_medicineId: string, medicine: any) => {
@@ -1994,20 +2079,25 @@ function ConsultationWorkspace(props: any) {
                       .join(" ")
                   }
                 />
-              </Field>
-              <Field label="Dosage">
+              </FormField>
+              <FormField label="Dosage">
                 <Input
                   value={medicineDosage}
                   onChange={(e: any) => setMedicineDosage(e.target.value)}
                   placeholder="500mg"
                 />
-              </Field>
-              <Field label="Frequency">
+              </FormField>
+              <FormField label="Frequency">
                 <Select
                   value={medicineFrequency}
                   onChange={(e: any) => setMedicineFrequency(e.target.value)}
                 >
-                  {[...new Set([medicineFrequency, ...medicineFrequencyOptions])]
+                  {[
+                    ...new Set([
+                      medicineFrequency,
+                      ...medicineFrequencyOptions,
+                    ]),
+                  ]
                     .filter(Boolean)
                     .map((value: string) => (
                       <option key={value} value={value}>
@@ -2015,8 +2105,8 @@ function ConsultationWorkspace(props: any) {
                       </option>
                     ))}
                 </Select>
-              </Field>
-              <Field label="Duration">
+              </FormField>
+              <FormField label="Duration">
                 <Input
                   list="medicine-duration-options"
                   value={medicineDuration}
@@ -2028,13 +2118,18 @@ function ConsultationWorkspace(props: any) {
                     <option key={value} value={value} />
                   ))}
                 </datalist>
-              </Field>
-              <Field label="Instructions">
+              </FormField>
+              <FormField label="Instructions">
                 <Select
                   value={medicineInstructions}
                   onChange={(e: any) => setMedicineInstructions(e.target.value)}
                 >
-                  {[...new Set([medicineInstructions, ...medicineInstructionOptions])]
+                  {[
+                    ...new Set([
+                      medicineInstructions,
+                      ...medicineInstructionOptions,
+                    ]),
+                  ]
                     .filter(Boolean)
                     .map((value: string) => (
                       <option key={value} value={value}>
@@ -2042,14 +2137,16 @@ function ConsultationWorkspace(props: any) {
                       </option>
                     ))}
                 </Select>
-              </Field>
+              </FormField>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {medicineCatalog.slice(0, 8).map((medicine: any) => (
                 <button
                   key={medicine.id}
                   type="button"
-                  onClick={() => addMedicineFromText(medicine.name, { item: medicine })}
+                  onClick={() =>
+                    addMedicineFromText(medicine.name, { item: medicine })
+                  }
                   className="rounded-xl border bg-white px-3 py-2 text-xs font-bold"
                 >
                   {medicine.name}
@@ -2068,9 +2165,11 @@ function ConsultationWorkspace(props: any) {
                 Lab test needed
               </label>
               {labNeeded && (
-                <Field label="Lab Tests">
+                <FormField label="Lab Tests">
                   <TagEntryBox
-                    tags={referralItems.filter((item: any) => item.type === "lab")}
+                    tags={referralItems.filter(
+                      (item: any) => item.type === "lab",
+                    )}
                     value={labTagText}
                     onChange={setLabTagText}
                     onSubmit={addLabFromText}
@@ -2090,10 +2189,10 @@ function ConsultationWorkspace(props: any) {
                         .join(" · ")
                     }
                   />
-                </Field>
+                </FormField>
               )}
               <div className="mt-3 grid gap-2">
-                <Field label="Available Lab Test">
+                <FormField label="Available Lab Test">
                   <SearchPicker
                     value={selectedLabTestId}
                     onChange={(_id: string, test: any) => {
@@ -2113,7 +2212,7 @@ function ConsultationWorkspace(props: any) {
                         .join(" ")
                     }
                   />
-                </Field>
+                </FormField>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Select
                     value={labPriority}
@@ -2154,13 +2253,13 @@ function ConsultationWorkspace(props: any) {
                   Scan referral
                 </label>
                 {scanNeeded && (
-                  <Field label="Scan / Diagnostic">
+                  <FormField label="Scan / Diagnostic">
                     <Input
                       value={scanTests}
                       onChange={(e: any) => setScanTests(e.target.value)}
                       placeholder="X-Ray, ECG, Ultrasound"
                     />
-                  </Field>
+                  </FormField>
                 )}
                 <div className="mt-2 flex flex-wrap gap-1">
                   {scanCatalog.map((s: any) => (
@@ -2178,7 +2277,7 @@ function ConsultationWorkspace(props: any) {
                   Refer another doctor
                 </label>
                 {referDoctor && (
-                  <Field label="Recommended Doctor">
+                  <FormField label="Recommended Doctor">
                     <Select
                       value={referDoctorId}
                       onChange={(e: any) => setReferDoctorId(e.target.value)}
@@ -2193,8 +2292,18 @@ function ConsultationWorkspace(props: any) {
                           </option>
                         ))}
                     </Select>
-                  </Field>
+                  </FormField>
                 )}
+              </div>
+              <div className="rounded-3xl bg-slate-50 p-4">
+                <label className="flex items-center gap-3 font-bold">
+                  <input
+                    type="checkbox"
+                    value={admissionNeeded}
+                    onChange={(e: any) => setAdmissionNeeded(e.target.checked)}
+                  />
+                  <span>Refer for IP Admission</span>
+                </label>
               </div>
             </div>
           </div>
@@ -2202,21 +2311,24 @@ function ConsultationWorkspace(props: any) {
             <div className="rounded-3xl bg-emerald-50 p-4">
               <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
-                  <p className="font-bold text-emerald-900">Signed consultation</p>
+                  <p className="font-bold text-emerald-900">
+                    Signed consultation
+                  </p>
                   <p className="text-sm text-emerald-700">
-                    Billing can generate the consultation invoice from the Invoices page.
+                    Billing can generate the consultation invoice from the
+                    Invoices page.
                   </p>
                 </div>
                 <Badge tone="green">Ready for billing</Badge>
               </div>
-              <Field label="Signed Record Addendum">
+              <FormField label="Signed Record Addendum">
                 <textarea
                   value={addendumNote}
                   onChange={(e: any) => setAddendumNote(e.target.value)}
                   className="min-h-20 w-full rounded-2xl border border-emerald-100 px-4 py-3 text-sm outline-none"
                   placeholder="Add clarification without changing signed record"
                 />
-              </Field>
+              </FormField>
               <Button
                 onClick={saveAddendum}
                 disabled={busy || !addendumNote.trim()}

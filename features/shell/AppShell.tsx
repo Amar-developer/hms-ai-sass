@@ -1,6 +1,6 @@
 "use client";
 
-import { useState,useRef,useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -12,7 +12,8 @@ import {
   LogOut,
   Settings,
 } from "lucide-react";
-import { Badge, Card, Field, Select } from "@/components/ui";
+import { Badge, Card, Select } from "@/components/ui";
+import { FormField } from "@/components/FormElements";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
 import {
@@ -142,7 +143,7 @@ export function AppShell(props: any) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [reportsSection, setReportsSection] = useState("metrix");
-  const profileOpenRef = useRef<HTMLDivElement>(null)
+  const profileOpenRef = useRef<HTMLDivElement>(null);
   const activeNavLabel =
     visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
 
@@ -187,17 +188,18 @@ export function AppShell(props: any) {
     setActive(nextPage);
   }
 
-  useEffect(()=>{
-    const handleClickOutside = (event:MouseEvent)=>{
-      if (profileOpenRef.current && 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        profileOpenRef.current &&
         !profileOpenRef.current.contains(event.target as Node)
-      ){
-        setProfileOpen(false)
+      ) {
+        setProfileOpen(false);
       }
-    }
-    document.addEventListener('mousedown',handleClickOutside)
-    return ()=> document.addEventListener('mousedown',handleClickOutside)
-  },[])
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.addEventListener("mousedown", handleClickOutside);
+  }, []);
 
   function renderPage() {
     switch (activePage) {
@@ -298,6 +300,7 @@ export function AppShell(props: any) {
                       onClick={() => {
                         navigatePage(id);
                         setSuperAdminSettingsOpen(!superAdminSettingsOpen);
+                        setReportsOpen(!reportsOpen);
                       }}
                       className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
                         isActive
@@ -350,7 +353,12 @@ export function AppShell(props: any) {
                       type="button"
                       onClick={() => {
                         navigatePage(id);
-                        setTenantAdminSettingsOpen(!tenantAdminSettingsOpen);
+                        setTenantAdminSettingsOpen(true);
+                        if (visibleTenantAdminSections.length > 0) {
+                          setTenantAdminSection(
+                            visibleTenantAdminSections[0][0],
+                          );
+                        }
                       }}
                       className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
                         isActive
@@ -622,7 +630,7 @@ export function AppShell(props: any) {
               </div>
 
               <div className="lg:hidden lg:col-span-5">
-                <Field label="Module">
+                <FormField label="Module">
                   <Select
                     value={activePage}
                     onChange={(e: any) => navigatePage(e.target.value)}
@@ -633,7 +641,7 @@ export function AppShell(props: any) {
                       </option>
                     ))}
                   </Select>
-                </Field>
+                </FormField>
               </div>
             </div>
           </header>

@@ -3,8 +3,9 @@
 import {useEffect, useMemo, useState} from 'react';
 import {CalendarPlus, Search, X} from 'lucide-react';
 
-import {Badge, Button, Card, Field, Input, Select} from '@/components/ui';
+import {Badge, Button, Card} from '@/components/ui';
 import {apiFetch, type ApiSession} from '@/lib/api';
+import {DateField, SelectField, TextareaField, TextField} from '@/components/FormElements';
 import {generatePatientId, generateToken, searchPatients} from '@/lib/hmsLogic';
 import {humanizeOptionLabel,publicDisplayValue,uniqueDepartmentRows} from '@/lib/options';
 
@@ -369,8 +370,7 @@ export function AppointmentCalendarBooking(props: Props) {
     await refreshAppointmentList();
   }
 
-  async function savePatient(form: HTMLFormElement) {
-    const fd = new FormData(form);
+  async function savePatient(data: any) {
     setBusy(true);
     setMessage('');
     try {
@@ -379,13 +379,13 @@ export function AppointmentCalendarBooking(props: Props) {
           method: 'POST',
           body: JSON.stringify({
             branch_id: branchId,
-            full_name: String(fd.get('name') || ''),
-            date_of_birth: fd.get('dateOfBirth') || null,
-            gender: String(fd.get('gender') || 'unknown'),
-            mobile: String(fd.get('mobile') || '') || null,
-            guardian_name: String(fd.get('guardian') || '') || null,
-            guardian_mobile: String(fd.get('guardianMobile') || '') || null,
-            area: String(fd.get('area') || '') || null,
+            full_name: data.name,
+            date_of_birth: data.dateOfBirth || null,
+            gender: data.gender || 'unknown',
+            mobile: data.mobile || null,
+            guardian_name: data.guardian || null,
+            guardian_mobile: data.guardianMobile || null,
+            area: data.area || null,
           }),
         });
         const highConfidenceDuplicates = duplicateRows.filter((row: any) => row.confidence === 'high');
@@ -399,23 +399,22 @@ export function AppointmentCalendarBooking(props: Props) {
           method: 'POST',
           body: JSON.stringify({
             branch_id: branchId,
-            full_name: String(fd.get('name') || ''),
-            date_of_birth: fd.get('dateOfBirth') || null,
-            gender: String(fd.get('gender') || 'unknown'),
-            mobile: String(fd.get('mobile') || '') || null,
-            guardian_name: String(fd.get('guardian') || '') || null,
-            guardian_mobile: String(fd.get('guardianMobile') || '') || null,
-            area: String(fd.get('area') || '') || null,
+            full_name: data.name,
+            date_of_birth: data.dateOfBirth || null,
+            gender: data.gender || 'unknown',
+            mobile: data.mobile || null,
+            guardian_name: data.guardian || null,
+            guardian_mobile: data.guardianMobile || null,
+            area: data.area || null,
           }),
         });
-        const allergies = String(fd.get('allergies') || '').trim();
-        if (allergies) {
+        if (data.allergies?.trim()) {
           await apiFetch(`/patients/${saved.id}/alerts`, apiSession, {
             method: 'POST',
             body: JSON.stringify({
               alert_type: 'allergy',
               title: 'Allergies',
-              description: allergies,
+              description: data.allergies.trim(),
               severity: 'high',
               created_by_user_id: apiSession.user?.id || null,
             }),
@@ -434,15 +433,15 @@ export function AppointmentCalendarBooking(props: Props) {
       } else {
         const patient = {
           id: generatePatientId(patients.length),
-          name: fd.get('name'),
+          name: data.name,
           age: 0,
-          gender: fd.get('gender'),
-          mobile: fd.get('mobile'),
-          guardian: fd.get('guardian'),
-          guardianMobile: fd.get('guardianMobile'),
-          area: fd.get('area'),
+          gender: data.gender,
+          mobile: data.mobile,
+          guardian: data.guardian,
+          guardianMobile: data.guardianMobile,
+          area: data.area,
           blood: '',
-          allergies: fd.get('allergies') || '',
+          allergies: data.allergies || '',
           medicalHistory: '',
           status: 'Active',
           patientType: 'OP',
@@ -575,8 +574,8 @@ export function AppointmentCalendarBooking(props: Props) {
           <Card>
             <h4 className="font-bold">Search Patient / Mobile</h4>
             <div className="mt-4 flex gap-2">
-              <Input value={patientSearch} onChange={(e: any) => setPatientSearch(e.target.value)} placeholder="Enter patient name or mobile" />
-              <Search className="mt-3 text-slate-400" size={18} />
+              <TextField value={patientSearch} onChange={setPatientSearch} label="Patient Name or Mobile" placeholder="Enter patient name or mobile" />
+              <Search className="mt-8 text-slate-400" size={18} />
             </div>
             <div className="mt-4 space-y-3">
               {patientSearch && patientMatches.length === 0 && (
@@ -606,41 +605,11 @@ export function AppointmentCalendarBooking(props: Props) {
         )}
 
         {bookingStep === 'newPatient' && (
-          <Card>
-            <div className="flex justify-between gap-3">
-              <h4 className="font-bold">New Patient</h4>
-              <button type="button" onClick={() => setBookingStep('search')} className="rounded-xl border p-2" title="Cancel">
-                <X size={16} />
-              </button>
-            </div>
-            <form
-              onSubmit={(e: any) => {
-                e.preventDefault();
-                savePatient(e.currentTarget);
-              }}
-              className="mt-4 grid gap-3 md:grid-cols-3"
-            >
-              <Field label="Name"><Input name="name" required /></Field>
-              <Field label="Date of Birth"><Input name="dateOfBirth" type="date" /></Field>
-              <Field label="Gender">
-                <Select name="gender" defaultValue="unknown">
-                  <option value="female">Female</option>
-                  <option value="male">Male</option>
-                  <option value="other">Transgender</option>
-                  <option value="unknown">Unknown</option>
-                </Select>
-              </Field>
-              <Field label="Mobile optional"><Input name="mobile" /></Field>
-              <Field label="Guardian"><Input name="guardian" /></Field>
-              <Field label="Guardian Mobile"><Input name="guardianMobile" /></Field>
-              <Field label="Area"><Input name="area" /></Field>
-              <div className="md:col-span-2"><Field label="Allergies"><Input name="allergies" /></Field></div>
-              <div className="flex flex-wrap gap-2 md:col-span-3">
-                <Button disabled={busy}>{busy ? 'Saving...' : 'Save Patient'}</Button>
-                <button type="button" onClick={() => setBookingStep('search')} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button>
-              </div>
-            </form>
-          </Card>
+          <NewPatientForm
+            busy={busy}
+            onSave={savePatient}
+            onCancel={() => setBookingStep('search')}
+          />
         )}
 
         {bookingStep === 'appointment' && selectedPatient && (
@@ -652,33 +621,47 @@ export function AppointmentCalendarBooking(props: Props) {
               <p className="text-slate-500">{selectedPatient.mobile || 'No mobile'} · {selectedPatient.area || selectedPatient.guardian_mobile || '-'}</p>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
-              <Field label="Department">
-                <Select value={departmentId} onChange={(e: any) => setDepartmentId(e.target.value)}>
-                  {departmentOptions.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
-                </Select>
-              </Field>
-              <Field label="Doctor">
-                <Select value={doctorId} onChange={(e: any) => setDoctorId(e.target.value)} disabled={apiSession && doctors.length === 0}>
-                  {doctors.length === 0 && <option value="">No doctor available</option>}
-                  {doctors.map((item: any) => <option key={item.id} value={item.id}>{item.full_name || item.name}</option>)}
-                </Select>
-              </Field>
-              <Field label="Visit Type">
-                <Select value={appointmentType} onChange={(e: any) => setAppointmentType(e.target.value)}>
-                  <option value="op">OP</option>
-                  <option value="follow_up">Follow-up</option>
-                  <option value="doctor_review">Doctor Review</option>
-                  <option value="fitness_certificate">Fitness Certificate</option>
-                  <option value="emergency">Emergency</option>
-                </Select>
-              </Field>
-              <Field label="Appointment Date"><Input type="date" value={appointmentDate} onChange={(e: any) => setAppointmentDate(e.target.value)} /></Field>
-              <Field label="Timing Slots">
-                <Select value={selectedGroup?.id || ''} onChange={(e: any) => setSlotGroup(e.target.value)} disabled={appointmentType !== 'emergency' && timingOptions.length === 0}>
-                  {timingOptions.length === 0 && <option value="">No timing available</option>}
-                  {timingOptions.map((group: any) => <option key={group.id} value={group.id}>{group.label}</option>)}
-                </Select>
-              </Field>
+              <SelectField
+                label="Department"
+                value={departmentId}
+                onChange={setDepartmentId}
+                options={departmentOptions.map((d: any) => ({ value: d.id, label: d.name }))}
+              />
+              <SelectField
+                label="Doctor"
+                value={doctorId}
+                onChange={setDoctorId}
+                disabled={Boolean(apiSession) && doctors.length === 0}
+                options={
+                  doctors.length === 0
+                    ? [{ value: '', label: 'No doctor available' }]
+                    : doctors.map((item: any) => ({ value: item.id, label: item.full_name || item.name }))
+                }
+              />
+              <SelectField
+                label="Visit Type"
+                value={appointmentType}
+                onChange={(v) => setAppointmentType(v as any)}
+                options={[
+                  { value: 'op', label: 'OP' },
+                  { value: 'follow_up', label: 'Follow-up' },
+                  { value: 'doctor_review', label: 'Doctor Review' },
+                  { value: 'fitness_certificate', label: 'Fitness Certificate' },
+                  { value: 'emergency', label: 'Emergency' },
+                ]}
+              />
+              <DateField label="Appointment Date" value={appointmentDate} onChange={setAppointmentDate} />
+              <SelectField
+                label="Timing Slots"
+                value={selectedGroup?.id || ''}
+                onChange={setSlotGroup}
+                disabled={appointmentType !== 'emergency' && timingOptions.length === 0}
+                options={
+                  timingOptions.length === 0
+                    ? [{ value: '', label: 'No timing available' }]
+                    : timingOptions.map((g: any) => ({ value: g.id, label: g.label }))
+                }
+              />
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs font-bold uppercase text-slate-500">Doctor Fee</p>
                 <p className="mt-1 text-lg font-black">{isBillable ? (selectedFeeAmount !== undefined ? `₹${Number(selectedFeeAmount).toLocaleString('en-IN')}` : 'Not configured') : 'Free'}</p>
@@ -687,19 +670,29 @@ export function AppointmentCalendarBooking(props: Props) {
             </div>
             {appointmentType === 'emergency' && (
               <div className="mt-4 rounded-2xl bg-red-50 p-4">
-                <Field label="Emergency Reason"><Input value={emergencyReason} onChange={(e: any) => setEmergencyReason(e.target.value)} placeholder="Severe pain, trauma, breathlessness" /></Field>
+                <TextField
+                  label="Emergency Reason"
+                  value={emergencyReason}
+                  onChange={setEmergencyReason}
+                  placeholder="Severe pain, trauma, breathlessness"
+                />
                 <p className="mt-2 text-xs font-semibold text-red-700">Emergency bookings skip normal slot availability and are audited as emergency overrides.</p>
               </div>
             )}
             {(appointmentType === 'follow_up' || appointmentType === 'doctor_review' || appointmentType === 'fitness_certificate') && (
               <div className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-2">
-                <Field label="Billing">
-                  <Select value={isBillable ? 'paid' : 'free'} onChange={(e: any) => setIsBillable(e.target.value === 'paid')}>
-                    <option value="paid">Chargeable</option>
-                    <option value="free">Free Review</option>
-                  </Select>
-                </Field>
-                <Field label="Billing Note"><Input value={billingNote} onChange={(e: any) => setBillingNote(e.target.value)} placeholder="Within free review period, certificate request, etc." /></Field>
+                <SelectField
+                  label="Billing"
+                  value={isBillable ? 'paid' : 'free'}
+                  onChange={(v) => setIsBillable(v === 'paid')}
+                  options={[{ value: 'paid', label: 'Chargeable' }, { value: 'free', label: 'Free Review' }]}
+                />
+                <TextField
+                  label="Billing Note"
+                  value={billingNote}
+                  onChange={setBillingNote}
+                  placeholder="Within free review period, certificate request, etc."
+                />
               </div>
             )}
             {appointmentType !== 'emergency' && slotIntervalsEnabled && <div className="mt-4">
@@ -739,17 +732,19 @@ export function AppointmentCalendarBooking(props: Props) {
                 <span className="text-xs text-slate-500">Pre-fills the doctor consultation page.</span>
               </div>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <Field label="Vitals">
-                  <Input value={intakeVitals} onChange={(e: any) => setIntakeVitals(e.target.value)} placeholder="BP=120/80 mmHg, Pulse=78 bpm" />
-                </Field>
-                <Field label="Complaint Rows">
-                  <textarea
-                    value={intakeComplaints}
-                    onChange={(e: any) => setIntakeComplaints(e.target.value)}
-                    className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-500"
-                    placeholder={"Fever | 2 days | medium\nCough | 1 day | mild"}
-                  />
-                </Field>
+                <TextField
+                  label="Vitals"
+                  value={intakeVitals}
+                  onChange={setIntakeVitals}
+                  placeholder="BP=120/80 mmHg, Pulse=78 bpm"
+                />
+                <TextareaField
+                  label="Complaint Rows"
+                  value={intakeComplaints}
+                  onChange={setIntakeComplaints}
+                  placeholder={"Fever | 2 days | medium\nCough | 1 day | mild"}
+                  rows={3}
+                />
               </div>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
@@ -798,30 +793,28 @@ export function AppointmentCalendarBooking(props: Props) {
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-3">
         {isSuperAdmin && (
-          <Field label="Clinic / Tenant">
-            <Select value={platformTenantId} onChange={(e: any) => setPlatformTenantId(e.target.value)}>
-              <option value="">All tenants</option>
-              {platformTenants.filter((tenant: any) => !tenant.is_primary).map((tenant: any) => (
-                <option key={tenant.id} value={tenant.id}>{tenant.name}</option>
-              ))}
-            </Select>
-          </Field>
+          <SelectField
+            label="Clinic / Tenant"
+            value={platformTenantId}
+            onChange={setPlatformTenantId}
+            options={[
+              { value: '', label: 'All tenants' },
+              ...platformTenants.filter((t: any) => !t.is_primary).map((t: any) => ({ value: t.id, label: t.name })),
+            ]}
+          />
         )}
-        <Field label="Patient name / mobile"><Input value={query} onChange={(e: any) => setQuery(e.target.value)} placeholder="Search patient or mobile" /></Field>
-        <Field label="Select date"><Input type="date" value={filterDate} onChange={(e: any) => setFilterDate(e.target.value)} /></Field>
-        <Field label="Department">
-          {isSuperAdmin ? (
-            <Select value={platformDepartment} onChange={(e: any) => setPlatformDepartment(e.target.value)}>
-              <option value="all">All departments</option>
-              {platformDepartmentOptions.map((department: string) => <option key={department} value={department}>{department}</option>)}
-            </Select>
-          ) : (
-            <Select value={filterDepartment} onChange={(e: any) => setFilterDepartment(e.target.value)}>
-              <option value="all">All departments</option>
-              {departmentOptions.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
-            </Select>
-          )}
-        </Field>
+        <TextField label="Patient name / mobile" value={query} onChange={setQuery} placeholder="Search patient or mobile" />
+        <DateField label="Select date" value={filterDate} onChange={setFilterDate} />
+        <SelectField
+          label="Department"
+          value={isSuperAdmin ? platformDepartment : filterDepartment}
+          onChange={isSuperAdmin ? setPlatformDepartment : setFilterDepartment}
+          options={
+            isSuperAdmin
+              ? [{ value: 'all', label: 'All departments' }, ...platformDepartmentOptions.map((d: string) => ({ value: d, label: d }))]
+              : [{ value: 'all', label: 'All departments' }, ...departmentOptions.map((d: any) => ({ value: d.id, label: d.name }))]
+          }
+        />
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
         <div className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${isSuperAdmin ? 'grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]' : 'grid-cols-[1fr_.7fr_.8fr_.95fr_.78fr_.72fr_1.55fr]'}`}>
@@ -874,6 +867,61 @@ export function AppointmentCalendarBooking(props: Props) {
         </div>
       </div>
       <Pagination page={safePage} totalPages={totalPages} total={listRecords.length} onPage={setPage} />
+    </Card>
+  );
+}
+
+function NewPatientForm({ busy, onSave, onCancel }: any) {
+  const [name, setName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState('unknown');
+  const [mobile, setMobile] = useState('');
+  const [guardian, setGuardian] = useState('');
+  const [guardianMobile, setGuardianMobile] = useState('');
+  const [area, setArea] = useState('');
+  const [allergies, setAllergies] = useState('');
+
+  function handleSubmit(e: any) {
+    e.preventDefault();
+    onSave({ name, dateOfBirth, gender, mobile, guardian, guardianMobile, area, allergies });
+  }
+
+  return (
+    <Card>
+      <div className="flex justify-between gap-3">
+        <h4 className="font-bold">New Patient</h4>
+        <button type="button" onClick={onCancel} className="rounded-xl border p-2" title="Cancel">
+          <X size={16} />
+        </button>
+      </div>
+      <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-3">
+        <TextField label="Name" value={name} onChange={setName} required />
+        <DateField label="Date of Birth" value={dateOfBirth} onChange={setDateOfBirth} />
+        <SelectField
+          label="Gender"
+          value={gender}
+          onChange={setGender}
+          options={[
+            { value: 'female', label: 'Female' },
+            { value: 'male', label: 'Male' },
+            { value: 'other', label: 'Transgender' },
+            { value: 'unknown', label: 'Unknown' },
+          ]}
+        />
+        <TextField label="Mobile (optional)" type="tel" value={mobile} onChange={setMobile} />
+        <TextField label="Guardian" value={guardian} onChange={setGuardian} />
+        <TextField label="Guardian Mobile" type="tel" value={guardianMobile} onChange={setGuardianMobile} />
+        <TextField label="Area" value={area} onChange={setArea} />
+        <div className="md:col-span-2">
+          <TextField label="Allergies" value={allergies} onChange={setAllergies} />
+        </div>
+        <div className="flex flex-wrap gap-2 md:col-span-3">
+          <Button disabled={busy}>{busy ? 'Saving...' : 'Save Patient'}</Button>
+          <button type="button" onClick={onCancel} className="rounded-2xl border px-4 py-3 text-sm font-bold">
+            Cancel
+          </button>
+        </div>
+      </form>
     </Card>
   );
 }

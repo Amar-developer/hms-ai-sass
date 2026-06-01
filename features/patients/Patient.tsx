@@ -2,17 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import {
-  ActionButton,
-  ActionGroup,
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-} from "@/components/ui";
+import { ActionButton, ActionGroup, Badge, Button, Card } from "@/components/ui";
 import { UPLOADS_BASE, apiFetch, apiUpload, type ApiSession } from "@/lib/api";
+import {
+  DateField,
+  NumberField,
+  SelectField,
+  TextField,
+} from "@/components/FormElements";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -195,23 +192,33 @@ export function Patient({ apiSession, branchId }: PatientProps) {
     );
   }
 
-  async function createPatient(e: any) {
-    e.preventDefault();
+  async function createPatient(data: any) {
     if (!scopedSession) return;
-    const form = e.currentTarget;
-    const fd = new FormData(form);
     setBusy(true);
     setMessage("");
     try {
       const created = await apiFetch("/patients", scopedSession, {
         method: "POST",
-        body: JSON.stringify(formPayload(fd)),
+        body: JSON.stringify({
+          branch_id: data.branchId || null,
+          full_name: data.fullName,
+          mobile: data.mobile || null,
+          alternate_mobile: data.alternateMobile || null,
+          email: data.email || null,
+          gender: data.gender || "unknown",
+          date_of_birth: data.dateOfBirth || null,
+          age_years: data.ageYears ? Number(data.ageYears) : null,
+          guardian_name: data.guardianName || null,
+          guardian_mobile: data.guardianMobile || null,
+          area: data.area || null,
+          address: data.address || null,
+          blood_group: data.bloodGroup || null,
+        }),
       });
       setRows((previous: any[]) => [
         toRow(created),
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
-      form.reset();
       setSelectedId(created.id);
       await loadData(tenantId);
       open("detail", created.id);
@@ -223,18 +230,28 @@ export function Patient({ apiSession, branchId }: PatientProps) {
     }
   }
 
-  async function updatePatient(e: any) {
-    e.preventDefault();
+  async function updatePatient(data: any) {
     if (!scopedSession || !selectedId) return;
-    const fd = new FormData(e.currentTarget);
     setBusy(true);
     setMessage("");
     try {
       const updated = await apiFetch(`/patients/${selectedId}`, scopedSession, {
         method: "PATCH",
         body: JSON.stringify({
-          ...formPayload(fd),
-          status: fd.get("status") || "active",
+          branch_id: data.branchId || null,
+          full_name: data.fullName,
+          mobile: data.mobile || null,
+          alternate_mobile: data.alternateMobile || null,
+          email: data.email || null,
+          gender: data.gender || "unknown",
+          date_of_birth: data.dateOfBirth || null,
+          age_years: data.ageYears ? Number(data.ageYears) : null,
+          guardian_name: data.guardianName || null,
+          guardian_mobile: data.guardianMobile || null,
+          area: data.area || null,
+          address: data.address || null,
+          blood_group: data.bloodGroup || null,
+          status: data.status || "active",
         }),
       });
       setRows((previous: any[]) => [
@@ -301,20 +318,17 @@ export function Patient({ apiSession, branchId }: PatientProps) {
     }
   }
 
-  async function enrollMembership(e:any){
-    e.preventDefault();
+  async function enrollMembership(data: any){
     if(!scopedSession||!selectedId)return;
-    const fd=new FormData(e.currentTarget);
-    const planId=String(fd.get('planId')||'');
-    if(!planId){setMessage('Select membership plan.');return}
+    if(!data.planId){setMessage('Select membership plan.');return}
     setBusy(true);setMessage('');
     try{
       await apiFetch('/patient-subscriptions/enrollments',scopedSession,{method:'POST',body:JSON.stringify({
-        branch_id:fd.get('branchId')||selected?.branch_id||branchId,
+        branch_id:data.branchId||selected?.branch_id||branchId,
         patient_id:selectedId,
-        plan_id:planId,
-        starts_on:fd.get('startsOn')||new Date().toISOString().slice(0,10),
-        paid_amount:fd.get('paidAmount')!==''?Number(fd.get('paidAmount')):undefined,
+        plan_id:data.planId,
+        starts_on:data.startsOn||new Date().toISOString().slice(0,10),
+        paid_amount:data.paidAmount!==''?Number(data.paidAmount):undefined,
         created_by_user_id:apiSession.user?.id,
       })});
       await loadPatientDetail(selectedId);
@@ -431,86 +445,50 @@ export function Patient({ apiSession, branchId }: PatientProps) {
           className={`grid gap-3 ${isSuperAdmin ? "lg:grid-cols-3 xl:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "lg:grid-cols-3 xl:grid-cols-[1.35fr_1.05fr_.9fr_.9fr_.85fr_.85fr_auto]"}`}
         >
           {isSuperAdmin && (
-            <Field label="Tenant">
-              <Select
-                value={tenantId}
-                onChange={(e: any) => setTenantId(e.target.value)}
-              >
-                {tenants.map((tenant: any) => (
-                  <option key={tenant.id} value={tenant.id}>
-                    {tenant.name}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            <SelectField
+              label="Tenant"
+              value={tenantId}
+              onChange={setTenantId}
+              options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
+            />
           )}
-          <Field label="Patient / Mobile">
-            <Input
-              value={query}
-              onChange={(e: any) => setQuery(e.target.value)}
-              placeholder="Name, mobile, area"
-            />
-          </Field>
-          <Field label="Branch">
-            <Select
-              value={branchFilter}
-              onChange={(e: any) => {
-                setBranchFilter(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="all">All branches</option>
-              {branches.map((branch: any) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Gender">
-            <Select
-              value={gender}
-              onChange={(e: any) => {
-                setGender(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="all">All gender</option>
-              {genders.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Status">
-            <Select
-              value={status}
-              onChange={(e: any) => {
-                setStatus(e.target.value);
-                setPage(1);
-              }}
-            >
-              <option value="all">All status</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="deceased">Deceased</option>
-            </Select>
-          </Field>
-          <Field label="From">
-            <Input
-              type="date"
-              value={fromDate}
-              onChange={(e: any) => setFromDate(e.target.value)}
-            />
-          </Field>
-          <Field label="To">
-            <Input
-              type="date"
-              value={toDate}
-              onChange={(e: any) => setToDate(e.target.value)}
-            />
-          </Field>
+          <TextField
+            label="Patient / Mobile"
+            value={query}
+            onChange={setQuery}
+            placeholder="Name, mobile, area"
+          />
+          <SelectField
+            label="Branch"
+            value={branchFilter}
+            onChange={(v) => { setBranchFilter(v); setPage(1); }}
+            options={[
+              { value: "all", label: "All branches" },
+              ...branches.map((b: any) => ({ value: b.id, label: b.name })),
+            ]}
+          />
+          <SelectField
+            label="Gender"
+            value={gender}
+            onChange={(v) => { setGender(v); setPage(1); }}
+            options={[
+              { value: "all", label: "All gender" },
+              ...genders.map(([value, label]) => ({ value, label })),
+            ]}
+          />
+          <SelectField
+            label="Status"
+            value={status}
+            onChange={(v) => { setStatus(v); setPage(1); }}
+            options={[
+              { value: "all", label: "All status" },
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+              { value: "deceased", label: "Deceased" },
+            ]}
+          />
+          <DateField label="From" value={fromDate} onChange={setFromDate} />
+          <DateField label="To" value={toDate} onChange={setToDate} />
           <div className="flex items-end gap-2">
             <Button
               className="min-h-[46px] px-5"
@@ -596,29 +574,32 @@ export function Patient({ apiSession, branchId }: PatientProps) {
   );
 }
 
-function formPayload(fd: FormData) {
-  return {
-    branch_id: fd.get("branchId") || null,
-    full_name: fd.get("fullName"),
-    mobile: fd.get("mobile") || null,
-    alternate_mobile: fd.get("alternateMobile") || null,
-    email: fd.get("email") || null,
-    gender: fd.get("gender") || "unknown",
-    date_of_birth: fd.get("dateOfBirth") || null,
-    age_years: fd.get("ageYears") ? Number(fd.get("ageYears")) : null,
-    guardian_name: fd.get("guardianName") || null,
-    guardian_mobile: fd.get("guardianMobile") || null,
-    area: fd.get("area") || null,
-    address: fd.get("address") || null,
-    blood_group: fd.get("bloodGroup") || null,
-  };
-}
 
 function toRow(patient: any) {
   return { ...patient, active_alert_count: 0, critical_alert_count: 0 };
 }
 
 function PatientForm({ title, patient, branches, busy, onSubmit, back }: any) {
+  const [fullName, setFullName] = useState(patient?.full_name || "");
+  const [mobile, setMobile] = useState(patient?.mobile || "");
+  const [branchId, setBranchId] = useState(patient?.branch_id || "");
+  const [gender, setGender] = useState(patient?.gender || "unknown");
+  const [dateOfBirth, setDateOfBirth] = useState(patient?.date_of_birth || "");
+  const [ageYears, setAgeYears] = useState(String(patient?.age_years ?? ""));
+  const [guardianName, setGuardianName] = useState(patient?.guardian_name || "");
+  const [guardianMobile, setGuardianMobile] = useState(patient?.guardian_mobile || "");
+  const [alternateMobile, setAlternateMobile] = useState(patient?.alternate_mobile || "");
+  const [email, setEmail] = useState(patient?.email || "");
+  const [area, setArea] = useState(patient?.area || "");
+  const [bloodGroup, setBloodGroup] = useState(patient?.blood_group || "");
+  const [status, setStatus] = useState(patient?.status || "active");
+  const [address, setAddress] = useState(patient?.address || "");
+
+  function handleSubmit(e: any) {
+    e.preventDefault();
+    onSubmit({ fullName, mobile, branchId, gender, dateOfBirth, ageYears, guardianName, guardianMobile, alternateMobile, email, area, bloodGroup, status, address });
+  }
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -628,122 +609,99 @@ function PatientForm({ title, patient, branches, busy, onSubmit, back }: any) {
             {patient?.patient_number || "Create tenant-scoped patient record."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
-        >
+        <button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">
           Back
         </button>
       </div>
-      <form
-        onSubmit={onSubmit}
-        className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
-      >
-        <Field label="Full Name">
-          <Input
-            name="fullName"
-            defaultValue={patient?.full_name || ""}
-            required
-          />
-        </Field>
-        <Field label="Mobile">
-          <Input name="mobile" defaultValue={patient?.mobile || ""} />
-        </Field>
-        <Field label="Branch">
-          <Select name="branchId" defaultValue={patient?.branch_id || ""}>
-            <option value="">No branch</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Gender">
-          <Select name="gender" defaultValue={patient?.gender || "unknown"}>
-            {genders.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Date of Birth">
-          <Input
-            name="dateOfBirth"
-            type="date"
-            defaultValue={patient?.date_of_birth || ""}
-          />
-        </Field>
-        <Field label="Age Years">
-          <Input
-            name="ageYears"
-            type="number"
-            min="0"
-            max="130"
-            defaultValue={patient?.age_years || ""}
-          />
-        </Field>
-        <Field label="Guardian Name">
-          <Input
-            name="guardianName"
-            defaultValue={patient?.guardian_name || ""}
-          />
-        </Field>
-        <Field label="Guardian Mobile">
-          <Input
-            name="guardianMobile"
-            defaultValue={patient?.guardian_mobile || ""}
-          />
-        </Field>
-        <Field label="Alternate Mobile">
-          <Input
-            name="alternateMobile"
-            defaultValue={patient?.alternate_mobile || ""}
-          />
-        </Field>
-        <Field label="Email">
-          <Input
-            name="email"
-            type="email"
-            defaultValue={patient?.email || ""}
-          />
-        </Field>
-        <Field label="Area">
-          <Input name="area" defaultValue={patient?.area || ""} />
-        </Field>
-        <Field label="Blood Group">
-          <Input name="bloodGroup" defaultValue={patient?.blood_group || ""} />
-        </Field>
+      <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <TextField label="Full Name" value={fullName} onChange={setFullName} required />
+        <TextField label="Mobile" type="tel" value={mobile} onChange={setMobile} />
+        <SelectField
+          label="Branch"
+          value={branchId}
+          onChange={setBranchId}
+          options={[
+            { value: "", label: "No branch" },
+            ...branches.map((b: any) => ({ value: b.id, label: b.name })),
+          ]}
+        />
+        <SelectField
+          label="Gender"
+          value={gender}
+          onChange={setGender}
+          options={genders.map(([value, label]) => ({ value, label }))}
+        />
+        <DateField label="Date of Birth" value={dateOfBirth} onChange={setDateOfBirth} />
+        <NumberField label="Age Years" value={ageYears} onChange={setAgeYears} min={0} max={130} />
+        <TextField label="Guardian Name" value={guardianName} onChange={setGuardianName} />
+        <TextField label="Guardian Mobile" type="tel" value={guardianMobile} onChange={setGuardianMobile} />
+        <TextField label="Alternate Mobile" type="tel" value={alternateMobile} onChange={setAlternateMobile} />
+        <TextField label="Email" type="email" value={email} onChange={setEmail} />
+        <TextField label="Area" value={area} onChange={setArea} />
+        <TextField label="Blood Group" value={bloodGroup} onChange={setBloodGroup} />
         {patient && (
-          <Field label="Status">
-            <Select name="status" defaultValue={patient.status || "active"}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="deceased">Deceased</option>
-            </Select>
-          </Field>
+          <SelectField
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+              { value: "deceased", label: "Deceased" },
+            ]}
+          />
         )}
         <div className="md:col-span-2 xl:col-span-3">
-          <Field label="Address">
-            <Input name="address" defaultValue={patient?.address || ""} />
-          </Field>
+          <TextField label="Address" value={address} onChange={setAddress} />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
           <Button disabled={busy}>
             {busy ? "Saving..." : patient ? "Save Patient" : "Create Patient"}
           </Button>
-          <button
-            type="button"
-            onClick={back}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
-          >
+          <button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">
             Cancel
           </button>
         </div>
       </form>
     </Card>
+  );
+}
+
+function MembershipEnrollForm({ membershipPlans, patient, loading, onSubmit }: any) {
+  const activePlans = membershipPlans.filter((plan: any) => plan.is_active);
+  const [planId, setPlanId] = useState("");
+  const [branchId, setBranchId] = useState(patient?.branch_id || "");
+  const [startsOn, setStartsOn] = useState(new Date().toISOString().slice(0, 10));
+  const [paidAmount, setPaidAmount] = useState("");
+
+  function handleSubmit(e: any) {
+    e.preventDefault();
+    onSubmit({ planId, branchId, startsOn, paidAmount });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-4">
+      <SelectField
+        label="Plan"
+        value={planId}
+        onChange={setPlanId}
+        options={[
+          { value: "", label: "Select plan" },
+          ...activePlans.map((plan: any) => ({
+            value: plan.id,
+            label: `${plan.name} · ₹${Number(plan.price_amount || 0).toLocaleString("en-IN")}`,
+          })),
+        ]}
+      />
+      <TextField label="Branch ID" value={branchId} onChange={setBranchId} />
+      <DateField label="Starts On" value={startsOn} onChange={setStartsOn} />
+      <NumberField label="Paid Amount" value={paidAmount} onChange={setPaidAmount} min={0} placeholder="Plan price" />
+      <div className="md:col-span-4">
+        <Button disabled={loading || activePlans.length === 0}>
+          {loading ? "Saving..." : "Enroll Membership"}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -1065,18 +1023,12 @@ function PatientDetail({
           <Info k="Free Consult Used" v={activeMembership?`${activeMembership.used_consultations}/${activeMembership.plan?.free_consultations??0}`:"-"}/>
           <Info k="Membership Savings" v={money(membershipSavings)}/>
         </div>
-        <form onSubmit={onEnrollMembership} className="mt-4 grid gap-3 md:grid-cols-4">
-          <Field label="Plan">
-            <Select name="planId" defaultValue="">
-              <option value="">Select plan</option>
-              {membershipPlans.filter((plan:any)=>plan.is_active).map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name} · {money(plan.price_amount)}</option>)}
-            </Select>
-          </Field>
-          <Field label="Branch ID"><Input name="branchId" defaultValue={patient.branch_id||""}/></Field>
-          <Field label="Starts On"><Input name="startsOn" type="date" defaultValue={new Date().toISOString().slice(0,10)}/></Field>
-          <Field label="Paid Amount"><Input name="paidAmount" type="number" min="0" placeholder="Plan price"/></Field>
-          <div className="md:col-span-4"><Button disabled={loading||membershipPlans.length===0}>{loading?"Saving...":"Enroll Membership"}</Button></div>
-        </form>
+        <MembershipEnrollForm
+          membershipPlans={membershipPlans}
+          patient={patient}
+          loading={loading}
+          onSubmit={onEnrollMembership}
+        />
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border p-4">
             <h5 className="font-bold">Membership History</h5>

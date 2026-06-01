@@ -1,20 +1,21 @@
 'use client';
 
-import {useState} from 'react';
-import {HeartPulse,Lock,ShieldCheck} from 'lucide-react';
-import {Button,Card,Field,Input} from '@/components/ui';
+import { useState } from 'react';
+import { HeartPulse, Lock, ShieldCheck } from 'lucide-react';
+import { Button, Card } from '@/components/ui';
+import { FormErrorBanner, PasswordField, TextField } from '@/components/FormElements';
 
 type DemoUser = readonly [string, string, string];
 
-export function AuthScreen({role,setRole,onLogin,demoUsers,loginPresets}:any){
+export function AuthScreen({ role, setRole, onLogin, demoUsers, loginPresets }: any) {
   const preset = loginPresets[role] || loginPresets.tenant_admin;
-  const [email,setEmail] = useState(preset.email);
-  const [password,setPassword] = useState(preset.password);
-  const [error,setError] = useState('');
-  const [loading,setLoading] = useState(false);
-  const [showDemo,setShowDemo] = useState(false);
+  const [email, setEmail] = useState(preset.email);
+  const [password, setPassword] = useState(preset.password);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
-  function fillDemo(id:string){
+  function fillDemo(id: string) {
     const next = loginPresets[id] || loginPresets.tenant_admin;
     setRole(id);
     setEmail(next.email);
@@ -22,15 +23,15 @@ export function AuthScreen({role,setRole,onLogin,demoUsers,loginPresets}:any){
     setError('');
   }
 
-  async function submit(e:React.FormEvent<HTMLFormElement>){
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
     setLoading(true);
-    try{
-      await onLogin({email,password});
-    }catch(err:any){
+    try {
+      await onLogin({ email, password });
+    } catch (err: any) {
       setError(err.message || 'Login failed');
-    }finally{
+    } finally {
       setLoading(false);
     }
   }
@@ -41,21 +42,27 @@ export function AuthScreen({role,setRole,onLogin,demoUsers,loginPresets}:any){
         <section className="hidden lg:block">
           <div className="max-w-xl">
             <div className="mb-8 inline-flex items-center gap-3 rounded-full bg-white px-4 py-2 text-sm font-bold text-slate-600 shadow-sm">
-              <ShieldCheck size={18}/>
+              <ShieldCheck size={18} />
               Primary tenant secured by MedizinHub HMS
             </div>
             <h1 className="text-5xl font-bold leading-tight tracking-normal text-slate-950">
               MedizinHub HMS
             </h1>
             <p className="mt-5 max-w-lg text-lg leading-8 text-slate-600">
-              A secure healthcare workspace for tenants, branches, doctors, staff, lab, pharmacy, billing, and platform administrators.
+              A secure healthcare workspace for tenants, branches, doctors, staff, lab, pharmacy,
+              billing, and platform administrators.
             </p>
             <div className="mt-10 grid max-w-lg gap-3 sm:grid-cols-2">
-              {['Tenant aware access','Role based screens','Audited user actions','Multi branch ready'].map((item)=>(
-                <div key={item} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm">
-                  {item}
-                </div>
-              ))}
+              {['Tenant aware access', 'Role based screens', 'Audited user actions', 'Multi branch ready'].map(
+                (item) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 shadow-sm"
+                  >
+                    {item}
+                  </div>
+                ),
+              )}
             </div>
           </div>
         </section>
@@ -63,7 +70,7 @@ export function AuthScreen({role,setRole,onLogin,demoUsers,loginPresets}:any){
         <section className="mx-auto w-full max-w-md">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
             <div className="rounded-2xl bg-slate-900 p-3 text-white">
-              <HeartPulse/>
+              <HeartPulse />
             </div>
             <div>
               <h1 className="text-2xl font-bold">MedizinHub HMS</h1>
@@ -74,7 +81,7 @@ export function AuthScreen({role,setRole,onLogin,demoUsers,loginPresets}:any){
           <Card className="rounded-2xl p-6 sm:p-8">
             <div className="mb-6 flex items-center gap-3">
               <div className="rounded-2xl bg-slate-100 p-3 text-slate-700">
-                <Lock/>
+                <Lock />
               </div>
               <div>
                 <h2 className="text-2xl font-bold">Sign in</h2>
@@ -83,30 +90,24 @@ export function AuthScreen({role,setRole,onLogin,demoUsers,loginPresets}:any){
             </div>
 
             <form onSubmit={submit} className="grid gap-4">
-              <Field label="Username / Email">
-                <Input
-                  autoComplete="username"
-                  value={email}
-                  onChange={(e:any)=>setEmail(e.target.value)}
-                  placeholder="name@clinic.com"
-                  required
-                />
-              </Field>
-              <Field label="Password">
-                <Input
-                  autoComplete="current-password"
-                  type="password"
-                  value={password}
-                  onChange={(e:any)=>setPassword(e.target.value)}
-                  placeholder="Enter password"
-                  required
-                />
-              </Field>
-              {error && (
-                <div className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">
-                  {error}
-                </div>
-              )}
+              <TextField
+                label="Username / Email"
+                type="email"
+                autoComplete="username"
+                value={email}
+                onChange={setEmail}
+                placeholder="name@clinic.com"
+                required
+              />
+              <PasswordField
+                label="Password"
+                autoComplete="current-password"
+                value={password}
+                onChange={setPassword}
+                placeholder="Enter password"
+                required
+              />
+              <FormErrorBanner error={error} />
               <Button disabled={loading} className="w-full">
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
@@ -115,23 +116,25 @@ export function AuthScreen({role,setRole,onLogin,demoUsers,loginPresets}:any){
             <div className="mt-6 border-t border-slate-200 pt-4">
               <button
                 type="button"
-                onClick={()=>setShowDemo(!showDemo)}
+                onClick={() => setShowDemo(!showDemo)}
                 className="text-sm font-bold text-slate-600 hover:text-slate-950"
               >
                 {showDemo ? 'Hide demo credentials' : 'Use demo credentials'}
               </button>
               {showDemo && (
                 <div className="mt-3 grid gap-2">
-                  {demoUsers.map(([id,label,description]:DemoUser)=>(
+                  {demoUsers.map(([id, label, description]: DemoUser) => (
                     <button
                       key={id}
                       type="button"
-                      onClick={()=>fillDemo(id)}
+                      onClick={() => fillDemo(id)}
                       className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-left text-sm hover:bg-white"
                     >
                       <span className="font-bold text-slate-800">{label}</span>
                       <span className="ml-2 text-xs text-slate-500">{description}</span>
-                      <span className="mt-1 block text-xs text-slate-500">{loginPresets[id].email}</span>
+                      <span className="mt-1 block text-xs text-slate-500">
+                        {loginPresets[id].email}
+                      </span>
                     </button>
                   ))}
                 </div>

@@ -1,17 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActionButton,
-  ActionGroup,
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-} from "@/components/ui";
+import { ActionButton, ActionGroup, Badge, Button, Card } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
+import { DateField, NumberField, SelectField, TextField } from "@/components/FormElements";
 import { humanizeOptionLabel } from "@/lib/options";
 
 const itemTypes = [
@@ -520,85 +512,67 @@ export function Items({ apiSession, branchId }: any) {
           </div>
         )}
         <form onSubmit={createItem} className="mt-5 grid gap-3 md:grid-cols-4">
-          <Field label="Item Type">
-            <Select value={type} onChange={(e: any) => setType(e.target.value)}>
-              {itemTypes.map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Code / Serial">
-            <Input
-              value={form.code}
-              onChange={(e: any) => setCodeOrSerial(e.target.value)}
-            />
-          </Field>
-          <Field label="Item Name">
-            <Input
-              value={form.name}
-              onChange={(e: any) => setField("name", e.target.value)}
-              required
-            />
-          </Field>
+          <SelectField
+            label="Item Type"
+            value={type}
+            onChange={setType}
+            options={itemTypes.map(([value, label]) => ({ value, label }))}
+          />
+          <TextField
+            label="Code / Serial"
+            value={form.code}
+            onChange={setCodeOrSerial}
+          />
+          <TextField
+            label="Item Name"
+            value={form.name}
+            onChange={(v) => setField("name", v)}
+            required
+          />
           {type !== "physio_equipment" && (
-            <Field label={type === "lab_package" ? "Package Price" : "Price"}>
-              <Input
-                type="number"
-                value={form.price}
-                onChange={(e: any) => setField("price", e.target.value)}
-              />
-            </Field>
-          )}
-          <Field label="Supplier">
-            <Select
-              value={form.supplier_id}
-              onChange={(e: any) => setField("supplier_id", e.target.value)}
-            >
-              <option value="">No supplier</option>
-              {stockSuppliers.map((supplier: any) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Purchase Price">
-            <Input
-              type="number"
-              value={form.purchase_price}
-              onChange={(e: any) => setField("purchase_price", e.target.value)}
+            <NumberField
+              label={type === "lab_package" ? "Package Price" : "Price"}
+              value={form.price}
+              onChange={(v) => setField("price", v)}
+              min={0}
             />
-          </Field>
+          )}
+          <SelectField
+            label="Supplier"
+            value={form.supplier_id}
+            onChange={(v) => setField("supplier_id", v)}
+            options={[
+              { value: "", label: "No supplier" },
+              ...stockSuppliers.map((s: any) => ({ value: s.id, label: s.name })),
+            ]}
+          />
+          <NumberField
+            label="Purchase Price"
+            value={form.purchase_price}
+            onChange={(v) => setField("purchase_price", v)}
+            min={0}
+          />
           {type === "medicine" && (
             <>
-              <Field label="Generic">
-                <Input
-                  value={form.generic_name}
-                  onChange={(e: any) =>
-                    setField("generic_name", e.target.value)
-                  }
-                />
-              </Field>
-              <Field label="Reorder Level">
-                <Input
-                  type="number"
-                  value={form.reorder_level}
-                  onChange={(e: any) =>
-                    setField("reorder_level", e.target.value)
-                  }
-                />
-              </Field>
+              <TextField
+                label="Generic"
+                value={form.generic_name}
+                onChange={(v) => setField("generic_name", v)}
+              />
+              <NumberField
+                label="Reorder Level"
+                value={form.reorder_level}
+                onChange={(v) => setField("reorder_level", v)}
+                min={0}
+              />
             </>
           )}
           {type === "lab_test" && (
-            <Field label="Sample Type">
-              <Input
-                value={form.sample_type}
-                onChange={(e: any) => setField("sample_type", e.target.value)}
-              />
-            </Field>
+            <TextField
+              label="Sample Type"
+              value={form.sample_type}
+              onChange={(v) => setField("sample_type", v)}
+            />
           )}
           {type === "lab_package" && (
             <div className="md:col-span-4 rounded-2xl bg-slate-50 p-4">
@@ -627,65 +601,42 @@ export function Items({ apiSession, branchId }: any) {
           )}
           {type === "physio_equipment" && (
             <>
-              <Field label="Modality">
-                <Select
-                  value={form.modality_type}
-                  onChange={(e: any) =>
-                    setField("modality_type", e.target.value)
-                  }
-                >
-                  {modalities.map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Manufacturer">
-                <Input
-                  value={form.manufacturer}
-                  onChange={(e: any) =>
-                    setField("manufacturer", e.target.value)
-                  }
-                />
-              </Field>
-              <Field label="Model">
-                <Input
-                  value={form.model_number}
-                  onChange={(e: any) =>
-                    setField("model_number", e.target.value)
-                  }
-                />
-              </Field>
-              <Field label="Serial Number">
-                <Input
-                  value={form.serial_number}
-                  onChange={(e: any) => {
-                    setField("serial_number", e.target.value);
-                    setField("code", e.target.value);
-                  }}
-                />
-              </Field>
-              <Field label="Portable">
-                <Select
-                  value={form.is_portable}
-                  onChange={(e: any) => setField("is_portable", e.target.value)}
-                >
-                  <option value="false">No</option>
-                  <option value="true">Yes</option>
-                </Select>
-              </Field>
-              <Field label="Scope">
-                <Select
-                  value={form.branch_scope}
-                  onChange={(e: any) =>
-                    setField("branch_scope", e.target.value)
-                  }
-                >
-                  <option value="branch">Current Branch</option>
-                  <option value="tenant">All Branches</option>
-                </Select>
-              </Field>
+              <SelectField
+                label="Modality"
+                value={form.modality_type}
+                onChange={(v) => setField("modality_type", v)}
+                options={modalities.map(([value, label]) => ({ value, label }))}
+              />
+              <TextField
+                label="Manufacturer"
+                value={form.manufacturer}
+                onChange={(v) => setField("manufacturer", v)}
+              />
+              <TextField
+                label="Model"
+                value={form.model_number}
+                onChange={(v) => setField("model_number", v)}
+              />
+              <TextField
+                label="Serial Number"
+                value={form.serial_number}
+                onChange={(v) => { setField("serial_number", v); setField("code", v); }}
+              />
+              <SelectField
+                label="Portable"
+                value={form.is_portable}
+                onChange={(v) => setField("is_portable", v)}
+                options={[{ value: "false", label: "No" }, { value: "true", label: "Yes" }]}
+              />
+              <SelectField
+                label="Scope"
+                value={form.branch_scope}
+                onChange={(v) => setField("branch_scope", v)}
+                options={[
+                  { value: "branch", label: "Current Branch" },
+                  { value: "tenant", label: "All Branches" },
+                ]}
+              />
             </>
           )}
           <div className="flex items-end gap-2">
@@ -716,12 +667,7 @@ export function Items({ apiSession, branchId }: any) {
         </div>
         <div className="mt-4 grid gap-3 lg:grid-cols-3">
           <div className="rounded-2xl bg-slate-50 p-4">
-            <Field label="Supplier Name">
-              <Input
-                value={suppNameInput}
-                onChange={(e: any) => setSuppNameInput(e.target.value)}
-              />
-            </Field>
+            <TextField label="Supplier Name" value={suppNameInput} onChange={setSuppNameInput} />
             <button
               type="button"
               onClick={createSupplier}
@@ -736,66 +682,19 @@ export function Items({ apiSession, branchId }: any) {
           </div>
           <div className="rounded-2xl bg-slate-50 p-4">
             <div className="grid gap-2 md:grid-cols-2">
-              <Field label="PO ID">
-                <Input
-                  value={poId}
-                  onChange={(e: any) => setPoId(e.target.value)}
-                />
-              </Field>
-              <Field label="Purchase Date">
-                <Input
-                  type="date"
-                  value={poDate}
-                  onChange={(e: any) => setPoDate(e.target.value)}
-                />
-              </Field>
-              <Field label="Medicine">
-                <Select
-                  value={stockMedId}
-                  onChange={(e: any) => setStockMedId(e.target.value)}
-                >
-                  {medicines.map((m: any) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-              <Field label="Quantity">
-                <Input
-                  type="number"
-                  value={poQty}
-                  onChange={(e: any) => setPoQty(e.target.value)}
-                />
-              </Field>
-              <Field label="Header Discount %">
-                <Input
-                  type="number"
-                  value={poHdrDisc}
-                  onChange={(e: any) => setPoHdrDisc(e.target.value)}
-                />
-              </Field>
-              <Field label="Line Discount %">
-                <Input
-                  type="number"
-                  value={poLineDisc}
-                  onChange={(e: any) => setPoLineDisc(e.target.value)}
-                />
-              </Field>
-              <Field label="CGST %">
-                <Input
-                  type="number"
-                  value={poCgst}
-                  onChange={(e: any) => setPoCgst(e.target.value)}
-                />
-              </Field>
-              <Field label="SGST %">
-                <Input
-                  type="number"
-                  value={poSgst}
-                  onChange={(e: any) => setPoSgst(e.target.value)}
-                />
-              </Field>
+              <TextField label="PO ID" value={poId} onChange={setPoId} />
+              <DateField label="Purchase Date" value={poDate} onChange={setPoDate} />
+              <SelectField
+                label="Medicine"
+                value={stockMedId}
+                onChange={setStockMedId}
+                options={medicines.map((m: any) => ({ value: m.id, label: m.name }))}
+              />
+              <NumberField label="Quantity" value={poQty} onChange={setPoQty} min={1} />
+              <NumberField label="Header Discount %" value={poHdrDisc} onChange={setPoHdrDisc} min={0} max={100} />
+              <NumberField label="Line Discount %" value={poLineDisc} onChange={setPoLineDisc} min={0} max={100} />
+              <NumberField label="CGST %" value={poCgst} onChange={setPoCgst} min={0} />
+              <NumberField label="SGST %" value={poSgst} onChange={setPoSgst} min={0} />
             </div>
             <button
               type="button"
@@ -828,27 +727,15 @@ export function Items({ apiSession, branchId }: any) {
               )}
             </div>
             <div className="mt-3 grid gap-2 md:grid-cols-2">
-              <Field label="Return Batch">
-                <Select
-                  value={stockBatchId}
-                  onChange={(e: any) => setStockBatchId(e.target.value)}
-                >
-                  {stockBatches
-                    .filter((b: any) => b.medicine_id === stockMedId)
-                    .map((b: any) => (
-                      <option key={b.id} value={b.id}>
-                        {b.batch_number} · Qty {b.quantity_on_hand}
-                      </option>
-                    ))}
-                </Select>
-              </Field>
-              <Field label="Return Qty">
-                <Input
-                  type="number"
-                  value={retQty}
-                  onChange={(e: any) => setRetQty(e.target.value)}
-                />
-              </Field>
+              <SelectField
+                label="Return Batch"
+                value={stockBatchId}
+                onChange={setStockBatchId}
+                options={stockBatches
+                  .filter((b: any) => b.medicine_id === stockMedId)
+                  .map((b: any) => ({ value: b.id, label: `${b.batch_number} · Qty ${b.quantity_on_hand}` }))}
+              />
+              <NumberField label="Return Qty" value={retQty} onChange={setRetQty} min={1} />
             </div>
             <button
               type="button"
@@ -871,41 +758,30 @@ export function Items({ apiSession, branchId }: any) {
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3 lg:min-w-[720px]">
-            <Field label="Search">
-              <Input
-                value={filters.query}
-                onChange={(e: any) =>
-                  setFiltersAndReset({ ...filters, query: e.target.value })
-                }
-                placeholder="Name, code, type"
-              />
-            </Field>
-            <Field label="Type">
-              <Select
-                value={filters.type}
-                onChange={(e: any) =>
-                  setFiltersAndReset({ ...filters, type: e.target.value })
-                }
-              >
-                <option value="all">All item types</option>
-                {itemTypes.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Lab Items">
-              <Select
-                value={filters.labOnly}
-                onChange={(e: any) =>
-                  setFiltersAndReset({ ...filters, labOnly: e.target.value })
-                }
-              >
-                <option value="all">All items</option>
-                <option value="lab">Lab tests & packages</option>
-              </Select>
-            </Field>
+            <TextField
+              label="Search"
+              value={filters.query}
+              onChange={(v) => setFiltersAndReset({ ...filters, query: v })}
+              placeholder="Name, code, type"
+            />
+            <SelectField
+              label="Type"
+              value={filters.type}
+              onChange={(v) => setFiltersAndReset({ ...filters, type: v })}
+              options={[
+                { value: "all", label: "All item types" },
+                ...itemTypes.map(([value, label]) => ({ value, label })),
+              ]}
+            />
+            <SelectField
+              label="Lab Items"
+              value={filters.labOnly}
+              onChange={(v) => setFiltersAndReset({ ...filters, labOnly: v })}
+              options={[
+                { value: "all", label: "All items" },
+                { value: "lab", label: "Lab tests & packages" },
+              ]}
+            />
           </div>
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">

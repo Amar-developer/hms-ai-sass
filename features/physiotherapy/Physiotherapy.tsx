@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Field, Input, Select } from "@/components/ui";
+import { Badge, Button, Card, Input, Select } from "@/components/ui";
+import { FormField, NumberField } from "@/components/FormElements";
 import {
   UPLOADS_BASE,
   apiFetch,
@@ -515,7 +516,7 @@ export function Physiotherapy({
           <p className="text-sm text-slate-500">Patient-signed consent files (PDF or image, max 10 MB each).</p>
           <form onSubmit={submitConsent} className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
             <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Consent Files">
+              <FormField label="Consent Files">
                 <input
                   name="consent_files"
                   type="file"
@@ -524,14 +525,14 @@ export function Physiotherapy({
                   required
                   className="block w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-xs file:font-bold"
                 />
-              </Field>
-              <Field label="Notes (optional)">
+              </FormField>
+              <FormField label="Notes (optional)">
                 <input
                   name="consent_notes"
                   placeholder="Consent obtained by, date, remarks"
                   className="w-full rounded-2xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-400"
                 />
-              </Field>
+              </FormField>
             </div>
             <Button disabled={busy === "consent"}>{busy === "consent" ? "Uploading..." : "Upload Consent Files"}</Button>
           </form>
@@ -544,14 +545,14 @@ export function Physiotherapy({
             <h4 className="text-lg font-bold">Record Therapy Session</h4>
             <form onSubmit={submitSession} className="mt-4 grid gap-3">
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Date">
+                <FormField label="Date">
                   <Input
                     name="session_date"
                     type="date"
                     defaultValue={today()}
                   />
-                </Field>
-                <Field label="Modality">
+                </FormField>
+                <FormField label="Modality">
                   <Select name="modality_type">
                     {modalities.map(([value, label]) => (
                       <option key={value} value={value}>
@@ -559,9 +560,9 @@ export function Physiotherapy({
                       </option>
                     ))}
                   </Select>
-                </Field>
+                </FormField>
               </div>
-              <Field label="Physiotherapist">
+              <FormField label="Physiotherapist">
                 <SearchSelect
                   name="physiotherapist_id"
                   value={sessionPhysiotherapistId}
@@ -583,8 +584,8 @@ export function Physiotherapy({
                       .join(" ")
                   }
                 />
-              </Field>
-              <Field label="Equipment">
+              </FormField>
+              <FormField label="Equipment">
                 <Select name="equipment_id">
                   <option value="">Manual / No equipment</option>
                   {equipment.map((row: any) => (
@@ -593,39 +594,39 @@ export function Physiotherapy({
                     </option>
                   ))}
                 </Select>
-              </Field>
+              </FormField>
               <div className="grid gap-3 md:grid-cols-3">
-                <Field label="Treatment Area">
+                <FormField label="Treatment Area">
                   <Input
                     name="treatment_area"
                     defaultValue={selected.body_region || ""}
                   />
-                </Field>
-                <Field label="Intensity">
+                </FormField>
+                <FormField label="Intensity">
                   <Input name="intensity" placeholder="Low / 1 MHz / 20 mA" />
-                </Field>
-                <Field label="Duration Minutes">
+                </FormField>
+                <FormField label="Duration Minutes">
                   <Input
                     name="duration_minutes"
                     type="number"
                     min="1"
                     defaultValue="20"
                   />
-                </Field>
+                </FormField>
               </div>
               <div className="grid gap-3 md:grid-cols-3">
-                <Field label="Pre Pain">
+                <FormField label="Pre Pain">
                   <Input name="pre_pain_score" type="number" min="0" max="10" />
-                </Field>
-                <Field label="Post Pain">
+                </FormField>
+                <FormField label="Post Pain">
                   <Input
                     name="post_pain_score"
                     type="number"
                     min="0"
                     max="10"
                   />
-                </Field>
-                <Field label="Charge">
+                </FormField>
+                <FormField label="Charge">
                   <Input
                     key={selectedSessionFee?.id || sessionPhysiotherapistId || "charge"}
                     name="charge_amount"
@@ -633,26 +634,26 @@ export function Physiotherapy({
                     min="0"
                     defaultValue={selectedSessionFee?.fee_amount ?? 0}
                   />
-                </Field>
+                </FormField>
               </div>
-              <Field label="Exercises">
+              <FormField label="Exercises">
                 <Input
                   name="exercises"
                   placeholder="ROM, strengthening, gait training, resistance band"
                 />
-              </Field>
-              <Field label="Home Program">
+              </FormField>
+              <FormField label="Home Program">
                 <Input
                   name="home_program"
                   placeholder="Home exercise and device usage advice"
                 />
-              </Field>
-              <Field label="Notes">
+              </FormField>
+              <FormField label="Notes">
                 <Input
                   name="notes"
                   placeholder="Response, tolerance, precautions"
                 />
-              </Field>
+              </FormField>
               <Button disabled={busy === "session"}>Save Session</Button>
             </form>
           </Card>
@@ -717,14 +718,12 @@ export function Physiotherapy({
               </div>
               {!invoiceDetail ? (
                 <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                  <Field label="Discount">
-                    <Input
-                      type="number"
-                      min="0"
-                      value={invoiceDiscount}
-                      onChange={(e: any) => setInvoiceDiscount(e.target.value)}
-                    />
-                  </Field>
+                  <NumberField
+                    label="Discount"
+                    value={invoiceDiscount}
+                    onChange={setInvoiceDiscount}
+                    min={0}
+                  />
                   <Button
                     type="button"
                     onClick={generateInvoice}
@@ -933,51 +932,51 @@ function CaseFields() {
   return (
     <>
       <div className="grid gap-3 md:grid-cols-3">
-        <Field label="Body Region">
+        <FormField label="Body Region">
           <Input
             name="body_region"
             placeholder="Knee, shoulder, lumbar spine"
           />
-        </Field>
-        <Field label="Pain Score">
+        </FormField>
+        <FormField label="Pain Score">
           <Input name="pain_score" type="number" min="0" max="10" />
-        </Field>
-        <Field label="Assessment Date">
+        </FormField>
+        <FormField label="Assessment Date">
           <Input name="assessment_date" type="date" defaultValue={today()} />
-        </Field>
+        </FormField>
       </div>
-      <Field label="Condition">
+      <FormField label="Condition">
         <Input
           name="condition"
           placeholder="Chronic pain, post-surgery, sports injury, arthritis"
         />
-      </Field>
+      </FormField>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Range Of Motion">
+        <FormField label="Range Of Motion">
           <Input name="range_of_motion" />
-        </Field>
-        <Field label="Muscle Strength">
+        </FormField>
+        <FormField label="Muscle Strength">
           <Input name="muscle_strength" />
-        </Field>
+        </FormField>
       </div>
-      <Field label="Treatment Goal">
+      <FormField label="Treatment Goal">
         <Input
           name="treatment_goal"
           placeholder="Pain relief, mobility, strengthening, joint rehabilitation"
         />
-      </Field>
+      </FormField>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Planned Sessions">
+        <FormField label="Planned Sessions">
           <Input
             name="planned_sessions"
             type="number"
             min="1"
             defaultValue="6"
           />
-        </Field>
-        <Field label="Frequency">
+        </FormField>
+        <FormField label="Frequency">
           <Input name="frequency" placeholder="Daily / 3 days per week" />
-        </Field>
+        </FormField>
       </div>
     </>
   );
@@ -1022,7 +1021,7 @@ function CaseForm({
         <p className="text-sm text-slate-500">{subtitle}</p>
       </div>
       <form onSubmit={onSubmit} className="mt-5 grid gap-4">
-        <Field label="Patient">
+        <FormField label="Patient">
           <SearchSelect
             name="patient_id"
             value={patientId}
@@ -1042,8 +1041,8 @@ function CaseForm({
                 .join(" ")
             }
           />
-        </Field>
-        <Field label="Linked OP Appointment">
+        </FormField>
+        <FormField label="Linked OP Appointment">
           <SearchSelect
             name="source_appointment_id"
             value={appointmentId}
@@ -1070,8 +1069,8 @@ function CaseForm({
                 : "No linked appointment"
             }
           />
-        </Field>
-        <Field label="Physiotherapist">
+        </FormField>
+        <FormField label="Physiotherapist">
           <SearchSelect
             name="physiotherapist_id"
             value={physiotherapistId}
@@ -1090,7 +1089,7 @@ function CaseForm({
                 .join(" ")
             }
           />
-        </Field>
+        </FormField>
         <CaseFields />
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button
@@ -1141,7 +1140,7 @@ function IPCaseForm({
         </p>
       </div>
       <form onSubmit={onSubmit} className="mt-5 grid gap-4">
-        <Field label="IP Admission">
+        <FormField label="IP Admission">
           <SearchSelect
             name="ip_admission_id"
             value={admissionId}
@@ -1161,8 +1160,8 @@ function IPCaseForm({
                 .join(" ");
             }}
           />
-        </Field>
-        <Field label="Physiotherapist">
+        </FormField>
+        <FormField label="Physiotherapist">
           <SearchSelect
             name="physiotherapist_id"
             value={physiotherapistId}
@@ -1181,7 +1180,7 @@ function IPCaseForm({
                 .join(" ")
             }
           />
-        </Field>
+        </FormField>
         {admissions.length === 0 && (
           <div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">
             No IP admissions are loaded. Create or convert an IP admission
@@ -1210,10 +1209,10 @@ function EquipmentPage({ equipment, onSubmit, busy }: any) {
       <Card>
         <h4 className="text-lg font-bold">Add Equipment</h4>
         <form onSubmit={onSubmit} className="mt-4 grid gap-3">
-          <Field label="Name">
+          <FormField label="Name">
             <Input name="name" placeholder="HMS Indotherm 500W" required />
-          </Field>
-          <Field label="Modality">
+          </FormField>
+          <FormField label="Modality">
             <Select name="modality_type">
               {modalities.map(([value, label]) => (
                 <option key={value} value={value}>
@@ -1221,32 +1220,32 @@ function EquipmentPage({ equipment, onSubmit, busy }: any) {
                 </option>
               ))}
             </Select>
-          </Field>
+          </FormField>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Manufacturer">
+            <FormField label="Manufacturer">
               <Input name="manufacturer" placeholder="HMS" />
-            </Field>
-            <Field label="Model">
+            </FormField>
+            <FormField label="Model">
               <Input name="model_number" placeholder="DIGISTIM 202" />
-            </Field>
+            </FormField>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Serial Number">
+            <FormField label="Serial Number">
               <Input name="serial_number" />
-            </Field>
-            <Field label="Portable">
+            </FormField>
+            <FormField label="Portable">
               <Select name="is_portable">
                 <option value="false">No</option>
                 <option value="true">Yes</option>
               </Select>
-            </Field>
+            </FormField>
           </div>
-          <Field label="Scope">
+          <FormField label="Scope">
             <Select name="branch_scope">
               <option value="branch">Current Branch</option>
               <option value="tenant">All Branches</option>
             </Select>
-          </Field>
+          </FormField>
           <Button disabled={busy}>Save Equipment</Button>
         </form>
       </Card>

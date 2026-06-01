@@ -19,11 +19,11 @@ import {
   Badge,
   Button,
   Card,
-  Field,
   Input,
   SearchableSelect,
   Select,
 } from "@/components/ui";
+import { FormField } from "@/components/FormElements";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { UPLOADS_BASE, apiFetch, apiUpload } from "@/lib/api";
 import {
@@ -1758,13 +1758,13 @@ function ListCard({
         </button>
       </div>
       <div className="mt-4 max-w-md">
-        <Field label={`Search ${title}`}>
+        <FormField label={`Search ${title}`}>
           <Input
             value={query}
             onChange={(e: any) => setQuery(e.target.value)}
             placeholder={`Search ${title.toLowerCase()}`}
           />
-        </Field>
+        </FormField>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1040px]">
@@ -1808,24 +1808,24 @@ function RoleForm({ title, role, permissions, busy, onSubmit, back }: any) {
         back={back}
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Role Name">
+        <FormField label="Role Name">
           <Input
             name="name"
             defaultValue={role?.name || ""}
             required
             disabled={isLocked(role)}
           />
-        </Field>
-        <Field label="Role Key">
+        </FormField>
+        <FormField label="Role Key">
           <Input
             name="key"
             defaultValue={role?.key || ""}
             required
             disabled={isLocked(role)}
           />
-        </Field>
+        </FormField>
         {role && (
-          <Field label="Status">
+          <FormField label="Status">
             <Select
               name="isActive"
               defaultValue={String(role.is_active)}
@@ -1834,7 +1834,7 @@ function RoleForm({ title, role, permissions, busy, onSubmit, back }: any) {
               <option value="true">Active</option>
               <option value="false">Inactive</option>
             </Select>
-          </Field>
+          </FormField>
         )}
         <div className="md:col-span-2">
           <PermissionCheckboxes
@@ -1869,18 +1869,18 @@ function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
         back={back}
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Name">
+        <FormField label="Name">
           <Input name="name" defaultValue={user?.name || ""} required />
-        </Field>
-        <Field label="Email">
+        </FormField>
+        <FormField label="Email">
           <Input
             name="email"
             type="email"
             defaultValue={user?.email || ""}
             required
           />
-        </Field>
-        <Field label="User Type">
+        </FormField>
+        <FormField label="User Type">
           <Select name="userType" defaultValue={user?.user_type || "staff"}>
             {userTypes.map(([value, label]) => (
               <option key={value} value={value}>
@@ -1888,11 +1888,11 @@ function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
               </option>
             ))}
           </Select>
-        </Field>
-        <Field label="Mobile">
+        </FormField>
+        <FormField label="Mobile">
           <Input name="mobile" defaultValue={user?.mobile || ""} />
-        </Field>
-        <Field label="Branch">
+        </FormField>
+        <FormField label="Branch">
           <Select
             name="branchId"
             value={selectedBranch}
@@ -1905,18 +1905,18 @@ function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
               </option>
             ))}
           </Select>
-        </Field>
+        </FormField>
         {!user && (
-          <Field label="Temporary Password">
+          <FormField label="Temporary Password">
             <Input
               name="password"
               type="text"
               defaultValue="TempPass123"
               required
             />
-          </Field>
+          </FormField>
         )}
-        <Field label="Must Change Password">
+        <FormField label="Must Change Password">
           <Select
             name="mustChangePassword"
             defaultValue={String(user?.must_change_password ?? true)}
@@ -1924,14 +1924,14 @@ function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
             <option value="true">Yes</option>
             <option value="false">No</option>
           </Select>
-        </Field>
+        </FormField>
         {user && (
-          <Field label="Status">
+          <FormField label="Status">
             <Select name="isActive" defaultValue={String(user.is_active)}>
               <option value="true">Active</option>
               <option value="false">Inactive</option>
             </Select>
-          </Field>
+          </FormField>
         )}
         <div className="md:col-span-2">
           <CheckboxList
@@ -1969,15 +1969,15 @@ function DepartmentForm({
         back={back}
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Name">
+        <FormField label="Name">
           <Input
             name="name"
             defaultValue={department?.name || ""}
             required
             disabled={isLocked(department)}
           />
-        </Field>
-        <Field label="Branch">
+        </FormField>
+        <FormField label="Branch">
           <Select
             name="branchId"
             defaultValue={department?.branch_id || ""}
@@ -1990,9 +1990,9 @@ function DepartmentForm({
               </option>
             ))}
           </Select>
-        </Field>
+        </FormField>
         {department && (
-          <Field label="Status">
+          <FormField label="Status">
             <Select
               name="isActive"
               defaultValue={String(department.is_active)}
@@ -2001,16 +2001,16 @@ function DepartmentForm({
               <option value="true">Active</option>
               <option value="false">Inactive</option>
             </Select>
-          </Field>
+          </FormField>
         )}
         <div className="md:col-span-2">
-          <Field label="Description">
+          <FormField label="Description">
             <Input
               name="description"
               defaultValue={department?.description || ""}
               disabled={isLocked(department)}
             />
-          </Field>
+          </FormField>
         </div>
         <Actions
           busy={busy}
@@ -2043,38 +2043,38 @@ function BranchForm({ title, branch, branchCount, busy, onSubmit, back }: any) {
         </div>
       )}
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Branch Name">
+        <FormField label="Branch Name">
           <Input
             name="name"
             defaultValue={branch?.name || ""}
             required
             disabled={isLocked(branch)}
           />
-        </Field>
-        <Field label="Code">
+        </FormField>
+        <FormField label="Code">
           <Input
             name="code"
             defaultValue={branch?.code || ""}
             required
             disabled={isLocked(branch)}
           />
-        </Field>
-        <Field label="City">
+        </FormField>
+        <FormField label="City">
           <Input
             name="city"
             defaultValue={branch?.city || ""}
             disabled={isLocked(branch)}
           />
-        </Field>
-        <Field label="State">
+        </FormField>
+        <FormField label="State">
           <Input
             name="state"
             defaultValue={branch?.state || ""}
             disabled={isLocked(branch)}
           />
-        </Field>
+        </FormField>
         {branch && (
-          <Field label="Status">
+          <FormField label="Status">
             <Select
               name="isActive"
               defaultValue={String(branch.is_active)}
@@ -2083,16 +2083,16 @@ function BranchForm({ title, branch, branchCount, busy, onSubmit, back }: any) {
               <option value="true">Active</option>
               <option value="false">Inactive</option>
             </Select>
-          </Field>
+          </FormField>
         )}
         <div className="md:col-span-2">
-          <Field label="Address">
+          <FormField label="Address">
             <Input
               name="address"
               defaultValue={branch?.address || ""}
               disabled={isLocked(branch)}
             />
-          </Field>
+          </FormField>
         </div>
         <Actions
           busy={busy}
@@ -2117,34 +2117,34 @@ function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
         back={back}
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Supplier Name">
+        <FormField label="Supplier Name">
           <Input name="name" defaultValue={supplier?.name || ""} required />
-        </Field>
-        <Field label="GSTIN">
+        </FormField>
+        <FormField label="GSTIN">
           <Input name="gstin" defaultValue={supplier?.gstin || ""} />
-        </Field>
-        <Field label="Phone">
+        </FormField>
+        <FormField label="Phone">
           <Input name="phone" defaultValue={supplier?.phone || ""} />
-        </Field>
-        <Field label="Email">
+        </FormField>
+        <FormField label="Email">
           <Input
             name="email"
             type="email"
             defaultValue={supplier?.email || ""}
           />
-        </Field>
+        </FormField>
         {supplier && (
-          <Field label="Status">
+          <FormField label="Status">
             <Select name="isActive" defaultValue={String(supplier.is_active)}>
               <option value="true">Active</option>
               <option value="false">Inactive</option>
             </Select>
-          </Field>
+          </FormField>
         )}
         <div className="md:col-span-2">
-          <Field label="Address">
+          <FormField label="Address">
             <Input name="address" defaultValue={supplier?.address || ""} />
-          </Field>
+          </FormField>
         </div>
         <Actions
           busy={busy}
@@ -2173,10 +2173,10 @@ function TaxRuleForm({ title, rule, branches, busy, onSubmit, back }: any) {
         back={back}
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Name">
+        <FormField label="Name">
           <Input name="name" defaultValue={rule?.name || ""} required />
-        </Field>
-        <Field label="Branch">
+        </FormField>
+        <FormField label="Branch">
           <Select name="branchId" defaultValue={rule?.branch_id || ""}>
             <option value="">All branches</option>
             {branches.map((branch: any) => (
@@ -2185,8 +2185,8 @@ function TaxRuleForm({ title, rule, branches, busy, onSubmit, back }: any) {
               </option>
             ))}
           </Select>
-        </Field>
-        <Field label="Service Scope">
+        </FormField>
+        <FormField label="Service Scope">
           <Select
             name="serviceScope"
             defaultValue={rule?.service_scope || "all"}
@@ -2197,15 +2197,15 @@ function TaxRuleForm({ title, rule, branches, busy, onSubmit, back }: any) {
               </option>
             ))}
           </Select>
-        </Field>
-        <Field label="Tax Label">
+        </FormField>
+        <FormField label="Tax Label">
           <Input
             name="taxLabel"
             defaultValue={rule?.tax_label || "GST"}
             required
           />
-        </Field>
-        <Field label="Tax Percentage">
+        </FormField>
+        <FormField label="Tax Percentage">
           <Input
             name="taxPercentage"
             type="number"
@@ -2214,14 +2214,14 @@ function TaxRuleForm({ title, rule, branches, busy, onSubmit, back }: any) {
             defaultValue={rule?.tax_percentage ?? 0}
             required
           />
-        </Field>
+        </FormField>
         {rule && (
-          <Field label="Status">
+          <FormField label="Status">
             <Select name="isActive" defaultValue={String(rule.is_active)}>
               <option value="true">Active</option>
               <option value="false">Inactive</option>
             </Select>
-          </Field>
+          </FormField>
         )}
         <Actions
           busy={busy}
@@ -2249,17 +2249,17 @@ function DiscountOfferForm({
         back={back}
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <Field label="Offer Name">
+        <FormField label="Offer Name">
           <Input name="name" defaultValue={offer?.name || ""} required />
-        </Field>
-        <Field label="Code">
+        </FormField>
+        <FormField label="Code">
           <Input
             name="code"
             defaultValue={offer?.code || ""}
             placeholder="HEALTH10"
           />
-        </Field>
-        <Field label="Branch">
+        </FormField>
+        <FormField label="Branch">
           <Select name="branchId" defaultValue={offer?.branch_id || ""}>
             <option value="">All branches</option>
             {branches.map((branch: any) => (
@@ -2268,8 +2268,8 @@ function DiscountOfferForm({
               </option>
             ))}
           </Select>
-        </Field>
-        <Field label="Service Scope">
+        </FormField>
+        <FormField label="Service Scope">
           <Select
             name="serviceScope"
             defaultValue={offer?.service_scope || "all"}
@@ -2280,8 +2280,8 @@ function DiscountOfferForm({
               </option>
             ))}
           </Select>
-        </Field>
-        <Field label="Discount Type">
+        </FormField>
+        <FormField label="Discount Type">
           <Select
             name="discountType"
             defaultValue={offer?.discount_type || "percentage"}
@@ -2289,8 +2289,8 @@ function DiscountOfferForm({
             <option value="percentage">Percentage</option>
             <option value="fixed">Fixed amount</option>
           </Select>
-        </Field>
-        <Field label="Value">
+        </FormField>
+        <FormField label="Value">
           <Input
             name="value"
             type="number"
@@ -2298,44 +2298,44 @@ function DiscountOfferForm({
             defaultValue={offer?.value ?? 0}
             required
           />
-        </Field>
-        <Field label="Minimum Bill Amount">
+        </FormField>
+        <FormField label="Minimum Bill Amount">
           <Input
             name="minimumBillAmount"
             type="number"
             min="0"
             defaultValue={offer?.minimum_bill_amount ?? 0}
           />
-        </Field>
-        <Field label="Max Discount">
+        </FormField>
+        <FormField label="Max Discount">
           <Input
             name="maxDiscountAmount"
             type="number"
             min="0"
             defaultValue={offer?.max_discount_amount ?? ""}
           />
-        </Field>
-        <Field label="Valid From">
+        </FormField>
+        <FormField label="Valid From">
           <Input
             name="validFrom"
             type="date"
             defaultValue={dateToInput(offer?.valid_from)}
           />
-        </Field>
-        <Field label="Valid Until">
+        </FormField>
+        <FormField label="Valid Until">
           <Input
             name="validUntil"
             type="date"
             defaultValue={dateToInput(offer?.valid_until)}
           />
-        </Field>
+        </FormField>
         {offer && (
-          <Field label="Status">
+          <FormField label="Status">
             <Select name="isActive" defaultValue={String(offer.is_active)}>
               <option value="true">Active</option>
               <option value="false">Inactive</option>
             </Select>
-          </Field>
+          </FormField>
         )}
         <Actions
           busy={busy}
@@ -2721,10 +2721,10 @@ function FilesPanel({
           onSubmit={handleSubmit}
           className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
         >
-          <Field label="Upload File">
+          <FormField label="Upload File">
             <Input name="file" type="file" required />
-          </Field>
-          <Field label="Category">
+          </FormField>
+          <FormField label="Category">
             <SearchableSelect
               name="category"
               value={category}
@@ -2732,8 +2732,8 @@ function FilesPanel({
               options={fileCategoryOptions}
               searchPlaceholder="Search categories..."
             />
-          </Field>
-          <Field label="Branch">
+          </FormField>
+          <FormField label="Branch">
             <SearchableSelect
               name="branch_id"
               value={branchId}
@@ -2746,8 +2746,8 @@ function FilesPanel({
               }))}
               searchPlaceholder="Search branches..."
             />
-          </Field>
-          <Field label="Patient">
+          </FormField>
+          <FormField label="Patient">
             <SearchableSelect
               name="patient_id"
               value={patientId}
@@ -2756,8 +2756,8 @@ function FilesPanel({
               options={patientOptions}
               searchPlaceholder="Search patients..."
             />
-          </Field>
-          <Field label="Source Module">
+          </FormField>
+          <FormField label="Source Module">
             <SearchableSelect
               name="source_module"
               value={sourceModule}
@@ -2766,8 +2766,8 @@ function FilesPanel({
               searchPlaceholder="Search modules..."
               allowCustom
             />
-          </Field>
-          <Field label="Linked Doctype">
+          </FormField>
+          <FormField label="Linked Doctype">
             <SearchableSelect
               name="attached_to_doctype"
               value={doctype}
@@ -2776,8 +2776,8 @@ function FilesPanel({
               searchPlaceholder="Search doctypes..."
               allowCustom
             />
-          </Field>
-          <Field label="Linked Record ID">
+          </FormField>
+          <FormField label="Linked Record ID">
             <SearchableSelect
               name="attached_to_name"
               value={recordId}
@@ -2794,8 +2794,8 @@ function FilesPanel({
               allowCustom
               emptyText={recordsLoading ? "Loading..." : "No matching records."}
             />
-          </Field>
-          <Field label="Linked Field">
+          </FormField>
+          <FormField label="Linked Field">
             <SearchableSelect
               name="attached_to_field"
               value={fieldName}
@@ -2804,8 +2804,8 @@ function FilesPanel({
               searchPlaceholder="Search fields..."
               allowCustom
             />
-          </Field>
-          <Field label="Label">
+          </FormField>
+          <FormField label="Label">
             <SearchableSelect
               name="attached_to_label"
               value={labelValue}
@@ -2814,8 +2814,8 @@ function FilesPanel({
               searchPlaceholder="Search labels..."
               allowCustom
             />
-          </Field>
-          <Field label="Folder">
+          </FormField>
+          <FormField label="Folder">
             <SearchableSelect
               name="folder"
               value={folder}
@@ -2827,16 +2827,16 @@ function FilesPanel({
               searchPlaceholder="Search folders..."
               allowCustom
             />
-          </Field>
+          </FormField>
           <div className="md:col-span-2">
-            <Field label="Notes">
+            <FormField label="Notes">
               <Input
                 name="notes"
                 value={notes}
                 onChange={(e: any) => setNotes(e.target.value)}
                 placeholder="Optional notes"
               />
-            </Field>
+            </FormField>
           </div>
           <div className="flex items-end">
             <Button disabled={busy}>
@@ -2855,13 +2855,13 @@ function FilesPanel({
               uploads directory.
             </p>
           </div>
-          <Field label="Search">
+          <FormField label="Search">
             <Input
               value={query}
               onChange={(e: any) => setQuery(e.target.value)}
               placeholder="Search files"
             />
-          </Field>
+          </FormField>
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border border-slate-200">
           <table className="w-full min-w-[980px] text-left text-sm">
@@ -2996,7 +2996,7 @@ function SettingsPanel(props: any) {
           slots, payments, and communications for this tenant.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Document Prefix">
+          <FormField label="Document Prefix">
             <Input
               value={numberingRules.prefix || invoicePrefix}
               onChange={(e: any) => {
@@ -3005,8 +3005,8 @@ function SettingsPanel(props: any) {
               }}
               placeholder="SUN"
             />
-          </Field>
-          <Field label="Number Digits">
+          </FormField>
+          <FormField label="Number Digits">
             <Input
               type="number"
               min="1"
@@ -3016,29 +3016,29 @@ function SettingsPanel(props: any) {
                 setRule("digits", Number(e.target.value || 5))
               }
             />
-          </Field>
-          <Field label="Invoice Logo URL">
+          </FormField>
+          <FormField label="Invoice Logo URL">
             <Input
               value={invoiceLogoUrl}
               onChange={(e: any) => setInvoiceLogoUrl(e.target.value)}
               placeholder="/uploads/logo.jpg"
             />
-          </Field>
-          <Field label="Requeue After">
+          </FormField>
+          <FormField label="Requeue After">
             <Input
               type="number"
               value={requeueAfter}
               onChange={(e: any) => setRequeueAfter(Number(e.target.value))}
             />
-          </Field>
-          <Field label="No-show Calls">
+          </FormField>
+          <FormField label="No-show Calls">
             <Input
               type="number"
               value={noShowAfter}
               onChange={(e: any) => setNoShowAfter(Number(e.target.value))}
             />
-          </Field>
-          <Field label="Slot Display">
+          </FormField>
+          <FormField label="Slot Display">
             <Select
               value={slotIntervalsEnabled ? "intervals" : "sessions"}
               onChange={(e: any) =>
@@ -3048,8 +3048,8 @@ function SettingsPanel(props: any) {
               <option value="sessions">Consultation timings only</option>
               <option value="intervals">Detailed interval slots</option>
             </Select>
-          </Field>
-          <Field label="Interval Minutes">
+          </FormField>
+          <FormField label="Interval Minutes">
             <Input
               type="number"
               min="5"
@@ -3060,30 +3060,30 @@ function SettingsPanel(props: any) {
               }
               disabled={!slotIntervalsEnabled}
             />
-          </Field>
-          <Field label="Payment Methods">
+          </FormField>
+          <FormField label="Payment Methods">
             <Input
               value={payments}
               onChange={(e: any) => setPayments(e.target.value)}
             />
-          </Field>
-          <Field label="Communication">
+          </FormField>
+          <FormField label="Communication">
             <Input
               value={providers}
               onChange={(e: any) => setProviders(e.target.value)}
             />
-          </Field>
+          </FormField>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {Object.entries(
             numberingRules.entities || defaultNumberingEntities,
           ).map(([key, value]: any) => (
-            <Field key={key} label={`${humanizeOptionLabel(key)} Code`}>
+            <FormField key={key} label={`${humanizeOptionLabel(key)} Code`}>
               <Input
                 value={value}
                 onChange={(e: any) => setEntity(key, e.target.value)}
               />
-            </Field>
+            </FormField>
           ))}
         </div>
         <div className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
@@ -3124,21 +3124,21 @@ function SettingsPanel(props: any) {
           </Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <Field label="Target Emails">
+          <FormField label="Target Emails">
             <Input
               value={reportRecipients}
               onChange={(e: any) => setReportRecipients(e.target.value)}
               placeholder="owner@clinic.com, accounts@clinic.com"
             />
-          </Field>
-          <Field label="CC Emails">
+          </FormField>
+          <FormField label="CC Emails">
             <Input
               value={reportCc}
               onChange={(e: any) => setReportCc(e.target.value)}
               placeholder="Optional"
             />
-          </Field>
-          <Field label="Send Day">
+          </FormField>
+          <FormField label="Send Day">
             <Input
               type="number"
               min="1"
@@ -3146,8 +3146,8 @@ function SettingsPanel(props: any) {
               value={reportSendDay}
               onChange={(e: any) => setReportSendDay(Number(e.target.value))}
             />
-          </Field>
-          <Field label="Auto Send">
+          </FormField>
+          <FormField label="Auto Send">
             <Select
               value={reportEnabled ? "enabled" : "disabled"}
               onChange={(e: any) =>
@@ -3157,7 +3157,7 @@ function SettingsPanel(props: any) {
               <option value="disabled">Manual only</option>
               <option value="enabled">Every month</option>
             </Select>
-          </Field>
+          </FormField>
         </div>
         <div className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
           {[

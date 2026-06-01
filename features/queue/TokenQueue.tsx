@@ -1,7 +1,8 @@
 'use client';
 
 import {useEffect,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Card,Field,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Card,Select} from '@/components/ui';
+import {FormField} from '@/components/FormElements';
 import {apiFetch,type ApiSession} from '@/lib/api';
 import {sortQueue} from '@/lib/hmsLogic';
 import {humanizeOptionLabel,publicDisplayValue} from '@/lib/options';
@@ -196,24 +197,24 @@ export function TokenQueue({
           </p>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
-          <Field label="Display Mode">
+          <FormField label="Display Mode">
             <Select value={displayMode} onChange={(e:any)=>setDisplayMode(e.target.value)}>
               <option value="reception">Reception Queue</option>
               <option value="called_only">Called Tokens</option>
             </Select>
-          </Field>
-          <Field label="Call Language">
+          </FormField>
+          <FormField label="Call Language">
             <Select value={tokenLanguage} onChange={(e:any)=>setTokenLanguage(e.target.value)}>
               <option value="english">English</option>
               <option value="tamil">Tamil</option>
               <option value="both">English + Tamil</option>
             </Select>
-          </Field>
-          <Field label="Day Close">
+          </FormField>
+          <FormField label="Day Close">
             <button type="button" onClick={cancelRemainingTokens} disabled={busyId==='end-of-day'||queue.length===0} className="h-[46px] w-full rounded-2xl border border-red-100 bg-white px-4 text-sm font-bold text-red-600 hover:bg-red-50 disabled:text-slate-300">
               {busyId==='end-of-day'?'Closing...':'Cancel Remaining'}
             </button>
-          </Field>
+          </FormField>
         </div>
       </div>
       {message && <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}

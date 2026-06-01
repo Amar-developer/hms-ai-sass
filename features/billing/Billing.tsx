@@ -1,8 +1,9 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Button,Card,Field,Input,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Button,Card} from '@/components/ui';
 import {apiBlob,apiFetch} from '@/lib/api';
+import {DateField,NumberField,SelectField,TextField} from '@/components/FormElements';
 
 const pageSize=10;
 
@@ -429,30 +430,43 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
           <Badge tone="slate">{filteredInvoices.length} of {invoices.length} invoices</Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1.2fr_.85fr_.85fr_.75fr_.75fr_auto] xl:items-end">
-          <Field label="Search">
-            <Input value={filters.query} onChange={(e:any)=>updateFilter('query',e.target.value)} placeholder="Invoice, patient, source"/>
-          </Field>
-          <Field label="Source">
-            <Select value={filters.source} onChange={(e:any)=>updateFilter('source',e.target.value)}>
-              <option value="all">All sources</option>
-              {sourceOptions.map((source:any)=><option key={source.key} value={source.key}>{source.label}</option>)}
-            </Select>
-          </Field>
-          <Field label="Paid Status">
-            <Select value={filters.paidStatus} onChange={(e:any)=>updateFilter('paidStatus',e.target.value)}>
-              <option value="all">All payments</option>
-              <option value="paid">Paid</option>
-              <option value="due">Due</option>
-              <option value="partially_paid">Partially paid</option>
-              <option value="unpaid">Unpaid</option>
-            </Select>
-          </Field>
-          <Field label="From Date">
-            <Input type="date" value={filters.fromDate} onChange={(e:any)=>updateFilter('fromDate',e.target.value)}/>
-          </Field>
-          <Field label="To Date">
-            <Input type="date" value={filters.toDate} onChange={(e:any)=>updateFilter('toDate',e.target.value)}/>
-          </Field>
+          <TextField
+            label="Search"
+            value={filters.query}
+            onChange={(v) => updateFilter('query', v)}
+            placeholder="Invoice, patient, source"
+          />
+          <SelectField
+            label="Source"
+            value={filters.source}
+            onChange={(v) => updateFilter('source', v)}
+            options={[
+              {value:'all', label:'All sources'},
+              ...sourceOptions.map((s:any) => ({value: s.key, label: s.label})),
+            ]}
+          />
+          <SelectField
+            label="Paid Status"
+            value={filters.paidStatus}
+            onChange={(v) => updateFilter('paidStatus', v)}
+            options={[
+              {value:'all', label:'All payments'},
+              {value:'paid', label:'Paid'},
+              {value:'due', label:'Due'},
+              {value:'partially_paid', label:'Partially paid'},
+              {value:'unpaid', label:'Unpaid'},
+            ]}
+          />
+          <DateField
+            label="From Date"
+            value={filters.fromDate}
+            onChange={(v) => updateFilter('fromDate', v)}
+          />
+          <DateField
+            label="To Date"
+            value={filters.toDate}
+            onChange={(v) => updateFilter('toDate', v)}
+          />
           <button type="button" onClick={clearFilters} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50">
             Clear
           </button>
@@ -663,18 +677,34 @@ function InvoiceDetailPage({
                   {numberValue(invoice.balance_amount)>0?(
                     <div className="grid gap-2">
                       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                        <Select value={methods[invoice.id]||'cash'} onChange={(e:any)=>setMethods({...methods,[invoice.id]:e.target.value})}>
-                          <option value="cash">Cash</option>
-                          <option value="upi">UPI</option>
-                          <option value="gpay">GPay</option>
-                          <option value="paytm">Paytm</option>
-                          <option value="credit_card">Credit Card</option>
-                          <option value="debit_card">Debit Card</option>
-                          <option value="bank_transfer">Bank</option>
-                        </Select>
-                        <Input className="text-right tabular-nums" type="number" min="1" max={invoice.balance_amount} value={amounts[invoice.id]??invoice.balance_amount} onChange={(e:any)=>setAmounts({...amounts,[invoice.id]:e.target.value})}/>
+                        <SelectField
+                          label="Payment Method"
+                          value={methods[invoice.id]||'cash'}
+                          onChange={(v)=>setMethods({...methods,[invoice.id]:v})}
+                          options={[
+                            {value:'cash',label:'Cash'},
+                            {value:'upi',label:'UPI'},
+                            {value:'gpay',label:'GPay'},
+                            {value:'paytm',label:'Paytm'},
+                            {value:'credit_card',label:'Credit Card'},
+                            {value:'debit_card',label:'Debit Card'},
+                            {value:'bank_transfer',label:'Bank'},
+                          ]}
+                        />
+                        <NumberField
+                          label="Amount"
+                          value={amounts[invoice.id]??invoice.balance_amount}
+                          onChange={(v)=>setAmounts({...amounts,[invoice.id]:v})}
+                          min={1}
+                          max={invoice.balance_amount}
+                        />
                       </div>
-                      <Input placeholder="Reference number" value={references[invoice.id]||''} onChange={(e:any)=>setReferences({...references,[invoice.id]:e.target.value})}/>
+                      <TextField
+                        label="Reference Number"
+                        value={references[invoice.id]||''}
+                        onChange={(v)=>setReferences({...references,[invoice.id]:v})}
+                        placeholder="Reference number"
+                      />
                       <Button className="w-full" disabled={busy===invoice.id} onClick={()=>collectPayment(invoice)}>
                         {busy===invoice.id?'Saving Payment...':`Pay ${money(amounts[invoice.id]??invoice.balance_amount)}`}
                       </Button>

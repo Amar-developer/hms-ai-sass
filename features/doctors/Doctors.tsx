@@ -2,17 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import {
-  ActionButton,
-  ActionGroup,
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-} from "@/components/ui";
+import { ActionButton, ActionGroup, Badge, Button, Card } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
+import {
+  NumberField,
+  SelectField,
+  TextField,
+} from "@/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
 
 const doctorTypes = [
@@ -109,13 +105,13 @@ export function Doctors({ apiSession, clinic }: any) {
     );
   }
 
-  async function saveDoctorFeeRules(practitionerId: string, fd: FormData) {
+  async function saveDoctorFeeRules(practitionerId: string, data: any) {
     if (!scopedSession) return;
-    const feeAmount = Number(fd.get("consultationFee") || 0);
-    const doctorSharePercentage = Number(fd.get("doctorSharePercentage") || 0);
-    const practitionerType = String(fd.get("practitionerType") || "doctor");
+    const feeAmount = Number(data.consultationFee || 0);
+    const doctorSharePercentage = Number(data.doctorSharePercentage || 0);
+    const practitionerType = String(data.practitionerType || "doctor");
     if (feeAmount <= 0) return;
-    const branchIds = fd.getAll("branchIds").map(String);
+    const branchIds: string[] = data.branchIds || [];
     const targets = branchIds.length ? branchIds : [null];
     await Promise.all(
       targets.map((branch: any) =>
@@ -132,47 +128,40 @@ export function Doctors({ apiSession, clinic }: any) {
                 : null,
             fee_amount: feeAmount,
             share_type: "percentage",
-            doctor_share_percentage: Math.min(
-              100,
-              Math.max(0, doctorSharePercentage),
-            ),
+            doctor_share_percentage: Math.min(100, Math.max(0, doctorSharePercentage)),
             doctor_fixed_amount: null,
-            share_tax_with_doctor: fd.get("shareTaxWithDoctor") === "true",
+            share_tax_with_doctor: data.shareTaxWithDoctor === "true",
           }),
         }),
       ),
     );
   }
 
-  async function createDoctor(e: any) {
-    e.preventDefault();
+  async function createDoctor(data: any) {
     if (!scopedSession) return;
-    const form = e.currentTarget;
-    const fd = new FormData(form);
     setBusy(true);
     setMessage("");
     try {
       const created = await apiFetch("/practitioners", scopedSession, {
         method: "POST",
         body: JSON.stringify({
-          user_id: fd.get("userId") || null,
-          full_name: fd.get("fullName"),
-          practitioner_type: fd.get("practitionerType") || "doctor",
-          primary_specialty: fd.get("primarySpecialty") || null,
-          registration_number: fd.get("registrationNumber") || null,
-          mobile: fd.get("mobile") || null,
-          email: fd.get("email") || null,
-          branch_ids: fd.getAll("branchIds").map(String),
-          department_ids: fd.getAll("departmentIds").map(String),
+          user_id: data.userId || null,
+          full_name: data.fullName,
+          practitioner_type: data.practitionerType || "doctor",
+          primary_specialty: data.primarySpecialty || null,
+          registration_number: data.registrationNumber || null,
+          mobile: data.mobile || null,
+          email: data.email || null,
+          branch_ids: data.branchIds,
+          department_ids: data.departmentIds,
           actor_user_id: apiSession.user?.id || null,
         }),
       });
-      await saveDoctorFeeRules(created.id, fd);
+      await saveDoctorFeeRules(created.id, data);
       setRows((previous: any[]) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
-      form.reset();
       open("list");
       await loadData(tenantId);
       setMessage(`Doctor created: ${created.full_name}`);
@@ -183,10 +172,8 @@ export function Doctors({ apiSession, clinic }: any) {
     }
   }
 
-  async function updateDoctor(e: any) {
-    e.preventDefault();
+  async function updateDoctor(data: any) {
     if (!scopedSession || !selected) return;
-    const fd = new FormData(e.currentTarget);
     setBusy(true);
     setMessage("");
     try {
@@ -196,20 +183,20 @@ export function Doctors({ apiSession, clinic }: any) {
         {
           method: "PATCH",
           body: JSON.stringify({
-            full_name: fd.get("fullName"),
-            practitioner_type: fd.get("practitionerType") || "doctor",
-            primary_specialty: fd.get("primarySpecialty") || null,
-            registration_number: fd.get("registrationNumber") || null,
-            mobile: fd.get("mobile") || null,
-            email: fd.get("email") || null,
-            status: fd.get("status") || "active",
-            branch_ids: fd.getAll("branchIds").map(String),
-            department_ids: fd.getAll("departmentIds").map(String),
+            full_name: data.fullName,
+            practitioner_type: data.practitionerType || "doctor",
+            primary_specialty: data.primarySpecialty || null,
+            registration_number: data.registrationNumber || null,
+            mobile: data.mobile || null,
+            email: data.email || null,
+            status: data.status || "active",
+            branch_ids: data.branchIds,
+            department_ids: data.departmentIds,
             actor_user_id: apiSession.user?.id || null,
           }),
         },
       );
-      await saveDoctorFeeRules(updated.id, fd);
+      await saveDoctorFeeRules(updated.id, data);
       setRows((previous: any[]) => [
         updated,
         ...previous.filter((row: any) => row.id !== updated.id),
@@ -373,58 +360,38 @@ export function Doctors({ apiSession, clinic }: any) {
       )}
       <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
         {isSuperAdmin && (
-          <Field label="Tenant">
-            <Select
-              value={tenantId}
-              onChange={(e: any) => setTenantId(e.target.value)}
-            >
-              {tenants.map((tenant: any) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-        <Field label="Search">
-          <Input
-            value={query}
-            onChange={(e: any) => {
-              setQuery(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Name, specialty, mobile, email"
+          <SelectField
+            label="Tenant"
+            value={tenantId}
+            onChange={setTenantId}
+            options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
           />
-        </Field>
-        <Field label="Type">
-          <Select
-            value={type}
-            onChange={(e: any) => {
-              setType(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All types</option>
-            {doctorTypes.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Status">
-          <Select
-            value={status}
-            onChange={(e: any) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </Select>
-        </Field>
+        )}
+        <TextField
+          label="Search"
+          value={query}
+          onChange={(v) => { setQuery(v); setPage(1); }}
+          placeholder="Name, specialty, mobile, email"
+        />
+        <SelectField
+          label="Type"
+          value={type}
+          onChange={(v) => { setType(v); setPage(1); }}
+          options={[
+            { value: "all", label: "All types" },
+            ...doctorTypes.map(([value, label]) => ({ value, label })),
+          ]}
+        />
+        <SelectField
+          label="Status"
+          value={status}
+          onChange={(v) => { setStatus(v); setPage(1); }}
+          options={[
+            { value: "all", label: "All status" },
+            { value: "active", label: "Active" },
+            { value: "inactive", label: "Inactive" },
+          ]}
+        />
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1280px]">
@@ -521,18 +488,50 @@ function DoctorForm({
   onSubmit,
   back,
 }: any) {
-  const selectedBranches = doctor?.branch_ids || [];
-  const selectedDepartments = doctor?.department_ids || [];
-  const [practitionerType, setPractitionerType] = useState(
-    doctor?.practitioner_type || "doctor",
-  );
   const activeFeeRule = activeDoctorFeeRule(feeRules, doctor);
+  const [fullName, setFullName] = useState(doctor?.full_name || "");
+  const [practitionerType, setPractitionerType] = useState(doctor?.practitioner_type || "doctor");
+  const [userId, setUserId] = useState(doctor?.user_id || "");
+  const [primarySpecialty, setPrimarySpecialty] = useState(doctor?.primary_specialty || "");
+  const [registrationNumber, setRegistrationNumber] = useState(doctor?.registration_number || "");
+  const [mobile, setMobile] = useState(doctor?.mobile || "");
+  const [email, setEmail] = useState(doctor?.email || "");
+  const [status, setStatus] = useState(doctor?.status || "active");
+  const [consultationFee, setConsultationFee] = useState(String(activeFeeRule?.fee_amount ?? ""));
+  const [doctorSharePercentage, setDoctorSharePercentage] = useState(
+    String(activeFeeRule?.doctor_share_percentage ?? 70),
+  );
+  const [shareTaxWithDoctor, setShareTaxWithDoctor] = useState(
+    String(activeFeeRule?.share_tax_with_doctor ?? false),
+  );
+
   const isPhysiotherapist = practitionerType === "physiotherapist";
   const doctorUsers = users.filter(
     (user: any) =>
       ["doctor", "nurse", "lab", "staff"].includes(user.user_type) ||
       user.roles?.includes("doctor"),
   );
+
+  function handleSubmit(e: any) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    onSubmit({
+      fullName,
+      practitionerType,
+      userId,
+      primarySpecialty,
+      registrationNumber,
+      mobile,
+      email,
+      status,
+      consultationFee,
+      doctorSharePercentage,
+      shareTaxWithDoctor,
+      branchIds: fd.getAll("branchIds").map(String),
+      departmentIds: fd.getAll("departmentIds").map(String),
+    });
+  }
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -550,103 +549,94 @@ function DoctorForm({
           Back to Doctors
         </button>
       </div>
-      <form
-        onSubmit={onSubmit}
-        className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
-      >
-        <Field label="Full Name">
-          <Input
-            name="fullName"
-            defaultValue={doctor?.full_name || ""}
-            required
-            placeholder="Dr. Priya Raman"
-          />
-        </Field>
-        <Field label="Doctor Type">
-          <Select
-            name="practitionerType"
-            value={practitionerType}
-            onChange={(event: any) => setPractitionerType(event.target.value)}
-          >
-            {doctorTypes.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Linked Login User">
-          <Select name="userId" defaultValue={doctor?.user_id || ""}>
-            <option value="">No login linked</option>
-            {doctorUsers.map((user: any) => (
-              <option key={user.id} value={user.id}>
-                {user.name} - {user.email}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Primary Specialty">
-          <Input
-            name="primarySpecialty"
-            defaultValue={doctor?.primary_specialty || ""}
-            placeholder="General Medicine"
-          />
-        </Field>
-        <Field label="Registration Number">
-          <Input
-            name="registrationNumber"
-            defaultValue={doctor?.registration_number || ""}
-            placeholder="TNMC12345"
-          />
-        </Field>
-        <Field label="Mobile">
-          <Input name="mobile" defaultValue={doctor?.mobile || ""} />
-        </Field>
-        <Field label="Email">
-          <Input name="email" type="email" defaultValue={doctor?.email || ""} />
-        </Field>
+      <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <TextField
+          label="Full Name"
+          value={fullName}
+          onChange={setFullName}
+          placeholder="Dr. Priya Raman"
+          required
+        />
+        <SelectField
+          label="Doctor Type"
+          value={practitionerType}
+          onChange={setPractitionerType}
+          options={doctorTypes.map(([value, label]) => ({ value, label }))}
+        />
+        <SelectField
+          label="Linked Login User"
+          value={userId}
+          onChange={setUserId}
+          options={[
+            { value: "", label: "No login linked" },
+            ...doctorUsers.map((u: any) => ({ value: u.id, label: `${u.name} - ${u.email}` })),
+          ]}
+        />
+        <TextField
+          label="Primary Specialty"
+          value={primarySpecialty}
+          onChange={setPrimarySpecialty}
+          placeholder="General Medicine"
+        />
+        <TextField
+          label="Registration Number"
+          value={registrationNumber}
+          onChange={setRegistrationNumber}
+          placeholder="TNMC12345"
+        />
+        <TextField
+          label="Mobile"
+          type="tel"
+          value={mobile}
+          onChange={setMobile}
+        />
+        <TextField
+          label="Email"
+          type="email"
+          value={email}
+          onChange={setEmail}
+        />
         {doctor && (
-          <Field label="Status">
-            <Select name="status" defaultValue={doctor.status}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </Select>
-          </Field>
+          <SelectField
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+          />
         )}
-        <Field label={isPhysiotherapist ? "Physiotherapy / Session Price" : "OP Consultation Fee"}>
-          <Input
-            name="consultationFee"
-            type="number"
-            min="0"
-            defaultValue={activeFeeRule?.fee_amount ?? ""}
-            placeholder="600"
-          />
-        </Field>
-        <Field label="Doctor Share %">
-          <Input
-            name="doctorSharePercentage"
-            type="number"
-            min="0"
-            max="100"
-            defaultValue={activeFeeRule?.doctor_share_percentage ?? 70}
-            placeholder="70"
-          />
-        </Field>
-        <Field label="Tax Sharing">
-          <Select
-            name="shareTaxWithDoctor"
-            defaultValue={String(activeFeeRule?.share_tax_with_doctor || false)}
-          >
-            <option value="false">Clinic keeps tax</option>
-            <option value="true">Share tax by ratio</option>
-          </Select>
-        </Field>
+        <NumberField
+          label={isPhysiotherapist ? "Physiotherapy / Session Price" : "OP Consultation Fee"}
+          value={consultationFee}
+          onChange={setConsultationFee}
+          min={0}
+          placeholder="600"
+        />
+        <NumberField
+          label="Doctor Share %"
+          value={doctorSharePercentage}
+          onChange={setDoctorSharePercentage}
+          min={0}
+          max={100}
+          placeholder="70"
+        />
+        <SelectField
+          label="Tax Sharing"
+          value={shareTaxWithDoctor}
+          onChange={setShareTaxWithDoctor}
+          options={[
+            { value: "false", label: "Clinic keeps tax" },
+            { value: "true", label: "Share tax by ratio" },
+          ]}
+        />
         <div className="md:col-span-2 xl:col-span-3">
           <CheckboxGroup
             title="Branches"
             name="branchIds"
             rows={branches}
-            selected={selectedBranches}
+            selected={doctor?.branch_ids || []}
             empty="Create branches before mapping doctors."
           />
         </div>
@@ -655,7 +645,7 @@ function DoctorForm({
             title="Departments"
             name="departmentIds"
             rows={departments}
-            selected={selectedDepartments}
+            selected={doctor?.department_ids || []}
             empty="Create departments before mapping doctors."
           />
         </div>

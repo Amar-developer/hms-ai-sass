@@ -2,7 +2,8 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {ChevronDown} from 'lucide-react';
-import {Badge,Button,Card,Field,Input,Select} from '@/components/ui';
+import {Badge,Button,Card,Input,Select} from '@/components/ui';
+import {FormField} from '@/components/FormElements';
 import {SearchPicker,TagEntryBox,medicineFrequencyOptions,rowTagLabel} from '@/components/clinicalRows';
 import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';
 
@@ -395,12 +396,12 @@ export function IPAdmission({
             <p className="text-sm text-slate-500">Use this when an OP patient requires admission after doctor consultation or clinical review.</p>
           </div>
           <form onSubmit={(e)=>submitAdmission(e,true)} className="mt-5 grid gap-4">
-            <Field label="OP Appointment">
+            <FormField label="OP Appointment">
               <Select name="source_appointment_id" required className="min-h-[52px]">
                 <option value="">Select appointment</option>
                 {opCandidates.map((a:any)=><option key={a.id} value={a.id}>{a.patient} · {a.appointmentDate} · {a.doctor}</option>)}
               </Select>
-            </Field>
+            </FormField>
             {opCandidates.length===0&&<div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">No eligible OP appointments are currently loaded for conversion.</div>}
             <AdmissionFields patients={patients} departmentId={departmentId} rooms={ipRooms} admissionDate={admissionDate} setAdmissionDate={setAdmissionDate} expectedDischargeDate={expectedDischargeDate} setExpectedDischargeDate={setExpectedDischargeDate} hidePatient/>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
@@ -804,24 +805,24 @@ function IPCareWorkspace({
         {closed&&<div className="mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">This IP admission is discharged and locked. Use Invoices to view or collect against the final bill.</div>}
         <form onSubmit={submitCare} className="mt-5 grid gap-4">
           <div className="grid gap-3 md:grid-cols-4">
-            <Field label="Date"><Input name="care_date" type="date" defaultValue={today()}/></Field>
-            <Field label="Round"><Select name="round_type"><option value="ward_round">Ward Round</option><option value="admission_visit">Admission Visit</option><option value="emergency_visit">Emergency Visit</option><option value="procedure">Procedure</option><option value="discharge_round">Discharge Round</option></Select></Field>
-            <Field label="Visit Fee"><Input name="fee_amount" type="number" min="0" defaultValue="500"/></Field>
+            <FormField label="Date"><Input name="care_date" type="date" defaultValue={today()}/></FormField>
+            <FormField label="Round"><Select name="round_type"><option value="ward_round">Ward Round</option><option value="admission_visit">Admission Visit</option><option value="emergency_visit">Emergency Visit</option><option value="procedure">Procedure</option><option value="discharge_round">Discharge Round</option></Select></FormField>
+            <FormField label="Visit Fee"><Input name="fee_amount" type="number" min="0" defaultValue="500"/></FormField>
             <label className="flex items-end gap-2 pb-3 text-sm font-bold text-slate-700"><input name="mark_given" type="checkbox" defaultChecked/> Give medicines now</label>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            <Field label="BP"><Input name="bp" placeholder="120/80"/></Field>
-            <Field label="Pulse"><Input name="pulse" placeholder="78"/></Field>
-            <Field label="Temp"><Input name="temperature" placeholder="98.6 F"/></Field>
+            <FormField label="BP"><Input name="bp" placeholder="120/80"/></FormField>
+            <FormField label="Pulse"><Input name="pulse" placeholder="78"/></FormField>
+            <FormField label="Temp"><Input name="temperature" placeholder="98.6 F"/></FormField>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Complaints"><Input name="complaints" placeholder="Current IP complaints"/></Field>
-            <Field label="Diagnosis"><Input name="diagnosis" placeholder="Working diagnosis"/></Field>
+            <FormField label="Complaints"><Input name="complaints" placeholder="Current IP complaints"/></FormField>
+            <FormField label="Diagnosis"><Input name="diagnosis" placeholder="Working diagnosis"/></FormField>
           </div>
-          <Field label="Clinical Notes"><textarea name="notes" required className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Progress, assessment, care plan, response"/></Field>
+          <FormField label="Clinical Notes"><textarea name="notes" required className="min-h-24 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none" placeholder="Progress, assessment, care plan, response"/></FormField>
 
           <div className="rounded-3xl bg-slate-50 p-4">
-            <Field label="Medicine Rows">
+            <FormField label="Medicine Rows">
               <TagEntryBox
                 tags={splitRows(medicineRows)}
                 value={medicineTagText}
@@ -833,9 +834,9 @@ function IPCareWorkspace({
                 disabled={closed}
                 submitOnComma={false}
               />
-            </Field>
+            </FormField>
             <div className="mt-3 grid gap-2 lg:grid-cols-[1.2fr_.8fr_.7fr_.7fr_auto] lg:items-end">
-              <Field label="Medicine">
+              <FormField label="Medicine">
                 {medicineCatalog.length>0?(
                   <SearchPicker
                     value={selectedMedicineId}
@@ -857,17 +858,17 @@ function IPCareWorkspace({
                 ):(
                   <Input value={medName} onChange={(e:any)=>setMedName(e.target.value)} placeholder="Ceftriaxone"/>
                 )}
-              </Field>
-              <Field label="Dose"><Input value={medDose} onChange={(e:any)=>setMedDose(e.target.value)} placeholder="1 g"/></Field>
-              <Field label="Freq"><Select value={medFrequency} onChange={(e:any)=>setMedFrequency(e.target.value)}>{[...new Set([medFrequency,...medicineFrequencyOptions])].filter(Boolean).map((value:string)=><option key={value} value={value}>{value}</option>)}</Select></Field>
-              <Field label="Route"><Select value={medRoute} onChange={(e:any)=>setMedRoute(e.target.value)}><option value="oral">Oral</option><option value="iv">IV</option><option value="im">IM</option><option value="sc">SC</option></Select></Field>
+              </FormField>
+              <FormField label="Dose"><Input value={medDose} onChange={(e:any)=>setMedDose(e.target.value)} placeholder="1 g"/></FormField>
+              <FormField label="Freq"><Select value={medFrequency} onChange={(e:any)=>setMedFrequency(e.target.value)}>{[...new Set([medFrequency,...medicineFrequencyOptions])].filter(Boolean).map((value:string)=><option key={value} value={value}>{value}</option>)}</Select></FormField>
+              <FormField label="Route"><Select value={medRoute} onChange={(e:any)=>setMedRoute(e.target.value)}><option value="oral">Oral</option><option value="iv">IV</option><option value="im">IM</option><option value="sc">SC</option></Select></FormField>
               <Button type="button" onClick={addMedicineRow} disabled={closed}>Add</Button>
             </div>
             {medicineCatalog.length>0&&<div className="mt-3 flex flex-wrap gap-2">{medicineCatalog.slice(0,8).map((medicine:any)=><button key={medicine.id} type="button" onClick={()=>selectMedicine(medicine.id)} className="rounded-xl border bg-white px-3 py-2 text-xs font-bold">{medicine.name}</button>)}</div>}
           </div>
 
           <div className="rounded-3xl bg-slate-50 p-4">
-            <Field label="Lab / Scan Rows">
+            <FormField label="Lab / Scan Rows">
               <TagEntryBox
                 tags={splitRows(referralRows)}
                 value={referralTagText}
@@ -879,10 +880,10 @@ function IPCareWorkspace({
                 disabled={closed}
                 submitOnComma={false}
               />
-            </Field>
+            </FormField>
             <div className="mt-3 grid gap-2 lg:grid-cols-[.7fr_1.2fr_.7fr_auto] lg:items-end">
-              <Field label="Type"><Select value={refType} onChange={(e:any)=>setRefType(e.target.value)}><option value="lab">Lab</option><option value="scan">Scan</option></Select></Field>
-              <Field label="Item">
+              <FormField label="Type"><Select value={refType} onChange={(e:any)=>setRefType(e.target.value)}><option value="lab">Lab</option><option value="scan">Scan</option></Select></FormField>
+              <FormField label="Item">
                 {labCatalog.length>0?(
                   <SearchPicker
                     value={selectedLabTestId}
@@ -905,8 +906,8 @@ function IPCareWorkspace({
                 ):(
                   <Input value={refName} onChange={(e:any)=>setRefName(e.target.value)} placeholder="CBC / X-Ray"/>
                 )}
-              </Field>
-              <Field label="Priority"><Select value={refPriority} onChange={(e:any)=>setRefPriority(e.target.value)}><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></Select></Field>
+              </FormField>
+              <FormField label="Priority"><Select value={refPriority} onChange={(e:any)=>setRefPriority(e.target.value)}><option value="routine">Routine</option><option value="urgent">Urgent</option><option value="stat">STAT</option></Select></FormField>
               <Button type="button" onClick={addReferralRow} disabled={closed}>Add</Button>
             </div>
             {labCatalog.length>0&&<div className="mt-3 flex flex-wrap gap-2">{labCatalog.slice(0,8).map((test:any)=><button key={test.id} type="button" onClick={()=>selectLabTest(test.id)} className="rounded-xl border bg-white px-3 py-2 text-xs font-bold">{test.name}</button>)}</div>}
@@ -923,28 +924,28 @@ function IPCareWorkspace({
           </div>
           {detailTab==='consent'?(
             <form onSubmit={(e)=>postWork(e,'consent')} className="mt-4 grid gap-3">
-              <Field label="Consent Title"><Input name="title" defaultValue="General IP Admission Consent"/></Field>
-              <Field label="Consent Text"><Input name="content" defaultValue="Patient/guardian consent received for in-patient admission, investigation, treatment, billing, and discharge process."/></Field>
+              <FormField label="Consent Title"><Input name="title" defaultValue="General IP Admission Consent"/></FormField>
+              <FormField label="Consent Text"><Input name="content" defaultValue="Patient/guardian consent received for in-patient admission, investigation, treatment, billing, and discharge process."/></FormField>
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Guardian Name"><Input name="patient_or_guardian_name" placeholder="Patient / guardian name"/></Field>
-                <Field label="Relationship"><Input name="relationship" placeholder="Self / spouse / parent"/></Field>
+                <FormField label="Guardian Name"><Input name="patient_or_guardian_name" placeholder="Patient / guardian name"/></FormField>
+                <FormField label="Relationship"><Input name="relationship" placeholder="Self / spouse / parent"/></FormField>
               </div>
-              <Field label="Consent Files">
+              <FormField label="Consent Files">
                 <Input name="documents" type="file" multiple accept="image/*,.pdf,.doc,.docx"/>
-              </Field>
+              </FormField>
               {consentDocuments.length>0&&<div className="flex flex-wrap gap-2">{consentDocuments.map((doc:any)=><a key={doc.id} href={`${UPLOADS_BASE}${doc.file_url}`} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-xs font-bold text-blue-700 underline">{doc.file_name}</a>)}</div>}
               <div className="flex flex-wrap gap-2"><Button disabled={closed||busy==='consent'}>Save Consent</Button><Button type="button" disabled={closed||!latestConsent||busy==='consent sign'} onClick={()=>sign(`/ip/consents/${latestConsent.id}/sign`,'consent sign',setLatestConsent)} className="bg-emerald-700">Mark Signed</Button></div>
             </form>
           ):(
             <form onSubmit={(e)=>postWork(e,'discharge')} className="mt-4 grid gap-3">
               <div className="grid gap-3 md:grid-cols-2">
-                <Field label="Discharge Date"><Input name="discharge_date" type="date" defaultValue={today()}/></Field>
-                <Field label="Final Diagnosis"><Input name="final_diagnosis" required/></Field>
+                <FormField label="Discharge Date"><Input name="discharge_date" type="date" defaultValue={today()}/></FormField>
+                <FormField label="Final Diagnosis"><Input name="final_diagnosis" required/></FormField>
               </div>
-              <Field label="Advice"><Input name="follow_up_advice"/></Field>
-              <Field label="Discharge Files">
+              <FormField label="Advice"><Input name="follow_up_advice"/></FormField>
+              <FormField label="Discharge Files">
                 <Input name="documents" type="file" multiple accept="image/*,.pdf,.doc,.docx"/>
-              </Field>
+              </FormField>
               {dischargeDocuments.length>0&&<div className="flex flex-wrap gap-2">{dischargeDocuments.map((doc:any)=><a key={doc.id} href={`${UPLOADS_BASE}${doc.file_url}`} target="_blank" rel="noopener noreferrer" className="rounded-xl border px-3 py-2 text-xs font-bold text-blue-700 underline">{doc.file_name}</a>)}</div>}
               <div className="flex flex-wrap gap-2"><Button disabled={closed||busy==='discharge'}>Save Summary</Button><Button type="button" disabled={closed||!latestDischarge||busy==='discharge finalize'} onClick={()=>sign(`/ip/discharge-summaries/${latestDischarge.id}/finalize`,'discharge finalize',setLatestDischarge)} className="bg-emerald-700">{closed?'Discharged':'Finalize'}</Button></div>
             </form>
@@ -1102,44 +1103,44 @@ function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmiss
   return (
     <>
       {!hidePatient&&(
-        <Field label="Patient">
+        <FormField label="Patient">
           <Select name="patient_id" required>
             <option value="">Select patient</option>
             {patients.map((p:any)=><option key={p.id} value={p.id}>{patientName(p)} · {p.mobile||p.patientNumber||p.id}</option>)}
           </Select>
-        </Field>
+        </FormField>
       )}
       <input type="hidden" name="department_id" value={departmentId||''}/>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Admission Date"><Input name="admission_date" type="date" value={admissionDate} onChange={(e:any)=>setAdmissionDate(e.target.value)} required/></Field>
-        <Field label="Planned Discharge"><Input name="expected_discharge_date" type="date" value={expectedDischargeDate} min={admissionDate} onChange={(e:any)=>setExpectedDischargeDate(e.target.value)}/></Field>
+        <FormField label="Admission Date"><Input name="admission_date" type="date" value={admissionDate} onChange={(e:any)=>setAdmissionDate(e.target.value)} required/></FormField>
+        <FormField label="Planned Discharge"><Input name="expected_discharge_date" type="date" value={expectedDischargeDate} min={admissionDate} onChange={(e:any)=>setExpectedDischargeDate(e.target.value)}/></FormField>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
-        <Field label="Aadhaar Number"><Input name="aadhaar_number" inputMode="numeric" pattern="\d{12}" maxLength={12} placeholder="12 digit Aadhaar number"/></Field>
-        <Field label="Admission File">
+        <FormField label="Aadhaar Number"><Input name="aadhaar_number" inputMode="numeric" pattern="\d{12}" maxLength={12} placeholder="12 digit Aadhaar number"/></FormField>
+        <FormField label="Admission File">
           <input name="admission_document" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" className="block w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-xl file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-xs file:font-bold"/>
-        </Field>
+        </FormField>
       </div>
       {rooms.length>0?(
         <>
           <div className="grid gap-3 md:grid-cols-3">
-            <Field label="Ward">
+            <FormField label="Ward">
               <Select value={ward} onChange={(e:any)=>setWard(e.target.value)} required>
                 {wardNames.map((name:any)=><option key={name} value={name}>{name}</option>)}
               </Select>
-            </Field>
-            <Field label="Room">
+            </FormField>
+            <FormField label="Room">
               <Select value={roomNumber} onChange={(e:any)=>setRoomNumber(e.target.value)} required>
                 <option value="">Select room</option>
                 {roomNumbers.map((number:any)=><option key={number} value={number}>Room {number}</option>)}
               </Select>
-            </Field>
-            <Field label="Bed">
+            </FormField>
+            <FormField label="Bed">
               <Select name="room_id" value={roomId} onChange={(e:any)=>setRoomId(e.target.value)} required>
                 <option value="">Select bed by availability</option>
                 {bedRows.map((room:any)=><option key={room.id} value={room.id} disabled={!room.available}>{room.bed_number} · {room.available?'Available':'Occupied'} · {inr(room.daily_rate)}/day</option>)}
               </Select>
-            </Field>
+            </FormField>
           </div>
           <div className="grid gap-2 rounded-2xl bg-slate-50 p-3 text-sm sm:grid-cols-3">
             <div><b>{availableRooms.length}</b> available bed(s)</div>
@@ -1157,14 +1158,14 @@ function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmiss
         <>
           <div className="rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">No IP room master is configured for this branch. Add ward/room/bed records from the backend room API before using availability-based admission.</div>
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="Ward"><Select name="ward"><option>General Ward</option><option>Private Room</option><option>ICU</option><option>Emergency Ward</option></Select></Field>
-            <Field label="Bed"><Input name="bed" required/></Field>
+            <FormField label="Ward"><Select name="ward"><option>General Ward</option><option>Private Room</option><option>ICU</option><option>Emergency Ward</option></Select></FormField>
+            <FormField label="Bed"><Input name="bed" required/></FormField>
           </div>
-          <Field label="Room"><Input name="room"/></Field>
+          <FormField label="Room"><Input name="room"/></FormField>
         </>
       )}
-      <Field label="Reason"><Input name="reason" placeholder="Reason for IP admission"/></Field>
-      <Field label="Provisional Diagnosis"><Input name="provisional_diagnosis"/></Field>
+      <FormField label="Reason"><Input name="reason" placeholder="Reason for IP admission"/></FormField>
+      <FormField label="Provisional Diagnosis"><Input name="provisional_diagnosis"/></FormField>
     </>
   );
 }

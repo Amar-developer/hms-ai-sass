@@ -2,18 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
-import {
-  ActionButton,
-  ActionGroup,
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-} from "@/components/ui";
+import { ActionButton, ActionGroup, Badge, Button, Card } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
+import { NumberField, SelectField, TextField, TimeField } from "@/components/FormElements";
 import { publicDisplayValue, uniqueDepartmentRows } from "@/lib/options";
+import { Input } from "@/components/ui";
+
 
 const weekdays = [
   ["0", "Monday"],
@@ -451,90 +445,56 @@ export function Scheduling({ apiSession, branchId }: any) {
       )}
       <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
         {isSuperAdmin && (
-          <Field label="Tenant">
-            <Select
-              value={tenantId}
-              onChange={(e: any) => setTenantId(e.target.value)}
-            >
-              {tenants.map((tenant: any) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-        )}
-        <Field label="Search">
-          <Input
-            value={query}
-            onChange={(e: any) => {
-              setQuery(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Doctor, room, department"
+          <SelectField
+            label="Tenant"
+            value={tenantId}
+            onChange={setTenantId}
+            options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
           />
-        </Field>
-        <Field label="Branch">
-          <Select
-            value={filterBranch}
-            onChange={(e: any) => {
-              setFilterBranch(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All branches</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Department">
-          <Select
-            value={filterDepartment}
-            onChange={(e: any) => {
-              setFilterDepartment(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All departments</option>
-            {departments.map((department: any) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Weekday">
-          <Select
-            value={filterWeekday}
-            onChange={(e: any) => {
-              setFilterWeekday(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">All days</option>
-            {weekdays.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Status">
-          <Select
-            value={filterStatus}
-            onChange={(e: any) => {
-              setFilterStatus(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="all">All</option>
-          </Select>
-        </Field>
+        )}
+        <TextField
+          label="Search"
+          value={query}
+          onChange={(v) => { setQuery(v); setPage(1); }}
+          placeholder="Doctor, room, department"
+        />
+        <SelectField
+          label="Branch"
+          value={filterBranch}
+          onChange={(v) => { setFilterBranch(v); setPage(1); }}
+          options={[
+            { value: "all", label: "All branches" },
+            ...branches.map((b: any) => ({ value: b.id, label: b.name })),
+          ]}
+        />
+        <SelectField
+          label="Department"
+          value={filterDepartment}
+          onChange={(v) => { setFilterDepartment(v); setPage(1); }}
+          options={[
+            { value: "all", label: "All departments" },
+            ...departments.map((d: any) => ({ value: d.id, label: d.name })),
+          ]}
+        />
+        <SelectField
+          label="Weekday"
+          value={filterWeekday}
+          onChange={(v) => { setFilterWeekday(v); setPage(1); }}
+          options={[
+            { value: "all", label: "All days" },
+            ...weekdays.map(([value, label]) => ({ value, label })),
+          ]}
+        />
+        <SelectField
+          label="Status"
+          value={filterStatus}
+          onChange={(v) => { setFilterStatus(v); setPage(1); }}
+          options={[
+            { value: "active", label: "Active" },
+            { value: "inactive", label: "Inactive" },
+            { value: "all", label: "All" },
+          ]}
+        />
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1120px]">
@@ -642,6 +602,12 @@ function ScheduleForm({
   const [selectedDepartmentId, setSelectedDepartmentId] = useState(
     schedule?.department_id || "",
   );
+  const [slotMinutes, setSlotMinutes] = useState(
+    String(schedule?.slot_minutes || 15),
+  );
+  const [roomNumber, setRoomNumber] = useState(
+    schedule?.room_number ? String(Number(schedule.room_number)) : "",
+  );
   const applyDoctorLinks = (doctorId: string) => {
     const doctor = doctors.find((item: any) => item.id === doctorId);
     const branchIds = doctor?.branch_ids || [];
@@ -705,7 +671,8 @@ function ScheduleForm({
         onSubmit={onSubmit}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
-        <Field label="Doctor">
+        <div className="block">
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Doctor</span>
           <input type="hidden" name="practitionerId" value={selectedDoctorId} />
           <PractitionerPicker
             doctors={doctors}
@@ -715,59 +682,49 @@ function ScheduleForm({
               applyDoctorLinks(doctorId);
             }}
           />
-        </Field>
-        <Field label="Branch">
-          <Select
-            name="branchId"
+        </div>
+        <div>
+          <SelectField
+            label="Branch"
             value={selectedBranchId}
-            onChange={(event: any) => setSelectedBranchId(event.target.value)}
+            onChange={setSelectedBranchId}
             required
-          >
-            <option value="">Select branch</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Department">
-          <Select
-            name="departmentId"
+            options={[
+              { value: "", label: "Select branch" },
+              ...branches.map((b: any) => ({ value: b.id, label: b.name })),
+            ]}
+          />
+          <input type="hidden" name="branchId" value={selectedBranchId} />
+        </div>
+        <div>
+          <SelectField
+            label="Department"
             value={selectedDepartmentId}
-            onChange={(event: any) =>
-              setSelectedDepartmentId(event.target.value)
-            }
-          >
-            <option value="">All departments</option>
-            {departments.map((department: any) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+            onChange={setSelectedDepartmentId}
+            options={[
+              { value: "", label: "All departments" },
+              ...departments.map((d: any) => ({ value: d.id, label: d.name })),
+            ]}
+          />
+          <input type="hidden" name="departmentId" value={selectedDepartmentId} />
+        </div>
         <div className="md:col-span-2 xl:col-span-3">
           <input type="hidden" name="weekday" value={selectedDays[0]} />
           {selectedDays.map((value) => (
             <input key={value} type="hidden" name="weekdays" value={value} />
           ))}
           <div className="grid gap-3 md:grid-cols-[260px_1fr] md:items-end">
-            <Field label="Add Weekday">
-              <Select
-                value={dayToAdd}
-                onChange={(event: any) => addDay(event.target.value)}
-              >
-                <option value="">Select day</option>
-                {weekdays
+            <SelectField
+              label="Add Weekday"
+              value={dayToAdd}
+              onChange={addDay}
+              options={[
+                { value: "", label: "Select day" },
+                ...weekdays
                   .filter(([value]) => !selectedDays.includes(value))
-                  .map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-              </Select>
-            </Field>
+                  .map(([value, label]) => ({ value, label })),
+              ]}
+            />
             <div className="flex min-h-[50px] flex-wrap items-center gap-2">
               {selectedDays.map((value) => {
                 const label =
@@ -813,44 +770,36 @@ function ScheduleForm({
                 key={index}
                 className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 md:grid-cols-[1fr_1fr_180px_auto] md:items-end"
               >
-                <Field label={`Start Time ${index + 1}`}>
-                  <Input
-                    name={`startTime_${index}`}
-                    type="time"
+                <div>
+                  <TimeField
+                    label={`Start Time ${index + 1}`}
                     value={range.start}
-                    onChange={(event: any) =>
-                      updateRange(index, "start", event.target.value)
-                    }
+                    onChange={(v) => updateRange(index, "start", v)}
                     required
                   />
-                </Field>
-                <Field label={`End Time ${index + 1}`}>
-                  <Input
-                    name={`endTime_${index}`}
-                    type="time"
+                  <input type="hidden" name={`startTime_${index}`} value={range.start} />
+                </div>
+                <div>
+                  <TimeField
+                    label={`End Time ${index + 1}`}
                     value={range.end}
-                    onChange={(event: any) =>
-                      updateRange(index, "end", event.target.value)
-                    }
+                    onChange={(v) => updateRange(index, "end", v)}
                     required
                   />
-                </Field>
-                <Field label={`Status ${index + 1}`}>
-                  <Select
-                    name={`isActive_${index}`}
+                  <input type="hidden" name={`endTime_${index}`} value={range.end} />
+                </div>
+                <div>
+                  <SelectField
+                    label={`Status ${index + 1}`}
                     value={String(range.isActive)}
-                    onChange={(event: any) =>
-                      updateRange(
-                        index,
-                        "isActive",
-                        event.target.value === "true",
-                      )
-                    }
-                  >
-                    <option value="true">Active</option>
-                    <option value="false">Inactive</option>
-                  </Select>
-                </Field>
+                    onChange={(v) => updateRange(index, "isActive", v === "true")}
+                    options={[
+                      { value: "true", label: "Active" },
+                      { value: "false", label: "Inactive" },
+                    ]}
+                  />
+                  <input type="hidden" name={`isActive_${index}`} value={String(range.isActive)} />
+                </div>
                 <button
                   type="button"
                   onClick={() => removeRange(index)}
@@ -864,25 +813,27 @@ function ScheduleForm({
             ))}
           </div>
         </div>
-        <Field label="Slot Minutes">
-          <Input
-            name="slotMinutes"
-            type="number"
-            min="1"
-            max="240"
-            defaultValue={schedule?.slot_minutes || 15}
+        <div>
+          <NumberField
+            label="Slot Minutes"
+            value={slotMinutes}
+            onChange={setSlotMinutes}
+            min={1}
+            max={240}
           />
-        </Field>
-        <Field label="Room Number">
-          <Input
-            name="roomNumber"
-            type="number"
-            min="1"
-            max="999"
-            defaultValue={schedule?.room_number ? String(Number(schedule.room_number)) : ""}
+          <input type="hidden" name="slotMinutes" value={slotMinutes} />
+        </div>
+        <div>
+          <NumberField
+            label="Room Number"
+            value={roomNumber}
+            onChange={setRoomNumber}
+            min={1}
+            max={999}
             placeholder="012"
           />
-        </Field>
+          <input type="hidden" name="roomNumber" value={roomNumber} />
+        </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
           <Button disabled={busy}>
             {busy
