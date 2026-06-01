@@ -5,7 +5,7 @@ from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
-from app.core.auth import require_any_permission, require_permission
+from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.core.uploads import UPLOADS_DIR, save_upload
@@ -159,6 +159,8 @@ def list_files(
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_READ,
             permissions.SETTINGS_MANAGE,
             permissions.SETTINGS_READ,
             permissions.PATIENTS_READ,
@@ -215,7 +217,14 @@ async def upload_file(
     is_private: bool = Form(default=False),
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.SETTINGS_MANAGE, permissions.SETTINGS_CREATE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_CREATE,
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_CREATE,
+        )
+    ),
 ) -> FileDocument:
     require_user_branch_access(current_user, branch_id)
     saved_filename, url_path = await save_upload(file, f"file_{tenant_id[:12]}")
@@ -257,7 +266,14 @@ async def upload_file(
 def sync_uploads_folder(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.SETTINGS_MANAGE, permissions.SETTINGS_CREATE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_CREATE,
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_CREATE,
+        )
+    ),
 ) -> list[FileDocument]:
     folder = Path(UPLOADS_DIR)
     if not folder.exists():
@@ -332,7 +348,7 @@ def update_file(
     payload: FileDocumentUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.FILES_MANAGE, permissions.FILES_EDIT, permissions.SETTINGS_MANAGE)),
 ) -> FileDocument:
     row = _get_file(session, tenant_id, file_id)
     require_user_branch_access(current_user, row.branch_id)
@@ -360,7 +376,7 @@ def delete_file(
     file_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.FILES_MANAGE, permissions.FILES_DELETE, permissions.SETTINGS_MANAGE)),
 ) -> FileDocument:
     row = _get_file(session, tenant_id, file_id)
     require_user_branch_access(current_user, row.branch_id)

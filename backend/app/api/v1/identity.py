@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
@@ -21,6 +22,7 @@ from app.modules.identity.schemas import (
     LoginRequest,
     LoginResponse,
     PermissionRead,
+    ResetUserPasswordRequest,
     RoleCreate,
     RoleRead,
     RoleUpdate,
@@ -46,6 +48,11 @@ TENANT_ADMIN_DEFAULT_PERMISSION_KEYS = [
 
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
+
+
+def _normalize_role_key(value: str) -> str:
+    key = re.sub(r"[^a-z0-9]+", "_", value.strip().lower())
+    return re.sub(r"_+", "_", key).strip("_")
 
 
 def _assert_tenant_admin(session: Session, current_user: User, tenant_id: str) -> None:
@@ -277,9 +284,34 @@ def bootstrap_super_admin(
 
 @router.post("/auth/login", response_model=LoginResponse)
 def login(payload: LoginRequest, session: Session = Depends(get_session)) -> LoginResponse:
-    user = find_user_by_login(session, _normalize_email(payload.email), payload.tenant_id)
-    if not user or not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login")
+    email = _normalize_email(payload.email)
+
+    def tenant_allows_login(candidate: User) -> bool:
+        tenant = session.get(Tenant, candidate.tenant_id) if candidate.tenant_id else None
+        return not tenant or tenant.status != TenantStatus.SUSPENDED
+
+    if payload.tenant_id:
+        user = find_user_by_login(session, email, payload.tenant_id)
+        if not user or not verify_password(payload.password, user.password_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login")
+        if not tenant_allows_login(user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended")
+    else:
+        candidates = session.exec(
+            select(User)
+            .where(User.email == email, User.is_active == True)  # noqa: E712
+            .order_by(User.updated_at.desc(), User.created_at.desc())
+        ).all()
+        user = next(
+            (
+                candidate
+                for candidate in candidates
+                if tenant_allows_login(candidate) and verify_password(payload.password, candidate.password_hash)
+            ),
+            None,
+        )
+        if not user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login")
     token, auth_session = create_access_session(session, user)
     if user.tenant_id:
         record_audit_event(
@@ -376,7 +408,7 @@ def create_role(
     role = Role(
         tenant_id=tenant_id,
         name=payload.name,
-        key=payload.key,
+        key=_normalize_role_key(payload.key or payload.name),
         is_global_template=current_user.is_super_admin and _is_primary_tenant(session, tenant_id),
         is_template_locked=False,
         created_by_user_id=current_user.id,
@@ -509,6 +541,64 @@ def _replace_role_permissions(session: Session, role: Role, permission_keys: lis
         session.add(RolePermission(role_id=role.id, permission_id=permission.id))
 
 
+def _role_permission_keys(session: Session, role: Role) -> list[str]:
+    return list(
+        session.exec(
+            select(Permission.key)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .where(RolePermission.role_id == role.id)
+        ).all()
+    )
+
+
+def _resolve_role_for_user_assignment(
+    session: Session,
+    tenant_id: str,
+    role_key: str,
+    current_user: User,
+) -> Role | None:
+    role = session.exec(select(Role).where(Role.tenant_id == tenant_id, Role.key == role_key)).first()
+    if role or role_key != "tenant_admin" or not current_user.is_super_admin:
+        return role
+
+    target_tenant = session.get(Tenant, tenant_id)
+    source_role = session.exec(
+        select(Role)
+        .join(Tenant, Tenant.id == Role.tenant_id)
+        .where(Tenant.is_primary == True, Role.key == "tenant_admin")  # noqa: E712
+    ).first()
+    source_permissions = _role_permission_keys(session, source_role) if source_role else TENANT_ADMIN_DEFAULT_PERMISSION_KEYS
+    role = Role(
+        tenant_id=tenant_id,
+        source_template_role_id=source_role.id if source_role and source_role.tenant_id != tenant_id else None,
+        name=source_role.name if source_role else "Tenant Admin",
+        key="tenant_admin",
+        is_active=True,
+        is_global_template=bool(target_tenant and target_tenant.is_primary),
+        is_template_locked=bool(source_role and target_tenant and not target_tenant.is_primary),
+        created_by_user_id=current_user.id,
+        updated_by_user_id=current_user.id,
+    )
+    session.add(role)
+    session.commit()
+    session.refresh(role)
+    _replace_role_permissions(session, role, source_permissions)
+    session.commit()
+    return role
+
+
+def _normalize_user_access(updates: dict) -> dict:
+    role_keys = list(updates.get("role_keys") or [])
+    has_tenant_admin_access = updates.get("user_type") == "tenant_admin" or "tenant_admin" in role_keys
+    if has_tenant_admin_access:
+        updates["user_type"] = "tenant_admin"
+        updates["branch_id"] = None
+        if "tenant_admin" not in role_keys:
+            role_keys.append("tenant_admin")
+        updates["role_keys"] = role_keys
+    return updates
+
+
 @router.patch("/identity/roles/{role_id}", response_model=RoleRead)
 def update_role(
     role_id: str,
@@ -522,12 +612,11 @@ def update_role(
     _assert_role_editable_by_actor(session, role, current_user)
     updates = payload.model_dump(exclude_unset=True)
     if "key" in updates and updates["key"]:
-        duplicate = session.exec(
-            select(Role).where(Role.tenant_id == tenant_id, Role.key == updates["key"], Role.id != role_id)
-        ).first()
+        next_key = _normalize_role_key(updates["key"])
+        duplicate = session.exec(select(Role).where(Role.tenant_id == tenant_id, Role.key == next_key, Role.id != role_id)).first()
         if duplicate:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role key already exists")
-        role.key = updates["key"]
+        role.key = next_key
     if "name" in updates and updates["name"]:
         role.name = updates["name"]
     if "is_active" in updates and updates["is_active"] is not None:
@@ -620,32 +709,33 @@ def create_user(
     session: Session = Depends(get_session),
 ) -> UserRead:
     _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_CREATE)
+    user_payload = _normalize_user_access(payload.model_dump())
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     existing = session.exec(
-        select(User).where(User.tenant_id == tenant_id, User.email == _normalize_email(payload.email))
+        select(User).where(User.tenant_id == tenant_id, User.email == _normalize_email(user_payload["email"]))
     ).first()
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
     user = User(
         tenant_id=tenant_id,
-        branch_id=payload.branch_id,
-        user_number=next_document_number(session, tenant_id=tenant_id, branch_id=payload.branch_id, entity="user"),
-        user_type=payload.user_type,
-        name=payload.name,
-        email=_normalize_email(payload.email),
-        mobile=payload.mobile,
-        password_hash=hash_password(payload.password),
-        must_change_password=payload.must_change_password,
+        branch_id=user_payload["branch_id"],
+        user_number=next_document_number(session, tenant_id=tenant_id, branch_id=user_payload["branch_id"], entity="user"),
+        user_type=user_payload["user_type"],
+        name=user_payload["name"],
+        email=_normalize_email(user_payload["email"]),
+        mobile=user_payload["mobile"],
+        password_hash=hash_password(user_payload["password"]),
+        must_change_password=user_payload["must_change_password"],
         created_by_user_id=current_user.id,
         updated_by_user_id=current_user.id,
     )
     session.add(user)
     session.commit()
     session.refresh(user)
-    for role_key in payload.role_keys:
-        role = session.exec(select(Role).where(Role.tenant_id == tenant_id, Role.key == role_key)).first()
+    for role_key in user_payload["role_keys"]:
+        role = _resolve_role_for_user_assignment(session, tenant_id, role_key, current_user)
         if not role:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown role: {role_key}")
         session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=tenant_id))
@@ -684,12 +774,18 @@ def _get_tenant_user_or_404(session: Session, tenant_id: str, user_id: str) -> U
     return user
 
 
-def _replace_user_roles(session: Session, tenant_id: str, user: User, role_keys: list[str]) -> None:
+def _replace_user_roles(
+    session: Session,
+    tenant_id: str,
+    user: User,
+    role_keys: list[str],
+    current_user: User,
+) -> None:
     existing = list(session.exec(select(UserRole).where(UserRole.user_id == user.id)).all())
     for row in existing:
         session.delete(row)
     for role_key in role_keys:
-        role = session.exec(select(Role).where(Role.tenant_id == tenant_id, Role.key == role_key)).first()
+        role = _resolve_role_for_user_assignment(session, tenant_id, role_key, current_user)
         if not role:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown role: {role_key}")
         session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=tenant_id))
@@ -705,7 +801,7 @@ def update_user(
 ) -> UserRead:
     _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_EDIT)
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
-    updates = payload.model_dump(exclude_unset=True)
+    updates = _normalize_user_access(payload.model_dump(exclude_unset=True))
     if "email" in updates and updates["email"]:
         email = _normalize_email(updates["email"])
         duplicate = session.exec(
@@ -718,7 +814,7 @@ def update_user(
         if key in updates:
             setattr(user, key, updates[key])
     if "role_keys" in updates and updates["role_keys"] is not None:
-        _replace_user_roles(session, tenant_id, user, updates["role_keys"])
+        _replace_user_roles(session, tenant_id, user, updates["role_keys"], current_user)
     user.updated_by_user_id = current_user.id
     user.updated_at = now_utc()
     session.add(user)
@@ -734,6 +830,43 @@ def update_user(
         resource_type="user",
         resource_id=user.id,
         purpose="access_control",
+    )
+    return _user_read(session, user)
+
+
+@router.post("/identity/users/{user_id}/password-reset", response_model=UserRead)
+def reset_user_password(
+    user_id: str,
+    payload: ResetUserPasswordRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> UserRead:
+    _assert_tenant_permission(
+        session,
+        current_user,
+        tenant_id,
+        permissions.IDENTITY_USERS_MANAGE,
+        permissions.IDENTITY_USERS_EDIT,
+    )
+    user = _get_tenant_user_or_404(session, tenant_id, user_id)
+    user.password_hash = hash_password(payload.new_password)
+    user.must_change_password = payload.must_change_password
+    user.updated_by_user_id = current_user.id
+    user.updated_at = now_utc()
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=user.branch_id,
+        actor_user_id=current_user.id,
+        actor_role=",".join(user_role_keys(session, current_user)),
+        action="identity.user_password_reset",
+        resource_type="user",
+        resource_id=user.id,
+        purpose="password_reset",
     )
     return _user_read(session, user)
 

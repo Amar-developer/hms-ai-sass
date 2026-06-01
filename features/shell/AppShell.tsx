@@ -124,11 +124,12 @@ export function AppShell(props: any) {
   const departmentName =
     departmentOptions.find((d: any) => d.id === departmentId)?.name ||
     departmentOptions[0]?.name ||
-    "Assigned department";
+    "Assigned medical department";
   const displayClinicName = clinic.name || "Hospital / Clinic";
+  const visibleTenantOptions = activeTenantOptions(tenants);
   const tenantOptions = isSuperAdmin
-    ? tenants.length
-      ? tenants
+    ? visibleTenantOptions.length
+      ? visibleTenantOptions
       : [{ id: apiSession?.tenantId || clinic.id, name: displayClinicName }]
     : clinics;
   const [superAdminSection, setSuperAdminSection] = useState("overview");
@@ -546,7 +547,7 @@ export function AppShell(props: any) {
                 )}
               </CompactControl>
 
-              <CompactControl label="Department">
+              <CompactControl label="Medical Department">
                 {canChangeDepartment ? (
                   <select
                     value={departmentId}
@@ -603,7 +604,7 @@ export function AppShell(props: any) {
                           value={apiSession?.tenantId || clinic.id}
                         />
                         <ProfileRow label="Branch" value={branchName} />
-                        <ProfileRow label="Department" value={departmentName} />
+                        <ProfileRow label="Medical Department" value={departmentName} />
                       </div>
                       <div className="mt-4 grid gap-2 border-t border-slate-100 pt-3">
                         <button
@@ -750,6 +751,17 @@ function CompactControl({ label, children }: any) {
       </span>
     </label>
   );
+}
+
+function activeTenantOptions(tenants: any[]) {
+  const seen = new Set<string>();
+  return (tenants || []).filter((tenant: any) => {
+    if (tenant.status === "suspended") return false;
+    const key = String(tenant.name || tenant.id || "").trim().toLowerCase();
+    if (key && seen.has(key)) return false;
+    if (key) seen.add(key);
+    return true;
+  });
 }
 
 function ProfileRow({ label, value }: any) {

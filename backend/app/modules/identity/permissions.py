@@ -15,6 +15,11 @@ SETTINGS_CREATE = "settings.create"
 SETTINGS_READ = "settings.read"
 SETTINGS_EDIT = "settings.edit"
 SETTINGS_DELETE = "settings.delete"
+FILES_MANAGE = "files.manage"
+FILES_CREATE = "files.create"
+FILES_READ = "files.read"
+FILES_EDIT = "files.edit"
+FILES_DELETE = "files.delete"
 DEPARTMENTS_MANAGE = "departments.manage"
 DEPARTMENTS_CREATE = "departments.create"
 DEPARTMENTS_READ = "departments.read"
@@ -71,6 +76,11 @@ PHARMACY_CREATE = "pharmacy.create"
 PHARMACY_READ = "pharmacy.read"
 PHARMACY_EDIT = "pharmacy.edit"
 PHARMACY_DELETE = "pharmacy.delete"
+SUPPLIERS_MANAGE = "suppliers.manage"
+SUPPLIERS_CREATE = "suppliers.create"
+SUPPLIERS_READ = "suppliers.read"
+SUPPLIERS_EDIT = "suppliers.edit"
+SUPPLIERS_DELETE = "suppliers.delete"
 IP_MANAGE = "ip.manage"
 IP_CREATE = "ip.create"
 IP_READ = "ip.read"
@@ -82,8 +92,26 @@ PHYSIOTHERAPY_READ = "physiotherapy.read"
 PHYSIOTHERAPY_EDIT = "physiotherapy.edit"
 PHYSIOTHERAPY_DELETE = "physiotherapy.delete"
 NOTIFICATIONS_MANAGE = "notifications.manage"
+NOTIFICATIONS_CREATE = "notifications.create"
+NOTIFICATIONS_READ = "notifications.read"
+NOTIFICATIONS_EDIT = "notifications.edit"
+NOTIFICATIONS_DELETE = "notifications.delete"
 AUDIT_READ = "audit.read"
 REPORTS_READ = "reports.read"
+REPORTS_MANAGE = "reports.manage"
+REPORTS_CREATE = "reports.create"
+REPORTS_EDIT = "reports.edit"
+REPORTS_DELETE = "reports.delete"
+TAX_MANAGE = "tax.manage"
+TAX_CREATE = "tax.create"
+TAX_READ = "tax.read"
+TAX_EDIT = "tax.edit"
+TAX_DELETE = "tax.delete"
+DISCOUNTS_MANAGE = "discounts.manage"
+DISCOUNTS_CREATE = "discounts.create"
+DISCOUNTS_READ = "discounts.read"
+DISCOUNTS_EDIT = "discounts.edit"
+DISCOUNTS_DELETE = "discounts.delete"
 
 PERMISSION_CATALOG = [
     PLATFORM_TENANTS_MANAGE,
@@ -103,6 +131,11 @@ PERMISSION_CATALOG = [
     SETTINGS_READ,
     SETTINGS_EDIT,
     SETTINGS_DELETE,
+    FILES_MANAGE,
+    FILES_CREATE,
+    FILES_READ,
+    FILES_EDIT,
+    FILES_DELETE,
     DEPARTMENTS_MANAGE,
     DEPARTMENTS_CREATE,
     DEPARTMENTS_READ,
@@ -159,6 +192,11 @@ PERMISSION_CATALOG = [
     PHARMACY_READ,
     PHARMACY_EDIT,
     PHARMACY_DELETE,
+    SUPPLIERS_MANAGE,
+    SUPPLIERS_CREATE,
+    SUPPLIERS_READ,
+    SUPPLIERS_EDIT,
+    SUPPLIERS_DELETE,
     IP_MANAGE,
     IP_CREATE,
     IP_READ,
@@ -170,6 +208,24 @@ PERMISSION_CATALOG = [
     PHYSIOTHERAPY_EDIT,
     PHYSIOTHERAPY_DELETE,
     NOTIFICATIONS_MANAGE,
+    NOTIFICATIONS_CREATE,
+    NOTIFICATIONS_READ,
+    NOTIFICATIONS_EDIT,
+    NOTIFICATIONS_DELETE,
     AUDIT_READ,
     REPORTS_READ,
+    REPORTS_MANAGE,
+    REPORTS_CREATE,
+    REPORTS_EDIT,
+    REPORTS_DELETE,
+    TAX_MANAGE,
+    TAX_CREATE,
+    TAX_READ,
+    TAX_EDIT,
+    TAX_DELETE,
+    DISCOUNTS_MANAGE,
+    DISCOUNTS_CREATE,
+    DISCOUNTS_READ,
+    DISCOUNTS_EDIT,
+    DISCOUNTS_DELETE,
 ]

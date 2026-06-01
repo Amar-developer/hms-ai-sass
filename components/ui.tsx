@@ -113,6 +113,68 @@ export function Input({ className = "", onKeyDown, ...props }: any) {
     />
   );
 }
+
+export function SuggestionInput({
+  suggestions = [],
+  className = "",
+  defaultValue = "",
+  onChange,
+  disabled,
+  ...props
+}: any) {
+  const [value, setValue] = useState(String(defaultValue || props.value || ""));
+  const [open, setOpen] = useState(false);
+  const query = value.trim().toLowerCase();
+  const filtered = suggestions
+    .filter((item: string) => {
+      if (!query) return true;
+      return item.toLowerCase().includes(query);
+    })
+    .slice(0, 8);
+
+  function setNext(next: string) {
+    setValue(next);
+    onChange?.({ target: { value: next } });
+  }
+
+  return (
+    <div className="relative">
+      <input
+        {...props}
+        disabled={disabled}
+        value={value}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onChange={(event: any) => {
+          setNext(event.target.value);
+          setOpen(true);
+        }}
+        autoComplete="off"
+        className={`w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+      />
+      {open && !disabled && filtered.length > 0 && (
+        <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-lg">
+          {filtered.map((item: string) => (
+            <button
+              key={item}
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                setNext(item);
+                setOpen(false);
+              }}
+              className={`block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+                item.toLowerCase() === query ? "bg-slate-50 font-bold" : ""
+              }`}
+            >
+              {item}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 export function Select(props: any) {
   return (
     <select

@@ -3,7 +3,7 @@
 import {useEffect, useMemo, useState} from 'react';
 import {CalendarPlus, Search, X} from 'lucide-react';
 
-import {Badge, Button, Card} from '@/components/ui';
+import {Badge, Button, Card, Field, Input, Select} from '@/components/ui';
 import {apiFetch, type ApiSession} from '@/lib/api';
 import {DateField, SelectField, TextareaField, TextField} from '@/components/FormElements';
 import {generatePatientId, generateToken, searchPatients} from '@/lib/hmsLogic';
@@ -185,8 +185,13 @@ export function AppointmentCalendarBooking(props: Props) {
           apiFetch(`/appointments/platform/all?${params.toString()}`, apiSession),
         ]);
         if (!alive) return;
-        setPlatformTenants(tenantRows);
-        setPlatformRows(appointmentRows);
+        const selectableTenants = activeTenantOptions(tenantRows);
+        const selectableTenantIds = new Set(selectableTenants.map((tenant: any) => tenant.id));
+        setPlatformTenants(selectableTenants);
+        if (platformTenantId && !selectableTenants.some((tenant: any) => tenant.id === platformTenantId)) {
+          setPlatformTenantId('');
+        }
+        setPlatformRows(appointmentRows.filter((row: any) => selectableTenantIds.has(row.tenant_id)));
       } catch (err: any) {
         if (alive) setMessage(err.message || 'Could not load all-tenant appointments.');
       }
@@ -294,7 +299,7 @@ export function AppointmentCalendarBooking(props: Props) {
         setLiveDoctors(rows);
         setDoctorId((current) => (rows.some((row: any) => row.id === current) ? current : rows[0]?.id || ''));
         if (rows.length === 0) {
-          setMessage('No doctor is mapped for this branch and department. Ask the tenant admin to map a doctor and add Doctor Scheduling timings.');
+          setMessage('No doctor is mapped for this branch and medical department. Ask the tenant admin to map a doctor and add Doctor Scheduling timings.');
         }
       } catch (err: any) {
         if (alive) {
@@ -561,7 +566,7 @@ export function AppointmentCalendarBooking(props: Props) {
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <h3 className="text-lg font-bold">Book OP Appointment</h3>
-              <p className="text-sm text-slate-500">Search patient, register if needed, then select department, doctor, date, and timing slot.</p>
+              <p className="text-sm text-slate-500">Search patient, register if needed, then select medical department, doctor, date, and timing slot.</p>
             </div>
             <button type="button" onClick={closeBooking} className="rounded-2xl border px-4 py-3 text-sm font-bold">
               Close
@@ -621,47 +626,33 @@ export function AppointmentCalendarBooking(props: Props) {
               <p className="text-slate-500">{selectedPatient.mobile || 'No mobile'} · {selectedPatient.area || selectedPatient.guardian_mobile || '-'}</p>
             </div>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
-              <SelectField
-                label="Department"
-                value={departmentId}
-                onChange={setDepartmentId}
-                options={departmentOptions.map((d: any) => ({ value: d.id, label: d.name }))}
-              />
-              <SelectField
-                label="Doctor"
-                value={doctorId}
-                onChange={setDoctorId}
-                disabled={Boolean(apiSession) && doctors.length === 0}
-                options={
-                  doctors.length === 0
-                    ? [{ value: '', label: 'No doctor available' }]
-                    : doctors.map((item: any) => ({ value: item.id, label: item.full_name || item.name }))
-                }
-              />
-              <SelectField
-                label="Visit Type"
-                value={appointmentType}
-                onChange={(v) => setAppointmentType(v as any)}
-                options={[
-                  { value: 'op', label: 'OP' },
-                  { value: 'follow_up', label: 'Follow-up' },
-                  { value: 'doctor_review', label: 'Doctor Review' },
-                  { value: 'fitness_certificate', label: 'Fitness Certificate' },
-                  { value: 'emergency', label: 'Emergency' },
-                ]}
-              />
-              <DateField label="Appointment Date" value={appointmentDate} onChange={setAppointmentDate} />
-              <SelectField
-                label="Timing Slots"
-                value={selectedGroup?.id || ''}
-                onChange={setSlotGroup}
-                disabled={appointmentType !== 'emergency' && timingOptions.length === 0}
-                options={
-                  timingOptions.length === 0
-                    ? [{ value: '', label: 'No timing available' }]
-                    : timingOptions.map((g: any) => ({ value: g.id, label: g.label }))
-                }
-              />
+              <Field label="Medical Department">
+                <Select value={departmentId} onChange={(e: any) => setDepartmentId(e.target.value)}>
+                  {departmentOptions.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Doctor">
+                <Select value={doctorId} onChange={(e: any) => setDoctorId(e.target.value)} disabled={apiSession && doctors.length === 0}>
+                  {doctors.length === 0 && <option value="">No doctor available</option>}
+                  {doctors.map((item: any) => <option key={item.id} value={item.id}>{item.full_name || item.name}</option>)}
+                </Select>
+              </Field>
+              <Field label="Visit Type">
+                <Select value={appointmentType} onChange={(e: any) => setAppointmentType(e.target.value)}>
+                  <option value="op">OP</option>
+                  <option value="follow_up">Follow-up</option>
+                  <option value="doctor_review">Doctor Review</option>
+                  <option value="fitness_certificate">Fitness Certificate</option>
+                  <option value="emergency">Emergency</option>
+                </Select>
+              </Field>
+              <Field label="Appointment Date"><Input type="date" value={appointmentDate} onChange={(e: any) => setAppointmentDate(e.target.value)} /></Field>
+              <Field label="Timing Slots">
+                <Select value={selectedGroup?.id || ''} onChange={(e: any) => setSlotGroup(e.target.value)} disabled={appointmentType !== 'emergency' && timingOptions.length === 0}>
+                  {timingOptions.length === 0 && <option value="">No timing available</option>}
+                  {timingOptions.map((group: any) => <option key={group.id} value={group.id}>{group.label}</option>)}
+                </Select>
+              </Field>
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs font-bold uppercase text-slate-500">Doctor Fee</p>
                 <p className="mt-1 text-lg font-black">{isBillable ? (selectedFeeAmount !== undefined ? `₹${Number(selectedFeeAmount).toLocaleString('en-IN')}` : 'Not configured') : 'Free'}</p>
@@ -787,7 +778,7 @@ export function AppointmentCalendarBooking(props: Props) {
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="text-lg font-bold">Appointments</h3>
-          <p className="text-sm text-slate-500">{isSuperAdmin ? 'Combined all-tenant appointment grid for MedizinHub HMS primary tenant.' : 'Row based OP appointment view with patient, mobile, department, doctor, date, and consultation status.'}</p>
+          <p className="text-sm text-slate-500">{isSuperAdmin ? 'Combined all-tenant appointment grid for MedizinHub HMS primary tenant.' : 'Row based OP appointment view with patient, mobile, medical department, doctor, date, and consultation status.'}</p>
         </div>
         <Button onClick={openBooking} className="flex items-center gap-2"><CalendarPlus size={16} /> New Appointment</Button>
       </div>
@@ -803,22 +794,25 @@ export function AppointmentCalendarBooking(props: Props) {
             ]}
           />
         )}
-        <TextField label="Patient name / mobile" value={query} onChange={setQuery} placeholder="Search patient or mobile" />
-        <DateField label="Select date" value={filterDate} onChange={setFilterDate} />
-        <SelectField
-          label="Department"
-          value={isSuperAdmin ? platformDepartment : filterDepartment}
-          onChange={isSuperAdmin ? setPlatformDepartment : setFilterDepartment}
-          options={
-            isSuperAdmin
-              ? [{ value: 'all', label: 'All departments' }, ...platformDepartmentOptions.map((d: string) => ({ value: d, label: d }))]
-              : [{ value: 'all', label: 'All departments' }, ...departmentOptions.map((d: any) => ({ value: d.id, label: d.name }))]
-          }
-        />
+        <Field label="Patient name / mobile"><Input value={query} onChange={(e: any) => setQuery(e.target.value)} placeholder="Search patient or mobile" /></Field>
+        <Field label="Select date"><Input type="date" value={filterDate} onChange={(e: any) => setFilterDate(e.target.value)} /></Field>
+        <Field label="Medical Department">
+          {isSuperAdmin ? (
+            <Select value={platformDepartment} onChange={(e: any) => setPlatformDepartment(e.target.value)}>
+              <option value="all">All medical departments</option>
+              {platformDepartmentOptions.map((department: string) => <option key={department} value={department}>{department}</option>)}
+            </Select>
+          ) : (
+            <Select value={filterDepartment} onChange={(e: any) => setFilterDepartment(e.target.value)}>
+              <option value="all">All medical departments</option>
+              {departmentOptions.map((department: any) => <option key={department.id} value={department.id}>{department.name}</option>)}
+            </Select>
+          )}
+        </Field>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
         <div className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${isSuperAdmin ? 'grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]' : 'grid-cols-[1fr_.7fr_.8fr_.95fr_.78fr_.72fr_1.55fr]'}`}>
-          {isSuperAdmin && <span>Tenant</span>}<span>Patient</span><span>Mobile</span><span>Department</span><span>Doctor</span><span>Appointment Date</span><span>Consultation Status</span>{!isSuperAdmin && <span className="text-right">Links</span>}
+          {isSuperAdmin && <span>Tenant</span>}<span>Patient</span><span>Mobile</span><span>Medical Department</span><span>Doctor</span><span>Appointment Date</span><span>Consultation Status</span>{!isSuperAdmin && <span className="text-right">Links</span>}
         </div>
         <div className="divide-y divide-slate-200">
           {rows.length === 0 && <div className="p-4 text-sm text-slate-500">No appointments found.</div>}
@@ -928,6 +922,17 @@ function NewPatientForm({ busy, onSave, onCancel }: any) {
 
 function Info({label, value}: {label: string; value: any}) {
   return <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 font-bold">{value}</p></div>;
+}
+
+function activeTenantOptions(tenants: any[]) {
+  const seen = new Set<string>();
+  return (tenants || []).filter((tenant: any) => {
+    if (tenant.status === 'suspended') return false;
+    const key = String(tenant.name || tenant.id || '').trim().toLowerCase();
+    if (key && seen.has(key)) return false;
+    if (key) seen.add(key);
+    return true;
+  });
 }
 
 function sessionOptionsFromSlots(slots: any[], appointmentDate: string) {

@@ -14,6 +14,11 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=128)
 
 
+class ResetUserPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8, max_length=128)
+    must_change_password: bool = True
+
+
 class BootstrapSuperAdminRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     email: str = Field(min_length=5, max_length=220)

@@ -23,6 +23,39 @@ export function publicDisplayValue(value:any,fallback='-'){
   return text;
 }
 
+export const basicMedicalDepartmentSuggestions = [
+  "General Medicine",
+  "Pediatrics",
+  "Obstetrics and Gynecology",
+  "Orthopedics",
+  "Cardiology",
+  "Neurology",
+  "Dermatology",
+  "ENT",
+  "Ophthalmology",
+  "Dental",
+  "Emergency Medicine",
+  "General Surgery",
+  "Urology",
+  "Nephrology",
+  "Pulmonology",
+  "Psychiatry",
+  "Physiotherapy",
+  "Radiology",
+  "Pathology",
+  "Anesthesiology",
+] as const;
+
+export const paymentMethodOptions = [
+  { value: "cash", label: "Cash" },
+  { value: "upi", label: "UPI" },
+  { value: "gpay", label: "GPay" },
+  { value: "paytm", label: "Paytm" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "debit_card", label: "Debit Card" },
+  { value: "bank_transfer", label: "Bank" },
+] as const;
+
 export function uniqueDepartmentRows<T extends {id?:string;name?:string;code?:string;is_active?:boolean}>(rows:T[], preferredId=''){
   const byLabel=new Map<string,T>();
   for(const row of rows||[]){

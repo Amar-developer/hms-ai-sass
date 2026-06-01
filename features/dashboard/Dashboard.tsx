@@ -296,8 +296,8 @@ export function Dashboard({
 
       <div className="grid gap-6 xl:grid-cols-2">
         <AnalysisCard
-          title="Completed By Department"
-          subtitle="Completed consultation count by department."
+          title="Completed By Medical Department"
+          subtitle="Completed consultation count by medical department."
           rows={departmentRows}
           empty="No completed consultations yet."
         />

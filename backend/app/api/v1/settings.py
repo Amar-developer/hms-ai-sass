@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
@@ -99,14 +99,30 @@ def list_admin_settings(
 @router.get(
     "/resolve",
     response_model=ResolvedSettingRead,
-    dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.SETTINGS_MANAGE,
+                permissions.BILLING_MANAGE,
+                permissions.INVOICES_READ,
+                permissions.PAYMENTS_MANAGE,
+            )
+        )
+    ],
 )
 def resolve_admin_setting(
     module: str,
     key: SettingKey,
     branch_id: str | None = None,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTINGS_MANAGE,
+            permissions.BILLING_MANAGE,
+            permissions.INVOICES_READ,
+            permissions.PAYMENTS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> ResolvedSettingRead:
     branch_id = scoped_branch_id(current_user, branch_id)

@@ -311,7 +311,7 @@ def create_supplier(
     payload: SupplierCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
+    _current_user: User = Depends(require_any_permission(permissions.SUPPLIERS_MANAGE, permissions.SUPPLIERS_CREATE, permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> PharmacySupplier:
     supplier = PharmacySupplier.model_validate(
         payload,
@@ -331,7 +331,7 @@ def list_suppliers(
     tenant_id: str = Depends(require_tenant_id),
     include_inactive: bool = False,
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
+    _current_user: User = Depends(require_any_permission(permissions.SUPPLIERS_MANAGE, permissions.SUPPLIERS_READ, permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> list[PharmacySupplier]:
     statement = select(PharmacySupplier).where(PharmacySupplier.tenant_id == tenant_id)
     if not include_inactive:
@@ -345,7 +345,7 @@ def update_supplier(
     payload: SupplierUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
+    _current_user: User = Depends(require_any_permission(permissions.SUPPLIERS_MANAGE, permissions.SUPPLIERS_EDIT, permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> PharmacySupplier:
     supplier = session.get(PharmacySupplier, supplier_id)
     if not supplier or supplier.tenant_id != tenant_id:
@@ -364,7 +364,7 @@ def delete_supplier(
     supplier_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_any_permission(permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
+    _current_user: User = Depends(require_any_permission(permissions.SUPPLIERS_MANAGE, permissions.SUPPLIERS_DELETE, permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> PharmacySupplier:
     supplier = session.get(PharmacySupplier, supplier_id)
     if not supplier or supplier.tenant_id != tenant_id:

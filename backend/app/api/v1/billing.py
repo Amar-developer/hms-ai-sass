@@ -793,7 +793,7 @@ def create_tax_rule(
     payload: TaxRuleCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.TAX_MANAGE, permissions.TAX_CREATE, permissions.BILLING_MANAGE)),
 ) -> TaxRule:
     enforce_entitlement(session, tenant_id, "billing_basic")
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
@@ -820,7 +820,7 @@ def list_tax_rules(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.TAX_MANAGE, permissions.TAX_READ, permissions.BILLING_MANAGE)),
 ) -> list[TaxRule]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
@@ -836,7 +836,7 @@ def update_tax_rule(
     payload: TaxRuleUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.TAX_MANAGE, permissions.TAX_EDIT, permissions.BILLING_MANAGE)),
 ) -> TaxRule:
     enforce_entitlement(session, tenant_id, "billing_basic")
     rule = session.get(TaxRule, rule_id)
@@ -868,7 +868,7 @@ def create_discount_offer(
     payload: DiscountOfferCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.DISCOUNTS_MANAGE, permissions.DISCOUNTS_CREATE, permissions.BILLING_MANAGE)),
 ) -> DiscountOffer:
     enforce_entitlement(session, tenant_id, "billing_basic")
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
@@ -895,7 +895,7 @@ def list_discount_offers(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.DISCOUNTS_MANAGE, permissions.DISCOUNTS_READ, permissions.BILLING_MANAGE)),
 ) -> list[DiscountOffer]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
@@ -911,7 +911,7 @@ def update_discount_offer(
     payload: DiscountOfferUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(require_any_permission(permissions.DISCOUNTS_MANAGE, permissions.DISCOUNTS_EDIT, permissions.BILLING_MANAGE)),
 ) -> DiscountOffer:
     enforce_entitlement(session, tenant_id, "billing_basic")
     offer = session.get(DiscountOffer, offer_id)

@@ -75,10 +75,34 @@ def _normal_key(value: str | None) -> str:
     return re.sub(r"\s+", " ", (value or "").strip()).lower()
 
 
+def _assert_unique_tenant_values(
+    session: Session,
+    *,
+    name: str | None,
+    email: str | None,
+    phone: str | None,
+    current_tenant_id: str | None = None,
+) -> None:
+    payload_name = _normal_key(name)
+    payload_email = _normal_key(email)
+    payload_phone = _normal_key(phone)
+    enforce_name = bool(payload_name and (payload_email or payload_phone))
+    tenants = session.exec(select(Tenant)).all()
+    for tenant in tenants:
+        if tenant.id == current_tenant_id:
+            continue
+        if enforce_name and _normal_key(tenant.name) == payload_name:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant already exists with this name")
+        if payload_email and _normal_key(tenant.email) == payload_email:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant already exists with this email")
+        if payload_phone and _normal_key(tenant.phone) == payload_phone:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant already exists with this phone")
+
+
 def _get_department_or_404(session: Session, tenant_id: str, department_id: str) -> Department:
     department = session.get(Department, department_id)
     if not department or department.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Department not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medical department not found")
     return department
 
 
@@ -103,6 +127,7 @@ def create_tenant(
         existing_primary = session.exec(select(Tenant).where(Tenant.is_primary == True)).first()  # noqa: E712
         if existing_primary:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Primary tenant already exists")
+    _assert_unique_tenant_values(session, name=payload.name, email=payload.email, phone=payload.phone)
     tenant = Tenant.model_validate(
         payload,
         update={"created_by_user_id": current_user.id, "updated_by_user_id": current_user.id},
@@ -167,6 +192,16 @@ def update_tenant(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Primary tenant type is fixed")
         if updates.get("status") not in (None, TenantStatus.ACTIVE):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Primary tenant must remain active")
+    changed_name = updates.get("name") if "name" in updates and _normal_key(updates.get("name")) != _normal_key(tenant.name) else None
+    changed_email = updates.get("email") if "email" in updates and _normal_key(updates.get("email")) != _normal_key(tenant.email) else None
+    changed_phone = updates.get("phone") if "phone" in updates and _normal_key(updates.get("phone")) != _normal_key(tenant.phone) else None
+    _assert_unique_tenant_values(
+        session,
+        name=changed_name,
+        email=changed_email,
+        phone=changed_phone,
+        current_tenant_id=tenant.id,
+    )
     for key, value in updates.items():
         if isinstance(value, TenantType):
             value = value.value
@@ -269,7 +304,6 @@ def delete_tenant(
     session.commit()
     return {"deleted": True, "mode": "suspended", "tenant_id": tenant.id}
 
-
 @router.post(
     "/{tenant_id}/branches",
     response_model=BranchRead,
@@ -359,7 +393,7 @@ def list_branches(
         )
     return list(
         session.exec(
-            select(Branch).where(Branch.tenant_id == tenant_id).order_by(Branch.updated_at.desc(), Branch.created_at.desc())
+            select(Branch).where(Branch.tenant_id == tenant_id).order_by(Branch.created_at.desc(), Branch.name.asc())
         ).all()
     )
 

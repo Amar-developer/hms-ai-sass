@@ -351,7 +351,7 @@ def build_monthly_revenue_report(
     if filters.get("doctor", True):
         sections.append(_table("Doctor Revenue and Settlement", grouped_headers, bucket_rows("doctor")))
     if filters.get("department", True):
-        sections.append(_table("Department Revenue", grouped_headers, bucket_rows("department")))
+        sections.append(_table("Medical Department Revenue", grouped_headers, bucket_rows("department")))
     if filters.get("invoice", True):
         invoice_rows = []
         for invoice in paid_invoices:
@@ -386,7 +386,7 @@ def build_monthly_revenue_report(
                     "Date",
                     "Patient",
                     "Doctor",
-                    "Department",
+                    "Medical Department",
                     "Item Total",
                     "Offer Discount",
                     "Membership Benefit",

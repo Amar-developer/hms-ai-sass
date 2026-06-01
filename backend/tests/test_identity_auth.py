@@ -151,6 +151,33 @@ def test_tenant_admin_can_manage_only_own_tenant_users(unauthenticated_client):
     assert cross_tenant.status_code == 403
 
 
+def test_super_admin_user_creation_auto_creates_missing_tenant_admin_role(unauthenticated_client):
+    client = unauthenticated_client
+    super_token = bootstrap_super_admin(client)
+    tenant = create_tenant_with_paid_plan(client, super_token)
+    headers = {"Authorization": f"Bearer {super_token}", "X-Tenant-ID": tenant["id"]}
+
+    created = client.post(
+        "/api/v1/identity/users",
+        headers=headers,
+        json={
+            "name": "Clinic Admin",
+            "email": "auto.admin@test.local",
+            "password": "ClinicPass123",
+            "user_type": "tenant_admin",
+            "role_keys": ["tenant_admin"],
+        },
+    )
+
+    assert created.status_code == 201
+    assert created.json()["roles"] == ["tenant_admin"]
+    roles = client.get("/api/v1/identity/roles", headers=headers)
+    tenant_admin_role = next(row for row in roles.json() if row["key"] == "tenant_admin")
+    assert tenant_admin_role["name"] == "Tenant Admin"
+    assert "identity.users.manage" in tenant_admin_role["permission_keys"]
+    assert "platform.tenants.manage" not in tenant_admin_role["permission_keys"]
+
+
 def test_identity_actions_are_audited(unauthenticated_client):
     client = unauthenticated_client
     super_token = bootstrap_super_admin(client)

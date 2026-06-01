@@ -9,7 +9,7 @@ import {
   UsersRound,
   Video,
 } from "lucide-react";
-import { Badge, Button, Card, Input, Select } from "@/components/ui";
+import { Badge, Button, Card, Field, Input, Select } from "@/components/ui";
 import { FormField } from "@/components/FormElements";
 import {
   SearchPicker,
@@ -1757,7 +1757,7 @@ function PatientHistoryPanel({ history, onOpenPatient }: any) {
                   </p>
                   <p className="text-xs text-slate-500">
                     {item.doctor || item.practitioner_name || "Doctor"} ·{" "}
-                    {item.departmentName || item.departmentId || "Department"}
+                    {item.departmentName || item.departmentId || "Medical Department"}
                   </p>
                 </div>
                 <Badge
@@ -1876,6 +1876,26 @@ function ConsultationWorkspace(props: any) {
   }));
   const [medicineTagText, setMedicineTagText] = useState("");
   const [labTagText, setLabTagText] = useState("");
+  const [medicineDraftName, setMedicineDraftName] = useState("");
+  const [labDraftName, setLabDraftName] = useState("");
+  const selectedMedicine = medicineCatalog.find(
+    (medicine: any) => medicine.id === selectedMedicineId,
+  );
+  const selectedLabTest = labCatalog.find(
+    (test: any) => test.id === selectedLabTestId,
+  );
+  function addDraftMedicine() {
+    const name = selectedMedicine?.name || medicineDraftName;
+    if (!String(name || "").trim()) return;
+    addMedicineFromText(name, selectedMedicine ? { item: selectedMedicine } : undefined);
+    setMedicineDraftName("");
+  }
+  function addDraftLabTest() {
+    const name = selectedLabTest?.name || labDraftName;
+    if (!String(name || "").trim()) return;
+    addLabFromText(name, selectedLabTest ? { item: selectedLabTest } : undefined);
+    setLabDraftName("");
+  }
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -2045,7 +2065,8 @@ function ConsultationWorkspace(props: any) {
               onChange={setMedicineTagText}
               onSubmit={addMedicineFromText}
               onRemove={removeMedicineItem}
-              placeholder="Type medicine and press Enter"
+              hideInput
+              emptyText="No medicines added yet."
               getLabel={(m: any) =>
                 [m.name, m.dosage, m.frequency, m.duration, m.instructions]
                   .map((part: any) => String(part || "").trim())
@@ -2055,18 +2076,25 @@ function ConsultationWorkspace(props: any) {
             />
           </FormField>
           <div className="rounded-3xl bg-slate-50 p-4">
-            <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr] lg:items-end">
-              <FormField label="Medicine">
+            <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr_auto] lg:items-end">
+              <Field label="Medicine">
                 <SearchPicker
                   value={selectedMedicineId}
-                  onChange={(_medicineId: string, medicine: any) => {
-                    if (medicine?.name) {
-                      addMedicineFromText(medicine.name, { item: medicine });
-                    }
+                  inputValue={medicineDraftName}
+                  onInputValueChange={(text: string) => {
+                    setMedicineDraftName(text);
+                    if (!text) setSelectedMedicineId("");
+                  }}
+                  onChange={(medicineId: string, medicine: any) => {
+                    setSelectedMedicineId(medicineId);
+                    setMedicineDraftName(medicine?.name || "");
                   }}
                   options={medicineOptions}
                   placeholder="Type medicine name"
-                  onEnterQuery={addMedicineFromText}
+                  onUseTyped={(text: string) => {
+                    setSelectedMedicineId("");
+                    setMedicineDraftName(text);
+                  }}
                   getSearchText={(medicine: any) =>
                     [
                       medicine?.name,
@@ -2079,7 +2107,7 @@ function ConsultationWorkspace(props: any) {
                       .join(" ")
                   }
                 />
-              </FormField>
+              </Field>
               <FormField label="Dosage">
                 <Input
                   value={medicineDosage}
@@ -2099,7 +2127,7 @@ function ConsultationWorkspace(props: any) {
                     ]),
                   ]
                     .filter(Boolean)
-                    .map((value: string) => (
+                  .map((value: string) => (
                       <option key={value} value={value}>
                         {value}
                       </option>
@@ -2135,9 +2163,12 @@ function ConsultationWorkspace(props: any) {
                       <option key={value} value={value}>
                         {value}
                       </option>
-                    ))}
+                  ))}
                 </Select>
               </FormField>
+              <Button type="button" onClick={addDraftMedicine}>
+                Add
+              </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {medicineCatalog.slice(0, 8).map((medicine: any) => (
@@ -2156,51 +2187,49 @@ function ConsultationWorkspace(props: any) {
           </div>
           <div className="grid gap-3">
             <div className="rounded-3xl bg-slate-50 p-4">
-              <label className="flex items-center gap-3 font-bold">
-                <input
-                  type="checkbox"
-                  checked={labNeeded}
-                  onChange={(e: any) => setLabNeeded(e.target.checked)}
-                />{" "}
-                Lab test needed
-              </label>
-              {labNeeded && (
-                <FormField label="Lab Tests">
-                  <TagEntryBox
-                    tags={referralItems.filter(
-                      (item: any) => item.type === "lab",
-                    )}
-                    value={labTagText}
-                    onChange={setLabTagText}
-                    onSubmit={addLabFromText}
-                    onRemove={(labIndex: number) => {
-                      const indexes = referralItems
-                        .map((item: any, index: number) =>
-                          item.type === "lab" ? index : -1,
-                        )
-                        .filter((index: number) => index >= 0);
-                      removeReferralItem(indexes[labIndex]);
-                    }}
-                    placeholder="Type lab test and press Enter"
-                    getLabel={(r: any) =>
-                      [r.name, r.priority, r.instructions]
-                        .map((part: any) => String(part || "").trim())
-                        .filter(Boolean)
-                        .join(" · ")
-                    }
-                  />
-                </FormField>
-              )}
+              <Field label="Lab Tests">
+                <TagEntryBox
+                  tags={referralItems.filter((item: any) => item.type === "lab")}
+                  value={labTagText}
+                  onChange={setLabTagText}
+                  onSubmit={addLabFromText}
+                  onRemove={(labIndex: number) => {
+                    const indexes = referralItems
+                      .map((item: any, index: number) =>
+                        item.type === "lab" ? index : -1,
+                      )
+                      .filter((index: number) => index >= 0);
+                    removeReferralItem(indexes[labIndex]);
+                  }}
+                  hideInput
+                  emptyText="No lab tests added yet."
+                  getLabel={(r: any) =>
+                    [r.name, r.priority, r.instructions]
+                      .map((part: any) => String(part || "").trim())
+                      .filter(Boolean)
+                      .join(" · ")
+                  }
+                />
+              </Field>
               <div className="mt-3 grid gap-2">
                 <FormField label="Available Lab Test">
                   <SearchPicker
                     value={selectedLabTestId}
-                    onChange={(_id: string, test: any) => {
-                      if (test?.name) addLabFromText(test.name, { item: test });
+                    inputValue={labDraftName}
+                    onInputValueChange={(text: string) => {
+                      setLabDraftName(text);
+                      if (!text) setSelectedLabTestId("");
+                    }}
+                    onChange={(id: string, test: any) => {
+                      setSelectedLabTestId(id);
+                      setLabDraftName(test?.name || "");
                     }}
                     options={labOptions}
                     placeholder="Type lab test name"
-                    onEnterQuery={addLabFromText}
+                    onUseTyped={(text: string) => {
+                      setSelectedLabTestId("");
+                      setLabDraftName(text);
+                    }}
                     getSearchText={(test: any) =>
                       [
                         test?.name,
@@ -2227,6 +2256,9 @@ function ConsultationWorkspace(props: any) {
                     onChange={(e: any) => setLabInstructions(e.target.value)}
                     placeholder="Instructions"
                   />
+                  <Button type="button" onClick={addDraftLabTest}>
+                    Add Lab Test
+                  </Button>
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap gap-1">

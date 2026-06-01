@@ -19,6 +19,7 @@ class PractitionerCreate(BaseModel):
 
 
 class PractitionerUpdate(BaseModel):
+    user_id: str | None = None
     full_name: str | None = Field(default=None, min_length=2, max_length=180)
     practitioner_type: PractitionerType | None = None
     primary_specialty: str | None = Field(default=None, max_length=160)

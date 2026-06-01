@@ -120,6 +120,7 @@ Current enforced guardrails:
 | `POST` | `/api/v1/identity/users` | `identity.users.manage` |
 | `GET` | `/api/v1/identity/users` | `identity.users.manage` |
 | `PATCH` | `/api/v1/identity/users/{user_id}` | `identity.users.manage` |
+| `POST` | `/api/v1/identity/users/{user_id}/password-reset` | `identity.users.manage` |
 | `POST` | `/api/v1/identity/users/{user_id}/status` | `identity.users.manage` |
 | `DELETE` | `/api/v1/identity/users/{user_id}` | `identity.users.manage` |
 
@@ -301,6 +302,7 @@ Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, pa
 | `PUT` | `/api/v1/reports/monthly-email/config` | `settings.manage` |
 | `POST` | `/api/v1/reports/monthly-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-email/jobs` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+| `GET` | `/api/v1/reports/monthly-email/jobs/{job_id}/download` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `POST` | `/api/v1/reports/profit-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 
 Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `ReportJob`, pushes the job id to Redis, and returns `202 Accepted`. The worker sends an Excel-compatible `.xls` report through SMTP. Manual send defaults to previous month and supports `from_date` / `to_date` for testing current-month reports.

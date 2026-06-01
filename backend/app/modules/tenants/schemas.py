@@ -45,6 +45,7 @@ class TenantRead(TenantCreate):
 class BranchCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     code: str = Field(min_length=2, max_length=40)
+    area: str | None = Field(default=None, max_length=120)
     address: str | None = Field(default=None, max_length=500)
     city: str | None = Field(default=None, max_length=120)
     state: str | None = Field(default=None, max_length=120)
@@ -53,6 +54,7 @@ class BranchCreate(BaseModel):
 class BranchUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
     code: str | None = Field(default=None, min_length=2, max_length=40)
+    area: str | None = Field(default=None, max_length=120)
     address: str | None = Field(default=None, max_length=500)
     city: str | None = Field(default=None, max_length=120)
     state: str | None = Field(default=None, max_length=120)

@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
-import { ActionButton, ActionGroup, Badge, Button, Card } from "@/components/ui";
+import {
+  ActionButton,
+  ActionGroup,
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+} from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { NumberField, SelectField, TextField, TimeField } from "@/components/FormElements";
 import { publicDisplayValue, uniqueDepartmentRows } from "@/lib/options";
-import { Input } from "@/components/ui";
 
 
 const weekdays = [
@@ -143,9 +151,9 @@ export function Scheduling({ apiSession, branchId }: any) {
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
-    const tenantRows = await apiFetch("/tenants", apiSession);
+    const tenantRows = activeTenantOptions(await apiFetch("/tenants", apiSession));
     setTenants(tenantRows);
-    if (!tenantId)
+    if (!tenantId || !tenantRows.some((tenant: any) => tenant.id === tenantId))
       setTenantId(
         tenantRows.find((tenant: any) => !tenant.is_primary)?.id ||
           tenantRows[0]?.id ||
@@ -426,7 +434,7 @@ export function Scheduling({ apiSession, branchId }: any) {
           </h3>
           <p className="text-sm text-slate-500">
             Tenant-scoped weekly consultation timings mapped to doctor, branch,
-            department, room, and slot duration.
+            medical department, room, and slot duration.
           </p>
         </div>
         <button
@@ -445,63 +453,97 @@ export function Scheduling({ apiSession, branchId }: any) {
       )}
       <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
         {isSuperAdmin && (
-          <SelectField
-            label="Tenant"
-            value={tenantId}
-            onChange={setTenantId}
-            options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
-          />
+          <Field label="Tenant">
+            <Select
+              value={tenantId}
+              onChange={(e: any) => setTenantId(e.target.value)}
+            >
+              {tenants.map((tenant: any) => (
+                <option key={tenant.id} value={tenant.id}>
+                  {tenant.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
         )}
-        <TextField
-          label="Search"
-          value={query}
-          onChange={(v) => { setQuery(v); setPage(1); }}
-          placeholder="Doctor, room, department"
-        />
-        <SelectField
-          label="Branch"
-          value={filterBranch}
-          onChange={(v) => { setFilterBranch(v); setPage(1); }}
-          options={[
-            { value: "all", label: "All branches" },
-            ...branches.map((b: any) => ({ value: b.id, label: b.name })),
-          ]}
-        />
-        <SelectField
-          label="Department"
-          value={filterDepartment}
-          onChange={(v) => { setFilterDepartment(v); setPage(1); }}
-          options={[
-            { value: "all", label: "All departments" },
-            ...departments.map((d: any) => ({ value: d.id, label: d.name })),
-          ]}
-        />
-        <SelectField
-          label="Weekday"
-          value={filterWeekday}
-          onChange={(v) => { setFilterWeekday(v); setPage(1); }}
-          options={[
-            { value: "all", label: "All days" },
-            ...weekdays.map(([value, label]) => ({ value, label })),
-          ]}
-        />
-        <SelectField
-          label="Status"
-          value={filterStatus}
-          onChange={(v) => { setFilterStatus(v); setPage(1); }}
-          options={[
-            { value: "active", label: "Active" },
-            { value: "inactive", label: "Inactive" },
-            { value: "all", label: "All" },
-          ]}
-        />
+        <Field label="Search">
+          <Input
+            value={query}
+            onChange={(e: any) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Doctor, room, medical department"
+          />
+        </Field>
+        <Field label="Branch">
+          <Select
+            value={filterBranch}
+            onChange={(e: any) => {
+              setFilterBranch(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All branches</option>
+            {branches.map((branch: any) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Medical Department">
+          <Select
+            value={filterDepartment}
+            onChange={(e: any) => {
+              setFilterDepartment(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All medical departments</option>
+            {departments.map((department: any) => (
+              <option key={department.id} value={department.id}>
+                {department.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Weekday">
+          <Select
+            value={filterWeekday}
+            onChange={(e: any) => {
+              setFilterWeekday(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="all">All days</option>
+            {weekdays.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Status">
+          <Select
+            value={filterStatus}
+            onChange={(e: any) => {
+              setFilterStatus(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="all">All</option>
+          </Select>
+        </Field>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1120px]">
           <div className="hidden grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid">
             <span>Doctor</span>
             <span>Branch</span>
-            <span>Department</span>
+            <span>Medical Department</span>
             <span>Room No.</span>
             <span>Timing</span>
             <span>Slots</span>
@@ -550,6 +592,17 @@ export function Scheduling({ apiSession, branchId }: any) {
   );
 }
 
+function activeTenantOptions(tenants: any[]) {
+  const seen = new Set<string>();
+  return (tenants || []).filter((tenant: any) => {
+    if (tenant.status === "suspended") return false;
+    const key = String(tenant.name || tenant.id || "").trim().toLowerCase();
+    if (key && seen.has(key)) return false;
+    if (key) seen.add(key);
+    return true;
+  });
+}
+
 function ScheduleForm({
   title,
   schedule,
@@ -564,8 +617,8 @@ function ScheduleForm({
     ? schedule.schedules
     : [schedule].filter(Boolean);
   const initialDays = Array.from(
-    new Set<string>(scheduleRows.map((row: any) => String(row.weekday ?? 0))),
-  );
+    new Set(scheduleRows.map((row: any) => String(row.weekday ?? 0))),
+  ) as string[];
   const initialRanges = Array.from(
     new Map(
       scheduleRows.map((row: any) => {
@@ -684,30 +737,38 @@ function ScheduleForm({
           />
         </div>
         <div>
-          <SelectField
-            label="Branch"
-            value={selectedBranchId}
-            onChange={setSelectedBranchId}
-            required
-            options={[
-              { value: "", label: "Select branch" },
-              ...branches.map((b: any) => ({ value: b.id, label: b.name })),
-            ]}
-          />
-          <input type="hidden" name="branchId" value={selectedBranchId} />
+          <Field label="Branch">
+            <Select
+              name="branchId"
+              value={selectedBranchId}
+              onChange={(event: any) => setSelectedBranchId(event.target.value)}
+              required
+            >
+              <option value="">Select branch</option>
+              {branches.map((branch: any) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
         </div>
-        <div>
-          <SelectField
-            label="Department"
+        <Field label="Medical Department">
+          <Select
+            name="departmentId"
             value={selectedDepartmentId}
-            onChange={setSelectedDepartmentId}
-            options={[
-              { value: "", label: "All departments" },
-              ...departments.map((d: any) => ({ value: d.id, label: d.name })),
-            ]}
-          />
-          <input type="hidden" name="departmentId" value={selectedDepartmentId} />
-        </div>
+            onChange={(event: any) =>
+              setSelectedDepartmentId(event.target.value)
+            }
+          >
+            <option value="">All medical departments</option>
+            {departments.map((department: any) => (
+              <option key={department.id} value={department.id}>
+                {department.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
         <div className="md:col-span-2 xl:col-span-3">
           <input type="hidden" name="weekday" value={selectedDays[0]} />
           {selectedDays.map((value) => (
@@ -908,7 +969,7 @@ function ScheduleRow({
         </p>
       </div>
       <span>{branch?.name || publicDisplayValue(row.branch_id, "Assigned branch")}</span>
-      <span>{department?.name || "All departments"}</span>
+      <span>{department?.name || "All medical departments"}</span>
       <span>{row.room_number ? row.room_number.padStart(3, "0") : "-"}</span>
       <span>
         {formatDisplayRange(firstSchedule.start_time, firstSchedule.end_time)}

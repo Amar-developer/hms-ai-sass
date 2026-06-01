@@ -1,7 +1,7 @@
 import json
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
@@ -14,6 +14,7 @@ from app.modules.reports.models import ReportJob, ReportJobStatus
 from app.modules.reports.queue import enqueue_monthly_report_job
 from app.modules.reports.service import (
     build_profit_report_email_attachments,
+    build_monthly_revenue_report,
     load_monthly_report_config,
     previous_month_range,
     save_monthly_report_config,
@@ -282,3 +283,29 @@ def list_monthly_report_jobs(
         ).all()
     )
     return [_read_job(job) for job in jobs]
+
+
+@router.get("/monthly-email/jobs/{job_id}/download")
+def download_monthly_report_job(
+    job_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(permissions.REPORTS_READ, permissions.SETTINGS_MANAGE, permissions.BILLING_MANAGE)
+    ),
+) -> Response:
+    job = session.get(ReportJob, job_id)
+    if not job or job.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report job not found")
+    filename, content = build_monthly_revenue_report(
+        session,
+        tenant_id=tenant_id,
+        start=date.fromisoformat(job.period_start),
+        end=date.fromisoformat(job.period_end),
+        filters=json.loads(job.filters_json),
+    )
+    return Response(
+        content=content,
+        media_type="application/vnd.ms-excel",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

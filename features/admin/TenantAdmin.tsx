@@ -19,23 +19,27 @@ import {
   Badge,
   Button,
   Card,
+  Field,
   Input,
   SearchableSelect,
   Select,
+  SuggestionInput,
 } from "@/components/ui";
 import { FormField } from "@/components/FormElements";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
-import { UPLOADS_BASE, apiFetch, apiUpload } from "@/lib/api";
+import { UPLOADS_BASE, apiBlob, apiFetch, apiUpload } from "@/lib/api";
 import {
+  basicMedicalDepartmentSuggestions,
   humanizeOptionLabel,
   normalizeOptionLabel,
+  paymentMethodOptions,
   publicDisplayValue,
 } from "@/lib/options";
 
 const sections = [
   ["users", "Users", Users],
   ["roles", "Roles", ShieldCheck],
-  ["departments", "Departments", ClipboardList],
+  ["departments", "Medical Departments", ClipboardList],
   ["branches", "Branches", Building2],
   ["suppliers", "Suppliers", Truck],
   ["tax", "Tax", Percent],
@@ -104,17 +108,35 @@ export function canUseTenantAdminSection(section: string, user: any) {
       "settings.manage",
     ].some((permission) => permissions.includes(permission));
   if (section === "suppliers")
-    return ["settings.manage", "pharmacy.manage"].some((permission) =>
-      permissions.includes(permission),
-    );
+    return [
+      "suppliers.manage",
+      "suppliers.create",
+      "suppliers.read",
+      "suppliers.edit",
+      "suppliers.delete",
+      "settings.manage",
+      "pharmacy.manage",
+    ].some((permission) => permissions.includes(permission));
   if (section === "tax")
-    return ["billing.manage", "settings.manage"].some((permission) =>
-      permissions.includes(permission),
-    );
+    return [
+      "tax.manage",
+      "tax.create",
+      "tax.read",
+      "tax.edit",
+      "tax.delete",
+      "billing.manage",
+      "settings.manage",
+    ].some((permission) => permissions.includes(permission));
   if (section === "offers")
-    return ["billing.manage", "settings.manage"].some((permission) =>
-      permissions.includes(permission),
-    );
+    return [
+      "discounts.manage",
+      "discounts.create",
+      "discounts.read",
+      "discounts.edit",
+      "discounts.delete",
+      "billing.manage",
+      "settings.manage",
+    ].some((permission) => permissions.includes(permission));
   if (section === "membership")
     return [
       "patient_subscriptions.manage",
@@ -124,6 +146,11 @@ export function canUseTenantAdminSection(section: string, user: any) {
     ].some((permission) => permissions.includes(permission));
   if (section === "files")
     return [
+      "files.manage",
+      "files.create",
+      "files.read",
+      "files.edit",
+      "files.delete",
       "settings.manage",
       "settings.read",
       "patients.read",
@@ -183,31 +210,31 @@ const requiredRolePermissions = [
     key: "departments.manage",
     module: "departments",
     action: "manage",
-    description: "Departments Manage",
+    description: "Medical Departments Manage",
   },
   {
     key: "departments.create",
     module: "departments",
     action: "create",
-    description: "Departments Create",
+    description: "Medical Departments Create",
   },
   {
     key: "departments.read",
     module: "departments",
     action: "read",
-    description: "Departments Read",
+    description: "Medical Departments Read",
   },
   {
     key: "departments.edit",
     module: "departments",
     action: "edit",
-    description: "Departments Edit",
+    description: "Medical Departments Edit",
   },
   {
     key: "departments.delete",
     module: "departments",
     action: "delete",
-    description: "Departments Delete",
+    description: "Medical Departments Delete",
   },
   {
     key: "branches.manage",
@@ -309,6 +336,7 @@ export function TenantAdmin({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<any>(null);
+  const [passwordUser, setPasswordUser] = useState<any>(null);
   const [invoicePrefix, setInvoicePrefix] = useState("MHD");
   const [invoiceLogoUrl, setInvoiceLogoUrl] = useState("");
   const [numberingRules, setNumberingRules] = useState<any>(
@@ -318,9 +346,7 @@ export function TenantAdmin({
   const [noShowAfter, setNoShowAfter] = useState(3);
   const [slotIntervalsEnabled, setSlotIntervalsEnabled] = useState(false);
   const [slotIntervalMinutes, setSlotIntervalMinutes] = useState(5);
-  const [payments, setPayments] = useState(
-    "cash,credit_card,debit_card,upi,gpay,paytm",
-  );
+  const [payments, setPayments] = useState("cash,upi,gpay,paytm,credit_card,debit_card,bank_transfer");
   const [providers, setProviders] = useState("whatsapp,sms,voice");
   const [reportEnabled, setReportEnabled] = useState(false);
   const [reportRecipients, setReportRecipients] = useState("");
@@ -357,6 +383,15 @@ export function TenantAdmin({
     setSection(nextSection);
     setView(nextView);
     setSelectedId("");
+    requestAnimationFrame(() =>
+      window.scrollTo({ top: 0, behavior: "smooth" }),
+    );
+  }
+
+  function openRolePermissions(role: any) {
+    setSection("roles");
+    setView("edit");
+    setSelectedId(role.id);
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
     );
@@ -435,8 +470,9 @@ export function TenantAdmin({
       const find = (key: string) => settingRows.find((x: any) => x.key === key);
       if (find("invoice.prefix"))
         setInvoicePrefix(find("invoice.prefix").value);
-      if (find("invoice.logo_url"))
-        setInvoiceLogoUrl(String(find("invoice.logo_url").value || ""));
+      setInvoiceLogoUrl(
+        String(find("invoice.logo_url")?.value || clinic?.logo_url || ""),
+      );
       if (find("numbering.rules"))
         setNumberingRules(
           parseNumberingRules(
@@ -636,6 +672,42 @@ export function TenantAdmin({
     }
   }
 
+  async function resetUserPassword(e: any) {
+    e.preventDefault();
+    if (!passwordUser) return;
+    const fd = new FormData(e.currentTarget);
+    const password = String(fd.get("newPassword") || "");
+    const confirmPassword = String(fd.get("confirmPassword") || "");
+    if (password !== confirmPassword) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    try {
+      const updated = await apiFetch(
+        `/identity/users/${passwordUser.id}/password-reset`,
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            new_password: password,
+            must_change_password: fd.get("mustChangePassword") === "true",
+          }),
+        },
+      );
+      setUsers((previous) =>
+        previous.map((user: any) => (user.id === updated.id ? updated : user)),
+      );
+      setPasswordUser(null);
+      setMessage(`Password reset for ${updated.name}.`);
+    } catch (err: any) {
+      setMessage(err.message || "Could not reset password.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createDepartment(e: any) {
     e.preventDefault();
     const form = e.currentTarget;
@@ -662,7 +734,7 @@ export function TenantAdmin({
       ]);
       open("departments");
       await loadAdmin();
-      setMessage(`Department created: ${created.name}`);
+      setMessage(`Medical Department created: ${created.name}`);
     } catch (err: any) {
       setMessage(err.message || "Could not create department.");
     } finally {
@@ -696,7 +768,7 @@ export function TenantAdmin({
       ]);
       open("departments");
       await loadAdmin();
-      setMessage("Department updated.");
+      setMessage("Medical Department updated.");
     } catch (err: any) {
       setMessage(err.message || "Could not update department.");
     } finally {
@@ -719,6 +791,7 @@ export function TenantAdmin({
           body: JSON.stringify({
             name: fd.get("name"),
             code: fd.get("code"),
+            area: fd.get("area") || null,
             address: fd.get("address") || null,
             city: fd.get("city") || null,
             state: fd.get("state") || null,
@@ -755,6 +828,7 @@ export function TenantAdmin({
           body: JSON.stringify({
             name: fd.get("name"),
             code: fd.get("code"),
+            area: fd.get("area") || null,
             address: fd.get("address") || null,
             city: fd.get("city") || null,
             state: fd.get("state") || null,
@@ -1176,6 +1250,42 @@ export function TenantAdmin({
     }
   }
 
+  async function uploadInvoiceLogo(file: File) {
+    if (!file) return;
+    setMessage("");
+    setBusy(true);
+    try {
+      const upload = new FormData();
+      upload.append("file", file);
+      upload.append("category", "logo");
+      upload.append("source_module", "settings");
+      upload.append("attached_to_doctype", "Tenant");
+      upload.append("attached_to_name", apiSession.tenantId);
+      upload.append("attached_to_field", "invoice.logo_url");
+      upload.append("attached_to_label", "Invoice Logo");
+      upload.append("folder", "Branding");
+      const created = await apiUpload("/files", apiSession, upload);
+      setInvoiceLogoUrl(created.file_url);
+      await apiFetch("/settings", apiSession, {
+        method: "PUT",
+        body: JSON.stringify({
+          scope: "branch",
+          scope_id: branchId,
+          module: "invoice",
+          key: "invoice.logo_url",
+          value: created.file_url,
+          actor_user_id: apiSession.user?.id,
+        }),
+      });
+      await loadAdmin();
+      setMessage("Invoice logo uploaded and saved.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not upload invoice logo.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function saveReportSettings() {
     const list = (v: string) =>
       v
@@ -1234,6 +1344,52 @@ export function TenantAdmin({
     }
   }
 
+  async function resendMonthlyReport(job: any) {
+    setReportBusy(`resend-${job.id}`);
+    setMessage("");
+    try {
+      await apiFetch("/reports/monthly-email/send", apiSession, {
+        method: "POST",
+        body: JSON.stringify({
+          recipients: job.recipients || [],
+          cc: job.cc || [],
+          from_date: job.period_start,
+          to_date: job.period_end,
+          filters: job.filters || reportFilters,
+        }),
+      });
+      await loadAdmin();
+      setMessage("Report queued again.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not resend report.");
+    } finally {
+      setReportBusy("");
+    }
+  }
+
+  async function downloadMonthlyReport(job: any) {
+    setReportBusy(`download-${job.id}`);
+    setMessage("");
+    try {
+      const blob = await apiBlob(
+        `/reports/monthly-email/jobs/${job.id}/download`,
+        apiSession,
+      );
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `monthly-revenue-report-${job.period_start}-${job.period_end}.xls`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setMessage(err.message || "Could not download report.");
+    } finally {
+      setReportBusy("");
+    }
+  }
+
   if (!apiSession)
     return (
       <Card>
@@ -1262,7 +1418,7 @@ export function TenantAdmin({
               {clinic?.name || "Tenant"} Administration
             </h3>
             <p className="text-sm text-slate-500">
-              Manage only this tenant’s users, roles, departments, branches, and
+              Manage only this tenant’s users, roles, medical departments, branches, and
               settings.
             </p>
           </div>
@@ -1302,6 +1458,7 @@ export function TenantAdmin({
               onStatus={() =>
                 setConfirm({ entity: "users", kind: "status", row: user })
               }
+              onPassword={() => setPasswordUser(user)}
               onDelete={() =>
                 setConfirm({ entity: "users", kind: "delete", row: user })
               }
@@ -1316,6 +1473,7 @@ export function TenantAdmin({
           branches={branches}
           busy={busy}
           onSubmit={createUser}
+          onRoleOpen={openRolePermissions}
           back={() => open("users")}
         />
       )}
@@ -1327,6 +1485,7 @@ export function TenantAdmin({
           branches={branches}
           busy={busy}
           onSubmit={updateUser}
+          onRoleOpen={openRolePermissions}
           back={() => open("users")}
         />
       )}
@@ -1379,12 +1538,12 @@ export function TenantAdmin({
 
       {section === "departments" && view === "list" && (
         <ListCard
-          title="Departments"
+          title="Medical Departments"
           rows={departmentGroups}
           searchKeys={["name", "code", "branch_names", "description", "id"]}
-          createLabel="Create Department"
+          createLabel="Create Medical Department"
           onCreate={() => setView("create")}
-          columns={["Department", "Code", "Branches", "Status", "Actions"]}
+          columns={["Medical Department", "Code", "Branches", "Status", "Actions"]}
           render={(department: any) => (
             <DepartmentRow
               key={department.id}
@@ -1414,7 +1573,7 @@ export function TenantAdmin({
       )}
       {section === "departments" && view === "create" && (
         <DepartmentForm
-          title="Create Department"
+          title="Create Medical Department"
           branches={branches}
           busy={busy}
           onSubmit={createDepartment}
@@ -1423,7 +1582,7 @@ export function TenantAdmin({
       )}
       {section === "departments" && view === "edit" && selectedDepartment && (
         <DepartmentForm
-          title="Edit Department"
+          title="Edit Medical Department"
           department={selectedDepartment}
           branches={branches}
           busy={busy}
@@ -1654,6 +1813,8 @@ export function TenantAdmin({
           setNumberingRules={setNumberingRules}
           invoiceLogoUrl={invoiceLogoUrl}
           setInvoiceLogoUrl={setInvoiceLogoUrl}
+          tenantLogoUrl={clinic?.logo_url || ""}
+          uploadInvoiceLogo={uploadInvoiceLogo}
           requeueAfter={requeueAfter}
           setRequeueAfter={setRequeueAfter}
           noShowAfter={noShowAfter}
@@ -1682,6 +1843,8 @@ export function TenantAdmin({
           reportBusy={reportBusy}
           saveReportSettings={saveReportSettings}
           sendMonthlyReportNow={sendMonthlyReportNow}
+          resendMonthlyReport={resendMonthlyReport}
+          downloadMonthlyReport={downloadMonthlyReport}
         />
       )}
       {confirm && (
@@ -1694,6 +1857,14 @@ export function TenantAdmin({
               ? deleteRow(confirm.entity, confirm.row)
               : changeStatus(confirm.entity, confirm.row)
           }
+        />
+      )}
+      {passwordUser && (
+        <PasswordResetModal
+          user={passwordUser}
+          busy={busy}
+          onSubmit={resetUserPassword}
+          onCancel={() => setPasswordUser(null)}
         />
       )}
     </div>
@@ -1800,6 +1971,8 @@ function ListCard({
 }
 
 function RoleForm({ title, role, permissions, busy, onSubmit, back }: any) {
+  const [roleName, setRoleName] = useState(role?.name || "");
+  const generatedKey = roleKeyFromName(roleName || role?.key || "");
   return (
     <Card>
       <Header
@@ -1811,19 +1984,21 @@ function RoleForm({ title, role, permissions, busy, onSubmit, back }: any) {
         <FormField label="Role Name">
           <Input
             name="name"
-            defaultValue={role?.name || ""}
+            value={roleName}
+            onChange={(event: any) => setRoleName(event.target.value)}
             required
             disabled={isLocked(role)}
           />
         </FormField>
-        <FormField label="Role Key">
-          <Input
-            name="key"
-            defaultValue={role?.key || ""}
-            required
-            disabled={isLocked(role)}
-          />
-        </FormField>
+        <input type="hidden" name="key" value={generatedKey} />
+        <div className="rounded-2xl bg-slate-50 p-4 text-sm">
+          <p className="text-xs font-bold uppercase text-slate-500">
+            Generated Role Key
+          </p>
+          <p className="mt-1 font-bold text-slate-800">
+            {generatedKey || "Enter role name"}
+          </p>
+        </div>
         {role && (
           <FormField label="Status">
             <Select
@@ -1854,12 +2029,43 @@ function RoleForm({ title, role, permissions, busy, onSubmit, back }: any) {
   );
 }
 
-function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
-  const [selectedBranch, setSelectedBranch] = useState(user?.branch_id || "");
+function UserForm({
+  title,
+  user,
+  roles,
+  branches,
+  busy,
+  onSubmit,
+  onRoleOpen,
+  back,
+}: any) {
+  const initialRoleKeys =
+    user?.roles?.length
+      ? user.roles
+      : user?.user_type === "tenant_admin"
+        ? ["tenant_admin"]
+        : [];
+  const [selectedRoleKeys, setSelectedRoleKeys] = useState<string[]>(initialRoleKeys);
+  const [userType, setUserType] = useState(
+    user?.user_type || (initialRoleKeys.includes("tenant_admin") ? "tenant_admin" : "staff"),
+  );
+  const hasTenantAdminAccess =
+    userType === "tenant_admin" || selectedRoleKeys.includes("tenant_admin");
+  const [selectedBranch, setSelectedBranch] = useState(
+    hasTenantAdminAccess ? "" : user?.branch_id || "",
+  );
+  useEffect(() => {
+    if (!hasTenantAdminAccess) return;
+    setSelectedBranch("");
+    setUserType("tenant_admin");
+    setSelectedRoleKeys((previous) =>
+      previous.includes("tenant_admin") ? previous : [...previous, "tenant_admin"],
+    );
+  }, [hasTenantAdminAccess]);
   const roleOptions = useMemo(
     () =>
-      filterRolesForBranch(roles, branches, selectedBranch, user?.roles || []),
-    [roles, branches, selectedBranch, user?.roles],
+      filterRolesForBranch(roles, branches, selectedBranch, selectedRoleKeys),
+    [roles, branches, selectedBranch, selectedRoleKeys],
   );
   return (
     <Card>
@@ -1881,7 +2087,11 @@ function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
           />
         </FormField>
         <FormField label="User Type">
-          <Select name="userType" defaultValue={user?.user_type || "staff"}>
+          <Select
+            name="userType"
+            value={userType}
+            onChange={(event: any) => setUserType(event.target.value)}
+          >
             {userTypes.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -1892,11 +2102,12 @@ function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
         <FormField label="Mobile">
           <Input name="mobile" defaultValue={user?.mobile || ""} />
         </FormField>
-        <FormField label="Branch">
+        <Field label="Branch Access">
           <Select
             name="branchId"
             value={selectedBranch}
             onChange={(event: any) => setSelectedBranch(event.target.value)}
+            disabled={hasTenantAdminAccess}
           >
             <option value="">All branches</option>
             {branches.map((branch: any) => (
@@ -1905,7 +2116,12 @@ function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
               </option>
             ))}
           </Select>
-        </FormField>
+          {hasTenantAdminAccess && (
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Tenant Admin access covers every branch in this tenant.
+            </p>
+          )}
+        </Field>
         {!user && (
           <FormField label="Temporary Password">
             <Input
@@ -1938,9 +2154,11 @@ function UserForm({ title, user, roles, branches, busy, onSubmit, back }: any) {
             title="Role Access"
             name="roleKeys"
             rows={roleOptions}
-            selected={user?.roles || []}
+            selected={selectedRoleKeys}
             valueKey="key"
             labelKey="name"
+            onRowOpen={onRoleOpen}
+            onSelectionChange={setSelectedRoleKeys}
           />
         </div>
         <Actions
@@ -1965,18 +2183,24 @@ function DepartmentForm({
     <Card>
       <Header
         title={title}
-        subtitle={department?.code || "Departments belong to this tenant only."}
+        subtitle={department?.code || "Medical departments are used for doctors, schedules, appointments, and patient routing."}
         back={back}
       />
-      <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <FormField label="Name">
-          <Input
+      <form
+        onSubmit={onSubmit}
+        autoComplete="off"
+        className="mt-4 grid gap-3 md:grid-cols-2"
+      >
+        <Field label="Name">
+          <SuggestionInput
             name="name"
             defaultValue={department?.name || ""}
+            placeholder="General Medicine"
+            suggestions={basicMedicalDepartmentSuggestions}
             required
             disabled={isLocked(department)}
           />
-        </FormField>
+        </Field>
         <FormField label="Branch">
           <Select
             name="branchId"
@@ -2016,7 +2240,7 @@ function DepartmentForm({
           busy={busy}
           back={back}
           disabled={isLocked(department)}
-          label={department ? "Save Department" : "Create Department"}
+          label={department ? "Save Medical Department" : "Create Medical Department"}
         />
       </form>
     </Card>
@@ -2066,13 +2290,20 @@ function BranchForm({ title, branch, branchCount, busy, onSubmit, back }: any) {
             disabled={isLocked(branch)}
           />
         </FormField>
-        <FormField label="State">
+        <Field label="Area">
+          <Input
+            name="area"
+            defaultValue={branch?.area || ""}
+            disabled={isLocked(branch)}
+          />
+        </Field>
+        <Field label="State">
           <Input
             name="state"
             defaultValue={branch?.state || ""}
             disabled={isLocked(branch)}
           />
-        </FormField>
+        </Field>
         {branch && (
           <FormField label="Status">
             <Select
@@ -2946,6 +3177,8 @@ function SettingsPanel(props: any) {
     setNumberingRules,
     invoiceLogoUrl,
     setInvoiceLogoUrl,
+    tenantLogoUrl,
+    uploadInvoiceLogo,
     requeueAfter,
     setRequeueAfter,
     noShowAfter,
@@ -2974,7 +3207,11 @@ function SettingsPanel(props: any) {
     reportBusy,
     saveReportSettings,
     sendMonthlyReportNow,
+    resendMonthlyReport,
+    downloadMonthlyReport,
   } = props;
+  const [invoiceLogoFile, setInvoiceLogoFile] = useState<File | null>(null);
+  const effectiveInvoiceLogoUrl = invoiceLogoUrl || tenantLogoUrl || "";
   const toggleReportFilter = (key: string) => (event: any) =>
     setReportFilters({ ...reportFilters, [key]: event.target.checked });
   const setRule = (key: string, value: any) =>
@@ -3017,20 +3254,78 @@ function SettingsPanel(props: any) {
               }
             />
           </FormField>
-          <FormField label="Invoice Logo URL">
-            <Input
-              value={invoiceLogoUrl}
-              onChange={(e: any) => setInvoiceLogoUrl(e.target.value)}
-              placeholder="/uploads/logo.jpg"
-            />
-          </FormField>
-          <FormField label="Requeue After">
+          <div className="md:col-span-2 xl:col-span-4">
+            <Field label="Invoice Logo">
+              <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 lg:grid-cols-[160px_minmax(0,1fr)]">
+                <div className="grid h-32 place-items-center overflow-hidden rounded-2xl border border-slate-200 bg-white p-3">
+                  {effectiveInvoiceLogoUrl ? (
+                    <img
+                      src={assetUrl(effectiveInvoiceLogoUrl)}
+                      alt="Invoice logo"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-center text-xs font-semibold text-slate-400">
+                      No logo selected
+                    </span>
+                  )}
+                </div>
+                <div className="grid content-start gap-3">
+                  <Input
+                    value={invoiceLogoUrl}
+                    onChange={(e: any) => setInvoiceLogoUrl(e.target.value)}
+                    placeholder={tenantLogoUrl || "/uploads/logo.jpg"}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {tenantLogoUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setInvoiceLogoUrl(tenantLogoUrl)}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50"
+                      >
+                        Use Tenant Logo
+                      </button>
+                    )}
+                    <label className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50">
+                      Choose Logo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(event: any) =>
+                          setInvoiceLogoFile(event.target.files?.[0] || null)
+                        }
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!invoiceLogoFile) return;
+                        await uploadInvoiceLogo(invoiceLogoFile);
+                        setInvoiceLogoFile(null);
+                      }}
+                      disabled={!invoiceLogoFile || busy}
+                      className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                    >
+                      {busy ? "Uploading..." : "Upload Logo"}
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {invoiceLogoFile
+                      ? invoiceLogoFile.name
+                      : "Shown on invoice print and PDF output."}
+                  </p>
+                </div>
+              </div>
+            </Field>
+          </div>
+          <Field label="Requeue After">
             <Input
               type="number"
               value={requeueAfter}
               onChange={(e: any) => setRequeueAfter(Number(e.target.value))}
             />
-          </FormField>
+          </Field>
           <FormField label="No-show Calls">
             <Input
               type="number"
@@ -3061,18 +3356,22 @@ function SettingsPanel(props: any) {
               disabled={!slotIntervalsEnabled}
             />
           </FormField>
-          <FormField label="Payment Methods">
-            <Input
-              value={payments}
-              onChange={(e: any) => setPayments(e.target.value)}
-            />
-          </FormField>
-          <FormField label="Communication">
+          <div className="md:col-span-2 xl:col-span-4">
+            <Field label="Payment Methods">
+              <MultiCheckSelect
+                options={paymentMethodOptions}
+                selected={listValue(payments)}
+                onChange={(values: string[]) => setPayments(values.join(","))}
+                allLabel="All payment methods"
+              />
+            </Field>
+          </div>
+          <Field label="Communication">
             <Input
               value={providers}
               onChange={(e: any) => setProviders(e.target.value)}
             />
-          </FormField>
+          </Field>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           {Object.entries(
@@ -3114,7 +3413,7 @@ function SettingsPanel(props: any) {
           <div>
             <h3 className="text-lg font-bold">Monthly Email Reports</h3>
             <p className="text-sm text-slate-500">
-              Send last month revenue, doctor settlement, department revenue,
+              Send last month revenue, doctor settlement, medical department revenue,
               and paid invoice profit as an Excel-compatible spreadsheet through
               the Redis report worker.
             </p>
@@ -3163,7 +3462,7 @@ function SettingsPanel(props: any) {
           {[
             ["overall", "Overall summary"],
             ["doctor", "Doctor revenue"],
-            ["department", "Department revenue"],
+            ["department", "Medical department revenue"],
             ["invoice", "Paid invoice details"],
           ].map(([key, label]) => (
             <label
@@ -3197,7 +3496,7 @@ function SettingsPanel(props: any) {
           </button>
         </div>
         <div className="mt-5 overflow-auto rounded-2xl border border-slate-200">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Job</th>
@@ -3205,12 +3504,13 @@ function SettingsPanel(props: any) {
                 <th>Period</th>
                 <th>Recipients</th>
                 <th>Result</th>
+                <th className="pr-4">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {reportJobs.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-4 text-slate-500">
+                  <td colSpan={6} className="px-4 py-4 text-slate-500">
                     No monthly report jobs yet.
                   </td>
                 </tr>
@@ -3244,6 +3544,22 @@ function SettingsPanel(props: any) {
                   <td>{(job.recipients || []).join(", ")}</td>
                   <td className="pr-4 text-slate-500">
                     {job.failure_reason || job.attachment_filename || "-"}
+                  </td>
+                  <td className="pr-4">
+                    <ActionGroup className="justify-start">
+                      <ActionButton
+                        onClick={() => resendMonthlyReport(job)}
+                        disabled={reportBusy === `resend-${job.id}`}
+                      >
+                        {reportBusy === `resend-${job.id}` ? "Sending..." : "Resend"}
+                      </ActionButton>
+                      <ActionButton
+                        onClick={() => downloadMonthlyReport(job)}
+                        disabled={reportBusy === `download-${job.id}`}
+                      >
+                        {reportBusy === `download-${job.id}` ? "Downloading..." : "Download"}
+                      </ActionButton>
+                    </ActionGroup>
                   </td>
                 </tr>
               ))}
@@ -3309,7 +3625,7 @@ function PermissionCheckboxes({ permissions, selected, disabled }: any) {
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
               <div>
                 <h5 className="font-bold">
-                  {title(module.replaceAll("_", " "))}
+                  {permissionModuleTitle(module)}
                 </h5>
                 <p className="text-xs text-slate-500">
                   {grouped[module].length} permissions
@@ -3381,21 +3697,48 @@ function CheckboxList({
   selected,
   valueKey,
   labelKey,
+  onRowOpen,
+  onSelectionChange,
 }: any) {
   return (
     <div>
       <p className="mb-2 text-xs font-bold uppercase text-slate-500">{title}</p>
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {rows.map((row: any) => (
-          <label
+        {rows.map((row: any) => {
+          const value = row[valueKey];
+          const checked = (selected || []).includes(value);
+          return (
+          <div
             key={row.id}
-            className="flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-sm"
+            role={onRowOpen ? "button" : undefined}
+            tabIndex={onRowOpen ? 0 : undefined}
+            onClick={() => onRowOpen?.(row)}
+            onKeyDown={(event: any) => {
+              if (!onRowOpen || (event.key !== "Enter" && event.key !== " "))
+                return;
+              event.preventDefault();
+              onRowOpen(row);
+            }}
+            className={`flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-sm ${
+              onRowOpen
+                ? "cursor-pointer transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                : ""
+            }`}
           >
             <input
               name={name}
               type="checkbox"
-              value={row[valueKey]}
-              defaultChecked={selected.includes(row[valueKey])}
+              value={value}
+              checked={onSelectionChange ? checked : undefined}
+              defaultChecked={onSelectionChange ? undefined : checked}
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event: any) => {
+                onSelectionChange?.(
+                  event.target.checked
+                    ? Array.from(new Set([...(selected || []), value]))
+                    : (selected || []).filter((item: any) => item !== value),
+                );
+              }}
               className="mt-1 h-4 w-4"
             />
             <span>
@@ -3411,14 +3754,15 @@ function CheckboxList({
                 </span>
               )}
             </span>
-          </label>
-        ))}
+          </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
+function UserRow({ user, branches, onEdit, onStatus, onPassword, onDelete }: any) {
   const branch = branches.find((row: any) => row.id === user.branch_id);
   const typeLabel =
     userTypes.find(([value]) => value === user.user_type)?.[1] ||
@@ -3442,6 +3786,7 @@ function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
         row={user}
         onEdit={onEdit}
         onStatus={onStatus}
+        onPassword={onPassword}
         onDelete={onDelete}
       />
     </ClickableRow>
@@ -3526,7 +3871,7 @@ function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
       </div>
       <span>{branch.code}</span>
       <span>
-        {[branch.city, branch.state].filter(Boolean).join(", ") || "-"}
+        {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") || "-"}
       </span>
       <Badge tone={branch.is_active ? "green" : "red"}>
         {branch.is_active ? "Active" : "Inactive"}
@@ -3648,7 +3993,7 @@ function DiscountOfferRow({
     </ClickableRow>
   );
 }
-function RowActions({ row, locked, onEdit, onStatus, onDelete }: any) {
+function RowActions({ row, locked, onEdit, onStatus, onPassword, onDelete }: any) {
   const stop = (handler: any) => (event: any) => {
     event.stopPropagation();
     handler();
@@ -3662,6 +4007,9 @@ function RowActions({ row, locked, onEdit, onStatus, onDelete }: any) {
         <ActionButton onClick={stop(onStatus)}>
           {row.is_active ? "Inactive" : "Active"}
         </ActionButton>
+      )}
+      {onPassword && !locked && (
+        <ActionButton onClick={stop(onPassword)}>Password</ActionButton>
       )}
       {!locked && (
         <ActionButton tone="danger" onClick={stop(onDelete)}>
@@ -3743,6 +4091,47 @@ function ConfirmModal({ action, busy, onCancel, onConfirm }: any) {
             Cancel
           </button>
         </div>
+      </Card>
+    </div>
+  );
+}
+function PasswordResetModal({ user, busy, onSubmit, onCancel }: any) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+      <Card className="w-full max-w-md">
+        <h3 className="text-lg font-bold">Reset Password</h3>
+        <p className="mt-1 text-sm text-slate-500">
+          {user.name} · {user.email}
+        </p>
+        <form onSubmit={onSubmit} className="mt-4 grid gap-3">
+          <Field label="New Password">
+            <Input name="newPassword" type="password" minLength={8} required />
+          </Field>
+          <Field label="Confirm Password">
+            <Input
+              name="confirmPassword"
+              type="password"
+              minLength={8}
+              required
+            />
+          </Field>
+          <Field label="Must Change On Login">
+            <Select name="mustChangePassword" defaultValue="true">
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </Select>
+          </Field>
+          <div className="flex flex-wrap gap-2">
+            <Button disabled={busy}>{busy ? "Saving..." : "Reset Password"}</Button>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       </Card>
     </div>
   );
@@ -3955,5 +4344,88 @@ function filterRolesForBranch(
   }
   return Array.from(byName.values()).sort((a: any, b: any) =>
     String(a.name).localeCompare(String(b.name)),
+  );
+}
+
+function roleKeyFromName(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
+
+function permissionModuleTitle(module: string) {
+  if (module === "departments") return "Medical Departments";
+  return title(module.replaceAll("_", " "));
+}
+
+function assetUrl(value: string) {
+  if (!value) return "";
+  return value.startsWith("/uploads/") ? `${UPLOADS_BASE}${value}` : value;
+}
+
+function listValue(value: string) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function MultiCheckSelect({ options, selected, onChange, allLabel }: any) {
+  const selectedSet = new Set(selected || []);
+  const allSelected = options.every((option: any) => selectedSet.has(option.value));
+  const summary = allSelected
+    ? allLabel
+    : options
+        .filter((option: any) => selectedSet.has(option.value))
+        .map((option: any) => option.label)
+        .join(", ") || "Select options";
+  function toggle(value: string, checked: boolean) {
+    if (value === "__all") {
+      onChange(checked ? options.map((option: any) => option.value) : []);
+      return;
+    }
+    const next = new Set(selectedSet);
+    if (checked) next.add(value);
+    else next.delete(value);
+    onChange(Array.from(next));
+  }
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+      <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+        <p className="truncate text-sm font-bold text-slate-800">{summary}</p>
+        <label className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={(event: any) => toggle("__all", event.target.checked)}
+            className="h-4 w-4"
+          />
+          {allLabel}
+        </label>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {options.map((option: any) => (
+          <label
+            key={option.value}
+            className={`flex min-h-[48px] cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 text-sm font-semibold transition ${
+              selectedSet.has(option.value)
+                ? "border-blue-200 bg-blue-50 text-slate-900"
+                : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <input
+              type="checkbox"
+              checked={selectedSet.has(option.value)}
+              onChange={(event: any) => toggle(option.value, event.target.checked)}
+              className="h-4 w-4"
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { ActionButton, ActionGroup, Badge, Button, Card } from "@/components/ui";
+import {
+  ActionButton,
+  ActionGroup,
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+} from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import {
   NumberField,
@@ -45,9 +54,9 @@ export function Doctors({ apiSession, clinic }: any) {
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
-    const tenantRows = await apiFetch("/tenants", apiSession);
+    const tenantRows = activeTenantOptions(await apiFetch("/tenants", apiSession));
     setTenants(tenantRows);
-    if (!tenantId)
+    if (!tenantId || !tenantRows.some((tenant: any) => tenant.id === tenantId))
       setTenantId(
         tenantRows.find((tenant: any) => !tenant.is_primary)?.id ||
           tenantRows[0]?.id ||
@@ -183,6 +192,7 @@ export function Doctors({ apiSession, clinic }: any) {
         {
           method: "PATCH",
           body: JSON.stringify({
+            user_id: data.userId || null,
             full_name: data.fullName,
             practitioner_type: data.practitionerType || "doctor",
             primary_specialty: data.primarySpecialty || null,
@@ -190,8 +200,8 @@ export function Doctors({ apiSession, clinic }: any) {
             mobile: data.mobile || null,
             email: data.email || null,
             status: data.status || "active",
-            branch_ids: data.branchIds,
-            department_ids: data.departmentIds,
+            branch_ids: data.branchIds || [],
+            department_ids: data.departmentIds || [],
             actor_user_id: apiSession.user?.id || null,
           }),
         },
@@ -283,6 +293,7 @@ export function Doctors({ apiSession, clinic }: any) {
         branches={branches}
         departments={departments}
         users={users}
+        doctors={rows}
         feeRules={feeRules}
         busy={busy}
         onSubmit={createDoctor}
@@ -297,6 +308,7 @@ export function Doctors({ apiSession, clinic }: any) {
         branches={branches}
         departments={departments}
         users={users}
+        doctors={rows}
         feeRules={feeRules}
         busy={busy}
         onSubmit={updateDoctor}
@@ -341,7 +353,7 @@ export function Doctors({ apiSession, clinic }: any) {
           <h3 className="text-lg font-bold">Doctor Management</h3>
           <p className="text-sm text-slate-500">
             Create, update, deactivate, and map doctors to tenants, branches,
-            and departments.
+            and medical departments.
           </p>
         </div>
         <button
@@ -399,7 +411,7 @@ export function Doctors({ apiSession, clinic }: any) {
             <span>Doctor</span>
             <span>Type</span>
             <span>Branches</span>
-            <span>Departments</span>
+            <span>Medical Departments</span>
             <span>Contact</span>
             <span>Fee</span>
             <span>Status</span>
@@ -450,6 +462,17 @@ export function Doctors({ apiSession, clinic }: any) {
   );
 }
 
+function activeTenantOptions(tenants: any[]) {
+  const seen = new Set<string>();
+  return (tenants || []).filter((tenant: any) => {
+    if (tenant.status === "suspended") return false;
+    const key = String(tenant.name || tenant.id || "").trim().toLowerCase();
+    if (key && seen.has(key)) return false;
+    if (key) seen.add(key);
+    return true;
+  });
+}
+
 function activeDoctorFeeRule(feeRules: any[], doctor: any) {
   if (!doctor) return null;
   const branchIds = doctor.branch_ids || [];
@@ -483,19 +506,37 @@ function DoctorForm({
   branches,
   departments,
   users,
+  doctors,
   feeRules,
   busy,
   onSubmit,
   back,
 }: any) {
-  const activeFeeRule = activeDoctorFeeRule(feeRules, doctor);
+  const initialDepartmentIds = doctor?.department_ids || [];
+  const initialDepartmentName =
+    departments.find((department: any) => department.id === initialDepartmentIds[0])
+      ?.name || "";
+  const [practitionerType, setPractitionerType] = useState(
+    doctor?.practitioner_type || "doctor",
+  );
+  const [selectedUserId, setSelectedUserId] = useState(doctor?.user_id || "");
   const [fullName, setFullName] = useState(doctor?.full_name || "");
-  const [practitionerType, setPractitionerType] = useState(doctor?.practitioner_type || "doctor");
-  const [userId, setUserId] = useState(doctor?.user_id || "");
-  const [primarySpecialty, setPrimarySpecialty] = useState(doctor?.primary_specialty || "");
-  const [registrationNumber, setRegistrationNumber] = useState(doctor?.registration_number || "");
-  const [mobile, setMobile] = useState(doctor?.mobile || "");
   const [email, setEmail] = useState(doctor?.email || "");
+  const [mobile, setMobile] = useState(doctor?.mobile || "");
+  const [selectedBranches, setSelectedBranches] = useState<string[]>(
+    doctor?.branch_ids || [],
+  );
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>(
+    initialDepartmentIds,
+  );
+  const [primarySpecialty, setPrimarySpecialty] = useState(
+    doctor?.primary_specialty || initialDepartmentName,
+  );
+  const [specialtyTouched, setSpecialtyTouched] = useState(
+    Boolean(doctor?.primary_specialty),
+  );
+  const activeFeeRule = activeDoctorFeeRule(feeRules, doctor);
+  const [registrationNumber, setRegistrationNumber] = useState(doctor?.registration_number || "");
   const [status, setStatus] = useState(doctor?.status || "active");
   const [consultationFee, setConsultationFee] = useState(String(activeFeeRule?.fee_amount ?? ""));
   const [doctorSharePercentage, setDoctorSharePercentage] = useState(
@@ -506,39 +547,52 @@ function DoctorForm({
   );
 
   const isPhysiotherapist = practitionerType === "physiotherapist";
+  const linkedUserIds = new Set(
+    (doctors || [])
+      .filter((row: any) => row.id !== doctor?.id)
+      .map((row: any) => row.user_id)
+      .filter(Boolean),
+  );
   const doctorUsers = users.filter(
     (user: any) =>
-      ["doctor", "nurse", "lab", "staff"].includes(user.user_type) ||
-      user.roles?.includes("doctor"),
+      user.id === doctor?.user_id ||
+      (user.is_active !== false &&
+        user.user_type === "doctor" &&
+        !linkedUserIds.has(user.id)),
   );
-
-  function handleSubmit(e: any) {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    onSubmit({
-      fullName,
-      practitionerType,
-      userId,
-      primarySpecialty,
-      registrationNumber,
-      mobile,
-      email,
-      status,
-      consultationFee,
-      doctorSharePercentage,
-      shareTaxWithDoctor,
-      branchIds: fd.getAll("branchIds").map(String),
-      departmentIds: fd.getAll("departmentIds").map(String),
-    });
+  function applyLoginUser(userId: string) {
+    setSelectedUserId(userId);
+    const user = users.find((row: any) => row.id === userId);
+    if (!user) return;
+    setPractitionerType("doctor");
+    setFullName(user.name || "");
+    setEmail(user.email || "");
+    setMobile(user.mobile || "");
+    if (user.branch_id) setSelectedBranches([user.branch_id]);
   }
-
+  function handleDepartmentsChange(next: string[]) {
+    const previousFirst =
+      departments.find((department: any) => department.id === selectedDepartments[0])
+        ?.name || "";
+    const nextFirst =
+      departments.find((department: any) => department.id === next[0])?.name || "";
+    setSelectedDepartments(next);
+    if (
+      !specialtyTouched ||
+      !primarySpecialty ||
+      primarySpecialty === previousFirst
+    ) {
+      setPrimarySpecialty(nextFirst);
+      setSpecialtyTouched(false);
+    }
+  }
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="text-lg font-bold">{title}</h3>
           <p className="text-sm text-slate-500">
-            {doctor?.id || "Map doctor to branch and department availability."}
+            {doctor?.id || "Map doctor to branch and medical department availability."}
           </p>
         </div>
         <button
@@ -549,53 +603,79 @@ function DoctorForm({
           Back to Doctors
         </button>
       </div>
-      <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <TextField
-          label="Full Name"
-          value={fullName}
-          onChange={setFullName}
-          placeholder="Dr. Priya Raman"
-          required
-        />
-        <SelectField
-          label="Doctor Type"
-          value={practitionerType}
-          onChange={setPractitionerType}
-          options={doctorTypes.map(([value, label]) => ({ value, label }))}
-        />
-        <SelectField
-          label="Linked Login User"
-          value={userId}
-          onChange={setUserId}
-          options={[
-            { value: "", label: "No login linked" },
-            ...doctorUsers.map((u: any) => ({ value: u.id, label: `${u.name} - ${u.email}` })),
-          ]}
-        />
-        <TextField
-          label="Primary Specialty"
-          value={primarySpecialty}
-          onChange={setPrimarySpecialty}
-          placeholder="General Medicine"
-        />
-        <TextField
-          label="Registration Number"
-          value={registrationNumber}
-          onChange={setRegistrationNumber}
-          placeholder="TNMC12345"
-        />
-        <TextField
-          label="Mobile"
-          type="tel"
-          value={mobile}
-          onChange={setMobile}
-        />
-        <TextField
-          label="Email"
-          type="email"
-          value={email}
-          onChange={setEmail}
-        />
+      <form
+        onSubmit={onSubmit}
+        className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+      >
+        <Field label="Full Name">
+          <Input
+            name="fullName"
+            value={fullName}
+            onChange={(event: any) => setFullName(event.target.value)}
+            required
+            placeholder="Dr. Priya Raman"
+          />
+        </Field>
+        <Field label="Doctor Type">
+          <Select
+            name="practitionerType"
+            value={practitionerType}
+            onChange={(event: any) => setPractitionerType(event.target.value)}
+          >
+            {doctorTypes.map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Linked Login User">
+          <Select
+            name="userId"
+            value={selectedUserId}
+            onChange={(event: any) => applyLoginUser(event.target.value)}
+          >
+            <option value="">No login linked</option>
+            {doctorUsers.map((user: any) => (
+              <option key={user.id} value={user.id}>
+                {user.name} - {user.email}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Primary Specialty">
+          <Input
+            name="primarySpecialty"
+            value={primarySpecialty}
+            onChange={(event: any) => {
+              setPrimarySpecialty(event.target.value);
+              setSpecialtyTouched(true);
+            }}
+            placeholder="General Medicine"
+          />
+        </Field>
+        <Field label="Registration Number">
+          <Input
+            name="registrationNumber"
+            defaultValue={doctor?.registration_number || ""}
+            placeholder="TNMC12345"
+          />
+        </Field>
+        <Field label="Mobile">
+          <Input
+            name="mobile"
+            value={mobile}
+            onChange={(event: any) => setMobile(event.target.value)}
+          />
+        </Field>
+        <Field label="Email">
+          <Input
+            name="email"
+            type="email"
+            value={email}
+            onChange={(event: any) => setEmail(event.target.value)}
+          />
+        </Field>
         {doctor && (
           <SelectField
             label="Status"
@@ -636,17 +716,19 @@ function DoctorForm({
             title="Branches"
             name="branchIds"
             rows={branches}
-            selected={doctor?.branch_ids || []}
+            selected={selectedBranches}
+            onChange={setSelectedBranches}
             empty="Create branches before mapping doctors."
           />
         </div>
         <div className="md:col-span-2 xl:col-span-3">
           <CheckboxGroup
-            title="Departments"
+            title="Medical Departments"
             name="departmentIds"
             rows={departments}
-            selected={doctor?.department_ids || []}
-            empty="Create departments before mapping doctors."
+            selected={selectedDepartments}
+            onChange={handleDepartmentsChange}
+            empty="Create medical departments before mapping doctors."
           />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
@@ -743,7 +825,15 @@ function formatPractitionerName(row: any) {
   return `${withoutSuffix}, PT`;
 }
 
-function CheckboxGroup({ title, name, rows, selected, empty }: any) {
+function CheckboxGroup({ title, name, rows, selected, onChange, empty }: any) {
+  const selectedSet = new Set(selected || []);
+  function toggle(rowId: string, checked: boolean) {
+    if (!onChange) return;
+    const next = new Set(selectedSet);
+    if (checked) next.add(rowId);
+    else next.delete(rowId);
+    onChange(Array.from(next));
+  }
   return (
     <div className="rounded-2xl border border-slate-200 p-4">
       <p className="text-xs font-bold uppercase text-slate-500">{title}</p>
@@ -758,7 +848,9 @@ function CheckboxGroup({ title, name, rows, selected, empty }: any) {
               type="checkbox"
               name={name}
               value={row.id}
-              defaultChecked={selected.includes(row.id)}
+              checked={onChange ? selectedSet.has(row.id) : undefined}
+              defaultChecked={onChange ? undefined : selectedSet.has(row.id)}
+              onChange={(event: any) => toggle(row.id, event.target.checked)}
             />
             <span>{row.name}</span>
           </label>

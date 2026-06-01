@@ -1,19 +1,19 @@
 'use client';
 
-import { useState } from 'react';
-import { HeartPulse, Lock, ShieldCheck } from 'lucide-react';
-import { Button, Card } from '@/components/ui';
-import { FormErrorBanner, PasswordField, TextField } from '@/components/FormElements';
+import {useState} from 'react';
+import {Eye,EyeOff,HeartPulse,Lock,ShieldCheck} from 'lucide-react';
+import {Button,Card,Field,Input} from '@/components/ui';
 
 type DemoUser = readonly [string, string, string];
 
 export function AuthScreen({ role, setRole, onLogin, demoUsers, loginPresets }: any) {
   const preset = loginPresets[role] || loginPresets.tenant_admin;
-  const [email, setEmail] = useState(preset.email);
-  const [password, setPassword] = useState(preset.password);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
+  const [email,setEmail] = useState(preset.email);
+  const [password,setPassword] = useState(preset.password);
+  const [error,setError] = useState('');
+  const [loading,setLoading] = useState(false);
+  const [showDemo,setShowDemo] = useState(false);
+  const [showPassword,setShowPassword] = useState(false);
 
   function fillDemo(id: string) {
     const next = loginPresets[id] || loginPresets.tenant_admin;
@@ -90,24 +90,41 @@ export function AuthScreen({ role, setRole, onLogin, demoUsers, loginPresets }: 
             </div>
 
             <form onSubmit={submit} className="grid gap-4">
-              <TextField
-                label="Username / Email"
-                type="email"
-                autoComplete="username"
-                value={email}
-                onChange={setEmail}
-                placeholder="name@clinic.com"
-                required
-              />
-              <PasswordField
-                label="Password"
-                autoComplete="current-password"
-                value={password}
-                onChange={setPassword}
-                placeholder="Enter password"
-                required
-              />
-              <FormErrorBanner error={error} />
+              <Field label="Username / Email">
+                <Input
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e:any)=>setEmail(e.target.value)}
+                  placeholder="name@clinic.com"
+                  required
+                />
+              </Field>
+              <Field label="Password">
+                <div className="relative">
+                  <Input
+                    autoComplete="current-password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e:any)=>setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    required
+                    className="pr-12"
+                  />
+                  <button
+                    type="button"
+                    onClick={()=>setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                  >
+                    {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
+                  </button>
+                </div>
+              </Field>
+              {error && (
+                <div className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">
+                  {error}
+                </div>
+              )}
               <Button disabled={loading} className="w-full">
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>

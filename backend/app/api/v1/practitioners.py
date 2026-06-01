@@ -80,6 +80,29 @@ def _get_practitioner(session: Session, tenant_id: str, practitioner_id: str) ->
     return practitioner
 
 
+def _validate_doctor_login_user(
+    session: Session,
+    tenant_id: str,
+    user_id: str | None,
+    practitioner_id: str | None = None,
+) -> None:
+    if not user_id:
+        return
+    user = session.get(User, user_id)
+    if not user or user.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid doctor login user")
+    if user.user_type != "doctor":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Linked login user must have Doctor user type")
+    existing = session.exec(
+        select(Practitioner).where(
+            Practitioner.tenant_id == tenant_id,
+            Practitioner.user_id == user_id,
+        )
+    ).first()
+    if existing and existing.id != practitioner_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Doctor login user is already linked to another doctor")
+
+
 def _get_schedule(session: Session, tenant_id: str, schedule_id: str) -> PractitionerSchedule:
     schedule = session.get(PractitionerSchedule, schedule_id)
     if not schedule or schedule.tenant_id != tenant_id:
@@ -138,10 +161,7 @@ def create_practitioner(
     session: Session = Depends(get_session),
     _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
 ) -> PractitionerRead:
-    if payload.user_id:
-        user = session.get(User, payload.user_id)
-        if not user or user.tenant_id != tenant_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user")
+    _validate_doctor_login_user(session, tenant_id, payload.user_id)
     _validate_links(session, tenant_id, payload.branch_ids, payload.department_ids)
     branch_id = payload.branch_ids[0] if payload.branch_ids else None
     practitioner = Practitioner.model_validate(
@@ -320,6 +340,8 @@ def update_practitioner(
     _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_CREATE)),
 ) -> PractitionerRead:
     practitioner = _get_practitioner(session, tenant_id, practitioner_id)
+    if "user_id" in payload.model_fields_set:
+        _validate_doctor_login_user(session, tenant_id, payload.user_id, practitioner_id)
     branch_ids = payload.branch_ids
     department_ids = payload.department_ids
     _validate_links(session, tenant_id, branch_ids or [], department_ids or [])

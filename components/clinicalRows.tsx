@@ -56,30 +56,55 @@ export function SearchPicker({
   placeholder,
   getSearchText,
   onEnterQuery,
+  onUseTyped,
+  inputValue,
+  onInputValueChange,
   disabled = false,
 }: any) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const selected = options.find((row: any) => row.value === value);
-  const search = query.trim().toLowerCase();
+  const visibleQuery = inputValue !== undefined ? inputValue : query;
+  const search = String(visibleQuery || "").trim().toLowerCase();
   const rows = options.filter((row: any) => {
     if (!search) return true;
     const text = getSearchText ? getSearchText(row.item) : row.label;
     return String(text || row.label).toLowerCase().includes(search);
   });
+  const exact = search
+    ? rows.find((row: any) => row.label.toLowerCase() === search)
+    : undefined;
+  const canUseTyped = Boolean((onUseTyped || onEnterQuery) && search && !exact);
+
+  function submitTyped() {
+    if (disabled) return;
+    const typed = String(visibleQuery || "").trim();
+    if (!typed) return;
+    if (exact) {
+      onChange(exact.value, exact.item);
+      onInputValueChange?.(exact.label);
+    } else if (onUseTyped) {
+      onUseTyped(typed);
+    } else {
+      onEnterQuery?.(typed, selected);
+    }
+    if (inputValue === undefined) setQuery("");
+    setOpen(false);
+  }
 
   return (
     <div className="relative">
       <Input
         disabled={disabled}
-        value={open ? query : selected?.label || ""}
+        value={open ? visibleQuery : selected?.label || visibleQuery || ""}
         onFocus={() => {
           if (disabled) return;
           setOpen(true);
-          setQuery("");
+          if (inputValue === undefined) setQuery("");
         }}
         onChange={(event: any) => {
-          setQuery(event.target.value);
+          if (inputValue === undefined) setQuery(event.target.value);
+          onInputValueChange?.(event.target.value);
           setOpen(true);
         }}
         onKeyDown={(event: any) => {
@@ -94,26 +119,32 @@ export function SearchPicker({
             return;
           }
           event.preventDefault();
-          if (!onEnterQuery || disabled) return;
-          const typed = query.trim();
-          const exact = typed
-            ? rows.find(
-                (row: any) => row.label.toLowerCase() === typed.toLowerCase(),
-              )
-            : undefined;
-          onEnterQuery(typed || selected?.label || "", exact || selected);
-          setQuery("");
-          setOpen(false);
+          if (String(visibleQuery || "").trim()) {
+            submitTyped();
+            return;
+          }
+          if (onEnterQuery && selected?.label) {
+            onEnterQuery(selected.label, selected);
+            setOpen(false);
+          }
         }}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         placeholder={placeholder}
       />
       {open && !disabled && (
         <div className="absolute z-40 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-xl">
-          {rows.length === 0 && (
-            <div className="px-3 py-3 text-sm text-slate-500">
-              No matching records.
-            </div>
+          {canUseTyped && (
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={submitTyped}
+              className="mb-1 w-full rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-slate-50"
+            >
+              Use “{String(visibleQuery || "").trim()}”
+            </button>
+          )}
+          {rows.length === 0 && !canUseTyped && (
+            <div className="px-3 py-3 text-sm text-slate-500">No matching records.</div>
           )}
           {rows.map((row: any) => (
             <button
@@ -122,7 +153,8 @@ export function SearchPicker({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
                 onChange(row.value, row.item);
-                setQuery("");
+                onInputValueChange?.(row.label);
+                if (inputValue === undefined) setQuery("");
                 setOpen(false);
               }}
               className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50 ${
@@ -150,6 +182,8 @@ export function TagEntryBox({
   placeholder,
   disabled = false,
   submitOnComma = true,
+  hideInput = false,
+  emptyText = "No rows added yet.",
 }: any) {
   function submitTag() {
     const text = String(value || "").trim();
@@ -177,7 +211,10 @@ export function TagEntryBox({
           )}
         </div>
       ))}
-      {!disabled && (
+      {hideInput && tags.length === 0 && (
+        <span className="px-1 py-2 text-sm text-slate-400">{emptyText}</span>
+      )}
+      {!disabled && !hideInput && (
         <input
           value={value}
           onChange={(event: any) => onChange(event.target.value)}

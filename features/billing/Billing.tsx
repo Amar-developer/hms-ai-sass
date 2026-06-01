@@ -1,9 +1,10 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Button,Card} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Button,Card,Input,Select} from '@/components/ui';
+import {DateField,SelectField,TextField} from '@/components/FormElements';
 import {apiBlob,apiFetch} from '@/lib/api';
-import {DateField,NumberField,SelectField,TextField} from '@/components/FormElements';
+import {paymentMethodOptions} from '@/lib/options';
 
 const pageSize=10;
 
@@ -117,6 +118,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
   const [message,setMessage]=useState('');
   const [amounts,setAmounts]=useState<Record<string,string>>({});
   const [methods,setMethods]=useState<Record<string,string>>({});
+  const [enabledPaymentMethods,setEnabledPaymentMethods]=useState<string[]>(paymentMethodOptions.map((option)=>option.value));
   const [references,setReferences]=useState<Record<string,string>>({});
   const [dueReport,setDueReport]=useState<any>(null);
   const [revenueReport,setRevenueReport]=useState<any>(null);
@@ -133,6 +135,24 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
   const [page,setPage]=useState(1);
 
   const patientMap=useMemo(()=>new Map(patients.map((p:any)=>[p.id,p])),[patients]);
+  useEffect(()=>{
+    let alive=true;
+    apiFetch('/settings/resolve?module=payment&key=payment.methods_enabled',apiSession)
+      .then((row:any)=>{
+        const values=Array.isArray(row?.value)?row.value:[];
+        const allowed=new Set<string>(paymentMethodOptions.map((option)=>option.value));
+        const filtered=values.filter((value:string)=>allowed.has(value));
+        if(alive&&filtered.length)setEnabledPaymentMethods(filtered);
+      })
+      .catch(()=>{});
+    return ()=>{alive=false};
+  },[apiSession]);
+  const invoicePaymentOptions=useMemo(()=>{
+    const selected=new Set(enabledPaymentMethods);
+    const rows=paymentMethodOptions.filter((option)=>selected.has(option.value));
+    return rows.length?rows:paymentMethodOptions;
+  },[enabledPaymentMethods]);
+  const defaultPaymentMethod=invoicePaymentOptions[0]?.value||'cash';
   const invoices=useMemo(
     ()=>
       [...(liveInvoices||[])].sort(
@@ -277,7 +297,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       await apiFetch(`/billing/invoices/${invoice.id}/payments`,apiSession,{
         method:'POST',
         body:JSON.stringify({
-          method:methods[invoice.id]||'cash',
+          method:methods[invoice.id]||defaultPaymentMethod,
           amount,
           reference_number:references[invoice.id]||null,
           collected_by_user_id:apiSession.user?.id,
@@ -368,6 +388,8 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         setAmounts={setAmounts}
         references={references}
         setReferences={setReferences}
+        invoicePaymentOptions={invoicePaymentOptions}
+        defaultPaymentMethod={defaultPaymentMethod}
         busy={busy}
         collectPayment={async(invoice:any)=>{
           await collectPayment(invoice);
@@ -539,6 +561,8 @@ function InvoiceDetailPage({
   setAmounts,
   references,
   setReferences,
+  invoicePaymentOptions,
+  defaultPaymentMethod,
   busy,
   collectPayment,
   refreshConsultationInvoice,
@@ -677,27 +701,12 @@ function InvoiceDetailPage({
                   {numberValue(invoice.balance_amount)>0?(
                     <div className="grid gap-2">
                       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                        <SelectField
-                          label="Payment Method"
-                          value={methods[invoice.id]||'cash'}
-                          onChange={(v)=>setMethods({...methods,[invoice.id]:v})}
-                          options={[
-                            {value:'cash',label:'Cash'},
-                            {value:'upi',label:'UPI'},
-                            {value:'gpay',label:'GPay'},
-                            {value:'paytm',label:'Paytm'},
-                            {value:'credit_card',label:'Credit Card'},
-                            {value:'debit_card',label:'Debit Card'},
-                            {value:'bank_transfer',label:'Bank'},
-                          ]}
-                        />
-                        <NumberField
-                          label="Amount"
-                          value={amounts[invoice.id]??invoice.balance_amount}
-                          onChange={(v)=>setAmounts({...amounts,[invoice.id]:v})}
-                          min={1}
-                          max={invoice.balance_amount}
-                        />
+                        <Select value={methods[invoice.id]||defaultPaymentMethod} onChange={(e:any)=>setMethods({...methods,[invoice.id]:e.target.value})}>
+                          {invoicePaymentOptions.map((option)=>(
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </Select>
+                        <Input className="text-right tabular-nums" type="number" min="1" max={invoice.balance_amount} value={amounts[invoice.id]??invoice.balance_amount} onChange={(e:any)=>setAmounts({...amounts,[invoice.id]:e.target.value})}/>
                       </div>
                       <TextField
                         label="Reference Number"
