@@ -712,6 +712,7 @@ def create_doctor_fee_rule(
         require_any_permission(
             permissions.BILLING_MANAGE,
             permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_CREATE,
             permissions.PRACTITIONERS_EDIT,
         )
     ),

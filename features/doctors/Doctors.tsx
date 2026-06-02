@@ -167,7 +167,9 @@ export function Doctors({ apiSession, clinic }: any) {
           actor_user_id: apiSession.user?.id || null,
         }),
       });
-      await saveDoctorFeeRules(created.id, data);
+      await saveDoctorFeeRules(created.id, data).catch((err: any) => {
+        setMessage(err.message || "Doctor created, but fee rule could not be saved.");
+      });
       setRows((previous: any[]) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
@@ -207,7 +209,9 @@ export function Doctors({ apiSession, clinic }: any) {
           }),
         },
       );
-      await saveDoctorFeeRules(updated.id, data);
+      await saveDoctorFeeRules(updated.id, data).catch((err: any) => {
+        setMessage(err.message || "Doctor updated, but fee rule could not be saved.");
+      });
       setRows((previous: any[]) => [
         updated,
         ...previous.filter((row: any) => row.id !== updated.id),
@@ -601,7 +605,25 @@ function DoctorForm({
         </button>
       </div>
       <form
-        onSubmit={onSubmit}
+        onSubmit={(event: any) => {
+          event.preventDefault();
+          const fd = new FormData(event.currentTarget);
+          onSubmit({
+            userId: selectedUserId,
+            fullName,
+            practitionerType,
+            primarySpecialty,
+            registrationNumber: fd.get("registrationNumber") || "",
+            mobile,
+            email,
+            status,
+            branchIds: selectedBranches,
+            departmentIds: selectedDepartments,
+            consultationFee,
+            doctorSharePercentage,
+            shareTaxWithDoctor,
+          });
+        }}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
         <Field label="Full Name">
