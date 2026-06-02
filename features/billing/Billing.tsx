@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Button,Card,Input,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Button,Card,Input,Select,StatusToast} from '@/components/ui';
 import {DateField,SelectField,TextField} from '@/components/FormElements';
 import {apiBlob,apiFetch} from '@/lib/api';
 import {paymentMethodOptions} from '@/lib/options';
@@ -431,7 +431,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       <Card>
         <h3 className="text-lg font-bold">Pending Consultation Invoices</h3>
         <p className="text-sm text-slate-500">Reception can generate the consultation-fee invoice after the doctor signs the consultation. Lab, pharmacy, IP, and physiotherapy each have their own invoices created by those modules.</p>
-        {message&&<div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
+        <StatusToast message={message} onClose={()=>setMessage('')}/>
         <div className="mt-4 grid gap-3">
           {signedReady.length===0&&<div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">All signed consultations already have invoices.</div>}
           {signedReady.map((a:any)=>(

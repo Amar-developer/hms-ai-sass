@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Input, Select } from "@/components/ui";
+import { Badge, Button, Card, Input, Select, StatusToast } from "@/components/ui";
 import { FormField, NumberField } from "@/components/FormElements";
 import {
   UPLOADS_BASE,
@@ -357,16 +357,8 @@ export function Physiotherapy({
   return (
     <div className="space-y-6">
       <Header view={view} setView={setView} />
-      {message && (
-        <div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">
-          {message}
-        </div>
-      )}
-      {error && (
-        <div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">
-          {error}
-        </div>
-      )}
+      <StatusToast message={message} tone="success" onClose={() => setMessage("")} />
+      <StatusToast message={error} tone="error" onClose={() => setError("")} />
 
       {view === "op" && (
         <CaseForm

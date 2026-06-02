@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ActionButton, ActionGroup, Badge, Button, Card } from "@/components/ui";
+import { ActionButton, ActionGroup, Badge, Button, Card, StatusToast } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import { DateField, NumberField, SelectField, TextField } from "@/components/FormElements";
 import { humanizeOptionLabel } from "@/lib/options";
@@ -506,11 +506,7 @@ export function Items({ apiSession, branchId }: any) {
           </div>
           <Badge tone="blue">{filteredRows.length} items</Badge>
         </div>
-        {message && (
-          <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
-            {message}
-          </div>
-        )}
+        <StatusToast message={message} onClose={() => setMessage("")} />
         <form onSubmit={createItem} className="mt-5 grid gap-3 md:grid-cols-4">
           <SelectField
             label="Item Type"

@@ -1,24 +1,38 @@
 "use client";
 
 import {
+  Activity,
   ArrowRight,
   BarChart3,
   BedDouble,
+  Building2,
   CalendarDays,
   ClipboardList,
   Clock,
   Dumbbell,
+  FileText,
   FlaskConical,
   IndianRupee,
   PackageOpen,
+  Percent,
   Pill,
+  Receipt,
   ReceiptIndianRupee,
+  Settings,
   ShieldCheck,
   Stethoscope,
+  Tags,
+  Truck,
   UserCog,
   Users,
 } from "lucide-react";
 import { Badge, Card } from "@/components/ui";
+
+type ShortcutTarget = string | { id: string; section?: string };
+
+function shortcutTargetId(target: ShortcutTarget) {
+  return typeof target === "string" ? target : target.id;
+}
 
 const SHORTCUT_CATEGORIES = [
   {
@@ -38,7 +52,7 @@ const SHORTCUT_CATEGORIES = [
     headerColor: "text-emerald-700",
     iconColor: "text-emerald-500",
     modules: [
-      { id: "practitioners", label: "Doctors", icon: UserCog },
+      { id: "practitioners", label: "Doctors / Create", icon: UserCog },
       { id: "scheduling", label: "Scheduling", icon: ClipboardList },
       { id: "doctor", label: "Doctor Dashboard", icon: Stethoscope },
       { id: "consultation", label: "Consultation", icon: ClipboardList },
@@ -80,8 +94,23 @@ const SHORTCUT_CATEGORIES = [
     headerColor: "text-slate-700",
     iconColor: "text-slate-500",
     modules: [
-      { id: "reports", label: "Reports", icon: BarChart3 },
+      { id: "reports", label: "Reports Overview", icon: BarChart3 },
+      { id: "report-metrics", label: "Metrics Report", icon: Activity, target: { id: "reports", section: "metrix" } },
+      { id: "report-invoice", label: "Invoice Report", icon: Receipt, target: { id: "reports", section: "invoice" } },
+      { id: "report-lab", label: "Lab Report", icon: FlaskConical, target: { id: "reports", section: "lab" } },
+      { id: "report-appointments", label: "Appointments Report", icon: FileText, target: { id: "reports", section: "appointments" } },
+      { id: "report-pharmacy", label: "Pharmacy Report", icon: Users, target: { id: "reports", section: "pharmacy" } },
       { id: "admin", label: "Tenant Admin", icon: ShieldCheck },
+      { id: "admin-users", label: "Users / Create", icon: Users, target: { id: "admin", section: "users" } },
+      { id: "admin-roles", label: "Roles", icon: ShieldCheck, target: { id: "admin", section: "roles" } },
+      { id: "admin-departments", label: "Departments / Create", icon: ClipboardList, target: { id: "admin", section: "departments" } },
+      { id: "admin-branches", label: "Branches", icon: Building2, target: { id: "admin", section: "branches" } },
+      { id: "admin-suppliers", label: "Suppliers", icon: Truck, target: { id: "admin", section: "suppliers" } },
+      { id: "admin-tax", label: "Tax", icon: Percent, target: { id: "admin", section: "tax" } },
+      { id: "admin-offers", label: "Discounts & Offers", icon: Tags, target: { id: "admin", section: "offers" } },
+      { id: "admin-membership", label: "Patient Membership", icon: ShieldCheck, target: { id: "admin", section: "membership" } },
+      { id: "admin-files", label: "Files", icon: FileText, target: { id: "admin", section: "files" } },
+      { id: "admin-settings", label: "Tenant Settings", icon: Settings, target: { id: "admin", section: "settings" } },
     ],
   },
 ];
@@ -383,10 +412,10 @@ function Insight({ label, value }: any) {
   );
 }
 
-function QuickAccess({ enabled, setActive }: { enabled?: (id: string) => boolean; setActive?: (id: string) => void }) {
+function QuickAccess({ enabled, setActive }: { enabled?: (id: string) => boolean; setActive?: (target: ShortcutTarget) => void }) {
   const visibleCategories = SHORTCUT_CATEGORIES.map((cat) => ({
     ...cat,
-    modules: cat.modules.filter((mod) => !enabled || enabled(mod.id)),
+    modules: cat.modules.filter((mod) => !enabled || enabled(shortcutTargetId("target" in mod ? mod.target : mod.id))),
   })).filter((cat) => cat.modules.length > 0);
 
   if (visibleCategories.length === 0) return null;
@@ -407,11 +436,11 @@ function QuickAccess({ enabled, setActive }: { enabled?: (id: string) => boolean
               {cat.label}
             </p>
             <div className="grid gap-1">
-              {cat.modules.map(({ id, label, icon: Icon }) => (
+              {cat.modules.map(({ id, label, icon: Icon, ...mod }) => (
                 <button
                   key={id}
                   type="button"
-                  onClick={() => setActive?.(id)}
+                  onClick={() => setActive?.("target" in mod ? mod.target : id)}
                   className="flex items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-white/70 active:scale-[0.98]"
                 >
                   <Icon size={16} className={cat.iconColor} />

@@ -3,7 +3,7 @@
 import {useEffect, useMemo, useState} from 'react';
 import {CalendarPlus, Search, X} from 'lucide-react';
 
-import {Badge, Button, Card, Field, Input, Select} from '@/components/ui';
+import {Badge, Button, Card, Field, Input, Select, StatusToast} from '@/components/ui';
 import {apiFetch, type ApiSession} from '@/lib/api';
 import {DateField, SelectField, TextareaField, TextField} from '@/components/FormElements';
 import {generatePatientId, generateToken, searchPatients} from '@/lib/hmsLogic';
@@ -572,7 +572,7 @@ export function AppointmentCalendarBooking(props: Props) {
               Close
             </button>
           </div>
-          {message && <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
+          <StatusToast message={message} onClose={()=>setMessage('')}/>
         </Card>
 
         {bookingStep === 'search' && (

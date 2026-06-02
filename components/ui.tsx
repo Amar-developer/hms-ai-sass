@@ -1,3 +1,4 @@
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export function Card({
@@ -36,6 +37,109 @@ export function Badge({
     >
       {children}
     </span>
+  );
+}
+
+export type NoticeTone = "success" | "warning" | "delete" | "info" | "error";
+
+export function noticeTone(message: string): NoticeTone {
+  const text = String(message || "").toLowerCase();
+  if (!text) return "info";
+  if (
+    /denied|not allowed|unauthorized|forbidden|failed|could not|error|invalid|missing|required|does not|not found/.test(
+      text,
+    )
+  )
+    return "error";
+  if (/delete|deleted|deactivated|removed|suspended|cancelled|inactive/.test(text))
+    return "delete";
+  if (/already|choose|select|warning|queued|called|request/.test(text))
+    return "warning";
+  if (/created|updated|saved|linked|assigned|uploaded|generated|recorded|success|activated|changed|complete|completed/.test(text))
+    return "success";
+  return "info";
+}
+
+export function StatusToast({
+  message,
+  tone,
+  onClose,
+  duration = 3500,
+}: {
+  message?: string;
+  tone?: NoticeTone;
+  onClose?: () => void;
+  duration?: number;
+}) {
+  useEffect(() => {
+    if (!message || !onClose || duration <= 0) return undefined;
+    const timer = window.setTimeout(onClose, duration);
+    return () => window.clearTimeout(timer);
+  }, [duration, message, onClose]);
+
+  if (!message) return null;
+
+  const resolvedTone = tone || noticeTone(message);
+  const styles: Record<NoticeTone, { icon: any; iconClass: string; bar: string; label: string }> = {
+    success: {
+      icon: CheckCircle2,
+      iconClass: "fill-emerald-500 text-white",
+      bar: "bg-emerald-500",
+      label: "Success",
+    },
+    warning: {
+      icon: AlertTriangle,
+      iconClass: "fill-amber-400 text-white",
+      bar: "bg-amber-400",
+      label: "Warning",
+    },
+    delete: {
+      icon: XCircle,
+      iconClass: "fill-red-500 text-white",
+      bar: "bg-red-500",
+      label: "Deleted",
+    },
+    info: {
+      icon: Info,
+      iconClass: "fill-sky-500 text-white",
+      bar: "bg-sky-500",
+      label: "Info",
+    },
+    error: {
+      icon: XCircle,
+      iconClass: "fill-red-500 text-white",
+      bar: "bg-red-500",
+      label: "Error",
+    },
+  };
+  const current = styles[resolvedTone];
+  const Icon = current.icon;
+
+  return (
+    <div className="pointer-events-none fixed bottom-5 right-5 z-[80] w-[calc(100vw-2rem)] max-w-sm">
+      <div
+        role="status"
+        className="pointer-events-auto overflow-hidden rounded bg-white text-slate-800 shadow-xl ring-1 ring-slate-900/10"
+      >
+        <div className="flex min-h-[58px] items-center gap-3 px-4 py-3">
+          <Icon size={24} className={`shrink-0 rounded-full ${current.iconClass}`} />
+          <p className="min-w-0 flex-1 break-words text-sm">
+            <span className="font-semibold">{current.label}:</span> {message}
+          </p>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              aria-label="Close notification"
+            >
+              <X size={18} />
+            </button>
+          )}
+        </div>
+        <div className={`h-1 w-2/3 ${current.bar}`} />
+      </div>
+    </div>
   );
 }
 export function Field({

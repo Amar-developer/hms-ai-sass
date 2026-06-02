@@ -11,6 +11,7 @@ import {
   Field,
   Input,
   Select,
+  StatusToast,
 } from "@/components/ui";
 import { apiFetch } from "@/lib/api";
 import {
@@ -365,11 +366,7 @@ export function Doctors({ apiSession, clinic }: any) {
           Create Doctor
         </button>
       </div>
-      {message && (
-        <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
-          {message}
-        </div>
-      )}
+      <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
         {isSuperAdmin && (
           <SelectField

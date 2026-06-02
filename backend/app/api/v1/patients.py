@@ -140,12 +140,24 @@ def _duplicate_candidates(session: Session, tenant_id: str, payload: PatientCrea
     "",
     response_model=PatientRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission(permissions.PATIENTS_WRITE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.PATIENTS_WRITE,
+                permissions.PATIENTS_CREATE,
+            )
+        )
+    ],
 )
 def create_patient(
     payload: PatientCreate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.PATIENTS_WRITE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.PATIENTS_WRITE,
+            permissions.PATIENTS_CREATE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Patient:
     enforce_entitlement(session, tenant_id, "patients")

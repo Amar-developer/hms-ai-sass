@@ -159,7 +159,12 @@ def create_practitioner(
     payload: PractitionerCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE,
+            permissions.PRACTITIONERS_CREATE,
+        )
+    ),
 ) -> PractitionerRead:
     _validate_doctor_login_user(session, tenant_id, payload.user_id)
     _validate_links(session, tenant_id, payload.branch_ids, payload.department_ids)

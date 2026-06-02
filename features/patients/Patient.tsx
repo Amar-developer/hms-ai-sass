@@ -11,6 +11,7 @@ import {
   Field,
   Input,
   Select,
+  StatusToast,
 } from "@/components/ui";
 import { UPLOADS_BASE, apiFetch, apiUpload, type ApiSession } from "@/lib/api";
 import {
@@ -405,6 +406,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
         patientInvoices={patientInvoices}
         loading={busy}
         message={message}
+        onMessageClose={() => setMessage("")}
         onEnrollMembership={enrollMembership}
         onBack={() => open("list")}
         onEdit={() => open("edit", selected.id)}
@@ -458,11 +460,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
           Create Patient
         </button>
       </div>
-      {message && (
-        <div className="rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
-          {message}
-        </div>
-      )}
+      <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="rounded-3xl border border-slate-200 bg-slate-50/50 p-4">
         <div
           className={`grid gap-3 ${isSuperAdmin ? "lg:grid-cols-3 xl:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "lg:grid-cols-3 xl:grid-cols-[1.35fr_1.05fr_.9fr_.9fr_.85fr_.85fr_auto]"}`}
@@ -1033,6 +1031,7 @@ function PatientDetail({
   patientInvoices,
   loading,
   message,
+  onMessageClose,
   onEnrollMembership,
   onBack,
   onEdit,
@@ -1118,11 +1117,7 @@ function PatientDetail({
             <Button onClick={onEdit}>Edit Patient</Button>
           </div>
         </div>
-        {message && (
-          <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
-            {message}
-          </div>
-        )}
+        <StatusToast message={message} onClose={onMessageClose} />
         <div className="mt-4 grid gap-3 md:grid-cols-3">
           <Info k="Name" v={patient.full_name} />
           <Info k="Patient Number" v={patient.patient_number} />

@@ -171,8 +171,23 @@ export function AppShell(props: any) {
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < pageHistory.length - 1;
 
-  function navigatePage(id: string) {
-    if (!id || id === activePage) return;
+  function navigatePage(target: string | { id: string; section?: string }) {
+    const id = typeof target === "string" ? target : target.id;
+    const section = typeof target === "string" ? undefined : target.section;
+    if (!id) return;
+    if (id === "admin" && section) {
+      setTenantAdminSettingsOpen(true);
+      setTenantAdminSection(section);
+    }
+    if (id === "reports" && section) {
+      setReportsOpen(true);
+      setReportsSection(section);
+    }
+    if (id === "superadmin" && section) {
+      setSuperAdminSettingsOpen(true);
+      setSuperAdminSection(section);
+    }
+    if (id === activePage) return;
     setActive(id);
     setPageHistory((prev) => {
       const next = [...prev.slice(0, historyIndex + 1), id];

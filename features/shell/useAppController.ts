@@ -103,14 +103,14 @@ export function useAppController() {
       'platform.subscriptions.manage',
     ], null);
     const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows, scheduleRows, entitlements] = await Promise.all([
-      apiFetchIfAllowed<any[]>('/patients', session, 'patients.read', []),
-      apiFetchIfAllowed<any[]>('/appointments', session, ['appointments.manage', 'appointments.read'], []),
+      apiFetchIfAllowed<any[]>('/patients', session, ['patients.read', 'patients.create', 'patients.write'], []),
+      apiFetchIfAllowed<any[]>('/appointments', session, ['appointments.manage', 'appointments.read', 'appointments.create'], []),
       apiFetchIfAllowed<any[]>('/queue?include_completed=true', session, 'queue.manage', []),
       apiFetchIfAllowed<any[]>('/consultations', session, 'consultations.read', []),
       apiFetchIfAllowed<any[]>('/billing/invoices', session, 'billing.manage', []),
       apiFetchIfAllowed<any[]>('/ip/admissions', session, ['ip.manage', 'ip.read'], []),
-      apiFetchIfAllowed<any[]>('/practitioners', session, referenceReadPermissions, []),
-      apiFetchIfAllowed<any[]>('/practitioners/schedules?is_active=true', session, referenceReadPermissions, []),
+      apiFetchIfAllowed<any[]>('/practitioners', session, [...referenceReadPermissions, 'practitioners.create'], []),
+      apiFetchIfAllowed<any[]>('/practitioners/schedules?is_active=true', session, [...referenceReadPermissions, 'practitioners.create'], []),
       entitlementsPromise,
     ]);
 

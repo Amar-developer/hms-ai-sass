@@ -12,7 +12,7 @@ from app.core.access_control import (
     require_user_branch_access,
     scoped_branch_id,
 )
-from app.core.auth import require_permission, require_super_admin
+from app.core.auth import require_any_permission, require_super_admin
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
@@ -181,12 +181,24 @@ def _review_billing_defaults(
     "",
     response_model=AppointmentBookingRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission(permissions.APPOINTMENTS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.APPOINTMENTS_MANAGE,
+                permissions.APPOINTMENTS_CREATE,
+            )
+        )
+    ],
 )
 def book_appointment(
     payload: AppointmentCreate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.APPOINTMENTS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> AppointmentBookingRead:
     enforce_entitlement(session, tenant_id, "appointments")
@@ -337,13 +349,25 @@ def book_appointment(
     "/{appointment_id}/follow-up",
     response_model=AppointmentBookingRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission(permissions.APPOINTMENTS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.APPOINTMENTS_MANAGE,
+                permissions.APPOINTMENTS_CREATE,
+            )
+        )
+    ],
 )
 def book_follow_up_appointment(
     appointment_id: str,
     payload: FollowUpAppointmentCreate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.APPOINTMENTS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_CREATE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> AppointmentBookingRead:
     enforce_entitlement(session, tenant_id, "appointments")
@@ -394,7 +418,14 @@ def book_follow_up_appointment(
 @router.get(
     "",
     response_model=list[AppointmentRead],
-    dependencies=[Depends(require_permission(permissions.APPOINTMENTS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.APPOINTMENTS_MANAGE,
+                permissions.APPOINTMENTS_READ,
+            )
+        )
+    ],
 )
 def list_appointments(
     tenant_id: str = Depends(require_tenant_id),
@@ -405,7 +436,12 @@ def list_appointments(
     q: str | None = Query(default=None, max_length=120),
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
-    current_user: User = Depends(require_permission(permissions.APPOINTMENTS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_READ,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> list[Appointment]:
     enforce_entitlement(session, tenant_id, "appointments")
@@ -484,12 +520,24 @@ def list_platform_appointments(
 @router.get(
     "/{appointment_id}",
     response_model=AppointmentRead,
-    dependencies=[Depends(require_permission(permissions.APPOINTMENTS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.APPOINTMENTS_MANAGE,
+                permissions.APPOINTMENTS_READ,
+            )
+        )
+    ],
 )
 def get_appointment(
     appointment_id: str,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.APPOINTMENTS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_READ,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Appointment:
     enforce_entitlement(session, tenant_id, "appointments")

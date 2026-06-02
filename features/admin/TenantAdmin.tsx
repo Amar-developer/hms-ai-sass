@@ -23,6 +23,7 @@ import {
   Input,
   SearchableSelect,
   Select,
+  StatusToast,
   SuggestionInput,
 } from "@/components/ui";
 import { FormField } from "@/components/FormElements";
@@ -1425,22 +1426,19 @@ export function TenantAdmin({
           <Badge tone="green">Tenant scoped</Badge>
         </div>
       </Card>
-      {message && (
-        <div className="rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
-          {message}
-        </div>
-      )}
+      <StatusToast message={message} onClose={() => setMessage("")} />
       {section === "users" && view === "list" && (
         <ListCard
           title="Users"
           rows={users}
-          searchKeys={["name", "email", "mobile", "user_type", "id"]}
+          searchKeys={["name", "email", "mobile", "user_type", "roles", "id"]}
           createLabel="Create User"
           onCreate={() => setView("create")}
           columns={[
             "Name",
             "Email",
             "Type",
+            "Roles",
             "Branch",
             "Status",
             "Created",
@@ -1904,11 +1902,15 @@ function ListCard({
     setPage(1);
   }, [query, rows.length]);
   const gridClass =
-    columns.length === 7
+    columns.length === 8
+      ? "grid-cols-[1fr_1.15fr_.72fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
+      : columns.length === 7
       ? "grid-cols-[1.05fr_1.15fr_.75fr_1fr_.65fr_.7fr_1.45fr]"
       : columns.length === 6
         ? "grid-cols-[1.2fr_1.2fr_1fr_.7fr_.75fr_1.45fr]"
         : "grid-cols-[1.15fr_.75fr_1.2fr_.65fr_1.45fr]";
+  const tableMinWidth =
+    columns.length === 8 ? "min-w-[1380px]" : "min-w-[1040px]";
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
@@ -1938,7 +1940,7 @@ function ListCard({
         </FormField>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-        <div className="min-w-[1040px]">
+        <div className={tableMinWidth}>
           <div
             className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${gridClass}`}
           >
@@ -3767,16 +3769,18 @@ function UserRow({ user, branches, onEdit, onStatus, onPassword, onDelete }: any
   const typeLabel =
     userTypes.find(([value]) => value === user.user_type)?.[1] ||
     humanizeOptionLabel(user.user_type, "Staff");
+  const roleLabels = userRoleLabels(user);
   return (
     <ClickableRow
       onClick={onEdit}
-      className="xl:grid-cols-[1.05fr_1.15fr_.75fr_1fr_.65fr_.7fr_1.45fr]"
+      className="xl:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
     >
       <div>
         <b>{user.name}</b>
       </div>
       <span className="break-all">{user.email}</span>
       <span>{typeLabel}</span>
+      <RoleList labels={roleLabels} />
       <span>{branch?.name || "All branches"}</span>
       <Badge tone={user.is_active ? "green" : "red"}>
         {user.is_active ? "Active" : "Inactive"}
@@ -3790,6 +3794,36 @@ function UserRow({ user, branches, onEdit, onStatus, onPassword, onDelete }: any
         onDelete={onDelete}
       />
     </ClickableRow>
+  );
+}
+
+function userRoleLabels(user: any) {
+  const rawRoles = Array.isArray(user?.roles)
+    ? user.roles
+    : String(user?.roles || "")
+        .split(",");
+  const roles = rawRoles
+    .map((role: any) => String(role || "").trim())
+    .filter(Boolean);
+  const fallback = String(user?.user_type || "").trim();
+  const unique = Array.from(new Set(roles.length ? roles : fallback ? [fallback] : []));
+  return unique.map((role) => humanizeOptionLabel(role, "Staff"));
+}
+
+function RoleList({ labels }: { labels: string[] }) {
+  if (!labels.length) return <span className="text-slate-400">-</span>;
+  return (
+    <span className="flex min-w-0 flex-wrap gap-1">
+      {labels.map((label) => (
+        <span
+          key={label}
+          className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700"
+          title={labels.join(", ")}
+        >
+          {label}
+        </span>
+      ))}
+    </span>
   );
 }
 function RoleRow({ role, onEdit, onStatus, onDelete }: any) {

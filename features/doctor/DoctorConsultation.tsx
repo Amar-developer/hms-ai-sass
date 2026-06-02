@@ -9,7 +9,7 @@ import {
   UsersRound,
   Video,
 } from "lucide-react";
-import { Badge, Button, Card, Field, Input, Select } from "@/components/ui";
+import { Badge, Button, Card, Field, Input, Select, StatusToast } from "@/components/ui";
 import { FormField } from "@/components/FormElements";
 import {
   SearchPicker,
@@ -345,7 +345,8 @@ export function DoctorConsultation({
       selectedAppointment &&
       selectedAppointmentDoctorId &&
       selectedAppointmentDoctorAvailable &&
-      (!departmentId ||
+      (doctorScope?.practitionerId ||
+        !departmentId ||
         !selectedAppointmentDepartmentId ||
         selectedAppointmentDepartmentId === departmentId),
     );
@@ -358,7 +359,8 @@ export function DoctorConsultation({
     if (nextDoctorId !== doctorId) {
       const keepSelection = Boolean(
         selectedAppointment &&
-        (!departmentId ||
+        (doctorScope?.practitionerId ||
+          !departmentId ||
           !selectedAppointmentDepartmentId ||
           selectedAppointmentDepartmentId === departmentId) &&
         selectedAppointmentDoctorId === nextDoctorId,
@@ -388,12 +390,12 @@ export function DoctorConsultation({
   );
   const doctorQueue = sortQueue(
     scopedAppointments.filter((a: any) => {
-      if (departmentId && a.departmentId !== departmentId) return false;
       if (doctorScope?.practitionerId)
         return (
           a.doctorId === doctorScope.practitionerId ||
           a.practitioner_id === doctorScope.practitionerId
         );
+      if (departmentId && a.departmentId !== departmentId) return false;
       if (doctor.id)
         return a.doctorId === doctor.id || a.practitioner_id === doctor.id;
       return true;
@@ -1250,11 +1252,7 @@ export function DoctorConsultation({
               <Badge tone="blue">{branch.name}</Badge>
             </div>
           </div>
-          {message && (
-            <div className="mt-3 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
-              {message}
-            </div>
-          )}
+          <StatusToast message={message} onClose={() => setMessage("")} />
           <div className="scrollbar-hidden mt-4 overflow-x-auto">
             <div className="flex gap-3 pb-1">
               {doctorQueue
@@ -1480,11 +1478,7 @@ export function DoctorConsultation({
             </div>
             <Badge tone="blue">{branch.name}</Badge>
           </div>
-          {message && (
-            <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">
-              {message}
-            </div>
-          )}
+          <StatusToast message={message} onClose={() => setMessage("")} />
           <div className="mt-4 grid gap-3">
             <FormField label="Doctor">
               <Select

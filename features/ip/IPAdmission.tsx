@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {ChevronDown} from 'lucide-react';
-import {Badge,Button,Card,Input,Select} from '@/components/ui';
+import {Badge,Button,Card,Input,Select,StatusToast} from '@/components/ui';
 import {FormField} from '@/components/FormElements';
 import {SearchPicker,TagEntryBox,medicineFrequencyOptions,rowTagLabel} from '@/components/clinicalRows';
 import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';
@@ -388,8 +388,8 @@ export function IPAdmission({
     return (
       <div className="space-y-6">
         <IPHeader view={view} setView={setView}/>
-        {message&&<div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{message}</div>}
-        {error&&<div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</div>}
+        <StatusToast message={message} tone="success" onClose={()=>setMessage('')}/>
+        <StatusToast message={error} tone="error" onClose={()=>setError('')}/>
         <Card>
           <div className="flex flex-col gap-2">
             <h4 className="text-xl font-bold">Convert OP to IP</h4>
@@ -418,8 +418,8 @@ export function IPAdmission({
     return (
       <div className="space-y-6">
         <IPHeader view={view} setView={setView}/>
-        {message&&<div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{message}</div>}
-        {error&&<div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</div>}
+        <StatusToast message={message} tone="success" onClose={()=>setMessage('')}/>
+        <StatusToast message={error} tone="error" onClose={()=>setError('')}/>
         <Card>
           <div className="flex flex-col gap-2">
             <h4 className="text-xl font-bold">Direct IP Admission</h4>
@@ -440,8 +440,8 @@ export function IPAdmission({
   return (
     <div className="space-y-6">
       <IPHeader view={view} setView={setView}/>
-      {message&&<div className="rounded-2xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-700">{message}</div>}
-      {error&&<div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-700">{error}</div>}
+      <StatusToast message={message} tone="success" onClose={()=>setMessage('')}/>
+      <StatusToast message={error} tone="error" onClose={()=>setError('')}/>
 
       <div className="grid gap-6">
         <Card>

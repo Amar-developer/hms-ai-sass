@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Card,Select} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Card,Select,StatusToast} from '@/components/ui';
 import {FormField} from '@/components/FormElements';
 import {apiFetch,type ApiSession} from '@/lib/api';
 import {sortQueue} from '@/lib/hmsLogic';
@@ -71,7 +71,6 @@ export function TokenQueue({
   const today=todayKey();
   const queue = sortByTokenNumber(sortQueue(scopedAppointments.filter((appointment:any)=>{
     if(dateKey(appointment.appointmentDate||appointment.appointment_date)!==today)return false;
-    if(departmentId&&appointment.departmentId!==departmentId)return false;
     if(!isActiveQueueAppointment(appointment))return false;
     if(doctorScope?.practitionerId){
       return appointment.doctorId===doctorScope.practitionerId||appointment.practitioner_id===doctorScope.practitionerId;
@@ -217,7 +216,7 @@ export function TokenQueue({
           </FormField>
         </div>
       </div>
-      {message && <div className="mt-4 rounded-2xl bg-blue-50 p-3 text-sm font-semibold text-blue-700">{message}</div>}
+      <StatusToast message={message} onClose={()=>setMessage('')}/>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {(visibleDisplayRows.length?visibleDisplayRows:visibleQueue).map((item:any)=>{
           const appointment=item.appointment||item;
