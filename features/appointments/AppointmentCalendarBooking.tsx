@@ -5,9 +5,10 @@ import {CalendarPlus, Search, X} from 'lucide-react';
 
 import {Badge, Button, Card, Field, Input, Select, StatusToast} from '@/components/ui';
 import {apiFetch, type ApiSession} from '@/lib/api';
-import {DateField, SelectField, TextareaField, TextField} from '@/components/FormElements';
+import {SelectField, TextareaField, TextField} from '@/components/FormElements';
 import {generatePatientId, generateToken, searchPatients} from '@/lib/hmsLogic';
 import {humanizeOptionLabel,publicDisplayValue,uniqueDepartmentRows} from '@/lib/options';
+import {PatientFormFields, patientFormPayload} from '@/features/patients/PatientFormFields';
 
 type Props = {
   clinic: any;
@@ -379,16 +380,17 @@ export function AppointmentCalendarBooking(props: Props) {
     setBusy(true);
     setMessage('');
     try {
+      const patientBranchId = data.branchId || branchId;
       if (apiSession) {
         const duplicateRows = await apiFetch('/patients/duplicates', apiSession, {
           method: 'POST',
           body: JSON.stringify({
-            branch_id: branchId,
-            full_name: data.name,
+            branch_id: patientBranchId,
+            full_name: data.fullName,
             date_of_birth: data.dateOfBirth || null,
             gender: data.gender || 'unknown',
             mobile: data.mobile || null,
-            guardian_name: data.guardian || null,
+            guardian_name: data.guardianName || null,
             guardian_mobile: data.guardianMobile || null,
             area: data.area || null,
           }),
@@ -403,28 +405,20 @@ export function AppointmentCalendarBooking(props: Props) {
         const saved = await apiFetch('/patients', apiSession, {
           method: 'POST',
           body: JSON.stringify({
-            branch_id: branchId,
-            full_name: data.name,
+            branch_id: patientBranchId,
+            full_name: data.fullName,
             date_of_birth: data.dateOfBirth || null,
             gender: data.gender || 'unknown',
             mobile: data.mobile || null,
-            guardian_name: data.guardian || null,
+            alternate_mobile: data.alternateMobile || null,
+            email: data.email || null,
+            guardian_name: data.guardianName || null,
             guardian_mobile: data.guardianMobile || null,
             area: data.area || null,
+            address: data.address || null,
+            blood_group: data.bloodGroup || null,
           }),
         });
-        if (data.allergies?.trim()) {
-          await apiFetch(`/patients/${saved.id}/alerts`, apiSession, {
-            method: 'POST',
-            body: JSON.stringify({
-              alert_type: 'allergy',
-              title: 'Allergies',
-              description: data.allergies.trim(),
-              severity: 'high',
-              created_by_user_id: apiSession.user?.id || null,
-            }),
-          });
-        }
         await loadLiveData(apiSession);
         setSelectedPatient({
           id: saved.id,
@@ -438,15 +432,18 @@ export function AppointmentCalendarBooking(props: Props) {
       } else {
         const patient = {
           id: generatePatientId(patients.length),
-          name: data.name,
-          age: 0,
+          name: data.fullName,
+          age: data.ageYears ? Number(data.ageYears) : 0,
           gender: data.gender,
           mobile: data.mobile,
-          guardian: data.guardian,
+          guardian: data.guardianName,
           guardianMobile: data.guardianMobile,
           area: data.area,
-          blood: '',
-          allergies: data.allergies || '',
+          blood: data.bloodGroup || '',
+          email: data.email,
+          alternateMobile: data.alternateMobile,
+          address: data.address,
+          allergies: '',
           medicalHistory: '',
           status: 'Active',
           patientType: 'OP',
@@ -612,6 +609,8 @@ export function AppointmentCalendarBooking(props: Props) {
         {bookingStep === 'newPatient' && (
           <NewPatientForm
             busy={busy}
+            branches={clinic?.branches || []}
+            defaultBranchId={branchId}
             onSave={savePatient}
             onCancel={() => setBookingStep('search')}
           />
@@ -865,19 +864,10 @@ export function AppointmentCalendarBooking(props: Props) {
   );
 }
 
-function NewPatientForm({ busy, onSave, onCancel }: any) {
-  const [name, setName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [gender, setGender] = useState('unknown');
-  const [mobile, setMobile] = useState('');
-  const [guardian, setGuardian] = useState('');
-  const [guardianMobile, setGuardianMobile] = useState('');
-  const [area, setArea] = useState('');
-  const [allergies, setAllergies] = useState('');
-
+function NewPatientForm({ busy, branches, defaultBranchId, onSave, onCancel }: any) {
   function handleSubmit(e: any) {
     e.preventDefault();
-    onSave({ name, dateOfBirth, gender, mobile, guardian, guardianMobile, area, allergies });
+    onSave(patientFormPayload(new FormData(e.currentTarget)));
   }
 
   return (
@@ -889,26 +879,10 @@ function NewPatientForm({ busy, onSave, onCancel }: any) {
         </button>
       </div>
       <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-3">
-        <TextField label="Name" value={name} onChange={setName} required />
-        <DateField label="Date of Birth" value={dateOfBirth} onChange={setDateOfBirth} />
-        <SelectField
-          label="Gender"
-          value={gender}
-          onChange={setGender}
-          options={[
-            { value: 'female', label: 'Female' },
-            { value: 'male', label: 'Male' },
-            { value: 'other', label: 'Transgender' },
-            { value: 'unknown', label: 'Unknown' },
-          ]}
+        <PatientFormFields
+          branches={branches}
+          defaultBranchId={defaultBranchId}
         />
-        <TextField label="Mobile (optional)" type="tel" value={mobile} onChange={setMobile} />
-        <TextField label="Guardian" value={guardian} onChange={setGuardian} />
-        <TextField label="Guardian Mobile" type="tel" value={guardianMobile} onChange={setGuardianMobile} />
-        <TextField label="Area" value={area} onChange={setArea} />
-        <div className="md:col-span-2">
-          <TextField label="Allergies" value={allergies} onChange={setAllergies} />
-        </div>
         <div className="flex flex-wrap gap-2 md:col-span-3">
           <Button disabled={busy}>{busy ? 'Saving...' : 'Save Patient'}</Button>
           <button type="button" onClick={onCancel} className="rounded-2xl border px-4 py-3 text-sm font-bold">

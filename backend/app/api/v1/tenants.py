@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
@@ -11,8 +12,17 @@ from app.core.tenant_context import require_tenant_id
 from app.modules.audit.models import AuditEvent
 from app.modules.files.service import record_file_document
 from app.modules.identity import permissions
-from app.modules.identity.models import User
-from app.modules.subscriptions.service import create_default_trial_subscription, get_active_subscription
+from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole
+from app.modules.identity.security import hash_password
+from app.modules.settings.numbering import next_document_number
+from app.modules.subscriptions.models import SubscriptionInvoice, SubscriptionPlan, SubscriptionStatus, TenantSubscription
+from app.modules.subscriptions.service import (
+    CORE_HMS_MODULES,
+    create_default_trial_subscription,
+    get_active_subscription,
+    modules_to_json,
+    next_subscription_invoice_number,
+)
 from app.modules.tenants.models import Branch, Department, Tenant, TenantStatus, TenantType, now_utc
 from app.modules.tenants.schemas import (
     BranchCreate,
@@ -22,12 +32,19 @@ from app.modules.tenants.schemas import (
     DepartmentRead,
     DepartmentUpdate,
     TenantCreate,
+    TenantOnboardingCreate,
+    TenantOnboardingRead,
     TenantRead,
     TenantUpdate,
 )
 
 router = APIRouter(prefix="/tenants")
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
+TENANT_ADMIN_DEFAULT_PERMISSION_KEYS = [
+    permission_key
+    for permission_key in permissions.PERMISSION_CATALOG
+    if not permission_key.startswith("platform.")
+]
 
 
 def _assert_tenant_access(user: User, tenant_id: str, request_tenant_id: str | None) -> None:
@@ -113,6 +130,165 @@ def _get_branch_or_404(session: Session, tenant_id: str, branch_id: str) -> Bran
     return branch
 
 
+def _ensure_permission(session: Session, key: str) -> Permission:
+    permission = session.exec(select(Permission).where(Permission.key == key)).first()
+    if permission:
+        return permission
+    permission = Permission(key=key, description=key.replace(".", " ").title())
+    session.add(permission)
+    session.commit()
+    session.refresh(permission)
+    return permission
+
+
+def _replace_role_permissions(session: Session, role: Role, permission_keys: list[str]) -> None:
+    for row in list(session.exec(select(RolePermission).where(RolePermission.role_id == role.id)).all()):
+        session.delete(row)
+    for permission_key in permission_keys:
+        permission = _ensure_permission(session, permission_key)
+        session.add(RolePermission(role_id=role.id, permission_id=permission.id))
+
+
+def _role_permission_keys(session: Session, role: Role) -> list[str]:
+    return list(
+        session.exec(
+            select(Permission.key)
+            .join(RolePermission, RolePermission.permission_id == Permission.id)
+            .where(RolePermission.role_id == role.id)
+        ).all()
+    )
+
+
+def _ensure_tenant_admin_role(session: Session, tenant_id: str, current_user: User) -> Role:
+    role = session.exec(select(Role).where(Role.tenant_id == tenant_id, Role.key == "tenant_admin")).first()
+    if role:
+        return role
+    primary_template = session.exec(
+        select(Role)
+        .join(Tenant, Tenant.id == Role.tenant_id)
+        .where(Tenant.is_primary == True, Role.key == "tenant_admin")  # noqa: E712
+    ).first()
+    role = Role(
+        tenant_id=tenant_id,
+        source_template_role_id=primary_template.id if primary_template and primary_template.tenant_id != tenant_id else None,
+        name=primary_template.name if primary_template else "Tenant Admin",
+        key="tenant_admin",
+        is_active=True,
+        is_template_locked=bool(primary_template),
+        created_by_user_id=current_user.id,
+        updated_by_user_id=current_user.id,
+    )
+    session.add(role)
+    session.commit()
+    session.refresh(role)
+    _replace_role_permissions(
+        session,
+        role,
+        _role_permission_keys(session, primary_template) if primary_template else TENANT_ADMIN_DEFAULT_PERMISSION_KEYS,
+    )
+    session.commit()
+    return role
+
+
+def _copy_role_template(session: Session, role_id: str, target_tenant_id: str, current_user: User) -> Role:
+    source_role = session.get(Role, role_id)
+    target_tenant = session.get(Tenant, target_tenant_id)
+    if not source_role:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source role not found")
+    if not target_tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
+    if source_role.key == "super_admin" and not target_tenant.is_primary:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Super Admin role can only belong to the primary tenant")
+    permission_keys = _role_permission_keys(session, source_role)
+    role = session.exec(select(Role).where(Role.tenant_id == target_tenant_id, Role.key == source_role.key)).first()
+    if role:
+        role.name = source_role.name
+        role.is_active = source_role.is_active
+        role.source_template_role_id = source_role.id
+        role.is_template_locked = not target_tenant.is_primary
+        role.is_global_template = target_tenant.is_primary
+    else:
+        role = Role(
+            tenant_id=target_tenant_id,
+            source_template_role_id=source_role.id,
+            name=source_role.name,
+            key=source_role.key,
+            is_active=source_role.is_active,
+            is_template_locked=not target_tenant.is_primary,
+            is_global_template=target_tenant.is_primary,
+            created_by_user_id=current_user.id,
+        )
+    role.updated_by_user_id = current_user.id
+    role.updated_at = now_utc()
+    session.add(role)
+    session.commit()
+    session.refresh(role)
+    _replace_role_permissions(session, role, permission_keys)
+    session.commit()
+    return role
+
+
+def _copy_department_template(session: Session, department_id: str, target_tenant_id: str, current_user: User) -> Department:
+    source_department = session.get(Department, department_id)
+    target_tenant = session.get(Tenant, target_tenant_id)
+    if not source_department:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source department not found")
+    if not target_tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
+    department = session.exec(
+        select(Department).where(Department.tenant_id == target_tenant_id, Department.code == source_department.code)
+    ).first()
+    if not department:
+        department = Department(
+            tenant_id=target_tenant_id,
+            code=source_department.code,
+            created_by_user_id=current_user.id,
+        )
+    department.source_template_department_id = source_department.id
+    department.name = source_department.name
+    department.description = source_department.description
+    department.is_active = source_department.is_active
+    department.is_template_locked = not target_tenant.is_primary
+    department.is_global_template = target_tenant.is_primary
+    department.updated_by_user_id = current_user.id
+    department.updated_at = now_utc()
+    session.add(department)
+    session.commit()
+    session.refresh(department)
+    return department
+
+
+def _copy_branch_template(session: Session, branch_id: str, target_tenant_id: str, current_user: User) -> Branch:
+    source_branch = session.get(Branch, branch_id)
+    target_tenant = session.get(Tenant, target_tenant_id)
+    if not source_branch:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source branch not found")
+    if not target_tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
+    branch = session.exec(select(Branch).where(Branch.tenant_id == target_tenant_id, Branch.code == source_branch.code)).first()
+    if not branch:
+        branch = Branch(
+            tenant_id=target_tenant_id,
+            code=source_branch.code,
+            created_by_user_id=current_user.id,
+        )
+    branch.source_template_branch_id = source_branch.id
+    branch.name = source_branch.name
+    branch.area = source_branch.area
+    branch.address = source_branch.address
+    branch.city = source_branch.city
+    branch.state = source_branch.state
+    branch.is_active = source_branch.is_active
+    branch.is_template_locked = not target_tenant.is_primary
+    branch.is_global_template = target_tenant.is_primary
+    branch.updated_by_user_id = current_user.id
+    branch.updated_at = now_utc()
+    session.add(branch)
+    session.commit()
+    session.refresh(branch)
+    return branch
+
+
 @router.post(
     "",
     response_model=TenantRead,
@@ -148,6 +324,197 @@ def create_tenant(
     session.commit()
     create_default_trial_subscription(session, tenant.id)
     return tenant
+
+
+@router.post(
+    "/onboard",
+    response_model=TenantOnboardingRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def onboard_tenant(
+    payload: TenantOnboardingCreate,
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> TenantOnboardingRead:
+    _assert_unique_tenant_values(
+        session,
+        name=payload.tenant.name,
+        email=payload.tenant.email,
+        phone=payload.tenant.phone,
+    )
+    if payload.tenant.is_primary or payload.tenant.tenant_type in (TenantType.PRIMARY, TenantType.PRIMARY.value):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use bootstrap for the primary tenant")
+
+    tenant = Tenant.model_validate(
+        payload.tenant,
+        update={
+            "is_primary": False,
+            "created_by_user_id": current_user.id,
+            "updated_by_user_id": current_user.id,
+        },
+    )
+    session.add(tenant)
+    session.commit()
+    session.refresh(tenant)
+
+    branches: list[Branch] = []
+    for branch_payload in payload.branches:
+        branch = Branch.model_validate(
+            branch_payload,
+            update={
+                "tenant_id": tenant.id,
+                "created_by_user_id": current_user.id,
+                "updated_by_user_id": current_user.id,
+            },
+        )
+        session.add(branch)
+        session.commit()
+        session.refresh(branch)
+        branches.append(branch)
+
+    plan_id = payload.subscription_plan_id
+    if payload.enabled_modules:
+        included_branches = payload.included_branches if payload.included_branches is not None else max(len(branches), 1)
+        plan = SubscriptionPlan(
+            key=f"tenant_{tenant.id.replace('tenant_', '')}",
+            name=f"{tenant.name} Onboarding Plan",
+            monthly_patient_limit=payload.monthly_patient_limit,
+            included_branches=included_branches,
+            included_doctors=payload.included_doctors,
+            price_inr_monthly=payload.price_inr_monthly,
+            enabled_modules_json=modules_to_json(payload.enabled_modules or CORE_HMS_MODULES),
+            created_by_user_id=current_user.id,
+            updated_by_user_id=current_user.id,
+        )
+        session.add(plan)
+        session.commit()
+        session.refresh(plan)
+        plan_id = plan.id
+
+    subscription_id = None
+    if plan_id:
+        plan = session.get(SubscriptionPlan, plan_id)
+        if not plan or not plan.is_active:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan")
+        starts_today = payload.subscription_starts_on <= date.today()
+        for existing in session.exec(
+            select(TenantSubscription).where(
+                TenantSubscription.tenant_id == tenant.id,
+                TenantSubscription.status == SubscriptionStatus.ACTIVE,
+            )
+        ).all():
+            existing.is_active = False
+            existing.status = SubscriptionStatus.EXPIRED
+            existing.updated_by_user_id = current_user.id
+            existing.updated_at = now_utc()
+            session.add(existing)
+        subscription = TenantSubscription(
+            tenant_id=tenant.id,
+            plan_id=plan.id,
+            starts_on=payload.subscription_starts_on,
+            ends_on=payload.subscription_ends_on,
+            is_trial=tenant.status == TenantStatus.TRIAL,
+            is_active=starts_today,
+            status=SubscriptionStatus.ACTIVE if starts_today else SubscriptionStatus.SCHEDULED,
+            billing_amount=plan.price_inr_monthly,
+            created_by_user_id=current_user.id,
+            updated_by_user_id=current_user.id,
+        )
+        session.add(subscription)
+        session.commit()
+        session.refresh(subscription)
+        subscription_id = subscription.id
+        session.add(
+            SubscriptionInvoice(
+                tenant_id=tenant.id,
+                subscription_id=subscription.id,
+                invoice_number=next_subscription_invoice_number(session),
+                description=f"Subscription: {plan.name}",
+                amount=subscription.billing_amount,
+                taxable_amount=subscription.billing_amount,
+                total_amount=subscription.billing_amount,
+                balance_amount=subscription.billing_amount,
+                due_on=subscription.starts_on,
+                created_by_user_id=current_user.id,
+                updated_by_user_id=current_user.id,
+            )
+        )
+        session.commit()
+    else:
+        trial_subscription = create_default_trial_subscription(session, tenant.id)
+        subscription_id = trial_subscription.id
+        plan_id = trial_subscription.plan_id
+
+    role_count = 0
+    role_template_ids = list(dict.fromkeys(payload.role_template_ids))
+    if payload.admin_user:
+        tenant_admin_role = _ensure_tenant_admin_role(session, tenant.id, current_user)
+        role_count += 1
+        role_template_ids = [
+            role_id
+            for role_id in role_template_ids
+            if (source_role := session.get(Role, role_id)) and source_role.key != tenant_admin_role.key
+        ]
+    for role_id in role_template_ids:
+        _copy_role_template(session, role_id, tenant.id, current_user)
+        role_count += 1
+
+    for department_id in payload.department_template_ids:
+        _copy_department_template(session, department_id, tenant.id, current_user)
+    for branch_id in payload.branch_template_ids:
+        branches.append(_copy_branch_template(session, branch_id, tenant.id, current_user))
+
+    admin_user_id = None
+    if payload.admin_user:
+        existing_admin = session.exec(
+            select(User).where(User.tenant_id == tenant.id, User.email == payload.admin_user.email.strip().lower())
+        ).first()
+        if existing_admin:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant admin user already exists")
+        user = User(
+            tenant_id=tenant.id,
+            branch_id=None,
+            user_number=next_document_number(session, tenant_id=tenant.id, entity="user"),
+            user_type="tenant_admin",
+            name=payload.admin_user.name,
+            email=payload.admin_user.email.strip().lower(),
+            mobile=payload.admin_user.mobile,
+            password_hash=hash_password(payload.admin_user.password),
+            must_change_password=payload.admin_user.must_change_password,
+            created_by_user_id=current_user.id,
+            updated_by_user_id=current_user.id,
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        tenant_admin_role = _ensure_tenant_admin_role(session, tenant.id, current_user)
+        if not session.exec(select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == tenant_admin_role.id)).first():
+            session.add(UserRole(user_id=user.id, role_id=tenant_admin_role.id, tenant_id=tenant.id))
+            session.commit()
+        admin_user_id = user.id
+
+    session.add(
+        AuditEvent(
+            tenant_id=tenant.id,
+            actor_user_id=current_user.id,
+            action="tenant.onboarded",
+            resource_type="tenant",
+            resource_id=tenant.id,
+            purpose="platform_tenant_onboarding",
+        )
+    )
+    session.commit()
+    session.refresh(tenant)
+    return TenantOnboardingRead(
+        tenant=TenantRead.model_validate(tenant, from_attributes=True),
+        branches=[BranchRead.model_validate(branch, from_attributes=True) for branch in branches],
+        role_count=role_count,
+        department_count=len(payload.department_template_ids),
+        branch_template_count=len(payload.branch_template_ids),
+        subscription_id=subscription_id,
+        subscription_plan_id=plan_id,
+        admin_user_id=admin_user_id,
+    )
 
 
 @router.get(

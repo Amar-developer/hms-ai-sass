@@ -27,7 +27,23 @@ def ids_from_json(value: str | None) -> list[str]:
 
 
 def plan_to_read_dict(plan: PatientSubscriptionPlan) -> dict:
-    data = plan.model_dump()
+    data = {
+        "id": plan.id,
+        "tenant_id": plan.tenant_id,
+        "branch_id": plan.branch_id,
+        "name": plan.name,
+        "code": plan.code,
+        "price_amount": plan.price_amount,
+        "duration_days": plan.duration_days,
+        "free_consultations": plan.free_consultations,
+        "lab_discount_percentage": plan.lab_discount_percentage,
+        "pharmacy_discount_percentage": plan.pharmacy_discount_percentage,
+        "is_active": plan.is_active,
+        "created_by_user_id": plan.created_by_user_id,
+        "updated_by_user_id": plan.updated_by_user_id,
+        "created_at": plan.created_at,
+        "updated_at": plan.updated_at,
+    }
     data["free_lab_test_ids"] = ids_from_json(plan.free_lab_test_ids_json)
     data["discounted_lab_test_ids"] = ids_from_json(plan.discounted_lab_test_ids_json)
     data["free_medicine_ids"] = ids_from_json(plan.free_medicine_ids_json)

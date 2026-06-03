@@ -48,6 +48,45 @@ pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+## Fresh SaaS setup and super admin tenant flow
+
+MedizinHub HMS is a tenant-based SaaS application. A fresh installation must have exactly one primary platform tenant and one super admin. The super admin logs in without selecting a customer tenant, then creates and manages customer tenants.
+
+1. Start the backend and frontend.
+2. Create the first platform super admin once:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/bootstrap-super-admin \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Platform Super Admin","email":"admin@medizinhub.local","password":"ChangeMe@123"}'
+```
+
+If a super admin already exists, this endpoint returns `409`. Use the existing super admin login, or run `backend/scripts/reset_super_admin.py` only in a controlled development/support environment.
+
+3. Log in as the super admin. Do not pass `tenant_id` for this login:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@medizinhub.local","password":"ChangeMe@123"}'
+```
+
+4. Create customer tenants from the Super Admin dashboard, or call the backend onboarding API. The onboarding API creates tenant metadata, branches, subscription assignment, tenant admin role, and tenant admin login in one server-side flow:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/tenants/onboard \
+  -H "Authorization: Bearer <SUPER_ADMIN_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tenant": {"name":"Fresh Clinic","tenant_type":"clinic","status":"active","email":"owner@freshclinic.test"},
+    "branches": [{"name":"Main Branch","code":"MAIN"}],
+    "subscription_plan_id":"<PLAN_ID>",
+    "admin_user": {"name":"Tenant Admin","email":"admin@freshclinic.test","password":"TenantPass123"}
+  }'
+```
+
+Tenant admins and staff must log in with their customer `tenant_id`. The primary tenant stays reserved for platform-only work such as tenant creation, templates, plans, and global settings.
+
 ## Added in v6
 - Doctor consultation workspace with prescription, patient remarks and notes
 - Lab test referral and scan referral capture

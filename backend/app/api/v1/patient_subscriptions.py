@@ -34,6 +34,7 @@ from app.modules.patient_subscriptions.service import (
     plan_to_read_dict,
 )
 from app.modules.patients.models import Patient
+from app.modules.tenants.models import Branch
 
 router = APIRouter(prefix="/patient-subscriptions")
 
@@ -55,6 +56,34 @@ def _get_plan(session: Session, tenant_id: str, plan_id: str) -> PatientSubscrip
     if not plan or plan.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient subscription plan not found")
     return plan
+
+
+def _resolve_enrollment_branch(
+    session: Session,
+    *,
+    tenant_id: str,
+    payload_branch_id: str | None,
+    patient: Patient,
+    plan: PatientSubscriptionPlan,
+) -> str:
+    branch_id = payload_branch_id or patient.branch_id or plan.branch_id
+    if not branch_id:
+        branch_id = session.exec(
+            select(Branch.id)
+            .where(Branch.tenant_id == tenant_id, Branch.is_active == True)  # noqa: E712
+            .order_by(Branch.created_at, Branch.name)
+        ).first()
+    if not branch_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Select a branch before enrolling the patient in a membership plan",
+        )
+    require_branch_in_tenant(session, tenant_id, branch_id)
+    if patient.branch_id and patient.branch_id != branch_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Patient does not belong to this branch")
+    if plan.branch_id and plan.branch_id != branch_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Plan is not valid for this branch")
+    return branch_id
 
 
 @router.post("/plans", response_model=PatientSubscriptionPlanRead, status_code=status.HTTP_201_CREATED)
@@ -214,27 +243,31 @@ def enroll_patient(
     ),
 ) -> PatientSubscriptionEnrollmentRead:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
-    require_branch_in_tenant(session, tenant_id, payload.branch_id)
-    require_user_branch_access(current_user, payload.branch_id)
     patient = session.get(Patient, payload.patient_id)
     if not patient or patient.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient")
     plan = _get_plan(session, tenant_id, payload.plan_id)
     if not plan.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Patient subscription plan is inactive")
-    if plan.branch_id and plan.branch_id != payload.branch_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Plan is not valid for this branch")
+    branch_id = _resolve_enrollment_branch(
+        session,
+        tenant_id=tenant_id,
+        payload_branch_id=payload.branch_id,
+        patient=patient,
+        plan=plan,
+    )
+    require_user_branch_access(current_user, branch_id)
     existing = active_patient_enrollment(
         session,
         tenant_id=tenant_id,
-        branch_id=payload.branch_id,
+        branch_id=branch_id,
         patient_id=payload.patient_id,
     )
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Patient already has an active subscription")
     enrollment = PatientSubscriptionEnrollment(
         tenant_id=tenant_id,
-        branch_id=payload.branch_id,
+        branch_id=branch_id,
         patient_id=payload.patient_id,
         plan_id=payload.plan_id,
         starts_on=payload.starts_on,

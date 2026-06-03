@@ -48,7 +48,7 @@ class PatientSubscriptionPlanRead(PatientSubscriptionPlanCreate):
 
 
 class PatientSubscriptionEnrollmentCreate(BaseModel):
-    branch_id: str
+    branch_id: str | None = None
     patient_id: str
     plan_id: str
     starts_on: date = Field(default_factory=date.today)

@@ -24,7 +24,7 @@ export const loginPresets: Record<
     needsTenant: false,
   },
 
-  // ── Tenant 1: Sunrise Multispeciality Clinic ──────────────────────────────
+  // ── Tenant 1: Sunrise Multispeciality Clinic
   tenant_admin: {
     email:       'linuxuser206@gmail.com',
     password:    'Tenant@Admin1',

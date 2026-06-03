@@ -70,6 +70,7 @@ Current enforced guardrails:
 | Method | Endpoint | Permission |
 | --- | --- | --- |
 | `POST` | `/api/v1/tenants` | `platform.tenants.manage` |
+| `POST` | `/api/v1/tenants/onboard` | Super admin only; creates customer tenant, branches, subscription, and tenant admin |
 | `GET` | `/api/v1/tenants` | `platform.tenants.manage` |
 | `GET` | `/api/v1/tenants/{tenant_id}` | `platform.tenants.manage` |
 | `PATCH` | `/api/v1/tenants/{tenant_id}` | `platform.tenants.manage` |

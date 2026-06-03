@@ -8,9 +8,6 @@ import {
   Badge,
   Button,
   Card,
-  Field,
-  Input,
-  Select,
   StatusToast,
 } from "@/components/ui";
 import { UPLOADS_BASE, apiFetch, apiUpload, type ApiSession } from "@/lib/api";
@@ -20,6 +17,10 @@ import {
   SelectField,
   TextField,
 } from "@/components/FormElements";
+import {
+  PatientFormFields,
+  patientFormPayload,
+} from "@/features/patients/PatientFormFields";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -28,22 +29,10 @@ type PatientProps = {
 
 const pageSize = 10;
 const genders = [
-  ["", "Select gender"],
   ["male", "Male"],
   ["female", "Female"],
   ["other", "Other"],
   ["unknown", "Unknown"],
-] as const;
-const bloodGroups = [
-  ["", "Select blood group"],
-  ["A+", "A+"],
-  ["A-", "A-"],
-  ["B+", "B+"],
-  ["B-", "B-"],
-  ["AB+", "AB+"],
-  ["AB-", "AB-"],
-  ["O+", "O+"],
-  ["O-", "O-"],
 ] as const;
 
 export function Patient({ apiSession, branchId }: PatientProps) {
@@ -606,40 +595,6 @@ function activeTenantOptions(tenants: any[]) {
   });
 }
 
-function formPayload(fd: FormData) {
-  return {
-    branch_id: fd.get("branchId") || null,
-    full_name: fd.get("fullName"),
-    mobile: fd.get("mobile") || null,
-    alternate_mobile: fd.get("alternateMobile") || null,
-    email: fd.get("email") || null,
-    gender: fd.get("gender") || "unknown",
-    date_of_birth: fd.get("dateOfBirth") || null,
-    age_years: fd.get("ageYears") ? Number(fd.get("ageYears")) : null,
-    guardian_name: fd.get("guardianName") || null,
-    guardian_mobile: fd.get("guardianMobile") || null,
-    area: fd.get("area") || null,
-    address: fd.get("address") || null,
-    blood_group: fd.get("bloodGroup") || null,
-  };
-}
-
-function calculateAgeYears(dateOfBirth: string) {
-  if (!dateOfBirth) return "";
-  const dob = new Date(`${dateOfBirth}T00:00:00`);
-  if (Number.isNaN(dob.getTime())) return "";
-  const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDelta = today.getMonth() - dob.getMonth();
-  if (
-    monthDelta < 0 ||
-    (monthDelta === 0 && today.getDate() < dob.getDate())
-  ) {
-    age -= 1;
-  }
-  return age >= 0 && age <= 130 ? age : "";
-}
-
 function toRow(patient: any) {
   return { ...patient, active_alert_count: 0, critical_alert_count: 0 };
 }
@@ -653,15 +608,11 @@ function PatientForm({
   onSubmit,
   back,
 }: any) {
-  const [selectedBranchId, setSelectedBranchId] = useState(
-    patient?.branch_id || defaultBranchId || "",
-  );
-  const [dateOfBirth, setDateOfBirth] = useState(patient?.date_of_birth || "");
-  const [status, setStatus] = useState(patient?.status || "active");
-  const [address, setAddress] = useState(patient?.address || "");
-  const calculatedAge = dateOfBirth
-    ? calculateAgeYears(dateOfBirth)
-    : patient?.age_years || "";
+  function handleSubmit(event: any) {
+    event.preventDefault();
+    onSubmit(patientFormPayload(new FormData(event.currentTarget)));
+  }
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -676,112 +627,15 @@ function PatientForm({
         </button>
       </div>
       <form
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
-        <Field label="Full Name">
-          <Input
-            name="fullName"
-            defaultValue={patient?.full_name || ""}
-            required
-          />
-        </Field>
-        <Field label="Mobile">
-          <Input name="mobile" defaultValue={patient?.mobile || ""} />
-        </Field>
-        <Field label="Branch">
-          <Select
-            name="branchId"
-            value={selectedBranchId}
-            onChange={(event: any) => setSelectedBranchId(event.target.value)}
-          >
-            <option value="">No branch</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Gender">
-          <Select name="gender" defaultValue={patient?.gender || ""}>
-            {genders.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Date of Birth">
-          <Input
-            name="dateOfBirth"
-            type="date"
-            value={dateOfBirth}
-            onChange={(event: any) => setDateOfBirth(event.target.value)}
-          />
-        </Field>
-        <Field label="Age Years">
-          <Input
-            name="ageYears"
-            type="number"
-            min="0"
-            max="130"
-            value={calculatedAge}
-            readOnly
-          />
-        </Field>
-        <Field label="Guardian Name">
-          <Input
-            name="guardianName"
-            defaultValue={patient?.guardian_name || ""}
-          />
-        </Field>
-        <Field label="Guardian Mobile">
-          <Input
-            name="guardianMobile"
-            defaultValue={patient?.guardian_mobile || ""}
-          />
-        </Field>
-        <Field label="Alternate Mobile">
-          <Input
-            name="alternateMobile"
-            defaultValue={patient?.alternate_mobile || ""}
-          />
-        </Field>
-        <Field label="Email">
-          <Input
-            name="email"
-            type="email"
-            defaultValue={patient?.email || ""}
-          />
-        </Field>
-        <Field label="Area">
-          <Input name="area" defaultValue={patient?.area || ""} />
-        </Field>
-        <Field label="Blood Group">
-          <Select name="bloodGroup" defaultValue={patient?.blood_group || ""}>
-            {bloodGroups.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        {patient && (
-          <SelectField
-            label="Status"
-            value={status}
-            onChange={setStatus}
-            options={[
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-              { value: "deceased", label: "Deceased" },
-            ]}
-          />
-        )}
-        <div className="md:col-span-2 xl:col-span-3">
-          <TextField label="Address" value={address} onChange={setAddress} />
-        </div>
+        <PatientFormFields
+          patient={patient}
+          branches={branches}
+          defaultBranchId={defaultBranchId}
+          includeStatus={Boolean(patient)}
+        />
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
           <Button disabled={busy}>
             {busy ? "Saving..." : patient ? "Save Patient" : "Create Patient"}
