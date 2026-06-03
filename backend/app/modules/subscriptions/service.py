@@ -13,6 +13,8 @@ from app.modules.tenants.models import now_utc
 
 CORE_HMS_MODULES = [
     "patients",
+    "practitioners",
+    "scheduling",
     "appointments",
     "queue",
     "consultations",
@@ -39,13 +41,79 @@ DEFAULT_PLANS = [
         "price_inr_monthly": 999,
         "enabled_modules_json": json.dumps(
             [
-                "patients",
-                "appointments",
-                "queue",
-                "consultations",
-                "billing_basic",
+                *CORE_HMS_MODULES,
                 "billing_advanced",
                 "patient_subscriptions",
+            ]
+        ),
+    },
+    {
+        "key": "growth",
+        "name": "Growth Clinic",
+        "monthly_patient_limit": 1000,
+        "included_branches": 2,
+        "included_doctors": 5,
+        "price_inr_monthly": 2999,
+        "enabled_modules_json": json.dumps(
+            [
+                *CORE_HMS_MODULES,
+                "billing_advanced",
+                "patient_subscriptions",
+                "lab",
+                "pharmacy",
+                "notifications",
+                "sms",
+                "whatsapp",
+                "voice",
+                "reports",
+                "physiotherapy",
+            ]
+        ),
+    },
+    {
+        "key": "pro",
+        "name": "Pro Clinic",
+        "monthly_patient_limit": 3000,
+        "included_branches": 5,
+        "included_doctors": 15,
+        "price_inr_monthly": 7999,
+        "enabled_modules_json": json.dumps(
+            [
+                *CORE_HMS_MODULES,
+                "billing_advanced",
+                "patient_subscriptions",
+                "lab",
+                "pharmacy",
+                "notifications",
+                "sms",
+                "whatsapp",
+                "voice",
+                "reports",
+                "physiotherapy",
+            ]
+        ),
+    },
+    {
+        "key": "hospital",
+        "name": "Hospital",
+        "monthly_patient_limit": 10000,
+        "included_branches": 10,
+        "included_doctors": 50,
+        "price_inr_monthly": 19999,
+        "enabled_modules_json": json.dumps(
+            [
+                *CORE_HMS_MODULES,
+                "billing_advanced",
+                "patient_subscriptions",
+                "lab",
+                "pharmacy",
+                "notifications",
+                "sms",
+                "whatsapp",
+                "voice",
+                "reports",
+                "physiotherapy",
+                "ip",
             ]
         ),
     },

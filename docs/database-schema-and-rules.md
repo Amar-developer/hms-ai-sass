@@ -109,7 +109,7 @@ Source: `backend/app/modules/identity/models.py`
 
 | Table | Main columns | Connects to | Notes |
 |---|---|---|---|
-| `user` | `id`, `tenant_id`, `branch_id`, `user_type`, `email`, `is_super_admin` | `tenant`, `branch` | Tenant admins may have branch_id in seed data but are tenant-wide by backend access rules. |
+| `user` | `id`, `tenant_id`, `branch_id`, `user_type`, `email`, `is_super_admin` | `tenant`, `branch` | Tenant admins may have branch_id from onboarding data but are tenant-wide by backend access rules. |
 | `role` | `id`, `tenant_id`, `name`, `key` | `tenant`, `userrole` | Tenant roles are tenant-owned. Template roles can be locked. |
 | `permission` | `id`, `key` | `rolepermission` | Permission catalog lives in `backend/app/modules/identity/permissions.py`. |
 | `userrole` | `user_id`, `role_id`, `tenant_id` | `user`, `role` | Many-to-many users to roles. |
@@ -789,4 +789,3 @@ cd backend && pytest
 ```
 
 If Python bytecode cache directories are owned by another user, `py_compile` may fail to write `__pycache__`; use AST parse or fix file ownership before relying on bytecode compilation.
-

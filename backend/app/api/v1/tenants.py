@@ -552,6 +552,9 @@ def update_tenant(
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     updates = payload.model_dump(exclude_unset=True)
+    for required_key in ("name", "tenant_type", "status", "country"):
+        if updates.get(required_key) is None:
+            updates.pop(required_key, None)
     if tenant.is_primary:
         if updates.get("name") not in (None, PRIMARY_TENANT_NAME):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Primary tenant name is fixed")

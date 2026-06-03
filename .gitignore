@@ -6,11 +6,14 @@ backend/.venv/
 
 # Build outputs
 .next/
+.next*/
+.next*
 .next.permission-backup/
 .next-permission-backup/
 out/
 dist/
 build/
+tmp/
 
 # Test and tool caches
 .pytest_cache/

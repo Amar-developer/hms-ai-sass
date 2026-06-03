@@ -85,11 +85,13 @@ export function useAppController() {
       apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/branches`, session, referenceReadPermissions, []),
       apiFetchIfAllowed<any[]>(`/tenants/${session.tenantId}/departments`, session, referenceReadPermissions, []),
     ]);
+    const activeTenant = tenantRows.find((tenant: any) => tenant.id === session.tenantId);
+    const isPlatformPrimaryTenant = Boolean(session.user?.is_super_admin && (activeTenant?.is_primary || session.user?.tenant_id === session.tenantId));
     const isDoctorUser = session.user?.user_type === 'doctor' || session.user?.roles?.includes('doctor');
     let scopedBranchRows = branchRows;
     let scopedDepartmentRows = uniqueDepartmentRows(departmentRows, departmentId);
 
-    const entitlementsPromise = apiFetchIfAllowed<any>('/subscription-plans/entitlements', session, [
+    const entitlementsPromise = isPlatformPrimaryTenant ? Promise.resolve<any>(null) : apiFetchIfAllowed<any>('/subscription-plans/entitlements', session, [
       'reports.read',
       'settings.manage',
       'identity.users.manage',
@@ -103,12 +105,12 @@ export function useAppController() {
       'platform.subscriptions.manage',
     ], null);
     const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows, scheduleRows, entitlements] = await Promise.all([
-      apiFetchIfAllowed<any[]>('/patients', session, ['patients.read', 'patients.create', 'patients.write'], []),
-      apiFetchIfAllowed<any[]>('/appointments', session, ['appointments.manage', 'appointments.read', 'appointments.create'], []),
-      apiFetchIfAllowed<any[]>('/queue?include_completed=true', session, 'queue.manage', []),
-      apiFetchIfAllowed<any[]>('/consultations', session, 'consultations.read', []),
-      apiFetchIfAllowed<any[]>('/billing/invoices', session, 'billing.manage', []),
-      apiFetchIfAllowed<any[]>('/ip/admissions', session, ['ip.manage', 'ip.read'], []),
+      isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/patients', session, ['patients.read', 'patients.create', 'patients.write'], []),
+      isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/appointments', session, ['appointments.manage', 'appointments.read', 'appointments.create'], []),
+      isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/queue?include_completed=true', session, 'queue.manage', []),
+      isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/consultations', session, 'consultations.read', []),
+      isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/billing/invoices', session, 'billing.manage', []),
+      isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/ip/admissions', session, ['ip.manage', 'ip.read'], []),
       apiFetchIfAllowed<any[]>('/practitioners', session, [...referenceReadPermissions, 'practitioners.create'], []),
       apiFetchIfAllowed<any[]>('/practitioners/schedules?is_active=true', session, [...referenceReadPermissions, 'practitioners.create'], []),
       entitlementsPromise,

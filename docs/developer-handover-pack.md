@@ -145,7 +145,7 @@ Docs:
 - Important patient data views must create audit events.
 - Frontend must call MedizinHub HMS API, not ERPNext or provider APIs directly.
 - Add or update tests when adding behavior. Minimum: one success path and one authorization/validation failure for new backend APIs.
-- For schema changes, add Alembic migration and keep seed data working on PostgreSQL.
+- For schema changes, add Alembic migration and keep the fresh reset path working on PostgreSQL.
 - Keep SaaS entitlements and admin settings connected to live workflows, not just stored.
 
 ## Verification Commands

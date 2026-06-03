@@ -1,6 +1,12 @@
 .git
 .next
+.next*
 node_modules
+coverage
+.turbo
+.cache
+.pytest_cache
+.ruff_cache
 npm-debug.log*
 .env
 .env.*

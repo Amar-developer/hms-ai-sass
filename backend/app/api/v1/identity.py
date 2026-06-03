@@ -33,6 +33,7 @@ from app.modules.identity.schemas import (
 from app.modules.identity.security import create_access_session, find_user_by_login, hash_password, verify_password
 from app.modules.identity import permissions
 from app.modules.settings.numbering import next_document_number
+from app.modules.subscriptions.service import ensure_default_plans
 from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
@@ -265,6 +266,7 @@ def bootstrap_super_admin(
     existing = session.exec(select(User).where(User.is_super_admin == True)).first()  # noqa: E712
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Super admin already exists")
+    ensure_default_plans(session)
     primary_tenant = _ensure_primary_tenant(session)
     user = User(
         tenant_id=primary_tenant.id,

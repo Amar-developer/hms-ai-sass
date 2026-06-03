@@ -7,7 +7,7 @@ This guide defines how the MedizinHub HMS team should add or enhance modules wit
 Read these documents first:
 
 - `docs/developer-setup.md`: local setup for macOS, Windows, and Linux.
-- `docs/developer-handover-pack.md`: current project status, run commands, demo users, and code map.
+- `docs/developer-handover-pack.md`: current project status, run commands, fresh super admin setup, and code map.
 - `docs/development-master-prompt.md`: engineering rules that every module must follow.
 - `docs/backend-architecture-spec.md`: backend architecture, tenant isolation, RBAC, audit, and integration boundaries.
 - `docs/api-permission-matrix.md`: API permission and entitlement expectations.
@@ -169,7 +169,7 @@ Before a module is considered complete:
 - Subscription entitlement is enforced at API level.
 - Tenant and branch isolation are tested.
 - Audit logging is added and tested for sensitive workflows.
-- Demo seed data exists if needed for customer demo.
+- Keep customer demo data separate from the fresh SaaS setup path.
 - Frontend screen is connected to backend, not mock-only.
 - Listing page has search/filter/pagination where appropriate.
 - Create/edit pages redirect back to listing after success.

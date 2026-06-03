@@ -8,6 +8,7 @@ from app.core.database import engine
 from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole
 from app.modules.identity.permissions import PERMISSION_CATALOG
 from app.modules.identity.security import hash_password
+from app.modules.subscriptions.service import ensure_default_plans
 from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 
@@ -22,7 +23,7 @@ def ensure_primary_tenant(session: Session) -> Tenant:
     if tenant:
         tenant.name = PRIMARY_TENANT_NAME
         tenant.status = TenantStatus.ACTIVE
-        tenant.tenant_type = TenantType.PRIMARY
+        tenant.tenant_type = TenantType.PRIMARY.value
         tenant.updated_at = now_utc()
         session.add(tenant)
         session.commit()
@@ -35,7 +36,7 @@ def ensure_primary_tenant(session: Session) -> Tenant:
         email="admin@medizinhub.local",
         phone="9000000000",
         address="MedizinHub HMS Platform Office",
-            tenant_type=TenantType.PRIMARY.value,
+        tenant_type=TenantType.PRIMARY.value,
         is_primary=True,
         status=TenantStatus.ACTIVE,
     )
@@ -58,8 +59,8 @@ def ensure_super_admin(session: Session, tenant: Tenant) -> User:
     if not user:
         user = User(
             tenant_id=tenant.id,
-        user_type="platform_admin",
-        name=SUPER_ADMIN_NAME,
+            user_type="platform_admin",
+            name=SUPER_ADMIN_NAME,
             email=SUPER_ADMIN_EMAIL,
             password_hash=hash_password(SUPER_ADMIN_PASSWORD),
             is_super_admin=True,
@@ -150,6 +151,7 @@ def ensure_tenant_admin_template_role(session: Session, tenant: Tenant, user: Us
 
 def main() -> None:
     with Session(engine) as session:
+        ensure_default_plans(session)
         tenant = ensure_primary_tenant(session)
         user = ensure_super_admin(session, tenant)
         ensure_super_admin_role(session, tenant, user)

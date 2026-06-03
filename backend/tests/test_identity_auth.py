@@ -81,6 +81,56 @@ def test_bootstrap_creates_primary_super_admin_role(unauthenticated_client):
     assert "platform.subscriptions.manage" not in tenant_admin_role["permission_keys"]
 
 
+def test_bootstrap_super_admin_can_manage_default_subscription_catalog(unauthenticated_client):
+    client = unauthenticated_client
+    token = bootstrap_super_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    plans = client.get("/api/v1/subscription-plans", headers=headers)
+
+    assert plans.status_code == 200
+    keys = {row["key"] for row in plans.json()}
+    assert {"free_trial", "starter", "growth", "pro", "hospital"}.issubset(keys)
+
+    primary = next(row for row in client.get("/api/v1/tenants", headers=headers).json() if row["is_primary"])
+    starter = next(row for row in plans.json() if row["key"] == "starter")
+    primary_subscription = client.post(
+        "/api/v1/subscription-plans/tenant-subscriptions",
+        headers={**headers, "X-Tenant-ID": primary["id"]},
+        json={"plan_id": starter["id"], "starts_on": date.today().isoformat()},
+    )
+    assert primary_subscription.status_code == 400
+    assert primary_subscription.json()["detail"] == "Primary platform tenant does not need a customer subscription"
+
+
+def test_super_admin_can_update_primary_tenant_contact_fields(unauthenticated_client):
+    client = unauthenticated_client
+    token = bootstrap_super_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    tenants = client.get("/api/v1/tenants", headers=headers).json()
+    primary = next(row for row in tenants if row["is_primary"])
+
+    updated = client.patch(
+        f"/api/v1/tenants/{primary['id']}",
+        headers=headers,
+        json={
+            "name": "MedizinHub HMS",
+            "legal_name": "MedizinHub HMS Platform",
+            "description": "Primary platform tenant",
+            "email": "ops@medizinhub.local",
+            "phone": "9000000000",
+            "address": "Platform Office",
+            "tenant_type": "primary",
+            "status": "active",
+            "country": "IN",
+            "timezone": "Asia/Kolkata",
+        },
+    )
+
+    assert updated.status_code == 200
+    assert updated.json()["email"] == "ops@medizinhub.local"
+    assert updated.json()["is_primary"] is True
+
+
 def test_logout_revokes_current_session(unauthenticated_client):
     client = unauthenticated_client
     token = bootstrap_super_admin(client)

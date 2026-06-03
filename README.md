@@ -147,6 +147,15 @@ docker compose down -v
 # 8. Migration cmd
 docker compose -f docker-compose.dev.yml exec backend alembic -c alembic/alembic.ini upgrade head
 
+# Live Docker disk cleanup when deployment fails with "no space left on device"
+# Safe for production data: this removes stopped containers, unused images, and build cache, not named volumes.
+docker system df
+docker builder prune -af
+docker image prune -af
+docker container prune -f
+docker compose build --pull
+docker compose up -d --remove-orphans
+
 
 
 # Docker setup system requirements
@@ -178,3 +187,339 @@ Open working repository in vs code via Ubuntu
 
 
 # verified
+
+# Server Operations Command Reference
+> Clean command reference based on today's operations.
+> Replace placeholders like `YOUR_EMAIL`, `YOUR_PASSWORD`, `YOUR_EC2_IP` with actual values.
+
+---
+
+## 1. Fix Backend CORS Error
+
+```bash
+# Edit .env - CORS must be JSON array format
+nano ~/medizinhub-hms/.env
+
+# Correct format
+MEDIZINHUB_CORS_ORIGINS=["http://YOUR_EC2_IP:3000","http://YOUR_EC2_IP:8080"]
+# OR with domain
+MEDIZINHUB_CORS_ORIGINS=["https://YOUR_DOMAIN.com","http://YOUR_DOMAIN.com"]
+
+# Restart backend after .env change
+sudo docker compose up -d backend report-worker
+sleep 10
+sudo docker compose ps
+```
+
+---
+
+## 2. Fix Containerd Disk Full (Move to /mnt)
+
+```bash
+# Stop everything
+cd ~/medizinhub-hms
+sudo docker compose down
+sudo systemctl stop docker
+sudo systemctl stop docker.socket
+sudo systemctl stop containerd
+
+# Move containerd to /mnt
+sudo mv /var/lib/containerd /mnt/additional-storage/containerd
+sudo ln -s /mnt/additional-storage/containerd /var/lib/containerd
+
+# Verify symlink
+ls -la /var/lib/containerd
+
+# Start services
+sudo systemctl start containerd
+sudo systemctl start docker
+sudo docker compose up -d
+
+# Verify disk freed
+df -h /
+df -h /mnt/additional-storage
+```
+
+---
+
+## 3. Check Database Tables & Row Counts
+
+```bash
+sudo docker compose exec postgres psql -U medizinhub -d medizinhub_hms -c "
+SELECT
+    relname as table_name,
+    n_live_tup as row_count
+FROM pg_stat_user_tables
+ORDER BY n_live_tup DESC;"
+```
+
+---
+
+## 4. Check Tenant Details
+
+```bash
+sudo docker compose exec postgres psql -U medizinhub -d medizinhub_hms -c "
+SELECT
+    id,
+    name,
+    email,
+    status,
+    tenant_type,
+    is_primary,
+    created_at
+FROM tenant
+ORDER BY created_at;"
+```
+
+---
+
+## 5. Quick Database Summary
+
+```bash
+sudo docker compose exec postgres psql -U medizinhub -d medizinhub_hms -c "
+SELECT
+  (SELECT COUNT(*) FROM tenant) as tenants,
+  (SELECT COUNT(*) FROM \"user\") as users,
+  (SELECT COUNT(*) FROM patient) as patients,
+  (SELECT COUNT(*) FROM appointment) as appointments,
+  (SELECT COUNT(*) FROM practitioner) as practitioners;"
+```
+
+---
+
+## 6. Clear All Data (Truncate with FK Bypass)
+
+```bash
+# WARNING: Deletes ALL data except alembic_version
+sudo docker compose exec postgres psql -U medizinhub -d medizinhub_hms -c "
+DO \$\$
+DECLARE r RECORD;
+BEGIN
+    SET session_replication_role = replica;
+    FOR r IN (SELECT tablename FROM pg_tables
+              WHERE schemaname = 'public'
+              AND tablename != 'alembic_version') LOOP
+        EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
+    END LOOP;
+    SET session_replication_role = DEFAULT;
+END \$\$;"
+```
+
+---
+
+## 7. Create / Reset Super Admin
+
+```bash
+sudo docker compose exec \
+  -e MEDIZINHUB_SUPER_ADMIN_EMAIL="YOUR_EMAIL" \
+  -e MEDIZINHUB_SUPER_ADMIN_PASSWORD="YOUR_PASSWORD" \
+  backend python scripts/reset_super_admin.py
+```
+
+---
+
+## 8. Reset All Data & Recreate Super Admin
+
+```bash
+# Deletes all rows, keeps only super admin + default plans
+sudo docker compose exec \
+  -e MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV \
+  -e MEDIZINHUB_SUPER_ADMIN_EMAIL="YOUR_EMAIL" \
+  -e MEDIZINHUB_SUPER_ADMIN_PASSWORD="YOUR_PASSWORD" \
+  backend python scripts/reset_demo_data.py
+```
+
+---
+
+## 9. Seed Demo Data
+
+```bash
+# Insert demo/test data
+sudo docker compose exec backend python scripts/seed_demo.py
+
+# Delete demo data later
+sudo docker compose exec \
+  -e MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV \
+  backend python scripts/reset_demo_data.py
+```
+
+---
+
+## 10. Health Checks
+
+```bash
+# All containers status
+sudo docker compose ps
+
+# Backend API health
+curl http://localhost:8080/api/v1/health
+
+# Through domain
+curl https://YOUR_DOMAIN.com/api/v1/health
+
+# Frappe site
+curl -I https://YOUR_FRAPPE_DOMAIN.com/login
+
+# Frappe services
+sudo supervisorctl status
+```
+
+---
+
+## 11. Disk Usage Checks
+
+```bash
+# Overall disk
+df -h
+
+# What's using root disk
+sudo du -xh / --max-depth=1 2>/dev/null | sort -hr
+
+# What's using /var
+sudo du -xh /var --max-depth=2 2>/dev/null | sort -hr | head -20
+
+# What's using /mnt
+sudo du -sh /mnt/additional-storage/* 2>/dev/null | sort -rh
+
+# Containerd specifically
+sudo du -xh /var/lib/containerd --max-depth=2 | sort -hr | head -10
+```
+
+---
+
+## 12. Free Up Disk Space
+
+```bash
+# Clean Docker unused images/containers/cache
+sudo docker system prune -a -f
+
+# Clean system journals
+sudo journalctl --vacuum-size=50M
+
+# Clean apt cache
+sudo apt-get clean
+sudo apt-get autoremove -y
+
+# Clean old logs
+sudo find /var/log -name "*.gz" -delete
+sudo find /var/log -name "*.old" -delete
+
+# Clean snap cache
+sudo rm -rf /var/lib/snapd/cache/*
+```
+
+---
+
+## 13. Docker Storage Location Check
+
+```bash
+# Verify Docker is using /mnt
+docker info | grep "Docker Root Dir"
+# Expected: /mnt/additional-storage/docker
+
+# Verify containerd is using /mnt
+ls -la /var/lib/containerd
+# Expected: /var/lib/containerd -> /mnt/additional-storage/containerd
+
+# Verify MariaDB is using /mnt
+ls -la /var/lib/mysql
+# Expected: /var/lib/mysql -> /mnt/additional-storage/mysql
+```
+
+---
+
+## 14. Restart All Services
+
+```bash
+# Restart MedizinHub containers
+cd ~/medizinhub-hms
+sudo docker compose restart
+
+# Restart only specific service
+sudo docker compose restart backend
+sudo docker compose restart frontend
+
+# Rebuild and restart
+sudo docker compose up -d --build
+
+# Restart Frappe
+sudo supervisorctl restart all
+
+# Restart MariaDB
+sudo systemctl restart mariadb
+
+# Restart Nginx
+sudo systemctl reload nginx
+```
+
+---
+
+## 15. Nginx Config Check
+
+```bash
+# Test nginx config syntax
+sudo nginx -t
+
+# Reload nginx (no downtime)
+sudo systemctl reload nginx
+
+# Check which domains are configured
+cat /etc/nginx/conf.d/*.conf | grep server_name
+
+# View full nginx config
+cat /etc/nginx/conf.d/frappe-bench.conf
+```
+
+---
+
+## Dev Live Demo Credentials
+
+Show the login shortcut panel only on development/demo deployments:
+
+```bash
+cd ~/medizinhub-hms
+
+# Dev/demo server only
+printf '\nNEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=true\n' >> .env
+
+sudo docker compose build frontend
+sudo docker compose up -d frontend
+```
+
+For production, keep this unset or false:
+
+```bash
+NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=false
+```
+
+---
+
+## ⚠️ Commands to NEVER Run on Production
+
+```bash
+# NEVER - deletes all Docker volumes including database!
+docker compose down -v
+
+# NEVER - deletes database volume!
+docker volume rm medizinhub-hms_medizinhub_postgres_data
+
+# NEVER without backup - removes MariaDB data!
+sudo apt-get remove --purge mysql*
+# If this prompt appears: "Remove all MariaDB databases?" → ALWAYS SELECT NO!
+```
+
+---
+
+## Safe Commands (Data is Always Preserved)
+
+```bash
+# Safe - keeps volumes/data
+sudo docker compose down
+sudo docker compose up -d
+sudo docker compose up -d --build
+sudo docker compose restart
+```
+
+---
+
+*Reference guide — replace all YOUR_* placeholders with actual values before running*

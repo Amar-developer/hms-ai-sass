@@ -268,11 +268,16 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
   const fd=new FormData(e.currentTarget);
   setBusy(true);setMessage('');
   try{
+   const isPrimary=Boolean(selected.is_primary);
    const updated=await apiFetch(`/tenants/${selected.id}`,apiSession,{method:'PATCH',body:JSON.stringify({
-    name:fd.get('name'),legal_name:fd.get('legalName')||null,description:fd.get('description')||null,
+    name:isPrimary?selected.name:fd.get('name'),
+    legal_name:fd.get('legalName')||null,
+    description:fd.get('description')||null,
     email:fd.get('email')||null,phone:fd.get('phone')||null,address:fd.get('address')||null,
-    tenant_type:fd.get('tenantType'),status:fd.get('status'),country:String(fd.get('country')||'IN').toUpperCase(),
-   timezone:fd.get('timezone')||'Asia/Kolkata'
+    tenant_type:isPrimary?'primary':fd.get('tenantType'),
+    status:isPrimary?'active':fd.get('status'),
+    country:String(fd.get('country')||'IN').toUpperCase(),
+    timezone:fd.get('timezone')||'Asia/Kolkata'
    })});
    const logoFile=fd.get('logoFile') as File|null;
    let tenantRow=updated;
@@ -281,7 +286,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
     logoData.append('file',logoFile);
     tenantRow=await apiUpload(`/tenants/${selected.id}/logo`,apiSession,logoData);
    }
-   const branchCount=Number(fd.get('branchCount')||0);
+   const branchCount=isPrimary?0:Number(fd.get('branchCount')||0);
    for(let index=0;index<branchCount;index+=1){
     const branchName=String(fd.get(`branchName_${index}`)||'').trim();
     const branchId=String(fd.get(`branchId_${index}`)||'').trim();
@@ -565,7 +570,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
    {currentSection==='branchCreate'&&<CreateBranch tenants={selectableTenants} selectedId={selectedId} setSelectedId={setSelectedId} busy={busy} createBranch={createBranch} back={()=>changeSection('branches')}/>}
    {currentSection==='branchEdit'&&<EditBranch branch={tenantBranches.find((b:any)=>b.id===selectedBranchId)} busy={busy} updateBranch={updateBranch} back={()=>changeSection('branches')}/>}
    {currentSection==='branchAssign'&&<AssignTemplate title="Assign Branch Template" item={tenantBranches.find((b:any)=>b.id===selectedBranchId)} tenants={selectableTenants.filter((tenant:any)=>tenant.id!==selectedId)} busy={busy} onSubmit={assignBranchTemplate} back={()=>changeSection('branches')}/>}
-   {currentSection==='subscriptions'&&<SubscriptionManagement apiSession={apiSession} plans={plans} tenants={customerTenants} selectedId={selectedId} setSelectedId={setSelectedId} reloadPlans={loadPlatform}/>}
+   {currentSection==='subscriptions'&&<SubscriptionManagement apiSession={apiSession} plans={plans} tenants={customerTenants} selectedId={selectedId} setSelectedId={setSelectedId} reloadPlans={loadPlatform} modules={moduleRegistry}/>}
    {currentSection==='settings'&&<TenantBranchSettings apiSession={apiSession} selected={selected} tenants={customerTenants} selectedId={selectedId} setSelectedId={setSelectedId} plans={plans} modules={moduleRegistry} reloadPlans={loadPlatform}/>}
    {confirmAction&&<ConfirmModal action={confirmAction} busy={busy} onCancel={()=>setConfirmAction(null)} onConfirm={()=>{
    if(confirmAction.entity==='branch')return confirmAction.kind==='delete'?deleteBranch(confirmAction.branch):changeBranchStatus(confirmAction.branch);
@@ -1024,10 +1029,11 @@ function TenantCreatedModal({details,onClose}:any){
  return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-lg"><div className="flex flex-col gap-3"><Badge tone="green">Tenant Created</Badge><div><h3 className="text-xl font-bold">Tenant has been created successfully</h3><p className="mt-1 text-sm text-slate-600">{tenant.name} is ready and the Tenants listing page is open with the latest record shown first.</p></div><div className="grid gap-3 sm:grid-cols-2"><Info label="Tenant ID" value={tenant.id}/><Info label="Type" value={formatTenantType(tenant.tenant_type)}/><Info label="Status" value={tenant.status}/><Info label="Branches" value={details.branchCount}/><Info label="Subscription" value={details.hasSubscription?'Assigned':'Not assigned'}/><Info label="Modules" value={details.moduleCount||0}/><Info label="Plan" value={details.onboardingPlan?.name||'Selected plan'}/><Info label="Next Step" value="Create tenant admin user"/></div><div className="mt-2 flex flex-wrap gap-2"><Button type="button" onClick={onClose}>View Tenants</Button><button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold">Close</button></div></div></Card></div>
 }
 
-function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelectedId,reloadPlans}:any){
+function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelectedId,reloadPlans,modules=[]}:any){
  const [view,setView]=useState('list');
  const [filters,setFilters]=useState({tenant:'',plan:'all',status:'all',fromDate:'',toDate:''});
  const [page,setPage]=useState(1);
+ const [editingPlan,setEditingPlan]=useState<any>(null);
  const [usage,setUsage]=useState<any>(null);
  const [announcements,setAnnouncements]=useState<any[]>([]);
  const [subscriptions,setSubscriptions]=useState<any[]>([]);
@@ -1040,6 +1046,7 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
  const selectedTenant=tenants.find((tenant:any)=>tenant.id===selectedId);
  const planById=new Map(plans.map((plan:any)=>[plan.id,plan]));
  const tenantById=new Map(tenants.map((tenant:any)=>[tenant.id,tenant]));
+ const editableModules=entitlementModules(modules);
  const pageSize=8;
 
  function openSubscriptionView(nextView:string){
@@ -1087,10 +1094,27 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
     included_branches:Number(fd.get('includedBranches')||1),
     included_doctors:Number(fd.get('includedDoctors')||1),
     price_inr_monthly:Number(fd.get('priceInrMonthly')||0),
-    enabled_modules:String(fd.get('enabledModules')||'patients,appointments,queue,consultations,billing_basic').split(',').map(item=>item.trim()).filter(Boolean)
+    enabled_modules:moduleKeysWithDependencies(fd.getAll('enabledModules').map(String),modules)
    })});
    form.reset();await reloadPlans();await loadSubscriptionConsole();openSubscriptionView('list');setMessage('Custom subscription plan created.');
   }catch(err:any){setMessage(err.message||'Could not create plan.')}finally{setLoading(false)}
+ }
+
+ async function updatePlan(e:any){
+  e.preventDefault();if(!apiSession||!editingPlan)return;
+  const fd=new FormData(e.currentTarget);
+  setLoading(true);setMessage('');
+  try{
+   await apiFetch(`/subscription-plans/${editingPlan.id}`,apiSession,{method:'PATCH',body:JSON.stringify({
+    name:fd.get('name'),
+    monthly_patient_limit:Number(fd.get('monthlyPatientLimit')||0),
+    included_branches:Number(fd.get('includedBranches')||0),
+    included_doctors:Number(fd.get('includedDoctors')||0),
+    price_inr_monthly:Number(fd.get('priceInrMonthly')||0),
+    enabled_modules:moduleKeysWithDependencies(fd.getAll('enabledModules').map(String),modules)
+   })});
+   setEditingPlan(null);await reloadPlans();await loadSubscriptionConsole();openSubscriptionView('list');setMessage('Subscription plan updated. Active tenant entitlements using this plan now use the new modules.');
+  }catch(err:any){setMessage(err.message||'Could not update plan.')}finally{setLoading(false)}
  }
 
  async function changePlanStatus(plan:any){
@@ -1155,7 +1179,8 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
  const safePage=Math.min(page,totalPages);
  const rows=filtered.slice((safePage-1)*pageSize,safePage*pageSize);
 
- if(view==='createPlan')return <SubscriptionCreatePlan loading={loading} createPlan={createPlan} back={()=>openSubscriptionView('list')}/>;
+ if(view==='createPlan')return <SubscriptionCreatePlan loading={loading} createPlan={createPlan} back={()=>openSubscriptionView('list')} modules={editableModules}/>;
+ if(view==='editPlan'&&editingPlan)return <SubscriptionEditPlan loading={loading} plan={editingPlan} updatePlan={updatePlan} back={()=>{setEditingPlan(null);openSubscriptionView('list')}} modules={editableModules}/>;
  if(view==='assign')return <SubscriptionAssignPlan loading={loading} tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId} plans={activePlans} selectedTenant={selectedTenant} assignSubscription={assignSubscription} back={()=>openSubscriptionView('list')}/>;
  if(view==='credits')return <SubscriptionCreditsPage loading={loading} tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId} usage={usage} credits={credits} invoices={invoices} addCredits={addCredits} back={()=>openSubscriptionView('list')}/>;
 
@@ -1163,12 +1188,17 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
   <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h3 className="text-lg font-bold">Subscription Management</h3><p className="text-sm text-slate-500">Search tenant subscriptions, review SaaS revenue, and open focused pages for plan setup, upgrades, and credits.</p></div><div className="flex flex-wrap gap-2"><CreateActionButton label="Create Custom Plan" onClick={()=>openSubscriptionView('createPlan')}/><button type="button" onClick={()=>openSubscriptionView('assign')} className="rounded-2xl border px-4 py-3 text-sm font-bold">Assign / Upgrade</button><button type="button" onClick={()=>openSubscriptionView('credits')} className="rounded-2xl border px-4 py-3 text-sm font-bold">Additional Credits</button></div></div><StatusToast message={message} onClose={()=>setMessage('')}/>{announcements.length>0&&<div className="mt-4 overflow-hidden rounded-2xl bg-amber-50 p-3 text-sm font-bold text-amber-800"><div className="animate-pulse whitespace-nowrap">{announcements.map(item=>item.message).join('  |  ')}</div></div>}</Card>
   <div className="grid gap-4 md:grid-cols-4"><Info label="Active Subscriptions" value={revenue?.total_active_subscriptions??'-'}/><Info label="Scheduled" value={revenue?.scheduled_subscriptions??'-'}/><Info label="Estimated MRR" value={`₹${revenue?.estimated_monthly_recurring_revenue??0}`}/><Info label="Pending Invoice" value={`₹${revenue?.pending_invoice_amount??0}`}/></div>
   <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h4 className="font-bold">Subscriptions</h4><p className="text-sm text-slate-500">Latest created or updated subscription records appear first.</p></div><Badge tone="blue">{filtered.length} records</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><FormField label="Tenant / Plan"><Input value={filters.tenant} onChange={(e:any)=>setFilters({...filters,tenant:e.target.value})} placeholder="Search tenant or plan"/></FormField><FormField label="Plan"><Select value={filters.plan} onChange={(e:any)=>setFilters({...filters,plan:e.target.value})}><option value="all">All plans</option>{plans.map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name}</option>)}</Select></FormField><FormField label="Status"><Select value={filters.status} onChange={(e:any)=>setFilters({...filters,status:e.target.value})}><option value="all">All status</option><option value="active">Active</option><option value="scheduled">Scheduled</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></Select></FormField><FormField label="From"><Input type="date" value={filters.fromDate} onChange={(e:any)=>setFilters({...filters,fromDate:e.target.value})}/></FormField><FormField label="To"><Input type="date" value={filters.toDate} onChange={(e:any)=>setFilters({...filters,toDate:e.target.value})}/></FormField></div><div className="mt-4 overflow-hidden rounded-2xl border border-slate-200"><div className="hidden grid-cols-[1.3fr_1.05fr_.8fr_.85fr_.85fr_.85fr_1fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid"><span>Tenant</span><span>Plan</span><span>Status</span><span>Start</span><span>End</span><span>Amount</span><span>Actions</span></div><div className="divide-y divide-slate-200">{rows.length===0&&<Empty text={loading?'Loading subscriptions...':'No subscriptions match your search.'}/>} {rows.map((subscription:any)=>{const plan=planById.get(subscription.plan_id) as any;const tenant=tenantById.get(subscription.tenant_id) as any;return <div key={subscription.id} className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.3fr_1.05fr_.8fr_.85fr_.85fr_.85fr_1fr] xl:items-center"><div><b>{subscription.tenant_name||tenant?.name||subscription.tenant_id}</b><p className="break-all text-xs text-slate-500">{subscription.tenant_id}</p></div><div><b>{plan?.name||subscription.plan_id}</b><p className="text-xs text-slate-500">{plan?.key||''}</p></div><div><Badge tone={subscription.status==='active'?'green':subscription.status==='scheduled'?'amber':subscription.status==='expired'?'slate':'red'}>{subscription.status}</Badge></div><span>{formatDate(subscription.starts_on)}</span><span>{formatDate(subscription.ends_on)}</span><b>₹{subscription.billing_amount}</b><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>{setSelectedId(subscription.tenant_id);openSubscriptionView('assign')}} className="rounded-xl border px-3 py-2 text-xs font-bold">Upgrade</button><button type="button" onClick={()=>{setSelectedId(subscription.tenant_id);openSubscriptionView('credits')}} className="rounded-xl border px-3 py-2 text-xs font-bold">Credits</button></div></div>})}</div></div><Pagination page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPage={setPage}/></Card>
-  <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h4 className="font-bold">Plan Catalog</h4><p className="text-sm text-slate-500">Plans can be activated or deactivated here. Create/edit flows can be expanded into a full plan CRUD page next.</p></div><Badge tone="blue">{plans.length} plans</Badge></div><div className="mt-4 overflow-hidden rounded-2xl border border-slate-200"><div className="hidden grid-cols-[1.25fr_.9fr_.7fr_.7fr_.7fr_1fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid"><span>Plan</span><span>Price</span><span>Patients</span><span>Branches</span><span>Status</span><span>Actions</span></div><div className="divide-y divide-slate-200">{plans.map((plan:any)=><div key={plan.id} className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.25fr_.9fr_.7fr_.7fr_.7fr_1fr] xl:items-center"><div><b>{plan.name}</b><p className="text-xs text-slate-500">{plan.key}</p></div><b>₹{plan.price_inr_monthly}</b><span>{plan.monthly_patient_limit}</span><span>{plan.included_branches}</span><Badge tone={plan.is_active?'green':'slate'}>{plan.is_active?'Active':'Inactive'}</Badge><button type="button" onClick={()=>changePlanStatus(plan)} className="w-fit rounded-xl border px-3 py-2 text-xs font-bold">{plan.is_active?'Deactivate':'Activate'}</button></div>)}</div></div></Card>
+  <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h4 className="font-bold">Plan Catalog</h4><p className="text-sm text-slate-500">Update SaaS limits, pricing, and module access for new and active tenant subscriptions.</p></div><Badge tone="blue">{plans.length} plans</Badge></div><div className="mt-4 overflow-hidden rounded-2xl border border-slate-200"><div className="hidden grid-cols-[1.2fr_.7fr_.6fr_.6fr_1.25fr_.65fr_1fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid"><span>Plan</span><span>Price</span><span>Patients</span><span>Branches</span><span>Modules</span><span>Status</span><span>Actions</span></div><div className="divide-y divide-slate-200">{plans.map((plan:any)=><div key={plan.id} className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.2fr_.7fr_.6fr_.6fr_1.25fr_.65fr_1fr] xl:items-center"><div><b>{plan.name}</b><p className="text-xs text-slate-500">{plan.key}</p></div><b>₹{plan.price_inr_monthly}</b><span>{plan.monthly_patient_limit}</span><span>{plan.included_branches}</span><ModuleSummary modules={plan.enabled_modules}/><Badge tone={plan.is_active?'green':'slate'}>{plan.is_active?'Active':'Inactive'}</Badge><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>{setEditingPlan(plan);openSubscriptionView('editPlan')}} className="w-fit rounded-xl border px-3 py-2 text-xs font-bold">Edit</button><button type="button" onClick={()=>changePlanStatus(plan)} className="w-fit rounded-xl border px-3 py-2 text-xs font-bold">{plan.is_active?'Deactivate':'Activate'}</button></div></div>)}</div></div></Card>
  </div>
 }
 
-function SubscriptionCreatePlan({loading,createPlan,back}:any){
- return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Create Custom Plan</h3><p className="text-sm text-slate-500">Create a reusable SaaS package with limits, pricing, and enabled modules.</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Subscriptions</button></div><form onSubmit={createPlan} className="mt-5 grid gap-3 md:grid-cols-2"><FormField label="Plan Key"><Input name="key" required placeholder="growth_clinic"/></FormField><FormField label="Plan Name"><Input name="name" required placeholder="Growth Clinic"/></FormField><FormField label="Patient Limit"><Input name="monthlyPatientLimit" type="number" required min="1" defaultValue="300"/></FormField><FormField label="Monthly Price"><Input name="priceInrMonthly" type="number" required min="0" defaultValue="2999"/></FormField><FormField label="Included Branches"><Input name="includedBranches" type="number" min="1" defaultValue="1"/></FormField><FormField label="Included Doctors"><Input name="includedDoctors" type="number" min="1" defaultValue="3"/></FormField><div className="md:col-span-2"><FormField label="Enabled Modules"><Input name="enabledModules" defaultValue="patients,appointments,queue,consultations,billing_basic,patient_subscriptions" placeholder="lab,pharmacy,patient_subscriptions,whatsapp,voice,ai,ip"/></FormField></div><div className="flex flex-wrap gap-2 md:col-span-2"><Button disabled={loading}>{loading?'Saving...':'Create Plan'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></form></Card>
+function SubscriptionCreatePlan({loading,createPlan,back,modules}:any){
+ const defaults=defaultModuleKeys(modules);
+ return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Create Custom Plan</h3><p className="text-sm text-slate-500">Create a reusable SaaS package with limits, pricing, and enabled modules.</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Subscriptions</button></div><form onSubmit={createPlan} className="mt-5 grid gap-3 md:grid-cols-2"><FormField label="Plan Key"><Input name="key" required placeholder="growth_clinic"/></FormField><FormField label="Plan Name"><Input name="name" required placeholder="Growth Clinic"/></FormField><FormField label="Patient Limit"><Input name="monthlyPatientLimit" type="number" required min="1" defaultValue="300"/></FormField><FormField label="Monthly Price"><Input name="priceInrMonthly" type="number" required min="0" defaultValue="2999"/></FormField><FormField label="Included Branches"><Input name="includedBranches" type="number" min="1" defaultValue="1"/></FormField><FormField label="Included Doctors"><Input name="includedDoctors" type="number" min="1" defaultValue="3"/></FormField><div className="md:col-span-2"><ModuleEntitlementChecklist modules={modules} selected={defaults}/></div><div className="flex flex-wrap gap-2 md:col-span-2"><Button disabled={loading}>{loading?'Saving...':'Create Plan'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></form></Card>
+}
+
+function SubscriptionEditPlan({loading,plan,updatePlan,back,modules}:any){
+ return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Edit Subscription Plan</h3><p className="text-sm text-slate-500">{plan.key}</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Subscriptions</button></div><form onSubmit={updatePlan} className="mt-5 grid gap-3 md:grid-cols-2"><FormField label="Plan Name"><Input name="name" required defaultValue={plan.name}/></FormField><FormField label="Monthly Price"><Input name="priceInrMonthly" type="number" required min="0" defaultValue={plan.price_inr_monthly}/></FormField><FormField label="Patient Limit"><Input name="monthlyPatientLimit" type="number" required min="0" defaultValue={plan.monthly_patient_limit}/></FormField><FormField label="Included Branches"><Input name="includedBranches" type="number" required min="0" defaultValue={plan.included_branches}/></FormField><FormField label="Included Doctors"><Input name="includedDoctors" type="number" required min="0" defaultValue={plan.included_doctors}/></FormField><div className="md:col-span-2"><ModuleEntitlementChecklist modules={modules} selected={plan.enabled_modules||[]}/></div><div className="flex flex-wrap gap-2 md:col-span-2"><Button disabled={loading}>{loading?'Saving...':'Update Plan'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></form></Card>
 }
 
 function SubscriptionAssignPlan({loading,tenants,selectedId,setSelectedId,plans,selectedTenant,assignSubscription,back}:any){
@@ -1181,6 +1211,23 @@ function SubscriptionCreditsPage({loading,tenants,selectedId,setSelectedId,usage
 
 function SubscriptionTable({title,rows,columns}:any){
  return <Card><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{title}</h4><Badge tone="blue">{rows.length}</Badge></div><div className="mt-4 space-y-3">{rows.length===0&&<Empty text={`No ${title.toLowerCase()} yet.`}/>} {rows.slice(0,6).map((row:any)=><div key={row.id||row.invoice_number} className="rounded-2xl bg-slate-50 p-3 text-sm"><div className="grid gap-2 sm:grid-cols-2">{columns.map((column:string)=><div key={column}><p className="text-[11px] font-bold uppercase text-slate-500">{column.replaceAll('_',' ')}</p><p className="font-semibold">{String(row[column]??'-')}</p></div>)}</div></div>)}</div></Card>
+}
+
+function ModuleEntitlementChecklist({modules,selected=[]}:any){
+ const selectedSet=new Set(selected);
+ const grouped=(modules||[]).reduce((acc:any,module:any)=>{
+  const category=String(module.category||'modules');
+  acc[category]=[...(acc[category]||[]),module];
+  return acc;
+ },{});
+ const categories=Object.keys(grouped).sort();
+ return <div><p className="mb-2 text-sm font-bold text-slate-700">Enabled Modules</p><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{categories.map(category=><div key={category} className="rounded-2xl border border-slate-200 p-3"><p className="mb-2 text-xs font-bold uppercase text-slate-500">{category.replaceAll('_',' ')}</p><div className="grid gap-2">{grouped[category].map((module:any)=><label key={module.entitlement_key} className="flex cursor-pointer items-start gap-2 rounded-xl p-2 text-sm hover:bg-slate-50"><input name="enabledModules" type="checkbox" value={module.entitlement_key} defaultChecked={selectedSet.has(module.entitlement_key)} className="mt-1 h-4 w-4"/><span><span className="font-semibold">{module.name}</span><span className="block text-xs text-slate-500">{module.entitlement_key}</span></span></label>)}</div></div>)}</div></div>
+}
+
+function ModuleSummary({modules}:any){
+ const rows=(modules||[]).filter(Boolean);
+ if(!rows.length)return <span className="text-slate-400">-</span>;
+ return <div className="flex flex-wrap gap-1">{rows.slice(0,4).map((module:string)=><span key={module} className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700">{module}</span>)}{rows.length>4&&<span className="rounded-full bg-slate-900 px-2 py-1 text-[11px] font-bold text-white">+{rows.length-4}</span>}</div>
 }
 
 function TenantBranchSettings({apiSession,selected,tenants,selectedId,setSelectedId,plans,modules,reloadPlans}:any){
@@ -1263,21 +1310,24 @@ function TenantBranchSettings({apiSession,selected,tenants,selectedId,setSelecte
   setLoading(true);setMessage('');
   try{
    const safeTenantId=String(selected.id||'tenant').replace(/[^a-zA-Z0-9]/g,'_').slice(-24);
-   const plan=await apiFetch('/subscription-plans',apiSession,{method:'POST',body:JSON.stringify({
-    key:`tenant_modules_${safeTenantId}_${Date.now()}`.slice(0,80),
+   const canUpdateActivePlan=Boolean(activePlan?.key&&String(activePlan.key).startsWith('tenant_modules_'));
+   const planPayload={
     name:`${selected.name} Module Access`,
     monthly_patient_limit:Number(basePlan?.monthly_patient_limit||300),
     included_branches:Number(basePlan?.included_branches||1),
     included_doctors:Number(basePlan?.included_doctors||1),
     price_inr_monthly:Number(basePlan?.price_inr_monthly||0),
     enabled_modules:enabledModules
-   })});
-   const subscription=await apiFetch('/subscription-plans/tenant-subscriptions',{...apiSession,tenantId:selected.id},{method:'POST',body:JSON.stringify({
-    plan_id:plan.id,
-    starts_on:new Date().toISOString().slice(0,10),
-    billing_amount:Number(activeSubscription?.billing_amount??basePlan?.price_inr_monthly??0),
-    notes:'Updated enabled modules from Tenant & Branch Settings'
-   })});
+   };
+   const plan=canUpdateActivePlan
+    ? await apiFetch(`/subscription-plans/${activePlan.id}`,apiSession,{method:'PATCH',body:JSON.stringify(planPayload)})
+    : await apiFetch('/subscription-plans',apiSession,{method:'POST',body:JSON.stringify({...planPayload,key:`tenant_modules_${safeTenantId}_${Date.now()}`.slice(0,80)})});
+   const subscription=canUpdateActivePlan&&activeSubscription?activeSubscription:await apiFetch('/subscription-plans/tenant-subscriptions',{...apiSession,tenantId:selected.id},{method:'POST',body:JSON.stringify({
+     plan_id:plan.id,
+     starts_on:new Date().toISOString().slice(0,10),
+     billing_amount:Number(activeSubscription?.billing_amount??basePlan?.price_inr_monthly??0),
+     notes:'Updated enabled modules from Tenant & Branch Settings'
+    })});
    setSelectedModules(enabledModules);
    setSubscriptions(previous=>[subscription,...previous.filter((item:any)=>item.id!==subscription.id)]);
    window.localStorage.setItem('medizinhub.entitlements.refresh', String(Date.now()));
@@ -1341,6 +1391,26 @@ function tenantSelectOptions(tenants:any[]){
   if(key)seen.add(key);
   return true;
  });
+}
+function entitlementModules(modules:any[]){
+ return (modules||[]).filter((module:any)=>module.entitlement_key).sort((a:any,b:any)=>String(a.category||'').localeCompare(String(b.category||''))||String(a.name||'').localeCompare(String(b.name||'')));
+}
+function defaultModuleKeys(modules:any[]){
+ return entitlementModules(modules).filter((module:any)=>module.default_enabled).map((module:any)=>module.entitlement_key);
+}
+function moduleKeysWithDependencies(rawKeys:string[],modules:any[]){
+ const moduleByKey=new Map((modules||[]).map((module:any)=>[module.key,module]));
+ const moduleByEntitlement=new Map(entitlementModules(modules).map((module:any)=>[module.entitlement_key,module]));
+ const selected=new Set((rawKeys||[]).filter(Boolean));
+ if(!selected.size)defaultModuleKeys(modules).forEach((key:string)=>selected.add(key));
+ Array.from(selected).forEach((key:string)=>{
+  const module=moduleByEntitlement.get(key) as any;
+  (module?.dependencies||[]).forEach((dependency:string)=>{
+   const dependencyModule=moduleByKey.get(dependency) as any;
+   if(dependencyModule?.entitlement_key)selected.add(dependencyModule.entitlement_key);
+  });
+ });
+ return Array.from(selected).sort();
 }
 function roleDisplayName(role:any){return role?.name||formatTitle(String(role?.key||'Role').replaceAll('_',' ').replaceAll('.',' '))}
 function userRoleLabels(user:any){

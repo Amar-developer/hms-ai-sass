@@ -7,9 +7,12 @@ import {Button,Card,Field,Input} from '@/components/ui';
 type DemoUser = readonly [string, string, string];
 
 export function AuthScreen({ role, setRole, onLogin, demoUsers, loginPresets }: any) {
+  const showDemoCredentials =
+    process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === 'true' ||
+    process.env.NODE_ENV !== 'production';
   const preset = loginPresets[role] || loginPresets.tenant_admin;
-  const [email,setEmail] = useState(preset.email);
-  const [password,setPassword] = useState(preset.password);
+  const [email,setEmail] = useState(showDemoCredentials ? preset.email : '');
+  const [password,setPassword] = useState(showDemoCredentials ? preset.password : '');
   const [error,setError] = useState('');
   const [loading,setLoading] = useState(false);
   const [showDemo,setShowDemo] = useState(false);
@@ -130,7 +133,7 @@ export function AuthScreen({ role, setRole, onLogin, demoUsers, loginPresets }: 
               </Button>
             </form>
 
-            <div className="mt-6 border-t border-slate-200 pt-4">
+            {showDemoCredentials && <div className="mt-6 border-t border-slate-200 pt-4">
               <button
                 type="button"
                 onClick={() => setShowDemo(!showDemo)}
@@ -156,7 +159,7 @@ export function AuthScreen({ role, setRole, onLogin, demoUsers, loginPresets }: 
                   ))}
                 </div>
               )}
-            </div>
+            </div>}
           </Card>
         </section>
       </div>

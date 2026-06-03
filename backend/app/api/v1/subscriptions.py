@@ -44,6 +44,7 @@ from app.modules.subscriptions.service import (
     active_patient_credits,
     current_patient_count,
     effective_patient_limit,
+    ensure_default_plans,
     get_active_subscription,
     modules_from_json,
     modules_to_json,
@@ -205,6 +206,7 @@ def list_plans(
     session: Session = Depends(get_session),
     _current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
 ) -> list[SubscriptionPlanRead]:
+    ensure_default_plans(session)
     plans = list(session.exec(select(SubscriptionPlan).order_by(SubscriptionPlan.price_inr_monthly)).all())
     return [_plan_read(plan) for plan in plans]
 
@@ -278,6 +280,11 @@ def create_tenant_subscription(
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    if tenant.is_primary:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Primary platform tenant does not need a customer subscription",
+        )
     plan = session.get(SubscriptionPlan, payload.plan_id)
     if not plan or not plan.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan")
