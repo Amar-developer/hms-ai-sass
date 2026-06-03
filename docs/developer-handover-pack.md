@@ -24,14 +24,21 @@ cd backend
 source .venv/bin/activate
 
 MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms" .venv/bin/alembic upgrade head
-MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms" .venv/bin/python -m scripts.seed_demo
 MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms" .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
-To wipe local demo rows and rebuild the seeded MedizinHub HMS demo dataset from a clean database:
+Create the first platform super admin once:
 
 ```bash
-MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms" .venv/bin/python -m scripts.reset_demo_data
+curl -X POST http://localhost:8000/api/v1/auth/bootstrap-super-admin \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Platform Super Admin","email":"admin@medizinhub.local","password":"ChangeMe@123"}'
+```
+
+To wipe local rows and rebuild only the fresh SaaS setup, without demo tenants or sample clinical data:
+
+```bash
+MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV MEDIZINHUB_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@localhost:5433/medizinhub_hms" .venv/bin/python -m scripts.reset_fresh_data
 ```
 
 Frontend:
@@ -49,22 +56,15 @@ Open:
 
 Important: Docker PostgreSQL is mapped to host port `5433` because many Macs already run local PostgreSQL on `5432`.
 
-## Demo Credentials
+## Fresh Credentials
 
-After running `python -m scripts.seed_demo`:
+After bootstrapping or running `python -m scripts.reset_fresh_data`:
 
 | User | Email | Password |
 | --- | --- | --- |
-| Super Admin | `super.admin@demo.medizinhub.local` | `SuperPass123` |
-| Tenant Admin | `tenant.admin@demo.medizinhub.local` | `DemoPass123` |
-| Reception | `reception@demo.medizinhub.local` | `DemoUser123` |
-| Doctor | `doctor@demo.medizinhub.local` | `DemoUser123` |
-| Lab Technician | `lab@demo.medizinhub.local` | `DemoUser123` |
-| Pharmacy | `pharmacy@demo.medizinhub.local` | `DemoUser123` |
-| Billing | `billing@demo.medizinhub.local` | `DemoUser123` |
-| Back Office | `backoffice@demo.medizinhub.local` | `DemoUser123` |
+| Super Admin | `admin@medizinhub.local` | `ChangeMe@123` |
 
-The login screen only needs email and password. Tenant, role, and privileges are detected from backend auth.
+The super admin login does not need a tenant ID. Customer tenant admins and staff are created later from the Super Admin dashboard or tenant onboarding API.
 
 ## Important Current Limitations
 
@@ -88,8 +88,8 @@ Backend:
 - `backend/app/core/auth.py`: bearer session and RBAC dependencies.
 - `backend/app/core/database.py`: SQLModel engine/session setup.
 - `backend/alembic/versions/*`: migrations.
-- `backend/scripts/seed_demo.py`: idempotent demo data.
-- `backend/scripts/reset_demo_data.py`: guarded local demo-data reset and reseed command.
+- `backend/scripts/reset_fresh_data.py`: guarded local reset that recreates only the platform tenant, super admin, role templates, and default plans.
+- `backend/scripts/reset_super_admin.py`: controlled support script for repairing the platform super admin login.
 - `backend/tests/*`: backend contract tests.
 
 Frontend:

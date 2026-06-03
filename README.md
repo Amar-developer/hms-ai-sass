@@ -156,7 +156,7 @@ docker compose -f docker-compose.dev.yml exec backend alembic -c alembic/alembic
 
 3. clone our woriking github repository
 
-4. check postgreSQL db and seed data
+4. check PostgreSQL db and fresh super admin setup
 
 5. wsl --install -d Ubuntu ---> install ubuntu in windows
 

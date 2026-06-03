@@ -87,54 +87,35 @@ backend/.venv/bin/ruff check backend/app backend/tests
 backend/.venv/bin/pytest backend/tests -q
 ```
 
-## Seed Demo Data
+## Fresh SaaS Data
 
-Create a complete local demo dataset with one command:
+A fresh local database should contain only platform setup records:
+
+- Primary tenant: `MedizinHub HMS`
+- Super admin user
+- `super_admin` role
+- Global `tenant_admin` role template
+- Default subscription plans
+
+Start from an empty database by running migrations, then bootstrap the first super admin:
 
 ```bash
 cd backend
 source .venv/bin/activate
-python -m scripts.seed_demo
+alembic upgrade head
+
+curl -X POST http://localhost:8000/api/v1/auth/bootstrap-super-admin \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Platform Super Admin","email":"admin@medizinhub.local","password":"ChangeMe@123"}'
 ```
 
-For a clean local development reset, delete existing seeded rows and recreate the demo dataset:
+For a clean local development reset, delete all rows and recreate only the fresh SaaS setup:
 
 ```bash
-MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV python -m scripts.reset_demo_data
+MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV python -m scripts.reset_fresh_data
 ```
 
-The seed command is idempotent for the demo tenant. It creates or reuses:
-
-- Tenant: `MedizinHub Demo Clinic`
-- Branch: `Main Demo Branch`
-- Demo Growth subscription plan with billing, WhatsApp, SMS, voice, lab, pharmacy, AI, and IP modules enabled
-- Tenant and branch settings for invoice prefix, queue rules, payment methods, and communication providers
-- Tenant admin login: `tenant.admin@demo.medizinhub.local` / `DemoPass123`
-- Super admin login: `super.admin@demo.medizinhub.local` / `SuperPass123`
-- Staff demo password for reception, doctor, lab, pharmacy, billing, and back office: `DemoUser123`
-- Demo practitioner master for `doctor_demo` mapped to the main branch, general/pediatrics/diabetology departments, weekday 09:00-13:00 schedules, and Consultation Room 1
-- Patient with allergy alert
-- OP appointment and queue token
-- Signed consultation
-- Doctor fee rule
-- Invoice with `MHD` prefix
-- Queued appointment, token call, payment pending, and follow-up notifications
-
-Use the returned `tenant_id` as `X-Tenant-ID` in Swagger.
-Use `POST /api/v1/auth/login` with the seeded tenant admin credentials to get a bearer token for protected module APIs.
-
-Demo users:
-
-| User | Email | Password | Tenant ID |
-| --- | --- | --- | --- |
-| Super Admin | `super.admin@demo.medizinhub.local` | `SuperPass123` | Not required for login |
-| Tenant Admin | `tenant.admin@demo.medizinhub.local` | `DemoPass123` | Required |
-| Reception | `reception@demo.medizinhub.local` | `DemoUser123` | Required |
-| Doctor | `doctor@demo.medizinhub.local` | `DemoUser123` | Required |
-| Lab Technician | `lab@demo.medizinhub.local` | `DemoUser123` | Required |
-| Pharmacy | `pharmacy@demo.medizinhub.local` | `DemoUser123` | Required |
-| Billing | `billing@demo.medizinhub.local` | `DemoUser123` | Required |
-| Back Office | `backoffice@demo.medizinhub.local` | `DemoUser123` | Required |
+The reset script reads optional `MEDIZINHUB_SUPER_ADMIN_NAME`, `MEDIZINHUB_SUPER_ADMIN_EMAIL`, and `MEDIZINHUB_SUPER_ADMIN_PASSWORD` values. It does not create demo tenants, branches, patients, doctors, appointments, invoices, or staff users.
 
 ## Useful API Groups
 

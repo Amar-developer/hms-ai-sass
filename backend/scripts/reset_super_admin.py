@@ -12,8 +12,9 @@ from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
-SUPER_ADMIN_EMAIL = os.getenv("MEDIZINHUB_SUPER_ADMIN_EMAIL", "super.admin@demo.medizinhub.local").lower()
-SUPER_ADMIN_PASSWORD = os.getenv("MEDIZINHUB_SUPER_ADMIN_PASSWORD", "SuperPass123")
+SUPER_ADMIN_NAME = os.getenv("MEDIZINHUB_SUPER_ADMIN_NAME", "Platform Super Admin")
+SUPER_ADMIN_EMAIL = os.getenv("MEDIZINHUB_SUPER_ADMIN_EMAIL", "admin@medizinhub.local").lower()
+SUPER_ADMIN_PASSWORD = os.getenv("MEDIZINHUB_SUPER_ADMIN_PASSWORD", "ChangeMe@123")
 
 
 def ensure_primary_tenant(session: Session) -> Tenant:
@@ -34,7 +35,7 @@ def ensure_primary_tenant(session: Session) -> Tenant:
         email="admin@medizinhub.local",
         phone="9000000000",
         address="MedizinHub HMS Platform Office",
-        tenant_type=TenantType.PRIMARY,
+            tenant_type=TenantType.PRIMARY.value,
         is_primary=True,
         status=TenantStatus.ACTIVE,
     )
@@ -57,8 +58,8 @@ def ensure_super_admin(session: Session, tenant: Tenant) -> User:
     if not user:
         user = User(
             tenant_id=tenant.id,
-            user_type="platform_admin",
-            name="Demo Super Admin",
+        user_type="platform_admin",
+        name=SUPER_ADMIN_NAME,
             email=SUPER_ADMIN_EMAIL,
             password_hash=hash_password(SUPER_ADMIN_PASSWORD),
             is_super_admin=True,
@@ -67,6 +68,7 @@ def ensure_super_admin(session: Session, tenant: Tenant) -> User:
         )
     user.tenant_id = tenant.id
     user.user_type = "platform_admin"
+    user.name = SUPER_ADMIN_NAME
     user.email = SUPER_ADMIN_EMAIL
     user.password_hash = hash_password(SUPER_ADMIN_PASSWORD)
     user.is_super_admin = True
@@ -111,11 +113,47 @@ def ensure_super_admin_role(session: Session, tenant: Tenant, user: User) -> Non
     session.commit()
 
 
+def ensure_tenant_admin_template_role(session: Session, tenant: Tenant, user: User) -> None:
+    ensure_permissions(session)
+    role = session.exec(select(Role).where(Role.tenant_id == tenant.id, Role.key == "tenant_admin")).first()
+    if not role:
+        role = Role(
+            tenant_id=tenant.id,
+            name="Tenant Admin",
+            key="tenant_admin",
+            is_global_template=True,
+            created_by_user_id=user.id,
+            updated_by_user_id=user.id,
+        )
+        session.add(role)
+        session.commit()
+        session.refresh(role)
+    role.name = "Tenant Admin"
+    role.is_active = True
+    role.is_global_template = True
+    role.is_template_locked = False
+    role.updated_by_user_id = user.id
+    role.updated_at = now_utc()
+    session.add(role)
+
+    existing_permission_ids = {
+        row.permission_id for row in session.exec(select(RolePermission).where(RolePermission.role_id == role.id)).all()
+    }
+    tenant_permission_keys = [key for key in PERMISSION_CATALOG if not key.startswith("platform.")]
+    permissions_by_key = {row.key: row for row in session.exec(select(Permission)).all()}
+    for permission_key in tenant_permission_keys:
+        permission = permissions_by_key[permission_key]
+        if permission.id not in existing_permission_ids:
+            session.add(RolePermission(role_id=role.id, permission_id=permission.id))
+    session.commit()
+
+
 def main() -> None:
     with Session(engine) as session:
         tenant = ensure_primary_tenant(session)
         user = ensure_super_admin(session, tenant)
         ensure_super_admin_role(session, tenant, user)
+        ensure_tenant_admin_template_role(session, tenant, user)
         print("Super admin login repaired.")
         print(f"Email: {SUPER_ADMIN_EMAIL}")
         print(f"Password: {SUPER_ADMIN_PASSWORD}")
