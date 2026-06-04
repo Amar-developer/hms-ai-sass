@@ -16,6 +16,7 @@ class PharmacyIssueStatus(str, Enum):
     REQUESTED = "requested"
     PARTIALLY_DISPENSED = "partially_dispensed"
     DISPENSED = "dispensed"
+    BILLED = "billed"
     CANCELLED = "cancelled"
 
 

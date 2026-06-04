@@ -21,14 +21,51 @@ CORE_HMS_MODULES = [
     "billing_basic",
 ]
 
+FULL_HMS_MODULES = [
+    *CORE_HMS_MODULES,
+    "billing_advanced",
+    "patient_subscriptions",
+    "lab",
+    "pharmacy",
+    "notifications",
+    "sms",
+    "whatsapp",
+    "voice",
+    "reports",
+    "physiotherapy",
+    "ip",
+]
+
+STARTER_HMS_MODULES = [
+    *CORE_HMS_MODULES,
+    "billing_advanced",
+    "patient_subscriptions",
+]
+
+GROWTH_HMS_MODULES = [
+    *STARTER_HMS_MODULES,
+    "lab",
+    "pharmacy",
+    "notifications",
+    "sms",
+    "whatsapp",
+    "reports",
+]
+
+PRO_HMS_MODULES = [
+    *GROWTH_HMS_MODULES,
+    "voice",
+    "physiotherapy",
+]
+
 
 DEFAULT_PLANS = [
     {
         "key": "free_trial",
         "name": "Free Trial",
         "monthly_patient_limit": 50,
-        "included_branches": 1,
-        "included_doctors": 2,
+        "included_branches": 999,
+        "included_doctors": 999,
         "price_inr_monthly": 0,
         "enabled_modules_json": json.dumps(CORE_HMS_MODULES),
     },
@@ -39,13 +76,7 @@ DEFAULT_PLANS = [
         "included_branches": 1,
         "included_doctors": 1,
         "price_inr_monthly": 999,
-        "enabled_modules_json": json.dumps(
-            [
-                *CORE_HMS_MODULES,
-                "billing_advanced",
-                "patient_subscriptions",
-            ]
-        ),
+        "enabled_modules_json": json.dumps(STARTER_HMS_MODULES),
     },
     {
         "key": "growth",
@@ -54,68 +85,52 @@ DEFAULT_PLANS = [
         "included_branches": 2,
         "included_doctors": 5,
         "price_inr_monthly": 2999,
-        "enabled_modules_json": json.dumps(
-            [
-                *CORE_HMS_MODULES,
-                "billing_advanced",
-                "patient_subscriptions",
-                "lab",
-                "pharmacy",
-                "notifications",
-                "sms",
-                "whatsapp",
-                "voice",
-                "reports",
-                "physiotherapy",
-            ]
-        ),
+        "enabled_modules_json": json.dumps(GROWTH_HMS_MODULES),
     },
     {
         "key": "pro",
         "name": "Pro Clinic",
-        "monthly_patient_limit": 3000,
+        "monthly_patient_limit": 5000,
         "included_branches": 5,
-        "included_doctors": 15,
+        "included_doctors": 20,
         "price_inr_monthly": 7999,
-        "enabled_modules_json": json.dumps(
-            [
-                *CORE_HMS_MODULES,
-                "billing_advanced",
-                "patient_subscriptions",
-                "lab",
-                "pharmacy",
-                "notifications",
-                "sms",
-                "whatsapp",
-                "voice",
-                "reports",
-                "physiotherapy",
-            ]
-        ),
+        "enabled_modules_json": json.dumps(PRO_HMS_MODULES),
     },
     {
         "key": "hospital",
         "name": "Hospital",
         "monthly_patient_limit": 10000,
-        "included_branches": 10,
-        "included_doctors": 50,
-        "price_inr_monthly": 19999,
-        "enabled_modules_json": json.dumps(
-            [
-                *CORE_HMS_MODULES,
-                "billing_advanced",
-                "patient_subscriptions",
-                "lab",
-                "pharmacy",
-                "notifications",
-                "sms",
-                "whatsapp",
-                "voice",
-                "reports",
-                "physiotherapy",
-                "ip",
-            ]
-        ),
+        "included_branches": 999,
+        "included_doctors": 999,
+        "price_inr_monthly": 14999,
+        "enabled_modules_json": json.dumps(FULL_HMS_MODULES),
+    },
+    {
+        "key": "monthly_clinic",
+        "name": "Monthly Clinic",
+        "monthly_patient_limit": 50,
+        "included_branches": 1,
+        "included_doctors": 999,
+        "price_inr_monthly": 2999,
+        "enabled_modules_json": json.dumps(GROWTH_HMS_MODULES),
+    },
+    {
+        "key": "half_yearly_clinic",
+        "name": "Half Yearly Clinic",
+        "monthly_patient_limit": 300,
+        "included_branches": 999,
+        "included_doctors": 999,
+        "price_inr_monthly": 15999,
+        "enabled_modules_json": json.dumps(PRO_HMS_MODULES),
+    },
+    {
+        "key": "yearly_clinic",
+        "name": "Yearly Clinic",
+        "monthly_patient_limit": 999999,
+        "included_branches": 999,
+        "included_doctors": 999,
+        "price_inr_monthly": 29999,
+        "enabled_modules_json": json.dumps(FULL_HMS_MODULES),
     },
 ]
 
@@ -136,17 +151,27 @@ def modules_from_json(value: str | None) -> list[str]:
     return sorted({str(item) for item in raw})
 
 
+def plan_duration_days(plan_key: str | None) -> int | None:
+    return {
+        "free_trial": 30,
+        "starter": 30,
+        "monthly_clinic": 30,
+        "half_yearly_clinic": 180,
+        "yearly_clinic": 365,
+    }.get(str(plan_key or ""))
+
+
 def ensure_default_plans(session: Session) -> None:
     now = now_utc()
     for payload in DEFAULT_PLANS:
         exists = session.exec(select(SubscriptionPlan).where(SubscriptionPlan.key == payload["key"])).first()
         if not exists:
             session.add(SubscriptionPlan(**payload, created_at=now, updated_at=now))
-        elif not modules_from_json(exists.enabled_modules_json) or exists.updated_at is None or exists.created_at is None:
-            if not modules_from_json(exists.enabled_modules_json):
-                exists.enabled_modules_json = payload["enabled_modules_json"]
+        else:
+            for key, value in payload.items():
+                setattr(exists, key, value)
             exists.created_at = exists.created_at or now
-            exists.updated_at = exists.updated_at or exists.created_at
+            exists.updated_at = now
             session.add(exists)
     session.commit()
 
@@ -158,7 +183,7 @@ def create_default_trial_subscription(session: Session, tenant_id: str) -> Tenan
         tenant_id=tenant_id,
         plan_id=trial_plan.id,
         starts_on=date.today(),
-        ends_on=date.today() + timedelta(days=14),
+        ends_on=date.today() + timedelta(days=30),
         is_trial=True,
         status=SubscriptionStatus.ACTIVE,
         is_active=True,

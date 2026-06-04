@@ -3,7 +3,8 @@
 import {useEffect,useMemo,useState} from 'react';
 import {ActionButton,Badge,Button,Card,StatusToast} from '@/components/ui';
 import {apiBlob,apiFetch} from '@/lib/api';
-import {SelectField,TextField} from '@/components/FormElements';
+import {FormField,SelectField,TextField} from '@/components/FormElements';
+import {SearchPicker} from '@/components/clinicalRows';
 import {humanizeOptionLabel,publicDisplayValue} from '@/lib/options';
 
 const pageSize=10;
@@ -20,8 +21,15 @@ export function Lab({apiSession,branchId,patients,appointments,loadLiveData,live
  const [externalReferrer,setExternalReferrer]=useState('');
  const [manualTests,setManualTests]=useState('CBC');
  const [selectedTestIds,setSelectedTestIds]=useState<string[]>([]);
- const [orderTestId,setOrderTestId]=useState('');
- const [orderTestIds,setOrderTestIds]=useState<string[]>([]);
+ const [availableTests,setAvailableTests]=useState<any[]>([]);
+ const [testSearch,setTestSearch]=useState('');
+ const [selectedAvailableTestId,setSelectedAvailableTestId]=useState('');
+ const [testLoading,setTestLoading]=useState(false);
+ const [orderTests,setOrderTests]=useState<any[]>([]);
+ const [dismissedConsultations,setDismissedConsultations]=useState<string[]>(()=>{
+  if(typeof window==='undefined')return [];
+  try{return JSON.parse(localStorage.getItem('medizinhub.labDismissedConsultations')||'[]')}catch{return []}
+ });
  const [selectedPackageId,setSelectedPackageId]=useState('');
  const [testName,setTestName]=useState('Complete Blood Count');
  const [testCode,setTestCode]=useState('CBC');
@@ -46,8 +54,28 @@ export function Lab({apiSession,branchId,patients,appointments,loadLiveData,live
 
  useEffect(()=>{if(!patientId&&patients[0]?.id)setPatientId(patients[0].id)},[patients,patientId]);
  useEffect(()=>{load()},[apiSession?.token,apiSession?.tenantId]);
- useEffect(()=>{if(!orderTestId&&tests[0]?.id)setOrderTestId(tests[0].id)},[tests,orderTestId]);
  useEffect(()=>{if(page!==safePage)setPage(safePage)},[page,safePage]);
+ useEffect(()=>{if(typeof window!=='undefined')localStorage.setItem('medizinhub.labDismissedConsultations',JSON.stringify(dismissedConsultations))},[dismissedConsultations]);
+ useEffect(()=>{
+  if(!apiSession?.token){setAvailableTests([]);return}
+  let alive=true;
+  const search=testSearch.trim();
+  const timer=window.setTimeout(async()=>{
+   setTestLoading(true);
+   try{
+    const params=new URLSearchParams();
+    if(branchId)params.set('branch_id',branchId);
+    if(search)params.set('search',search);
+    const rows=await apiFetch(`/lab/catalog/available-tests${params.toString()?`?${params}`:''}`,apiSession);
+    if(alive)setAvailableTests(Array.isArray(rows)?rows:[]);
+   }catch{if(alive)setAvailableTests([])}
+   finally{if(alive)setTestLoading(false)}
+  },search?250:0);
+  return()=>{alive=false;window.clearTimeout(timer)};
+ },[apiSession?.token,apiSession?.tenantId,branchId,testSearch]);
+
+ const testOptions=availableTests.map((t:any)=>({value:t.id||t.slug||t.name,label:t.item_name||t.name,item:t}));
+ const selectedAvailableTest=availableTests.find((t:any)=>(t.id||t.slug||t.name)===selectedAvailableTestId);
 
  async function load(){
   if(!apiSession){setOrders([]);return}
@@ -88,23 +116,27 @@ export function Lab({apiSession,branchId,patients,appointments,loadLiveData,live
 
  async function createDirect(e:any){
   e.preventDefault();if(!apiSession)return;setBusy('create');setMessage('');
-  const selectedNames=orderTestIds.map(id=>tests.find((test:any)=>test.id===id)?.name).filter(Boolean);
+  const selectedNames=orderTests.map((t:any)=>t.name).filter(Boolean);
+  const localTestIds=orderTests.filter((t:any)=>t.id).map((t:any)=>t.id);
   const packageName=packages.find((pkg:any)=>pkg.id===selectedPackageId)?.name;
   const testsText=[manualTests,...selectedNames,packageName].filter(Boolean).join(', ');
   if(!testsText){setMessage('Select at least one lab test, package, or manual test.');setBusy('');return}
   try{
-   await apiFetch('/lab/orders',apiSession,{method:'POST',body:JSON.stringify({branch_id:branchId,patient_id:patientId,source,tests:testsText,test_ids:orderTestIds,package_ids:selectedPackageId?[selectedPackageId]:[],external_referrer:source==='external_referral'?externalReferrer:null,amount:0,ordered_by_user_id:apiSession.user?.id})});
-   setOrderTestIds([]);setManualTests('');setSelectedPackageId('');await load();setMessage('Lab order created.');
+   await apiFetch('/lab/orders',apiSession,{method:'POST',body:JSON.stringify({branch_id:branchId,patient_id:patientId,source,tests:testsText,test_ids:localTestIds,package_ids:selectedPackageId?[selectedPackageId]:[],external_referrer:source==='external_referral'?externalReferrer:null,amount:0,ordered_by_user_id:apiSession.user?.id})});
+   setOrderTests([]);setManualTests('');setSelectedPackageId('');setSelectedAvailableTestId('');setTestSearch('');await load();setMessage('Lab order created.');
   }catch(err:any){setMessage(err.message||'Could not create lab order.')}finally{setBusy('')}
  }
 
  function addOrderTest(){
-  if(!orderTestId)return;
-  setOrderTestIds(ids=>ids.includes(orderTestId)?ids:[...ids,orderTestId]);
+  const t=selectedAvailableTest;
+  const name=t?.item_name||t?.name||testSearch.trim();
+  if(!name)return;
+  setOrderTests((rows:any[])=>rows.some((r:any)=>r.name.toLowerCase()===name.toLowerCase())?rows:[...rows,{id:t?.source==='local'?(t.id||''):'',name,source:t?.source||'typed'}]);
+  setSelectedAvailableTestId('');setTestSearch('');
  }
 
- function removeOrderTest(testId:string){
-  setOrderTestIds(ids=>ids.filter(id=>id!==testId));
+ function removeOrderTest(index:number){
+  setOrderTests((rows:any[])=>rows.filter((_:any,i:number)=>i!==index));
  }
 
  async function createFromConsultation(a:any){
@@ -195,8 +227,8 @@ export function Lab({apiSession,branchId,patients,appointments,loadLiveData,live
   {selectedOrder&&<WorklistDetailModal title="Lab Test List" id={selectedOrder.id} patient={(patientMap.get(selectedOrder.patient_id) as any)?.name||publicDisplayValue(selectedOrder.patient_id,'Patient')} createdAt={selectedOrder.created_at} items={splitList(selectedOrder.tests)} onClose={()=>setSelectedOrder(null)}/>}
   {viewConsult&&<ConsultReferralModal a={viewConsult} detail={consultDetail} loading={loadingDetail} busy={busy} onClose={()=>setViewConsult(null)} onCreate={(a:any)=>{setViewConsult(null);createFromConsultation(a);}}/>}
   <StatusToast message={message} onClose={()=>setMessage('')}/>
-  <Card><h3 className="text-lg font-bold">Create Lab Order</h3><form onSubmit={createDirect} className="mt-4 grid gap-3 md:grid-cols-4"><SelectField label="Patient" value={patientId} onChange={setPatientId} options={patients.map((p:any)=>({value:p.id,label:p.name}))}/><SelectField label="Source" value={source} onChange={setSource} options={[{value:'op_direct',label:'OP Direct'},{value:'external_referral',label:'External Referral'}]}/><SelectField label="Lab Test" value={orderTestId} onChange={setOrderTestId} options={[{value:'',label:'Select test'},...tests.map((t:any)=>({value:t.id,label:`${t.name} · ₹${t.default_price}`}))]}/><div className="flex items-end"><ActionButton type="button" onClick={addOrderTest}>Add</ActionButton></div><SelectField label="Package" value={selectedPackageId} onChange={setSelectedPackageId} options={[{value:'',label:'No package'},...packages.map((pkg:any)=>({value:pkg.id,label:`${pkg.name} · ₹${pkg.package_price}`}))]}/><TextField label="Manual Tests" value={manualTests} onChange={setManualTests} placeholder="Optional external test"/><TextField label="External Referrer" value={externalReferrer} onChange={setExternalReferrer} disabled={source!=='external_referral'}/><div className="flex items-end"><Button disabled={busy==='create'}>{busy==='create'?'Saving...':'Create Order'}</Button></div>{orderTestIds.length>0&&<div className="md:col-span-4 flex flex-wrap gap-2">{orderTestIds.map((id:string)=>{const test:any=tests.find((row:any)=>row.id===id);return <button key={id} type="button" onClick={()=>removeOrderTest(id)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">{test?.name||id} · ₹{test?.default_price||0} ×</button>})}</div>}</form></Card>
-  <Card><h3 className="text-lg font-bold">Consultation Referrals</h3><div className="mt-4 grid gap-3">{labReady.length===0&&<div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No signed consultation referrals ready.</div>}{labReady.slice(0,6).map((a:any)=><div key={a.id} className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"><div><b>{a.token} · {a.patient}</b><p className="text-sm text-slate-500">Signed consultation referral</p></div><div className="flex gap-2"><ActionButton onClick={()=>loadConsultDetail(a)}>View Tests</ActionButton><Button disabled={busy===a.consultationId} onClick={()=>createFromConsultation(a)}>{busy===a.consultationId?'Creating...':'Create Lab Order'}</Button></div></div>)}</div></Card>
+  <Card><h3 className="text-lg font-bold">Create Lab Order</h3><form onSubmit={createDirect} className="mt-4 grid gap-3 md:grid-cols-4"><SelectField label="Patient" value={patientId} onChange={setPatientId} options={patients.map((p:any)=>({value:p.id,label:p.name}))}/><SelectField label="Source" value={source} onChange={setSource} options={[{value:'op_direct',label:'OP Direct'},{value:'external_referral',label:'External Referral'}]}/><FormField label="Lab Test"><SearchPicker value={selectedAvailableTestId} inputValue={testSearch} onInputValueChange={(text:string)=>{setTestSearch(text);if(!text)setSelectedAvailableTestId('')}} onChange={(id:string,test:any)=>{setSelectedAvailableTestId(id);setTestSearch(test?.item_name||test?.name||'')}} options={testOptions} placeholder="Type lab test name" onUseTyped={(text:string)=>{setSelectedAvailableTestId('');setTestSearch(text)}} getSearchText={(test:any)=>[test?.item_name,test?.name,test?.sample_type,test?.category,test?.code,test?.slug].filter(Boolean).join(' ')} loading={testLoading}/></FormField><div className="flex items-end"><ActionButton type="button" onClick={addOrderTest}>Add</ActionButton></div><SelectField label="Package" value={selectedPackageId} onChange={setSelectedPackageId} options={[{value:'',label:'No package'},...packages.map((pkg:any)=>({value:pkg.id,label:`${pkg.name} · ₹${pkg.package_price}`}))]}/><TextField label="Manual Tests" value={manualTests} onChange={setManualTests} placeholder="Optional external test"/><TextField label="External Referrer" value={externalReferrer} onChange={setExternalReferrer} disabled={source!=='external_referral'}/><div className="flex items-end"><Button disabled={busy==='create'}>{busy==='create'?'Saving...':'Create Order'}</Button></div>{orderTests.length>0&&<div className="md:col-span-4 flex flex-wrap gap-2">{orderTests.map((test:any,index:number)=><button key={`${test.name}-${index}`} type="button" onClick={()=>removeOrderTest(index)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700">{test.name} ×</button>)}</div>}</form></Card>
+  <Card><h3 className="text-lg font-bold">Consultation Referrals</h3><div className="mt-4 grid gap-3">{(()=>{const visible=labReady.filter((a:any)=>!dismissedConsultations.includes(a.consultationId));return <>{visible.length===0&&<div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">No signed consultation referrals ready.</div>}{visible.slice(0,6).map((a:any)=><div key={a.id} className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"><div><b>{a.token} · {a.patient}</b><p className="text-sm text-slate-500">Signed consultation referral</p></div><div className="flex gap-2"><ActionButton onClick={()=>loadConsultDetail(a)}>View Tests</ActionButton><Button disabled={busy===a.consultationId} onClick={()=>createFromConsultation(a)}>{busy===a.consultationId?'Creating...':'Create Lab Order'}</Button><ActionButton onClick={()=>setDismissedConsultations((ids:string[])=>[...ids,a.consultationId])}>Remove</ActionButton></div></div>)}</>;})()}</div></Card>
   <Card><h3 className="text-lg font-bold">Lab Worklist</h3><div className="mt-4 overflow-auto rounded-2xl border"><table className="w-full min-w-[1180px] table-fixed text-left text-sm"><thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="w-[80px] px-4 py-3">#</th><th className="w-[170px]">Date & Time</th><th className="w-[190px]">Patient</th><th className="w-[150px]">Source</th><th className="w-[150px]">Status</th><th className="w-[90px]">Amount</th><th className="w-[250px]">Report</th><th className="w-[210px] pr-4 text-right">Action</th></tr></thead><tbody className="divide-y">{orders.length===0&&<tr><td colSpan={8} className="px-4 py-4 text-slate-500">No lab orders yet.</td></tr>}{labPageRows.map((o:any,index:number)=>{const p:any=patientMap.get(o.patient_id);const selected=selectedOrder?.id===o.id;const released=isReleased(o);const cancelled=isCancelled(o);const invoiced=invoicedOrderIds.has(o.id);const rowBusy=busy===o.id;const invoiceBusy=busy===`invoice-${o.id}`;const statusLabel=invoiced?'Billed':humanizeOptionLabel(o.status);const statusTone=invoiced?'green':released?'green':cancelled?'red':'amber';return <tr key={o.id} onClick={()=>setSelectedOrder(o)} className={`cursor-pointer transition hover:bg-slate-50 ${selected?'bg-slate-50':''}`}><td className="px-4 py-4"><b>{(safePage-1)*pageSize+index+1}</b></td><td><b>{new Date(o.created_at).toLocaleDateString()}</b><p className="text-xs text-slate-500">{new Date(o.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</p></td><td>{p?.name||publicDisplayValue(o.patient_id,'Patient')}</td><td><Badge>{humanizeOptionLabel(o.source)}</Badge></td><td><Badge tone={statusTone as any}>{statusLabel}</Badge></td><td>₹{o.amount}</td><td onClick={(event)=>event.stopPropagation()}><div className="flex min-w-[230px] items-center gap-2"><label className={`flex min-w-[210px] cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${released||cancelled?'cursor-not-allowed bg-slate-50 text-slate-300':'bg-white text-slate-700 hover:bg-slate-50'}`}><input type="file" accept="application/pdf,image/*" className="hidden" disabled={released||cancelled} onChange={(event:any)=>setReportFiles({...reportFiles,[o.id]:event.target.files?.[0]||null})}/>{reportFiles[o.id]?.name||'Upload report'}</label></div></td><td className="pr-4" onClick={(event)=>event.stopPropagation()}><div className="ml-auto w-[190px]"><select value="" disabled={rowBusy||invoiceBusy} onChange={(event:any)=>handleOrderAction(o,event.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"><option value="">{rowBusy||invoiceBusy?'Updating...':'Select action'}</option><option value="sample" disabled={released||cancelled||invoiced}>Sample collected</option><option value="release" disabled={released||cancelled||invoiced}>Release result</option>{released&&!invoiced&&<option value="invoice">Generate invoice</option>}<option value="pdf" disabled={!released}>Download PDF</option><option value="cancel" disabled={released||cancelled||invoiced}>Cancel order</option></select></div></td></tr>})}</tbody></table></div><Pagination page={safePage} totalPages={totalPages} total={orders.length} onPage={setPage}/></Card>
  </div>
 }

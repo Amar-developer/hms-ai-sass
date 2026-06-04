@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from pathlib import Path
+import re
 import zlib
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -8,6 +9,7 @@ from sqlmodel import Session, select
 
 from app.core.access_control import enforce_entitlement, require_branch_in_tenant, require_user_branch_access, scoped_branch_id
 from app.core.auth import require_any_permission, require_permission
+from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.appointments.models import Appointment
@@ -49,6 +51,8 @@ from app.modules.billing.schemas import (
     InvoiceCreateFromPharmacyIssue,
     InvoiceDetailRead,
     InvoiceItemRead,
+    InvoiceItemSupplierOptionRead,
+    InvoiceItemSupplierUpdate,
     InvoiceMembershipBenefitRead,
     InvoiceRead,
     PaymentCreate,
@@ -72,6 +76,7 @@ from app.modules.billing.service import (
 from app.modules.consultations.models import Consultation, ConsultationStatus
 from app.modules.identity import permissions
 from app.modules.identity.models import User
+from app.modules.integrations.frappe import FrappeCatalogClient
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
@@ -99,6 +104,41 @@ def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
     case.updated_at = now_utc()
     session.add(case)
     session.commit()
+
+
+def _frappe_catalog_client() -> FrappeCatalogClient:
+    settings = get_settings()
+    if not settings.maha_clinic_url or not settings.maha_clinic_token:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="ERPNext catalog plugin is not configured")
+    return FrappeCatalogClient(
+        base_url=settings.maha_clinic_url,
+        token=settings.maha_clinic_token,
+        timeout_seconds=settings.maha_clinic_timeout_seconds,
+    )
+
+
+def _invoice_item_external_slug(item: InvoiceItem) -> str:
+    if item.external_slug:
+        return item.external_slug
+    return re.sub(r"[^a-z0-9]+", "-", str(item.external_item_code or item.description or "").strip().lower()).strip("-")
+
+
+def _external_supplier_options(item: InvoiceItem) -> list[dict[str, int | str]]:
+    if item.external_source != "erpnext":
+        return []
+    detail = _frappe_catalog_client().get_lab_item_details(_invoice_item_external_slug(item))
+    suppliers = detail.get("suppliers") if isinstance(detail, dict) else []
+    if not isinstance(suppliers, list):
+        return []
+    return [
+        {
+            "supplier": str(supplier.get("supplier") or supplier.get("supplier_name") or ""),
+            "supplier_name": str(supplier.get("supplier_name") or supplier.get("supplier") or ""),
+            "buying_price": max(round(float(supplier.get("buying_price") or 0)), 0),
+        }
+        for supplier in suppliers
+        if isinstance(supplier, dict) and (supplier.get("supplier") or supplier.get("supplier_name"))
+    ]
 
 
 def _invoice_membership_service(invoice: Invoice) -> str | None:
@@ -590,7 +630,7 @@ def _create_service_invoice(
     description: str,
     amount: int,
     created_by_user_id: str | None,
-    line_items: list[dict[str, int | str]] | None = None,
+    line_items: list[dict[str, int | str | None]] | None = None,
     service_scope: str,
     tax_rule_id: str | None = None,
     discount_offer_id: str | None = None,
@@ -692,6 +732,13 @@ def _create_service_invoice(
                 quantity=int(row.get("quantity") or 1),
                 unit_amount=int(row.get("unit_amount") or 0),
                 total_amount=int(row.get("total_amount") or 0),
+                mrp_amount=int(row.get("mrp_amount") or 0),
+                selling_amount=int(row.get("selling_amount") or row.get("unit_amount") or 0),
+                buying_amount=int(row.get("buying_amount") or 0),
+                supplier_id=str(row.get("supplier_id") or "") or None,
+                external_source=str(row.get("external_source") or "") or None,
+                external_slug=str(row.get("external_slug") or "") or None,
+                external_item_code=str(row.get("external_item_code") or "") or None,
             )
         )
     session.commit()
@@ -1124,6 +1171,46 @@ def create_invoice_from_lab_order(
     amount = int(order.amount or sum(item.price for item in items) or 0)
     if amount <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Lab order amount is zero")
+
+    def lab_line_item(item: LabOrderItem) -> dict[str, int | str | None]:
+        supplier_id = item.supplier_id
+        buying_amount = item.buying_price
+        if item.external_source == "erpnext" and item.external_slug:
+            try:
+                suppliers = _external_supplier_options(
+                    InvoiceItem(
+                        tenant_id=tenant_id,
+                        invoice_id="preview",
+                        item_type="lab",
+                        description=item.test_name,
+                        quantity=1,
+                        unit_amount=item.price,
+                        total_amount=item.price,
+                        external_source=item.external_source,
+                        external_slug=item.external_slug,
+                        external_item_code=item.external_item_code,
+                    )
+                )
+                if suppliers:
+                    supplier_id = str(suppliers[0]["supplier"] or "")
+                    buying_amount = int(suppliers[0]["buying_price"] or 0)
+            except HTTPException:
+                pass
+        return {
+            "item_type": "lab",
+            "description": item.test_name,
+            "quantity": 1,
+            "unit_amount": item.price,
+            "total_amount": item.price,
+            "mrp_amount": item.mrp_price,
+            "selling_amount": item.selling_price or item.price,
+            "buying_amount": buying_amount,
+            "supplier_id": supplier_id,
+            "external_source": item.external_source,
+            "external_slug": item.external_slug,
+            "external_item_code": item.external_item_code,
+        }
+
     invoice = _create_service_invoice(
         session,
         tenant_id=tenant_id,
@@ -1139,16 +1226,7 @@ def create_invoice_from_lab_order(
         tax_rule_id=payload.tax_rule_id,
         discount_offer_id=payload.discount_offer_id,
         benefit_item_ids=[item.test_id for item in items if item.test_id],
-        line_items=[
-            {
-                "item_type": "lab",
-                "description": item.test_name,
-                "quantity": 1,
-                "unit_amount": item.price,
-                "total_amount": item.price,
-            }
-            for item in items
-        ] or None,
+        line_items=[lab_line_item(item) for item in items] or None,
         created_by_user_id=payload.created_by_user_id,
     )
     record_audit_event(
@@ -1279,6 +1357,68 @@ def get_invoice(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
     require_user_branch_access(current_user, invoice.branch_id)
     return _read_invoice_detail(session, invoice)
+
+
+@router.patch("/invoices/{invoice_id}/items/{item_id}/supplier", response_model=InvoiceDetailRead)
+def update_invoice_item_supplier(
+    invoice_id: str,
+    item_id: str,
+    payload: InvoiceItemSupplierUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    invoice = session.get(Invoice, invoice_id)
+    if not invoice or invoice.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+    if not invoice.lab_order_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supplier can be set only for lab invoices")
+    require_user_branch_access(current_user, invoice.branch_id)
+    item = session.get(InvoiceItem, item_id)
+    if not item or item.tenant_id != tenant_id or item.invoice_id != invoice.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice item not found")
+    options = _external_supplier_options(item)
+    if payload.supplier_id:
+        selected = next((supplier for supplier in options if supplier["supplier"] == payload.supplier_id), None)
+        if not selected:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid supplier")
+        item.buying_amount = int(selected["buying_price"] or 0)
+    else:
+        item.buying_amount = 0
+    item.supplier_id = payload.supplier_id
+    session.add(item)
+    session.commit()
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        actor_user_id=current_user.id,
+        action="invoice_item.supplier_updated",
+        resource_type="invoice_item",
+        resource_id=item.id,
+        purpose="billing",
+    )
+    return _read_invoice_detail(session, invoice)
+
+
+@router.get("/invoices/{invoice_id}/items/{item_id}/supplier-options", response_model=list[InvoiceItemSupplierOptionRead])
+def list_invoice_item_supplier_options(
+    invoice_id: str,
+    item_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> list[InvoiceItemSupplierOptionRead]:
+    invoice = session.get(Invoice, invoice_id)
+    if not invoice or invoice.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+    if not invoice.lab_order_id:
+        return []
+    require_user_branch_access(current_user, invoice.branch_id)
+    item = session.get(InvoiceItem, item_id)
+    if not item or item.tenant_id != tenant_id or item.invoice_id != invoice.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice item not found")
+    return [InvoiceItemSupplierOptionRead(**supplier) for supplier in _external_supplier_options(item)]
 
 
 @router.post("/invoices/{invoice_id}/membership-benefit/apply", response_model=InvoiceDetailRead)

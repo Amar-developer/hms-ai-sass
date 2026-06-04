@@ -130,6 +130,13 @@ class InvoiceItem(SQLModel, table=True):
     quantity: int = Field(default=1, ge=1)
     unit_amount: int = Field(ge=0)
     total_amount: int = Field(ge=0)
+    mrp_amount: int = Field(default=0, ge=0)
+    selling_amount: int = Field(default=0, ge=0)
+    buying_amount: int = Field(default=0, ge=0)
+    supplier_id: str | None = Field(default=None, index=True)
+    external_source: str | None = Field(default=None, max_length=80)
+    external_slug: str | None = Field(default=None, max_length=220)
+    external_item_code: str | None = Field(default=None, max_length=220)
     created_at: datetime = Field(default_factory=now_utc, index=True)
 
 

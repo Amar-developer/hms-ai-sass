@@ -1,3 +1,4 @@
+import json
 import re
 from datetime import datetime, timezone
 
@@ -6,12 +7,14 @@ from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.auth import require_any_permission, require_permission
+from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
 from app.modules.consultations.models import Consultation
 from app.modules.identity import permissions
 from app.modules.identity.models import User
+from app.modules.integrations.graphql_catalog import GraphQLCatalogClient
 from app.modules.patients.models import Patient
 from app.modules.pharmacy.models import (
     MedicineBatch,
@@ -36,6 +39,7 @@ from app.modules.pharmacy.schemas import (
     MedicineRead,
     MedicineUpdate,
     PharmacyBillingLink,
+    PharmacyIssueAmountUpdate,
     PharmacyIssueCreate,
     PharmacyIssueDetailRead,
     PharmacyIssueFromConsultation,
@@ -52,6 +56,8 @@ from app.modules.pharmacy.schemas import (
     SupplierUpdate,
 )
 from app.modules.settings.numbering import next_document_number
+from app.modules.settings.models import SettingKey
+from app.modules.settings.service import resolve_setting
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, now_utc
 
@@ -113,6 +119,37 @@ def _fallback_medicine_rows(text: str | None) -> list[dict[str, str | None]]:
     return rows
 
 
+def _looks_like_frequency(value: str | None) -> bool:
+    text = (value or "").strip().lower()
+    return bool(re.match(r"^\d+\s*[-–]\s*\d+\s*[-–]\s*\d+$", text)) or text in {
+        "od",
+        "bd",
+        "tds",
+        "qid",
+        "hs",
+        "sos",
+        "daily",
+        "once daily",
+        "twice daily",
+    }
+
+
+def _looks_like_duration(value: str | None) -> bool:
+    return bool(re.search(r"\b\d+\s*(d|day|days|week|weeks|month|months)\b", value or "", flags=re.IGNORECASE))
+
+
+def _normalize_medicine_schedule(row: dict[str, str | None]) -> dict[str, str | None]:
+    if _looks_like_frequency(row.get("dosage")) and _looks_like_duration(row.get("frequency")) and not _looks_like_duration(row.get("duration")):
+        return {
+            **row,
+            "dosage": None,
+            "frequency": row.get("dosage"),
+            "duration": row.get("frequency"),
+            "instructions": row.get("duration") or row.get("instructions"),
+        }
+    return row
+
+
 def _validate_patient_branch(session: Session, tenant_id: str, patient_id: str, branch_id: str) -> None:
     patient = session.get(Patient, patient_id)
     branch = session.get(Branch, branch_id)
@@ -127,6 +164,41 @@ def _get_issue_or_404(session: Session, tenant_id: str, issue_id: str) -> Pharma
     if not issue or issue.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pharmacy issue not found")
     return issue
+
+
+def _external_medicine_items_enabled(session: Session, tenant_id: str) -> bool:
+    value, _scope, _scope_id = resolve_setting(
+        session,
+        tenant_id=tenant_id,
+        module="integrations",
+        key=SettingKey.CATALOG_INTEGRATIONS,
+    )
+    medicine_items = value.get("medicine_items") if isinstance(value, dict) else {}
+    if isinstance(medicine_items, dict) and "enabled" in medicine_items:
+        return bool(medicine_items.get("enabled")) and medicine_items.get("provider") != "local"
+    return False
+
+
+def _medicine_graphql_client() -> GraphQLCatalogClient:
+    settings = get_settings()
+    if not settings.medicine_graphql_url:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Medicine catalog plugin is not configured")
+    return GraphQLCatalogClient(
+        graphql_url=settings.medicine_graphql_url,
+        timeout_seconds=settings.medicine_graphql_timeout_seconds,
+    )
+
+
+def _normalize_local_medicine(row: MedicineCatalog) -> dict[str, str]:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "item_name": row.name,
+        "slug": row.code or row.id,
+        "generic_name": row.generic_name or "",
+        "strength": row.strength or "",
+        "source": "local",
+    }
 
 
 def _issue_detail(session: Session, issue: PharmacyIssue) -> PharmacyIssueDetailRead:
@@ -255,6 +327,40 @@ def list_medicines(
     return list(session.exec(statement.order_by(MedicineCatalog.name)).all())
 
 
+@router.get("/catalog/available-medicines")
+def list_available_medicines(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    search: str | None = None,
+    page_size: int = 10,
+    current_page: int = 1,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_READ,
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_SIGN,
+            permissions.PHARMACY_MANAGE,
+            permissions.PHARMACY_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> list[dict[str, str]]:
+    enforce_module_enabled(session, tenant_id, "pharmacy")
+    if _external_medicine_items_enabled(session, tenant_id):
+        return _medicine_graphql_client().get_products(search, page_size=page_size, current_page=current_page)
+
+    branch_id = scoped_branch_id(current_user, branch_id)
+    statement = select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id, MedicineCatalog.is_active == True)  # noqa: E712
+    if branch_id:
+        statement = statement.where((MedicineCatalog.branch_id == branch_id) | (MedicineCatalog.branch_id.is_(None)))
+    if search:
+        pattern = f"%{search}%"
+        statement = statement.where((MedicineCatalog.name.ilike(pattern)) | (MedicineCatalog.generic_name.ilike(pattern)) | (MedicineCatalog.code.ilike(pattern)))
+    return [_normalize_local_medicine(row) for row in session.exec(statement.order_by(MedicineCatalog.name)).all()]
+
+
 @router.patch("/medicines/{medicine_id}", response_model=MedicineRead)
 def update_medicine(
     medicine_id: str,
@@ -331,7 +437,7 @@ def list_suppliers(
     tenant_id: str = Depends(require_tenant_id),
     include_inactive: bool = False,
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_any_permission(permissions.SUPPLIERS_MANAGE, permissions.SUPPLIERS_READ, permissions.PHARMACY_MANAGE, permissions.SETTINGS_MANAGE)),
+    _current_user: User = Depends(require_any_permission(permissions.SUPPLIERS_MANAGE, permissions.SUPPLIERS_READ, permissions.PHARMACY_MANAGE, permissions.BILLING_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> list[PharmacySupplier]:
     statement = select(PharmacySupplier).where(PharmacySupplier.tenant_id == tenant_id)
     if not include_inactive:
@@ -662,6 +768,7 @@ def create_pharmacy_issue_from_consultation(
         }
         for med in medicines
     ] or _fallback_medicine_rows(consultation.prescription_text)
+    rows = [_normalize_medicine_schedule(row) for row in rows]
     total = 0
     names = []
     for med in rows:
@@ -680,8 +787,9 @@ def create_pharmacy_issue_from_consultation(
         item = PharmacyIssueItem(tenant_id=tenant_id, branch_id=issue.branch_id, pharmacy_issue_id=issue.id, medicine_id=catalog.id if catalog else None, medicine_name=catalog.name if catalog else medicine_name, quantity=quantity, unit_price=unit_price)
         session.add(item)
     if rows:
-        issue.medicine_text = "\n".join(
-            " | ".join(
+        summary_lines = []
+        for row in rows:
+            parts = [
                 str(part or "").strip()
                 for part in (
                     row.get("medicine_name"),
@@ -691,9 +799,11 @@ def create_pharmacy_issue_from_consultation(
                     row.get("instructions"),
                 )
                 if str(part or "").strip()
-            )
-            for row in rows
-            if str(row.get("medicine_name") or "").strip()
+            ]
+            if parts:
+                summary_lines.append(" | ".join(parts))
+        issue.medicine_text = "\n".join(
+            summary_lines
         ) or ", ".join(names)
     if rows and issue.amount == 0:
         issue.amount = total
@@ -801,6 +911,39 @@ def update_pharmacy_issue_status(
         resource_type="pharmacy_issue",
         resource_id=issue.id,
         purpose="pharmacy",
+    )
+    return issue
+
+
+@router.patch("/issues/{issue_id}/amount", response_model=PharmacyIssueRead)
+def update_pharmacy_issue_amount(
+    issue_id: str,
+    payload: PharmacyIssueAmountUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+) -> PharmacyIssue:
+    enforce_module_enabled(session, tenant_id, "pharmacy")
+    issue = _get_issue_or_404(session, tenant_id, issue_id)
+    require_user_branch_access(current_user, issue.branch_id)
+    previous_amount = issue.amount
+    issue.amount = payload.amount
+    issue.updated_at = datetime.now(timezone.utc)
+    note = f"Amount updated from Rs. {previous_amount} to Rs. {payload.amount}." + (f" Reason: {payload.reason}" if payload.reason else "")
+    issue.notes = "\n".join([part for part in [issue.notes, note] if part])
+    session.add(issue)
+    session.commit()
+    session.refresh(issue)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=issue.branch_id,
+        actor_user_id=payload.actor_user_id,
+        action="pharmacy_issue.amount_updated",
+        resource_type="pharmacy_issue",
+        resource_id=issue.id,
+        purpose="pharmacy",
+        metadata_json=json.dumps({"previous_amount": previous_amount, "amount": payload.amount, "reason": payload.reason}),
     )
     return issue
 

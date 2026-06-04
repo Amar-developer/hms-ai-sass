@@ -288,6 +288,8 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/cancel` | `billing.manage` |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier-options` | `billing.manage` |
+| `PATCH` | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier` | `billing.manage` |
 | `GET` | `/api/v1/billing/doctor-settlements/summary` | `settlements.read` |
 | `POST` | `/api/v1/billing/doctor-settlements/finalize` | `billing.manage` |
 | `GET` | `/api/v1/billing/reports/due-collection` | `reports.read` |
@@ -320,6 +322,9 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `GET` | `/api/v1/lab/catalog/packages` | `lab.manage` |
 | `PATCH` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
 | `DELETE` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
+| `GET` | `/api/v1/lab/catalog/available-tests` | `lab.manage` |
+| `GET` | `/api/v1/lab/external/items` | `lab.manage` |
+| `GET` | `/api/v1/lab/external/items/{slug}/details` | `lab.manage` |
 | `POST` | `/api/v1/lab/result-templates` | `lab.manage` |
 | `GET` | `/api/v1/lab/result-templates` | `lab.manage` |
 | `POST` | `/api/v1/lab/orders` | `lab.manage` |
@@ -334,6 +339,7 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `GET` | `/api/v1/pharmacy/medicines` | `pharmacy.manage` |
 | `PATCH` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
 | `DELETE` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
+| `GET` | `/api/v1/pharmacy/catalog/available-medicines` | `pharmacy.manage` |
 | `POST` | `/api/v1/pharmacy/suppliers` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/suppliers` | `pharmacy.manage` |
 | `PATCH` | `/api/v1/pharmacy/suppliers/{supplier_id}` | `pharmacy.manage` |
@@ -346,6 +352,7 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `GET` | `/api/v1/pharmacy/issues` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/issues/{issue_id}` | `pharmacy.manage` |
 | `PATCH` | `/api/v1/pharmacy/issues/{issue_id}/status` | `pharmacy.manage` |
+| `PATCH` | `/api/v1/pharmacy/issues/{issue_id}/amount` | `pharmacy.manage` |
 | `POST` | `/api/v1/pharmacy/issues/{issue_id}/billing-link` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/stock-ledger` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/low-stock` | `pharmacy.manage` |

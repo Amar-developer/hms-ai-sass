@@ -59,7 +59,24 @@ class InvoiceItemRead(BaseModel):
     quantity: int
     unit_amount: int
     total_amount: int
+    mrp_amount: int = 0
+    selling_amount: int = 0
+    buying_amount: int = 0
+    supplier_id: str | None = None
+    external_source: str | None = None
+    external_slug: str | None = None
+    external_item_code: str | None = None
     created_at: datetime
+
+
+class InvoiceItemSupplierUpdate(BaseModel):
+    supplier_id: str | None = None
+
+
+class InvoiceItemSupplierOptionRead(BaseModel):
+    supplier: str
+    supplier_name: str
+    buying_price: int = 0
 
 
 class InvoiceRead(BaseModel):

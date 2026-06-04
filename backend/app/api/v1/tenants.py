@@ -1,5 +1,5 @@
 import re
-from datetime import date
+from datetime import date, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile, status
@@ -17,11 +17,10 @@ from app.modules.identity.security import hash_password
 from app.modules.settings.numbering import next_document_number
 from app.modules.subscriptions.models import SubscriptionInvoice, SubscriptionPlan, SubscriptionStatus, TenantSubscription
 from app.modules.subscriptions.service import (
-    CORE_HMS_MODULES,
     create_default_trial_subscription,
     get_active_subscription,
-    modules_to_json,
     next_subscription_invoice_number,
+    plan_duration_days,
 )
 from app.modules.tenants.models import Branch, Department, Tenant, TenantStatus, TenantType, now_utc
 from app.modules.tenants.schemas import (
@@ -373,29 +372,17 @@ def onboard_tenant(
         branches.append(branch)
 
     plan_id = payload.subscription_plan_id
-    if payload.enabled_modules:
-        included_branches = payload.included_branches if payload.included_branches is not None else max(len(branches), 1)
-        plan = SubscriptionPlan(
-            key=f"tenant_{tenant.id.replace('tenant_', '')}",
-            name=f"{tenant.name} Onboarding Plan",
-            monthly_patient_limit=payload.monthly_patient_limit,
-            included_branches=included_branches,
-            included_doctors=payload.included_doctors,
-            price_inr_monthly=payload.price_inr_monthly,
-            enabled_modules_json=modules_to_json(payload.enabled_modules or CORE_HMS_MODULES),
-            created_by_user_id=current_user.id,
-            updated_by_user_id=current_user.id,
-        )
-        session.add(plan)
-        session.commit()
-        session.refresh(plan)
-        plan_id = plan.id
 
     subscription_id = None
     if plan_id:
         plan = session.get(SubscriptionPlan, plan_id)
         if not plan or not plan.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan")
+        subscription_ends_on = payload.subscription_ends_on
+        if subscription_ends_on is None:
+            duration_days = plan_duration_days(plan.key)
+            if duration_days:
+                subscription_ends_on = payload.subscription_starts_on + timedelta(days=duration_days)
         starts_today = payload.subscription_starts_on <= date.today()
         for existing in session.exec(
             select(TenantSubscription).where(
@@ -412,8 +399,8 @@ def onboard_tenant(
             tenant_id=tenant.id,
             plan_id=plan.id,
             starts_on=payload.subscription_starts_on,
-            ends_on=payload.subscription_ends_on,
-            is_trial=tenant.status == TenantStatus.TRIAL,
+            ends_on=subscription_ends_on,
+            is_trial=plan.key == "free_trial",
             is_active=starts_today,
             status=SubscriptionStatus.ACTIVE if starts_today else SubscriptionStatus.SCHEDULED,
             billing_amount=plan.price_inr_monthly,

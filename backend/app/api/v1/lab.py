@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.auth import require_any_permission, require_permission
+from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
@@ -46,7 +47,10 @@ from app.modules.lab.schemas import (
     LabTestPackageUpdate,
 )
 from app.modules.files.service import record_file_document
+from app.modules.integrations.frappe import FrappeCatalogClient
 from app.modules.settings.numbering import next_document_number
+from app.modules.settings.models import SettingKey
+from app.modules.settings.service import resolve_setting
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
@@ -157,6 +161,175 @@ def _get_order_or_404(session: Session, tenant_id: str, order_id: str) -> LabOrd
     if not order or order.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lab order not found")
     return order
+
+
+def _external_lab_items_enabled(session: Session, tenant_id: str) -> bool:
+    settings = get_settings()
+    value, _scope, _scope_id = resolve_setting(
+        session,
+        tenant_id=tenant_id,
+        module="integrations",
+        key=SettingKey.CATALOG_INTEGRATIONS,
+    )
+    lab_items = value.get("lab_items") if isinstance(value, dict) else {}
+    if isinstance(lab_items, dict) and "enabled" in lab_items:
+        return bool(lab_items.get("enabled")) and lab_items.get("provider") != "local"
+    return bool(settings.external_lab_items_enabled)
+
+
+def _frappe_catalog_client() -> FrappeCatalogClient:
+    settings = get_settings()
+    if not settings.maha_clinic_url or not settings.maha_clinic_token:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="ERPNext catalog plugin is not configured")
+    return FrappeCatalogClient(
+        base_url=settings.maha_clinic_url,
+        token=settings.maha_clinic_token,
+        timeout_seconds=settings.maha_clinic_timeout_seconds,
+    )
+
+
+def _normalize_local_lab_test(row: LabTestCatalog) -> dict[str, str]:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "item_name": row.name,
+        "slug": row.code or row.id,
+        "source": "local",
+    }
+
+
+def _round_price(value: object) -> int:
+    return max(round(float(value or 0)), 0)
+
+
+def _price_payload(
+    *,
+    price: int,
+    mrp_price: int = 0,
+    selling_price: int = 0,
+    buying_price: int = 0,
+    supplier_id: str | None = None,
+    external_source: str | None = None,
+    external_slug: str | None = None,
+    external_item_code: str | None = None,
+) -> dict[str, int | str | None]:
+    selling = selling_price or price
+    return {
+        "price": selling,
+        "mrp_price": mrp_price,
+        "selling_price": selling,
+        "buying_price": buying_price,
+        "supplier_id": supplier_id,
+        "external_source": external_source,
+        "external_slug": external_slug,
+        "external_item_code": external_item_code,
+    }
+
+
+def _local_lab_price(test: LabTestCatalog | None) -> dict[str, int | str | None]:
+    if not test:
+        return _price_payload(price=0)
+    return _price_payload(
+        price=test.default_price,
+        mrp_price=test.default_price,
+        selling_price=test.default_price,
+        buying_price=test.purchase_price,
+        supplier_id=test.supplier_id,
+    )
+
+
+def _external_lab_price(client: FrappeCatalogClient, item_name: str) -> dict[str, int | str | None]:
+    matches = client.get_lab_items(item_name)
+    requested = _catalog_key(item_name)
+    exact = next(
+        (
+            item
+            for item in matches
+            if _catalog_key(str(item.get("item_name") or item.get("name") or "")) == requested
+            or _catalog_key(str(item.get("erpnext_name") or "")) == requested
+        ),
+        matches[0] if matches else None,
+    )
+    if not exact:
+        return _price_payload(price=0)
+    detail = client.get_lab_item_details(str(exact.get("slug") or exact.get("id") or exact.get("erpnext_name") or item_name))
+    selling_price = _round_price(detail.get("selling_price"))
+    return _price_payload(
+        price=selling_price,
+        mrp_price=_round_price(detail.get("mrp_price")),
+        selling_price=selling_price,
+        buying_price=_round_price(detail.get("buying_price")),
+        external_source="erpnext",
+        external_slug=str(detail.get("slug") or exact.get("slug") or ""),
+        external_item_code=str(detail.get("item_code") or detail.get("name") or ""),
+    )
+
+
+@router.get("/external/items")
+def list_external_lab_items(
+    tenant_id: str = Depends(require_tenant_id),
+    search: str | None = None,
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_READ,
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_SIGN,
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+        )
+    ),
+) -> list[dict[str, str]]:
+    return _frappe_catalog_client().get_lab_items(search)
+
+
+@router.get("/external/items/{slug}/details")
+def get_external_lab_item_details(
+    slug: str,
+    _tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_READ,
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_SIGN,
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.BILLING_MANAGE,
+        )
+    ),
+) -> dict[str, int | str | float]:
+    return _frappe_catalog_client().get_lab_item_details(slug)
+
+
+@router.get("/catalog/available-tests")
+def list_available_lab_tests(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    search: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_READ,
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_SIGN,
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> list[dict[str, str]]:
+    enforce_module_enabled(session, tenant_id, "lab")
+    if _external_lab_items_enabled(session, tenant_id):
+        return _frappe_catalog_client().get_lab_items(search)
+
+    branch_id = scoped_branch_id(current_user, branch_id)
+    statement = select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id, LabTestCatalog.is_active == True)  # noqa: E712
+    if branch_id:
+        statement = statement.where((LabTestCatalog.branch_id == branch_id) | (LabTestCatalog.branch_id.is_(None)))
+    if search:
+        pattern = f"%{search}%"
+        statement = statement.where((LabTestCatalog.name.ilike(pattern)) | (LabTestCatalog.code.ilike(pattern)))
+    return [_normalize_local_lab_test(row) for row in session.exec(statement.order_by(LabTestCatalog.name)).all()]
 
 
 def _read_detail(session: Session, order: LabOrder) -> LabOrderDetailRead:
@@ -273,7 +446,7 @@ def _add_order_items(
                     package_id=package.id,
                     test_name=test.name,
                     sample_type=test.sample_type,
-                    price=0,
+                    **_price_payload(price=0, mrp_price=test.default_price, selling_price=0, buying_price=test.purchase_price, supplier_id=test.supplier_id),
                 )
             )
     for test_id in test_ids:
@@ -293,7 +466,7 @@ def _add_order_items(
                 test_id=test.id,
                 test_name=test.name,
                 sample_type=test.sample_type,
-                price=test.default_price,
+                **_local_lab_price(test),
             )
         )
     if names:
@@ -648,12 +821,14 @@ def create_lab_order_from_consultation(
         for row in structured_referrals
     ] or _fallback_lab_referrals(consultation.lab_referral_text)
     total = 0
+    frappe_client = _frappe_catalog_client() if _external_lab_items_enabled(session, tenant_id) else None
     for referral in referrals:
         item_name = str(referral["item_name"] or "").strip()
         if not item_name:
             continue
         test = _find_lab_test(session, tenant_id, consultation.branch_id, item_name)
-        total += test.default_price if test else 0
+        pricing = _external_lab_price(frappe_client, item_name) if frappe_client else _local_lab_price(test)
+        total += int(pricing.get("price") or 0)
         session.add(
             LabOrderItem(
                 tenant_id=tenant_id,
@@ -662,7 +837,7 @@ def create_lab_order_from_consultation(
                 test_id=test.id if test else None,
                 test_name=test.name if test else item_name,
                 sample_type=test.sample_type if test else None,
-                price=test.default_price if test else 0,
+                **pricing,
             )
         )
     if referrals and order.amount == 0:

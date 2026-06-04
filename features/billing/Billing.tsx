@@ -124,6 +124,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
   const [revenueReport,setRevenueReport]=useState<any>(null);
   const [settlement,setSettlement]=useState<any>(null);
   const [detail,setDetail]=useState<any>(null);
+  const [supplierOptions,setSupplierOptions]=useState<Record<string,any[]>>({});
   const [detailLoading,setDetailLoading]=useState('');
   const [filters,setFilters]=useState({
     query:'',
@@ -283,8 +284,21 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     try{
       const row=await apiFetch(`/billing/invoices/${invoice.id}`,apiSession);
       setDetail(row);
+      await loadInvoiceSupplierOptions(row);
     }catch(err:any){setMessage(err.message||'Could not load invoice details.')}
     finally{setDetailLoading('')}
+  }
+
+  async function loadInvoiceSupplierOptions(row:any){
+    if(!apiSession||!row?.invoice?.lab_order_id){setSupplierOptions({});return}
+    const optionRows=await Promise.all(
+      (row.items||[]).map((item:any)=>
+        apiFetch(`/billing/invoices/${row.invoice.id}/items/${item.id}/supplier-options`,apiSession)
+          .then((options:any)=>[item.id,Array.isArray(options)?options:[]])
+          .catch(()=>[item.id,[]]),
+      ),
+    );
+    setSupplierOptions(Object.fromEntries(optionRows));
   }
 
   async function collectPayment(invoice:any){
@@ -357,6 +371,22 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     finally{setBusy('')}
   }
 
+  async function updateInvoiceItemSupplier(invoice:any,item:any,supplierId:string){
+    if(!apiSession)return;
+    setBusy(`supplier-${item.id}`);
+    setMessage('');
+    try{
+      const row=await apiFetch(`/billing/invoices/${invoice.id}/items/${item.id}/supplier`,apiSession,{
+        method:'PATCH',
+        body:JSON.stringify({supplier_id:supplierId||null}),
+      });
+      setDetail(row);
+      await loadInvoiceSupplierOptions(row);
+      setMessage('Supplier updated.');
+    }catch(err:any){setMessage(err.message||'Could not update supplier.')}
+    finally{setBusy('')}
+  }
+
   async function finalizeSettlement(){
     if(!apiSession)return;
     setBusy('settlement');
@@ -402,6 +432,8 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         applyMembershipBenefit={applyMembershipBenefit}
         openReceipt={openReceipt}
         issueCreditNote={issueCreditNote}
+        supplierOptions={supplierOptions}
+        updateInvoiceItemSupplier={updateInvoiceItemSupplier}
       />
     );
   }
@@ -569,11 +601,14 @@ function InvoiceDetailPage({
   applyMembershipBenefit,
   openReceipt,
   issueCreditNote,
+  supplierOptions={},
+  updateInvoiceItemSupplier,
 }:any){
   const invoice=detail.invoice||{};
   const items=detail.items||[];
   const payments=detail.payments||[];
   const source=invoiceSource(invoice);
+  const showInternalLabPrices=Boolean(invoice.lab_order_id);
   const linkedRecord=invoiceLinkedRecord(invoice);
   const discountParts=invoiceDiscountParts(invoice);
   const membershipLabel=invoiceMembershipLabel(invoice);
@@ -624,11 +659,15 @@ function InvoiceDetailPage({
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-sm">
+                <table className={`w-full text-left text-sm ${showInternalLabPrices?'min-w-[1080px]':'min-w-[760px]'}`}>
                   <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
                     <tr>
                       <th className="px-4 py-3">Item</th>
                       <th className="px-3 py-3">Description</th>
+                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">MRP</th>}
+                      {showInternalLabPrices&&<th className="px-3 py-3">Supplier</th>}
+                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">Buying</th>}
+                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">Selling</th>}
                       <th className="px-3 py-3 text-right">Qty</th>
                       <th className="px-3 py-3 text-right">Rate</th>
                       <th className="px-4 py-3 text-right">Amount</th>
@@ -637,10 +676,12 @@ function InvoiceDetailPage({
                   <tbody className="divide-y divide-slate-100">
                     {items.length===0&&(
                       <tr>
-                        <td colSpan={5} className="px-4 py-5 text-sm font-semibold text-slate-500">No bill items found.</td>
+                        <td colSpan={showInternalLabPrices?9:5} className="px-4 py-5 text-sm font-semibold text-slate-500">No bill items found.</td>
                       </tr>
                     )}
-                    {items.map((item:any)=>(
+                    {items.map((item:any)=>{
+                      const itemSupplierOptions=supplierOptions[item.id]||[];
+                      return (
                       <tr key={item.id} className="align-middle">
                         <td className="px-4 py-4">
                           <Badge tone={source.tone as any}>{itemTypeLabel(item.item_type)}</Badge>
@@ -649,12 +690,31 @@ function InvoiceDetailPage({
                           <span className="block max-w-[520px] break-words font-semibold text-slate-950" title={item.description||itemTypeLabel(item.item_type)}>
                             {item.description||itemTypeLabel(item.item_type)}
                           </span>
+                          {showInternalLabPrices&&item.external_item_code&&<span className="mt-1 block text-xs text-slate-500">{item.external_item_code}</span>}
                         </td>
+                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.mrp_amount||0)}</td>}
+                        {showInternalLabPrices&&(
+                          <td className="px-3 py-4">
+                            <Select
+                              value={item.supplier_id||''}
+                              onChange={(event:any)=>updateInvoiceItemSupplier?.(invoice,item,event.target.value)}
+                              disabled={busy===`supplier-${item.id}`}
+                              className="min-w-[170px]"
+                            >
+                              <option value="">No supplier</option>
+                              {itemSupplierOptions.map((supplier:any)=>(
+                                <option key={supplier.supplier} value={supplier.supplier}>{supplier.supplier_name} · {money(supplier.buying_price)}</option>
+                              ))}
+                            </Select>
+                          </td>
+                        )}
+                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.buying_amount||0)}</td>}
+                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.selling_amount||item.unit_amount||0)}</td>}
                         <td className="px-3 py-4 text-right font-bold tabular-nums">{item.quantity}</td>
                         <td className="px-3 py-4 text-right tabular-nums">{money(item.unit_amount)}</td>
                         <td className="px-4 py-4 text-right font-black tabular-nums text-slate-950">{money(item.total_amount)}</td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>

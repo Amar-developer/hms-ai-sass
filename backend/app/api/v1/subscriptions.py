@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
@@ -49,6 +49,7 @@ from app.modules.subscriptions.service import (
     modules_from_json,
     modules_to_json,
     next_subscription_invoice_number,
+    plan_duration_days,
 )
 from app.modules.tenants.models import Tenant, now_utc
 
@@ -288,6 +289,23 @@ def create_tenant_subscription(
     plan = session.get(SubscriptionPlan, payload.plan_id)
     if not plan or not plan.is_active:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan")
+    if plan.key == "free_trial":
+        existing_trial = session.exec(
+            select(TenantSubscription).where(
+                TenantSubscription.tenant_id == tenant_id,
+                TenantSubscription.is_trial == True,  # noqa: E712
+            )
+        ).first()
+        if existing_trial:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Free Trial can only be used once for this tenant",
+            )
+    ends_on = payload.ends_on
+    if ends_on is None:
+        duration_days = plan_duration_days(plan.key)
+        if duration_days:
+            ends_on = payload.starts_on + timedelta(days=duration_days)
     starts_today = payload.starts_on <= date.today()
     if starts_today:
         existing = list(
@@ -308,7 +326,9 @@ def create_tenant_subscription(
         payload,
         update={
             "tenant_id": tenant_id,
+            "ends_on": ends_on,
             "is_active": starts_today,
+            "is_trial": plan.key == "free_trial",
             "status": SubscriptionStatus.ACTIVE if starts_today else SubscriptionStatus.SCHEDULED,
             "billing_amount": payload.billing_amount if payload.billing_amount is not None else plan.price_inr_monthly,
             "created_by_user_id": current_user.id,

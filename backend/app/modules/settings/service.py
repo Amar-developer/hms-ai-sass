@@ -35,6 +35,10 @@ DEFAULT_SETTING_VALUES: dict[SettingKey, Any] = {
     SettingKey.APPOINTMENT_SLOT_INTERVAL_MINUTES: 5,
     SettingKey.TOKEN_LANGUAGE: "en-IN",
     SettingKey.COMMUNICATION_PROVIDERS_ENABLED: [],
+    SettingKey.CATALOG_INTEGRATIONS: {
+        "lab_items": {"enabled": False, "provider": "local"},
+        "medicine_items": {"enabled": False, "provider": "local"},
+    },
 }
 
 

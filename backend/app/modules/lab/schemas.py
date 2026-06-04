@@ -142,6 +142,28 @@ class LabResultCreate(BaseModel):
     released_by_user_id: str | None = None
 
 
+class LabOrderItemRead(BaseModel):
+    id: str
+    tenant_id: str
+    branch_id: str
+    lab_order_id: str
+    test_id: str | None
+    package_id: str | None
+    test_name: str
+    sample_type: str | None
+    price: int
+    mrp_price: int = 0
+    selling_price: int = 0
+    buying_price: int = 0
+    supplier_id: str | None = None
+    external_source: str | None = None
+    external_slug: str | None = None
+    external_item_code: str | None = None
+    status: LabOrderStatus
+    created_at: datetime
+    updated_at: datetime
+
+
 class LabSampleCreate(BaseModel):
     barcode: str | None = Field(default=None, max_length=120)
     sample_type: str | None = Field(default=None, max_length=120)
@@ -159,21 +181,6 @@ class LabSampleRead(BaseModel):
     collected_by_user_id: str | None
     collected_at: datetime
     notes: str | None
-
-
-class LabOrderItemRead(BaseModel):
-    id: str
-    tenant_id: str
-    branch_id: str
-    lab_order_id: str
-    test_id: str | None
-    package_id: str | None
-    test_name: str
-    sample_type: str | None
-    price: int
-    status: LabOrderStatus
-    created_at: datetime
-    updated_at: datetime
 
 
 class LabResultRead(BaseModel):

@@ -5,6 +5,7 @@ import {
   Building2,
   ClipboardList,
   FileText,
+  KeyRound,
   Percent,
   Plus,
   Settings,
@@ -1456,7 +1457,6 @@ export function TenantAdmin({
               onStatus={() =>
                 setConfirm({ entity: "users", kind: "status", row: user })
               }
-              onPassword={() => setPasswordUser(user)}
               onDelete={() =>
                 setConfirm({ entity: "users", kind: "delete", row: user })
               }
@@ -1472,6 +1472,7 @@ export function TenantAdmin({
           busy={busy}
           onSubmit={createUser}
           onRoleOpen={openRolePermissions}
+          apiSession={apiSession}
           back={() => open("users")}
         />
       )}
@@ -1484,6 +1485,8 @@ export function TenantAdmin({
           busy={busy}
           onSubmit={updateUser}
           onRoleOpen={openRolePermissions}
+          apiSession={apiSession}
+          onResetPassword={setPasswordUser}
           back={() => open("users")}
         />
       )}
@@ -2031,6 +2034,13 @@ function RoleForm({ title, role, permissions, busy, onSubmit, back }: any) {
   );
 }
 
+function canResetTenantUserPassword(apiSession: any, user: any) {
+  if (!apiSession?.user || !user) return false;
+  if (apiSession.user.id === user.id) return false;
+  if (user.is_super_admin) return false;
+  return Boolean(apiSession.tenantId && user.tenant_id === apiSession.tenantId);
+}
+
 function UserForm({
   title,
   user,
@@ -2039,6 +2049,8 @@ function UserForm({
   busy,
   onSubmit,
   onRoleOpen,
+  apiSession,
+  onResetPassword,
   back,
 }: any) {
   const initialRoleKeys =
@@ -2069,6 +2081,7 @@ function UserForm({
       filterRolesForBranch(roles, branches, selectedBranch, selectedRoleKeys),
     [roles, branches, selectedBranch, selectedRoleKeys],
   );
+  const canResetPassword=canResetTenantUserPassword(apiSession,user);
   return (
     <Card>
       <Header
@@ -2163,6 +2176,24 @@ function UserForm({
             onSelectionChange={setSelectedRoleKeys}
           />
         </div>
+        {canResetPassword && (
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold">Password reset</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Set a temporary password for this tenant user.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onResetPassword?.(user)}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold shadow-sm transition hover:bg-slate-100"
+            >
+              <KeyRound size={16} />
+              <span>Reset Password</span>
+            </button>
+          </div>
+        )}
         <Actions
           busy={busy}
           back={back}
@@ -3764,7 +3795,7 @@ function CheckboxList({
   );
 }
 
-function UserRow({ user, branches, onEdit, onStatus, onPassword, onDelete }: any) {
+function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
   const branch = branches.find((row: any) => row.id === user.branch_id);
   const typeLabel =
     userTypes.find(([value]) => value === user.user_type)?.[1] ||
@@ -3790,7 +3821,6 @@ function UserRow({ user, branches, onEdit, onStatus, onPassword, onDelete }: any
         row={user}
         onEdit={onEdit}
         onStatus={onStatus}
-        onPassword={onPassword}
         onDelete={onDelete}
       />
     </ClickableRow>
@@ -4027,7 +4057,7 @@ function DiscountOfferRow({
     </ClickableRow>
   );
 }
-function RowActions({ row, locked, onEdit, onStatus, onPassword, onDelete }: any) {
+function RowActions({ row, locked, onEdit, onStatus, onDelete }: any) {
   const stop = (handler: any) => (event: any) => {
     event.stopPropagation();
     handler();
@@ -4041,9 +4071,6 @@ function RowActions({ row, locked, onEdit, onStatus, onPassword, onDelete }: any
         <ActionButton onClick={stop(onStatus)}>
           {row.is_active ? "Inactive" : "Active"}
         </ActionButton>
-      )}
-      {onPassword && !locked && (
-        <ActionButton onClick={stop(onPassword)}>Password</ActionButton>
       )}
       {!locked && (
         <ActionButton tone="danger" onClick={stop(onDelete)}>

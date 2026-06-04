@@ -256,7 +256,6 @@ export function DoctorConsultation({
     .map((m: any) =>
       [m.name, m.dosage, m.frequency, m.duration, m.instructions]
         .map((s: any) => String(s || "").trim())
-        .filter(Boolean)
         .join(" | "),
     )
     .join("\n");
@@ -720,7 +719,7 @@ export function DoctorConsultation({
       if (!apiSession) return;
       try {
         const [medicines, tests] = await Promise.all([
-          apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
+          apiFetch("/pharmacy/catalog/available-medicines", apiSession).catch(() => []),
           apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
         ]);
         if (alive) {
@@ -796,13 +795,13 @@ export function DoctorConsultation({
     const med = medicineCatalog.find(
       (row: any) => row.id === selectedMedicineId,
     );
-    if (med) addMedicineRow(med.name, medicineDosage || med.strength || "");
+    if (med) addMedicineRow(med.item_name || med.name, medicineDosage || med.strength || "");
   }
   function addMedicineFromText(value: string, option?: any) {
     const med =
       option?.item ||
       medicineCatalog.find((row: any) => row.id === option?.value);
-    addMedicineRow(med?.name || value, medicineDosage || med?.strength || "");
+    addMedicineRow(med?.item_name || med?.name || value, medicineDosage || med?.strength || "");
   }
   function addLabRow(name: string) {
     const testName = String(name || "").trim();
@@ -839,7 +838,7 @@ export function DoctorConsultation({
   function addLabFromText(value: string, option?: any) {
     const test =
       option?.item || labCatalog.find((row: any) => row.id === option?.value);
-    addLabRow(test?.name || value);
+    addLabRow(test?.item_name || test?.name || value);
   }
   function removeMedicineItem(index: number) {
     setMedicineItems((items: any[]) =>
@@ -1858,34 +1857,110 @@ function ConsultationWorkspace(props: any) {
     callNextInWorkspace,
     setActive,
   } = props;
-  const medicineOptions = medicineCatalog.map((medicine: any) => ({
-    value: medicine.id,
-    label: medicine.name,
-    item: medicine,
-  }));
-  const labOptions = labCatalog.map((test: any) => ({
-    value: test.id,
-    label: test.name,
-    item: test,
-  }));
   const [medicineTagText, setMedicineTagText] = useState("");
   const [labTagText, setLabTagText] = useState("");
   const [medicineDraftName, setMedicineDraftName] = useState("");
   const [labDraftName, setLabDraftName] = useState("");
-  const selectedMedicine = medicineCatalog.find(
-    (medicine: any) => medicine.id === selectedMedicineId,
+  const [availableMedicineCatalog, setAvailableMedicineCatalog] = useState<any[]>(medicineCatalog);
+  const [medicineCatalogLoading, setMedicineCatalogLoading] = useState(false);
+  const [medicineCatalogError, setMedicineCatalogError] = useState("");
+  const [externalLabCatalog, setExternalLabCatalog] = useState<any[]>([]);
+  const [externalLabLoading, setExternalLabLoading] = useState(false);
+  const [externalLabError, setExternalLabError] = useState("");
+  const activeMedicineCatalog = availableMedicineCatalog;
+  const medicineOptions = activeMedicineCatalog.map((medicine: any) => ({
+    value: medicine.id || medicine.slug || medicine.name,
+    label: medicine.item_name || medicine.name,
+    item: medicine,
+  }));
+  const selectedMedicine = activeMedicineCatalog.find(
+    (medicine: any) =>
+      (medicine.id || medicine.slug || medicine.name) === selectedMedicineId,
   );
-  const selectedLabTest = labCatalog.find(
+  const activeLabCatalog = externalLabCatalog;
+  const labOptions = activeLabCatalog.map((test: any) => ({
+    value: test.id || test.slug || test.name,
+    label: test.item_name || test.name,
+    item: test,
+  }));
+  const selectedLabTest = activeLabCatalog.find(
     (test: any) => test.id === selectedLabTestId,
   );
+  useEffect(() => {
+    setAvailableMedicineCatalog(Array.isArray(medicineCatalog) ? medicineCatalog : []);
+  }, [medicineCatalog]);
+  useEffect(() => {
+    if (!apiSession?.token) {
+      setAvailableMedicineCatalog([]);
+      return;
+    }
+    let alive = true;
+    const search = medicineDraftName.trim();
+    const timer = window.setTimeout(async () => {
+      setMedicineCatalogLoading(true);
+      setMedicineCatalogError("");
+      try {
+        const params = new URLSearchParams();
+        if (search) params.set("search", search);
+        const rows = await apiFetch(
+          `/pharmacy/catalog/available-medicines${params.toString() ? `?${params}` : ""}`,
+          apiSession,
+        );
+        if (alive) setAvailableMedicineCatalog(Array.isArray(rows) ? rows : []);
+      } catch (err: any) {
+        if (alive) {
+          setAvailableMedicineCatalog([]);
+          setMedicineCatalogError(err?.message || "Could not load medicine catalog.");
+        }
+      } finally {
+        if (alive) setMedicineCatalogLoading(false);
+      }
+    }, search ? 250 : 0);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [apiSession?.token, apiSession?.tenantId, medicineDraftName]);
+  useEffect(() => {
+    if (!apiSession?.token) {
+      setExternalLabCatalog([]);
+      return;
+    }
+    let alive = true;
+    const search = labDraftName.trim();
+    const timer = window.setTimeout(async () => {
+      setExternalLabLoading(true);
+      setExternalLabError("");
+      try {
+        const params = new URLSearchParams();
+        if (search) params.set("search", search);
+        const rows = await apiFetch(
+          `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
+          apiSession,
+        );
+        if (alive) setExternalLabCatalog(Array.isArray(rows) ? rows : []);
+      } catch (err: any) {
+        if (alive) {
+          setExternalLabCatalog([]);
+          setExternalLabError(err?.message || "Could not load ERPNext lab tests.");
+        }
+      } finally {
+        if (alive) setExternalLabLoading(false);
+      }
+    }, search ? 250 : 0);
+    return () => {
+      alive = false;
+      window.clearTimeout(timer);
+    };
+  }, [apiSession?.token, apiSession?.tenantId, labDraftName]);
   function addDraftMedicine() {
-    const name = selectedMedicine?.name || medicineDraftName;
+    const name = selectedMedicine?.item_name || selectedMedicine?.name || medicineDraftName;
     if (!String(name || "").trim()) return;
     addMedicineFromText(name, selectedMedicine ? { item: selectedMedicine } : undefined);
     setMedicineDraftName("");
   }
   function addDraftLabTest() {
-    const name = selectedLabTest?.name || labDraftName;
+    const name = selectedLabTest?.item_name || selectedLabTest?.name || labDraftName;
     if (!String(name || "").trim()) return;
     addLabFromText(name, selectedLabTest ? { item: selectedLabTest } : undefined);
     setLabDraftName("");
@@ -2081,7 +2156,7 @@ function ConsultationWorkspace(props: any) {
                   }}
                   onChange={(medicineId: string, medicine: any) => {
                     setSelectedMedicineId(medicineId);
-                    setMedicineDraftName(medicine?.name || "");
+                    setMedicineDraftName(medicine?.item_name || medicine?.name || "");
                   }}
                   options={medicineOptions}
                   placeholder="Type medicine name"
@@ -2092,15 +2167,23 @@ function ConsultationWorkspace(props: any) {
                   getSearchText={(medicine: any) =>
                     [
                       medicine?.name,
+                      medicine?.item_name,
                       medicine?.strength,
                       medicine?.generic_name,
                       medicine?.brand_name,
                       medicine?.category,
+                      medicine?.slug,
                     ]
                       .filter(Boolean)
                       .join(" ")
                   }
+                  loading={medicineCatalogLoading}
                 />
+                {!medicineCatalogLoading && medicineCatalogError && (
+                  <p className="mt-1 text-xs font-semibold text-red-500">
+                    {medicineCatalogError}
+                  </p>
+                )}
               </Field>
               <FormField label="Dosage">
                 <Input
@@ -2165,16 +2248,16 @@ function ConsultationWorkspace(props: any) {
               </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {medicineCatalog.slice(0, 8).map((medicine: any) => (
+              {activeMedicineCatalog.slice(0, 8).map((medicine: any) => (
                 <button
-                  key={medicine.id}
+                  key={medicine.id || medicine.slug || medicine.name}
                   type="button"
                   onClick={() =>
-                    addMedicineFromText(medicine.name, { item: medicine })
+                    addMedicineFromText(medicine.item_name || medicine.name, { item: medicine })
                   }
                   className="rounded-xl border bg-white px-3 py-2 text-xs font-bold"
                 >
-                  {medicine.name}
+                  {medicine.item_name || medicine.name}
                 </button>
               ))}
             </div>
@@ -2216,7 +2299,7 @@ function ConsultationWorkspace(props: any) {
                     }}
                     onChange={(id: string, test: any) => {
                       setSelectedLabTestId(id);
-                      setLabDraftName(test?.name || "");
+                      setLabDraftName(test?.item_name || test?.name || "");
                     }}
                     options={labOptions}
                     placeholder="Type lab test name"
@@ -2226,15 +2309,23 @@ function ConsultationWorkspace(props: any) {
                     }}
                     getSearchText={(test: any) =>
                       [
+                        test?.item_name,
                         test?.name,
                         test?.sample_type,
                         test?.category,
                         test?.code,
+                        test?.slug,
                       ]
                         .filter(Boolean)
                         .join(" ")
                     }
+                    loading={externalLabLoading}
                   />
+                  {!externalLabLoading && externalLabError && (
+                    <p className="mt-1 text-xs font-semibold text-red-500">
+                      {externalLabError}
+                    </p>
+                  )}
                 </FormField>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <Select
@@ -2256,14 +2347,16 @@ function ConsultationWorkspace(props: any) {
                 </div>
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
-                {labCatalog.slice(0, 8).map((l: any) => (
+                {activeLabCatalog.slice(0, 8).map((l: any) => (
                   <button
-                    key={l.id}
+                    key={l.id || l.slug || l.name}
                     type="button"
-                    onClick={() => addLabFromText(l.name, { item: l })}
+                    onClick={() =>
+                      addLabFromText(l.item_name || l.name, { item: l })
+                    }
                     className="rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-700"
                   >
-                    {l.name}
+                    {l.item_name || l.name}
                   </button>
                 ))}
               </div>

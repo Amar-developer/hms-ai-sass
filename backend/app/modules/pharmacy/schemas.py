@@ -182,6 +182,12 @@ class PharmacyIssueStatusUpdate(BaseModel):
     actor_user_id: str | None = None
 
 
+class PharmacyIssueAmountUpdate(BaseModel):
+    amount: int = Field(ge=0)
+    reason: str | None = Field(default=None, max_length=500)
+    actor_user_id: str | None = None
+
+
 class PharmacyIssueRead(BaseModel):
     id: str
     tenant_id: str

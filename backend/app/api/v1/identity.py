@@ -79,6 +79,10 @@ def _assert_tenant_permission(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
 
+def _has_tenant_admin_access(session: Session, user: User) -> bool:
+    return user.user_type == "tenant_admin" or "tenant_admin" in user_role_keys(session, user)
+
+
 def _is_primary_tenant(session: Session, tenant_id: str | None) -> bool:
     if not tenant_id:
         return False
@@ -852,6 +856,12 @@ def reset_user_password(
         permissions.IDENTITY_USERS_EDIT,
     )
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
+    if user.id == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use change password for your own login")
+    if current_user.is_super_admin and (_is_primary_tenant(session, tenant_id) or not _has_tenant_admin_access(session, user)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin can reset only tenant admin passwords")
+    if user.is_super_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin password cannot be reset here")
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = payload.must_change_password
     user.updated_by_user_id = current_user.id

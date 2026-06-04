@@ -30,6 +30,7 @@ class SettingKey(str, Enum):
     REPORT_MONTHLY_EMAIL_SEND_DAY = "report.monthly_email_send_day"
     REPORT_MONTHLY_EMAIL_FILTERS = "report.monthly_email_filters"
     REPORT_MONTHLY_EMAIL_LAST_SENT_PERIOD = "report.monthly_email_last_sent_period"
+    CATALOG_INTEGRATIONS = "catalog.integrations"
 
 
 class AdminSetting(SQLModel, table=True):

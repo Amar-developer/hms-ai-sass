@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     smtp_from_name: str = Field(default="MedizinHub HMS Reports")
     smtp_use_tls: bool = Field(default=True)
 
+    maha_clinic_url: str | None = Field(default=None)
+    maha_clinic_token: str | None = Field(default=None)
+    maha_clinic_timeout_seconds: int = Field(default=10)
+    medicine_graphql_url: str | None = Field(default="https://www.medizinhub.com/graphql")
+    medicine_graphql_timeout_seconds: int = Field(default=10)
+    external_lab_items_enabled: bool = Field(default=False)
+
     auto_create_tables: bool = Field(default=True)
 
     cors_origins: list[str] = Field(
@@ -42,7 +49,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
         env_prefix="MEDIZINHUB_",
-        env_file=".env",
+        env_file=(".env", "../.env"),
         extra="ignore",
     )
 

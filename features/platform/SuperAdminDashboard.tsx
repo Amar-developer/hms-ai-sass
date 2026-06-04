@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useRef,useState} from 'react';
-import {Activity,Building2,ClipboardList,CreditCard,Plus,Settings,ShieldCheck,Users} from 'lucide-react';
+import {Activity,Building2,ClipboardList,CreditCard,KeyRound,Plus,Settings,ShieldCheck,Users} from 'lucide-react';
 import {ActionButton,ActionGroup,Badge,Button,Card,Field,Input,Select,StatusToast,SuggestionInput} from '@/components/ui';
 import {FormField} from '@/components/FormElements';
 import {apiFetch,apiUpload} from '@/lib/api';
@@ -17,6 +17,11 @@ const tenantTypes = [
 
 const defaultNumberingEntities:any={user:'USR',patient:'PAT',doctor:'DOC',department:'DEPT',lab_order:'LAB',pharmacy_issue:'PHM',invoice:'INV',ip_admission:'IP',physiotherapy_case:'PHY',supplier:'SUP'};
 const parseNumberingRules=(value:any,fallbackPrefix='SUN')=>({prefix:String(value?.prefix||fallbackPrefix||'SUN').toUpperCase(),digits:Number(value?.digits||5),entities:{...defaultNumberingEntities,...(value?.entities||{})}});
+const defaultCatalogIntegrations:any={lab_items:{enabled:false,provider:'local'},medicine_items:{enabled:false,provider:'local'}};
+const parseCatalogIntegrations=(value:any)=>({
+ lab_items:{...defaultCatalogIntegrations.lab_items,...(value?.lab_items||{})},
+ medicine_items:{...defaultCatalogIntegrations.medicine_items,...(value?.medicine_items||{})},
+});
 const numberEntityLabel=(value:string)=>String(value||'').replaceAll('_',' ').replace(/\b\w/g,part=>part.toUpperCase());
 
 const userTypes = [
@@ -85,6 +90,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
  const [selectedBranchId,setSelectedBranchId]=useState('');
  const [confirmAction,setConfirmAction]=useState<any>(null);
  const [tenantSuccess,setTenantSuccess]=useState<any>(null);
+ const [passwordUser,setPasswordUser]=useState<any>(null);
  const [message,setMessage]=useState('');
  const [busy,setBusy]=useState(false);
  const onboardingInFlight=useRef(false);
@@ -194,35 +200,15 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
     firstBranchId=firstBranchId||branch.id;
    }
    const planId=String(fd.get('planId')||'');
-   const selectedModuleKeys=fd.getAll('enabledModules').map(value=>String(value));
-   const moduleByEntitlement=new Map(moduleRegistry.map((module:any)=>[module.entitlement_key||module.key,module]));
-   const withDependencies=new Set<string>(selectedModuleKeys);
-   selectedModuleKeys.forEach(key=>{
-    const module=moduleByEntitlement.get(key);
-    (module?.dependencies||[]).forEach((dependency:string)=>{
-     const dependencyModule=moduleRegistry.find((item:any)=>item.key===dependency);
-     if(dependencyModule?.entitlement_key)withDependencies.add(dependencyModule.entitlement_key);
-    });
-   });
-   const enabledModules=Array.from(withDependencies).filter(Boolean);
-   let subscriptionPlanId=planId;
-   let createdOnboardingPlan=null;
-   if(planId&&enabledModules.length){
-    const basePlan=plans.find((plan:any)=>plan.id===planId);
-    createdOnboardingPlan=await apiFetch('/subscription-plans',apiSession,{method:'POST',body:JSON.stringify({
-     key:`tenant_${created.id.replace(/^tenant_/,'')}`,
-     name:`${created.name} Onboarding Plan`,
-     monthly_patient_limit:Number(basePlan?.monthly_patient_limit||300),
-     included_branches:Number(basePlan?.included_branches||Math.max(1,branchCount)),
-     included_doctors:Number(basePlan?.included_doctors||1),
-     price_inr_monthly:Number(basePlan?.price_inr_monthly||0),
-     enabled_modules:enabledModules
-    })});
-    subscriptionPlanId=createdOnboardingPlan.id;
-   }
-   if(subscriptionPlanId){
+   const selectedPlan=plans.find((plan:any)=>plan.id===planId);
+   const enabledModules=selectedPlan?.enabled_modules||[];
+   const subscriptionPlanId=planId;
+   if(subscriptionPlanId&&selectedPlan?.key!=='free_trial'){
     await apiFetch('/subscription-plans/tenant-subscriptions',{...apiSession,tenantId:created.id},{method:'POST',body:JSON.stringify({
-     plan_id:subscriptionPlanId,starts_on:new Date().toISOString().slice(0,10),is_trial:fd.get('status')==='trial'
+     plan_id:subscriptionPlanId,
+     starts_on:new Date().toISOString().slice(0,10),
+     billing_amount:Number(selectedPlan?.price_inr_monthly||0),
+     notes:'Assigned during tenant onboarding'
     })});
    }
    const roleTemplateIds=fd.getAll('roleTemplateIds').map(value=>String(value));
@@ -257,7 +243,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
    setTenants(previous=>[tenantWithLogo,...previous.filter((tenant:any)=>tenant.id!==tenantWithLogo.id)]);
    openListing('tenants');
    await loadPlatform();
-   setTenantSuccess({tenant:tenantWithLogo,branchCount,hasSubscription:Boolean(subscriptionPlanId),moduleCount:enabledModules.length,onboardingPlan:createdOnboardingPlan,roleCount:roleTemplateIds.length,departmentCount:fd.getAll('departmentTemplateIds').length,branchTemplateCount:fd.getAll('branchTemplateIds').length,adminUser:tenantAdminUser,adminPassword});
+   setTenantSuccess({tenant:tenantWithLogo,branchCount,hasSubscription:Boolean(subscriptionPlanId),moduleCount:enabledModules.length,onboardingPlan:selectedPlan,roleCount:roleTemplateIds.length,departmentCount:fd.getAll('departmentTemplateIds').length,branchTemplateCount:fd.getAll('branchTemplateIds').length,adminUser:tenantAdminUser,adminPassword});
    setMessage(`Tenant onboarding completed successfully: ${tenantWithLogo.name}`);
    window.setTimeout(()=>window.location.assign('/'),600);
   }catch(err:any){setMessage(err.message||'Could not create tenant.')}finally{setBusy(false);onboardingInFlight.current=false}
@@ -415,6 +401,22 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
   }catch(err:any){setMessage(err.message||'Could not update user.')}finally{setBusy(false)}
  }
 
+ async function resetUserPassword(e:any){
+  e.preventDefault();if(!apiSession||!passwordUser)return;
+  const fd=new FormData(e.currentTarget);
+  const password=String(fd.get('newPassword')||'');
+  const confirm=String(fd.get('confirmPassword')||'');
+  if(password!==confirm){setMessage('Passwords do not match.');return}
+  const tenantId=passwordUser.tenant_id||selectedId||apiSession.tenantId;
+  setBusy(true);setMessage('');
+  try{
+   const updated=await apiFetch(`/identity/users/${passwordUser.id}/password-reset`,{...apiSession,tenantId},{method:'POST',body:JSON.stringify({new_password:password,must_change_password:fd.get('mustChangePassword')==='true'})});
+   setUsers(previous=>[updated,...previous.filter((user:any)=>user.id!==updated.id)]);
+   setPasswordUser(null);
+   setMessage(`Password reset for ${updated.name}.`);
+  }catch(err:any){setMessage(err.message||'Could not reset password.')}finally{setBusy(false)}
+ }
+
  async function changeUserStatus(user:any){
   if(!apiSession||!selectedId)return;
   setBusy(true);setMessage('');
@@ -553,7 +555,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
    {currentSection==='overview'&&<Overview customerTenants={customerTenants} activeTenants={activeTenants} trialTenants={trialTenants} plans={plans} estimatedRevenue={estimatedRevenue}/>}
    {currentSection==='tenants'&&<TenantManagement tenants={selectableTenants} setSelectedId={setSelectedId} setSection={changeSection} switchTenant={switchTenant} apiSession={apiSession} busy={busy} suspendTenant={suspendTenant}/>}
    {currentSection==='tenantEdit'&&selected&&<EditTenant selected={selected} branches={tenantBranches} busy={busy} updateTenant={updateTenant} suspendTenant={suspendTenant} back={()=>changeSection('tenants')}/>}
-   {currentSection==='createTenant'&&<CreateTenantForm plans={plans} moduleRegistry={moduleRegistry} templates={primaryTemplates} busy={busy} createTenant={createTenant}/>}
+   {currentSection==='createTenant'&&<CreateTenantForm plans={catalogSubscriptionPlans(plans)} moduleRegistry={moduleRegistry} templates={primaryTemplates} busy={busy} createTenant={createTenant}/>}
    {currentSection==='roles'&&<RolesManagement tenants={selectableTenants} customerTenants={customerTenants} selected={selected} selectedId={selectedId} setSelectedId={setSelectedId} roles={roles} setSelectedRoleId={setSelectedRoleId} setSection={changeSection} setConfirmAction={setConfirmAction}/>}
    {currentSection==='roleCreate'&&<CreateRole tenants={selectableTenants} selectedId={selectedId} setSelectedId={setSelectedId} permissionCatalog={permissionCatalog} busy={busy} createRole={createRole} back={()=>changeSection('roles')}/>}
    {currentSection==='roleEdit'&&<EditRole role={roles.find((r:any)=>r.id===selectedRoleId)} busy={busy} updateRole={updateRole} back={()=>changeSection('roles')}/>}
@@ -561,7 +563,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
    {currentSection==='roleAssign'&&<AssignTemplate title="Assign Role Template" item={roles.find((r:any)=>r.id===selectedRoleId)} tenants={selectableTenants.filter((tenant:any)=>tenant.id!==selectedId)} busy={busy} onSubmit={assignRoleTemplate} back={()=>changeSection('roles')}/>}
    {currentSection==='users'&&<TenantUsers tenants={selectableTenants} selectedId={selectedId} setSelectedId={setSelectedId} users={users} setSelectedUserId={setSelectedUserId} setSection={changeSection} setConfirmAction={setConfirmAction}/>}
    {currentSection==='userCreate'&&<CreateUser tenants={selectableTenants} selectedId={selectedId} setSelectedId={setSelectedId} branches={tenantBranches} roles={roles} busy={busy} createUser={createUser} back={()=>changeSection('users')}/>}
-   {currentSection==='userEdit'&&<EditUser user={users.find((u:any)=>u.id===selectedUserId)} branches={tenantBranches} roles={roles} busy={busy} updateUser={updateUser} back={()=>changeSection('users')}/>}
+   {currentSection==='userEdit'&&<EditUser apiSession={apiSession} selected={selected} user={users.find((u:any)=>u.id===selectedUserId)} branches={tenantBranches} roles={roles} busy={busy} updateUser={updateUser} onResetPassword={setPasswordUser} back={()=>changeSection('users')}/>}
    {currentSection==='departments'&&<DepartmentsManagement tenants={selectableTenants} customerTenants={customerTenants} selected={selected} selectedId={selectedId} setSelectedId={setSelectedId} departments={departments} setSelectedDepartmentId={setSelectedDepartmentId} setSection={changeSection} setConfirmAction={setConfirmAction}/>}
    {currentSection==='departmentCreate'&&<CreateDepartment tenants={selectableTenants} selectedId={selectedId} setSelectedId={setSelectedId} busy={busy} createDepartment={createDepartment} back={()=>changeSection('departments')}/>}
    {currentSection==='departmentEdit'&&<EditDepartment department={departments.find((d:any)=>d.id===selectedDepartmentId)} busy={busy} updateDepartment={updateDepartment} back={()=>changeSection('departments')}/>}
@@ -579,6 +581,7 @@ export function SuperAdminDashboard({apiSession,switchTenant,section,setSection}
     return confirmAction.kind==='delete'?deleteUser(confirmAction.user):changeUserStatus(confirmAction.user);
    }}/>}
    {tenantSuccess&&<TenantCreatedModal details={tenantSuccess} onClose={()=>setTenantSuccess(null)}/>}
+   {passwordUser&&<PasswordResetModal user={passwordUser} busy={busy} onSubmit={resetUserPassword} onCancel={()=>setPasswordUser(null)}/>}
  </div>
 }
 
@@ -644,16 +647,15 @@ function CreateTenantForm({plans,moduleRegistry,templates,busy,createTenant}:any
  const [step,setStep]=useState(0);
  const [,setReviewTick]=useState(0);
  const formRef=useRef<HTMLFormElement|null>(null);
- const steps=['Tenant','Plan & Branches','Modules','Templates','Admin User','Review'];
+ const steps=['Tenant','Plan & Branches','Included Modules','Templates','Admin User','Review'];
  const roleDefaults=new Set(['tenant_admin']);
  const departmentDefaults=new Set(['general_medicine','general']);
  const branchDefaults=new Set(['MAIN','OP_MAIN']);
  const draft=readTenantOnboardingDraft(formRef.current,branches,plans,moduleRegistry,templates);
- const modulesAvailable=(moduleRegistry||[]).some((module:any)=>module.entitlement_key);
  const validSteps=[
   Boolean(draft.name&&draft.tenantType&&draft.status&&draft.country&&draft.timezone),
   Boolean(draft.planId&&draft.branches.length&&draft.branches.every((branch:any)=>branch.name&&branch.code)),
-  modulesAvailable?draft.enabledModules.length>0:true,
+  Boolean(draft.planId),
   true,
   Boolean(draft.adminName&&draft.adminEmail&&draft.adminPassword),
  ];
@@ -681,7 +683,7 @@ function CreateTenantForm({plans,moduleRegistry,templates,busy,createTenant}:any
  const stepHelp=[
   'Tenant name, type, status, country, and timezone are required.',
   'Select a plan and complete every branch name and code.',
-  'Select at least one enabled module when modules are available.',
+  'Review the modules included with the selected catalog plan.',
   'Templates are optional, but review selected defaults before continuing.',
   'Admin name, email, and temporary password are required.',
   'Review every section, then complete onboarding.',
@@ -704,10 +706,10 @@ function CreateTenantForm({plans,moduleRegistry,templates,busy,createTenant}:any
    </div>
    <div className={step===0?'grid gap-4 md:grid-cols-3':'hidden'}><Field label="Tenant Name"><Input name="name" required placeholder="Clinic name"/></Field><Field label="Legal Name"><Input name="legalName" placeholder="Registered legal name"/></Field><Field label="Tenant Type"><Select name="tenantType">{tenantTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Status"><Select name="status" defaultValue="trial"><option value="trial">Trial</option><option value="active">Active</option><option value="suspended">Suspended</option></Select></Field><Field label="Tenant Logo"><Input name="logoFile" type="file" accept="image/*"/></Field><Field label="Email"><Input name="email" type="email"/></Field><Field label="Phone"><Input name="phone"/></Field><Field label="Country"><Input name="country" defaultValue="IN" maxLength={2}/></Field><Field label="Timezone"><Input name="timezone" defaultValue="Asia/Kolkata"/></Field><div className="md:col-span-3"><Field label="Address"><Input name="address"/></Field></div><div className="md:col-span-3"><Field label="Description"><Input name="description" placeholder="Clinic, hospital, or group description"/></Field></div></div>
    <div className={step===1?'grid gap-4':'hidden'}><div className="grid gap-4 md:grid-cols-3"><Field label="Subscription Model"><Select name="planId" required>{plans.map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name} - ₹{plan.price_inr_monthly}</option>)}</Select></Field></div><div><div className="flex items-center justify-between gap-3"><div><h4 className="font-bold">Branches</h4><p className="text-sm text-slate-500">Add local branches for the tenant. Every branch needs a name and code.</p></div><button type="button" onClick={()=>{setBranches([...branches,{id:Date.now()+branches.length}]);setTimeout(refreshDraft,0)}} className="rounded-2xl border px-4 py-3 text-sm font-bold">Add More Branch</button></div><div className="mt-3 grid gap-3">{branches.map((branch:any,index:number)=><div key={branch.id} className="rounded-2xl border border-slate-200 p-4"><div className="mb-3 flex items-center justify-between gap-3"><b>Branch {index+1}</b>{branches.length>1&&<button type="button" onClick={()=>{setBranches(branches.filter((item:any)=>item.id!==branch.id));setTimeout(refreshDraft,0)}} className="rounded-xl border px-3 py-2 text-xs font-bold text-red-600">Cancel Branch</button>}</div><div className="grid gap-3 md:grid-cols-3"><Field label="Branch Name"><Input name={`branchName_${index}`} defaultValue={index===0?'Main Branch':''} required/></Field><Field label="Branch Code"><Input name={`branchCode_${index}`} defaultValue={index===0?'MAIN':''} placeholder={`BR${index+1}`} required/></Field><Field label="City"><Input name={`branchCity_${index}`} placeholder="Chennai"/></Field><Field label="Area"><Input name={`branchArea_${index}`} placeholder="Chrompet"/></Field><Field label="State"><Input name={`branchState_${index}`} placeholder="Tamil Nadu"/></Field><div className="md:col-span-2"><Field label="Branch Address"><Input name={`branchAddress_${index}`}/></Field></div></div></div>)}</div></div></div>
-   <div className={step===2?'grid gap-4':'hidden'}><ModuleChecklist modules={moduleRegistry}/></div>
+   <div className={step===2?'grid gap-4':'hidden'}><PlanModulePreview plan={plans.find((plan:any)=>plan.id===draft.planId)} modules={moduleRegistry}/></div>
    <div className={step===3?'grid gap-4 lg:grid-cols-3':'hidden'}><TemplateChecklist title="Default Roles" name="roleTemplateIds" items={templates.roles} defaultSelected={(item:any)=>roleDefaults.has(item.key)} empty="Create default roles under MedizinHub HMS first."/><TemplateChecklist title="Default Medical Departments" name="departmentTemplateIds" items={templates.departments} defaultSelected={(item:any)=>departmentDefaults.has(item.code)||departmentDefaults.has(String(item.code||'').toLowerCase())} empty="Create default medical departments under MedizinHub HMS first."/><TemplateChecklist title="Default Branch Templates" name="branchTemplateIds" items={templates.branches} defaultSelected={(item:any)=>branchDefaults.has(item.code)} empty="Create branch templates under MedizinHub HMS first."/></div>
    <div className={step===4?'grid gap-4 md:grid-cols-3':'hidden'}><Field label="Admin Name"><Input name="adminName" defaultValue="Tenant Admin" placeholder="Clinic Owner / Admin" required/></Field><Field label="Admin Email"><Input name="adminEmail" type="email" placeholder="admin@clinic.local" required/></Field><Field label="Temporary Password"><Input name="adminPassword" type="text" defaultValue="TempPass123" required/></Field><Field label="Admin Mobile"><Input name="adminMobile" placeholder="Optional"/></Field><Field label="Must Change Password"><Select name="adminMustChangePassword" defaultValue="true"><option value="true">Yes</option><option value="false">No</option></Select></Field><div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 md:col-span-3">The wizard copies the Tenant Admin role template automatically and creates the first tenant admin user.</div></div>
-   <div className={step===5?'grid gap-4':'hidden'}><OnboardingReview draft={draft} validSteps={validSteps} steps={steps} onEdit={setStep}/><div className="rounded-2xl bg-blue-50 p-4 text-sm font-semibold text-blue-700">Submitting this wizard creates the tenant, generates a tenant-specific plan from selected modules, assigns selected defaults, creates the tenant admin user, and returns to the Tenants listing with the latest tenant first.</div></div>
+   <div className={step===5?'grid gap-4':'hidden'}><OnboardingReview draft={draft} validSteps={validSteps} steps={steps} onEdit={setStep}/><div className="rounded-2xl bg-blue-50 p-4 text-sm font-semibold text-blue-700">Submitting this wizard creates the tenant, assigns the selected catalog plan, copies selected defaults, creates the tenant admin user, and returns to the Tenants listing with the latest tenant first.</div></div>
    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4"><div className="flex gap-2"><button type="button" onClick={()=>setStep(Math.max(0,step-1))} disabled={step===0} className="rounded-2xl border px-4 py-3 text-sm font-bold disabled:text-slate-300">Previous</button><button type="button" onClick={nextStep} disabled={step===steps.length-1||!currentStepValid} className="rounded-2xl border px-4 py-3 text-sm font-bold disabled:text-slate-300">Next</button></div><Button disabled={!canComplete}>{busy?'Onboarding...':'Complete Onboarding'}</Button></div>
   </form>
  </Card>
@@ -727,12 +729,13 @@ function readTenantOnboardingDraft(form:HTMLFormElement|null,branches:any[],plan
   address:value(`branchAddress_${index}`),
  }));
  const selectedPlanId=value('planId',plans[0]?.id||'');
+ const selectedPlan=plans.find((plan:any)=>plan.id===selectedPlanId);
  const logoFile=fd?.get('logoFile') as File|null;
- const enabledModules=values('enabledModules');
+ const enabledModules=selectedPlan?.enabled_modules||[];
  const roleTemplateIds=values('roleTemplateIds');
  const departmentTemplateIds=values('departmentTemplateIds');
  const branchTemplateIds=values('branchTemplateIds');
- const moduleLabels=enabledModules.map(key=>{
+ const moduleLabels=enabledModules.map((key:string)=>{
   const module=(modules||[]).find((item:any)=>(item.entitlement_key||item.key)===key);
   return module?.name||key;
  });
@@ -751,7 +754,7 @@ function readTenantOnboardingDraft(form:HTMLFormElement|null,branches:any[],plan
   address:value('address'),
   description:value('description'),
   planId:selectedPlanId,
-  planName:plans.find((plan:any)=>plan.id===selectedPlanId)?.name||'No plan selected',
+  planName:selectedPlan?.name||'No plan selected',
   branches:branchRows,
   enabledModules,
   moduleLabels,
@@ -853,6 +856,15 @@ function ModuleChecklist({modules}:any){
    </div>)}
   </div>
  </div>
+}
+
+function PlanModulePreview({plan,modules}:any){
+ if(!plan)return <Empty text="Select a subscription plan first."/>
+ const moduleNames=(plan.enabled_modules||[]).map((key:string)=>{
+  const module=(modules||[]).find((item:any)=>(item.entitlement_key||item.key)===key);
+  return module?.name||key;
+ });
+ return <div className="grid gap-4"><div className="grid gap-3 md:grid-cols-5"><Info label="Plan" value={plan.name}/><Info label="Price" value={`₹${plan.price_inr_monthly}`}/><Info label="Patients" value={limitLabel(plan.monthly_patient_limit)}/><Info label="Invoices" value={invoiceLimitLabel(plan)}/><Info label="Branches" value={limitLabel(plan.included_branches)}/></div><Card><div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center"><div><h4 className="font-bold">Included Modules</h4><p className="text-sm text-slate-500">Tenant access follows these modules from the selected plan.</p></div><Badge tone="blue">{moduleNames.length} modules</Badge></div><div className="mt-3 flex flex-wrap gap-2">{moduleNames.length?moduleNames.map((name:string)=><span key={name} className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700">{name}</span>):<span className="text-sm text-slate-400">No modules configured.</span>}</div></Card></div>
 }
 
 function TemplateChecklist({title,name,items,defaultSelected,empty}:any){
@@ -961,8 +973,9 @@ function BranchSelect({branches,defaultValue=''}:any){
 }
 
 function RoleCheckboxes({roles,selected=[]}:any){
- const selectedSet=new Set(selected||[]);
- const effectiveRoles=roles.some((role:any)=>role.key==='tenant_admin')?roles:[{id:'tenant_admin_default',key:'tenant_admin',name:'Tenant Admin',permission_keys:[]},...roles];
+ const selectedSet=new Set<string>((selected||[]).map(String));
+ const withTenantAdmin=roles.some((role:any)=>role.key==='tenant_admin')?roles:[{id:'tenant_admin_default',key:'tenant_admin',name:'Tenant Admin',permission_keys:[]},...roles];
+ const effectiveRoles=dedupeRoleOptions(withTenantAdmin,selectedSet);
  return <div><p className="mb-2 text-xs font-bold uppercase text-slate-500">Role access</p><div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{effectiveRoles.map((role:any)=><label key={role.id} className="flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-sm"><input name="roleKeys" type="checkbox" value={role.key} defaultChecked={selectedSet.has(role.key)} className="mt-1 h-4 w-4"/><span><b>{roleDisplayName(role)}</b>{role.is_template_locked&&<span className="ml-2 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700">Template</span>}<span className="block text-xs text-slate-500">{role.permission_keys?.length?`${role.permission_keys.length} permissions`:'Default admin access'}</span></span></label>)}</div></div>
 }
 
@@ -970,9 +983,27 @@ function CreateUser({tenants,selectedId,setSelectedId,branches,roles,busy,create
  return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Create User</h3><p className="text-sm text-slate-500">Add a user under the selected tenant.</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Users</button></div><form onSubmit={createUser} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"><TenantPicker tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId}/><Field label="Name"><Input name="name" required placeholder="Clinic Admin"/></Field><Field label="Email"><Input name="email" type="email" required placeholder="admin@clinic.local"/></Field><Field label="User Type"><Select name="userType" defaultValue="tenant_admin">{userTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Password"><Input name="password" type="password" required placeholder="Minimum 8 characters"/></Field><Field label="Mobile"><Input name="mobile"/></Field><BranchSelect branches={branches}/><Field label="Must Change Password"><Select name="mustChangePassword" defaultValue="true"><option value="true">Yes</option><option value="false">No</option></Select></Field><div className="md:col-span-2 xl:col-span-3"><RoleCheckboxes roles={roles} selected={['tenant_admin']}/></div><div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3"><Button disabled={busy}>{busy?'Creating...':'Create User'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></form></Card>
 }
 
-function EditUser({user,branches,roles,busy,updateUser,back}:any){
+function userHasTenantAdminAccess(user:any){
+ const roles=Array.isArray(user?.roles)?user.roles:[];
+ return user?.user_type==='tenant_admin'||roles.includes('tenant_admin');
+}
+
+function canResetUserPassword(apiSession:any,user:any,selected:any){
+ if(!apiSession?.user||!user)return false;
+ if(apiSession.user.id===user.id)return false;
+ const tenantId=user.tenant_id||selected?.id;
+ if(apiSession.user.is_super_admin){
+  return Boolean(selected?.id&&tenantId===selected.id&&!selected?.is_primary&&userHasTenantAdminAccess(user));
+ }
+ const actorRoles=Array.isArray(apiSession.user.roles)?apiSession.user.roles:[];
+ const actorIsTenantAdmin=apiSession.user.user_type==='tenant_admin'||actorRoles.includes('tenant_admin');
+ return Boolean(actorIsTenantAdmin&&apiSession.tenantId&&tenantId===apiSession.tenantId&&!user.is_super_admin);
+}
+
+function EditUser({apiSession,selected,user,branches,roles,busy,updateUser,onResetPassword,back}:any){
  if(!user)return <Card><h3 className="text-lg font-bold">User not found</h3><button type="button" onClick={back} className="mt-4 rounded-2xl border px-4 py-3 text-sm font-bold">Back to Users</button></Card>;
- return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Edit User</h3><p className="text-sm text-slate-500">{user.email}</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Users</button></div><form onSubmit={updateUser} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"><Field label="Name"><Input name="name" defaultValue={user.name} required/></Field><Field label="Email"><Input name="email" type="email" defaultValue={user.email} required/></Field><Field label="User Type"><Select name="userType" defaultValue={user.user_type||'staff'}>{userTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Mobile"><Input name="mobile" defaultValue={user.mobile||''}/></Field><BranchSelect branches={branches} defaultValue={user.branch_id}/><Field label="Status"><Select name="isActive" defaultValue={String(user.is_active)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field><Field label="Must Change Password"><Select name="mustChangePassword" defaultValue={String(user.must_change_password)}><option value="true">Yes</option><option value="false">No</option></Select></Field><div className="md:col-span-2 xl:col-span-3"><RoleCheckboxes roles={roles} selected={user.roles?.length?user.roles:[user.user_type]}/></div><div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3"><Button disabled={busy}>{busy?'Saving...':'Save User'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></form></Card>
+ const canResetPassword = canResetUserPassword(apiSession,user,selected);
+ return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Edit User</h3><p className="text-sm text-slate-500">{user.email}</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Users</button></div><form onSubmit={updateUser} className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"><Field label="Name"><Input name="name" defaultValue={user.name} required/></Field><Field label="Email"><Input name="email" type="email" defaultValue={user.email} required/></Field><Field label="User Type"><Select name="userType" defaultValue={user.user_type||'staff'}>{userTypes.map(([value,label])=><option key={value} value={value}>{label}</option>)}</Select></Field><Field label="Mobile"><Input name="mobile" defaultValue={user.mobile||''}/></Field><BranchSelect branches={branches} defaultValue={user.branch_id}/><Field label="Status"><Select name="isActive" defaultValue={String(user.is_active)}><option value="true">Active</option><option value="false">Inactive</option></Select></Field><Field label="Must Change Password"><Select name="mustChangePassword" defaultValue={String(user.must_change_password)}><option value="true">Yes</option><option value="false">No</option></Select></Field><div className="md:col-span-2 xl:col-span-3"><RoleCheckboxes roles={roles} selected={user.roles?.length?user.roles:[user.user_type]}/></div>{canResetPassword&&<div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 xl:col-span-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold">Password reset</p><p className="mt-1 text-xs text-slate-500">Set a temporary password for this tenant user.</p></div><button type="button" onClick={()=>onResetPassword(user)} className="inline-flex items-center justify-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold shadow-sm transition hover:bg-slate-100"><KeyRound size={16}/><span>Reset Password</span></button></div>}<div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3"><Button disabled={busy}>{busy?'Saving...':'Save User'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></form></Card>
 }
 
 function DepartmentsManagement({tenants,selectedId,setSelectedId,selected,departments,setSelectedDepartmentId,setSection,setConfirmAction}:any){
@@ -1034,6 +1065,8 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
  const [filters,setFilters]=useState({tenant:'',plan:'all',status:'all',fromDate:'',toDate:''});
  const [page,setPage]=useState(1);
  const [editingPlan,setEditingPlan]=useState<any>(null);
+ const [detailSubscription,setDetailSubscription]=useState<any>(null);
+ const [detailPlan,setDetailPlan]=useState<any>(null);
  const [usage,setUsage]=useState<any>(null);
  const [announcements,setAnnouncements]=useState<any[]>([]);
  const [subscriptions,setSubscriptions]=useState<any[]>([]);
@@ -1042,7 +1075,8 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
  const [revenue,setRevenue]=useState<any>(null);
  const [message,setMessage]=useState('');
  const [loading,setLoading]=useState(false);
- const activePlans=plans.filter((plan:any)=>plan.is_active);
+ const catalogPlans=catalogSubscriptionPlans(plans);
+ const activePlans=catalogPlans.filter((plan:any)=>plan.is_active);
  const selectedTenant=tenants.find((tenant:any)=>tenant.id===selectedId);
  const planById=new Map(plans.map((plan:any)=>[plan.id,plan]));
  const tenantById=new Map(tenants.map((tenant:any)=>[tenant.id,tenant]));
@@ -1133,13 +1167,15 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
   setLoading(true);setMessage('');
   try{
    const scoped={...apiSession,tenantId:selectedId};
-   await apiFetch('/subscription-plans/tenant-subscriptions',scoped,{method:'POST',body:JSON.stringify({
+   const billingAmount=String(fd.get('billingAmount')||'').trim();
+   const payload:any={
     plan_id:fd.get('planId'),
     starts_on:fd.get('startsOn'),
     ends_on:fd.get('endsOn')||null,
-    billing_amount:Number(fd.get('billingAmount')||0),
     notes:fd.get('notes')||null
-   })});
+   };
+   if(billingAmount)payload.billing_amount=Number(billingAmount);
+   await apiFetch('/subscription-plans/tenant-subscriptions',scoped,{method:'POST',body:JSON.stringify(payload)});
    form.reset();await loadSubscriptionConsole();openSubscriptionView('list');setMessage('Tenant subscription assigned. Future start dates stay scheduled until activation date.');
   }catch(err:any){setMessage(err.message||'Could not assign subscription.')}finally{setLoading(false)}
  }
@@ -1187,8 +1223,10 @@ function SubscriptionManagement({apiSession,plans,tenants,selectedId,setSelected
  return <div className="space-y-5">
   <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h3 className="text-lg font-bold">Subscription Management</h3><p className="text-sm text-slate-500">Search tenant subscriptions, review SaaS revenue, and open focused pages for plan setup, upgrades, and credits.</p></div><div className="flex flex-wrap gap-2"><CreateActionButton label="Create Custom Plan" onClick={()=>openSubscriptionView('createPlan')}/><button type="button" onClick={()=>openSubscriptionView('assign')} className="rounded-2xl border px-4 py-3 text-sm font-bold">Assign / Upgrade</button><button type="button" onClick={()=>openSubscriptionView('credits')} className="rounded-2xl border px-4 py-3 text-sm font-bold">Additional Credits</button></div></div><StatusToast message={message} onClose={()=>setMessage('')}/>{announcements.length>0&&<div className="mt-4 overflow-hidden rounded-2xl bg-amber-50 p-3 text-sm font-bold text-amber-800"><div className="animate-pulse whitespace-nowrap">{announcements.map(item=>item.message).join('  |  ')}</div></div>}</Card>
   <div className="grid gap-4 md:grid-cols-4"><Info label="Active Subscriptions" value={revenue?.total_active_subscriptions??'-'}/><Info label="Scheduled" value={revenue?.scheduled_subscriptions??'-'}/><Info label="Estimated MRR" value={`₹${revenue?.estimated_monthly_recurring_revenue??0}`}/><Info label="Pending Invoice" value={`₹${revenue?.pending_invoice_amount??0}`}/></div>
-  <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h4 className="font-bold">Subscriptions</h4><p className="text-sm text-slate-500">Latest created or updated subscription records appear first.</p></div><Badge tone="blue">{filtered.length} records</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><FormField label="Tenant / Plan"><Input value={filters.tenant} onChange={(e:any)=>setFilters({...filters,tenant:e.target.value})} placeholder="Search tenant or plan"/></FormField><FormField label="Plan"><Select value={filters.plan} onChange={(e:any)=>setFilters({...filters,plan:e.target.value})}><option value="all">All plans</option>{plans.map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name}</option>)}</Select></FormField><FormField label="Status"><Select value={filters.status} onChange={(e:any)=>setFilters({...filters,status:e.target.value})}><option value="all">All status</option><option value="active">Active</option><option value="scheduled">Scheduled</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></Select></FormField><FormField label="From"><Input type="date" value={filters.fromDate} onChange={(e:any)=>setFilters({...filters,fromDate:e.target.value})}/></FormField><FormField label="To"><Input type="date" value={filters.toDate} onChange={(e:any)=>setFilters({...filters,toDate:e.target.value})}/></FormField></div><div className="mt-4 overflow-hidden rounded-2xl border border-slate-200"><div className="hidden grid-cols-[1.3fr_1.05fr_.8fr_.85fr_.85fr_.85fr_1fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid"><span>Tenant</span><span>Plan</span><span>Status</span><span>Start</span><span>End</span><span>Amount</span><span>Actions</span></div><div className="divide-y divide-slate-200">{rows.length===0&&<Empty text={loading?'Loading subscriptions...':'No subscriptions match your search.'}/>} {rows.map((subscription:any)=>{const plan=planById.get(subscription.plan_id) as any;const tenant=tenantById.get(subscription.tenant_id) as any;return <div key={subscription.id} className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.3fr_1.05fr_.8fr_.85fr_.85fr_.85fr_1fr] xl:items-center"><div><b>{subscription.tenant_name||tenant?.name||subscription.tenant_id}</b><p className="break-all text-xs text-slate-500">{subscription.tenant_id}</p></div><div><b>{plan?.name||subscription.plan_id}</b><p className="text-xs text-slate-500">{plan?.key||''}</p></div><div><Badge tone={subscription.status==='active'?'green':subscription.status==='scheduled'?'amber':subscription.status==='expired'?'slate':'red'}>{subscription.status}</Badge></div><span>{formatDate(subscription.starts_on)}</span><span>{formatDate(subscription.ends_on)}</span><b>₹{subscription.billing_amount}</b><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>{setSelectedId(subscription.tenant_id);openSubscriptionView('assign')}} className="rounded-xl border px-3 py-2 text-xs font-bold">Upgrade</button><button type="button" onClick={()=>{setSelectedId(subscription.tenant_id);openSubscriptionView('credits')}} className="rounded-xl border px-3 py-2 text-xs font-bold">Credits</button></div></div>})}</div></div><Pagination page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPage={setPage}/></Card>
-  <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h4 className="font-bold">Plan Catalog</h4><p className="text-sm text-slate-500">Update SaaS limits, pricing, and module access for new and active tenant subscriptions.</p></div><Badge tone="blue">{plans.length} plans</Badge></div><div className="mt-4 overflow-hidden rounded-2xl border border-slate-200"><div className="hidden grid-cols-[1.2fr_.7fr_.6fr_.6fr_1.25fr_.65fr_1fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid"><span>Plan</span><span>Price</span><span>Patients</span><span>Branches</span><span>Modules</span><span>Status</span><span>Actions</span></div><div className="divide-y divide-slate-200">{plans.map((plan:any)=><div key={plan.id} className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.2fr_.7fr_.6fr_.6fr_1.25fr_.65fr_1fr] xl:items-center"><div><b>{plan.name}</b><p className="text-xs text-slate-500">{plan.key}</p></div><b>₹{plan.price_inr_monthly}</b><span>{plan.monthly_patient_limit}</span><span>{plan.included_branches}</span><ModuleSummary modules={plan.enabled_modules}/><Badge tone={plan.is_active?'green':'slate'}>{plan.is_active?'Active':'Inactive'}</Badge><div className="flex flex-wrap gap-2"><button type="button" onClick={()=>{setEditingPlan(plan);openSubscriptionView('editPlan')}} className="w-fit rounded-xl border px-3 py-2 text-xs font-bold">Edit</button><button type="button" onClick={()=>changePlanStatus(plan)} className="w-fit rounded-xl border px-3 py-2 text-xs font-bold">{plan.is_active?'Deactivate':'Activate'}</button></div></div>)}</div></div></Card>
+  <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h4 className="font-bold">Subscriptions</h4><p className="text-sm text-slate-500">Compact tenant subscription list. Open details for IDs, notes, and module information.</p></div><Badge tone="blue">{filtered.length} records</Badge></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><FormField label="Tenant / Plan"><Input value={filters.tenant} onChange={(e:any)=>setFilters({...filters,tenant:e.target.value})} placeholder="Search tenant or plan"/></FormField><FormField label="Plan"><Select value={filters.plan} onChange={(e:any)=>setFilters({...filters,plan:e.target.value})}><option value="all">All plans</option>{catalogPlans.map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name}</option>)}</Select></FormField><FormField label="Status"><Select value={filters.status} onChange={(e:any)=>setFilters({...filters,status:e.target.value})}><option value="all">All status</option><option value="active">Active</option><option value="scheduled">Scheduled</option><option value="expired">Expired</option><option value="cancelled">Cancelled</option></Select></FormField><FormField label="From"><Input type="date" value={filters.fromDate} onChange={(e:any)=>setFilters({...filters,fromDate:e.target.value})}/></FormField><FormField label="To"><Input type="date" value={filters.toDate} onChange={(e:any)=>setFilters({...filters,toDate:e.target.value})}/></FormField></div><div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200"><div className="min-w-[980px]"><div className="grid grid-cols-[1.25fr_1.2fr_.72fr_.72fr_.72fr_.72fr_1.15fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500"><span>Tenant</span><span>Plan</span><span>Status</span><span>Start</span><span>End</span><span>Amount</span><span className="text-right">Actions</span></div><div className="divide-y divide-slate-200">{rows.length===0&&<Empty text={loading?'Loading subscriptions...':'No subscriptions match your search.'}/>} {rows.map((subscription:any)=>{const plan=planById.get(subscription.plan_id) as any;const tenant=tenantById.get(subscription.tenant_id) as any;return <div key={subscription.id} className="grid grid-cols-[1.25fr_1.2fr_.72fr_.72fr_.72fr_.72fr_1.15fr] gap-3 px-4 py-4 text-sm items-center"><div className="min-w-0"><b className="block truncate">{subscription.tenant_name||tenant?.name||'Tenant'}</b><span className="text-xs text-slate-500">{formatTenantType(tenant?.tenant_type||'')}</span></div><div className="min-w-0"><b className="block truncate">{plan?.name||'Custom plan'}</b><span className="text-xs text-slate-500">{plan?.key?.startsWith('tenant_')?'Tenant custom':plan?.key||'Plan'}</span></div><div><Badge tone={subscription.status==='active'?'green':subscription.status==='scheduled'?'amber':subscription.status==='expired'?'slate':'red'}>{subscription.status}</Badge></div><span>{formatDate(subscription.starts_on)}</span><span>{formatDate(subscription.ends_on)}</span><b>₹{subscription.billing_amount}</b><div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap"><button type="button" onClick={()=>setDetailSubscription({...subscription,plan,tenant})} className="rounded-xl border px-3 py-2 text-xs font-bold">Details</button><button type="button" onClick={()=>{setSelectedId(subscription.tenant_id);openSubscriptionView('assign')}} className="rounded-xl border px-3 py-2 text-xs font-bold">Upgrade</button><button type="button" onClick={()=>{setSelectedId(subscription.tenant_id);openSubscriptionView('credits')}} className="rounded-xl border px-3 py-2 text-xs font-bold">Credits</button></div></div>})}</div></div></div><Pagination page={safePage} totalPages={totalPages} total={filtered.length} pageSize={pageSize} onPage={setPage}/></Card>
+  <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h4 className="font-bold">Plan Catalog</h4><p className="text-sm text-slate-500">Reusable DB-backed SaaS plan catalog. Module lists and IDs live in details.</p></div><Badge tone="blue">{catalogPlans.length} plans</Badge></div><div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200"><div className="min-w-[900px]"><div className="grid grid-cols-[1.35fr_.75fr_1fr_.75fr_.75fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500"><span>Plan</span><span>Price</span><span>Limits</span><span>Modules</span><span>Status</span><span className="text-right">Actions</span></div><div className="divide-y divide-slate-200">{catalogPlans.map((plan:any)=><div key={plan.id} className="grid grid-cols-[1.35fr_.75fr_1fr_.75fr_.75fr_1.2fr] gap-3 px-4 py-4 text-sm items-center"><div className="min-w-0"><b className="block truncate">{plan.name}</b><span className="text-xs text-slate-500">{plan.key}</span></div><b>₹{plan.price_inr_monthly}</b><span className="text-slate-600">{limitLabel(plan.monthly_patient_limit)} patients · {limitLabel(plan.included_branches)} branches</span><Badge tone="slate">{(plan.enabled_modules||[]).length}</Badge><Badge tone={plan.is_active?'green':'slate'}>{plan.is_active?'Active':'Inactive'}</Badge><div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap"><button type="button" onClick={()=>setDetailPlan(plan)} className="rounded-xl border px-3 py-2 text-xs font-bold">Details</button><button type="button" onClick={()=>{setEditingPlan(plan);openSubscriptionView('editPlan')}} className="rounded-xl border px-3 py-2 text-xs font-bold">Edit</button><button type="button" onClick={()=>changePlanStatus(plan)} className="rounded-xl border px-3 py-2 text-xs font-bold">{plan.is_active?'Deactivate':'Activate'}</button></div></div>)}</div></div></div></Card>
+  {detailSubscription&&<SubscriptionDetailModal subscription={detailSubscription} onClose={()=>setDetailSubscription(null)} onUpgrade={()=>{setSelectedId(detailSubscription.tenant_id);setDetailSubscription(null);openSubscriptionView('assign')}} onCredits={()=>{setSelectedId(detailSubscription.tenant_id);setDetailSubscription(null);openSubscriptionView('credits')}}/>}
+  {detailPlan&&<PlanDetailModal plan={detailPlan} onClose={()=>setDetailPlan(null)} onEdit={()=>{setEditingPlan(detailPlan);setDetailPlan(null);openSubscriptionView('editPlan')}}/>}
  </div>
 }
 
@@ -1202,7 +1240,7 @@ function SubscriptionEditPlan({loading,plan,updatePlan,back,modules}:any){
 }
 
 function SubscriptionAssignPlan({loading,tenants,selectedId,setSelectedId,plans,selectedTenant,assignSubscription,back}:any){
- return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Assign / Upgrade Tenant Plan</h3><p className="text-sm text-slate-500">Assign immediately, schedule renewal, or upgrade a tenant when limits are reached.</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Subscriptions</button></div><form onSubmit={assignSubscription} className="mt-5 grid gap-3 md:grid-cols-2"><TenantPicker tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId}/><FormField label="Plan"><Select name="planId" required>{plans.map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name} - ₹{plan.price_inr_monthly}</option>)}</Select></FormField><FormField label="Activation Date"><Input name="startsOn" type="date" required defaultValue={new Date().toISOString().slice(0,10)}/></FormField><FormField label="End Date"><Input name="endsOn" type="date"/></FormField><FormField label="Billing Amount"><Input name="billingAmount" type="number" min="0" defaultValue={plans[0]?.price_inr_monthly||0}/></FormField><FormField label="Notes"><Input name="notes" placeholder="Upgrade, renewal, scheduled migration"/></FormField><div className="md:col-span-2">{selectedTenant&&<div className="mb-3 rounded-2xl bg-slate-50 p-4 text-sm"><b>Selected tenant:</b> {selectedTenant.name}</div>}<div className="flex flex-wrap gap-2"><Button disabled={loading||!selectedId||plans.length===0}>{loading?'Assigning...':'Save Subscription'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></div></form></Card>
+ return <Card><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center"><div><h3 className="text-lg font-bold">Assign / Upgrade Tenant Plan</h3><p className="text-sm text-slate-500">Assign immediately, schedule renewal, or upgrade a tenant when limits are reached.</p></div><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Back to Subscriptions</button></div><form onSubmit={assignSubscription} className="mt-5 grid gap-3 md:grid-cols-2"><TenantPicker tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId}/><FormField label="Plan"><Select name="planId" required>{plans.map((plan:any)=><option key={plan.id} value={plan.id}>{plan.name} - ₹{plan.price_inr_monthly}</option>)}</Select></FormField><FormField label="Activation Date"><Input name="startsOn" type="date" required defaultValue={new Date().toISOString().slice(0,10)}/></FormField><FormField label="End Date"><Input name="endsOn" type="date" placeholder="Auto from plan"/></FormField><FormField label="Billing Amount"><Input name="billingAmount" type="number" min="0" placeholder="Auto from plan price"/></FormField><FormField label="Notes"><Input name="notes" placeholder="Upgrade, renewal, scheduled migration"/></FormField><div className="md:col-span-2">{selectedTenant&&<div className="mb-3 rounded-2xl bg-slate-50 p-4 text-sm"><b>Selected tenant:</b> {selectedTenant.name}</div>}<div className="flex flex-wrap gap-2"><Button disabled={loading||!selectedId||plans.length===0}>{loading?'Assigning...':'Save Subscription'}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div></div></form></Card>
 }
 
 function SubscriptionCreditsPage({loading,tenants,selectedId,setSelectedId,usage,credits,invoices,addCredits,back}:any){
@@ -1211,6 +1249,17 @@ function SubscriptionCreditsPage({loading,tenants,selectedId,setSelectedId,usage
 
 function SubscriptionTable({title,rows,columns}:any){
  return <Card><div className="flex items-center justify-between gap-3"><h4 className="font-bold">{title}</h4><Badge tone="blue">{rows.length}</Badge></div><div className="mt-4 space-y-3">{rows.length===0&&<Empty text={`No ${title.toLowerCase()} yet.`}/>} {rows.slice(0,6).map((row:any)=><div key={row.id||row.invoice_number} className="rounded-2xl bg-slate-50 p-3 text-sm"><div className="grid gap-2 sm:grid-cols-2">{columns.map((column:string)=><div key={column}><p className="text-[11px] font-bold uppercase text-slate-500">{column.replaceAll('_',' ')}</p><p className="font-semibold">{String(row[column]??'-')}</p></div>)}</div></div>)}</div></Card>
+}
+
+function SubscriptionDetailModal({subscription,onClose,onUpgrade,onCredits}:any){
+ const plan=subscription.plan||{};
+ const tenant=subscription.tenant||{};
+ return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-3xl"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h3 className="text-lg font-bold">Subscription Details</h3><p className="text-sm text-slate-500">{tenant.name||subscription.tenant_name||subscription.tenant_id}</p></div><button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold">Close</button></div><div className="mt-4 grid gap-3 md:grid-cols-3"><Info label="Tenant" value={tenant.name||subscription.tenant_name||'-'}/><Info label="Plan" value={plan.name||subscription.plan_id}/><Info label="Status" value={subscription.status}/><Info label="Start" value={formatDate(subscription.starts_on)}/><Info label="End" value={formatDate(subscription.ends_on)}/><Info label="Amount" value={`₹${subscription.billing_amount??0}`}/></div><div className="mt-4 grid gap-3 md:grid-cols-2"><Info label="Tenant ID" value={subscription.tenant_id}/><Info label="Plan Key" value={plan.key||'-'}/><Info label="Subscription ID" value={subscription.id}/><Info label="Updated" value={formatDate(subscription.updated_at||subscription.created_at)}/></div>{subscription.notes&&<div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600"><b>Notes</b><p className="mt-1">{subscription.notes}</p></div>}<div className="mt-5 flex flex-wrap gap-2"><Button type="button" onClick={onUpgrade}>Upgrade</Button><button type="button" onClick={onCredits} className="rounded-2xl border px-4 py-3 text-sm font-bold">Credits</button></div></Card></div>
+}
+
+function PlanDetailModal({plan,onClose,onEdit}:any){
+ const modules=(plan.enabled_modules||[]).filter(Boolean);
+ return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4"><Card className="w-full max-w-3xl"><div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h3 className="text-lg font-bold">Plan Details</h3><p className="text-sm text-slate-500">{plan.key}</p></div><button type="button" onClick={onClose} className="rounded-2xl border px-4 py-3 text-sm font-bold">Close</button></div><div className="mt-4 grid gap-3 md:grid-cols-3"><Info label="Plan" value={plan.name}/><Info label="Monthly Price" value={`₹${plan.price_inr_monthly}`}/><Info label="Status" value={plan.is_active?'Active':'Inactive'}/><Info label="Patients" value={limitLabel(plan.monthly_patient_limit)}/><Info label="Branches" value={limitLabel(plan.included_branches)}/><Info label="Doctors" value={limitLabel(plan.included_doctors)}/></div><div className="mt-4 rounded-2xl bg-slate-50 p-4"><div className="flex items-center justify-between gap-3"><b className="text-sm">Enabled Modules</b><Badge tone="blue">{modules.length}</Badge></div><div className="mt-3 flex flex-wrap gap-2">{modules.length===0&&<span className="text-sm text-slate-500">No modules enabled.</span>}{modules.map((module:string)=><span key={module} className="rounded-full bg-white px-3 py-2 text-xs font-bold text-slate-700">{module}</span>)}</div></div><div className="mt-4 grid gap-3 md:grid-cols-2"><Info label="Plan ID" value={plan.id}/><Info label="Created" value={formatDate(plan.created_at)}/></div><div className="mt-5 flex flex-wrap gap-2"><Button type="button" onClick={onEdit}>Edit Plan</Button></div></Card></div>
 }
 
 function ModuleEntitlementChecklist({modules,selected=[]}:any){
@@ -1235,18 +1284,17 @@ function TenantBranchSettings({apiSession,selected,tenants,selectedId,setSelecte
  const [selectedModules,setSelectedModules]=useState<string[]>([]);
  const [settings,setSettings]=useState<any[]>([]);
  const [numberingRules,setNumberingRules]=useState<any>(parseNumberingRules(null,'SUN'));
+ const [catalogIntegrations,setCatalogIntegrations]=useState<any>(parseCatalogIntegrations(null));
  const [settingsMessage,setSettingsMessage]=useState('');
+ const [pluginMessage,setPluginMessage]=useState('');
  const [message,setMessage]=useState('');
  const [loading,setLoading]=useState(false);
  const [settingsLoading,setSettingsLoading]=useState(false);
- const [tenantUsers,setTenantUsers]=useState<any[]>([]);
- const [passwordUser,setPasswordUser]=useState<any>(null);
+ const [pluginLoading,setPluginLoading]=useState(false);
  const planById=new Map((plans||[]).map((plan:any)=>[plan.id,plan]));
  const activeSubscription=subscriptions.find((item:any)=>item.status==='active'||item.is_active)||subscriptions[0];
  const activePlan=activeSubscription?planById.get(activeSubscription.plan_id) as any:null;
  const editableModules=(modules||[]).filter((module:any)=>module.entitlement_key).sort((a:any,b:any)=>String(a.category||'').localeCompare(String(b.category||''))||String(a.name).localeCompare(String(b.name)));
- const moduleByKey=new Map((modules||[]).map((module:any)=>[module.key,module]));
- const moduleByEntitlement=new Map((modules||[]).filter((module:any)=>module.entitlement_key).map((module:any)=>[module.entitlement_key,module]));
 
  async function loadTenantSubscription(){
   if(!apiSession||!selectedId){setSubscriptions([]);setSelectedModules([]);return}
@@ -1265,76 +1313,23 @@ function TenantBranchSettings({apiSession,selected,tenants,selectedId,setSelecte
  }
 
  async function loadTenantSettings(){
-  if(!apiSession||!selectedId){setSettings([]);setNumberingRules(parseNumberingRules(null,'SUN'));return}
+  if(!apiSession||!selectedId){setSettings([]);setNumberingRules(parseNumberingRules(null,'SUN'));setCatalogIntegrations(parseCatalogIntegrations(null));return}
   setSettingsLoading(true);setSettingsMessage('');
   try{
    const rows=await apiFetch('/settings',{...apiSession,tenantId:selectedId});
    setSettings(rows);
    const find=(key:string)=>rows.find((setting:any)=>setting.key===key);
    setNumberingRules(parseNumberingRules(find('numbering.rules')?.value,find('invoice.prefix')?.value||'SUN'));
+   setCatalogIntegrations(parseCatalogIntegrations(find('catalog.integrations')?.value));
   }catch(err:any){
    setSettings([]);
    setNumberingRules(parseNumberingRules(null,'SUN'));
+   setCatalogIntegrations(parseCatalogIntegrations(null));
    setSettingsMessage(err.message||'Could not load numbering settings.');
   }finally{setSettingsLoading(false)}
  }
 
- async function loadTenantUsers(){
-  if(!apiSession||!selectedId){setTenantUsers([]);return}
-  try{
-   const rows=await apiFetch('/identity/users',{...apiSession,tenantId:selectedId});
-   setTenantUsers(rows);
-  }catch{
-   setTenantUsers([]);
-  }
- }
-
- useEffect(()=>{loadTenantSubscription();loadTenantSettings();loadTenantUsers()},[apiSession?.token,selectedId,plans.length,modules.length]);
-
- function toggleModule(key:string,checked:boolean){
-  setSelectedModules(previous=>checked?Array.from(new Set([...previous,key])):previous.filter(item=>item!==key));
- }
-
- async function saveModules(e:any){
-  e.preventDefault();if(!apiSession||!selected)return;
-  const withDependencies=new Set(selectedModules);
-  selectedModules.forEach(key=>{
-   const module=moduleByEntitlement.get(key) as any;
-   (module?.dependencies||[]).forEach((dependency:string)=>{
-    const dependencyModule=moduleByKey.get(dependency) as any;
-    if(dependencyModule?.entitlement_key)withDependencies.add(dependencyModule.entitlement_key);
-   });
-  });
-  const enabledModules=Array.from(withDependencies).filter(Boolean);
-  const basePlan=activePlan||(plans||[]).find((plan:any)=>plan.is_active)||plans?.[0];
-  setLoading(true);setMessage('');
-  try{
-   const safeTenantId=String(selected.id||'tenant').replace(/[^a-zA-Z0-9]/g,'_').slice(-24);
-   const canUpdateActivePlan=Boolean(activePlan?.key&&String(activePlan.key).startsWith('tenant_modules_'));
-   const planPayload={
-    name:`${selected.name} Module Access`,
-    monthly_patient_limit:Number(basePlan?.monthly_patient_limit||300),
-    included_branches:Number(basePlan?.included_branches||1),
-    included_doctors:Number(basePlan?.included_doctors||1),
-    price_inr_monthly:Number(basePlan?.price_inr_monthly||0),
-    enabled_modules:enabledModules
-   };
-   const plan=canUpdateActivePlan
-    ? await apiFetch(`/subscription-plans/${activePlan.id}`,apiSession,{method:'PATCH',body:JSON.stringify(planPayload)})
-    : await apiFetch('/subscription-plans',apiSession,{method:'POST',body:JSON.stringify({...planPayload,key:`tenant_modules_${safeTenantId}_${Date.now()}`.slice(0,80)})});
-   const subscription=canUpdateActivePlan&&activeSubscription?activeSubscription:await apiFetch('/subscription-plans/tenant-subscriptions',{...apiSession,tenantId:selected.id},{method:'POST',body:JSON.stringify({
-     plan_id:plan.id,
-     starts_on:new Date().toISOString().slice(0,10),
-     billing_amount:Number(activeSubscription?.billing_amount??basePlan?.price_inr_monthly??0),
-     notes:'Updated enabled modules from Tenant & Branch Settings'
-    })});
-   setSelectedModules(enabledModules);
-   setSubscriptions(previous=>[subscription,...previous.filter((item:any)=>item.id!==subscription.id)]);
-   window.localStorage.setItem('medizinhub.entitlements.refresh', String(Date.now()));
-   await reloadPlans?.();
-   setMessage('Tenant module access updated.');
-  }catch(err:any){setMessage(err.message||'Could not save tenant modules.')}finally{setLoading(false)}
- }
+ useEffect(()=>{loadTenantSubscription();loadTenantSettings()},[apiSession?.token,selectedId,plans.length,modules.length]);
 
  function setNumberRule(key:string,value:any){setNumberingRules({...numberingRules,[key]:value})}
  function setEntityCode(key:string,value:string){setNumberingRules({...numberingRules,entities:{...(numberingRules.entities||{}),[key]:value.toUpperCase()}})}
@@ -1350,26 +1345,27 @@ function TenantBranchSettings({apiSession,selected,tenants,selectedId,setSelecte
   setSettingsMessage('Document numbering settings saved.');
   }catch(err:any){setSettingsMessage(err.message||'Could not save numbering settings.')}finally{setSettingsLoading(false)}
  }
-
- async function resetPassword(e:any){
-  e.preventDefault();if(!apiSession||!selected||!passwordUser)return;
-  const fd=new FormData(e.currentTarget);
-  const password=String(fd.get('newPassword')||'');
-  const confirm=String(fd.get('confirmPassword')||'');
-  if(password!==confirm){setMessage('Passwords do not match.');return}
-  setLoading(true);setMessage('');
+ function setCatalogPlugin(key:string,patch:any){
+  setCatalogIntegrations({...catalogIntegrations,[key]:{...(catalogIntegrations[key]||{}),...patch}});
+ }
+ async function saveCatalogIntegrations(e:any){
+  e.preventDefault();if(!apiSession||!selected)return;
+  setPluginLoading(true);setPluginMessage('');
   try{
-   const updated=await apiFetch(`/identity/users/${passwordUser.id}/password-reset`,{...apiSession,tenantId:selected.id},{method:'POST',body:JSON.stringify({new_password:password,must_change_password:fd.get('mustChangePassword')==='true'})});
-   setTenantUsers(previous=>previous.map((user:any)=>user.id===updated.id?updated:user));
-   setPasswordUser(null);
-   setMessage(`Password reset for ${updated.name}.`);
-  }catch(err:any){setMessage(err.message||'Could not reset password.')}finally{setLoading(false)}
+   await apiFetch('/settings',{...apiSession,tenantId:selected.id},{method:'PUT',body:JSON.stringify({scope:'tenant',module:'integrations',key:'catalog.integrations',value:catalogIntegrations,actor_user_id:apiSession.user?.id})});
+   await loadTenantSettings();
+   setPluginMessage('Tenant catalog plugin controls saved.');
+  }catch(err:any){setPluginMessage(err.message||'Could not save catalog plugin controls.')}finally{setPluginLoading(false)}
  }
 
- return <div className="space-y-5"><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><h3 className="text-lg font-bold">Tenant & Branch Settings</h3><p className="text-sm text-slate-500">Configuration page for tenant type, enabled modules, branch settings, queue rules, invoice prefix, and communication providers.</p></div><TenantPicker tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId}/></div>{selected&&<div className="mt-5 grid gap-3 md:grid-cols-3"><Info label="Tenant" value={selected.name}/><Info label="Type" value={formatTenantType(selected.tenant_type)}/><Info label="Status" value={selected.status}/><Info label="Email" value={selected.email||'-'}/><Info label="Phone" value={selected.phone||'-'}/><Info label="Timezone" value={selected.timezone||'-'}/></div>}</Card><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><h4 className="font-bold">User Passwords</h4><p className="text-sm text-slate-500">Reset passwords for users in the selected tenant.</p></div><Badge tone="blue">{tenantUsers.length} users</Badge></div><StatusToast message={message} onClose={()=>setMessage('')}/><div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{tenantUsers.length===0&&<Empty text="No users loaded for this tenant."/>}{tenantUsers.map((user:any)=><div key={user.id} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 p-3 text-sm"><div className="min-w-0"><b className="block truncate">{user.name}</b><span className="block truncate text-xs text-slate-500">{user.email}</span></div><button type="button" onClick={()=>setPasswordUser(user)} className="rounded-xl border px-3 py-2 text-xs font-bold">Reset</button></div>)}</div></Card><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><h4 className="font-bold">Document Numbering</h4><p className="text-sm text-slate-500">Set the tenant prefix, digit length, and module codes used for generated IDs.</p></div><Badge tone="blue">{settingsLoading?'Loading':'Tenant scoped'}</Badge></div><StatusToast message={settingsMessage} onClose={()=>setSettingsMessage('')}/><form onSubmit={saveNumberingSettings} className="mt-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Prefix"><Input value={numberingRules.prefix||'SUN'} onChange={(e:any)=>setNumberRule('prefix',e.target.value.toUpperCase())} placeholder="SUN"/></Field><Field label="Digits"><Input type="number" min="1" max="12" value={numberingRules.digits||5} onChange={(e:any)=>setNumberRule('digits',Number(e.target.value||5))}/></Field><Info label="Example" value={`${numberingRules.prefix||'SUN'}-${numberingRules.entities?.patient||'PAT'}-${String(1).padStart(Number(numberingRules.digits||5),'0')}`}/></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{Object.entries(numberingRules.entities||defaultNumberingEntities).map(([key,value]:any)=><Field key={key} label={`${numberEntityLabel(key)} Code`}><Input value={value} onChange={(e:any)=>setEntityCode(key,e.target.value)}/></Field>)}</div><div className="mt-5 flex flex-wrap items-center gap-3"><Button disabled={settingsLoading||!selected}>{settingsLoading?'Saving...':'Save Numbering'}</Button><span className="text-xs text-slate-500">Previous enabled modules and tenant settings remain unchanged.</span></div></form></Card><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><h4 className="font-bold">Enabled Modules</h4><p className="text-sm text-slate-500">Enable Patient Membership here for the selected tenant. Changes create a tenant-specific subscription package and apply immediately.</p></div><div className="text-right">{activePlan?<><Badge tone="blue">{activePlan.name}</Badge><p className="mt-1 text-xs text-slate-500">Current plan</p></>:<Badge tone="amber">No active plan</Badge>}</div></div><form onSubmit={saveModules} className="mt-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{editableModules.length===0&&<Empty text={loading?'Loading modules...':'No entitlement modules found.'}/>} {editableModules.map((module:any)=>{const key=module.entitlement_key;const checked=selectedModules.includes(key);return <label key={module.key} className={`flex min-h-[92px] cursor-pointer gap-3 rounded-2xl border p-4 text-sm ${checked?'border-blue-300 bg-blue-50':'border-slate-200 bg-white'}`}><input type="checkbox" checked={checked} onChange={(e:any)=>toggleModule(key,e.target.checked)} className="mt-1 h-4 w-4"/><span><span className="flex flex-wrap items-center gap-2"><b>{module.name}</b>{key==='patient_subscriptions'&&<Badge tone="green">Patient Membership</Badge>}</span><span className="mt-1 block text-xs text-slate-500">{key}</span></span></label>})}</div><div className="mt-5 flex flex-wrap items-center gap-3"><Button disabled={loading||!selected}>{loading?'Saving...':'Save Module Access'}</Button><span className="text-xs text-slate-500">{selectedModules.length} selected</span></div></form></Card>{passwordUser&&<PasswordResetModal user={passwordUser} busy={loading} onSubmit={resetPassword} onCancel={()=>setPasswordUser(null)}/>}<p className="text-xs text-slate-500">Detailed branch settings reuse the tenant admin settings APIs. A dedicated branch CRUD/settings API page can be added next.</p></div>
+ return <div className="space-y-5"><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-center"><div><h3 className="text-lg font-bold">Tenant & Branch Settings</h3><p className="text-sm text-slate-500">Configuration page for tenant type, enabled modules, branch settings, queue rules, invoice prefix, and communication providers.</p></div><TenantPicker tenants={tenants} selectedId={selectedId} setSelectedId={setSelectedId}/></div>{selected&&<div className="mt-5 grid gap-3 md:grid-cols-3"><Info label="Tenant" value={selected.name}/><Info label="Type" value={formatTenantType(selected.tenant_type)}/><Info label="Status" value={selected.status}/><Info label="Email" value={selected.email||'-'}/><Info label="Phone" value={selected.phone||'-'}/><Info label="Timezone" value={selected.timezone||'-'}/></div>}</Card><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><h4 className="font-bold">Document Numbering</h4><p className="text-sm text-slate-500">Set the tenant prefix, digit length, and module codes used for generated IDs.</p></div><Badge tone="blue">{settingsLoading?'Loading':'Tenant scoped'}</Badge></div><StatusToast message={settingsMessage} onClose={()=>setSettingsMessage('')}/><form onSubmit={saveNumberingSettings} className="mt-4"><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><Field label="Prefix"><Input value={numberingRules.prefix||'SUN'} onChange={(e:any)=>setNumberRule('prefix',e.target.value.toUpperCase())} placeholder="SUN"/></Field><Field label="Digits"><Input type="number" min="1" max="12" value={numberingRules.digits||5} onChange={(e:any)=>setNumberRule('digits',Number(e.target.value||5))}/></Field><Info label="Example" value={`${numberingRules.prefix||'SUN'}-${numberingRules.entities?.patient||'PAT'}-${String(1).padStart(Number(numberingRules.digits||5),'0')}`}/></div><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{Object.entries(numberingRules.entities||defaultNumberingEntities).map(([key,value]:any)=><Field key={key} label={`${numberEntityLabel(key)} Code`}><Input value={value} onChange={(e:any)=>setEntityCode(key,e.target.value)}/></Field>)}</div><div className="mt-5 flex flex-wrap items-center gap-3"><Button disabled={settingsLoading||!selected}>{settingsLoading?'Saving...':'Save Numbering'}</Button><span className="text-xs text-slate-500">Previous enabled modules and tenant settings remain unchanged.</span></div></form></Card><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><h4 className="font-bold">Catalog Plugin Controls</h4><p className="text-sm text-slate-500">Tenant-specific catalog source routing for custom integrations. Disabled plugins use MedizinHub local catalog data.</p></div><Badge tone="blue">Tenant scoped</Badge></div><StatusToast message={pluginMessage} onClose={()=>setPluginMessage('')}/><form onSubmit={saveCatalogIntegrations} className="mt-4 grid gap-3 md:grid-cols-2"><CatalogPluginControl title="Lab Item Catalog" value={catalogIntegrations.lab_items} onChange={(patch:any)=>setCatalogPlugin('lab_items',patch)}/><CatalogPluginControl title="Medicine Item Catalog" value={catalogIntegrations.medicine_items} onChange={(patch:any)=>setCatalogPlugin('medicine_items',patch)}/><div className="flex flex-wrap items-center gap-3 md:col-span-2"><Button disabled={pluginLoading||!selected}>{pluginLoading?'Saving...':'Save Plugin Controls'}</Button><span className="text-xs text-slate-500">Subscription module access remains controlled by the active plan.</span></div></form></Card><Card><div className="flex flex-col justify-between gap-3 md:flex-row md:items-start"><div><h4 className="font-bold">Plan Module Access</h4><p className="text-sm text-slate-500">Modules are controlled by the active subscription plan. Upgrade the tenant plan from Subscription Management to change access.</p></div><div className="text-right">{activePlan?<><Badge tone="blue">{activePlan.name}</Badge><p className="mt-1 text-xs text-slate-500">Current plan</p></>:<Badge tone="amber">No active plan</Badge>}</div></div><StatusToast message={message} onClose={()=>setMessage('')}/><div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">{editableModules.length===0&&<Empty text={loading?'Loading modules...':'No entitlement modules found.'}/>} {editableModules.map((module:any)=>{const key=module.entitlement_key;const checked=selectedModules.includes(key);return <div key={module.key} className={`flex min-h-[92px] gap-3 rounded-2xl border p-4 text-sm ${checked?'border-blue-300 bg-blue-50':'border-slate-200 bg-white opacity-60'}`}><input type="checkbox" checked={checked} readOnly disabled className="mt-1 h-4 w-4"/><span><span className="flex flex-wrap items-center gap-2"><b>{module.name}</b>{key==='patient_subscriptions'&&<Badge tone="green">Patient Membership</Badge>}</span><span className="mt-1 block text-xs text-slate-500">{key}</span></span></div>})}</div><p className="mt-4 text-xs font-semibold text-slate-500">{selectedModules.length} modules enabled by the active plan.</p></Card><p className="text-xs text-slate-500">Detailed branch settings reuse the tenant admin settings APIs. A dedicated branch CRUD/settings API page can be added next.</p></div>
 }
 
 function CreateActionButton({label,onClick}:any){return <button type="button" onClick={onClick} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"><Plus size={16}/><span>{label}</span></button>}
+function CatalogPluginControl({title,value,onChange}:any){
+ const enabled=Boolean(value?.enabled);
+ return <div className={`rounded-2xl border p-4 text-sm ${enabled?'border-blue-300 bg-blue-50':'border-slate-200 bg-white'}`}><label className="flex items-start gap-3"><input type="checkbox" checked={enabled} onChange={(e:any)=>onChange({enabled:e.target.checked,provider:e.target.checked?(value?.provider==='local'?'external_catalog':value?.provider||'external_catalog'):'local'})} className="mt-1 h-4 w-4"/><span><b>{title}</b><span className="mt-1 block text-xs text-slate-500">{enabled?'Plugin source enabled for this tenant.':'Using local MedizinHub catalog.'}</span></span></label><div className="mt-3"><FormField label="Provider"><Select value={value?.provider||'local'} onChange={(e:any)=>onChange({provider:e.target.value,enabled:e.target.value!=='local'})}><option value="local">MedizinHub Local</option><option value="external_catalog">External Catalog Provider</option><option value="frappe_erpnext">Legacy External Provider</option></Select></FormField></div></div>
+}
 function TenantPicker({tenants,selectedId,setSelectedId}:any){return <FormField label="Selected Tenant"><Select value={selectedId} onChange={(e:any)=>setSelectedId(e.target.value)}>{tenants.map((tenant:any)=><option key={tenant.id} value={tenant.id}>{tenant.name}</option>)}</Select></FormField>}
 function Empty({text}:any){return <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">{text}</div>}
 function Info({label,value}:any){return <div className="rounded-2xl bg-slate-50 p-4"><p className="text-xs font-bold uppercase text-slate-500">{label}</p><p className="mt-1 font-bold">{value}</p></div>}
@@ -1380,6 +1376,21 @@ function addressText(tenant:any){return [tenant.address,tenant.city,tenant.state
 function formatDate(value:any){return value?new Date(value).toLocaleDateString():'-'}
 function formatTenantType(value:string){return String(value||'').split('_').map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')}
 function formatTitle(value:string){return String(value||'').split(' ').filter(Boolean).map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(' ')}
+function limitLabel(value:any){const number=Number(value||0);return number>=999999?'Unlimited':String(number)}
+function invoiceLimitLabel(plan:any){return plan?.key==='monthly_clinic'?'300':'Unlimited'}
+function catalogSubscriptionPlans(plans:any[]){
+ const catalogKeys=new Set(['free_trial','monthly_clinic','half_yearly_clinic','yearly_clinic']);
+ const legacyKeys=new Set(['starter','growth','pro','hospital']);
+ return (plans||[]).filter((plan:any)=>{
+  const key=String(plan.key||'');
+  const name=String(plan.name||'').toLowerCase();
+  if(catalogKeys.has(key))return true;
+  if(legacyKeys.has(key))return false;
+  if(key.startsWith('tenant_')||key.startsWith('tenant_modules_'))return false;
+  if(name.includes('module access')||name.includes('onboarding plan'))return false;
+  return true;
+ });
+}
 function roleKeyFromName(value:string){return String(value||'').trim().toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').replace(/_+/g,'_')}
 function permissionModuleTitle(module:string){return module==='departments'?'Medical Departments':formatTitle(String(module||'').replaceAll('_',' ').replaceAll('.',' '))}
 function tenantSelectOptions(tenants:any[]){
@@ -1413,6 +1424,20 @@ function moduleKeysWithDependencies(rawKeys:string[],modules:any[]){
  return Array.from(selected).sort();
 }
 function roleDisplayName(role:any){return role?.name||formatTitle(String(role?.key||'Role').replaceAll('_',' ').replaceAll('.',' '))}
+function dedupeRoleOptions(roles:any[],selectedSet:Set<string>){
+ const byLabel=new Map<string,any>();
+ for(const role of roles||[]){
+  const labelKey=normalizeOptionLabel(roleDisplayName(role));
+  if(!labelKey)continue;
+  const existing=byLabel.get(labelKey);
+  const roleSelected=selectedSet.has(role.key);
+  const existingSelected=existing&&selectedSet.has(existing.key);
+  if(!existing||roleSelected&&!existingSelected||role.key===labelKey&&!existingSelected){
+   byLabel.set(labelKey,role);
+  }
+ }
+ return Array.from(byLabel.values());
+}
 function userRoleLabels(user:any){
  const rawRoles=Array.isArray(user?.roles)?user.roles:String(user?.roles||'').split(',');
  const roles=rawRoles.map((role:any)=>String(role||'').trim()).filter(Boolean);

@@ -177,10 +177,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             () => [],
           ),
           apiFetch("/practitioners", session),
-          apiFetch(
-            `/practitioners/schedules${filterStatus === "all" ? "" : `?is_active=${filterStatus === "active"}`}`,
-            session,
-          ),
+          apiFetch("/practitioners/schedules", session),
         ]);
       setBranches(branchRows);
       setDepartments(uniqueDepartmentRows(departmentRows, filterDepartment));
@@ -202,7 +199,7 @@ export function Scheduling({ apiSession, branchId }: any) {
     if (apiSession && tenantId) {
       loadData(tenantId);
     }
-  }, [apiSession?.token, tenantId, filterStatus]);
+  }, [apiSession?.token, tenantId]);
 
   function open(nextView: string, id = "") {
     setSelectedId(id);
@@ -414,11 +411,17 @@ export function Scheduling({ apiSession, branchId }: any) {
         new Date(b.updated_at || b.created_at).getTime() -
         new Date(a.updated_at || a.created_at).getTime(),
     );
-  const groupedRows = groupSchedules(filtered).sort(
-    (a: any, b: any) =>
-      new Date(b.updated_at || b.created_at).getTime() -
-      new Date(a.updated_at || a.created_at).getTime(),
-  );
+  const groupedRows = groupSchedules(filtered)
+    .filter(
+      (group: any) =>
+        filterStatus === "all" ||
+        (filterStatus === "active" ? group.is_active : !group.is_active),
+    )
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.updated_at || b.created_at).getTime() -
+        new Date(a.updated_at || a.created_at).getTime(),
+    );
   const totalPages = Math.max(1, Math.ceil(groupedRows.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageRows = groupedRows.slice(
