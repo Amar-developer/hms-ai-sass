@@ -452,7 +452,7 @@ Backend:
 | Reception cannot change department | `AppShell.tsx` role control rules, department options loaded in `useAppController.ts` |
 | Doctor can change department by mistake | `AppShell.tsx` doctor read-only rendering, practitioner branch/department mapping |
 | Sidebar/global scroll wrong | `features/shell/AppShell.tsx`, `app/globals.css` layout and `.scrollbar-hidden` |
-| UI design/alignment messy | `features/shell/AppShell.tsx`, `components/ui.tsx`, active feature component CSS classes |
+| UI design/alignment messy | `features/shell/AppShell.tsx`, `components/common/ui.tsx`, active feature component CSS classes |
 | Permission works in UI but API returns 403 | Backend `require_permission`, seeded role permissions, API permission matrix |
 | API works but UI hides module | `lib/navigation.ts`, `useAppController.ts` permission-to-module mapping |
 

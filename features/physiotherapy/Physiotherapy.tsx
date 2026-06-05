@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Input, Select, StatusToast } from "@/components/ui";
+import { Badge, Button, Card, Input, Select, StatusToast } from "@/components/common/ui";
 import { FormField, NumberField } from "@/components/FormElements";
 import {
   UPLOADS_BASE,

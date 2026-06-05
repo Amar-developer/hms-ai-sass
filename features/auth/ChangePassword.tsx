@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
-import { Button, Card } from '@/components/ui';
+import { Button, Card } from '@/components/common/ui';
 import { apiFetch } from '@/lib/api';
 import { FormErrorBanner, FormSuccessBanner, PasswordField } from '@/components/FormElements';
 

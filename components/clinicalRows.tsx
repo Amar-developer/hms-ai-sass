@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Input } from "@/components/ui";
+import { Input } from "@/components/common/ui";
 
 export const medicineFrequencyOptions = [
   "1-0-0",

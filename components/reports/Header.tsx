@@ -1,5 +1,5 @@
 import React from "react";
-import { Card, Badge, Field, Input, Select } from "../ui";
+import { Card, Badge, Field, Input, Select } from "../common/ui";
 import { Download, Mail } from "lucide-react";
 
 // type HeaderProps = {
@@ -130,10 +130,10 @@ const Header = ({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
         <div>
-          <h3 className="text-lg font-bold">
+          <h3 className="text-base lg:text-lg font-bold">
             Healthcare Gross Profit Report
           </h3>
-          <p className="text-sm text-slate-500">
+          <p className="text-xs lg:text-sm text-slate-500">
             Consultation revenue, doctor settlement, clinic fee, gross profit,
             final profit, and paid-basis settlement.
           </p>
@@ -146,7 +146,7 @@ const Header = ({
         <button
           type="button"
           onClick={exportCsv}
-          className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold"
+          className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs lg:text-sm font-bold"
         >
           <Download size={15} />
           CSV
@@ -154,14 +154,14 @@ const Header = ({
         <button
           type="button"
           onClick={exportExcel}
-          className="rounded-2xl border px-3 py-2 text-sm font-bold"
+          className="rounded-2xl border px-3 py-2 text-xs lg:text-sm font-bold"
         >
           Excel
         </button>
         <button
           type="button"
           onClick={exportPdf}
-          className="rounded-2xl border px-3 py-2 text-sm font-bold"
+          className="rounded-2xl border px-3 py-2 text-xs lg:text-sm font-bold"
         >
           PDF
         </button>
@@ -237,6 +237,7 @@ const Header = ({
           {sendError || sendMessage}
         </div>
       )}
+      {/* Reports Page */}
       <div className="mt-4 grid gap-3 md:grid-cols-6">
         <Field label="Period">
           <Select

@@ -2,7 +2,7 @@
 
 import {useState} from 'react';
 import {Eye,EyeOff,HeartPulse,Lock,ShieldCheck} from 'lucide-react';
-import {Button,Card,Field,Input} from '@/components/ui';
+import {Button,Card,Field,Input} from '@/components/common/ui';
 
 type DemoUser = readonly [string, string, string];
 

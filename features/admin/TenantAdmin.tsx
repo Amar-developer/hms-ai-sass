@@ -26,7 +26,7 @@ import {
   Select,
   StatusToast,
   SuggestionInput,
-} from "@/components/ui";
+} from "@/components/common/ui";
 import { FormField } from "@/components/FormElements";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { UPLOADS_BASE, apiBlob, apiFetch, apiUpload } from "@/lib/api";

@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Card,Select,StatusToast} from '@/components/ui';
+import {ActionButton,ActionGroup,Badge,Card,Select,StatusToast} from '@/components/common/ui';
 import {FormField} from '@/components/FormElements';
 import {apiFetch,type ApiSession} from '@/lib/api';
 import {sortQueue} from '@/lib/hmsLogic';

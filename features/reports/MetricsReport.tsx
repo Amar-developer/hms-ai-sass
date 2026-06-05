@@ -36,7 +36,7 @@ const MetricsReport = ({
 }: MetrixProps) => {
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 grid-cols-4 lg:grid-cols-4">
         <Metric
           icon={IndianRupee}
           label="Gross Revenue"

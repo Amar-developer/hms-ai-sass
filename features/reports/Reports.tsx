@@ -16,7 +16,7 @@ import {
   Users,
   FlaskConical,
 } from "lucide-react";
-import { Badge, Card, Field, Input, Select } from "@/components/ui";
+import { Badge, Card, Field, Input, Select } from "@/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import {
@@ -1002,59 +1002,6 @@ export function Reports({
         suppliers={suppliers}
         setPeriod={setPeriod}
       />
-      {/* <MetricsReport
-        totals={totals}
-        grossProfit={grossProfit}
-        finalProfit={finalProfit}
-        completedAppointments={completedAppointments}
-        patients={patients}
-        ipAdmissions={ipAdmissions}
-        labSettlementSummary={labSettlementSummary}
-        pharmacySettlementSummary={pharmacySettlementSummary}
-        money={money}
-        percent={percent}
-      />
-      <InvoiceReport
-        filteredInvoices={filteredInvoices}
-        invoicePageRows={invoicePageRows}
-        appointmentById={appointmentById}
-        patientById={patientById}
-        settlementPaidBasis={settlementPaidBasis}
-        numberValue={numberValue}
-        doctorById={doctorById}
-        rowDate={rowDate}
-        invoiceTypeLabel={invoiceTypeLabel}
-        invoiceType={invoiceType}
-        publicDisplayValue={publicDisplayValue}
-        humanizeOptionLabel={humanizeOptionLabel}
-        money={money}
-        safeInvoicePage={safeInvoicePage}
-        totalInvoicePages={totalInvoicePages}
-        total={filteredInvoices}
-        setInvoicePage={setInvoicePage}
-        pageSize={pageSize}
-      />
-
-      <LabReports
-        labSettlementRows={labSettlementRows}
-        openSections={openSections}
-        money={money}
-        setOpenSections={setOpenSections}
-      />
-
-      <AppointmentReports
-        doctorRows={doctorRows}
-        openSections={openSections}
-        setOpenSections={setOpenSections}
-        money={money}
-        percent={percent}
-      />
-      <PharmacyReports
-        pharmacySettlementRows={pharmacySettlementRows}
-        openSections={openSections}
-        setOpenSections={setOpenSections}
-        money={money}
-      /> */}
 
       {/* DYNAMIC CONTENT */}
       {renderReportSection(section)}

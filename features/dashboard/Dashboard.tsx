@@ -26,7 +26,7 @@ import {
   UserCog,
   Users,
 } from "lucide-react";
-import { Badge, Card } from "@/components/ui";
+import { Badge, Card } from "@/components/common/ui";
 
 type ShortcutTarget = string | { id: string; section?: string };
 

@@ -12,7 +12,7 @@ export function Pagination({ page, totalPages, total, onPage,pageSize }: Paginat
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
   return (
-    <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center">
+    <div className="mt-4 flex flex-col justify-between gap-3 text-xs lg:text-sm text-slate-500 sm:flex-row sm:items-center">
       <span>
         Showing {start}-{end} of {total}
       </span>

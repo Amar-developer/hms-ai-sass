@@ -1,5 +1,5 @@
 import React from "react";
-import { Card,Badge } from "../ui";
+import { Card,Badge } from "../common/ui";
 import {ChevronDown} from 'lucide-react'
 
 
@@ -19,8 +19,8 @@ function CollapsibleReportSection({
         className="flex w-full flex-col justify-between gap-3 text-left md:flex-row md:items-center"
       >
         <div>
-          <h3 className="text-lg font-bold">{title}</h3>
-          <p className="text-sm text-slate-500">{subtitle}</p>
+          <h3 className="text-base lg:text-lg font-bold">{title}</h3>
+          <p className="text-xs lg:text-sm text-slate-500">{subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <Badge tone="blue">{badge}</Badge>

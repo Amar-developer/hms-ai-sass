@@ -1,5 +1,6 @@
 import React from "react";
 import CollapsibleReportSection from "@/components/reports/CollapsibleReportSection";
+import { DataTable } from "@/components/reports/DataTable";
 
 export type PharmacyReportsProps = {
   pharmacySettlementRows: any;
@@ -14,6 +15,46 @@ const PharmacyReports = ({
   setOpenSections,
   money,
 }: PharmacyReportsProps) => {
+  const columns = [
+    {
+      key: "supplier",
+      header: "Supplier",
+      render: (row: any) => <b>{row.supplier}</b>,
+    },
+    {
+      key: "item",
+      header: "Medicine",
+    },
+    {
+      key: "issueCount",
+      header: "Issues",
+    },
+    {
+      key: "invoiceCount",
+      header: "Invoices",
+    },
+    {
+      key: "quantity",
+      header: "Qty",
+    },
+    {
+      key: "revenue",
+      header: "Revenue",
+      render: (row: any) => money(row.revenue),
+    },
+    {
+      key: "purchaseCost",
+      header: "Purchase Cost",
+      render: (row: any) => money(row.purchaseCost),
+    },
+    {
+      key: "profit",
+      header: "Pharmacy Profit",
+      render: (row: any) => (
+        <span className="font-bold">{money(row.profit)}</span>
+      ),
+    },
+  ];
   return (
     <div>
       <CollapsibleReportSection
@@ -29,7 +70,7 @@ const PharmacyReports = ({
         }
       >
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1220px] text-left text-sm">
+          {/* <table className="w-full min-w-[1220px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Supplier</th>
@@ -65,7 +106,13 @@ const PharmacyReports = ({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table> */}
+          <DataTable
+            columns={columns}
+            data={pharmacySettlementRows}
+            emptyMessage="No paid pharmacy invoices match this filter."
+            className="w-full min-w-[1220px] text-left text-sm"
+          />
         </div>
       </CollapsibleReportSection>
     </div>

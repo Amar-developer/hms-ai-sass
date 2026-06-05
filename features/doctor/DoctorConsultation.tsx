@@ -9,7 +9,15 @@ import {
   UsersRound,
   Video,
 } from "lucide-react";
-import { Badge, Button, Card, Field, Input, Select, StatusToast } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+  StatusToast,
+} from "@/components/common/ui";
 import { FormField } from "@/components/FormElements";
 import {
   SearchPicker,
@@ -719,7 +727,9 @@ export function DoctorConsultation({
       if (!apiSession) return;
       try {
         const [medicines, tests] = await Promise.all([
-          apiFetch("/pharmacy/catalog/available-medicines", apiSession).catch(() => []),
+          apiFetch("/pharmacy/catalog/available-medicines", apiSession).catch(
+            () => [],
+          ),
           apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
         ]);
         if (alive) {
@@ -795,13 +805,20 @@ export function DoctorConsultation({
     const med = medicineCatalog.find(
       (row: any) => row.id === selectedMedicineId,
     );
-    if (med) addMedicineRow(med.item_name || med.name, medicineDosage || med.strength || "");
+    if (med)
+      addMedicineRow(
+        med.item_name || med.name,
+        medicineDosage || med.strength || "",
+      );
   }
   function addMedicineFromText(value: string, option?: any) {
     const med =
       option?.item ||
       medicineCatalog.find((row: any) => row.id === option?.value);
-    addMedicineRow(med?.item_name || med?.name || value, medicineDosage || med?.strength || "");
+    addMedicineRow(
+      med?.item_name || med?.name || value,
+      medicineDosage || med?.strength || "",
+    );
   }
   function addLabRow(name: string) {
     const testName = String(name || "").trim();
@@ -1229,7 +1246,7 @@ export function DoctorConsultation({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-bold">Patient Queue</h3>
-              <p className="text-sm text-slate-500">
+              <p className="text-xs lg:text-sm text-slate-500">
                 Select any waiting patient for consultation.
               </p>
             </div>
@@ -1248,7 +1265,7 @@ export function DoctorConsultation({
                   </option>
                 ))}
               </Select>
-              <Badge tone="blue">{branch.name}</Badge>
+              <Badge className="h-12 w-44 lg:w-52 flex justify-center items-center" tone="blue">{branch.name}</Badge>
             </div>
           </div>
           <StatusToast message={message} onClose={() => setMessage("")} />
@@ -1277,11 +1294,12 @@ export function DoctorConsultation({
                       </Badge>
                       {a.consultationStatus && (
                         <Badge
+                          // className="w-[500px]"
                           tone={
                             a.consultationStatus === "signed" ? "green" : "blue"
                           }
                         >
-                          {humanizeOptionLabel(a.consultationStatus)}
+                          {humanizeOptionLabel(a.consultationStatus)} 
                         </Badge>
                       )}
                     </div>
@@ -1300,8 +1318,8 @@ export function DoctorConsultation({
                 (a: any) =>
                   !isCompletedAppointment(a) && !isCancelledAppointment(a),
               ).length === 0 && (
-                <p className="py-4 text-sm text-slate-500">
-                  No waiting patients in the queue.
+                <p className="py-4 text-xs lg:text-sm text-slate-500">
+                  No waiting patients in the queue. 
                 </p>
               )}
             </div>
@@ -1389,7 +1407,7 @@ export function DoctorConsultation({
     );
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
         <DoctorMetric
           icon={CalendarClock}
           title="Today Booked"
@@ -1558,26 +1576,26 @@ export function DoctorConsultation({
       </div>
       <Card>
         <h3 className="text-lg font-bold">Doctor Revenue Tracking Logic</h3>
-        <div className="mt-3 grid gap-3 md:grid-cols-5">
-          <div className="rounded-2xl bg-slate-50 p-4">
+        <div className="mt-3 grid gap-3 md:grid-cols-4 lg:grid-cols-5">
+          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
             <b>Consultation</b>
-            <p className="text-sm text-slate-500">OP/IP/Online/Home Visit</p>
+            <p className="text-[10px] lg:text-sm text-slate-500">OP/IP/Online/Home Visit</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
             <b>Lab Referral</b>
-            <p className="text-sm text-slate-500">Lab tests written</p>
+            <p className="text-[10px] lg:text-sm text-slate-500">Lab tests written</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
             <b>Scan Referral</b>
-            <p className="text-sm text-slate-500">Diagnostics referred</p>
+            <p className="text-[10px] lg:text-sm text-slate-500">Diagnostics referred</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
             <b>Pharmacy</b>
-            <p className="text-sm text-slate-500">Medicine value referred</p>
+            <p className="text-[10px] lg:text-sm text-slate-500">Medicine value referred</p>
           </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
             <b>Reports</b>
-            <p className="text-sm text-slate-500">Admin revenue analytics</p>
+            <p className="text-[10px] lg:text-sm text-slate-500">Admin revenue analytics</p>
           </div>
         </div>
       </Card>
@@ -1750,7 +1768,9 @@ function PatientHistoryPanel({ history, onOpenPatient }: any) {
                   </p>
                   <p className="text-xs text-slate-500">
                     {item.doctor || item.practitioner_name || "Doctor"} ·{" "}
-                    {item.departmentName || item.departmentId || "Medical Department"}
+                    {item.departmentName ||
+                      item.departmentId ||
+                      "Medical Department"}
                   </p>
                 </div>
                 <Badge
@@ -1861,7 +1881,8 @@ function ConsultationWorkspace(props: any) {
   const [labTagText, setLabTagText] = useState("");
   const [medicineDraftName, setMedicineDraftName] = useState("");
   const [labDraftName, setLabDraftName] = useState("");
-  const [availableMedicineCatalog, setAvailableMedicineCatalog] = useState<any[]>(medicineCatalog);
+  const [availableMedicineCatalog, setAvailableMedicineCatalog] =
+    useState<any[]>(medicineCatalog);
   const [medicineCatalogLoading, setMedicineCatalogLoading] = useState(false);
   const [medicineCatalogError, setMedicineCatalogError] = useState("");
   const [externalLabCatalog, setExternalLabCatalog] = useState<any[]>([]);
@@ -1887,7 +1908,9 @@ function ConsultationWorkspace(props: any) {
     (test: any) => test.id === selectedLabTestId,
   );
   useEffect(() => {
-    setAvailableMedicineCatalog(Array.isArray(medicineCatalog) ? medicineCatalog : []);
+    setAvailableMedicineCatalog(
+      Array.isArray(medicineCatalog) ? medicineCatalog : [],
+    );
   }, [medicineCatalog]);
   useEffect(() => {
     if (!apiSession?.token) {
@@ -1896,26 +1919,32 @@ function ConsultationWorkspace(props: any) {
     }
     let alive = true;
     const search = medicineDraftName.trim();
-    const timer = window.setTimeout(async () => {
-      setMedicineCatalogLoading(true);
-      setMedicineCatalogError("");
-      try {
-        const params = new URLSearchParams();
-        if (search) params.set("search", search);
-        const rows = await apiFetch(
-          `/pharmacy/catalog/available-medicines${params.toString() ? `?${params}` : ""}`,
-          apiSession,
-        );
-        if (alive) setAvailableMedicineCatalog(Array.isArray(rows) ? rows : []);
-      } catch (err: any) {
-        if (alive) {
-          setAvailableMedicineCatalog([]);
-          setMedicineCatalogError(err?.message || "Could not load medicine catalog.");
+    const timer = window.setTimeout(
+      async () => {
+        setMedicineCatalogLoading(true);
+        setMedicineCatalogError("");
+        try {
+          const params = new URLSearchParams();
+          if (search) params.set("search", search);
+          const rows = await apiFetch(
+            `/pharmacy/catalog/available-medicines${params.toString() ? `?${params}` : ""}`,
+            apiSession,
+          );
+          if (alive)
+            setAvailableMedicineCatalog(Array.isArray(rows) ? rows : []);
+        } catch (err: any) {
+          if (alive) {
+            setAvailableMedicineCatalog([]);
+            setMedicineCatalogError(
+              err?.message || "Could not load medicine catalog.",
+            );
+          }
+        } finally {
+          if (alive) setMedicineCatalogLoading(false);
         }
-      } finally {
-        if (alive) setMedicineCatalogLoading(false);
-      }
-    }, search ? 250 : 0);
+      },
+      search ? 250 : 0,
+    );
     return () => {
       alive = false;
       window.clearTimeout(timer);
@@ -1928,49 +1957,64 @@ function ConsultationWorkspace(props: any) {
     }
     let alive = true;
     const search = labDraftName.trim();
-    const timer = window.setTimeout(async () => {
-      setExternalLabLoading(true);
-      setExternalLabError("");
-      try {
-        const params = new URLSearchParams();
-        if (search) params.set("search", search);
-        const rows = await apiFetch(
-          `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
-          apiSession,
-        );
-        if (alive) setExternalLabCatalog(Array.isArray(rows) ? rows : []);
-      } catch (err: any) {
-        if (alive) {
-          setExternalLabCatalog([]);
-          setExternalLabError(err?.message || "Could not load ERPNext lab tests.");
+    const timer = window.setTimeout(
+      async () => {
+        setExternalLabLoading(true);
+        setExternalLabError("");
+        try {
+          const params = new URLSearchParams();
+          if (search) params.set("search", search);
+          const rows = await apiFetch(
+            `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
+            apiSession,
+          );
+          if (alive) setExternalLabCatalog(Array.isArray(rows) ? rows : []);
+        } catch (err: any) {
+          if (alive) {
+            setExternalLabCatalog([]);
+            setExternalLabError(
+              err?.message || "Could not load ERPNext lab tests.",
+            );
+          }
+        } finally {
+          if (alive) setExternalLabLoading(false);
         }
-      } finally {
-        if (alive) setExternalLabLoading(false);
-      }
-    }, search ? 250 : 0);
+      },
+      search ? 250 : 0,
+    );
     return () => {
       alive = false;
       window.clearTimeout(timer);
     };
   }, [apiSession?.token, apiSession?.tenantId, labDraftName]);
   function addDraftMedicine() {
-    const name = selectedMedicine?.item_name || selectedMedicine?.name || medicineDraftName;
+    const name =
+      selectedMedicine?.item_name ||
+      selectedMedicine?.name ||
+      medicineDraftName;
     if (!String(name || "").trim()) return;
-    addMedicineFromText(name, selectedMedicine ? { item: selectedMedicine } : undefined);
+    addMedicineFromText(
+      name,
+      selectedMedicine ? { item: selectedMedicine } : undefined,
+    );
     setMedicineDraftName("");
   }
   function addDraftLabTest() {
-    const name = selectedLabTest?.item_name || selectedLabTest?.name || labDraftName;
+    const name =
+      selectedLabTest?.item_name || selectedLabTest?.name || labDraftName;
     if (!String(name || "").trim()) return;
-    addLabFromText(name, selectedLabTest ? { item: selectedLabTest } : undefined);
+    addLabFromText(
+      name,
+      selectedLabTest ? { item: selectedLabTest } : undefined,
+    );
     setLabDraftName("");
   }
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
         <div>
-          <h3 className="text-lg font-bold">Consultation Workspace</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="text-base lg:text-lg font-bold">Consultation Workspace</h3>
+          <p className="text-xs lg:text-sm text-slate-500">
             Structured vitals, complaints, diagnosis, prescription, referrals,
             follow-up and addendums.
           </p>
@@ -1978,38 +2022,38 @@ function ConsultationWorkspace(props: any) {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setActive?.("doctor")}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-2xl border px-4 py-3 text-xs lg:text-sm font-bold"
           >
             ← Dashboard
           </button>
           <button
             onClick={() => selected && callPatient(selected)}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-2xl border px-4 py-3 text-xs lg:text-sm font-bold"
           >
             Call
           </button>
           <button
             onClick={skipPatient}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-2xl border px-4 py-3 text-xs lg:text-sm font-bold"
           >
             Not Present
           </button>
           <button
             onClick={() => requeuePatient("after2")}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-2xl border px-4 py-3 text-xs lg:text-sm font-bold"
           >
             Requeue
           </button>
           <button
             onClick={cancelAppointment}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold text-red-600"
+            className="rounded-2xl border px-4 py-3 text-xs lg:text-sm font-bold text-red-600"
           >
             Cancel
           </button>
         </div>
       </div>
       {!selected ? (
-        <div className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">
+        <div className="mt-5 rounded-2xl bg-amber-50 p-4 text-xs lg:text-sm text-amber-700">
           No appointment selected.
         </div>
       ) : (
@@ -2156,7 +2200,9 @@ function ConsultationWorkspace(props: any) {
                   }}
                   onChange={(medicineId: string, medicine: any) => {
                     setSelectedMedicineId(medicineId);
-                    setMedicineDraftName(medicine?.item_name || medicine?.name || "");
+                    setMedicineDraftName(
+                      medicine?.item_name || medicine?.name || "",
+                    );
                   }}
                   options={medicineOptions}
                   placeholder="Type medicine name"
@@ -2204,7 +2250,7 @@ function ConsultationWorkspace(props: any) {
                     ]),
                   ]
                     .filter(Boolean)
-                  .map((value: string) => (
+                    .map((value: string) => (
                       <option key={value} value={value}>
                         {value}
                       </option>
@@ -2240,7 +2286,7 @@ function ConsultationWorkspace(props: any) {
                       <option key={value} value={value}>
                         {value}
                       </option>
-                  ))}
+                    ))}
                 </Select>
               </FormField>
               <Button type="button" onClick={addDraftMedicine}>
@@ -2253,7 +2299,9 @@ function ConsultationWorkspace(props: any) {
                   key={medicine.id || medicine.slug || medicine.name}
                   type="button"
                   onClick={() =>
-                    addMedicineFromText(medicine.item_name || medicine.name, { item: medicine })
+                    addMedicineFromText(medicine.item_name || medicine.name, {
+                      item: medicine,
+                    })
                   }
                   className="rounded-xl border bg-white px-3 py-2 text-xs font-bold"
                 >
@@ -2266,7 +2314,9 @@ function ConsultationWorkspace(props: any) {
             <div className="rounded-3xl bg-slate-50 p-4">
               <Field label="Lab Tests">
                 <TagEntryBox
-                  tags={referralItems.filter((item: any) => item.type === "lab")}
+                  tags={referralItems.filter(
+                    (item: any) => item.type === "lab",
+                  )}
                   value={labTagText}
                   onChange={setLabTagText}
                   onSubmit={addLabFromText}

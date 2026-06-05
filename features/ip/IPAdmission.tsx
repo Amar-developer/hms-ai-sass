@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {ChevronDown} from 'lucide-react';
-import {Badge,Button,Card,Input,Select,StatusToast} from '@/components/ui';
+import {Badge,Button,Card,Input,Select,StatusToast} from '@/components/common/ui';
 import {FormField} from '@/components/FormElements';
 import {SearchPicker,TagEntryBox,medicineFrequencyOptions,rowTagLabel} from '@/components/clinicalRows';
 import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';

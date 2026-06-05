@@ -12,7 +12,7 @@ import {
   Input,
   Select,
   StatusToast,
-} from "@/components/ui";
+} from "@/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import { NumberField, SelectField, TextField, TimeField } from "@/components/FormElements";
 import { publicDisplayValue, uniqueDepartmentRows } from "@/lib/options";

@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {ActionButton,Badge,Button,Card,Input,Select} from '@/components/ui';
+import {ActionButton,Badge,Button,Card,Input,Select} from '@/components/common/ui';
 import {FormField} from '@/components/FormElements';
 import {apiFetch} from '@/lib/api';
 

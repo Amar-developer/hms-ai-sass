@@ -10,7 +10,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm ${className}`}
+      className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm text-xl lg:2xl ${className}`}
     >
       {children}
     </div>
@@ -19,9 +19,11 @@ export function Card({
 export function Badge({
   children,
   tone = "slate",
+  className=""
 }: {
   children: React.ReactNode;
   tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple";
+  className?:string
 }) {
   const m: any = {
     slate: "bg-slate-100 text-slate-700",
@@ -33,7 +35,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-block rounded-full px-3 py-1 text-xs font-bold ${m[tone]}`}
+      className={`inline-block rounded-full px-3 py-1 text-[10px] lg:text-xs font-bold ${m[tone]} ${className}`}
     >
       {children}
     </span>
@@ -151,7 +153,7 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+      <span className="mb-1 block text-[10px] lg:text-xs font-bold uppercase tracking-wide text-slate-500">
         {label}
       </span>
       {children}
@@ -213,7 +215,7 @@ export function Input({ className = "", onKeyDown, ...props }: any) {
         event.preventDefault();
         submitNearestFormOnEnter(event);
       }}
-      className={`w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-500 ${className}`}
+      className={`w-full rounded-2xl border border-slate-200 px-2 py-1.5 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 ${className}`}
     />
   );
 }
@@ -254,7 +256,7 @@ export function SuggestionInput({
           setOpen(true);
         }}
         autoComplete="off"
-        className={`w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-2xl border border-slate-200 px-4 py-3 text-[10px]  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
       {open && !disabled && filtered.length > 0 && (
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-lg">
@@ -267,7 +269,7 @@ export function SuggestionInput({
                 setNext(item);
                 setOpen(false);
               }}
-              className={`block w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+              className={`block w-full rounded-xl px-3 py-2 text-[10px] text-sm hover:bg-slate-50 ${
                 item.toLowerCase() === query ? "bg-slate-50 font-bold" : ""
               }`}
             >
@@ -283,7 +285,7 @@ export function Select(props: any) {
   return (
     <select
       {...props}
-      className={`w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 ${props.className || ""}`}
+      className={`w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 ${props.className || ""}`}
     >
       {props.children}
     </select>
@@ -429,7 +431,7 @@ export function Button({ children, className = "", ...props }: any) {
   return (
     <button
       {...props}
-      className={`rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white disabled:bg-slate-300 ${className}`}
+      className={`rounded-lg bg-slate-900  ${className? className:'text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3'} font-bold text-white disabled:bg-slate-300`}
     >
       {children}
     </button>
@@ -465,7 +467,7 @@ export function ActionButton({
     <button
       type="button"
       {...props}
-      className={`inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-3 text-xs font-bold disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 ${tones[tone] || tones.neutral} ${className}`}
+      className={`inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-3 text-[10px] lg:text-xs font-bold disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 ${tones[tone] || tones.neutral} ${className}`}
     >
       {children}
     </button>

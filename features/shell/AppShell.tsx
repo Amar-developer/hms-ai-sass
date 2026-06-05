@@ -10,9 +10,10 @@ import {
   Home,
   KeyRound,
   LogOut,
+  Menu,
   Settings,
 } from "lucide-react";
-import { Badge, Card, Select } from "@/components/ui";
+import { Badge, Card, Select } from "@/components/common/ui";
 import { FormField } from "@/components/FormElements";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
@@ -40,15 +41,8 @@ import { Reports, reportSections } from "@/features/reports/Reports";
 import { Scheduling } from "@/features/scheduling/Scheduling";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { uniqueDepartmentRows } from "@/lib/options";
-
-function userInitials(user: any, email: string) {
-  const source = String(user?.name || email || "User").trim();
-  const parts = source.split(/[\s.@_-]+/).filter(Boolean);
-  return (
-    (parts[0]?.[0] || "U").toUpperCase() +
-    ((parts[1]?.[0] || "") as string).toUpperCase()
-  );
-}
+import { Sidebar } from "@/components/common/Sidebar";
+import AppHeader from "@/components/common/AppHeader";
 
 export function AppShell(props: any) {
   const {
@@ -144,6 +138,7 @@ export function AppShell(props: any) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [reportsSection, setReportsSection] = useState("metrix");
+  const [sideBarOpen, setSidebarOpen] = useState(false);
   const profileOpenRef = useRef<HTMLDivElement>(null);
   const activeNavLabel =
     visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
@@ -211,11 +206,16 @@ export function AppShell(props: any) {
         !profileOpenRef.current.contains(event.target as Node)
       ) {
         setProfileOpen(false);
+        if(sideBarOpen){
+          setSidebarOpen(false)
+        }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.addEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [sideBarOpen,profileOpenRef.current]);
+
+  
 
   function renderPage() {
     switch (activePage) {
@@ -302,200 +302,89 @@ export function AppShell(props: any) {
 
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
+      {/* Sidebar Toggle Button */}
+      <button
+        type="button"
+        onClick={() => setSidebarOpen(!sideBarOpen)}
+        className="hidden md:block lg:hidden fixed left-0 top-1/2 z-50 -translate-y-1/2 rounded-r-xl border border-slate-200 bg-white p-2 shadow-lg"
+      >
+        {sideBarOpen ? <ArrowLeft size={18} /> : <ArrowRight size={18} />}
+      </button>
+
+      {/* Sidebar */}
+      <div
+        className={`
+    fixed left-0 top-0 z-40 h-screen w-64 lg:w-72 bg-white border-r border-slate-200
+    transition-transform duration-300
+    ${sideBarOpen ? "translate-x-0" : "-translate-x-full"}
+    lg:translate-x-0 
+  `}
+        onClick={() => setSidebarOpen(false)}
+      >
+        <div className="scrollbar-hidden h-full overflow-y-auto  ">
+          <Sidebar
+            visibleNav={visibleNav}
+            activePage={activePage}
+            navigatePage={navigatePage}
+            isSuperAdmin={isSuperAdmin}
+            reportsOpen={reportsOpen}
+            setReportsOpen={setReportsOpen}
+            reportsSection={reportsSection}
+            setReportsSection={setReportsSection}
+            tenantAdminSettingsOpen={tenantAdminSettingsOpen}
+            setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
+            tenantAdminSection={tenantAdminSection}
+            setTenantAdminSection={setTenantAdminSection}
+            superAdminSettingsOpen={superAdminSettingsOpen}
+            setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
+            superAdminSection={superAdminSection}
+            setSuperAdminSection={setSuperAdminSection}
+            visibleTenantAdminSections={visibleTenantAdminSections}
+            enabled={enabled}
+            clinic={clinic}
+            setSidebarOpen={setSidebarOpen}
+            reportSections={reportSections}
+            reportSection={reportsSection}
+            superAdminSections={superAdminSections}
+          />
+        </div>
+      </div>
       <div className="h-full lg:flex">
-        <aside className="scrollbar-hidden hidden h-screen w-72 shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
-          <BrandBlock />
-          <nav className="mt-8 space-y-2">
-            {visibleNav.map(([id, label, Icon]: any) => {
-              const isActive = activePage === id;
-              if (id === "superadmin" && isSuperAdmin) {
-                return (
-                  <div key={id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigatePage(id);
-                        setSuperAdminSettingsOpen(!superAdminSettingsOpen);
-                        setReportsOpen(!reportsOpen);
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
-                        isActive
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <Icon size={18} />
-                      <span className="min-w-0 flex-1 truncate">{label}</span>
-                      <ChevronDown
-                        size={16}
-                        className={superAdminSettingsOpen ? "rotate-180" : ""}
-                      />
-                    </button>
-                    {isActive && superAdminSettingsOpen && (
-                      <div className="mt-2 grid gap-1 pl-5">
-                        <div className="mb-1 flex items-center gap-2 px-3 text-xs font-bold uppercase text-slate-400">
-                          <Settings size={13} />
-                          Settings
-                        </div>
-                        {superAdminSections.map(
-                          ([sectionId, sectionLabel, SectionIcon]: any) => (
-                            <button
-                              key={sectionId}
-                              type="button"
-                              onClick={() => {
-                                navigatePage("superadmin");
-                                setSuperAdminSection(sectionId);
-                              }}
-                              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
-                                superAdminSection === sectionId
-                                  ? "bg-slate-100 text-slate-950"
-                                  : "text-slate-500 hover:bg-slate-50"
-                              }`}
-                            >
-                              <SectionIcon size={15} />
-                              <span className="truncate">{sectionLabel}</span>
-                            </button>
-                          ),
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              if (id === "admin" && !isSuperAdmin) {
-                return (
-                  <div key={id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigatePage(id);
-                        setTenantAdminSettingsOpen(true);
-                        if (visibleTenantAdminSections.length > 0) {
-                          setTenantAdminSection(
-                            visibleTenantAdminSections[0][0],
-                          );
-                        }
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
-                        isActive
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <Icon size={18} />
-                      <span className="min-w-0 flex-1 truncate">{label}</span>
-                      <ChevronDown
-                        size={16}
-                        className={tenantAdminSettingsOpen ? "rotate-180" : ""}
-                      />
-                    </button>
-                    {isActive && tenantAdminSettingsOpen && (
-                      <div className="mt-2 grid gap-1 pl-5">
-                        <div className="mb-1 flex items-center gap-2 px-3 text-xs font-bold uppercase text-slate-400">
-                          <Settings size={13} />
-                          Settings
-                        </div>
-                        {visibleTenantAdminSections.map(
-                          ([sectionId, sectionLabel, SectionIcon]: any) => (
-                            <button
-                              key={sectionId}
-                              type="button"
-                              onClick={() => {
-                                navigatePage("admin");
-                                setTenantAdminSection(sectionId);
-                              }}
-                              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
-                                tenantAdminSection === sectionId
-                                  ? "bg-slate-100 text-slate-950"
-                                  : "text-slate-500 hover:bg-slate-50"
-                              }`}
-                            >
-                              <SectionIcon size={15} />
-                              <span className="truncate">{sectionLabel}</span>
-                            </button>
-                          ),
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              if (id === "reports") {
-                return (
-                  <div key={id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigatePage(id);
-                        setReportsOpen(!reportsOpen);
+        <aside className="scrollbar-hidden hidden h-screen w-64 lg:w-72 shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
+          {/* <BrandBlock /> */}
+          <div
+            className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-72 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+              sideBarOpen ? "translate-x-0" : "-translate-x-full"
+            }`}
+          >
+            <Sidebar
+              visibleNav={visibleNav}
+              activePage={activePage}
+              navigatePage={navigatePage}
+              isSuperAdmin={isSuperAdmin}
+              reportsOpen={reportsOpen}
+              setReportsOpen={setReportsOpen}
+              reportsSection={reportsSection}
+              setReportsSection={setReportsSection}
+              tenantAdminSettingsOpen={tenantAdminSettingsOpen}
+              setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
+              tenantAdminSection={tenantAdminSection}
+              setTenantAdminSection={setTenantAdminSection}
+              superAdminSettingsOpen={superAdminSettingsOpen}
+              setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
+              superAdminSection={superAdminSection}
+              setSuperAdminSection={setSuperAdminSection}
+              visibleTenantAdminSections={visibleTenantAdminSections}
+              enabled={enabled}
+              clinic={clinic}
+              setSidebarOpen={setSidebarOpen}
+              reportSections={reportSections}
+              reportSection={reportsSection}
+              superAdminSections={superAdminSections}
+            />
+          </div>
+          <Menu />
 
-                        if (!reportsSection) {
-                          setReportsSection("metrix");
-                        }
-                      }}
-                      className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
-                        isActive
-                          ? "bg-slate-900 text-white"
-                          : "text-slate-600 hover:bg-slate-100"
-                      }`}
-                    >
-                      <Icon size={18} />
-                      <span className="min-w-0 flex-1 truncate">{label}</span>
-                      <ChevronDown
-                        size={16}
-                        className={reportsOpen ? "rotate-180" : ""}
-                      />
-                    </button>
-
-                    {isActive && reportsOpen && (
-                      <div className="mt-2 grid gap-1 pl-5">
-                        <div className="mb-1 flex items-center gap-2 px-3 text-xs font-bold uppercase text-slate-400">
-                          <Settings size={13} />
-                          Reports
-                        </div>
-
-                        {reportSections.map(
-                          ([sectionId, sectionLabel, SectionIcon]: any) => (
-                            <button
-                              key={sectionId}
-                              type="button"
-                              onClick={() => {
-                                navigatePage("reports");
-                                setReportsSection(sectionId);
-                              }}
-                              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
-                                reportsSection === sectionId
-                                  ? "bg-slate-100 text-slate-950"
-                                  : "text-slate-500 hover:bg-slate-50"
-                              }`}
-                            >
-                              <SectionIcon size={15} />
-                              <span className="truncate">{sectionLabel}</span>
-                            </button>
-                          ),
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => navigatePage(id)}
-                  className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold ${
-                    isActive
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-600 hover:bg-slate-100"
-                  }`}
-                >
-                  <Icon size={18} />
-                  <span className="truncate">{label}</span>
-                </button>
-              );
-            })}
-          </nav>
           <div className="mt-8 rounded-2xl bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
               {isSuperAdmin ? "Primary Tenant" : clinic.type}
@@ -512,155 +401,33 @@ export function AppShell(props: any) {
         </aside>
 
         <main className="scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto bg-white">
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur lg:px-5">
-            <div className="grid min-w-0 gap-2 lg:grid-cols-[minmax(260px,1.25fr)_minmax(180px,.9fr)_minmax(180px,.9fr)_auto] lg:items-center">
-              <div className="min-w-0">
-                <div className="lg:hidden">
-                  <BrandBlock compact />
-                </div>
-                {isSuperAdmin && apiSession ? (
-                  <CompactControl label="Tenant">
-                    <select
-                      value={apiSession.tenantId}
-                      onChange={(e: any) => switchTenant(e.target.value)}
-                      className="w-full bg-transparent text-sm font-semibold outline-none"
-                    >
-                      {tenantOptions.map((tenant: any) => (
-                        <option key={tenant.id} value={tenant.id}>
-                          {tenant.name}
-                        </option>
-                      ))}
-                    </select>
-                  </CompactControl>
-                ) : (
-                  <div className="grid h-12 content-center">
-                    <span className="text-[10px] font-bold uppercase leading-none text-slate-500">
-                      Tenant
-                    </span>
-                    <h2 className="mt-1 truncate text-lg font-bold leading-tight">
-                      {displayClinicName}
-                    </h2>
-                  </div>
-                )}
-              </div>
-
-              <CompactControl label="Branch">
-                {canChangeBranch ? (
-                  <select
-                    value={branchId}
-                    onChange={(e: any) => setBranchId(e.target.value)}
-                    className="w-full bg-transparent text-sm font-semibold outline-none"
-                  >
-                    {clinic.branches.map((b: any) => (
-                      <option key={b.id} value={b.id}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="truncate">{branchName}</span>
-                )}
-              </CompactControl>
-
-              <CompactControl label="Medical Department">
-                {canChangeDepartment ? (
-                  <select
-                    value={departmentId}
-                    onChange={(e: any) => setDepartmentId(e.target.value)}
-                    className="w-full bg-transparent text-sm font-semibold outline-none"
-                  >
-                    {departmentOptions.map((d: any) => (
-                      <option key={d.id} value={d.id}>
-                        {d.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <span className="truncate">{departmentName}</span>
-                )}
-              </CompactControl>
-
-              <div className="flex shrink-0 items-center justify-end gap-2">
-                <button
-                  type="button"
-                  className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-500"
-                  title="Notifications"
-                >
-                  <Bell size={18} />
-                </button>
-                <div ref={profileOpenRef} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setProfileOpen(!profileOpen)}
-                    className="grid h-10 w-10 place-items-center rounded-xl bg-slate-900 text-sm font-black text-white"
-                    title="Profile"
-                  >
-                    {userInitials(apiSession?.user, apiSession?.email)}
-                  </button>
-                  {profileOpen && (
-                    <div className="absolute right-0 top-12 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl">
-                      <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
-                        <div className="grid h-11 w-11 place-items-center rounded-xl bg-slate-900 font-black text-white">
-                          {userInitials(apiSession?.user, apiSession?.email)}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate font-bold text-slate-900">
-                            {apiSession?.user?.name || roleLabel}
-                          </p>
-                          <p className="truncate text-xs text-slate-500">
-                            {apiSession?.email || "Not connected"}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="mt-3 grid gap-2 text-xs">
-                        <ProfileRow label="Role" value={roleLabel} />
-                        <ProfileRow
-                          label="Tenant"
-                          value={apiSession?.tenantId || clinic.id}
-                        />
-                        <ProfileRow label="Branch" value={branchName} />
-                        <ProfileRow label="Medical Department" value={departmentName} />
-                      </div>
-                      <div className="mt-4 grid gap-2 border-t border-slate-100 pt-3">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setProfileOpen(false);
-                            setShowPassword(true);
-                          }}
-                          className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-left text-sm font-bold text-slate-700 hover:bg-slate-50"
-                        >
-                          <KeyRound size={16} /> Change Password
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleLogout}
-                          className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-left text-sm font-bold text-red-600 hover:bg-red-50"
-                        >
-                          <LogOut size={16} /> Logout
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="lg:hidden lg:col-span-5">
-                <FormField label="Module">
-                  <Select
-                    value={activePage}
-                    onChange={(e: any) => navigatePage(e.target.value)}
-                  >
-                    {visibleNav.map(([id, label]: any) => (
-                      <option key={id} value={id}>
-                        {label}
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
-              </div>
-            </div>
-          </header>
+          <AppHeader
+            isSuperAdmin={isSuperAdmin}
+            apiSession={apiSession}
+            tenantOptions={tenantOptions}
+            switchTenant={switchTenant}
+            branchId={branchId}
+            setBranchId={setBranchId}
+            clinic={clinic}
+            departmentId={departmentId}
+            setDepartmentId={setDepartmentId}
+            departmentOptions={departmentOptions}
+            canChangeBranch={canChangeBranch}
+            canChangeDepartment={canChangeDepartment}
+            branchName={branchName}
+            departmentName={departmentName}
+            displayClinicName={displayClinicName}
+            activePage={activePage}
+            visibleNav={visibleNav}
+            navigatePage={navigatePage}
+            profileOpen={profileOpen}
+            setProfileOpen={setProfileOpen}
+            profileOpenRef={profileOpenRef}
+            roleLabel={roleLabel}
+            handleLogout={handleLogout}
+            setShowPassword={setShowPassword}
+            setReportsOpen={setReportsOpen}
+          />
 
           {showPassword && (
             <ChangePassword
@@ -735,7 +502,15 @@ export function AppShell(props: any) {
   );
 }
 
-function BrandBlock({ compact = false }: { compact?: boolean }) {
+type BrandBlockProps = {
+  compact?: boolean;
+  setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
+};
+
+export function BrandBlock({
+  compact = false,
+  setSidebarOpen,
+}: BrandBlockProps) {
   return (
     <div className="flex items-center gap-3">
       <div
@@ -755,37 +530,15 @@ function BrandBlock({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function CompactControl({ label, children }: any) {
-  return (
-    <label className="grid h-12 min-w-0 content-center rounded-xl border border-slate-200 bg-white px-3">
-      <span className="text-[10px] font-bold uppercase leading-none text-slate-500">
-        {label}
-      </span>
-      <span className="mt-1 min-w-0 truncate text-sm font-semibold text-slate-800">
-        {children}
-      </span>
-    </label>
-  );
-}
-
 function activeTenantOptions(tenants: any[]) {
   const seen = new Set<string>();
   return (tenants || []).filter((tenant: any) => {
     if (tenant.status === "suspended") return false;
-    const key = String(tenant.name || tenant.id || "").trim().toLowerCase();
+    const key = String(tenant.name || tenant.id || "")
+      .trim()
+      .toLowerCase();
     if (key && seen.has(key)) return false;
     if (key) seen.add(key);
     return true;
   });
-}
-
-function ProfileRow({ label, value }: any) {
-  return (
-    <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-2">
-      <span className="font-bold uppercase text-slate-400">{label}</span>
-      <span className="truncate font-semibold text-slate-700">
-        {value || "-"}
-      </span>
-    </div>
-  );
 }

@@ -9,7 +9,7 @@ import {
   Button,
   Card,
   StatusToast,
-} from "@/components/ui";
+} from "@/components/common/ui";
 import { UPLOADS_BASE, apiFetch, apiUpload, type ApiSession } from "@/lib/api";
 import {
   DateField,

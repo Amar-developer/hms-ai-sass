@@ -1,7 +1,7 @@
 'use client';
 
 import {Component,type ReactNode} from 'react';
-import {Button,Card} from '@/components/ui';
+import {Button,Card} from '@/components/common/ui';
 
 type Props = {
   children: ReactNode;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ActionButton, ActionGroup, Badge, Button, Card, StatusToast } from "@/components/ui";
+import { ActionButton, ActionGroup, Badge, Button, Card, StatusToast } from "@/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import { DateField, NumberField, SelectField, TextField } from "@/components/FormElements";
 import { humanizeOptionLabel } from "@/lib/options";

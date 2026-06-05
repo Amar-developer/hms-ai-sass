@@ -34,7 +34,7 @@ export function FormField({
   className = "",
 }: BaseFieldProps & { children?: React.ReactNode }) {
   return (
-    <div className={`block ${className}`}>
+    <div className={`inline lg:block ${className}`}>
       <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
         {label}
         {required && <span className="ml-1 text-red-500">*</span>}
@@ -75,7 +75,7 @@ export function TextField({
         disabled={disabled}
         autoComplete={autoComplete}
         maxLength={maxLength}
-        className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full rounded-lg border px-2 py-0.5 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
       />
     </FormField>
   );
@@ -148,7 +148,7 @@ export function NumberField({
         min={min}
         max={max}
         step={step}
-        className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full rounded-lg border px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
       />
     </FormField>
   );
@@ -177,7 +177,7 @@ export function DateField({
         disabled={disabled}
         min={min}
         max={max}
-        className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full rounded-lg border px-2 py-0 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
       />
     </FormField>
   );
@@ -262,7 +262,7 @@ export function SelectField({
         onChange={(e) => onChange(e.target.value)}
         required={required}
         disabled={disabled}
-        className={`w-full rounded-2xl border bg-white px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full rounded-lg border bg-white px-3 py-2 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
       >
         {placeholder && (
           <option value="" disabled>

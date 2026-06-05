@@ -1,21 +1,77 @@
 import React from "react";
 import CollapsibleReportSection from "@/components/reports/CollapsibleReportSection";
-
+import { DataTable } from "@/components/reports/DataTable";
 
 export type AppointmentReportsProps = {
   openSections: any;
   setOpenSections: any;
   money: any;
-  doctorRows:any;
-  percent:any
+  doctorRows: any;
+  percent: any;
 };
 const AppointmentReports = ({
   doctorRows,
   openSections,
   setOpenSections,
   money,
-  percent
+  percent,
 }: AppointmentReportsProps) => {
+  const columns = [
+    {
+      key: "doctor",
+      header: "Doctor",
+      render: (row: any) => <b>{row.doctor}</b>,
+    },
+    {
+      key: "consultations",
+      header: "Consultations",
+    },
+    {
+      key: "invoices",
+      header: "Invoices",
+    },
+    {
+      key: "grossRevenue",
+      header: "Gross Revenue",
+      render: (row: any) => money(row.grossRevenue),
+    },
+    {
+      key: "paidRevenue",
+      header: "Paid",
+      render: (row: any) => money(row.paidRevenue),
+    },
+    {
+      key: "doctorFee",
+      header: "Doctor Fee",
+      render: (row: any) => money(row.doctorFee),
+    },
+    {
+      key: "settlement",
+      header: "Settlement",
+      render: (row: any) => money(row.settlement),
+    },
+    {
+      key: "clinicFee",
+      header: "Clinic Fee",
+      render: (row: any) => money(row.clinicFee),
+    },
+    {
+      key: "grossProfitPercentage",
+      header: "Gross Profit %",
+      render: (row: any) =>
+        percent(
+          Math.max(row.grossRevenue - row.doctorFee, 0),
+          row.grossRevenue,
+        ),
+    },
+    {
+      key: "finalProfit",
+      header: "Final Profit",
+      render: (row: any) => (
+        <span className="font-bold">{money(row.finalProfit)}</span>
+      ),
+    },
+  ];
   return (
     <div>
       <CollapsibleReportSection
@@ -28,7 +84,7 @@ const AppointmentReports = ({
         }
       >
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1280px] text-left text-sm">
+          {/* <table className="w-full min-w-[1280px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Doctor</th>
@@ -73,7 +129,13 @@ const AppointmentReports = ({
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table> */}
+          <DataTable
+          columns={columns}
+          data={doctorRows}
+          className="w-full min-w-[1280px] text-left text-sm"
+          emptyMessage="No healthcare invoices match this filter."
+          />
         </div>
       </CollapsibleReportSection>
     </div>

@@ -12,7 +12,7 @@ import {
   Input,
   Select,
   StatusToast,
-} from "@/components/ui";
+} from "@/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import {
   NumberField,

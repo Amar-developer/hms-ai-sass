@@ -3,7 +3,7 @@
 import {useEffect, useMemo, useState} from 'react';
 import {CalendarPlus, Search, X} from 'lucide-react';
 
-import {Badge, Button, Card, Field, Input, Select, StatusToast} from '@/components/ui';
+import {Badge, Button, Card, Field, Input, Select, StatusToast} from '@/components/common/ui';
 import {apiFetch, type ApiSession} from '@/lib/api';
 import {SelectField, TextareaField, TextField} from '@/components/FormElements';
 import {generatePatientId, generateToken, searchPatients} from '@/lib/hmsLogic';
