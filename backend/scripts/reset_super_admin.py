@@ -14,8 +14,8 @@ from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
 SUPER_ADMIN_NAME = os.getenv("MEDIZINHUB_SUPER_ADMIN_NAME", "Platform Super Admin")
-SUPER_ADMIN_EMAIL = os.getenv("MEDIZINHUB_SUPER_ADMIN_EMAIL", "admin@medizinhub.local").lower()
-SUPER_ADMIN_PASSWORD = os.getenv("MEDIZINHUB_SUPER_ADMIN_PASSWORD", "ChangeMe@123")
+SUPER_ADMIN_EMAIL = os.getenv("MEDIZINHUB_SUPER_ADMIN_EMAIL", "amarnath.manivel@teanso.com").lower()
+SUPER_ADMIN_PASSWORD = os.getenv("MEDIZINHUB_SUPER_ADMIN_PASSWORD", "Admin@123")
 
 
 def ensure_primary_tenant(session: Session) -> Tenant:

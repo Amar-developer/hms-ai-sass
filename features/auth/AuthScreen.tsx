@@ -128,7 +128,7 @@ export function AuthScreen({ role, setRole, onLogin, demoUsers, loginPresets }: 
                   {error}
                 </div>
               )}
-              <Button disabled={loading} className="w-full">
+              <Button disabled={loading} className="w-full py-2 px-2 lg:py-3 lg:px-4 rounded-lg text-xs lg:text-sm ">
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>

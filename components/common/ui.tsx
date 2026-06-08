@@ -215,7 +215,7 @@ export function Input({ className = "", onKeyDown, ...props }: any) {
         event.preventDefault();
         submitNearestFormOnEnter(event);
       }}
-      className={`w-full rounded-2xl border border-slate-200 px-2 py-1.5 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 ${className}`}
+      className={`w-full rounded-lg border border-slate-200 px-2 py-1.5 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 ${className}`}
     />
   );
 }
@@ -285,7 +285,7 @@ export function Select(props: any) {
   return (
     <select
       {...props}
-      className={`w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 ${props.className || ""}`}
+      className={`w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 ${props.className || ""}`}
     >
       {props.children}
     </select>

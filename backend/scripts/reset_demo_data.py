@@ -22,10 +22,14 @@ def reset_all_data() -> None:
     with engine.begin() as connection:
         if engine.url.drivername.startswith("sqlite"):
             connection.execute(text("PRAGMA foreign_keys=OFF"))
-        for table in reversed(SQLModel.metadata.sorted_tables):
-            connection.execute(table.delete())
-        if engine.url.drivername.startswith("sqlite"):
+            for table in reversed(SQLModel.metadata.sorted_tables):
+                connection.execute(table.delete())
             connection.execute(text("PRAGMA foreign_keys=ON"))
+        else:
+            table_names = ", ".join(
+                f'"{t.name}"' for t in SQLModel.metadata.sorted_tables
+            )
+            connection.execute(text(f"TRUNCATE {table_names} RESTART IDENTITY CASCADE"))
 
 
 def main() -> None:

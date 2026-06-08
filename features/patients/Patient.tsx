@@ -501,7 +501,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
           <DateField label="To" value={toDate} onChange={setToDate} />
           <div className="flex items-end gap-2">
             <Button
-              className="min-h-[46px] px-5"
+              className="min-h-[46px] px-5 text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"
               onClick={() => {
                 setPage(1);
                 loadData(tenantId);
@@ -522,7 +522,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
                 setPage(1);
                 setTimeout(() => loadData(tenantId), 0);
               }}
-              className="min-h-[46px] rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
+              className="min-h-[46px] text-xs lg:text-sm px-2 py-1 lg:px-4 lg:py-3 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50"
             >
               Reset
             </button>

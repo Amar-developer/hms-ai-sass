@@ -1084,7 +1084,7 @@ function PractitionerPicker({ doctors, value, onChange }: any) {
 
 function Empty({ text }: any) {
   return (
-    <div className="px-4 py-8 text-center text-sm text-slate-500">{text}</div>
+    <div className="px-4 py-8 text-center text-xs lg:text-sm text-slate-500">{text}</div>
   );
 }
 function Pagination({ page, totalPages, total, onPage }: any) {

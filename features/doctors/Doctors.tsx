@@ -14,11 +14,7 @@ import {
   StatusToast,
 } from "@/components/common/ui";
 import { apiFetch } from "@/lib/api";
-import {
-  NumberField,
-  SelectField,
-  TextField,
-} from "@/components/FormElements";
+import { NumberField, SelectField, TextField } from "@/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
 
 const doctorTypes = [
@@ -55,7 +51,9 @@ export function Doctors({ apiSession, clinic }: any) {
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
-    const tenantRows = activeTenantOptions(await apiFetch("/tenants", apiSession));
+    const tenantRows = activeTenantOptions(
+      await apiFetch("/tenants", apiSession),
+    );
     setTenants(tenantRows);
     if (!tenantId || !tenantRows.some((tenant: any) => tenant.id === tenantId))
       setTenantId(
@@ -138,7 +136,10 @@ export function Doctors({ apiSession, clinic }: any) {
                 : null,
             fee_amount: feeAmount,
             share_type: "percentage",
-            doctor_share_percentage: Math.min(100, Math.max(0, doctorSharePercentage)),
+            doctor_share_percentage: Math.min(
+              100,
+              Math.max(0, doctorSharePercentage),
+            ),
             doctor_fixed_amount: null,
             share_tax_with_doctor: data.shareTaxWithDoctor === "true",
           }),
@@ -168,7 +169,9 @@ export function Doctors({ apiSession, clinic }: any) {
         }),
       });
       await saveDoctorFeeRules(created.id, data).catch((err: any) => {
-        setMessage(err.message || "Doctor created, but fee rule could not be saved.");
+        setMessage(
+          err.message || "Doctor created, but fee rule could not be saved.",
+        );
       });
       setRows((previous: any[]) => [
         created,
@@ -210,7 +213,9 @@ export function Doctors({ apiSession, clinic }: any) {
         },
       );
       await saveDoctorFeeRules(updated.id, data).catch((err: any) => {
-        setMessage(err.message || "Doctor updated, but fee rule could not be saved.");
+        setMessage(
+          err.message || "Doctor updated, but fee rule could not be saved.",
+        );
       });
       setRows((previous: any[]) => [
         updated,
@@ -284,8 +289,8 @@ export function Doctors({ apiSession, clinic }: any) {
   if (!apiSession)
     return (
       <Card>
-        <h3 className="text-lg font-bold">Doctor Management</h3>
-        <p className="mt-2 text-sm text-slate-500">
+        <h3 className="text-base lg:text-lg font-bold">Doctor Management</h3>
+        <p className="mt-2 text-xs lg:text-sm text-slate-500">
           Backend login is required for doctor CRUD.
         </p>
       </Card>
@@ -355,20 +360,22 @@ export function Doctors({ apiSession, clinic }: any) {
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-lg font-bold">Doctor Management</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="text-base lg:text-lg font-bold">Doctor Management</h3>
+          <p className="text-xs lg:text-sm text-slate-500">
             Create, update, deactivate, and map doctors to tenants, branches,
             and medical departments.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => open("create")}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
-        >
-          <Plus size={16} />
-          Create Doctor
-        </button>
+        <div className="flex justify-center items-center">
+          <button
+            type="button"
+            onClick={() => open("create")}
+            className="inline-flex items-center justify-center gap-2 rounded-lg w-2/4 lg:w-full bg-slate-900 px-4 py-3 text-xs lg:text-sm font-bold text-white"
+          >
+            <Plus size={16} />
+            Create Doctor
+          </button>
+        </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
@@ -383,13 +390,19 @@ export function Doctors({ apiSession, clinic }: any) {
         <TextField
           label="Search"
           value={query}
-          onChange={(v) => { setQuery(v); setPage(1); }}
+          onChange={(v) => {
+            setQuery(v);
+            setPage(1);
+          }}
           placeholder="Name, specialty, mobile, email"
         />
         <SelectField
           label="Type"
           value={type}
-          onChange={(v) => { setType(v); setPage(1); }}
+          onChange={(v) => {
+            setType(v);
+            setPage(1);
+          }}
           options={[
             { value: "all", label: "All types" },
             ...doctorTypes.map(([value, label]) => ({ value, label })),
@@ -398,7 +411,10 @@ export function Doctors({ apiSession, clinic }: any) {
         <SelectField
           label="Status"
           value={status}
-          onChange={(v) => { setStatus(v); setPage(1); }}
+          onChange={(v) => {
+            setStatus(v);
+            setPage(1);
+          }}
           options={[
             { value: "all", label: "All status" },
             { value: "active", label: "Active" },
@@ -467,7 +483,9 @@ function activeTenantOptions(tenants: any[]) {
   const seen = new Set<string>();
   return (tenants || []).filter((tenant: any) => {
     if (tenant.status === "suspended") return false;
-    const key = String(tenant.name || tenant.id || "").trim().toLowerCase();
+    const key = String(tenant.name || tenant.id || "")
+      .trim()
+      .toLowerCase();
     if (key && seen.has(key)) return false;
     if (key) seen.add(key);
     return true;
@@ -515,8 +533,9 @@ function DoctorForm({
 }: any) {
   const initialDepartmentIds = doctor?.department_ids || [];
   const initialDepartmentName =
-    departments.find((department: any) => department.id === initialDepartmentIds[0])
-      ?.name || "";
+    departments.find(
+      (department: any) => department.id === initialDepartmentIds[0],
+    )?.name || "";
   const [practitionerType, setPractitionerType] = useState(
     doctor?.practitioner_type || "doctor",
   );
@@ -527,9 +546,8 @@ function DoctorForm({
   const [selectedBranches, setSelectedBranches] = useState<string[]>(
     doctor?.branch_ids || [],
   );
-  const [selectedDepartments, setSelectedDepartments] = useState<string[]>(
-    initialDepartmentIds,
-  );
+  const [selectedDepartments, setSelectedDepartments] =
+    useState<string[]>(initialDepartmentIds);
   const [primarySpecialty, setPrimarySpecialty] = useState(
     doctor?.primary_specialty || initialDepartmentName,
   );
@@ -537,9 +555,13 @@ function DoctorForm({
     Boolean(doctor?.primary_specialty),
   );
   const activeFeeRule = activeDoctorFeeRule(feeRules, doctor);
-  const [registrationNumber, setRegistrationNumber] = useState(doctor?.registration_number || "");
+  const [registrationNumber, setRegistrationNumber] = useState(
+    doctor?.registration_number || "",
+  );
   const [status, setStatus] = useState(doctor?.status || "active");
-  const [consultationFee, setConsultationFee] = useState(String(activeFeeRule?.fee_amount ?? ""));
+  const [consultationFee, setConsultationFee] = useState(
+    String(activeFeeRule?.fee_amount ?? ""),
+  );
   const [doctorSharePercentage, setDoctorSharePercentage] = useState(
     String(activeFeeRule?.doctor_share_percentage ?? 70),
   );
@@ -573,10 +595,12 @@ function DoctorForm({
   }
   function handleDepartmentsChange(next: string[]) {
     const previousFirst =
-      departments.find((department: any) => department.id === selectedDepartments[0])
-        ?.name || "";
+      departments.find(
+        (department: any) => department.id === selectedDepartments[0],
+      )?.name || "";
     const nextFirst =
-      departments.find((department: any) => department.id === next[0])?.name || "";
+      departments.find((department: any) => department.id === next[0])?.name ||
+      "";
     setSelectedDepartments(next);
     if (
       !specialtyTouched ||
@@ -593,7 +617,8 @@ function DoctorForm({
         <div>
           <h3 className="text-lg font-bold">{title}</h3>
           <p className="text-sm text-slate-500">
-            {doctor?.id || "Map doctor to branch and medical department availability."}
+            {doctor?.id ||
+              "Map doctor to branch and medical department availability."}
           </p>
         </div>
         <button
@@ -707,7 +732,11 @@ function DoctorForm({
           />
         )}
         <NumberField
-          label={isPhysiotherapist ? "Physiotherapy / Session Price" : "OP Consultation Fee"}
+          label={
+            isPhysiotherapist
+              ? "Physiotherapy / Session Price"
+              : "OP Consultation Fee"
+          }
           value={consultationFee}
           onChange={setConsultationFee}
           min={0}
