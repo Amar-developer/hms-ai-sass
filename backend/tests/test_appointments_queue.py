@@ -76,6 +76,33 @@ def test_tokens_are_generated_per_selected_appointment_date(client: TestClient):
     assert future.json()["queue_entry"]["token_number"] == "N-001"
 
 
+def test_repeated_appointment_create_with_idempotency_key_replays_first_response(client: TestClient):
+    tenant = create_tenant(client)
+    branch = create_branch(client, tenant["id"])
+    patient = create_patient(client, tenant["id"], "Idempotent Patient")
+    headers = {"X-Tenant-ID": tenant["id"], "X-Idempotency-Key": "appointment-submit-1"}
+    payload = {
+        "branch_id": branch["id"],
+        "patient_id": patient["id"],
+        "appointment_type": "op",
+        "appointment_date": date.today().isoformat(),
+        "reason": "Fever",
+    }
+
+    first = client.post("/api/v1/appointments", headers=headers, json=payload)
+    second = client.post("/api/v1/appointments", headers=headers, json=payload)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.headers["x-idempotency-replayed"] == "true"
+    assert second.json()["appointment"]["id"] == first.json()["appointment"]["id"]
+    assert second.json()["queue_entry"]["token_number"] == first.json()["queue_entry"]["token_number"]
+
+    listed = client.get("/api/v1/appointments", headers={"X-Tenant-ID": tenant["id"]})
+    assert listed.status_code == 200
+    assert [row["id"] for row in listed.json()] == [first.json()["appointment"]["id"]]
+
+
 def test_list_appointments_supports_patient_search_date_and_department_filters(client: TestClient):
     tenant = create_tenant(client)
     branch = create_branch(client, tenant["id"])

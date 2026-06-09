@@ -1,14 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
-import {
-  Badge,
-  Button,
-  Card,
-  Field,
-  Input,
-  Select,
-} from "@/components/common/ui";
+import { Pencil } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Badge, Button, Card, Field, Input, Select } from "@/components/common/ui";
 import { tenantTypes } from "../../../utils/superAdmin/constants";
 import {
   invoiceLimitLabel,
@@ -53,7 +47,7 @@ function OnboardingReview({ draft, validSteps, steps, onEdit }: any) {
         {steps.slice(0, 5).map((label: string, index: number) => (
           <div
             key={label}
-            className={`rounded-lg border p-4 ${validSteps[index] ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}
+            className={`rounded-2xl border p-4 ${validSteps[index] ? "border-success-border bg-success-subtle" : "border-danger-border bg-danger-subtle"}`}
           >
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -273,6 +267,7 @@ export function CreateTenantForm({
 }: any) {
   const [branches, setBranches] = useState([{ id: Date.now() }]);
   const [step, setStep] = useState(0);
+  const [maxStepReached, setMaxStepReached] = useState(0);
   const [, setReviewTick] = useState(0);
   const formRef = useRef<HTMLFormElement | null>(null);
   const steps = [
@@ -317,6 +312,10 @@ export function CreateTenantForm({
     step >= validSteps.length ? allSetupValid : validSteps[step];
   const furthestStep = allSetupValid ? steps.length - 1 : firstInvalidStep;
 
+  useEffect(() => {
+    setMaxStepReached((previous) => Math.max(previous, step));
+  }, [step]);
+
   function refreshDraft() {
     setReviewTick((value) => value + 1);
   }
@@ -358,19 +357,35 @@ export function CreateTenantForm({
         </div>
         <div className="flex flex-wrap gap-2">
           {steps.map((label, index) => {
-            const complete =
+            const stepValid =
               index < validSteps.length ? validSteps[index] : allSetupValid;
+            // Only show the green tick once the user has actually advanced past
+            // the step — otherwise later steps that pass on default values
+            // (default plan, optional templates) look "complete" before they
+            // are ever visited.
+            const complete = stepValid && index < maxStepReached;
             const locked = index > furthestStep && index > step;
+            const editable = complete && index !== step;
             return (
               <button
                 key={label}
                 type="button"
                 onClick={() => goToStep(index)}
                 disabled={locked}
-                className={`rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[10px] lg:text-xs font-bold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 ${step === index ? "bg-slate-900 text-white" : complete ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                title={editable ? "Go back and edit this step" : undefined}
+                className={`group inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 ${step === index ? "bg-brand text-brand-fg" : complete ? "bg-success-subtle text-success-fg hover:bg-success-soft" : "bg-slate-100 text-slate-600"}`}
               >
-                {index + 1}. {label}
-                {complete && index !== step ? " ✓" : ""}
+                <span>
+                  {index + 1}. {label}
+                  {editable ? " ✓" : ""}
+                </span>
+                {editable && (
+                  <Pencil
+                    size={12}
+                    className="opacity-60 transition group-hover:opacity-100"
+                    aria-label="Edit step"
+                  />
+                )}
               </button>
             );
           })}

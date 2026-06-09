@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DateInput } from "@/components/common/ui";
 
 // ─── Shared Types ────────────────────────────────────────────────────────────
 
@@ -169,8 +170,7 @@ export function DateField({
 }: DateFieldProps) {
   return (
     <FormField label={label} error={error} hint={hint} required={required} className={className}>
-      <input
-        type="date"
+      <DateInput
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required={required}

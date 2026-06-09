@@ -4,6 +4,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {ActionButton,Badge,Button,Card,Input,Select,StatusToast} from '@/components/common/ui';
 import {FormField} from '@/components/FormElements';
 import {apiFetch} from '@/lib/api';
+import {displayDate} from '@/utils/helper';
 
 function money(value:any){return `₹${Number(value||0).toLocaleString('en-IN')}`}
 function codeFromName(prefix:string,name:string){const clean=String(name||'ITEM').replace(/[^a-z0-9]/gi,'').toUpperCase().slice(0,18)||'ITEM';return `${prefix}${clean}${Date.now().toString().slice(-4)}`.slice(0,40)}
@@ -405,7 +406,7 @@ function ActiveEnrollmentsTable({rows,patientMap,branchName}:any){
     <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500"><tr><th className="px-4 py-3">#</th><th>Patient</th><th>Plan</th><th>Branch</th><th>Validity</th><th className="text-right">Paid</th><th>Status</th></tr></thead>
     <tbody className="divide-y divide-slate-200">
      {pageRows.length===0&&<tr><td colSpan={7} className="px-4 py-4 text-slate-500">No active enrollments yet.</td></tr>}
-     {pageRows.map((row:any,index:number)=><tr key={row.id} className="hover:bg-slate-50"><td className="px-4 py-4 font-semibold text-slate-500">{(safePage-1)*enrollmentPageSize+index+1}</td><td><b>{patientMap.get(row.patient_id)?.name||patientMap.get(row.patient_id)?.full_name||'Patient'}</b><p className="text-xs text-slate-500">{patientMap.get(row.patient_id)?.patient_number||''}</p></td><td><b>{row.plan?.name||'Membership plan'}</b>{row.plan?.code&&<p className="text-xs text-slate-500">{row.plan.code}</p>}</td><td>{branchName(row.branch_id)}</td><td>{row.starts_on} to {row.ends_on}</td><td className="text-right font-semibold tabular-nums">{money(row.paid_amount)}</td><td><Badge tone="green">{row.status}</Badge></td></tr>)}
+     {pageRows.map((row:any,index:number)=><tr key={row.id} className="hover:bg-slate-50"><td className="px-4 py-4 font-semibold text-slate-500">{(safePage-1)*enrollmentPageSize+index+1}</td><td><b>{patientMap.get(row.patient_id)?.name||patientMap.get(row.patient_id)?.full_name||'Patient'}</b><p className="text-xs text-slate-500">{patientMap.get(row.patient_id)?.patient_number||''}</p></td><td><b>{row.plan?.name||'Membership plan'}</b>{row.plan?.code&&<p className="text-xs text-slate-500">{row.plan.code}</p>}</td><td>{branchName(row.branch_id)}</td><td>{displayDate(row.starts_on)} to {displayDate(row.ends_on)}</td><td className="text-right font-semibold tabular-nums">{money(row.paid_amount)}</td><td><Badge tone="green">{row.status}</Badge></td></tr>)}
     </tbody>
    </table>
   </div>

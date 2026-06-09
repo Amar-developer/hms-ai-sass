@@ -8,8 +8,8 @@ from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import Invoice, InvoiceItem
-from app.modules.billing.service import next_invoice_number
+from app.modules.billing.models import Invoice, InvoiceItem, Payment
+from app.modules.billing.service import next_invoice_number, update_invoice_payment_status
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.patient_subscriptions.models import (
@@ -283,6 +283,9 @@ def enroll_patient(
     )
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Patient already has an active subscription")
+    paid_now = int(payload.paid_amount or 0)
+    if paid_now > plan.price_amount:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Paid amount cannot exceed plan price")
     enrollment = PatientSubscriptionEnrollment(
         tenant_id=tenant_id,
         branch_id=branch_id,
@@ -290,7 +293,7 @@ def enroll_patient(
         plan_id=payload.plan_id,
         starts_on=payload.starts_on,
         ends_on=enrollment_end_date(payload.starts_on, plan),
-        paid_amount=payload.paid_amount if payload.paid_amount is not None else plan.price_amount,
+        paid_amount=0,
         created_by_user_id=payload.created_by_user_id,
     )
     session.add(enrollment)
@@ -304,14 +307,14 @@ def enroll_patient(
         patient_subscription_plan_id=plan.id,
         invoice_number=next_invoice_number(session, tenant_id, branch_id=enrollment.branch_id),
         subtotal_amount=plan.price_amount,
-        discount_amount=max(plan.price_amount - enrollment.paid_amount, 0),
-        taxable_amount=enrollment.paid_amount,
+        discount_amount=0,
+        taxable_amount=plan.price_amount,
         tax_amount=0,
-        total_amount=enrollment.paid_amount,
+        total_amount=plan.price_amount,
         paid_amount=0,
-        balance_amount=enrollment.paid_amount,
+        balance_amount=plan.price_amount,
         doctor_share_amount=0,
-        clinic_share_amount=enrollment.paid_amount,
+        clinic_share_amount=plan.price_amount,
         created_by_user_id=payload.created_by_user_id,
     )
     session.add(invoice)
@@ -331,6 +334,22 @@ def enroll_patient(
     enrollment.purchase_invoice_id = invoice.id
     session.add(enrollment)
     session.commit()
+    if paid_now > 0:
+        session.add(
+            Payment(
+                tenant_id=tenant_id,
+                branch_id=enrollment.branch_id,
+                invoice_id=invoice.id,
+                method=payload.payment_method,
+                amount=paid_now,
+                collected_by_user_id=payload.created_by_user_id or current_user.id,
+            )
+        )
+        session.commit()
+        invoice = update_invoice_payment_status(session, invoice)
+        enrollment.paid_amount = invoice.paid_amount
+        session.add(enrollment)
+        session.commit()
     session.refresh(enrollment)
     record_audit_event(
         session,

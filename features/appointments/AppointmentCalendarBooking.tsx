@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarPlus, Search, X } from "lucide-react";
 
 import {
@@ -32,6 +32,7 @@ import {
   PatientFormFields,
   patientFormPayload,
 } from "@/features/patients/PatientFormFields";
+import { displayDate } from "@/utils/helper";
 
 type Props = {
   clinic: any;
@@ -115,6 +116,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [booked, setBooked] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const bookingInFlightRef = useRef(false);
   const [message, setMessage] = useState("");
   const [platformTenants, setPlatformTenants] = useState<any[]>([]);
   const [platformTenantId, setPlatformTenantId] = useState("");
@@ -147,14 +149,34 @@ export function AppointmentCalendarBooking(props: Props) {
     );
   });
   const filteredAppointments = appointments.filter((appointment: any) => {
-    const patient = patientMap.get(appointment.patientId);
+    const patient = patientMap.get(appointment.patientId || appointment.patient_id);
     const text = [
       appointment.patient,
+      appointment.patient_name,
+      appointment.patient_number,
+      appointment.patient_mobile,
+      appointment.mobile,
+      appointment.token_number,
+      patient?.id,
+      patient?.name,
+      patient?.full_name,
+      patient?.patient_number,
       patient?.mobile,
+      patient?.alternate_mobile,
+      patient?.guardian_name,
+      patient?.guardian,
+      patient?.guardian_mobile,
+      patient?.guardianMobile,
+      patient?.area,
+      patient?.address,
       appointment.departmentId,
+      appointment.department_id,
+      appointment.department_name,
       appointment.doctor,
+      appointment.practitioner_name,
       appointment.status,
       appointment.consultationStatus,
+      appointment.consultation_status,
     ]
       .join(" ")
       .toLowerCase();
@@ -613,6 +635,7 @@ export function AppointmentCalendarBooking(props: Props) {
   }
 
   async function bookAppointment() {
+    if (bookingInFlightRef.current) return;
     if (!selectedPatient) return;
     if (!doctorId) {
       setMessage(
@@ -624,6 +647,7 @@ export function AppointmentCalendarBooking(props: Props) {
       setMessage("Select an available timing slot.");
       return;
     }
+    bookingInFlightRef.current = true;
     setBusy(true);
     setMessage("");
     try {
@@ -719,6 +743,7 @@ export function AppointmentCalendarBooking(props: Props) {
     } catch (err: any) {
       setMessage(err.message || "Could not book appointment.");
     } finally {
+      bookingInFlightRef.current = false;
       setBusy(false);
     }
   }
@@ -1292,7 +1317,7 @@ export function AppointmentCalendarBooking(props: Props) {
                   <span>{appointment.department_name || "-"}</span>
                   <span>{appointment.practitioner_name || "-"}</span>
                   <span>
-                    {appointment.appointment_date}
+                    {displayDate(appointment.appointment_date)}
                     {appointment.appointment_time
                       ? ` ${String(appointment.appointment_time).slice(0, 5)}`
                       : ""}

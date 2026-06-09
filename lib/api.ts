@@ -13,9 +13,64 @@ export type ApiSession = {
 
 export const AUTH_SESSION_EXPIRED_EVENT = 'medizinhub.auth.sessionExpired';
 
+const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const IDEMPOTENCY_KEY_TTL_MS = 2 * 60 * 1000;
+const idempotencyKeys = new Map<string, { key: string; expiresAt: number }>();
+
 function notifySessionExpired() {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT));
+}
+
+function cleanupIdempotencyKeys(now = Date.now()) {
+  for (const [signature, cached] of idempotencyKeys.entries()) {
+    if (cached.expiresAt <= now) idempotencyKeys.delete(signature);
+  }
+}
+
+function hashText(value: string) {
+  let hash = 5381;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 33) ^ value.charCodeAt(index);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function requestBodySignature(body: BodyInit | null | undefined) {
+  if (typeof body === 'string') return body;
+  if (!body) return '';
+  return String(body);
+}
+
+function idempotencyKeyFor(path: string, session: ApiSession, options: RequestInit) {
+  const method = String(options.method || 'GET').toUpperCase();
+  if (!IDEMPOTENT_METHODS.has(method)) return null;
+  const headers = new Headers(options.headers || {});
+  if (headers.has('X-Idempotency-Key')) return null;
+
+  cleanupIdempotencyKeys();
+  const signature = [
+    session.tenantId,
+    session.user?.id || session.email || '',
+    method,
+    path,
+    requestBodySignature(options.body),
+  ].join('\n');
+  const existing = idempotencyKeys.get(signature);
+  if (existing) {
+    existing.expiresAt = Date.now() + IDEMPOTENCY_KEY_TTL_MS;
+    return existing.key;
+  }
+  const randomPart =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const key = `mh-${hashText(signature)}-${randomPart}`;
+  idempotencyKeys.set(signature, {
+    key,
+    expiresAt: Date.now() + IDEMPOTENCY_KEY_TTL_MS,
+  });
+  return key;
 }
 
 async function readErrorDetail(res: Response) {
@@ -34,6 +89,7 @@ async function readErrorDetail(res: Response) {
 
 export async function apiFetch(path: string, session: ApiSession, options: RequestInit = {}) {
   let res: Response;
+  const idempotencyKey = idempotencyKeyFor(path, session, options);
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
@@ -41,6 +97,7 @@ export async function apiFetch(path: string, session: ApiSession, options: Reque
         'Content-Type': 'application/json',
         Authorization: `Bearer ${session.token}`,
         'X-Tenant-ID': session.tenantId,
+        ...(idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {}),
         ...(options.headers || {}),
       },
     });

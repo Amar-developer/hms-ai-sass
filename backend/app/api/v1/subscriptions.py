@@ -162,16 +162,30 @@ def _record_platform_audit(
 
 
 def _usage_read(session: Session, tenant_id: str) -> SubscriptionUsageRead:
-    subscription, plan = get_active_subscription(session, tenant_id)
+    try:
+        subscription, plan = get_active_subscription(session, tenant_id)
+        missing_subscription_reason = None
+    except HTTPException as exc:
+        if exc.status_code != status.HTTP_402_PAYMENT_REQUIRED:
+            raise
+        subscription = session.exec(
+            select(TenantSubscription)
+            .where(TenantSubscription.tenant_id == tenant_id)
+            .order_by(TenantSubscription.ends_on.desc(), TenantSubscription.updated_at.desc())
+        ).first()
+        plan = session.get(SubscriptionPlan, subscription.plan_id) if subscription else None
+        missing_subscription_reason = str(exc.detail or "No active subscription found")
     patient_count = current_patient_count(session, tenant_id)
     credits = active_patient_credits(session, tenant_id)
-    limit = effective_patient_limit(session, tenant_id, plan)
+    limit = (plan.monthly_patient_limit if plan else 0) + credits
     remaining = max(limit - patient_count, 0)
-    days_to_expiry = (subscription.ends_on - date.today()).days if subscription.ends_on else None
+    days_to_expiry = (subscription.ends_on - date.today()).days if subscription and subscription.ends_on else None
     usage_percentage = round((patient_count / limit) * 100, 2) if limit else 100.0
     alerts = []
+    if missing_subscription_reason:
+        alerts.append(missing_subscription_reason)
     if days_to_expiry is not None and days_to_expiry <= 7:
-        alerts.append("Plan expires within 7 days")
+        alerts.append("Plan has expired" if days_to_expiry < 0 else "Plan expires within 7 days")
     if remaining == 0:
         alerts.append("Patient limit reached")
     elif usage_percentage >= 90:
@@ -180,12 +194,12 @@ def _usage_read(session: Session, tenant_id: str) -> SubscriptionUsageRead:
         alerts.append("Usage is above 75 percent")
     return SubscriptionUsageRead(
         tenant_id=tenant_id,
-        plan_key=plan.key,
-        plan_name=plan.name,
-        subscription_status=subscription.status,
-        starts_on=subscription.starts_on,
-        ends_on=subscription.ends_on,
-        monthly_patient_limit=plan.monthly_patient_limit,
+        plan_key=plan.key if plan else "no_active_subscription",
+        plan_name=plan.name if plan else "No active subscription",
+        subscription_status=subscription.status if subscription else SubscriptionStatus.EXPIRED,
+        starts_on=subscription.starts_on if subscription else date.today(),
+        ends_on=subscription.ends_on if subscription else None,
+        monthly_patient_limit=plan.monthly_patient_limit if plan else 0,
         additional_patient_credits=credits,
         effective_patient_limit=limit,
         current_patient_count=patient_count,

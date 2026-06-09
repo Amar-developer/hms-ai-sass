@@ -13,24 +13,118 @@ import { FormField } from "@/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
 import { humanizeOptionLabel } from "@/lib/options";
-import {
-  displayTime,
-  displayDate,
-  statusKey,
-  appointmentDateKey,
-  asArray,
-  splitRows,
-  appendLine,
-  labTestNames,
-} from "@/utils/doctorConsultation/helpers";
-import {
-  isWaitingAppointment,
-  isCompletedAppointment,
-  isCancelledAppointment,
-} from "@/utils/doctorConsultation/constants";
+import { displayDate as formatDisplayDate } from "@/utils/helper";
 import { ConsultationWorkspace } from "@/components/doctorConsultation/ConsultationWorkspace";
 import { DoctorMetric } from "@/components/doctorConsultation/DoctorMetric";
 import { ScheduleList } from "@/components/doctorConsultation/ScheduleList";
+import {
+  appendLine,
+  labTestNames,
+  splitRows,
+} from "@/utils/doctorConsultation/helpers";
+
+function displayTime(value: any) {
+  const raw = String(value || "").slice(0, 5);
+  const [hourText, minuteText = "00"] = raw.split(":");
+  const hour = Number(hourText);
+  if (Number.isNaN(hour)) return raw || "-";
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:${minuteText.padStart(2, "0")} ${period}`;
+}
+
+function displayDate(value: any) {
+  return formatDisplayDate(value, "Today");
+}
+
+function toneForQueue(status: string) {
+  if (["Emergency Queue", "emergency"].includes(status)) return "red";
+  if (["Called", "in_consultation"].includes(status)) return "blue";
+  if (["Completed", "Done"].includes(status)) return "green";
+  return "amber";
+}
+
+function statusKey(value: any) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replaceAll(" ", "_");
+}
+
+function appointmentDateKey(row: any) {
+  return String(row.appointmentDate || row.appointment_date || "").slice(0, 10);
+}
+
+function isWaitingAppointment(row: any) {
+  const status = statusKey(row.status);
+  const queue = statusKey(row.queueStatus || row.queue_status);
+  return (
+    [
+      "scheduled",
+      "confirmed",
+      "checked_in",
+      "waiting",
+      "called",
+      "patient_not_available",
+      "requeued",
+      "in_consultation",
+      "in_queue",
+      "emergency_queue",
+    ].includes(status) ||
+    [
+      "scheduled",
+      "confirmed",
+      "checked_in",
+      "waiting",
+      "called",
+      "patient_not_available",
+      "requeued",
+      "in_consultation",
+      "in_queue",
+      "emergency_queue",
+    ].includes(queue)
+  );
+}
+
+function isCompletedAppointment(row: any) {
+  const status = statusKey(row.status);
+  const queue = statusKey(row.queueStatus || row.queue_status);
+  const consultation = statusKey(
+    row.consultationStatus || row.consultation_status,
+  );
+  return (
+    [
+      "consultation_completed",
+      "billed",
+      "consultation_done",
+      "seen",
+      "completed",
+      "done",
+    ].includes(status) ||
+    [
+      "consultation_completed",
+      "billed",
+      "consultation_done",
+      "seen",
+      "completed",
+      "done",
+    ].includes(queue) ||
+    consultation === "signed"
+  );
+}
+
+function isCancelledAppointment(row: any) {
+  const status = statusKey(row.status);
+  const queue = statusKey(row.queueStatus || row.queue_status);
+  return (
+    ["cancelled", "canceled", "no_show"].includes(status) ||
+    ["cancelled", "canceled", "no_show"].includes(queue)
+  );
+}
+
+function asArray(value: any) {
+  return Array.isArray(value) ? value.filter(Boolean) : value ? [value] : [];
+}
 
 export function DoctorConsultation({
   clinic,
@@ -471,7 +565,7 @@ export function DoctorConsultation({
           }
         }
       } catch {
-        // silently ignore — form stays blank, user can re-enter
+
       }
     }
     loadConsultationData();

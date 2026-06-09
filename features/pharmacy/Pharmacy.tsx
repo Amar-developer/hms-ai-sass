@@ -19,6 +19,7 @@ import {
 import { SearchPicker } from "@/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { Column, DataTable } from "@/components/reports/DataTable";
+import { displayDate, displayDateTime } from "@/utils/helper";
 
 const pageSize = 10;
 
@@ -761,7 +762,7 @@ export function Pharmacy({
                       <b>{(safePage - 1) * pageSize + index + 1}</b>
                     </td>
                     <td>
-                      <b>{new Date(issue.created_at).toLocaleDateString()}</b>
+                      <b>{displayDate(issue.created_at)}</b>
                       <p className="text-xs text-slate-500">
                         {new Date(issue.created_at).toLocaleTimeString([], {
                           hour: "2-digit",
@@ -1013,9 +1014,7 @@ function MedicineDetailModal({ issue, apiSession, patient, onClose }: any) {
             <h3 className="text-xl font-bold">Medicine List</h3>
             <p className="mt-1 text-sm text-slate-500">{patient}</p>
             <p className="text-xs text-slate-500">
-              {issue?.created_at
-                ? new Date(issue.created_at).toLocaleString()
-                : ""}
+              {issue?.created_at ? displayDateTime(issue.created_at) : ""}
             </p>
           </div>
           <ActionButton onClick={onClose}>Close</ActionButton>

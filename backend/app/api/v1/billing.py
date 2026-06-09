@@ -79,6 +79,7 @@ from app.modules.identity.models import User
 from app.modules.integrations.frappe import FrappeCatalogClient
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
+from app.modules.patient_subscriptions.models import PatientSubscriptionEnrollment
 from app.modules.patients.models import Patient
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
@@ -121,6 +122,21 @@ def _sync_home_care_booking_status(session: Session, invoice: Invoice) -> None:
     booking.status = target_status
     booking.updated_at = now_utc()
     session.add(booking)
+    session.commit()
+
+
+def _sync_patient_membership_payment(session: Session, invoice: Invoice) -> None:
+    if not invoice.patient_subscription_enrollment_id:
+        return
+    enrollment = session.get(PatientSubscriptionEnrollment, invoice.patient_subscription_enrollment_id)
+    if not enrollment or enrollment.tenant_id != invoice.tenant_id:
+        return
+    paid_amount = max(0, min(int(invoice.paid_amount or 0), int(invoice.total_amount or 0)))
+    if enrollment.paid_amount == paid_amount:
+        return
+    enrollment.paid_amount = paid_amount
+    enrollment.updated_at = datetime.now(timezone.utc)
+    session.add(enrollment)
     session.commit()
 
 
@@ -1596,6 +1612,7 @@ def record_payment(
     invoice = update_invoice_payment_status(session, invoice)
     _sync_physiotherapy_case_status(session, invoice)
     _sync_home_care_booking_status(session, invoice)
+    _sync_patient_membership_payment(session, invoice)
     patient = session.get(Patient, invoice.patient_id)
     if invoice.balance_amount > 0 and patient:
         for provider in (NotificationProvider.WHATSAPP, NotificationProvider.SMS):
@@ -1653,6 +1670,7 @@ def refund_payment(
     invoice = update_invoice_payment_status(session, invoice)
     _sync_physiotherapy_case_status(session, invoice)
     _sync_home_care_booking_status(session, invoice)
+    _sync_patient_membership_payment(session, invoice)
     if refundable_paid_total(session, invoice) == 0:
         invoice.status = InvoiceStatus.REFUNDED
         session.add(invoice)

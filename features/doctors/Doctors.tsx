@@ -592,6 +592,7 @@ function DoctorForm({
     setEmail(user.email || "");
     setMobile(user.mobile || "");
     if (user.branch_id) setSelectedBranches([user.branch_id]);
+    else if (branches.length) setSelectedBranches(branches.map((branch: any) => branch.id));
   }
   function handleDepartmentsChange(next: string[]) {
     const previousFirst =
@@ -632,6 +633,12 @@ function DoctorForm({
       <form
         onSubmit={(event: any) => {
           event.preventDefault();
+          if (branches.length > 0 && selectedBranches.length === 0) {
+            window.alert(
+              "Select at least one branch (or tick 'All branches') so the doctor can be booked.",
+            );
+            return;
+          }
           const fd = new FormData(event.currentTarget);
           onSubmit({
             userId: selectedUserId,
@@ -767,6 +774,7 @@ function DoctorForm({
             selected={selectedBranches}
             onChange={setSelectedBranches}
             empty="Create branches before mapping doctors."
+            allLabel="All branches"
           />
         </div>
         <div className="md:col-span-2 xl:col-span-3">
@@ -873,8 +881,9 @@ function formatPractitionerName(row: any) {
   return `${withoutSuffix}, PT`;
 }
 
-function CheckboxGroup({ title, name, rows, selected, onChange, empty }: any) {
+function CheckboxGroup({ title, name, rows, selected, onChange, empty, allLabel }: any) {
   const selectedSet = new Set(selected || []);
+  const allSelected = rows.length > 0 && rows.every((row: any) => selectedSet.has(row.id));
   function toggle(rowId: string, checked: boolean) {
     if (!onChange) return;
     const next = new Set(selectedSet);
@@ -882,9 +891,25 @@ function CheckboxGroup({ title, name, rows, selected, onChange, empty }: any) {
     else next.delete(rowId);
     onChange(Array.from(next));
   }
+  function toggleAll(checked: boolean) {
+    if (!onChange) return;
+    onChange(checked ? rows.map((row: any) => row.id) : []);
+  }
   return (
     <div className="rounded-2xl border border-slate-200 p-4">
-      <p className="text-xs font-bold uppercase text-slate-500">{title}</p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-bold uppercase text-slate-500">{title}</p>
+        {allLabel && onChange && rows.length > 0 && (
+          <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={(event: any) => toggleAll(event.target.checked)}
+            />
+            <span>{allLabel}</span>
+          </label>
+        )}
+      </div>
       <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
         {rows.length === 0 && <p className="text-sm text-slate-500">{empty}</p>}
         {rows.map((row: any) => (

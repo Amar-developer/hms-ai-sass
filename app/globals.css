@@ -2,8 +2,49 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Global theme tokens. Change a value here and every component that uses the
+ * matching semantic Tailwind color (bg-success-soft, text-danger-fg, bg-brand, …)
+ * updates across the whole app. Brand stays near-black slate.
+ */
+:root {
+  /* Brand / primary */
+  --brand: #0f172a;          /* slate-900 */
+  --brand-hover: #1e293b;    /* slate-800 */
+  --brand-fg: #ffffff;
+
+  /* Success */
+  --success-subtle: #ecfdf5; /* emerald-50  */
+  --success-soft: #d1fae5;   /* emerald-100 */
+  --success-border: #a7f3d0; /* emerald-200 */
+  --success-solid: #10b981;  /* emerald-500 */
+  --success-fg: #047857;     /* emerald-700 */
+
+  /* Danger */
+  --danger-subtle: #fef2f2;  /* red-50  */
+  --danger-soft: #fee2e2;    /* red-100 */
+  --danger-border: #fecaca;  /* red-200 */
+  --danger-solid: #ef4444;   /* red-500 */
+  --danger-fg: #b91c1c;      /* red-700 */
+
+  /* Warning */
+  --warning-subtle: #fffbeb; /* amber-50  */
+  --warning-soft: #fef3c7;   /* amber-100 */
+  --warning-border: #fde68a; /* amber-200 */
+  --warning-solid: #fbbf24;  /* amber-400 */
+  --warning-fg: #b45309;     /* amber-700 */
+
+  /* Info */
+  --info-subtle: #eff6ff;    /* blue-50  */
+  --info-soft: #dbeafe;      /* blue-100 */
+  --info-border: #bfdbfe;    /* blue-200 */
+  --info-solid: #0ea5e9;     /* sky-500  */
+  --info-fg: #1d4ed8;        /* blue-700 */
+}
+
 body {
   background: #ffffff;
+  font-family: "Poppins" ,"Inter", "Segoe UI", Arial, sans-serif;
 }
 
 .scrollbar-hidden {

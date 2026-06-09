@@ -82,3 +82,50 @@ def test_patient_membership_enrollment_resolves_missing_branch(client: TestClien
     body = enrollment.json()
     assert body["branch_id"] == branch["id"]
     assert body["purchase_invoice_id"] is not None
+    assert body["paid_amount"] == 0
+    invoices = client.get(
+        f"/api/v1/billing/invoices?patient_id={patient['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    ).json()
+    purchase_invoice = next(invoice for invoice in invoices if invoice["id"] == body["purchase_invoice_id"])
+    assert purchase_invoice["total_amount"] == 500
+    assert purchase_invoice["paid_amount"] == 0
+    assert purchase_invoice["balance_amount"] == 500
+
+    before_payment = client.post(
+        "/api/v1/patient-subscriptions/benefits/preview",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "patient_id": patient["id"],
+            "branch_id": branch["id"],
+            "service_type": "consultation",
+            "subtotal_amount": 500,
+        },
+    ).json()
+    assert before_payment["has_active_subscription"] is False
+
+    paid = client.post(
+        f"/api/v1/billing/invoices/{purchase_invoice['id']}/payments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"method": "cash", "amount": 500},
+    )
+    assert paid.status_code == 201
+    assert paid.json()["invoice"]["paid_amount"] == 500
+    assert paid.json()["invoice"]["balance_amount"] == 0
+
+    synced = client.get(
+        f"/api/v1/patient-subscriptions/enrollments?patient_id={patient['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    ).json()[0]
+    assert synced["paid_amount"] == 500
+    after_payment = client.post(
+        "/api/v1/patient-subscriptions/benefits/preview",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "patient_id": patient["id"],
+            "branch_id": branch["id"],
+            "service_type": "consultation",
+            "subtotal_amount": 500,
+        },
+    ).json()
+    assert after_payment["has_active_subscription"] is True

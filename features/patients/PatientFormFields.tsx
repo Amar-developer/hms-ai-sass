@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Field, Input, Select } from "@/components/common/ui";
 
 type BranchOption = {
@@ -116,6 +116,16 @@ export function PatientFormFields({
   ) {
     branchOptions.unshift({ id: selectedBranchId, name: "Selected branch" });
   }
+  useEffect(() => {
+    if (selectedBranchId || !branchOptions.length) return;
+    const nextBranchId =
+      (defaultBranchId &&
+        branchOptions.some((branch) => branch.id === defaultBranchId) &&
+        defaultBranchId) ||
+      branchOptions[0]?.id ||
+      "";
+    if (nextBranchId) setSelectedBranchId(nextBranchId);
+  }, [branchOptions, defaultBranchId, selectedBranchId]);
 
   return (
     <>
@@ -135,7 +145,9 @@ export function PatientFormFields({
           value={selectedBranchId}
           onChange={(event: any) => setSelectedBranchId(event.target.value)}
         >
-          <option value="">No branch</option>
+          {branchOptions.length === 0 && (
+            <option value="">No branches available</option>
+          )}
           {branchOptions.map((branch) => (
             <option key={branch.id} value={branch.id}>
               {branch.name}
@@ -146,7 +158,7 @@ export function PatientFormFields({
       <Field label="Gender">
         <Select
           name="gender"
-          defaultValue={patientField(patient, "gender") || "unknown"}
+          defaultValue={patientField(patient, "gender")}
         >
           {genders.map(([value, label]) => (
             <option key={value} value={value}>

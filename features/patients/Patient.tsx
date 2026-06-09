@@ -21,6 +21,8 @@ import {
   PatientFormFields,
   patientFormPayload,
 } from "@/features/patients/PatientFormFields";
+import { paymentMethodOptions } from "@/lib/options";
+import { displayDate } from "@/utils/helper";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -340,6 +342,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
         plan_id:data.planId,
         starts_on:data.startsOn||new Date().toISOString().slice(0,10),
         paid_amount:data.paidAmount!==''?Number(data.paidAmount):undefined,
+        payment_method:data.paymentMethod||"cash",
         created_by_user_id:apiSession.user?.id,
       })});
       await loadPatientDetail(selectedId);
@@ -405,12 +408,16 @@ export function Patient({ apiSession, branchId }: PatientProps) {
 
   const filtered = rows
     .filter((row: any) => {
+      const search = query.trim().toLowerCase();
       const created = row.created_at ? new Date(row.created_at).getTime() : 0;
       const from = fromDate ? new Date(fromDate).getTime() : 0;
       const to = toDate
         ? new Date(`${toDate}T23:59:59`).getTime()
         : Number.MAX_SAFE_INTEGER;
+      const branch = branches.find((item: any) => item.id === row.branch_id);
+      const text = patientSearchText(row, branch);
       return (
+        (!search || text.includes(search)) &&
         (status === "all" || row.status === status) &&
         (gender === "all" || row.gender === gender) &&
         (branchFilter === "all" || row.branch_id === branchFilter) &&
@@ -465,7 +472,10 @@ export function Patient({ apiSession, branchId }: PatientProps) {
           <TextField
             label="Patient / Mobile"
             value={query}
-            onChange={setQuery}
+            onChange={(value) => {
+              setQuery(value);
+              setPage(1);
+            }}
             placeholder="Name, mobile, area"
           />
           <SelectField
@@ -599,6 +609,32 @@ function toRow(patient: any) {
   return { ...patient, active_alert_count: 0, critical_alert_count: 0 };
 }
 
+function patientSearchText(patient: any, branch?: any) {
+  return [
+    patient.id,
+    patient.patient_number,
+    patient.full_name,
+    patient.name,
+    patient.mobile,
+    patient.alternate_mobile,
+    patient.guardian_name,
+    patient.guardian,
+    patient.guardian_mobile,
+    patient.guardianMobile,
+    patient.email,
+    patient.area,
+    patient.address,
+    patient.status,
+    branch?.name,
+    branch?.code,
+    branch?.area,
+    branch?.city,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
 function PatientForm({
   title,
   patient,
@@ -655,14 +691,15 @@ function MembershipEnrollForm({ membershipPlans, patient, loading, onSubmit }: a
   const [branchId, setBranchId] = useState(patient?.branch_id || "");
   const [startsOn, setStartsOn] = useState(new Date().toISOString().slice(0, 10));
   const [paidAmount, setPaidAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
 
   function handleSubmit(e: any) {
     e.preventDefault();
-    onSubmit({ planId, branchId, startsOn, paidAmount });
+    onSubmit({ planId, branchId, startsOn, paidAmount, paymentMethod });
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-4">
+    <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-5">
       <SelectField
         label="Plan"
         value={planId}
@@ -677,8 +714,14 @@ function MembershipEnrollForm({ membershipPlans, patient, loading, onSubmit }: a
       />
       <TextField label="Branch ID" value={branchId} onChange={setBranchId} />
       <DateField label="Starts On" value={startsOn} onChange={setStartsOn} />
-      <NumberField label="Paid Amount" value={paidAmount} onChange={setPaidAmount} min={0} placeholder="Plan price" />
-      <div className="md:col-span-4">
+      <NumberField label="Amount Paid Now" value={paidAmount} onChange={setPaidAmount} min={0} placeholder="0 if unpaid" />
+      <SelectField
+        label="Payment Method"
+        value={paymentMethod}
+        onChange={setPaymentMethod}
+        options={[...paymentMethodOptions]}
+      />
+      <div className="md:col-span-5">
         <Button disabled={loading || activePlans.length === 0}>
           {loading ? "Saving..." : "Enroll Membership"}
         </Button>
@@ -778,16 +821,7 @@ function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
 }
 
 function fmtDate(val: string | null | undefined) {
-  if (!val) return "-";
-  try {
-    return new Date(val).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  } catch {
-    return val;
-  }
+  return displayDate(val);
 }
 
 function money(value:any){return `₹${Number(value||0).toLocaleString("en-IN")}`}
@@ -917,8 +951,15 @@ function PatientDetail({
     uniquePharmacyIssues,
     (issue: any) => issue.medicine_text,
   );
-  const activeMembership = membershipEnrollments.find((row:any)=>row.status==="active");
   const membershipInvoices = patientInvoices.filter((invoice:any)=>invoice.patient_subscription_enrollment_id||invoice.patient_subscription_plan_id);
+  const purchaseInvoiceFor = (enrollment:any) => membershipInvoices.find((invoice:any)=>invoice.id===enrollment.purchase_invoice_id||invoice.patient_subscription_enrollment_id===enrollment.id);
+  const isEnrollmentPaid = (enrollment:any) => {
+    const invoice = purchaseInvoiceFor(enrollment);
+    if (invoice) return Number(invoice.balance_amount||0)<=0;
+    return Number(enrollment.paid_amount||0)>=Number(enrollment.plan?.price_amount||0);
+  };
+  const activeMembership = membershipEnrollments.find((row:any)=>row.status==="active"&&isEnrollmentPaid(row));
+  const pendingMembership = membershipEnrollments.find((row:any)=>row.status==="active"&&!isEnrollmentPaid(row));
   const membershipUsageInvoices = patientInvoices.filter((invoice:any)=>Number(invoice.membership_discount_amount||0)>0);
   const membershipSavings = membershipUsageInvoices.reduce((sum:number,invoice:any)=>sum+Number(invoice.membership_discount_amount||0),0);
 
@@ -994,12 +1035,12 @@ function PatientDetail({
             <h4 className="font-bold">Patient Membership</h4>
             <p className="text-xs text-slate-500">Subscription status, usage, purchase invoice, and benefit savings for this patient.</p>
           </div>
-          <Badge tone={activeMembership?"green":"slate"}>{activeMembership?"Subscribed":"Not subscribed"}</Badge>
+          <Badge tone={activeMembership?"green":pendingMembership?"amber":"slate"}>{activeMembership?"Subscribed":pendingMembership?"Payment due":"Not subscribed"}</Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-4">
-          <Info k="Current Plan" v={activeMembership?.plan?.name||"-"}/>
-          <Info k="Valid Until" v={fmtDate(activeMembership?.ends_on)}/>
-          <Info k="Free Consult Used" v={activeMembership?`${activeMembership.used_consultations}/${activeMembership.plan?.free_consultations??0}`:"-"}/>
+          <Info k="Current Plan" v={activeMembership?.plan?.name||pendingMembership?.plan?.name||"-"}/>
+          <Info k="Valid Until" v={fmtDate(activeMembership?.ends_on||pendingMembership?.ends_on)}/>
+          <Info k="Free Consult Used" v={activeMembership?`${activeMembership.used_consultations}/${activeMembership.plan?.free_consultations??0}`:"Payment required"}/>
           <Info k="Membership Savings" v={money(membershipSavings)}/>
         </div>
         <MembershipEnrollForm
@@ -1011,14 +1052,14 @@ function PatientDetail({
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border p-4">
             <h5 className="font-bold">Membership History</h5>
-            <div className="mt-3 space-y-2">{membershipEnrollments.length===0&&<SectionEmpty text="No membership history."/>}{membershipEnrollments.map((row:any)=><div key={row.id} className="rounded-xl bg-slate-50 p-3 text-sm"><div className="flex justify-between gap-3"><b>{row.plan?.name||row.plan_id}</b><StatusBadge status={row.status}/></div><p className="text-xs text-slate-500">{fmtDate(row.starts_on)} to {fmtDate(row.ends_on)} · paid {money(row.paid_amount)}</p><p className="text-xs text-slate-500">Purchase invoice: {row.purchase_invoice_id||"-"}</p></div>)}</div>
+            <div className="mt-3 space-y-2">{membershipEnrollments.length===0&&<SectionEmpty text="No membership history."/>}{membershipEnrollments.map((row:any)=>{const invoice=purchaseInvoiceFor(row);const due=Number(invoice?.balance_amount??Math.max(Number(row.plan?.price_amount||0)-Number(row.paid_amount||0),0));return <div key={row.id} className="rounded-xl bg-slate-50 p-3 text-sm"><div className="flex justify-between gap-3"><b>{row.plan?.name||row.plan_id}</b><Badge tone={due>0?"amber":"green"}>{due>0?"payment due":row.status}</Badge></div><p className="text-xs text-slate-500">{fmtDate(row.starts_on)} to {fmtDate(row.ends_on)} · paid {money(invoice?.paid_amount??row.paid_amount)} / {money(invoice?.total_amount??row.plan?.price_amount)}</p><p className="text-xs text-slate-500">Purchase invoice: {invoice?.invoice_number||row.purchase_invoice_id||"-"}{due>0?` · due ${money(due)}`:""}</p></div>})}</div>
           </div>
           <div className="rounded-2xl border p-4">
             <h5 className="font-bold">Benefit Usage Invoices</h5>
             <div className="mt-3 space-y-2">{membershipUsageInvoices.length===0&&<SectionEmpty text="No membership benefits used yet."/>}{membershipUsageInvoices.map((invoice:any)=><div key={invoice.id} className="rounded-xl bg-slate-50 p-3 text-sm"><div className="flex justify-between gap-3"><b>{invoice.invoice_number}</b><span>{money(invoice.membership_discount_amount)}</span></div><p className="text-xs text-slate-500">{fmtDate(invoice.created_at)} · total {money(invoice.total_amount)} · discount {money(invoice.discount_amount)}</p></div>)}</div>
           </div>
         </div>
-        {membershipInvoices.length>0&&<div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm"><b>Plan purchase invoices:</b> {membershipInvoices.map((invoice:any)=>invoice.invoice_number).join(", ")}</div>}
+        {membershipInvoices.length>0&&<div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm"><b>Plan purchase invoices:</b> {membershipInvoices.map((invoice:any)=>`${invoice.invoice_number} (${money(invoice.paid_amount)} paid, ${money(invoice.balance_amount)} due)`).join(", ")}</div>}
       </Card>
 
       {/* Alerts */}

@@ -30,6 +30,7 @@ import {
   percent,
   settlementPaidBasis,
   rowDate,
+  rowDateKey,
   isPaidInvoice,
   invoiceType,
   invoiceTypeLabel,
@@ -141,7 +142,7 @@ export function Reports({
   ).sort((a: any, b: any) => String(a[1]).localeCompare(String(b[1])));
 
   const filteredInvoices = liveInvoices.filter((invoice: any) => {
-    const invoiceDate = rowDate(invoice);
+    const invoiceDate = rowDateKey(invoice);
     const appointment = appointmentById.get(invoice.appointment_id);
     const invoiceDoctorId =
       appointment?.doctorId ||

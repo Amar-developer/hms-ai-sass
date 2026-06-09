@@ -47,8 +47,10 @@ def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient
         tenant["id"],
         full_name="Meena Sharma",
         mobile="9123456780",
+        alternate_mobile="9111122222",
         guardian_name="Suresh",
         area="Velachery",
+        address="Lake View Street",
     )
 
     by_area = client.get(
@@ -59,11 +61,23 @@ def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient
         "/api/v1/patients?q=suresh",
         headers={"X-Tenant-ID": tenant["id"]},
     )
+    by_alternate_mobile = client.get(
+        "/api/v1/patients?q=11112222",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    by_address = client.get(
+        "/api/v1/patients?q=lake view",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
 
     assert by_area.status_code == 200
     assert [row["full_name"] for row in by_area.json()] == ["Ravi Kumar"]
     assert by_guardian.status_code == 200
     assert [row["full_name"] for row in by_guardian.json()] == ["Meena Sharma"]
+    assert by_alternate_mobile.status_code == 200
+    assert [row["full_name"] for row in by_alternate_mobile.json()] == ["Meena Sharma"]
+    assert by_address.status_code == 200
+    assert [row["full_name"] for row in by_address.json()] == ["Meena Sharma"]
 
 
 def test_patient_search_is_tenant_isolated(client: TestClient):

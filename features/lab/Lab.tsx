@@ -12,6 +12,7 @@ import { apiBlob, apiFetch } from "@/lib/api";
 import { FormField, SelectField, TextField } from "@/components/FormElements";
 import { SearchPicker } from "@/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
+import { displayDate, displayDateTime } from "@/utils/helper";
 
 const pageSize = 10;
 
@@ -780,7 +781,7 @@ export function Lab({
                       <b>{(safePage - 1) * pageSize + index + 1}</b>
                     </td>
                     <td>
-                      <b>{new Date(o.created_at).toLocaleDateString()}</b>
+                      <b>{displayDate(o.created_at)}</b>
                       <p className="text-xs text-slate-500">
                         {new Date(o.created_at).toLocaleTimeString([], {
                           hour: "2-digit",
@@ -925,7 +926,7 @@ function WorklistDetailModal({
             <h3 className="text-xl font-bold">{title}</h3>
             <p className="mt-1 text-sm text-slate-500">{patient}</p>
             <p className="text-xs text-slate-500">
-              {createdAt ? new Date(createdAt).toLocaleString() : ""}
+              {createdAt ? displayDateTime(createdAt) : ""}
             </p>
           </div>
           <ActionButton onClick={onClose}>Close</ActionButton>

@@ -259,9 +259,11 @@ def search_patients(
                 func.lower(Patient.patient_number).like(pattern),
                 func.lower(Patient.full_name).like(pattern),
                 func.lower(Patient.mobile).like(pattern),
+                func.lower(Patient.alternate_mobile).like(pattern),
                 func.lower(Patient.guardian_name).like(pattern),
                 func.lower(Patient.guardian_mobile).like(pattern),
                 func.lower(Patient.area).like(pattern),
+                func.lower(Patient.address).like(pattern),
             )
         )
     patients = list(session.exec(statement.order_by(Patient.created_at).limit(limit)).all())

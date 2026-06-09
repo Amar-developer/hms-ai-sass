@@ -3,6 +3,7 @@ from datetime import date, timedelta
 
 from sqlmodel import Session, select
 
+from app.modules.billing.models import Invoice
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionEnrollmentStatus,
@@ -75,8 +76,20 @@ def active_patient_enrollment(
         if enrollment.branch_id != branch_id:
             continue
         plan = session.get(PatientSubscriptionPlan, enrollment.plan_id)
-        if plan and plan.tenant_id == tenant_id and plan.is_active:
-            return enrollment, plan
+        if not plan or plan.tenant_id != tenant_id or not plan.is_active:
+            continue
+        if plan.price_amount > 0:
+            if enrollment.purchase_invoice_id:
+                invoice = session.get(Invoice, enrollment.purchase_invoice_id)
+                if (
+                    not invoice
+                    or invoice.tenant_id != tenant_id
+                    or invoice.balance_amount > 0
+                ):
+                    continue
+            elif enrollment.paid_amount < plan.price_amount:
+                continue
+        return enrollment, plan
     return None
 
 

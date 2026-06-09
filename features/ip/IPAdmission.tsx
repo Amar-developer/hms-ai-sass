@@ -6,6 +6,7 @@ import {Badge,Button,Card,Input,Select,StatusToast} from '@/components/common/ui
 import {FormField} from '@/components/FormElements';
 import {SearchPicker,TagEntryBox,medicineFrequencyOptions,rowTagLabel} from '@/components/clinicalRows';
 import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';
+import {displayDate} from '@/utils/helper';
 
 function today(){return new Date().toISOString().slice(0,10)}
 function patientName(p:any){return p?.name||p?.full_name||p?.patient_name||p?.id||'Patient'}
@@ -502,8 +503,8 @@ export function IPAdmission({
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <Info title="Patient" value={patientName(patientMap.get(selectedAdmission.patient_id)||patientMap.get(selectedAdmission.patientId))}/>
               <Info title="Status" value={String(selectedAdmission.status||'-').toUpperCase()}/>
-              <Info title="Admission Date" value={selectedAdmission.admission_date||'-'}/>
-              <Info title="Planned Discharge" value={selectedAdmission.expected_discharge_date||'-'}/>
+              <Info title="Admission Date" value={displayDate(selectedAdmission.admission_date)}/>
+              <Info title="Planned Discharge" value={displayDate(selectedAdmission.expected_discharge_date)}/>
               <Info title="Aadhaar" value={selectedAdmission.aadhaar_number||'Not captured'}/>
               <Info title="Payable Amount" value={inr(runningBillTotal)}/>
               <div className="rounded-2xl bg-slate-50 p-4">

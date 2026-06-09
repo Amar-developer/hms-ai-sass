@@ -1,6 +1,9 @@
+import hashlib
+import json
 from datetime import date, time
+from time import monotonic
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
@@ -44,6 +47,8 @@ from app.modules.settings.service import resolve_setting
 from app.modules.tenants.models import Branch, Department, Tenant
 
 router = APIRouter(prefix="/appointments")
+IDEMPOTENCY_TTL_SECONDS = 300
+_appointment_idempotency_cache: dict[tuple[str, str, str], dict] = {}
 
 ACTIVE_APPOINTMENT_STATUSES = {
     AppointmentStatus.SCHEDULED,
@@ -55,6 +60,43 @@ ACTIVE_APPOINTMENT_STATUSES = {
     AppointmentStatus.REQUEUED,
     AppointmentStatus.IN_CONSULTATION,
 }
+
+
+def _appointment_payload_hash(payload: AppointmentCreate) -> str:
+    encoded = json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _cleanup_appointment_idempotency_cache() -> None:
+    now = monotonic()
+    expired = [key for key, value in _appointment_idempotency_cache.items() if value["expires_at"] <= now]
+    for key in expired:
+        _appointment_idempotency_cache.pop(key, None)
+
+
+def _normalize_department_lookup(value: str | None) -> str:
+    return "".join(char for char in str(value or "").lower() if char.isalnum())
+
+
+def _resolve_department_id(session: Session, tenant_id: str, department_id: str | None) -> str | None:
+    if not department_id:
+        return None
+    department = session.get(Department, department_id)
+    if department and department.tenant_id == tenant_id:
+        return department.id
+    requested = _normalize_department_lookup(department_id)
+    departments = session.exec(select(Department).where(Department.tenant_id == tenant_id)).all()
+    for department in departments:
+        department_keys = {
+            _normalize_department_lookup(department.id),
+            _normalize_department_lookup(department.code),
+            _normalize_department_lookup(department.name),
+        }
+        if requested in department_keys:
+            return department.id
+        if requested == "general" and _normalize_department_lookup(department.name).startswith("general"):
+            return department.id
+    return department_id
 
 
 def _appointment_grid_row(row) -> AppointmentGridRead:
@@ -192,6 +234,8 @@ def _review_billing_defaults(
 )
 def book_appointment(
     payload: AppointmentCreate,
+    response: Response,
+    idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
     tenant_id: str = Depends(require_tenant_id),
     current_user: User = Depends(
         require_any_permission(
@@ -201,10 +245,29 @@ def book_appointment(
     ),
     session: Session = Depends(get_session),
 ) -> AppointmentBookingRead:
+    _cleanup_appointment_idempotency_cache()
+    cache_key: tuple[str, str, str] | None = None
+
     enforce_entitlement(session, tenant_id, "appointments")
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    resolved_department_id = _resolve_department_id(session, tenant_id, payload.department_id)
+    if resolved_department_id != payload.department_id:
+        payload = payload.model_copy(update={"department_id": resolved_department_id})
+    request_hash = _appointment_payload_hash(payload)
+    if idempotency_key:
+        cache_key = (tenant_id, current_user.id, idempotency_key)
+        cached = _appointment_idempotency_cache.get(cache_key)
+        if cached:
+            if cached["request_hash"] != request_hash:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Idempotency key was reused with a different appointment request",
+                )
+            response.headers["X-Idempotency-Replayed"] = "true"
+            return cached["booking"]
+
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
     doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
@@ -339,10 +402,17 @@ def book_appointment(
             resource_id=appointment.id,
             queued_by_user_id=payload.created_by_user_id,
         )
-    return AppointmentBookingRead(
+    booking = AppointmentBookingRead(
         appointment=AppointmentRead.model_validate(appointment, from_attributes=True),
         queue_entry=QueueEntryRead.model_validate(queue_entry, from_attributes=True),
     )
+    if cache_key:
+        _appointment_idempotency_cache[cache_key] = {
+            "request_hash": request_hash,
+            "booking": booking,
+            "expires_at": monotonic() + IDEMPOTENCY_TTL_SECONDS,
+        }
+    return booking
 
 
 @router.post(

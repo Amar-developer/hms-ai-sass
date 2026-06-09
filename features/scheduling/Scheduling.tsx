@@ -43,7 +43,9 @@ function formatDisplayRange(start: any, end: any) {
   return `${formatDisplayTime(start)} - ${formatDisplayTime(end)}`;
 }
 
-function selectedSchedulePayloads(fd: FormData) {
+const ALL_BRANCHES = "__all__";
+
+function selectedSchedulePayloads(fd: FormData, allBranchIds: string[] = []) {
   const weekdays = fd
     .getAll("weekdays")
     .map((value) => Number(value))
@@ -63,17 +65,24 @@ function selectedSchedulePayloads(fd: FormData) {
   ).filter((range) => range.start_time && range.end_time);
   const rawRoomNumber = String(fd.get("roomNumber") || "").replace(/\D/g, "");
   const roomNumber = rawRoomNumber ? rawRoomNumber.padStart(3, "0").slice(0, 3) : null;
-  return selectedWeekdays.flatMap((weekday) =>
-    ranges.map((range) => ({
-      branch_id: fd.get("branchId"),
-      department_id: fd.get("departmentId") || null,
-      weekday,
-      start_time: range.start_time,
-      end_time: range.end_time,
-      is_active: range.is_active,
-      slot_minutes: Number(fd.get("slotMinutes") || 15),
-      room_number: roomNumber,
-    })),
+  const branchValue = String(fd.get("branchId") || "");
+  const branchIds =
+    branchValue === ALL_BRANCHES
+      ? allBranchIds.filter(Boolean)
+      : [branchValue];
+  return branchIds.flatMap((branch_id) =>
+    selectedWeekdays.flatMap((weekday) =>
+      ranges.map((range) => ({
+        branch_id,
+        department_id: fd.get("departmentId") || null,
+        weekday,
+        start_time: range.start_time,
+        end_time: range.end_time,
+        is_active: range.is_active,
+        slot_minutes: Number(fd.get("slotMinutes") || 15),
+        room_number: roomNumber,
+      })),
+    ),
   );
 }
 
@@ -215,7 +224,9 @@ export function Scheduling({ apiSession, branchId }: any) {
     const form = e.currentTarget;
     const fd = new FormData(form);
     const practitionerId = String(fd.get("practitionerId") || "");
-    const schedulePayloads = selectedSchedulePayloads(fd);
+    const doctorBranchIds =
+      doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
+    const schedulePayloads = selectedSchedulePayloads(fd, doctorBranchIds);
     setBusy(true);
     setMessage("");
     try {
@@ -254,23 +265,41 @@ export function Scheduling({ apiSession, branchId }: any) {
     const practitionerId = String(
       fd.get("practitionerId") || selected.practitioner_id || "",
     );
-    const schedulePayloads = selectedSchedulePayloads(fd);
+    const doctorBranchIds =
+      doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
+    const schedulePayloads = selectedSchedulePayloads(fd, doctorBranchIds);
     const [firstPayload, ...extraPayloads] = schedulePayloads;
-    const existingRows = selected.schedules || [selected];
+    // Only reuse active rows. Soft-deleted (is_active=false) rows are ghosts:
+    // patching or counting them resurfaces removed ranges in the editor.
+    const existingRows = (selected.schedules || [selected]).filter(
+      (row: any) => row && row.is_active !== false,
+    );
     setBusy(true);
     setMessage("");
     try {
-      const updated = await apiFetch(
-        `/practitioners/schedules/${existingRows[0].id}`,
-        scopedSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            ...firstPayload,
-            practitioner_id: practitionerId,
-          }),
-        },
-      );
+      const updated = existingRows[0]
+        ? await apiFetch(
+            `/practitioners/schedules/${existingRows[0].id}`,
+            scopedSession,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                ...firstPayload,
+                practitioner_id: practitionerId,
+              }),
+            },
+          )
+        : await apiFetch(
+            `/practitioners/${practitionerId}/schedules`,
+            scopedSession,
+            {
+              method: "POST",
+              body: JSON.stringify({
+                ...firstPayload,
+                practitioner_id: practitionerId,
+              }),
+            },
+          );
       const createdRows = await Promise.all(
         extraPayloads.map((item) =>
           apiFetch(
@@ -280,18 +309,10 @@ export function Scheduling({ apiSession, branchId }: any) {
           ),
         ),
       );
+      // Remove every other active row we just replaced.
       await Promise.all(
         existingRows
-          .slice(schedulePayloads.length)
-          .map((row: any) =>
-            apiFetch(`/practitioners/schedules/${row.id}`, scopedSession, {
-              method: "DELETE",
-            }),
-          ),
-      );
-      await Promise.all(
-        existingRows
-          .slice(1, schedulePayloads.length)
+          .slice(1)
           .map((row: any) =>
             apiFetch(`/practitioners/schedules/${row.id}`, scopedSession, {
               method: "DELETE",
@@ -613,23 +634,25 @@ function ScheduleForm({
   onSubmit,
   back,
 }: any) {
-  const scheduleRows = schedule?.schedules?.length
-    ? schedule.schedules
-    : [schedule].filter(Boolean);
+  const scheduleRows = (
+    schedule?.schedules?.length ? schedule.schedules : [schedule].filter(Boolean)
+  ).filter((row: any) => row && row.is_active !== false);
   const initialDays = Array.from(
     new Set(scheduleRows.map((row: any) => String(row.weekday ?? 0))),
   ) as string[];
   const initialRanges = Array.from(
-    new Map(
-      scheduleRows.map((row: any) => {
-        const range = {
-          start: String(row.start_time || "09:00").slice(0, 5),
-          end: String(row.end_time || "13:00").slice(0, 5),
-          isActive: row.is_active !== false,
-        };
-        return [`${range.start}|${range.end}|${range.isActive}`, range];
-      }),
-    ).values(),
+    scheduleRows
+      .reduce((map: Map<string, any>, row: any) => {
+        const start = String(row.start_time || "09:00").slice(0, 5);
+        const end = String(row.end_time || "13:00").slice(0, 5);
+        const isActive = row.is_active !== false;
+        const key = `${start}|${end}`;
+        const existing = map.get(key);
+        if (existing) existing.isActive = existing.isActive || isActive;
+        else map.set(key, { start, end, isActive });
+        return map;
+      }, new Map<string, any>())
+      .values(),
   );
   const [selectedDays, setSelectedDays] = useState<string[]>(
     initialDays.length ? initialDays : [String(schedule?.weekday ?? 0)],
@@ -746,6 +769,10 @@ function ScheduleForm({
               required
             >
               <option value="">Select branch</option>
+              {(doctors.find((item: any) => item.id === selectedDoctorId)
+                ?.branch_ids?.length || 0) > 1 && (
+                <option value={ALL_BRANCHES}>All branches</option>
+              )}
               {branches.map((branch: any) => (
                 <option key={branch.id} value={branch.id}>
                   {branch.name}

@@ -14,6 +14,7 @@ import {
 import { DateField, SelectField, TextField } from "@/components/FormElements";
 import { apiBlob, apiFetch } from "@/lib/api";
 import { paymentMethodOptions } from "@/lib/options";
+import { displayDate } from "@/utils/helper";
 
 const pageSize = 10;
 
@@ -110,13 +111,7 @@ function formatInvoiceDate(invoice: any) {
   const key = invoiceDateKey(invoice);
   if (!key) return "-";
   const date = new Date(`${key}T00:00:00`);
-  return Number.isNaN(date.getTime())
-    ? key
-    : date.toLocaleDateString(undefined, {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
+  return Number.isNaN(date.getTime()) ? key : displayDate(key);
 }
 
 function invoicePaidStatus(invoice: any) {
@@ -228,9 +223,15 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         const patient: any = patientMap.get(invoice.patient_id);
         const haystack = [
           invoice.invoice_number,
+          invoice.patient_name,
+          invoice.patient_mobile,
           patient?.name,
           patient?.full_name,
           patient?.patient_number,
+          patient?.mobile,
+          patient?.alternate_mobile,
+          patient?.guardian_mobile,
+          patient?.guardianMobile,
           source.label,
           invoice.status,
         ]

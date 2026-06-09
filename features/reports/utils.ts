@@ -1,3 +1,5 @@
+import { displayDate } from "@/utils/helper";
+
 export function money(value: any) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
 }
@@ -75,8 +77,12 @@ export function settlementPaidBasis(invoice: any) {
   return Math.min(Math.round((doctorShare * paid) / total), paid);
 }
 
-export function rowDate(invoice: any) {
+export function rowDateKey(invoice: any) {
   return dateKey(invoice.created_at || invoice.invoice_date || invoice.updated_at);
+}
+
+export function rowDate(invoice: any) {
+  return displayDate(rowDateKey(invoice));
 }
 
 export function isPaidInvoice(invoice: any) {

@@ -17,7 +17,9 @@ import {
   TextareaField,
 } from "@/components/FormElements";
 import { apiFetch } from "@/lib/api";
+import { searchPatients } from "@/lib/hmsLogic";
 import { humanizeOptionLabel } from "@/lib/options";
+import { displayDate } from "@/utils/helper";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
 
@@ -199,19 +201,7 @@ export function HomeCare({
   const patientMatches = useMemo(() => {
     const query = patientSearch.trim().toLowerCase();
     if (!query || form.patient_id) return [];
-    return patients
-      .filter((patient: any) =>
-        [
-          patientName(patient),
-          patient.mobile,
-          patientCode(patient),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase()
-          .includes(query),
-      )
-      .slice(0, 6);
+    return searchPatients(patients, query).slice(0, 6);
   }, [form.patient_id, patientSearch, patients]);
   const normalizedStaffType =
     form.staff_type && staffTypeOptions.some(([value]) => value === form.staff_type)
@@ -233,7 +223,15 @@ export function HomeCare({
         const haystack = [
           booking.booking_number,
           patientName(patient),
+          patientCode(patient),
           patient?.mobile,
+          patient?.alternate_mobile,
+          patient?.guardian_name,
+          patient?.guardian,
+          patient?.guardian_mobile,
+          patient?.guardianMobile,
+          patient?.area,
+          patient?.address,
           booking.assigned_staff_name || userName(assigned),
           booking.staff_type,
           booking.status,
@@ -710,7 +708,7 @@ export function HomeCare({
                     <div>
                       <TextField label="Description" value={line.description} onChange={(value) => setLine(index, "description", value)} />
                       <p className="mt-1 text-xs font-bold text-blue-600">
-                        × {days} day{days > 1 ? "s" : ""} ({form.start_date || "-"} → {form.end_date || form.start_date || "-"})
+                        × {days} day{days > 1 ? "s" : ""} ({displayDate(form.start_date)} → {displayDate(form.end_date || form.start_date)})
                       </p>
                     </div>
                     <NumberField label="Hours/Day" value={line.quantity} onChange={(value) => setLine(index, "quantity", value)} min={1} />
@@ -894,7 +892,7 @@ function BookingsList({
                     )}
                   </td>
                   <td>
-                    {booking.start_date} to {booking.end_date || "-"}
+                    {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
                     <p className="text-xs text-slate-500">
                       {humanizeOptionLabel(booking.recurrence || "daily")}
                     </p>
@@ -962,8 +960,8 @@ function BookingDetail({
           <Info title="Staff" value={booking.assigned_staff_name || userName(staffMap.get(booking.assigned_staff_user_id))} />
           <Info title="Staff Type" value={humanizeOptionLabel(booking.staff_type || "-")} />
           <Info title="Recurrence" value={humanizeOptionLabel(booking.recurrence || "daily")} />
-          <Info title="Start Date" value={booking.start_date} />
-          <Info title="End Date" value={booking.end_date || "-"} />
+          <Info title="Start Date" value={displayDate(booking.start_date)} />
+          <Info title="End Date" value={displayDate(booking.end_date)} />
           <Info title="Total" value={money(bookingTotal(booking))} />
         </div>
         {booking.complaints && (
@@ -1086,7 +1084,7 @@ function InvoiceCard({
       <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
         <b>{booking.booking_number}</b>
         <p className="mt-1 text-slate-500">
-          {patientName(patientMap.get(booking.patient_id))} · {booking.start_date} to {booking.end_date || "-"}
+          {patientName(patientMap.get(booking.patient_id))} · {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
         </p>
         <p className="text-xs text-slate-500">
           {humanizeOptionLabel(booking.recurrence || "daily")}

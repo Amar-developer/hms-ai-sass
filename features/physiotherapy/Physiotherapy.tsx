@@ -10,6 +10,7 @@ import {
   generatePhysiotherapyInvoice,
   getPhysiotherapyInvoice,
 } from "@/lib/api";
+import { displayDate } from "@/utils/helper";
 
 type View = "list" | "op" | "ip" | "detail";
 const modalities = [
@@ -482,7 +483,7 @@ export function Physiotherapy({
                       ))}
                       {selected.consent_submitted_at && (
                         <p className="text-xs text-slate-500">
-                          Submitted: {new Date(selected.consent_submitted_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                          Submitted: {displayDate(selected.consent_submitted_at)}
                         </p>
                       )}
                       {selected.consent_notes && (
@@ -665,7 +666,7 @@ export function Physiotherapy({
                     Session {row.session_number} · {row.modality_type}
                   </b>
                   <p className="text-slate-500">
-                    {row.session_date} · {row.duration_minutes} mins · Pain{" "}
+                    {displayDate(row.session_date)} · {row.duration_minutes} mins · Pain{" "}
                     {row.pre_pain_score ?? "-"} to {row.post_pain_score ?? "-"}
                   </p>
                   <p className="text-xs font-semibold text-slate-500">

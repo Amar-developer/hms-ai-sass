@@ -54,18 +54,30 @@ def _validate_links(session: Session, tenant_id: str, branch_ids: list[str], dep
         if not branch or branch.tenant_id != tenant_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid branch: {branch_id}")
 
+
+def _normalize_department_lookup(value: str | None) -> str:
+    return "".join(char for char in str(value or "").lower() if char.isalnum())
+
+
 def _resolve_department(session: Session, tenant_id: str, department_id: str | None) -> Department | None:
     if not department_id:
         return None
     department = session.get(Department, department_id)
     if department and department.tenant_id == tenant_id:
         return department
-    return session.exec(
-        select(Department).where(
-            Department.tenant_id == tenant_id,
-            Department.code == department_id,
-        )
-    ).first()
+    requested = _normalize_department_lookup(department_id)
+    departments = session.exec(select(Department).where(Department.tenant_id == tenant_id)).all()
+    for department in departments:
+        department_keys = {
+            _normalize_department_lookup(department.id),
+            _normalize_department_lookup(department.code),
+            _normalize_department_lookup(department.name),
+        }
+        if requested in department_keys:
+            return department
+        if requested == "general" and _normalize_department_lookup(department.name).startswith("general"):
+            return department
+    return None
 
 
 def _department_filter_ids(session: Session, tenant_id: str, department_id: str | None) -> set[str]:

@@ -1,5 +1,6 @@
-import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { displayToIsoDate, isoToDisplayDate } from "@/utils/helper";
 
 export function Card({
   children,
@@ -27,10 +28,10 @@ export function Badge({
 }) {
   const m: any = {
     slate: "bg-slate-100 text-slate-700",
-    red: "bg-red-100 text-red-700",
-    green: "bg-emerald-100 text-emerald-700",
-    blue: "bg-blue-100 text-blue-700",
-    amber: "bg-amber-100 text-amber-700",
+    red: "bg-danger-soft text-danger-fg",
+    green: "bg-success-soft text-success-fg",
+    blue: "bg-info-soft text-info-fg",
+    amber: "bg-warning-soft text-warning-fg",
     purple: "bg-purple-100 text-purple-700",
   };
   return (
@@ -48,7 +49,7 @@ export function noticeTone(message: string): NoticeTone {
   const text = String(message || "").toLowerCase();
   if (!text) return "info";
   if (
-    /denied|not allowed|unauthorized|forbidden|failed|could not|error|invalid|missing|required|does not|not found/.test(
+    /denied|not allowed|not assigned|unauthorized|forbidden|failed|could not|error|invalid|missing|required|does not|not found/.test(
       text,
     )
   )
@@ -103,32 +104,32 @@ export function StatusToast({
   > = {
     success: {
       icon: CheckCircle2,
-      iconClass: "fill-emerald-500 text-white",
-      bar: "bg-emerald-500",
+      iconClass: "fill-success-solid text-white",
+      bar: "bg-success-solid",
       label: "Success",
     },
     warning: {
       icon: AlertTriangle,
-      iconClass: "fill-amber-400 text-white",
-      bar: "bg-amber-400",
+      iconClass: "fill-warning-solid text-white",
+      bar: "bg-warning-solid",
       label: "Warning",
     },
     delete: {
       icon: XCircle,
-      iconClass: "fill-red-500 text-white",
-      bar: "bg-red-500",
+      iconClass: "fill-danger-solid text-white",
+      bar: "bg-danger-solid",
       label: "Deleted",
     },
     info: {
       icon: Info,
-      iconClass: "fill-sky-500 text-white",
-      bar: "bg-sky-500",
+      iconClass: "fill-info-solid text-white",
+      bar: "bg-info-solid",
       label: "Info",
     },
     error: {
       icon: XCircle,
-      iconClass: "fill-red-500 text-white",
-      bar: "bg-red-500",
+      iconClass: "fill-danger-solid text-white",
+      bar: "bg-danger-solid",
       label: "Error",
     },
   };
@@ -220,11 +221,247 @@ function submitNearestFormOnEnter(event: any) {
     }
   }
 }
-export function Input({
-  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
-  onKeyDown,
-  ...props
-}: any) {
+const DATE_MONTH_LABELS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const DATE_WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function parseIsoParts(iso: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
+  if (!match) return null;
+  return { year: Number(match[1]), month: Number(match[2]) - 1, day: Number(match[3]) };
+}
+
+export function DateInput({ className = "", onChange, value, defaultValue, name, min, max, disabled, required, ...props }: any) {
+  const isControlled = value !== undefined;
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [innerValue, setInnerValue] = useState(String(defaultValue || ""));
+  const isoValue = String(isControlled ? value || "" : innerValue || "");
+  const [displayValue, setDisplayValue] = useState(isoToDisplayDate(isoValue));
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [viewMonth, setViewMonth] = useState(() => {
+    const parsed = parseIsoParts(isoValue);
+    const base = parsed ? new Date(parsed.year, parsed.month, 1) : new Date();
+    return { year: base.getFullYear(), month: base.getMonth() };
+  });
+
+  useEffect(() => {
+    if (isControlled) setDisplayValue(isoToDisplayDate(isoValue));
+  }, [isControlled, isoValue]);
+
+  useEffect(() => {
+    if (!open) return;
+    function reposition() {
+      const rect = wrapperRef.current?.getBoundingClientRect();
+      if (!rect || typeof window === "undefined") return;
+      const POPUP_W = 288;
+      const POPUP_H = 340;
+      const GAP = 4;
+      const MARGIN = 8;
+      let left = rect.left;
+      if (left + POPUP_W > window.innerWidth - MARGIN) left = rect.right - POPUP_W;
+      left = Math.min(Math.max(left, MARGIN), Math.max(MARGIN, window.innerWidth - POPUP_W - MARGIN));
+      let top = rect.bottom + GAP;
+      if (top + POPUP_H > window.innerHeight - MARGIN && rect.top > POPUP_H) {
+        top = rect.top - POPUP_H - GAP;
+      }
+      top = Math.min(Math.max(top, MARGIN), Math.max(MARGIN, window.innerHeight - POPUP_H - MARGIN));
+      setCoords({ top, left });
+    }
+    reposition();
+    function onDocClick(event: MouseEvent) {
+      if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    return () => {
+      document.removeEventListener("mousedown", onDocClick);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+    };
+  }, [open]);
+
+  function emit(nextIso: string) {
+    if (!isControlled) setInnerValue(nextIso);
+    onChange?.({ target: { value: nextIso, name } });
+  }
+
+  function changeDisplay(nextDisplay: string) {
+    setDisplayValue(nextDisplay);
+    const nextIso = displayToIsoDate(nextDisplay);
+    if (nextIso || !nextDisplay.trim()) emit(nextIso);
+  }
+
+  const hiddenValue = displayToIsoDate(displayValue) || isoValue;
+
+  function openCalendar() {
+    if (disabled) return;
+    const parsed = parseIsoParts(hiddenValue);
+    if (parsed) setViewMonth({ year: parsed.year, month: parsed.month });
+    setOpen((previous) => !previous);
+  }
+
+  function shiftMonth(delta: number) {
+    setViewMonth((current) => {
+      const next = new Date(current.year, current.month + delta, 1);
+      return { year: next.getFullYear(), month: next.getMonth() };
+    });
+  }
+
+  function selectDay(day: number) {
+    const mm = String(viewMonth.month + 1).padStart(2, "0");
+    const dd = String(day).padStart(2, "0");
+    const iso = `${viewMonth.year}-${mm}-${dd}`;
+    if (min && iso < min) return;
+    if (max && iso > max) return;
+    setDisplayValue(isoToDisplayDate(iso));
+    emit(iso);
+    setOpen(false);
+  }
+
+  const selectedParts = parseIsoParts(hiddenValue);
+  const firstWeekday = new Date(viewMonth.year, viewMonth.month, 1).getDay();
+  const daysInMonth = new Date(viewMonth.year, viewMonth.month + 1, 0).getDate();
+  const calendarCells = [
+    ...Array.from({ length: firstWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      {name && <input type="hidden" name={name} value={hiddenValue} />}
+      <input
+        {...props}
+        type="text"
+        value={displayValue}
+        onChange={(event: any) => changeDisplay(event.target.value)}
+        onBlur={() => setDisplayValue(isoToDisplayDate(hiddenValue, displayValue))}
+        onFocus={(event: any) => props.onFocus?.(event)}
+        aria-required={required || undefined}
+        disabled={disabled}
+        placeholder={props.placeholder || "dd/mm/yyyy"}
+        inputMode="numeric"
+        className={`w-full rounded-lg border border-slate-200 px-2 py-1.5 pr-10 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+      />
+      <button
+        type="button"
+        onClick={openCalendar}
+        disabled={disabled}
+        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+        aria-label="Choose date"
+      >
+        <CalendarDays size={16} />
+      </button>
+      {open && (
+        <div
+          role="dialog"
+          style={{
+            position: "fixed",
+            top: coords?.top ?? 0,
+            left: coords?.left ?? 0,
+            width: 288,
+            visibility: coords ? "visible" : "hidden",
+          }}
+          className="z-50 rounded-2xl border border-slate-200 bg-white p-3 shadow-xl"
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => shiftMonth(-1)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-slate-500 hover:bg-slate-100"
+              aria-label="Previous month"
+            >
+              ‹
+            </button>
+            <span className="text-sm font-bold text-slate-700">
+              {DATE_MONTH_LABELS[viewMonth.month]} {viewMonth.year}
+            </span>
+            <button
+              type="button"
+              onClick={() => shiftMonth(1)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-slate-500 hover:bg-slate-100"
+              aria-label="Next month"
+            >
+              ›
+            </button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-bold uppercase text-slate-400">
+            {DATE_WEEKDAY_LABELS.map((label) => (
+              <span key={label} className="py-1">
+                {label}
+              </span>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-7 gap-1">
+            {calendarCells.map((day, index) => {
+              if (day === null) return <span key={`blank-${index}`} />;
+              const mm = String(viewMonth.month + 1).padStart(2, "0");
+              const dd = String(day).padStart(2, "0");
+              const iso = `${viewMonth.year}-${mm}-${dd}`;
+              const isSelected =
+                selectedParts &&
+                selectedParts.year === viewMonth.year &&
+                selectedParts.month === viewMonth.month &&
+                selectedParts.day === day;
+              const isDisabled = Boolean((min && iso < min) || (max && iso > max));
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => selectDay(day)}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg text-sm transition ${
+                    isSelected
+                      ? "bg-slate-900 font-bold text-white"
+                      : "text-slate-700 hover:bg-slate-100"
+                  } disabled:cursor-not-allowed disabled:text-slate-300 disabled:hover:bg-transparent`}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-2 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                const today = new Date();
+                setViewMonth({ year: today.getFullYear(), month: today.getMonth() });
+              }}
+              className="font-bold text-slate-600 hover:text-slate-900"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDisplayValue("");
+                emit("");
+                setOpen(false);
+              }}
+              className="font-bold text-blue-600 hover:text-blue-800"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Input({ className = "", onKeyDown, ...props }: any) {
+  if (props.type === "date") {
+    return <DateInput {...props} className={className} />;
+  }
   return (
     <input
       {...props}
@@ -470,7 +707,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`rounded-lg bg-slate-900  ${className ? className : "text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"} font-bold text-white disabled:bg-slate-300`}
+      className={`rounded-lg bg-brand  ${className? className:'text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3'} font-bold text-brand-fg disabled:bg-slate-300`}
     >
       {children}
     </button>
@@ -499,8 +736,8 @@ export function ActionButton({
 }: any) {
   const tones: any = {
     neutral: "border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
-    primary: "border-slate-900 bg-slate-900 text-white hover:bg-slate-800",
-    danger: "border-red-100 bg-white text-red-600 hover:bg-red-50",
+    primary: "border-brand bg-brand text-brand-fg hover:bg-brand-hover",
+    danger: "border-danger-border bg-white text-danger-fg hover:bg-danger-subtle",
   };
   return (
     <button

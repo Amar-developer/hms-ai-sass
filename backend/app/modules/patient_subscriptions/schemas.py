@@ -2,6 +2,7 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from app.modules.billing.models import PaymentMethod
 from app.modules.patient_subscriptions.models import PatientSubscriptionEnrollmentStatus
 
 
@@ -55,6 +56,7 @@ class PatientSubscriptionEnrollmentCreate(BaseModel):
     plan_id: str
     starts_on: date = Field(default_factory=date.today)
     paid_amount: int | None = Field(default=None, ge=0)
+    payment_method: PaymentMethod = PaymentMethod.CASH
     created_by_user_id: str | None = None
 
 

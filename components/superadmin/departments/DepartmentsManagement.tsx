@@ -6,6 +6,7 @@ import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "../shared/Empty";
 import { Pagination } from "../shared/Pagination";
 import { TenantPicker } from "../shared/TenantPicker";
+import { displayDate } from "@/utils/helper";
 
 export function DepartmentsManagement({
   tenants,
@@ -114,9 +115,7 @@ export function DepartmentsManagement({
                     {department.is_active ? "Active" : "Inactive"}
                   </Badge>
                   <span className="text-xs lg:text-sm">
-                    {new Date(
-                      department.updated_at || department.created_at,
-                    ).toLocaleDateString()}
+                    {displayDate(department.updated_at || department.created_at)}
                   </span>
                   <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
                     {!locked && (

@@ -1,4 +1,5 @@
 import { normalizeOptionLabel } from "@/lib/options";
+import { displayDate } from "@/utils/helper";
 import { tenantTypes } from "./constants";
 
 export function addressText(tenant: any) {
@@ -6,7 +7,7 @@ export function addressText(tenant: any) {
 }
 
 export function formatDate(value: any) {
-  return value ? new Date(value).toLocaleDateString() : "-";
+  return displayDate(value);
 }
 
 export function formatTenantType(value: string) {
