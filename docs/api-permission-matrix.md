@@ -48,6 +48,8 @@ Current enforced guardrails:
 | `pharmacy.create/read/edit/delete` | Granular pharmacy workflow controls |
 | `physiotherapy.manage` | Physiotherapy case, session, equipment, and billing workflow controls |
 | `physiotherapy.create/read/edit/delete` | Granular physiotherapy workflow controls |
+| `home_care.manage` | Home-care service catalog, booking, and billing workflow controls |
+| `home_care.create/read/edit/delete` | Granular home-care service and booking controls |
 | `notifications.manage` | Notification queue create/list |
 | `audit.read` | Audit event create/list/detail |
 | `reports.read` | Subscription active/entitlement reads and future reports |
@@ -378,6 +380,22 @@ Lab APIs enforce module entitlement and branch scope for catalog, packages, temp
 
 Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, multiple consent-file upload, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection and receipt PDFs use the shared billing endpoints.
 
+## Home Care
+
+| Method | Endpoint | Permission |
+| --- | --- | --- |
+| `GET` | `/api/v1/home-care/services` | Any of `home_care.read`, `home_care.manage` |
+| `POST` | `/api/v1/home-care/services` | Any of `home_care.create`, `home_care.manage` |
+| `PATCH` | `/api/v1/home-care/services/{service_id}` | Any of `home_care.edit`, `home_care.manage` |
+| `DELETE` | `/api/v1/home-care/services/{service_id}` | Any of `home_care.delete`, `home_care.manage` |
+| `GET` | `/api/v1/home-care/bookings` | Any of `home_care.read`, `home_care.manage` |
+| `POST` | `/api/v1/home-care/bookings` | Any of `home_care.create`, `home_care.manage` |
+| `PATCH` | `/api/v1/home-care/bookings/{booking_id}` | Any of `home_care.edit`, `home_care.manage` |
+| `GET` | `/api/v1/home-care/bookings/{booking_id}/invoice` | `billing.manage` |
+| `POST` | `/api/v1/home-care/bookings/{booking_id}/invoice` | `billing.manage` |
+
+Home-care APIs enforce the `home_care` module entitlement and branch scope for service catalog rows and patient bookings. Booking invoice endpoints use the shared billing permission and create invoices from billable home-care booking items.
+
 ## Files, Settings, Notifications, and Audit
 
 | Method | Endpoint | Permission |
@@ -391,6 +409,7 @@ Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP 
 | `GET` | `/api/v1/settings` | `settings.manage` |
 | `GET` | `/api/v1/settings/resolve` | `settings.manage` |
 | `GET` | `/api/v1/settings/bundle` | `settings.manage` |
+| `GET` | `/api/v1/settings/sidebar-modules` | Authenticated tenant user |
 | `POST` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications` | `notifications.manage` |
 | `POST` | `/api/v1/audit-events` | `audit.read` |

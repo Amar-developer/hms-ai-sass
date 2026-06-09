@@ -90,6 +90,7 @@ class InvoiceRead(BaseModel):
     pharmacy_issue_id: str | None = None
     ip_admission_id: str | None = None
     physiotherapy_case_id: str | None = None
+    home_care_booking_id: str | None = None
     patient_subscription_enrollment_id: str | None = None
     patient_subscription_plan_id: str | None = None
     invoice_number: str

@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useMemo,useState} from 'react';
-import {ActionButton,Badge,Button,Card,Input,Select} from '@/components/common/ui';
+import {ActionButton,Badge,Button,Card,Input,Select,StatusToast} from '@/components/common/ui';
 import {FormField} from '@/components/FormElements';
 import {apiFetch} from '@/lib/api';
 
@@ -110,7 +110,8 @@ export function PatientSubscriptions({apiSession,branchId,branches,clinic,patien
  }
 
  async function createPlan(event:any){
-  event.preventDefault();const fd=new FormData(event.currentTarget);
+  event.preventDefault();const form=event.currentTarget as HTMLFormElement;const fd=new FormData(form);
+  if(busy==='plan')return;
   setBusy('plan');setToast(null);
   try{
    const selectedBranches=createBranchIds.length?createBranchIds:[branchId||''];
@@ -122,6 +123,7 @@ export function PatientSubscriptions({apiSession,branchId,branches,clinic,patien
     free_consultations:Number(fd.get('freeConsultations')||0),
     lab_discount_percentage:Number(fd.get('labDiscount')||0),
     pharmacy_discount_percentage:Number(fd.get('pharmacyDiscount')||0),
+    min_discount_amount:Number(fd.get('minDiscountAmount')||0),
     created_by_user_id:apiSession.user?.id,
    };
    for(const selectedBranch of selectedBranches){
@@ -139,7 +141,7 @@ export function PatientSubscriptions({apiSession,branchId,branches,clinic,patien
      discounted_medicine_ids:discountedMedIds,
     })});
    }
-   event.currentTarget.reset();setCreateBranchIds(branchId?[branchId]:['']);setFreeLabTestIds([]);setDiscountedLabTestIds([]);setFreeMedicineIds([]);setDiscountedMedicineIds([]);
+   form.reset();setCreateBranchIds(branchId?[branchId]:['']);setFreeLabTestIds([]);setDiscountedLabTestIds([]);setFreeMedicineIds([]);setDiscountedMedicineIds([]);
    setView('list');await load();setToast({text:selectedBranches.length>1?'Patient subscription plans created for selected branches.':'Patient subscription plan created.',kind:'success'});
   }catch(err:any){setToast({text:err.message||'Could not create plan.',kind:'error'})}finally{setBusy('')}
  }
@@ -186,6 +188,7 @@ export function PatientSubscriptions({apiSession,branchId,branches,clinic,patien
     free_consultations:Number(fd.get('freeConsultations')||0),
     lab_discount_percentage:Number(fd.get('labDiscount')||0),
     pharmacy_discount_percentage:Number(fd.get('pharmacyDiscount')||0),
+    min_discount_amount:Number(fd.get('minDiscountAmount')||0),
     free_lab_test_ids:editFreeLabIds,
     discounted_lab_test_ids:editDiscountedLabIds,
     free_medicine_ids:editFreeMedIds,
@@ -217,21 +220,16 @@ export function PatientSubscriptions({apiSession,branchId,branches,clinic,patien
 
  if(!apiSession)return <Card><h3 className="text-lg font-bold">Patient Subscriptions</h3><p className="mt-2 text-sm text-slate-500">Backend login is required.</p></Card>;
 
- const toastStyle=toast?.kind==='error'
-  ?'bg-red-50 text-red-700 border border-red-200'
-  :toast?.kind==='warn'
-  ?'bg-amber-50 text-amber-700 border border-amber-200'
-  :'bg-green-50 text-green-700 border border-green-200';
  const activeEnrollments=enrollments.filter((row:any)=>row.status==='active');
  const detailPlan=detailPlanId?plans.find((plan:any)=>plan.id===detailPlanId):null;
 
  return <div className="space-y-5">
   <Card><div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center"><div><h3 className="text-xl font-bold">Patient Subscriptions</h3><p className="text-sm text-slate-500">Create clinic membership plans with free consultations, lab benefits, and pharmacy benefits.</p></div><Badge tone="green">Tenant module</Badge></div></Card>
   {loadError&&<div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700"><span className="font-bold">⚠ Could not load plans:</span><span className="flex-1">{loadError}</span><button type="button" className="font-bold underline" onClick={load}>Retry</button><button type="button" className="ml-2 font-bold" onClick={()=>setLoadError('')}>✕</button></div>}
-  {toast&&<div className={`rounded-2xl p-3 text-sm font-semibold ${toastStyle}`}>{toast.text}</div>}
+  <StatusToast message={toast?.text} tone={toast?.kind==='error'?'error':toast?.kind==='warn'?'warning':undefined} onClose={()=>setToast(null)}/>
   {view==='detail'&&detailPlan&&<PlanDetailPage plan={detailPlan} labTests={labTests} medicines={medicines} branchName={branchName} onBack={()=>{setDetailPlanId('');setView('list')}} onEdit={()=>startEdit(detailPlan)} onToggle={()=>togglePlanActive(detailPlan)}/>}
-  {view==='create'&&<PlanForm title="Create Plan" branches={branchRows} selectedBranches={createBranchIds} setSelectedBranches={setCreateBranchIds} busy={busy==='plan'} submitLabel="Create Plan" onSubmit={createPlan} back={()=>setView('list')} labTests={labTests} medicines={medicines} freeLabTestIds={freeLabTestIds} setFreeLabTestIds={setFreeLabTestIds} discountedLabTestIds={discountedLabTestIds} setDiscountedLabTestIds={setDiscountedLabTestIds} freeMedicineIds={freeMedicineIds} setFreeMedicineIds={setFreeMedicineIds} discountedMedicineIds={discountedMedicineIds} setDiscountedMedicineIds={setDiscountedMedicineIds}/>}
-  {view==='edit'&&editingPlan&&<PlanForm title="Edit Plan" plan={editingPlan} branches={branchRows} busy={busy==='edit'} submitLabel="Save Changes" onSubmit={updatePlan} back={cancelEdit} labTests={labTests} medicines={medicines} freeLabTestIds={editFreeLabIds} setFreeLabTestIds={setEditFreeLabIds} discountedLabTestIds={editDiscountedLabIds} setDiscountedLabTestIds={setEditDiscountedLabIds} freeMedicineIds={editFreeMedIds} setFreeMedicineIds={setEditFreeMedIds} discountedMedicineIds={editDiscountedMedIds} setDiscountedMedicineIds={setEditDiscountedMedIds}/>}
+  {view==='create'&&<PlanForm title="Create Plan" apiSession={apiSession} branches={branchRows} selectedBranches={createBranchIds} setSelectedBranches={setCreateBranchIds} busy={busy==='plan'} submitLabel="Create Plan" onSubmit={createPlan} back={()=>setView('list')} labTests={labTests} medicines={medicines} freeLabTestIds={freeLabTestIds} setFreeLabTestIds={setFreeLabTestIds} discountedLabTestIds={discountedLabTestIds} setDiscountedLabTestIds={setDiscountedLabTestIds} freeMedicineIds={freeMedicineIds} setFreeMedicineIds={setFreeMedicineIds} discountedMedicineIds={discountedMedicineIds} setDiscountedMedicineIds={setDiscountedMedicineIds}/>}
+  {view==='edit'&&editingPlan&&<PlanForm title="Edit Plan" apiSession={apiSession} plan={editingPlan} branches={branchRows} busy={busy==='edit'} submitLabel="Save Changes" onSubmit={updatePlan} back={cancelEdit} labTests={labTests} medicines={medicines} freeLabTestIds={editFreeLabIds} setFreeLabTestIds={setEditFreeLabIds} discountedLabTestIds={editDiscountedLabIds} setDiscountedLabTestIds={setEditDiscountedLabIds} freeMedicineIds={editFreeMedIds} setFreeMedicineIds={setEditFreeMedIds} discountedMedicineIds={editDiscountedMedIds} setDiscountedMedicineIds={setEditDiscountedMedIds}/>}
   {view==='list'&&<>
   {showEnrollment&&<Card><h3 className="text-lg font-bold">Enroll Patient</h3><form onSubmit={enroll} className="mt-4 grid gap-3 md:grid-cols-3"><FormField label="Patient"><Select value={selectedPatient} onChange={(e:any)=>setSelectedPatient(e.target.value)}>{(patients||[]).map((p:any)=><option key={p.id} value={p.id}>{p.name||p.full_name}</option>)}</Select></FormField><FormField label="Plan"><Select value={selectedPlan} onChange={(e:any)=>setSelectedPlan(e.target.value)}>{plans.filter((p:any)=>p.is_active).map((p:any)=><option key={p.id} value={p.id}>{p.name} · {money(p.price_amount)}</option>)}</Select></FormField><div className="flex items-end"><Button disabled={busy==='enroll'}>{busy==='enroll'?'Enrolling...':'Enroll'}</Button></div></form></Card>}
 
@@ -274,18 +272,34 @@ export function PatientSubscriptions({apiSession,branchId,branches,clinic,patien
  </div>
 }
 
-function BenefitPicker({label,kind,rows,selected,onChange,priceKey,emptyHint}:any){
+function BenefitPicker({label,kind,rows,selected,onChange,priceKey,emptyHint,apiSession,searchPath}:any){
  const [query,setQuery]=useState('');
+ const [remote,setRemote]=useState<any[]>([]);
  const normalized=query.trim().toLowerCase();
  const selectedSet=new Set(selected);
  const filtered=(rows||[]).filter((row:any)=>!selectedSet.has(row.id)&&[row.name,row.code,row.generic_name,row.department,row.form].filter(Boolean).join(' ').toLowerCase().includes(normalized)).slice(0,8);
  const exact=(rows||[]).some((row:any)=>sameName(row,query));
- function add(value:string){if(!value||selectedSet.has(value))return;onChange([...selected,value]);setQuery('')}
+ const localNames=new Set((rows||[]).map((r:any)=>String(r.name||'').trim().toLowerCase()));
+ const remoteSuggestions=(remote||[]).filter((r:any)=>r?.name&&!localNames.has(String(r.name).trim().toLowerCase())).slice(0,8);
+ useEffect(()=>{
+  const q=query.trim();
+  if(!apiSession||!searchPath||q.length<2){setRemote([]);return}
+  let alive=true;
+  const timer=setTimeout(()=>{
+   const sep=searchPath.includes('?')?'&':'?';
+   apiFetch(`${searchPath}${sep}search=${encodeURIComponent(q)}&page_size=10`,apiSession)
+    .then((data:any)=>{if(alive)setRemote(Array.isArray(data)?data:(data?.items||[]))})
+    .catch(()=>{if(alive)setRemote([])});
+  },250);
+  return ()=>{alive=false;clearTimeout(timer)};
+ },[query,apiSession,searchPath]);
+ function add(value:string){if(!value||selectedSet.has(value))return;onChange([...selected,value]);setQuery('');setRemote([])}
  function remove(value:string){onChange(selected.filter((item:string)=>item!==value))}
- return <div><FormField label={label}><Input value={query} onChange={(e:any)=>setQuery(e.target.value)} placeholder={`Search existing ${kind} or type new name`}/></FormField>{selected.length>0&&<div className="mt-2 flex flex-wrap gap-2">{selected.map((value:string)=><button key={value} type="button" onClick={()=>remove(value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">{value.startsWith('new:')?value.slice(4):benefitLabel(value,rows)} ×</button>)}</div>}{query&&<div className="mt-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><div className="max-h-56 overflow-auto">{filtered.length===0&&<p className="px-3 py-2 text-sm text-slate-500">No existing {kind} found.</p>}{filtered.map((row:any)=><button key={row.id} type="button" onClick={()=>add(row.id)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50"><span><b>{row.name}</b><span className="block text-xs text-slate-500">{[row.code,row.generic_name,row.department,row.form].filter(Boolean).join(' · ')||row.id}</span></span><span className="text-xs font-bold">{money(row[priceKey])}</span></button>)}</div>{query.trim()&&!exact&&<button type="button" onClick={()=>add(`new:${query.trim()}`)} className="mt-2 w-full rounded-xl bg-slate-900 px-3 py-2 text-left text-sm font-bold text-white">Add new {kind}: {query.trim()}</button>}</div>}{emptyHint&&selected.length===0&&<p className="mt-2 text-xs text-slate-500">{emptyHint}</p>}</div>
+ function addRemote(item:any){const local=(rows||[]).find((r:any)=>sameName(r,item.name));add(local?local.id:`new:${String(item.name).trim()}`)}
+ return <div><FormField label={label}><Input value={query} onChange={(e:any)=>setQuery(e.target.value)} placeholder={`Search existing ${kind} or type new name`}/></FormField>{selected.length>0&&<div className="mt-2 flex flex-wrap gap-2">{selected.map((value:string)=><button key={value} type="button" onClick={()=>remove(value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700">{value.startsWith('new:')?value.slice(4):benefitLabel(value,rows)} ×</button>)}</div>}{query&&<div className="mt-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"><div className="max-h-56 overflow-auto">{filtered.length===0&&remoteSuggestions.length===0&&<p className="px-3 py-2 text-sm text-slate-500">No matching {kind} found.</p>}{filtered.map((row:any)=><button key={row.id} type="button" onClick={()=>add(row.id)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50"><span><b>{row.name}</b><span className="block text-xs text-slate-500">{[row.code,row.generic_name,row.department,row.form].filter(Boolean).join(' · ')||row.id}</span></span><span className="text-xs font-bold">{money(row[priceKey])}</span></button>)}{remoteSuggestions.map((item:any,index:number)=><button key={`remote-${item.id||item.slug||index}`} type="button" onClick={()=>addRemote(item)} className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50"><span><b>{item.name}</b><span className="block text-xs text-slate-500">{[item.code,item.generic_name,item.department].filter(Boolean).join(' · ')||'External catalog'}</span></span><Badge tone="blue">External</Badge></button>)}</div>{query.trim()&&!exact&&<button type="button" onClick={()=>add(`new:${query.trim()}`)} className="mt-2 w-full rounded-xl bg-slate-900 px-3 py-2 text-left text-sm font-bold text-white">Add new {kind}: {query.trim()}</button>}</div>}{emptyHint&&selected.length===0&&<p className="mt-2 text-xs text-slate-500">{emptyHint}</p>}</div>
 }
 
-function PlanForm({title,plan,branches,selectedBranches,setSelectedBranches,busy,submitLabel,onSubmit,back,labTests,medicines,freeLabTestIds,setFreeLabTestIds,discountedLabTestIds,setDiscountedLabTestIds,freeMedicineIds,setFreeMedicineIds,discountedMedicineIds,setDiscountedMedicineIds}:any){
+function PlanForm({title,plan,branches,selectedBranches,setSelectedBranches,busy,submitLabel,onSubmit,back,labTests,medicines,freeLabTestIds,setFreeLabTestIds,discountedLabTestIds,setDiscountedLabTestIds,freeMedicineIds,setFreeMedicineIds,discountedMedicineIds,setDiscountedMedicineIds,apiSession}:any){
  return <Card>
   <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
    <div><h3 className="text-lg font-bold">{title}</h3><p className="text-sm text-slate-500">{plan?'Update this membership plan.':'Choose one or more branches for this membership plan.'}</p></div>
@@ -299,11 +313,12 @@ function PlanForm({title,plan,branches,selectedBranches,setSelectedBranches,busy
    <FormField label="Free Consultations"><Input name="freeConsultations" type="number" min="0" defaultValue={plan?.free_consultations??1}/></FormField>
    <FormField label="Lab Discount %"><Input name="labDiscount" type="number" min="0" max="100" defaultValue={plan?.lab_discount_percentage??5}/></FormField>
    <FormField label="Pharmacy Discount %"><Input name="pharmacyDiscount" type="number" min="0" max="100" defaultValue={plan?.pharmacy_discount_percentage??5}/></FormField>
+   <FormField label="Min Bill for % Discount (₹)"><Input name="minDiscountAmount" type="number" min="0" defaultValue={plan?.min_discount_amount??500} placeholder="0 = no minimum"/></FormField>
    {plan?<FormField label="Branch"><Select name="branchId" defaultValue={plan.branch_id||''}><option value="">All branches</option>{branches.map((branch:any)=><option key={branch.id} value={branch.id}>{branch.name}</option>)}</Select></FormField>:<div className="md:col-span-2 xl:col-span-4"><BranchPicker branches={branches} selected={selectedBranches} onChange={setSelectedBranches}/></div>}
-   <div className="md:col-span-2"><BenefitPicker label="Free Lab Tests" kind="lab test" rows={labTests} selected={freeLabTestIds} onChange={setFreeLabTestIds} priceKey="default_price"/></div>
-   <div className="md:col-span-2"><BenefitPicker label="Discounted Lab Tests" kind="lab test" rows={labTests} selected={discountedLabTestIds} onChange={setDiscountedLabTestIds} priceKey="default_price" emptyHint="Leave empty to apply lab percentage to all lab tests."/></div>
-   <div className="md:col-span-2"><BenefitPicker label="Free Tablets / Medicines" kind="medicine" rows={medicines} selected={freeMedicineIds} onChange={setFreeMedicineIds} priceKey="default_sale_price"/></div>
-   <div className="md:col-span-2"><BenefitPicker label="Discounted Tablets / Medicines" kind="medicine" rows={medicines} selected={discountedMedicineIds} onChange={setDiscountedMedicineIds} priceKey="default_sale_price" emptyHint="Leave empty to apply pharmacy percentage to all medicines."/></div>
+   <div className="md:col-span-2"><BenefitPicker label="Free Lab Tests" kind="lab test" rows={labTests} selected={freeLabTestIds} onChange={setFreeLabTestIds} priceKey="default_price" apiSession={apiSession} searchPath="/lab/catalog/available-tests"/></div>
+   <div className="md:col-span-2"><BenefitPicker label="Discounted Lab Tests" kind="lab test" rows={labTests} selected={discountedLabTestIds} onChange={setDiscountedLabTestIds} priceKey="default_price" emptyHint="Leave empty to apply lab percentage to all lab tests." apiSession={apiSession} searchPath="/lab/catalog/available-tests"/></div>
+   <div className="md:col-span-2"><BenefitPicker label="Free Tablets / Medicines" kind="medicine" rows={medicines} selected={freeMedicineIds} onChange={setFreeMedicineIds} priceKey="default_sale_price" apiSession={apiSession} searchPath="/pharmacy/catalog/available-medicines"/></div>
+   <div className="md:col-span-2"><BenefitPicker label="Discounted Tablets / Medicines" kind="medicine" rows={medicines} selected={discountedMedicineIds} onChange={setDiscountedMedicineIds} priceKey="default_sale_price" emptyHint="Leave empty to apply pharmacy percentage to all medicines." apiSession={apiSession} searchPath="/pharmacy/catalog/available-medicines"/></div>
    <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-4"><Button disabled={busy}>{busy?'Saving...':submitLabel}</Button><button type="button" onClick={back} className="rounded-2xl border px-4 py-3 text-sm font-bold">Cancel</button></div>
   </form>
  </Card>

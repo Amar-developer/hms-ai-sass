@@ -320,7 +320,12 @@ def list_available_lab_tests(
 ) -> list[dict[str, str]]:
     enforce_module_enabled(session, tenant_id, "lab")
     if _external_lab_items_enabled(session, tenant_id):
-        return _frappe_catalog_client().get_lab_items(search)
+        try:
+            return _frappe_catalog_client().get_lab_items(search)
+        except HTTPException:
+            # External ERPNext catalog is unreachable or not configured —
+            # fall back to the local MedizinHub lab catalog so the picker keeps working.
+            pass
 
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id, LabTestCatalog.is_active == True)  # noqa: E712

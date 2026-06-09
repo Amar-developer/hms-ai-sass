@@ -21,6 +21,7 @@ function invoiceSourceKey(invoice: any) {
   if (invoice.lab_order_id) return "lab_scan";
   if (invoice.pharmacy_issue_id) return "pharmacy";
   if (invoice.physiotherapy_case_id) return "physiotherapy";
+  if (invoice.home_care_booking_id) return "home_care";
   if (invoice.ip_admission_id) return "ip_billing";
   if (invoice.consultation_id || invoice.appointment_id) return "consultation";
   return "direct";
@@ -34,6 +35,7 @@ function invoiceSource(invoice: any) {
     lab_scan: { label: "Lab / Scan", tone: "blue" },
     pharmacy: { label: "Pharmacy", tone: "amber" },
     physiotherapy: { label: "Physiotherapy", tone: "purple" },
+    home_care: { label: "Home Care / Visit", tone: "blue" },
     ip_billing: { label: "IP Billing", tone: "blue" },
     consultation: { label: "Consultation", tone: "slate" },
     direct: { label: "Direct", tone: "amber" },
@@ -44,6 +46,7 @@ function invoiceSource(invoice: any) {
 function invoiceLinkedRecord(invoice: any) {
   if (invoice.ip_admission_id) return "IP admission";
   if (invoice.physiotherapy_case_id) return "Physiotherapy case";
+  if (invoice.home_care_booking_id) return "Home care / visit booking";
   if (invoice.pharmacy_issue_id) return "Pharmacy issue";
   if (invoice.lab_order_id) return "Lab / Scan order";
   if (invoice.consultation_id) return "Consultation";
@@ -136,6 +139,7 @@ function itemTypeLabel(type: any) {
     ip_lab: "IP Lab / Scan",
     ip_charge: "IP Charge",
     physiotherapy: "Physiotherapy",
+    home_care: "Home Care / Visit",
   };
   return (
     labels[String(type || "")] || String(type || "Service").replaceAll("_", " ")
@@ -454,6 +458,46 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     }
   }
 
+  async function collectSplitPayment(invoice: any, rows: any[]) {
+    if (!apiSession) return;
+    const valid = (rows || [])
+      .map((row) => ({
+        method: row.method || defaultPaymentMethod,
+        amount: Number(row.amount || 0),
+        reference_number: row.reference?.trim() ? row.reference.trim() : null,
+      }))
+      .filter((row) => row.amount > 0);
+    if (!valid.length) {
+      setMessage("Enter at least one payment amount.");
+      return;
+    }
+    const total = valid.reduce((sum, row) => sum + row.amount, 0);
+    const balance = Number(invoice.balance_amount || 0);
+    if (total > balance) {
+      setMessage(`Total ${money(total)} exceeds balance due ${money(balance)}.`);
+      return;
+    }
+    setBusy(invoice.id);
+    setMessage("");
+    try {
+      for (const row of valid) {
+        await apiFetch(`/billing/invoices/${invoice.id}/payments`, apiSession, {
+          method: "POST",
+          body: JSON.stringify({ ...row, collected_by_user_id: apiSession.user?.id }),
+        });
+      }
+      await loadLiveData(apiSession);
+      await loadReports();
+      await openInvoiceDetail(invoice);
+      const modes = valid.length > 1 ? `${valid.length} payment modes` : valid[0].method;
+      setMessage(`Recorded ${money(total)} (${modes}) for ${invoice.invoice_number}.`);
+    } catch (err: any) {
+      setMessage(err.message || "Could not record payment.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function applyMembershipBenefit(invoice: any) {
     if (!apiSession) return;
     setBusy(`membership-${invoice.id}`);
@@ -587,6 +631,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
           await collectPayment(invoice);
           await openInvoiceDetail(invoice);
         }}
+        collectSplitPayment={collectSplitPayment}
         refreshConsultationInvoice={async (invoice: any) => {
           await refreshConsultationInvoice(invoice);
           await openInvoiceDetail(invoice);
@@ -877,6 +922,7 @@ function InvoiceDetailPage({
   defaultPaymentMethod,
   busy,
   collectPayment,
+  collectSplitPayment,
   refreshConsultationInvoice,
   applyMembershipBenefit,
   openReceipt,
@@ -896,6 +942,23 @@ function InvoiceDetailPage({
   const taxableAmount=numberValue(invoice.taxable_amount);
   const taxAmount=numberValue(invoice.tax_amount);
   const canRefresh=invoice.consultation_id&&!invoice.lab_order_id&&!invoice.pharmacy_issue_id&&!invoice.ip_admission_id&&!invoice.physiotherapy_case_id;
+  const balanceDue=numberValue(invoice.balance_amount);
+  const [payRows,setPayRows]=useState<any[]>([{method:defaultPaymentMethod,amount:"",reference:""}]);
+  useEffect(()=>{
+    setPayRows([{method:defaultPaymentMethod,amount:String(balanceDue||""),reference:""}]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[invoice.id,invoice.balance_amount,defaultPaymentMethod]);
+  const enteredTotal=payRows.reduce((sum,row)=>sum+Number(row.amount||0),0);
+  const remaining=balanceDue-enteredTotal;
+  function updatePayRow(index:number,key:string,value:any){
+    setPayRows((rows)=>rows.map((row,i)=>i===index?{...row,[key]:value}:row));
+  }
+  function addPayRow(){
+    setPayRows((rows)=>[...rows,{method:defaultPaymentMethod,amount:remaining>0?String(remaining):"",reference:""}]);
+  }
+  function removePayRow(index:number){
+    setPayRows((rows)=>rows.length>1?rows.filter((_,i)=>i!==index):rows);
+  }
   return (
     <div className="space-y-5">
       <Card>
@@ -1135,54 +1198,110 @@ function InvoiceDetailPage({
                     </div>
                   </div>
                   {numberValue(invoice.balance_amount) > 0 ? (
-                    <div className="grid gap-2">
-                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                        <Select
-                          value={methods[invoice.id] || defaultPaymentMethod}
-                          onChange={(e: any) =>
-                            setMethods({
-                              ...methods,
-                              [invoice.id]: e.target.value,
-                            })
-                          }
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900">
+                            Collect Payment
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Split across multiple modes if needed
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={addPayRow}
+                          className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-900 hover:bg-slate-50"
                         >
-                          {invoicePaymentOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </Select>
-                        <Input
-                          className="text-right tabular-nums"
-                          type="number"
-                          min="1"
-                          max={invoice.balance_amount}
-                          value={amounts[invoice.id] ?? invoice.balance_amount}
-                          onChange={(e: any) =>
-                            setAmounts({
-                              ...amounts,
-                              [invoice.id]: e.target.value,
-                            })
-                          }
-                        />
+                          + Add mode
+                        </button>
                       </div>
-                      <TextField
-                        label="Reference Number"
-                        value={references[invoice.id] || ""}
-                        onChange={(v) =>
-                          setReferences({ ...references, [invoice.id]: v })
-                        }
-                        placeholder="Reference number"
-                      />
-                      <Button
-                        className="w-full"
-                        disabled={busy === invoice.id}
-                        onClick={() => collectPayment(invoice)}
+                      <div className="mt-3 space-y-3">
+                        {payRows.map((row, index) => (
+                          <div
+                            key={index}
+                            className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                          >
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <Select
+                                value={row.method}
+                                onChange={(e: any) =>
+                                  updatePayRow(index, "method", e.target.value)
+                                }
+                              >
+                                {invoicePaymentOptions.map((option) => (
+                                  <option key={option.value} value={option.value}>
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </Select>
+                              <Input
+                                className="text-right tabular-nums"
+                                type="number"
+                                min="0"
+                                placeholder="Amount"
+                                value={row.amount}
+                                onChange={(e: any) =>
+                                  updatePayRow(index, "amount", e.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="mt-2 flex items-center gap-2">
+                              <Input
+                                placeholder="Reference number (optional)"
+                                value={row.reference}
+                                onChange={(e: any) =>
+                                  updatePayRow(index, "reference", e.target.value)
+                                }
+                              />
+                              {payRows.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => removePayRow(index)}
+                                  className="shrink-0 rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold">
+                        <span className="text-slate-500">Entering</span>
+                        <span className="tabular-nums text-slate-900">
+                          {money(enteredTotal)} / {money(balanceDue)}
+                        </span>
+                      </div>
+                      {remaining < 0 && (
+                        <p className="mt-1 text-xs font-bold text-rose-600">
+                          Exceeds balance by {money(Math.abs(remaining))}
+                        </p>
+                      )}
+                      {remaining > 0 && enteredTotal > 0 && (
+                        <p className="mt-1 text-xs font-bold text-amber-600">
+                          {money(remaining)} will remain due (partial payment)
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        disabled={busy === invoice.id || enteredTotal <= 0 || remaining < 0}
+                        onClick={() => collectSplitPayment(invoice, payRows)}
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-3.5 text-base font-black tracking-wide text-white shadow-lg shadow-slate-900/20 transition hover:from-slate-800 hover:to-slate-600 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                       >
-                        {busy === invoice.id
-                          ? "Saving Payment..."
-                          : `Pay ${money(amounts[invoice.id] ?? invoice.balance_amount)}`}
-                      </Button>
+                        {busy === invoice.id ? (
+                          "Saving Payment..."
+                        ) : (
+                          <>
+                            <span>
+                              {payRows.filter((r) => Number(r.amount) > 0).length > 1
+                                ? "Pay (Split)"
+                                : "Pay"}
+                            </span>
+                            <span className="tabular-nums">{money(enteredTotal)}</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">

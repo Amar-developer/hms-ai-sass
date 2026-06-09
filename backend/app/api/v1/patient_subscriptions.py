@@ -96,6 +96,24 @@ def create_plan(
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
+    name_norm = (payload.name or "").strip().lower()
+    branch_filter = (
+        PatientSubscriptionPlan.branch_id == payload.branch_id
+        if payload.branch_id
+        else PatientSubscriptionPlan.branch_id.is_(None)
+    )
+    duplicate = session.exec(
+        select(PatientSubscriptionPlan).where(
+            PatientSubscriptionPlan.tenant_id == tenant_id,
+            PatientSubscriptionPlan.is_active == True,  # noqa: E712
+            branch_filter,
+        )
+    ).all()
+    if any((existing.name or "").strip().lower() == name_norm for existing in duplicate):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active subscription plan with this name already exists for this branch",
+        )
     plan = PatientSubscriptionPlan(
         **payload.model_dump(
             exclude={

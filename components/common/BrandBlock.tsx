@@ -8,7 +8,6 @@ export function BrandBlock({
   compact = false,
   setSidebarOpen,
 }: BrandBlockProps) {
-    console.log(compact,'co')
   return (
     <div className="flex items-center gap-3">
       <div

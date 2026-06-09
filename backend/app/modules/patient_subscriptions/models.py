@@ -28,6 +28,7 @@ class PatientSubscriptionPlan(SQLModel, table=True):
     free_consultations: int = Field(default=0, ge=0)
     lab_discount_percentage: int = Field(default=0, ge=0, le=100)
     pharmacy_discount_percentage: int = Field(default=0, ge=0, le=100)
+    min_discount_amount: int = Field(default=500, ge=0)
     free_lab_test_ids_json: str = Field(default="[]")
     discounted_lab_test_ids_json: str = Field(default="[]")
     free_medicine_ids_json: str = Field(default="[]")

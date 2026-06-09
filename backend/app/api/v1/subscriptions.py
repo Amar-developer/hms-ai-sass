@@ -11,6 +11,7 @@ from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
 from app.modules.identity import permissions
 from app.modules.identity.models import User
+from app.modules.manifest import MODULES
 from app.modules.subscriptions.models import (
     CreditStatus,
     SubscriptionCredit,
@@ -98,6 +99,35 @@ def _plan_read(plan: SubscriptionPlan) -> SubscriptionPlanRead:
     )
 
 
+def _normalize_enabled_modules(raw_modules: list[str] | None) -> list[str]:
+    entitlement_modules = {
+        str(module["entitlement_key"]): module
+        for module in MODULES
+        if module.get("entitlement_key")
+    }
+    module_by_key = {str(module["key"]): module for module in MODULES}
+    selected = {str(module).strip() for module in (raw_modules or []) if str(module).strip()}
+    if not selected:
+        selected = set(CORE_HMS_MODULES)
+
+    changed = True
+    while changed:
+        changed = False
+        for module_key in list(selected):
+            module = entitlement_modules.get(module_key)
+            if not module:
+                continue
+            for dependency in module.get("dependencies", []):
+                dependency_module = module_by_key.get(str(dependency))
+                dependency_key = dependency_module.get("entitlement_key") if dependency_module else dependency
+                if dependency_key and dependency_key not in selected:
+                    selected.add(str(dependency_key))
+                    changed = True
+
+    allowed = set(entitlement_modules)
+    return sorted(module for module in selected if module in allowed)
+
+
 def _platform_audit_tenant_id(session: Session, current_user: User) -> str | None:
     if current_user.tenant_id:
         return current_user.tenant_id
@@ -172,7 +202,7 @@ def create_plan(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
 ) -> SubscriptionPlanRead:
-    enabled_modules = payload.enabled_modules or CORE_HMS_MODULES
+    enabled_modules = _normalize_enabled_modules(payload.enabled_modules)
     plan = SubscriptionPlan.model_validate(
         payload.model_dump(exclude={"enabled_modules"}),
         update={
@@ -227,7 +257,7 @@ def update_plan(
     for key, value in updates.items():
         setattr(plan, key, value)
     if enabled_modules is not None:
-        plan.enabled_modules_json = modules_to_json(enabled_modules or CORE_HMS_MODULES)
+        plan.enabled_modules_json = modules_to_json(_normalize_enabled_modules(enabled_modules))
     plan.updated_by_user_id = current_user.id
     plan.updated_at = now_utc()
     session.add(plan)
@@ -407,6 +437,9 @@ def get_entitlements(
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
             permissions.PATIENT_SUBSCRIPTIONS_READ,
             permissions.PATIENT_SUBSCRIPTIONS_CREATE,
+            permissions.HOME_CARE_MANAGE,
+            permissions.HOME_CARE_READ,
+            permissions.HOME_CARE_CREATE,
         )
     ),
 ) -> EntitlementRead:

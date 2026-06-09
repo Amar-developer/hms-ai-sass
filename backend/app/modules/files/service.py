@@ -21,6 +21,7 @@ def record_file_document(
     attached_to_field: str | None = None,
     attached_to_label: str | None = None,
     folder: str | None = None,
+    notes: str | None = None,
     uploaded_by_user_id: str | None = None,
     is_private: bool = False,
 ) -> FileDocument:
@@ -43,6 +44,7 @@ def record_file_document(
         existing.source_module = source_module or existing.source_module
         existing.attached_to_label = attached_to_label or existing.attached_to_label
         existing.folder = folder or existing.folder
+        existing.notes = notes if notes is not None else existing.notes
         existing.uploaded_by_user_id = uploaded_by_user_id or existing.uploaded_by_user_id
         existing.is_private = is_private
         existing.is_active = True
@@ -64,6 +66,7 @@ def record_file_document(
         attached_to_field=attached_to_field,
         attached_to_label=attached_to_label,
         folder=folder,
+        notes=notes,
         uploaded_by_user_id=uploaded_by_user_id,
         is_private=is_private,
     )

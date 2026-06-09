@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
-from app.core.auth import require_any_permission, require_permission
+from app.core.auth import get_current_user, require_any_permission, require_permission
 from app.core.database import get_session
+from app.core.schema_repair import ensure_settingkey_enum_values
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -94,6 +95,27 @@ def list_admin_settings(
         statement = statement.where(AdminSetting.module == module)
     settings = list(session.exec(statement.order_by(AdminSetting.created_at)).all())
     return [_read_setting(setting) for setting in settings]
+
+
+@router.get("/sidebar-modules", response_model=dict)
+def get_sidebar_role_modules(
+    tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Per-role sidebar module map (e.g. {"reception": ["appointments", ...]}).
+
+    Readable by any authenticated user so each user's sidebar can render. Empty
+    roles fall back to the frontend's built-in defaults.
+    """
+    ensure_settingkey_enum_values(session)
+    value, _scope, _scope_id = resolve_setting(
+        session,
+        tenant_id=tenant_id,
+        module="navigation",
+        key=SettingKey.SIDEBAR_ROLE_MODULES,
+    )
+    return value if isinstance(value, dict) else {}
 
 
 @router.get(

@@ -27,10 +27,11 @@ function today() {
   return new Date().toISOString().slice(0, 10);
 }
 function patientName(p: any) {
-  return p?.name || p?.full_name || p?.patient_name || p?.id || "Patient";
+  return p?.name || p?.full_name || p?.patient_name || "Patient";
 }
 function patientLabel(p: any) {
-  return `${patientName(p)} · ${p?.mobile || p?.patientNumber || p?.patient_number || p?.id || ""}`;
+  const detail = p?.patientNumber || p?.patient_number || p?.mobile || "";
+  return detail ? `${patientName(p)} · ${detail}` : patientName(p);
 }
 function appointmentPatientId(row: any) {
   return row?.patientId || row?.patient_id || "";

@@ -38,6 +38,7 @@ def plan_to_read_dict(plan: PatientSubscriptionPlan) -> dict:
         "free_consultations": plan.free_consultations,
         "lab_discount_percentage": plan.lab_discount_percentage,
         "pharmacy_discount_percentage": plan.pharmacy_discount_percentage,
+        "min_discount_amount": plan.min_discount_amount,
         "is_active": plan.is_active,
         "created_by_user_id": plan.created_by_user_id,
         "updated_by_user_id": plan.updated_by_user_id,
@@ -112,8 +113,14 @@ def benefit_preview(
             discount_amount = subtotal_amount
             reason = "Selected lab test is fully free in this plan"
         elif plan.lab_discount_percentage > 0 and (not discounted_ids or discounted_item_ids):
-            discount_amount = round(subtotal_amount * plan.lab_discount_percentage / 100)
-            reason = f"{plan.lab_discount_percentage}% lab discount"
+            if subtotal_amount > plan.min_discount_amount:
+                discount_amount = round(subtotal_amount * plan.lab_discount_percentage / 100)
+                reason = f"{plan.lab_discount_percentage}% lab discount"
+            else:
+                reason = (
+                    f"Lab bill must exceed ₹{plan.min_discount_amount} "
+                    f"to unlock the {plan.lab_discount_percentage}% lab discount"
+                )
     elif service_type == "pharmacy":
         free_ids = set(ids_from_json(plan.free_medicine_ids_json))
         discounted_ids = set(ids_from_json(plan.discounted_medicine_ids_json))
@@ -123,8 +130,14 @@ def benefit_preview(
             discount_amount = subtotal_amount
             reason = "Selected medicine is fully free in this plan"
         elif plan.pharmacy_discount_percentage > 0 and (not discounted_ids or discounted_item_ids):
-            discount_amount = round(subtotal_amount * plan.pharmacy_discount_percentage / 100)
-            reason = f"{plan.pharmacy_discount_percentage}% pharmacy discount"
+            if subtotal_amount > plan.min_discount_amount:
+                discount_amount = round(subtotal_amount * plan.pharmacy_discount_percentage / 100)
+                reason = f"{plan.pharmacy_discount_percentage}% pharmacy discount"
+            else:
+                reason = (
+                    f"Pharmacy bill must exceed ₹{plan.min_discount_amount} "
+                    f"to unlock the {plan.pharmacy_discount_percentage}% pharmacy discount"
+                )
     discount_amount = min(discount_amount, subtotal_amount)
     return {
         "plan_id": plan.id,

@@ -4,6 +4,7 @@
 
 body {
   background: #ffffff;
+  font-family: "Poppins", "Inter", "Segoe UI", Arial, sans-serif;
 }
 
 .scrollbar-hidden {

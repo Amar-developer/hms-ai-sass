@@ -6,6 +6,7 @@ from app.api.v1.billing import router as billing_router
 from app.api.v1.consultations import router as consultations_router
 from app.api.v1.health import router as health_router
 from app.api.v1.files import router as files_router
+from app.api.v1.home_care import router as home_care_router
 from app.api.v1.identity import router as identity_router
 from app.api.v1.ip import router as ip_router
 from app.api.v1.lab import router as lab_router
@@ -42,5 +43,6 @@ api_router.include_router(ip_router, tags=["ip"])
 api_router.include_router(lab_router, tags=["lab"])
 api_router.include_router(pharmacy_router, tags=["pharmacy"])
 api_router.include_router(physiotherapy_router, tags=["physiotherapy"])
+api_router.include_router(home_care_router, tags=["home-care"])
 api_router.include_router(settings_router, tags=["settings"])
 api_router.include_router(notifications_router, tags=["notifications"])

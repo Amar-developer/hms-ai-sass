@@ -11,6 +11,27 @@ export type ApiSession = {
   user: any;
 };
 
+export const AUTH_SESSION_EXPIRED_EVENT = 'medizinhub.auth.sessionExpired';
+
+function notifySessionExpired() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT));
+}
+
+async function readErrorDetail(res: Response) {
+  let detail = `${res.status} ${res.statusText}`;
+  try {
+    const body = await res.json();
+    detail =
+      typeof body.detail === 'string'
+        ? body.detail
+        : body.detail
+          ? JSON.stringify(body.detail)
+          : detail;
+  } catch {}
+  return detail;
+}
+
 export async function apiFetch(path: string, session: ApiSession, options: RequestInit = {}) {
   let res: Response;
   try {
@@ -29,16 +50,8 @@ export async function apiFetch(path: string, session: ApiSession, options: Reque
     );
   }
   if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      detail =
-        typeof body.detail === 'string'
-          ? body.detail
-          : body.detail
-            ? JSON.stringify(body.detail)
-            : detail;
-    } catch {}
+    const detail = await readErrorDetail(res);
+    if (res.status === 401) notifySessionExpired();
     throw new Error(`${path}: ${detail}`);
   }
   if (res.status === 204 || res.headers.get('content-length') === '0') return null;
@@ -62,16 +75,8 @@ export async function apiBlob(path: string, session: ApiSession, options: Reques
     );
   }
   if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      detail =
-        typeof body.detail === 'string'
-          ? body.detail
-          : body.detail
-            ? JSON.stringify(body.detail)
-            : detail;
-    } catch {}
+    const detail = await readErrorDetail(res);
+    if (res.status === 401) notifySessionExpired();
     throw new Error(`${path}: ${detail}`);
   }
   return res.blob();
@@ -92,11 +97,8 @@ export async function apiUpload(path: string, session: ApiSession, formData: For
     throw new Error(`Could not connect to MedizinHub HMS backend at ${API_BASE}.`);
   }
   if (!res.ok) {
-    let detail = `${res.status} ${res.statusText}`;
-    try {
-      const body = await res.json();
-      detail = body.detail || detail;
-    } catch {}
+    const detail = await readErrorDetail(res);
+    if (res.status === 401) notifySessionExpired();
     throw new Error(`${path}: ${detail}`);
   }
   return res.json();

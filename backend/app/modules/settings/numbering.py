@@ -19,6 +19,7 @@ DEFAULT_ENTITY_CODES: dict[str, str] = {
     "invoice": "INV",
     "ip_admission": "IP",
     "physiotherapy_case": "PHY",
+    "home_care_booking": "HC",
     "supplier": "SUP",
 }
 
@@ -32,6 +33,7 @@ ENTITY_COLUMNS: dict[str, tuple[str, str, bool]] = {
     "invoice": ("invoice", "invoice_number", True),
     "ip_admission": ("ipadmission", "admission_number", True),
     "physiotherapy_case": ("physiotherapycase", "case_number", True),
+    "home_care_booking": ("homecarebooking", "booking_number", True),
     "supplier": ("pharmacysupplier", "supplier_number", False),
 }
 

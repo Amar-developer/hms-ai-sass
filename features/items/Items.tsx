@@ -11,6 +11,7 @@ const itemTypes = [
   ["lab_test", "Lab Test"],
   ["lab_package", "Lab Package"],
   ["physio_equipment", "Physiotherapy Equipment"],
+  ["home_care_service", "Home Care / Visit Service"],
 ];
 
 const modalities = [
@@ -24,6 +25,21 @@ const modalities = [
   ["exercise", "Therapeutic Exercise"],
 ];
 
+function generatedItemCode(type: string, name: string) {
+  const prefixes: Record<string, string> = {
+    medicine: "MED",
+    lab_test: "LAB",
+    lab_package: "PKG",
+    physio_equipment: "PHY",
+    home_care_service: "HC",
+  };
+  const compactName = String(name || "ITEM")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "")
+    .slice(0, 6);
+  return `${prefixes[type] || "ITM"}-${compactName || "ITEM"}-${Date.now().toString().slice(-5)}`;
+}
+
 export function Items({ apiSession, branchId }: any) {
   const [type, setType] = useState("medicine");
   const [message, setMessage] = useState("");
@@ -32,6 +48,7 @@ export function Items({ apiSession, branchId }: any) {
   const [tests, setTests] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
   const [equipment, setEquipment] = useState<any[]>([]);
+  const [homeCareServices, setHomeCareServices] = useState<any[]>([]);
   const [packageTestIds, setPackageTestIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<any>(null);
   const [filters, setFilters] = useState({
@@ -70,6 +87,7 @@ export function Items({ apiSession, branchId }: any) {
     supplier_id: "",
     reorder_level: "10",
     sample_type: "Blood",
+    description: "",
     modality_type: "ift",
     manufacturer: "",
     model_number: "",
@@ -130,8 +148,20 @@ export function Items({ apiSession, branchId }: any) {
         id: row.id,
         raw: row,
       })),
+      ...homeCareServices.map((row: any) => ({
+        type: "home_care_service",
+        kind: "Home Care / Visit Service",
+        name: row.name,
+        code: row.code,
+        price: row.default_price,
+        purchase_price: null,
+        supplier: "-",
+        meta: row.description || "Home care / visit",
+        id: row.id,
+        raw: row,
+      })),
     ],
-    [medicines, tests, packages, equipment, stockSuppliers],
+    [medicines, tests, packages, equipment, homeCareServices, stockSuppliers],
   );
   const filteredRows = useMemo(
     () =>
@@ -178,6 +208,28 @@ export function Items({ apiSession, branchId }: any) {
     }));
   }
 
+  function changeItemType(nextType: string) {
+    setType(nextType);
+    setEditing(null);
+    setPackageTestIds([]);
+    if (nextType === "home_care_service") {
+      resetHomeCareServiceForm();
+    }
+  }
+
+  function resetHomeCareServiceForm() {
+    setForm((prev: any) => ({
+      ...prev,
+      code: "",
+      name: "",
+      price: "",
+      purchase_price: "0",
+      supplier_id: "",
+      description: "",
+      branch_scope: "branch",
+    }));
+  }
+
   async function load() {
     if (!apiSession) return;
     try {
@@ -186,6 +238,7 @@ export function Items({ apiSession, branchId }: any) {
         testRows,
         packageRows,
         equipmentRows,
+        homeCareServiceRows,
         batchRows,
         supplierRows,
         lowRows,
@@ -194,6 +247,7 @@ export function Items({ apiSession, branchId }: any) {
         apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
         apiFetch("/lab/catalog/packages", apiSession).catch(() => []),
         apiFetch("/physiotherapy/equipment", apiSession).catch(() => []),
+        apiFetch("/home-care/services", apiSession).catch(() => []),
         apiFetch("/pharmacy/batches", apiSession).catch(() => []),
         apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
         apiFetch(`/pharmacy/low-stock?branch_id=${branchId}`, apiSession).catch(
@@ -204,6 +258,7 @@ export function Items({ apiSession, branchId }: any) {
       setTests(testRows);
       setPackages(packageRows);
       setEquipment(equipmentRows);
+      setHomeCareServices(homeCareServiceRows);
       setStockBatches(batchRows);
       setStockSuppliers(supplierRows);
       setStockLow(lowRows);
@@ -221,6 +276,11 @@ export function Items({ apiSession, branchId }: any) {
       const method = editing ? "PATCH" : "POST";
       const supplierId = form.supplier_id || null;
       const purchasePrice = Number(form.purchase_price || 0);
+      const itemCode =
+        type === "home_care_service" && !editing
+          ? generatedItemCode(type, form.name)
+          : form.code || generatedItemCode(type, form.name);
+      let savedHomeCareService: any = null;
       if (type === "medicine") {
         await apiFetch(
           editing ? `/pharmacy/medicines/${editing.id}` : "/pharmacy/medicines",
@@ -229,7 +289,7 @@ export function Items({ apiSession, branchId }: any) {
             method,
             body: JSON.stringify({
               branch_id: branchId,
-              code: form.code,
+              code: itemCode,
               name: form.name,
               generic_name: form.generic_name || null,
               form: "Tablet",
@@ -250,7 +310,7 @@ export function Items({ apiSession, branchId }: any) {
             method,
             body: JSON.stringify({
               branch_id: branchId,
-              code: form.code,
+              code: itemCode,
               name: form.name,
               supplier_id: supplierId,
               purchase_price: purchasePrice,
@@ -270,7 +330,7 @@ export function Items({ apiSession, branchId }: any) {
           {
             method,
             body: JSON.stringify({
-              code: form.code,
+              code: itemCode,
               name: form.name,
               supplier_id: supplierId,
               purchase_price: purchasePrice,
@@ -282,6 +342,23 @@ export function Items({ apiSession, branchId }: any) {
           },
         );
         setPackageTestIds([]);
+      } else if (type === "home_care_service") {
+        savedHomeCareService = await apiFetch(
+          editing
+            ? `/home-care/services/${editing.id}`
+            : "/home-care/services",
+          apiSession,
+          {
+            method,
+            body: JSON.stringify({
+              branch_id: form.branch_scope === "branch" ? branchId : null,
+              code: itemCode,
+              name: form.name,
+              description: form.description || null,
+              default_price: Number(form.price || 0),
+            }),
+          },
+        );
       } else {
         await apiFetch(
           editing
@@ -298,15 +375,28 @@ export function Items({ apiSession, branchId }: any) {
               purchase_price: purchasePrice,
               manufacturer: form.manufacturer || null,
               model_number: form.model_number || null,
-              serial_number: form.serial_number || form.code || null,
+              serial_number: form.serial_number || itemCode || null,
               is_portable: form.is_portable === "true",
             }),
           },
         );
       }
+      const wasEditing = Boolean(editing);
       setEditing(null);
-      await load();
-      setMessage(editing ? "Item updated." : "Item saved.");
+      if (!wasEditing && type === "home_care_service") {
+        resetHomeCareServiceForm();
+      }
+      if (type === "home_care_service" && savedHomeCareService) {
+        setHomeCareServices((prev: any[]) =>
+          wasEditing
+            ? prev.map((row) => (row.id === savedHomeCareService.id ? savedHomeCareService : row))
+            : [savedHomeCareService, ...prev],
+        );
+        void load();
+      } else {
+        await load();
+      }
+      setMessage(wasEditing ? "Item updated." : "Item saved.");
     } catch (err: any) {
       setMessage(err.message || "Could not save item.");
     } finally {
@@ -349,7 +439,16 @@ export function Items({ apiSession, branchId }: any) {
         supplier_id: raw.supplier_id || "",
       });
       setPackageTestIds(raw.test_ids || []);
-    } else
+    } else if (row.type === "home_care_service")
+      setForm({
+        ...form,
+        code: raw.code,
+        name: raw.name,
+        price: String(raw.default_price || 0),
+        description: raw.description || "",
+        branch_scope: raw.branch_id ? "branch" : "tenant",
+      });
+    else
       setForm({
         ...form,
         code: raw.serial_number || "",
@@ -475,7 +574,9 @@ export function Items({ apiSession, branchId }: any) {
           ? `/lab/catalog/tests/${row.id}`
           : row.type === "lab_package"
             ? `/lab/catalog/packages/${row.id}`
-            : `/physiotherapy/equipment/${row.id}`;
+            : row.type === "home_care_service"
+              ? `/home-care/services/${row.id}`
+              : `/physiotherapy/equipment/${row.id}`;
     try {
       await apiFetch(path, apiSession, { method: "DELETE" });
       await load();
@@ -500,8 +601,8 @@ export function Items({ apiSession, branchId }: any) {
           <div>
             <h3 className="text-xl font-bold">Items</h3>
             <p className="text-sm text-slate-500">
-              ERP-style item master for medicines, lab tests, lab packages, and
-              physiotherapy equipment.
+              ERP-style item master for medicines, lab tests, lab packages,
+              physiotherapy equipment, and home care / visit services.
             </p>
           </div>
           <Badge tone="blue">{filteredRows.length} items</Badge>
@@ -511,43 +612,57 @@ export function Items({ apiSession, branchId }: any) {
           <SelectField
             label="Item Type"
             value={type}
-            onChange={setType}
+            onChange={changeItemType}
             options={itemTypes.map(([value, label]) => ({ value, label }))}
           />
+          {type !== "home_care_service" && (
+            <TextField
+              label="Code / Serial"
+              value={form.code}
+              onChange={setCodeOrSerial}
+              placeholder="Auto generated if blank"
+            />
+          )}
           <TextField
-            label="Code / Serial"
-            value={form.code}
-            onChange={setCodeOrSerial}
-          />
-          <TextField
-            label="Item Name"
+            label={type === "home_care_service" ? "Service Name" : "Item Name"}
             value={form.name}
             onChange={(v) => setField("name", v)}
             required
           />
           {type !== "physio_equipment" && (
             <NumberField
-              label={type === "lab_package" ? "Package Price" : "Price"}
+              label={
+                type === "home_care_service"
+                  ? "Rate / Hour"
+                  : type === "lab_package"
+                    ? "Package Price"
+                    : "Price"
+              }
               value={form.price}
               onChange={(v) => setField("price", v)}
               min={0}
+              required={type === "home_care_service"}
             />
           )}
-          <SelectField
-            label="Supplier"
-            value={form.supplier_id}
-            onChange={(v) => setField("supplier_id", v)}
-            options={[
-              { value: "", label: "No supplier" },
-              ...stockSuppliers.map((s: any) => ({ value: s.id, label: s.name })),
-            ]}
-          />
-          <NumberField
-            label="Purchase Price"
-            value={form.purchase_price}
-            onChange={(v) => setField("purchase_price", v)}
-            min={0}
-          />
+          {type !== "home_care_service" && (
+            <>
+              <SelectField
+                label="Supplier"
+                value={form.supplier_id}
+                onChange={(v) => setField("supplier_id", v)}
+                options={[
+                  { value: "", label: "No supplier" },
+                  ...stockSuppliers.map((s: any) => ({ value: s.id, label: s.name })),
+                ]}
+              />
+              <NumberField
+                label="Purchase Price"
+                value={form.purchase_price}
+                onChange={(v) => setField("purchase_price", v)}
+                min={0}
+              />
+            </>
+          )}
           {type === "medicine" && (
             <>
               <TextField
@@ -569,6 +684,24 @@ export function Items({ apiSession, branchId }: any) {
               value={form.sample_type}
               onChange={(v) => setField("sample_type", v)}
             />
+          )}
+          {type === "home_care_service" && (
+            <>
+              <TextField
+                label="Description"
+                value={form.description}
+                onChange={(v) => setField("description", v)}
+              />
+              <SelectField
+                label="Scope"
+                value={form.branch_scope}
+                onChange={(v) => setField("branch_scope", v)}
+                options={[
+                  { value: "branch", label: "Current Branch" },
+                  { value: "tenant", label: "All Branches" },
+                ]}
+              />
+            </>
           )}
           {type === "lab_package" && (
             <div className="md:col-span-4 rounded-2xl bg-slate-50 p-4">
@@ -749,8 +882,8 @@ export function Items({ apiSession, branchId }: any) {
           <div>
             <h3 className="text-lg font-bold">Item List</h3>
             <p className="text-sm text-slate-500">
-              Filter, edit, or delete catalog items used by Lab, Pharmacy, and
-              Physiotherapy.
+              Filter, edit, or delete catalog items used by Lab, Pharmacy,
+              Physiotherapy, and Home Care / Visit.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3 lg:min-w-[720px]">
@@ -790,7 +923,7 @@ export function Items({ apiSession, branchId }: any) {
                 <th>Details</th>
                 <th>Supplier</th>
                 <th>Purchase</th>
-                <th>Price</th>
+                <th>Price / Rate</th>
                 <th className="pr-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -813,8 +946,14 @@ export function Items({ apiSession, branchId }: any) {
                   <td>{row.code || "-"}</td>
                   <td>{row.meta}</td>
                   <td>{row.supplier}</td>
-                  <td>₹{row.purchase_price || 0}</td>
-                  <td>{row.price === null ? "-" : `₹${row.price}`}</td>
+                  <td>{row.purchase_price === null ? "-" : `₹${row.purchase_price || 0}`}</td>
+                  <td>
+                    {row.price === null
+                      ? "-"
+                      : row.type === "home_care_service"
+                        ? `₹${row.price}/hr`
+                        : `₹${row.price}`}
+                  </td>
                   <td className="pr-4">
                     <ActionGroup>
                       <ActionButton onClick={() => startEdit(row)}>

@@ -4,37 +4,17 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlmodel import Session
 
 from app.api.router import api_router
 from app.api.v1.health import HealthResponse, ReadinessResponse, health, readiness
 from app.core.config import get_settings
-from app.core.database import engine, get_session
 from app.core.middleware import TenantContextMiddleware
-from app.core.schema_repair import ensure_upload_schema
-from app.modules.subscriptions.service import ensure_default_plans
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    #Keep business initialization only
-    override = app.dependency_overrides.get(get_session)
-    if override:
-        session_generator = override()
-        session = next(session_generator)
-        try:
-            ensure_upload_schema(session)
-            ensure_default_plans(session)
-        finally:
-            try:
-                next(session_generator)
-            except StopIteration:
-                pass
-    else:
-        with Session(engine) as session:
-            ensure_upload_schema(session)
-            ensure_default_plans(session)
-
+    # Docker runs Alembic before Uvicorn. Keep app startup free of DB work so
+    # health checks and normal requests cannot be blocked by optional repairs.
     yield
 
 
@@ -57,6 +37,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.get("/", tags=["platform"])
+    def root() -> dict[str, str]:
+        return {"status": "ok", "docs": "/docs", "health": f"{settings.api_prefix}/health"}
+
     app.add_api_route("/health", health, methods=["GET"], response_model=HealthResponse, tags=["platform"])
     app.add_api_route("/readiness", readiness, methods=["GET"], response_model=ReadinessResponse, tags=["platform"])
     app.include_router(api_router, prefix=settings.api_prefix)
@@ -69,4 +54,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

@@ -98,6 +98,7 @@ class Invoice(SQLModel, table=True):
     pharmacy_issue_id: str | None = Field(default=None, index=True, foreign_key="pharmacyissue.id")
     ip_admission_id: str | None = Field(default=None, index=True, foreign_key="ipadmission.id")
     physiotherapy_case_id: str | None = Field(default=None, index=True, foreign_key="physiotherapycase.id")
+    home_care_booking_id: str | None = Field(default=None, index=True, foreign_key="homecarebooking.id")
     patient_subscription_enrollment_id: str | None = Field(default=None, index=True, foreign_key="patientsubscriptionenrollment.id")
     patient_subscription_plan_id: str | None = Field(default=None, index=True, foreign_key="patientsubscriptionplan.id")
     invoice_number: str = Field(index=True, min_length=3, max_length=60)

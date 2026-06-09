@@ -91,6 +91,11 @@ PHYSIOTHERAPY_CREATE = "physiotherapy.create"
 PHYSIOTHERAPY_READ = "physiotherapy.read"
 PHYSIOTHERAPY_EDIT = "physiotherapy.edit"
 PHYSIOTHERAPY_DELETE = "physiotherapy.delete"
+HOME_CARE_MANAGE = "home_care.manage"
+HOME_CARE_CREATE = "home_care.create"
+HOME_CARE_READ = "home_care.read"
+HOME_CARE_EDIT = "home_care.edit"
+HOME_CARE_DELETE = "home_care.delete"
 NOTIFICATIONS_MANAGE = "notifications.manage"
 NOTIFICATIONS_CREATE = "notifications.create"
 NOTIFICATIONS_READ = "notifications.read"
@@ -207,6 +212,11 @@ PERMISSION_CATALOG = [
     PHYSIOTHERAPY_READ,
     PHYSIOTHERAPY_EDIT,
     PHYSIOTHERAPY_DELETE,
+    HOME_CARE_MANAGE,
+    HOME_CARE_CREATE,
+    HOME_CARE_READ,
+    HOME_CARE_EDIT,
+    HOME_CARE_DELETE,
     NOTIFICATIONS_MANAGE,
     NOTIFICATIONS_CREATE,
     NOTIFICATIONS_READ,

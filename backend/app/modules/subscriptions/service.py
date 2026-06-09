@@ -25,6 +25,7 @@ FULL_HMS_MODULES = [
     *CORE_HMS_MODULES,
     "billing_advanced",
     "patient_subscriptions",
+    "home_care",
     "lab",
     "pharmacy",
     "notifications",
@@ -44,6 +45,7 @@ STARTER_HMS_MODULES = [
 
 GROWTH_HMS_MODULES = [
     *STARTER_HMS_MODULES,
+    "home_care",
     "lab",
     "pharmacy",
     "notifications",
@@ -167,9 +169,8 @@ def ensure_default_plans(session: Session) -> None:
         exists = session.exec(select(SubscriptionPlan).where(SubscriptionPlan.key == payload["key"])).first()
         if not exists:
             session.add(SubscriptionPlan(**payload, created_at=now, updated_at=now))
-        else:
-            for key, value in payload.items():
-                setattr(exists, key, value)
+        elif not modules_from_json(exists.enabled_modules_json):
+            exists.enabled_modules_json = payload["enabled_modules_json"]
             exists.created_at = exists.created_at or now
             exists.updated_at = now
             session.add(exists)

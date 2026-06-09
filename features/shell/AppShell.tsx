@@ -26,6 +26,7 @@ import { Billing } from "@/features/billing/Billing";
 import { Dashboard } from "@/features/dashboard/Dashboard";
 import { DoctorConsultation } from "@/features/doctor/DoctorConsultation";
 import { IPAdmission } from "@/features/ip/IPAdmission";
+import { HomeCare } from "@/features/home-care/HomeCare";
 import { Items } from "@/features/items/Items";
 import { Lab } from "@/features/lab/Lab";
 import { Patient } from "@/features/patients/Patient";
@@ -274,6 +275,8 @@ export function AppShell(props: any) {
         return <Pharmacy {...ctx} />;
       case "physiotherapy":
         return <Physiotherapy {...ctx} />;
+      case "home_care":
+        return <HomeCare {...ctx} setActive={navigatePage} />;
       case "billing":
         return <Billing {...ctx} />;
       case "admin":

@@ -29,12 +29,38 @@ Open http://localhost:3000
 
 ## Before pushing to GitHub
 
-Run these checks from the project root before pushing backend changes:
+Install the local Git hooks once after cloning the repo:
 
 ```bash
-backend/.venv/bin/ruff check backend/app backend/tests
-backend/.venv/bin/pytest backend/tests -q
+npm run hooks:install
 ```
+
+Run the full local quality gate from the project root before every push:
+
+```bash
+npm run quality
+```
+
+That command runs:
+
+```bash
+# Backend linting
+backend/.venv/bin/ruff check backend/app backend/tests
+
+# Backend tests
+backend/.venv/bin/pytest backend/tests -q
+
+# Frontend tests
+npm test
+
+# Frontend TypeScript check
+npm run typecheck
+
+# Frontend production build
+npm run build
+```
+
+GitHub Actions runs the same main checks on pull requests and pushes to `main`, `master`, and `develop`.
 
 ## Backend scaffold
 

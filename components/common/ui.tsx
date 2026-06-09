@@ -66,17 +66,26 @@ export function StatusToast({
   message,
   tone,
   onClose,
-  duration = 3500,
+  duration = 5000,
 }: {
   message?: string;
   tone?: NoticeTone;
   onClose?: () => void;
   duration?: number;
 }) {
+  const [shrink, setShrink] = useState(false);
   useEffect(() => {
-    if (!message || !onClose || duration <= 0) return undefined;
-    const timer = window.setTimeout(onClose, duration);
-    return () => window.clearTimeout(timer);
+    if (!message) return undefined;
+    setShrink(false);
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => setShrink(true)),
+    );
+    const timer =
+      onClose && duration > 0 ? window.setTimeout(onClose, duration) : undefined;
+    return () => {
+      cancelAnimationFrame(raf);
+      if (timer) window.clearTimeout(timer);
+    };
   }, [duration, message, onClose]);
 
   if (!message) return null;
@@ -139,7 +148,15 @@ export function StatusToast({
             </button>
           )}
         </div>
-        <div className={`h-1 w-2/3 ${current.bar}`} />
+        <div className="h-1 w-full bg-slate-100">
+          <div
+            className={`h-full ${current.bar}`}
+            style={{
+              width: shrink ? "100%" : "0%",
+              transition: duration > 0 ? `width ${duration}ms linear` : undefined,
+            }}
+          />
+        </div>
       </div>
     </div>
   );

@@ -64,6 +64,13 @@ export function SubscriptionManagement({
   const editableModules = entitlementModules(modules);
   const pageSize = 8;
 
+  function notifyEntitlementsChanged() {
+    try {
+      localStorage.setItem("medizinhub.entitlements.refresh", String(Date.now()));
+      window.dispatchEvent(new Event("medizinhub.entitlements.refresh"));
+    } catch {}
+  }
+
   function openSubscriptionView(nextView: string) {
     setView(nextView);
     requestAnimationFrame(() =>
@@ -165,6 +172,7 @@ export function SubscriptionManagement({
       form.reset();
       await reloadPlans();
       await loadSubscriptionConsole();
+      notifyEntitlementsChanged();
       openSubscriptionView("list");
       setMessage("Custom subscription plan created.");
     } catch (err: any) {
@@ -198,6 +206,7 @@ export function SubscriptionManagement({
       setEditingPlan(null);
       await reloadPlans();
       await loadSubscriptionConsole();
+      notifyEntitlementsChanged();
       openSubscriptionView("list");
       setMessage(
         "Subscription plan updated. Active tenant entitlements using this plan now use the new modules.",
@@ -220,6 +229,7 @@ export function SubscriptionManagement({
       });
       await reloadPlans();
       await loadSubscriptionConsole();
+      notifyEntitlementsChanged();
       setMessage(
         `${plan.name} ${plan.is_active ? "deactivated" : "activated"}.`,
       );
@@ -253,6 +263,7 @@ export function SubscriptionManagement({
       });
       form.reset();
       await loadSubscriptionConsole();
+      notifyEntitlementsChanged();
       openSubscriptionView("list");
       setMessage(
         "Tenant subscription assigned. Future start dates stay scheduled until activation date.",

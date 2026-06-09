@@ -106,6 +106,24 @@ def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
     session.commit()
 
 
+def _sync_home_care_booking_status(session: Session, invoice: Invoice) -> None:
+    if not invoice.home_care_booking_id:
+        return
+    from app.modules.home_care.models import HomeCareBooking
+    from app.modules.tenants.models import now_utc
+
+    booking = session.get(HomeCareBooking, invoice.home_care_booking_id)
+    if not booking or booking.tenant_id != invoice.tenant_id:
+        return
+    target_status = "paid" if invoice.balance_amount <= 0 and invoice.total_amount > 0 else "invoiced"
+    if booking.status == target_status:
+        return
+    booking.status = target_status
+    booking.updated_at = now_utc()
+    session.add(booking)
+    session.commit()
+
+
 def _frappe_catalog_client() -> FrappeCatalogClient:
     settings = get_settings()
     if not settings.maha_clinic_url or not settings.maha_clinic_token:
@@ -146,7 +164,7 @@ def _invoice_membership_service(invoice: Invoice) -> str | None:
         return "lab"
     if invoice.pharmacy_issue_id:
         return "pharmacy"
-    if invoice.consultation_id and not invoice.ip_admission_id and not invoice.physiotherapy_case_id:
+    if invoice.consultation_id and not invoice.ip_admission_id and not invoice.physiotherapy_case_id and not invoice.home_care_booking_id:
         return "consultation"
     return None
 
@@ -1577,6 +1595,7 @@ def record_payment(
     session.refresh(payment)
     invoice = update_invoice_payment_status(session, invoice)
     _sync_physiotherapy_case_status(session, invoice)
+    _sync_home_care_booking_status(session, invoice)
     patient = session.get(Patient, invoice.patient_id)
     if invoice.balance_amount > 0 and patient:
         for provider in (NotificationProvider.WHATSAPP, NotificationProvider.SMS):
@@ -1633,6 +1652,7 @@ def refund_payment(
     session.refresh(payment)
     invoice = update_invoice_payment_status(session, invoice)
     _sync_physiotherapy_case_status(session, invoice)
+    _sync_home_care_booking_status(session, invoice)
     if refundable_paid_total(session, invoice) == 0:
         invoice.status = InvoiceStatus.REFUNDED
         session.add(invoice)

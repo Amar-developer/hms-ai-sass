@@ -14,6 +14,18 @@ def _connect_args(database_url: str) -> dict:
     return {}
 
 
+def _engine_options(database_url: str) -> dict:
+    if database_url.startswith("sqlite"):
+        return {}
+    return {
+        "pool_pre_ping": True,
+        "pool_size": 10,
+        "max_overflow": 20,
+        "pool_timeout": 10,
+        "pool_recycle": 1800,
+    }
+
+
 def create_db_engine():
     settings = get_settings()
     database_url = settings.database_url
@@ -24,6 +36,7 @@ def create_db_engine():
     return create_engine(
         database_url,
         connect_args=_connect_args(database_url),
+        **_engine_options(database_url),
         echo=False,
     )
 

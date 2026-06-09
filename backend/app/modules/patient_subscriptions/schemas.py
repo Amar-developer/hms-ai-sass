@@ -14,6 +14,7 @@ class PatientSubscriptionPlanCreate(BaseModel):
     free_consultations: int = Field(default=0, ge=0)
     lab_discount_percentage: int = Field(default=0, ge=0, le=100)
     pharmacy_discount_percentage: int = Field(default=0, ge=0, le=100)
+    min_discount_amount: int = Field(default=500, ge=0)
     free_lab_test_ids: list[str] = Field(default_factory=list)
     discounted_lab_test_ids: list[str] = Field(default_factory=list)
     free_medicine_ids: list[str] = Field(default_factory=list)
@@ -30,6 +31,7 @@ class PatientSubscriptionPlanUpdate(BaseModel):
     free_consultations: int | None = Field(default=None, ge=0)
     lab_discount_percentage: int | None = Field(default=None, ge=0, le=100)
     pharmacy_discount_percentage: int | None = Field(default=None, ge=0, le=100)
+    min_discount_amount: int | None = Field(default=None, ge=0)
     free_lab_test_ids: list[str] | None = None
     discounted_lab_test_ids: list[str] | None = None
     free_medicine_ids: list[str] | None = None

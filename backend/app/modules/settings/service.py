@@ -27,6 +27,7 @@ DEFAULT_SETTING_VALUES: dict[SettingKey, Any] = {
             "invoice": "INV",
             "ip_admission": "IP",
             "physiotherapy_case": "PHY",
+            "home_care_booking": "HC",
             "supplier": "SUP",
         },
     },

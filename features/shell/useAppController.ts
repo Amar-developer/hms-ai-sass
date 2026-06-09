@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useState} from 'react';
-import {API_BASE,apiFetch,type ApiSession} from '@/lib/api';
+import {API_BASE,AUTH_SESSION_EXPIRED_EVENT,apiFetch,type ApiSession} from '@/lib/api';
 import {demoUsers,loginPresets} from '@/lib/authPresets';
 import {type LiveSummary,mapAppointment,mapPatient} from '@/lib/liveData';
 import {canOpenModule} from '@/lib/moduleAccess';
@@ -35,6 +35,7 @@ export function useAppController() {
   const [patients, setPatients] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [ipAdmissions, setIpAdmissions] = useState<any[]>([]);
+  const [roleModuleOverrides, setRoleModuleOverrides] = useState<Record<string, string[]>>({});
 
   function hasPermission(session: ApiSession, permission: string) {
     const keys = session.user?.permissions || [];
@@ -58,6 +59,29 @@ export function useAppController() {
     } catch {
       return fallback;
     }
+  }
+
+  function clearLocalSession(status = 'Logged out') {
+    localStorage.removeItem('medizinhub.session');
+    sessionStorage.removeItem('medizinhub.session');
+    setApiSession(null);
+    setAuthenticated(false);
+    setLiveSummary(null);
+    setLiveInvoices([]);
+    setLiveBranchId('');
+    setLiveBranches([]);
+    setLiveDepartments([]);
+    setLiveTenants([]);
+    setDoctorScope(null);
+    setLivePractitioners([]);
+    setPatients([]);
+    setAppointments([]);
+    setIpAdmissions([]);
+    setRoleModuleOverrides({});
+    setActive('dashboard');
+    setRole('tenant_admin');
+    setShowPassword(false);
+    setLiveStatus(status);
   }
 
   async function loadLiveData(session: ApiSession) {
@@ -102,6 +126,9 @@ export function useAppController() {
       'patient_subscriptions.manage',
       'patient_subscriptions.read',
       'patient_subscriptions.create',
+      'home_care.manage',
+      'home_care.read',
+      'home_care.create',
       'platform.subscriptions.manage',
     ], null);
     const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows, scheduleRows, entitlements] = await Promise.all([
@@ -160,6 +187,9 @@ export function useAppController() {
     setIpAdmissions(ipRows);
     setLiveInvoices(invoiceRows);
     setEnabledModules(entitlements?.enabled_modules?.length ? entitlements.enabled_modules : defaultEntitlementModuleIds);
+    apiFetch('/settings/sidebar-modules', session)
+      .then((map: any) => setRoleModuleOverrides(map && typeof map === 'object' && !Array.isArray(map) ? map : {}))
+      .catch(() => setRoleModuleOverrides({}));
     setLiveSummary({
       patients: patientRows.length,
       appointments: appointmentRows.length,
@@ -176,8 +206,12 @@ export function useAppController() {
       const reason = event.reason;
       setLiveStatus(reason?.message || 'A backend request failed, but the app is still running.');
     }
+    function handleSessionExpired() {
+      clearLocalSession('Session expired. Please sign in again.');
+    }
 
     window.addEventListener('unhandledrejection', handleUnhandled);
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
     const raw = localStorage.getItem('medizinhub.session');
     if (raw) {
       try {
@@ -195,7 +229,10 @@ export function useAppController() {
       }
     }
 
-    return () => window.removeEventListener('unhandledrejection', handleUnhandled);
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandled);
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
   }, []);
 
   useEffect(() => {
@@ -211,10 +248,12 @@ export function useAppController() {
     };
     window.addEventListener('focus', refreshLiveData);
     window.addEventListener('storage', handleStorage);
+    window.addEventListener('medizinhub.entitlements.refresh', refreshLiveData);
     document.addEventListener('visibilitychange', refreshLiveData);
     return () => {
       window.removeEventListener('focus', refreshLiveData);
       window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('medizinhub.entitlements.refresh', refreshLiveData);
       document.removeEventListener('visibilitychange', refreshLiveData);
     };
   }, [apiSession?.token, apiSession?.tenantId]);
@@ -279,25 +318,7 @@ export function useAppController() {
 
   async function handleLogout() {
     const sessionToRevoke = apiSession;
-    localStorage.removeItem('medizinhub.session');
-    sessionStorage.removeItem('medizinhub.session');
-    setApiSession(null);
-    setAuthenticated(false);
-    setLiveSummary(null);
-    setLiveInvoices([]);
-    setLiveBranchId('');
-    setLiveBranches([]);
-    setLiveDepartments([]);
-    setLiveTenants([]);
-    setDoctorScope(null);
-    setLivePractitioners([]);
-    setPatients([]);
-    setAppointments([]);
-    setIpAdmissions([]);
-    setActive('dashboard');
-    setRole('tenant_admin');
-    setShowPassword(false);
-    setLiveStatus('Logged out');
+    clearLocalSession('Logged out');
     if (sessionToRevoke) {
       apiFetch('/auth/logout', sessionToRevoke, {method: 'POST'}).catch(() => {});
     }
@@ -391,7 +412,7 @@ export function useAppController() {
   if (navHasAnyPermission('patients.read', 'patients.write', 'patients.create', 'patients.edit')) permissionModules.add('patients');
   if (navHasAnyPermission('practitioners.manage', 'practitioners.read', 'practitioners.create', 'practitioners.edit')) permissionModules.add('practitioners');
   if (navHasAnyPermission('scheduling.manage', 'scheduling.read', 'scheduling.create', 'scheduling.edit', 'scheduling.delete')) permissionModules.add('scheduling');
-  if (navHasAnyPermission('pharmacy.manage', 'pharmacy.read', 'pharmacy.create', 'pharmacy.edit', 'lab.manage', 'lab.read', 'lab.create', 'lab.edit', 'physiotherapy.manage', 'physiotherapy.read', 'physiotherapy.create', 'physiotherapy.edit')) permissionModules.add('items');
+  if (navHasAnyPermission('pharmacy.manage', 'pharmacy.read', 'pharmacy.create', 'pharmacy.edit', 'lab.manage', 'lab.read', 'lab.create', 'lab.edit', 'physiotherapy.manage', 'physiotherapy.read', 'physiotherapy.create', 'physiotherapy.edit', 'home_care.manage', 'home_care.read', 'home_care.create', 'home_care.edit')) permissionModules.add('items');
   if (navHasAnyPermission('ip.manage', 'ip.read', 'ip.create', 'ip.edit', 'ip.delete')) permissionModules.add('ip');
   if (navHasAnyPermission('consultations.read', 'consultations.write', 'consultations.sign')) {
     permissionModules.add('doctor');
@@ -400,14 +421,28 @@ export function useAppController() {
   if (navHasAnyPermission('lab.manage', 'lab.read', 'lab.create', 'lab.edit')) permissionModules.add('lab');
   if (navHasAnyPermission('pharmacy.manage', 'pharmacy.read', 'pharmacy.create', 'pharmacy.edit')) permissionModules.add('pharmacy');
   if (navHasAnyPermission('physiotherapy.manage', 'physiotherapy.read', 'physiotherapy.create', 'physiotherapy.edit', 'physiotherapy.delete')) permissionModules.add('physiotherapy');
+  if (navHasAnyPermission('home_care.manage', 'home_care.read', 'home_care.create', 'home_care.edit', 'home_care.delete')) permissionModules.add('home_care');
   if (navHasAnyPermission('billing.manage', 'invoices.read', 'invoices.create', 'payments.manage')) permissionModules.add('billing');
   if (isTenantAdminUser || canOpenTenantAdmin || navHasAnyPermission('patient_subscriptions.manage', 'patient_subscriptions.read', 'patient_subscriptions.create')) permissionModules.add('subscriptions');
   if ((isSuperAdmin || isTenantAdminUser) && navHasAnyPermission('reports.read', 'audit.read')) permissionModules.add('reports');
   const isTenantAdminDashboardUser = Boolean(!isSuperAdmin && (role === 'tenant_admin' || apiSession?.user?.roles?.includes('tenant_admin') || apiSession?.user?.user_type === 'tenant_admin'));
+  // Role-based sidebar control: when the user has one or more predefined roles, the
+  // sidebar is gated strictly by those roles' module lists (e.g. reception never sees
+  // the doctor module, even if a stray permission would otherwise expose it). Only
+  // users with no recognized role fall back to permission-derived modules.
+  // Tenant-admin-configurable per-role sidebar modules override the built-in defaults
+  // (lib/navigation.ts). Unconfigured roles keep their defaults.
+  const effectiveRoleModules: Record<string, string[]> = { ...roleModules, ...roleModuleOverrides };
+  const knownRoleNames: string[] = ((apiSession?.user?.roles as string[]) || []).filter(
+    (name) => Boolean(effectiveRoleModules[name]),
+  );
+  const roleAllowedModules: string[] = knownRoleNames.length
+    ? Array.from(new Set<string>(knownRoleNames.flatMap((name) => effectiveRoleModules[name])))
+    : Array.from(new Set<string>([...allowedForRole, ...Array.from(permissionModules)]));
   const enabled = (id: string) => {
     if (id === 'dashboard') return isTenantAdminDashboardUser;
-    if (id === 'reports') return Boolean(isSuperAdmin || isTenantAdminUser) && canOpenModule(id, Array.from(new Set([...allowedForRole, ...Array.from(permissionModules)])), clinic);
-    return canOpenModule(id, Array.from(new Set([...allowedForRole, ...Array.from(permissionModules)])), clinic);
+    if (id === 'reports') return Boolean(isSuperAdmin || isTenantAdminUser) && canOpenModule(id, roleAllowedModules, clinic);
+    return canOpenModule(id, roleAllowedModules, clinic);
   };
 
   return {

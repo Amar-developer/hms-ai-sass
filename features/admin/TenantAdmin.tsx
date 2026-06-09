@@ -28,6 +28,7 @@ import {
   SuggestionInput,
 } from "../../components/common/ui";
 import { FormField } from "@/components/FormElements";
+import { nav, roleModules } from "@/lib/navigation";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { UPLOADS_BASE, apiBlob, apiFetch, apiUpload } from "@/lib/api";
 import {
@@ -61,6 +62,7 @@ const defaultNumberingEntities: any = {
   invoice: "INV",
   ip_admission: "IP",
   physiotherapy_case: "PHY",
+  home_care_booking: "HC",
   supplier: "SUP",
 };
 const parseNumberingRules = (value: any, fallbackPrefix = "SUN") => ({
@@ -1807,6 +1809,7 @@ export function TenantAdmin({
 
       {section === "settings" && (
         <SettingsPanel
+          apiSession={apiSession}
           settings={settings}
           invoicePrefix={invoicePrefix}
           setInvoicePrefix={setInvoicePrefix}
@@ -2783,13 +2786,13 @@ function FilesPanel({
   const patientOptions = useMemo(
     () =>
       patients.slice(0, 500).map((patient: any) => {
-        const name = patient.full_name || patient.name || patient.id;
+        const name = patient.full_name || patient.name || "Patient";
         return {
           value: patient.id,
           label:
             name +
             (patient.patient_number ? ` — ${patient.patient_number}` : ""),
-          sublabel: patient.id,
+          sublabel: patient.patient_number || patient.mobile || "",
         };
       }),
     [patients],
@@ -3201,8 +3204,135 @@ function FilesPanel({
   );
 }
 
+const SIDEBAR_EDITABLE_ROLES = [
+  "reception",
+  "nurse",
+  "staff_nurse",
+  "staff",
+  "doctor",
+  "lab",
+  "pharmacy",
+  "billing",
+  "back_office",
+];
+const SIDEBAR_MODULE_OPTIONS = nav
+  .map(([id, label]: any) => ({ id, label }))
+  .filter((m: any) => !["superadmin", "admin", "dashboard"].includes(m.id));
+
+function SidebarModuleAccessCard({ apiSession }: any) {
+  const [map, setMap] = useState<Record<string, string[]>>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!apiSession) return;
+    apiFetch("/settings/sidebar-modules", apiSession)
+      .then((data: any) =>
+        setMap(data && typeof data === "object" && !Array.isArray(data) ? data : {}),
+      )
+      .catch(() => {});
+  }, [apiSession?.token, apiSession?.tenantId]);
+
+  const modulesFor = (role: string) => map[role] ?? roleModules[role] ?? [];
+
+  function toggle(role: string, moduleId: string) {
+    const current = new Set(modulesFor(role));
+    if (current.has(moduleId)) current.delete(moduleId);
+    else current.add(moduleId);
+    setMap({ ...map, [role]: Array.from(current) });
+  }
+
+  function resetRole(role: string) {
+    const next = { ...map };
+    delete next[role];
+    setMap(next);
+  }
+
+  async function save() {
+    if (!apiSession) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiFetch("/settings", apiSession, {
+        method: "PUT",
+        body: JSON.stringify({
+          scope: "tenant",
+          module: "navigation",
+          key: "navigation.role_modules",
+          value: map,
+          actor_user_id: apiSession.user?.id,
+        }),
+      });
+      setMessage("Sidebar module access saved. Users see changes on next login or refresh.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not save sidebar module access.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
+        <div>
+          <h3 className="text-lg font-bold">Sidebar Module Access</h3>
+          <p className="text-sm text-slate-500">
+            Control which modules each role sees in the sidebar. This is separate from
+            permissions. Roles left at default keep the built-in configuration.
+          </p>
+        </div>
+        <Badge tone="blue">Role based</Badge>
+      </div>
+      <StatusToast message={message} onClose={() => setMessage("")} />
+      <div className="mt-4 space-y-3">
+        {SIDEBAR_EDITABLE_ROLES.map((role) => {
+          const selected = new Set(modulesFor(role));
+          const overridden = Boolean(map[role]);
+          return (
+            <div key={role} className="rounded-2xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <b className="capitalize">{role.replaceAll("_", " ")}</b>
+                {overridden ? (
+                  <button
+                    type="button"
+                    onClick={() => resetRole(role)}
+                    className="text-xs font-bold text-slate-500 underline"
+                  >
+                    Reset to default
+                  </button>
+                ) : (
+                  <span className="text-xs text-slate-400">Default</span>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {SIDEBAR_MODULE_OPTIONS.map((m: any) => {
+                  const on = selected.has(m.id);
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => toggle(role, m.id)}
+                      className={`rounded-xl border px-3 py-2 text-xs font-bold ${on ? "border-slate-900 bg-slate-900 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <Button onClick={save} disabled={busy} className="mt-4">
+        {busy ? "Saving..." : "Save Sidebar Access"}
+      </Button>
+    </Card>
+  );
+}
+
 function SettingsPanel(props: any) {
   const {
+    apiSession,
     settings,
     invoicePrefix,
     setInvoicePrefix,
@@ -3441,6 +3571,7 @@ function SettingsPanel(props: any) {
           ))}
         </div>
       </Card>
+      <SidebarModuleAccessCard apiSession={apiSession} />
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>

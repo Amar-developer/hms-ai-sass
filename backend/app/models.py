@@ -7,6 +7,7 @@ from app.modules.billing.models import Invoice, InvoiceItem, Payment, TaxRule
 from app.modules.consultations.models import ClinicalTemplate, Consultation, ConsultationAddendum
 from app.modules.consultations.models import ConsultationComplaint, ConsultationDiagnosis, ConsultationMedicine
 from app.modules.consultations.models import ConsultationReferral, ConsultationVital
+from app.modules.home_care.models import HomeCareBooking, HomeCareBookingItem, HomeCareService
 from app.modules.identity.models import AuthSession, Permission, Role, RolePermission, User, UserRole
 from app.modules.ip.models import (
     IPAdmission,
@@ -53,6 +54,9 @@ __all__ = [
     "ClinicalTemplate",
     "Department",
     "DoctorFeeRule",
+    "HomeCareBooking",
+    "HomeCareBookingItem",
+    "HomeCareService",
     "DoctorSettlement",
     "DiscountApproval",
     "DiscountOffer",

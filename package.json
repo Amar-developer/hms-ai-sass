@@ -4,9 +4,10 @@
     "build": "next build",
     "start": "next start",
     "test": "vitest run --cache=false",
+    "typecheck": "tsc --noEmit",
     "quality": "npm run quality:backend && npm run quality:frontend",
     "quality:backend": "backend/.venv/bin/ruff check backend/app backend/tests && backend/.venv/bin/pytest backend/tests -q",
-    "quality:frontend": "npm test && npm run build",
+    "quality:frontend": "npm test && npm run typecheck && npm run build",
     "hooks:install": "sh scripts/install-git-hooks.sh"
   },
   "dependencies": {
