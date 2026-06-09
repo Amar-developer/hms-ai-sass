@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, Field, Input, Select } from "@/components/common/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+} from "@/components/common/ui";
 import { tenantTypes } from "../../../utils/superAdmin/constants";
 
 export function EditTenant({
@@ -22,7 +29,14 @@ export function EditTenant({
     setBranchRows(
       rows.length
         ? rows
-        : [{ _key: Date.now(), name: "Main Branch", code: "MAIN", is_active: true }],
+        : [
+            {
+              _key: Date.now(),
+              name: "Main Branch",
+              code: "MAIN",
+              is_active: true,
+            },
+          ],
     );
   }, [selected.id, branches]);
 
@@ -46,13 +60,15 @@ export function EditTenant({
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-lg font-bold">Edit Tenant Details</h3>
-          <p className="text-sm text-slate-500">{selected.name}</p>
+          <h3 className="text-base lg:text-lg font-bold">
+            Edit Tenant Details
+          </h3>
+          <p className="text-xs lg:text-sm text-slate-500">{selected.name}</p>
         </div>
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
         >
           Back to Tenants
         </button>
@@ -67,13 +83,23 @@ export function EditTenant({
             defaultValue={selected.name}
             required
             disabled={selected.is_primary}
+            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </Field>
         <Field label="Legal Name">
-          <Input name="legalName" defaultValue={selected.legal_name || ""} />
+          <Input
+            name="legalName"
+            defaultValue={selected.legal_name || ""}
+            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
         </Field>
         <Field label="Tenant Logo">
-          <Input name="logoFile" type="file" accept="image/*" />
+          <Input
+            name="logoFile"
+            type="file"
+            accept="image/*"
+            className="px-2 py-1.5 lg:px-4 lg:py-2 text-xs lg:text-sm file:text-xs lg:file-text-sm"
+          />
           {selected.logo_url && (
             <p className="mt-1 break-all text-xs text-slate-500">
               {selected.logo_url}
@@ -81,16 +107,26 @@ export function EditTenant({
           )}
         </Field>
         <Field label="Email">
-          <Input name="email" type="email" defaultValue={selected.email || ""} />
+          <Input
+            name="email"
+            type="email"
+            defaultValue={selected.email || ""}
+            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
         </Field>
         <Field label="Phone">
-          <Input name="phone" defaultValue={selected.phone || ""} />
+          <Input
+            name="phone"
+            defaultValue={selected.phone || ""}
+            className="px-2 py-2.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
         </Field>
         <Field label="Tenant Type">
           <Select
             name="tenantType"
             defaultValue={selected.tenant_type}
             disabled={selected.is_primary}
+            className="px-2 py-2.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             {selected.is_primary && <option value="primary">Primary</option>}
             {tenantTypes.map(([value, label]) => (
@@ -105,6 +141,7 @@ export function EditTenant({
             name="status"
             defaultValue={selected.status}
             disabled={selected.is_primary}
+            className="px-2 py-2.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             <option value="trial">Trial</option>
             <option value="active">Active</option>
@@ -116,29 +153,39 @@ export function EditTenant({
             name="country"
             defaultValue={selected.country || "IN"}
             maxLength={2}
+            className="px-2 py-2.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </Field>
         <Field label="Timezone">
           <Input
             name="timezone"
             defaultValue={selected.timezone || "Asia/Kolkata"}
+            className="px-2 py-2.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </Field>
         <div className="md:col-span-2 xl:col-span-3">
           <Field label="Address">
-            <Input name="address" defaultValue={selected.address || ""} />
+            <Input
+              name="address"
+              defaultValue={selected.address || ""}
+              className="px-2 py-2.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
         </div>
         <div className="md:col-span-2 xl:col-span-3">
           <Field label="Description">
-            <Input name="description" defaultValue={selected.description || ""} />
+            <Input
+              name="description"
+              defaultValue={selected.description || ""}
+              className="px-2 py-2.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
         </div>
         <div className="md:col-span-2 xl:col-span-3">
-          <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-row justify-between gap-3  sm:items-center">
             <div>
-              <h4 className="font-bold">Branches</h4>
-              <p className="text-sm text-slate-500">
+              <h4 className="text-lg lg:text-xl font-bold">Branches</h4>
+              <p className="text-xs lg:text-sm text-slate-500">
                 Edit local branches or add new branches for this tenant. Locked
                 global branches are managed from MedizinHub HMS templates.
               </p>
@@ -146,7 +193,7 @@ export function EditTenant({
             <button
               type="button"
               onClick={addBranch}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold w-[20%] lg:w-[30%]"
             >
               Add Branch
             </button>
@@ -171,9 +218,21 @@ export function EditTenant({
                       <div className="flex flex-wrap items-center gap-2">
                         <b>Branch {index + 1}</b>
                         {branch.is_global_template && (
-                          <Badge tone="blue">Global</Badge>
+                          <Badge
+                            tone="blue"
+                            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+                          >
+                            Global
+                          </Badge>
                         )}
-                        {locked && <Badge tone="purple">Locked</Badge>}
+                        {locked && (
+                          <Badge
+                            tone="purple"
+                            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+                          >
+                            Locked
+                          </Badge>
+                        )}
                       </div>
                       {branch.id && (
                         <p className="break-all text-xs text-slate-500">
@@ -198,6 +257,7 @@ export function EditTenant({
                         defaultValue={branch.name || ""}
                         required={index === 0}
                         disabled={locked}
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="Branch Code">
@@ -206,6 +266,7 @@ export function EditTenant({
                         defaultValue={branch.code || ""}
                         required={index === 0}
                         disabled={locked}
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="Status">
@@ -213,6 +274,7 @@ export function EditTenant({
                         name={`branchActive_${index}`}
                         defaultValue={String(branch.is_active !== false)}
                         disabled={locked}
+                        className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       >
                         <option value="true">Active</option>
                         <option value="false">Inactive</option>
@@ -223,6 +285,7 @@ export function EditTenant({
                         name={`branchCity_${index}`}
                         defaultValue={branch.city || ""}
                         disabled={locked}
+                        className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="Area">
@@ -230,6 +293,7 @@ export function EditTenant({
                         name={`branchArea_${index}`}
                         defaultValue={branch.area || ""}
                         disabled={locked}
+                        className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="State">
@@ -237,6 +301,7 @@ export function EditTenant({
                         name={`branchState_${index}`}
                         defaultValue={branch.state || ""}
                         disabled={locked}
+                        className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="Branch Address">
@@ -244,6 +309,7 @@ export function EditTenant({
                         name={`branchAddress_${index}`}
                         defaultValue={branch.address || ""}
                         disabled={locked}
+                        className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                   </div>
@@ -253,14 +319,17 @@ export function EditTenant({
           </div>
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-          <Button disabled={busy}>
+          <Button
+            disabled={busy}
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
             {busy ? "Saving..." : "Update Tenant"}
           </Button>
           <button
             type="button"
             onClick={() => suspendTenant(selected)}
             disabled={busy || selected.is_primary}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold text-red-600 disabled:text-slate-300"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border cursor font-bold text-red-600 disabled:text-slate-300"
           >
             Deactivate Tenant
           </button>

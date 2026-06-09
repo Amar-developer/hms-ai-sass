@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { Badge, Card, Field, Input, Select } from "@/components/common/ui";
 import { tenantTypes } from "../../../utils/superAdmin/constants";
-import { addressText, formatDate, formatTenantType } from "../../../utils/superAdmin/superAdmin";
+import {
+  addressText,
+  formatDate,
+  formatTenantType,
+} from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "../shared/Empty";
 import { Pagination } from "../shared/Pagination";
@@ -61,9 +65,7 @@ export function TenantManagement({
         .toLowerCase();
       const dateValue = tenant[filters.dateField] || tenant.created_at;
       const timestamp = dateValue ? new Date(dateValue).getTime() : 0;
-      const from = filters.fromDate
-        ? new Date(filters.fromDate).getTime()
-        : 0;
+      const from = filters.fromDate ? new Date(filters.fromDate).getTime() : 0;
       const to = filters.toDate
         ? new Date(`${filters.toDate}T23:59:59`).getTime()
         : Number.MAX_SAFE_INTEGER;
@@ -99,31 +101,38 @@ export function TenantManagement({
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="text-lg font-bold">Tenants</h3>
-          <p className="text-sm text-slate-500">
+          <p className="text-xs lg:text-sm text-slate-500">
             Latest created or updated tenants appear first. Use filters and
             sortable headers to manage tenant records.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="blue">{filtered.length} tenants</Badge>
+          <Badge
+            tone="blue"
+            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
+            {filtered.length} tenants
+          </Badge>
           <CreateActionButton
             label="Create Tenant"
             onClick={() => setSection("createTenant")}
           />
         </div>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
         <Field label="Tenant">
           <Input
             value={filters.tenant}
             onChange={(e: any) => updateFilter("tenant", e.target.value)}
             placeholder="Tenant name or ID"
+            className="py-3 px-2 text-xs lg:text-sm"
           />
         </Field>
         <Field label="Type">
           <Select
             value={filters.type}
             onChange={(e: any) => updateFilter("type", e.target.value)}
+            className='py-3 px-2 text-xs lg:text-sm'
           >
             <option value="all">All types</option>
             {tenantTypes.map(([value, label]) => (
@@ -137,6 +146,7 @@ export function TenantManagement({
           <Select
             value={filters.status}
             onChange={(e: any) => updateFilter("status", e.target.value)}
+            className='py-3 px-2 text-xs lg:text-sm'
           >
             <option value="all">All status</option>
             <option value="trial">Trial</option>
@@ -148,23 +158,25 @@ export function TenantManagement({
             value={filters.contact}
             onChange={(e: any) => updateFilter("contact", e.target.value)}
             placeholder="Email, phone, address"
+            className="py-3 px-2 text-xs lg:text-sm"
           />
         </Field>
         <Field label="Date field">
           <Select
             value={filters.dateField}
             onChange={(e: any) => updateFilter("dateField", e.target.value)}
+            className='py-3 px-2 text-xs lg:text-sm'
           >
             <option value="updated_at">Modified date</option>
             <option value="created_at">Created date</option>
           </Select>
         </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="From">
+        <Field label="From">
             <Input
               type="date"
               value={filters.fromDate}
               onChange={(e: any) => updateFilter("fromDate", e.target.value)}
+              className="py-3 px-2 text-xs lg:text-sm"
             />
           </Field>
           <Field label="To">
@@ -172,18 +184,48 @@ export function TenantManagement({
               type="date"
               value={filters.toDate}
               onChange={(e: any) => updateFilter("toDate", e.target.value)}
+              className="py-3 px-2 text-xs lg:text-sm"
             />
           </Field>
-        </div>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-        <div className="hidden grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_1.15fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid">
-          <SortButton label="Tenant" field="tenant" sort={sort} onSort={changeSort} />
-          <SortButton label="Type" field="tenant_type" sort={sort} onSort={changeSort} />
-          <SortButton label="Status" field="status" sort={sort} onSort={changeSort} />
-          <SortButton label="Contact" field="contact" sort={sort} onSort={changeSort} />
-          <SortButton label="Created" field="created_at" sort={sort} onSort={changeSort} />
-          <SortButton label="Modified" field="updated_at" sort={sort} onSort={changeSort} />
+       <div className="hidden md:grid grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_1.15fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+          <SortButton
+            label="Tenant"
+            field="tenant"
+            sort={sort}
+            onSort={changeSort}
+          />
+          <SortButton
+            label="Type"
+            field="tenant_type"
+            sort={sort}
+            onSort={changeSort}
+          />
+          <SortButton
+            label="Status"
+            field="status"
+            sort={sort}
+            onSort={changeSort}
+          />
+          <SortButton
+            label="Contact"
+            field="contact"
+            sort={sort}
+            onSort={changeSort}
+          />
+          <SortButton
+            label="Created"
+            field="created_at"
+            sort={sort}
+            onSort={changeSort}
+          />
+          <SortButton
+            label="Modified"
+            field="updated_at"
+            sort={sort}
+            onSort={changeSort}
+          />
           <span>Actions</span>
         </div>
         <div className="divide-y divide-slate-200">
@@ -191,20 +233,20 @@ export function TenantManagement({
           {rows.map((tenant: any) => (
             <div
               key={tenant.id}
-              className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_1.15fr] xl:items-center"
+              className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_1.15fr] md:items-center"
             >
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <b className="truncate">{tenant.name}</b>
+                  <b className="truncate text-xs md:text-sm">{tenant.name}</b>
                   {tenant.is_primary && <Badge tone="blue">Primary</Badge>}
                 </div>
-                <p className="break-all text-xs text-slate-500">{tenant.id}</p>
+                <p className="break-all text-[10px] lg:text-xs text-slate-500 ">{tenant.id}</p>
               </div>
               <div>
-                <span className="xl:hidden text-xs font-bold uppercase text-slate-500">
+                <span className="xl:hidden text-[10px] lg:text-xs font-bold uppercase text-slate-500">
                   Type:{" "}
                 </span>
-                {formatTenantType(tenant.tenant_type)}
+                <p className="text-xs lg:text-sm">{formatTenantType(tenant.tenant_type)}</p>
               </div>
               <div>
                 <Badge
@@ -220,11 +262,11 @@ export function TenantManagement({
                 </Badge>
               </div>
               <div className="min-w-0">
-                <p className="truncate">{tenant.email || "-"}</p>
-                <p className="text-xs text-slate-500">{tenant.phone || ""}</p>
+                <p className="truncate text-xs lg:text-sm">{tenant.email || "-"}</p>
+                <p className="text-[10px] lg:text-xs text-slate-500">{tenant.phone || ""}</p>
               </div>
-              <div>{formatDate(tenant.created_at)}</div>
-              <div>{formatDate(tenant.updated_at)}</div>
+              <div className="text-xs lg:text-sm">{formatDate(tenant.created_at)}</div>
+              <div className="text-xs lg:text-sm">{formatDate(tenant.updated_at)}</div>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
@@ -232,14 +274,14 @@ export function TenantManagement({
                     setSelectedId(tenant.id);
                     setSection("tenantEdit");
                   }}
-                  className="rounded-xl border px-3 py-2 text-xs font-bold"
+                  className="rounded-lg border px-2 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-xs font-bold"
                 >
                   Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => switchTenant(tenant.id)}
-                  className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:bg-slate-300"
+                  className="rounded-lg bg-slate-900 px-2 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-xs font-bold text-white disabled:bg-slate-300"
                   disabled={busy || apiSession.tenantId === tenant.id}
                 >
                   {apiSession.tenantId === tenant.id ? "Opened" : "Open"}
@@ -248,7 +290,7 @@ export function TenantManagement({
                   type="button"
                   onClick={() => suspendTenant(tenant)}
                   disabled={tenant.is_primary || busy}
-                  className="rounded-xl border px-3 py-2 text-xs font-bold text-red-600 disabled:text-slate-300"
+                  className="rounded-lg border px-2 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-xs font-bold text-red-600 disabled:text-slate-300"
                 >
                   Deactivate
                 </button>

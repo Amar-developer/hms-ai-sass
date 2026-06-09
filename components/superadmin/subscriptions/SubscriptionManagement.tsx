@@ -415,14 +415,14 @@ export function SubscriptionManagement({
             <button
               type="button"
               onClick={() => openSubscriptionView("assign")}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
             >
               Assign / Upgrade
             </button>
             <button
               type="button"
               onClick={() => openSubscriptionView("credits")}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
             >
               Additional Credits
             </button>
@@ -459,12 +459,12 @@ export function SubscriptionManagement({
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             <h4 className="font-bold">Subscriptions</h4>
-            <p className="text-sm text-slate-500">
+            <p className=" text-xs text-sm text-slate-500">
               Compact tenant subscription list. Open details for IDs, notes, and
               module information.
             </p>
           </div>
-          <Badge tone="blue">{filtered.length} records</Badge>
+          <Badge tone="blue" className="w-[30%] lg:w-[10%] text-center">{filtered.length} records</Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <FormField label="Tenant / Plan">
@@ -526,7 +526,7 @@ export function SubscriptionManagement({
         </div>
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
           <div className="min-w-[980px]">
-            <div className="grid grid-cols-[1.25fr_1.2fr_.72fr_.72fr_.72fr_.72fr_1.15fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+            <div className="grid grid-cols-[1.25fr_1.2fr_.92fr_.52fr_.52fr_.42fr_1.15fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
               <span>Tenant</span>
               <span>Plan</span>
               <span>Status</span>
@@ -551,21 +551,21 @@ export function SubscriptionManagement({
                 return (
                   <div
                     key={subscription.id}
-                    className="grid grid-cols-[1.25fr_1.2fr_.72fr_.72fr_.72fr_.72fr_1.15fr] gap-3 px-4 py-4 text-sm items-center"
+                    className="grid grid-cols-[1.25fr_1.2fr_.92fr_.52fr_.52fr_.42fr_1.15fr] gap-3 px-4 py-4 text-sm items-center"
                   >
                     <div className="min-w-0">
-                      <b className="block truncate">
+                      <b className=" text-xs lg:text-sm block truncate">
                         {subscription.tenant_name || tenant?.name || "Tenant"}
                       </b>
-                      <span className="text-xs text-slate-500">
+                      <span className="text-[10px] lg:text-xs text-slate-500">
                         {formatTenantType(tenant?.tenant_type || "")}
                       </span>
                     </div>
                     <div className="min-w-0">
-                      <b className="block truncate">
+                      <b className="text-xs lg:text-sm block truncate">
                         {plan?.name || "Custom plan"}
                       </b>
-                      <span className="text-xs text-slate-500">
+                      <span className="text-[10px] lg:text-xs text-slate-500">
                         {plan?.key?.startsWith("tenant_")
                           ? "Tenant custom"
                           : plan?.key || "Plan"}
@@ -586,9 +586,9 @@ export function SubscriptionManagement({
                         {subscription.status}
                       </Badge>
                     </div>
-                    <span>{formatDate(subscription.starts_on)}</span>
-                    <span>{formatDate(subscription.ends_on)}</span>
-                    <b>₹{subscription.billing_amount}</b>
+                    <span className="text-xs lg:text-sm">{formatDate(subscription.starts_on)}</span>
+                    <span className="text-xs lg:text-sm">{formatDate(subscription.ends_on)}</span>
+                    <b className="text-xs lg:text-sm">₹{subscription.billing_amount}</b>
                     <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
                       <button
                         type="button"
@@ -599,7 +599,7 @@ export function SubscriptionManagement({
                             tenant,
                           })
                         }
-                        className="rounded-xl border px-3 py-2 text-xs font-bold"
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                       >
                         Details
                       </button>
@@ -609,7 +609,7 @@ export function SubscriptionManagement({
                           setSelectedId(subscription.tenant_id);
                           openSubscriptionView("assign");
                         }}
-                        className="rounded-xl border px-3 py-2 text-xs font-bold"
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                       >
                         Upgrade
                       </button>
@@ -619,7 +619,7 @@ export function SubscriptionManagement({
                           setSelectedId(subscription.tenant_id);
                           openSubscriptionView("credits");
                         }}
-                        className="rounded-xl border px-3 py-2 text-xs font-bold"
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                       >
                         Credits
                       </button>
@@ -666,11 +666,11 @@ export function SubscriptionManagement({
                   className="grid grid-cols-[1.35fr_.75fr_1fr_.75fr_.75fr_1.2fr] gap-3 px-4 py-4 text-sm items-center"
                 >
                   <div className="min-w-0">
-                    <b className="block truncate">{plan.name}</b>
-                    <span className="text-xs text-slate-500">{plan.key}</span>
+                    <b className="text-xs lg:text-sm block truncate">{plan.name}</b>
+                    <span className="text-[10px] text-xs text-slate-500">{plan.key}</span>
                   </div>
                   <b>₹{plan.price_inr_monthly}</b>
-                  <span className="text-slate-600">
+                  <span className="text-slate-600 text-xs lg:text-sm">
                     {limitLabel(plan.monthly_patient_limit)} patients ·{" "}
                     {limitLabel(plan.included_branches)} branches
                   </span>
@@ -684,7 +684,7 @@ export function SubscriptionManagement({
                     <button
                       type="button"
                       onClick={() => setDetailPlan(plan)}
-                      className="rounded-xl border px-3 py-2 text-xs font-bold"
+                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                     >
                       Details
                     </button>
@@ -694,14 +694,14 @@ export function SubscriptionManagement({
                         setEditingPlan(plan);
                         openSubscriptionView("editPlan");
                       }}
-                      className="rounded-xl border px-3 py-2 text-xs font-bold"
+                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                     >
                       Edit
                     </button>
                     <button
                       type="button"
                       onClick={() => changePlanStatus(plan)}
-                      className="rounded-xl border px-3 py-2 text-xs font-bold"
+                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                     >
                       {plan.is_active ? "Deactivate" : "Activate"}
                     </button>

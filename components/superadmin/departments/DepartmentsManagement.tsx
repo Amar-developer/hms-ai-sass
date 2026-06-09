@@ -51,17 +51,20 @@ export function DepartmentsManagement({
               : "Manage tenant medical departments used for practitioner mapping, schedules, and appointment booking."}
           </p>
         </div>
-        <CreateActionButton
+        <div className="flex justify-start item-center">
+          <CreateActionButton
           label="Create Medical Department"
           onClick={() => setSection("departmentCreate")}
         />
+        </div>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_280px]">
+      <div className="mt-4 grid gap-3 md:grid-cols-3 ">
         <Input
           value={query}
           onChange={(e: any) => setQuery(e.target.value)}
           placeholder="Search medical department name, code, status"
-        />
+          className='rounded-lg px-2 py-2 lg:px-4 lg:py-1 text-xs lg:text-sm w-2/3 mt-5'
+        />      
         <TenantPicker
           tenants={tenants}
           selectedId={selectedId}
@@ -70,7 +73,7 @@ export function DepartmentsManagement({
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1180px]">
-          <div className="hidden grid-cols-[1.15fr_.65fr_1.35fr_.65fr_.7fr_1.65fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid">
+          <div className="hidden grid-cols-[1.15fr_.65fr_1.35fr_.65fr_.7fr_1.65fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
             <span>Medical Department</span>
             <span>Code</span>
             <span>Description</span>
@@ -89,28 +92,28 @@ export function DepartmentsManagement({
               return (
                 <div
                   key={department.id}
-                  className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.15fr_.65fr_1.35fr_.65fr_.7fr_1.65fr] xl:items-center"
+                  className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.15fr_.65fr_1.35fr_.65fr_.7fr_1.65fr] md:items-center"
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <b>{department.name}</b>
+                      <b className="text-xs lg:text-sm">{department.name}</b>
                       {department.is_global_template && (
                         <Badge tone="blue">Global</Badge>
                       )}
                       {locked && <Badge tone="purple">Locked</Badge>}
                     </div>
-                    <p className="break-all text-xs text-slate-500">
+                    <p className="break-all text-[10px] lg:text-xs text-slate-500">
                       {department.id}
                     </p>
                   </div>
-                  <span>{department.code}</span>
-                  <span className="text-slate-500">
+                  <span className="text-xs lg:text-sm">{department.code}</span>
+                  <span className="text-slate-500 text-xs lg:text-sm">
                     {department.description || "-"}
                   </span>
-                  <Badge tone={department.is_active ? "green" : "red"}>
+                  <Badge tone={department.is_active ? "green" : "red"} >
                     {department.is_active ? "Active" : "Inactive"}
                   </Badge>
-                  <span>
+                  <span className="text-xs lg:text-sm">
                     {new Date(
                       department.updated_at || department.created_at,
                     ).toLocaleDateString()}
@@ -123,7 +126,7 @@ export function DepartmentsManagement({
                           setSelectedDepartmentId(department.id);
                           setSection("departmentEdit");
                         }}
-                        className="rounded-xl border px-3 py-2 text-xs font-bold"
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                       >
                         Edit
                       </button>
@@ -134,7 +137,7 @@ export function DepartmentsManagement({
                         setSelectedDepartmentId(department.id);
                         setSection("departmentAssign");
                       }}
-                      className="rounded-xl border px-3 py-2 text-xs font-bold"
+                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                     >
                       Assign
                     </button>
@@ -148,7 +151,7 @@ export function DepartmentsManagement({
                             department,
                           })
                         }
-                        className="rounded-xl border px-3 py-2 text-xs font-bold"
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                       >
                         {department.is_active ? "Inactive" : "Active"}
                       </button>

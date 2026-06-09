@@ -1189,7 +1189,7 @@ export function AppointmentCalendarBooking(props: Props) {
         </div>
         <Button
           onClick={openBooking}
-          className="flex items-center gap-2 w-44 lg:w-56 text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"
+          className="flex items-center rounded-lg gap-2 w-44 lg:w-56 text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"
         >
           <CalendarPlus size={16} /> New Appointment
         </Button>
@@ -1430,7 +1430,7 @@ function NewPatientForm({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-lg border text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4 font-bold"
           >
             Cancel
           </button>

@@ -54,16 +54,19 @@ export function BranchesManagement({
               : "Manage tenant branches used by appointments, users, billing, lab, pharmacy, and reports."}
           </p>
         </div>
-        <CreateActionButton
-          label="Create Branch"
-          onClick={() => setSection("branchCreate")}
-        />
+        <div className="">
+          <CreateActionButton
+            label="Create Branch"
+            onClick={() => setSection("branchCreate")}
+          />
+        </div>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_280px]">
         <Input
           value={query}
           onChange={(e: any) => setQuery(e.target.value)}
           placeholder="Search branch name, code, area, city, status"
+          className="rounded-lg px-2 py-2 lg:px-4 lg:py-1 text-xs lg:text-sm w-2/3 lg:w-[40%] mt-5"
         />
         <TenantPicker
           tenants={tenants}
@@ -72,7 +75,7 @@ export function BranchesManagement({
         />
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-        <div className="hidden grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid">
+        <div className="hidden grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
           <span>Branch</span>
           <span>Code</span>
           <span>Location</span>
@@ -88,22 +91,22 @@ export function BranchesManagement({
             return (
               <div
                 key={branch.id}
-                className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr] xl:items-center"
+                className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr] md:items-center"
               >
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <b>{branch.name}</b>
+                    <b className="text-xs lg:text-sm">{branch.name}</b>
                     {branch.is_global_template && (
                       <Badge tone="blue">Global</Badge>
                     )}
                     {locked && <Badge tone="purple">Locked</Badge>}
                   </div>
-                  <p className="break-all text-xs text-slate-500">
+                  <p className="break-all text-[10px] lg:text-xs text-slate-500">
                     {branch.id}
                   </p>
                 </div>
-                <span>{branch.code}</span>
-                <span className="text-slate-500">
+                <span className="text-xs lg:text-sm">{branch.code}</span>
+                <span className="text-xs lg:text-sm text-slate-500">
                   {[branch.address, branch.area, branch.city, branch.state]
                     .filter(Boolean)
                     .join(", ") || "-"}
@@ -111,7 +114,7 @@ export function BranchesManagement({
                 <Badge tone={branch.is_active ? "green" : "red"}>
                   {branch.is_active ? "Active" : "Inactive"}
                 </Badge>
-                <span>
+                <span className="text-xs lg:text-sm">
                   {formatDate(branch.updated_at || branch.created_at)}
                 </span>
                 <div className="flex flex-wrap gap-2">
@@ -122,7 +125,7 @@ export function BranchesManagement({
                         setSelectedBranchId(branch.id);
                         setSection("branchEdit");
                       }}
-                      className="rounded-xl border px-3 py-2 text-xs font-bold"
+                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                     >
                       Edit
                     </button>
@@ -133,7 +136,7 @@ export function BranchesManagement({
                       setSelectedBranchId(branch.id);
                       setSection("branchAssign");
                     }}
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
+                    className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                   >
                     Assign
                   </button>
@@ -147,7 +150,7 @@ export function BranchesManagement({
                           branch,
                         })
                       }
-                      className="rounded-xl border px-3 py-2 text-xs font-bold"
+                      className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
                     >
                       {branch.is_active ? "Inactive" : "Active"}
                     </button>

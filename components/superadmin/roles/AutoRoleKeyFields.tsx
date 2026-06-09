@@ -16,6 +16,7 @@ export function AutoRoleKeyFields({ role }: any) {
           onChange={(e: any) => setName(e.target.value)}
           required
           placeholder="Reception Staff"
+          className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
         />
       </Field>
       <input type="hidden" name="key" value={key} />

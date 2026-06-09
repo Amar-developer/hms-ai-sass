@@ -123,6 +123,7 @@ export function TenantUsers({
           <Select
             value={filters.status}
             onChange={(e: any) => updateFilter("status", e.target.value)}
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             <option value="all">All status</option>
             <option value="active">Active</option>
@@ -133,6 +134,7 @@ export function TenantUsers({
           <Select
             value={filters.dateField}
             onChange={(e: any) => updateFilter("dateField", e.target.value)}
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             <option value="updated_at">Modified date</option>
             <option value="created_at">Created date</option>
@@ -143,6 +145,7 @@ export function TenantUsers({
             type="date"
             value={filters.fromDate}
             onChange={(e: any) => updateFilter("fromDate", e.target.value)}
+            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
           />
         </Field>
         <Field label="To">
@@ -150,12 +153,13 @@ export function TenantUsers({
             type="date"
             value={filters.toDate}
             onChange={(e: any) => updateFilter("toDate", e.target.value)}
+            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
           />
         </Field>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1420px]">
-          <div className="hidden grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid">
+          <div className="hidden md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
             <SortButton label="User" field="name" sort={sort} onSort={changeSort} />
             <SortButton label="Email" field="email" sort={sort} onSort={changeSort} />
             <SortButton label="Type" field="user_type" sort={sort} onSort={changeSort} />
@@ -194,23 +198,23 @@ export function TenantUsers({
                       open();
                     }
                   }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] xl:items-center"
+                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] xl:items-center"
                 >
                   <div>
-                    <b>{user.name}</b>
-                    <p className="text-xs text-slate-500">
+                    <b className="text-xs lg:text-sm">{user.name}</b>
+                    <p className="text-[10px] lg:text-xs text-slate-500">
                       {user.user_number || "User account"}
                     </p>
                   </div>
-                  <span className="break-all">{user.email}</span>
-                  <span>{typeLabel}</span>
+                  <span className="break-all text-xs lg:text-sm">{user.email}</span>
+                  <span className="text-xs lg:text-sm">{typeLabel}</span>
                   <UserRoleList user={user} />
                   <span>{user.mobile || "-"}</span>
                   <Badge tone={user.is_active ? "green" : "red"}>
                     {user.is_active ? "Active" : "Inactive"}
                   </Badge>
-                  <span>{formatDate(user.created_at)}</span>
-                  <span>{formatDate(user.updated_at)}</span>
+                  <span className="text-xs lg:text-sm flex justify-start items-center">{formatDate(user.created_at)}</span>
+                  <span className="text-xs lg:text-sm flex justify-start items-center">{formatDate(user.updated_at)}</span>
                   <ActionGroup>
                     <ActionButton onClick={stop(open)}>Edit</ActionButton>
                     <ActionButton

@@ -20,15 +20,15 @@ export function CreateUser({
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-lg font-bold">Create User</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="text-base lg:text-lg font-bold">Create User</h3>
+          <p className="text-xs lg:text-sm text-slate-500">
             Add a user under the selected tenant.
           </p>
         </div>
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
         >
           Back to Users
         </button>
@@ -54,7 +54,7 @@ export function CreateUser({
           />
         </Field>
         <Field label="User Type">
-          <Select name="userType" defaultValue="tenant_admin">
+          <Select name="userType" defaultValue="tenant_admin" className='rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm'>
             {userTypes.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -90,7 +90,7 @@ export function CreateUser({
           <button
             type="button"
             onClick={back}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
           >
             Cancel
           </button>

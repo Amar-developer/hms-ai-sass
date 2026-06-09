@@ -1,9 +1,20 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Badge, Button, Card, Field, Input, Select } from "@/components/common/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+} from "@/components/common/ui";
 import { tenantTypes } from "../../../utils/superAdmin/constants";
-import { invoiceLimitLabel, limitLabel, readTenantOnboardingDraft } from "../../../utils/superAdmin/superAdmin";
+import {
+  invoiceLimitLabel,
+  limitLabel,
+  readTenantOnboardingDraft,
+} from "../../../utils/superAdmin/superAdmin";
 import { Info } from "../shared/Info";
 
 function ReviewSection({ title, rows, onEdit }: any) {
@@ -14,14 +25,14 @@ function ReviewSection({ title, rows, onEdit }: any) {
         <button
           type="button"
           onClick={onEdit}
-          className="rounded-xl border px-3 py-2 text-xs font-bold"
+          className="rounded-lg border px-3 py-2 text-xs font-bold"
         >
           Edit
         </button>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {rows.map(([label, value]: any) => (
-          <div key={label} className="rounded-xl bg-slate-50 p-3 text-sm">
+          <div key={label} className="rounded-lg bg-slate-50 p-3 text-sm">
             <p className="text-xs font-bold uppercase text-slate-500">
               {label}
             </p>
@@ -42,23 +53,23 @@ function OnboardingReview({ draft, validSteps, steps, onEdit }: any) {
         {steps.slice(0, 5).map((label: string, index: number) => (
           <div
             key={label}
-            className={`rounded-2xl border p-4 ${validSteps[index] ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}
+            className={`rounded-lg border p-4 ${validSteps[index] ? "border-emerald-200 bg-emerald-50" : "border-red-200 bg-red-50"}`}
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-bold uppercase text-slate-500">
+                <p className="text-[10px] lg:text-xs font-bold uppercase text-slate-500">
                   Step {index + 1}
                 </p>
-                <h4 className="font-bold">{label}</h4>
+                <p className="font-bold text-base lg:text-lg">{label}</p>
               </div>
-              <Badge tone={validSteps[index] ? "green" : "red"}>
+              <Badge tone={validSteps[index] ? "green" : "red"} className="px-1.5 py-1.5 lg:px-4 lg:py-3 text-[10px] lg:text-xs">
                 {validSteps[index] ? "Complete" : "Missing"}
               </Badge>
             </div>
             <button
               type="button"
               onClick={() => onEdit(index)}
-              className="mt-3 rounded-xl border bg-white px-3 py-2 text-xs font-bold"
+              className="mt-3 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[10px] lg:text-xs bg-white border font-bold"
             >
               Edit Step
             </button>
@@ -181,8 +192,8 @@ function PlanModulePreview({ plan, modules }: any) {
       <Card>
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
           <div>
-            <h4 className="font-bold">Included Modules</h4>
-            <p className="text-sm text-slate-500">
+            <h4 className="font-bold text-base lg:text-lg">Included Modules</h4>
+            <p className="text-xs lg:text-sm text-slate-500">
               Tenant access follows these modules from the selected plan.
             </p>
           </div>
@@ -193,7 +204,7 @@ function PlanModulePreview({ plan, modules }: any) {
             moduleNames.map((name: string) => (
               <span
                 key={name}
-                className="rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
+                className="rounded-lg bg-slate-100 px-2 py-2 lg:px-4 lg:py-3 text-[10px] lg:text-sm font-bold text-slate-700"
               >
                 {name}
               </span>
@@ -209,18 +220,24 @@ function PlanModulePreview({ plan, modules }: any) {
   );
 }
 
-function TemplateChecklist({ title, name, items, defaultSelected, empty }: any) {
+function TemplateChecklist({
+  title,
+  name,
+  items,
+  defaultSelected,
+  empty,
+}: any) {
   return (
-    <div className="rounded-2xl border border-slate-200 p-4">
+    <div className="rounded-lg border border-slate-200 p-4">
       <h4 className="font-bold">{title}</h4>
       <div className="mt-3 grid gap-2">
         {items.length === 0 && (
-          <p className="text-sm text-slate-500">{empty}</p>
+          <p className="text-xs lg:text-sm text-slate-500">{empty}</p>
         )}
         {items.map((item: any) => (
           <label
             key={item.id}
-            className="flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-sm"
+            className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm"
           >
             <input
               type="checkbox"
@@ -279,15 +296,15 @@ export function CreateTenantForm({
   const validSteps = [
     Boolean(
       draft.name &&
-        draft.tenantType &&
-        draft.status &&
-        draft.country &&
-        draft.timezone,
+      draft.tenantType &&
+      draft.status &&
+      draft.country &&
+      draft.timezone,
     ),
     Boolean(
       draft.planId &&
-        draft.branches.length &&
-        draft.branches.every((branch: any) => branch.name && branch.code),
+      draft.branches.length &&
+      draft.branches.every((branch: any) => branch.name && branch.code),
     ),
     Boolean(draft.planId),
     true,
@@ -330,10 +347,10 @@ export function CreateTenantForm({
 
   return (
     <Card>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between rounded-lg ">
         <div>
-          <h3 className="text-lg font-bold">Tenant Onboarding Wizard</h3>
-          <p className="mt-1 text-sm text-slate-500">
+          <h3 className=" text-lg font-bold">Tenant Onboarding Wizard</h3>
+          <p className="mt-1 text-xs lg:text-sm text-slate-500">
             Create tenant, assign plan, module entitlements, branches, default
             templates, tenant admin credentials, and onboarding checklist in one
             guided flow.
@@ -350,7 +367,7 @@ export function CreateTenantForm({
                 type="button"
                 onClick={() => goToStep(index)}
                 disabled={locked}
-                className={`rounded-xl px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 ${step === index ? "bg-slate-900 text-white" : complete ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                className={`rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[10px] lg:text-xs font-bold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 ${step === index ? "bg-slate-900 text-white" : complete ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
               >
                 {index + 1}. {label}
                 {complete && index !== step ? " ✓" : ""}
@@ -368,21 +385,36 @@ export function CreateTenantForm({
         className="mt-5 grid gap-4"
       >
         <input type="hidden" name="branchCount" value={branches.length} />
-        <div className="rounded-2xl bg-slate-50 p-3 text-sm font-semibold text-slate-600">
+        <div className="rounded-lg bg-slate-50 p-3 text-xs lg:text-sm font-semibold text-slate-600">
           {stepHelp[step]}{" "}
           {!currentStepValid && step < 5 && (
-            <span className="text-red-600"> Complete this step to continue.</span>
+            <span className="text-red-600">
+              {" "}
+              Complete this step to continue.
+            </span>
           )}
         </div>
         <div className={step === 0 ? "grid gap-4 md:grid-cols-3" : "hidden"}>
           <Field label="Tenant Name">
-            <Input name="name" required placeholder="Clinic name" />
+            <Input
+              name="name"
+              required
+              placeholder="Clinic name"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
           <Field label="Legal Name">
-            <Input name="legalName" placeholder="Registered legal name" />
+            <Input
+              name="legalName"
+              placeholder="Registered legal name"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
           <Field label="Tenant Type">
-            <Select name="tenantType">
+            <Select
+              name="tenantType"
+              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            >
               {tenantTypes.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}
@@ -391,30 +423,58 @@ export function CreateTenantForm({
             </Select>
           </Field>
           <Field label="Status">
-            <Select name="status" defaultValue="trial">
+            <Select
+              name="status"
+              defaultValue="trial"
+              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            >
               <option value="trial">Trial</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
             </Select>
           </Field>
           <Field label="Tenant Logo">
-            <Input name="logoFile" type="file" accept="image/*" />
+            <Input
+              name="logoFile"
+              type="file"
+              accept="image/*"
+              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm file:text-[10px] lg:file:text-xs"
+            />
           </Field>
           <Field label="Email">
-            <Input name="email" type="email" />
+            <Input
+              name="email"
+              type="email"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
           <Field label="Phone">
-            <Input name="phone" />
+            <Input
+              name="phone"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
           <Field label="Country">
-            <Input name="country" defaultValue="IN" maxLength={2} />
+            <Input
+              name="country"
+              defaultValue="IN"
+              maxLength={2}
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
           <Field label="Timezone">
-            <Input name="timezone" defaultValue="Asia/Kolkata" />
+            <Input
+              name="timezone"
+              defaultValue="Asia/Kolkata"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
           <div className="md:col-span-3">
             <Field label="Address">
-              <Input name="address" />
+              <Input
+                name="address"
+                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+              />
             </Field>
           </div>
           <div className="md:col-span-3">
@@ -422,6 +482,7 @@ export function CreateTenantForm({
               <Input
                 name="description"
                 placeholder="Clinic, hospital, or group description"
+                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
               />
             </Field>
           </div>
@@ -429,7 +490,7 @@ export function CreateTenantForm({
         <div className={step === 1 ? "grid gap-4" : "hidden"}>
           <div className="grid gap-4 md:grid-cols-3">
             <Field label="Subscription Model">
-              <Select name="planId" required>
+              <Select name="planId" required className='rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm'>
                 {plans.map((plan: any) => (
                   <option key={plan.id} value={plan.id}>
                     {plan.name} - ₹{plan.price_inr_monthly}
@@ -442,7 +503,7 @@ export function CreateTenantForm({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h4 className="font-bold">Branches</h4>
-                <p className="text-sm text-slate-500">
+                <p className="text-xs lg:text-sm text-slate-500">
                   Add local branches for the tenant. Every branch needs a name
                   and code.
                 </p>
@@ -456,7 +517,7 @@ export function CreateTenantForm({
                   ]);
                   setTimeout(refreshDraft, 0);
                 }}
-                className="rounded-2xl border px-4 py-3 text-sm font-bold"
+                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
               >
                 Add More Branch
               </button>
@@ -492,6 +553,7 @@ export function CreateTenantForm({
                         name={`branchName_${index}`}
                         defaultValue={index === 0 ? "Main Branch" : ""}
                         required
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="Branch Code">
@@ -500,29 +562,36 @@ export function CreateTenantForm({
                         defaultValue={index === 0 ? "MAIN" : ""}
                         placeholder={`BR${index + 1}`}
                         required
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="City">
                       <Input
                         name={`branchCity_${index}`}
                         placeholder="Chennai"
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="Area">
                       <Input
                         name={`branchArea_${index}`}
                         placeholder="Chrompet"
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <Field label="State">
                       <Input
                         name={`branchState_${index}`}
                         placeholder="Tamil Nadu"
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
                       />
                     </Field>
                     <div className="md:col-span-2">
                       <Field label="Branch Address">
-                        <Input name={`branchAddress_${index}`} />
+                        <Input
+                          name={`branchAddress_${index}`}
+                          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+                        />
                       </Field>
                     </div>
                   </div>
@@ -570,6 +639,7 @@ export function CreateTenantForm({
               defaultValue="Tenant Admin"
               placeholder="Clinic Owner / Admin"
               required
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
           </Field>
           <Field label="Admin Email">
@@ -578,6 +648,7 @@ export function CreateTenantForm({
               type="email"
               placeholder="admin@clinic.local"
               required
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
           </Field>
           <Field label="Temporary Password">
@@ -586,18 +657,27 @@ export function CreateTenantForm({
               type="text"
               defaultValue="TempPass123"
               required
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
           </Field>
           <Field label="Admin Mobile">
-            <Input name="adminMobile" placeholder="Optional" />
+            <Input
+              name="adminMobile"
+              placeholder="Optional"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            />
           </Field>
           <Field label="Must Change Password">
-            <Select name="adminMustChangePassword" defaultValue="true">
+            <Select
+              name="adminMustChangePassword"
+              defaultValue="true"
+              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            >
               <option value="true">Yes</option>
               <option value="false">No</option>
             </Select>
           </Field>
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 md:col-span-3">
+          <div className="rounded-lg bg-slate-50 p-4 text-xs lg:  text-sm text-slate-600 md:col-span-3">
             The wizard copies the Tenant Admin role template automatically and
             creates the first tenant admin user.
           </div>
@@ -609,7 +689,7 @@ export function CreateTenantForm({
             steps={steps}
             onEdit={setStep}
           />
-          <div className="rounded-2xl bg-blue-50 p-4 text-sm font-semibold text-blue-700">
+          <div className="rounded-lg  bg-blue-50 p-4 text-xs lg:text-sm font-semibold text-blue-700">
             Submitting this wizard creates the tenant, assigns the selected
             catalog plan, copies selected defaults, creates the tenant admin
             user, and returns to the Tenants listing with the latest tenant
@@ -622,7 +702,7 @@ export function CreateTenantForm({
               type="button"
               onClick={() => setStep(Math.max(0, step - 1))}
               disabled={step === 0}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold disabled:text-slate-300"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold disabled:text-slate-300"
             >
               Previous
             </button>
@@ -630,12 +710,15 @@ export function CreateTenantForm({
               type="button"
               onClick={nextStep}
               disabled={step === steps.length - 1 || !currentStepValid}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold disabled:text-slate-300"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold disabled:text-slate-300"
             >
               Next
             </button>
           </div>
-          <Button disabled={!canComplete}>
+          <Button
+            disabled={!canComplete}
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
             {busy ? "Onboarding..." : "Complete Onboarding"}
           </Button>
         </div>

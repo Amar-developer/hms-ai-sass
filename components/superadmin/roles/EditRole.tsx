@@ -22,12 +22,12 @@ export function EditRole({ role, busy, updateRole, back }: any) {
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="text-lg font-bold">Edit Role</h3>
-          <p className="text-sm text-slate-500">{role.key}</p>
+          <p className="text-xs lg:text-sm text-slate-500">{role.key}</p>
         </div>
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="rounded-lg border px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm font-bold"
         >
           Back to Roles
         </button>
@@ -35,7 +35,12 @@ export function EditRole({ role, busy, updateRole, back }: any) {
       <form onSubmit={updateRole} className="mt-4 grid gap-3 md:grid-cols-2">
         <AutoRoleKeyFields role={role} />
         <Field label="Status">
-          <Select name="isActive" defaultValue={String(role.is_active)}>
+          <Select
+            name="isActive"
+            defaultValue={String(role.is_active)}
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm
+"
+          >
             <option value="true">Active</option>
             <option value="false">Inactive</option>
           </Select>
@@ -46,6 +51,7 @@ export function EditRole({ role, busy, updateRole, back }: any) {
               name="permissionKeysText"
               defaultValue={(role.permission_keys || []).join(", ")}
               placeholder="appointments.manage,patients.read"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
           </Field>
         </div>

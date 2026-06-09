@@ -10,7 +10,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-3xl border border-slate-200 bg-white p-5 shadow-sm text-xl lg:2xl ${className}`}
+      className={`border border-slate-200 bg-white p-5 shadow-sm ${className}`}
     >
       {children}
     </div>
@@ -19,11 +19,11 @@ export function Card({
 export function Badge({
   children,
   tone = "slate",
-  className=""
+  className = "px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm flex justify-center items-center",
 }: {
   children: React.ReactNode;
   tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple";
-  className?:string
+  className?: string;
 }) {
   const m: any = {
     slate: "bg-slate-100 text-slate-700",
@@ -35,7 +35,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-block rounded-full px-3 py-1 text-[10px] lg:text-xs font-bold ${m[tone]} ${className}`}
+      className={`inline-block rounded-lg px-3 py-1 text-[10px] lg:text-xs font-bold ${m[tone]} ${className}`}
     >
       {children}
     </span>
@@ -53,11 +53,17 @@ export function noticeTone(message: string): NoticeTone {
     )
   )
     return "error";
-  if (/delete|deleted|deactivated|removed|suspended|cancelled|inactive/.test(text))
+  if (
+    /delete|deleted|deactivated|removed|suspended|cancelled|inactive/.test(text)
+  )
     return "delete";
   if (/already|choose|select|warning|queued|called|request/.test(text))
     return "warning";
-  if (/created|updated|saved|linked|assigned|uploaded|generated|recorded|success|activated|changed|complete|completed/.test(text))
+  if (
+    /created|updated|saved|linked|assigned|uploaded|generated|recorded|success|activated|changed|complete|completed/.test(
+      text,
+    )
+  )
     return "success";
   return "info";
 }
@@ -91,7 +97,10 @@ export function StatusToast({
   if (!message) return null;
 
   const resolvedTone = tone || noticeTone(message);
-  const styles: Record<NoticeTone, { icon: any; iconClass: string; bar: string; label: string }> = {
+  const styles: Record<
+    NoticeTone,
+    { icon: any; iconClass: string; bar: string; label: string }
+  > = {
     success: {
       icon: CheckCircle2,
       iconClass: "fill-emerald-500 text-white",
@@ -133,7 +142,10 @@ export function StatusToast({
         className="pointer-events-auto overflow-hidden rounded bg-white text-slate-800 shadow-xl ring-1 ring-slate-900/10"
       >
         <div className="flex min-h-[58px] items-center gap-3 px-4 py-3">
-          <Icon size={24} className={`shrink-0 rounded-full ${current.iconClass}`} />
+          <Icon
+            size={24}
+            className={`shrink-0 rounded-full ${current.iconClass}`}
+          />
           <p className="min-w-0 flex-1 break-words text-sm">
             <span className="font-semibold">{current.label}:</span> {message}
           </p>
@@ -208,7 +220,11 @@ function submitNearestFormOnEnter(event: any) {
     }
   }
 }
-export function Input({ className = "", onKeyDown, ...props }: any) {
+export function Input({
+  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  onKeyDown,
+  ...props
+}: any) {
   return (
     <input
       {...props}
@@ -232,7 +248,7 @@ export function Input({ className = "", onKeyDown, ...props }: any) {
         event.preventDefault();
         submitNearestFormOnEnter(event);
       }}
-      className={`w-full rounded-lg border border-slate-200 px-2 py-1.5 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 ${className}`}
+      className={`w-full rounded-lg border border-slate-200  outline-none focus:border-slate-500 ${className}`}
     />
   );
 }
@@ -273,10 +289,10 @@ export function SuggestionInput({
           setOpen(true);
         }}
         autoComplete="off"
-        className={`w-full rounded-2xl border border-slate-200 px-4 py-3 text-[10px]  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-lg border border-slate-200 px-2 py-2 lg:px-4 lg:py-3 text-[10px]  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
       {open && !disabled && filtered.length > 0 && (
-        <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-lg">
+        <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
           {filtered.map((item: string) => (
             <button
               key={item}
@@ -286,7 +302,7 @@ export function SuggestionInput({
                 setNext(item);
                 setOpen(false);
               }}
-              className={`block w-full rounded-xl px-3 py-2 text-[10px] text-sm hover:bg-slate-50 ${
+              className={`block w-full rounded-lg px-3 py-2 text-xs lg:text-sm hover:bg-slate-50 ${
                 item.toLowerCase() === query ? "bg-slate-50 font-bold" : ""
               }`}
             >
@@ -298,13 +314,17 @@ export function SuggestionInput({
     </div>
   );
 }
-export function Select(props: any) {
+export function Select({
+  className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  children,
+  ...props
+}: any) {
   return (
     <select
       {...props}
-      className={`w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-[10px] lg:text-sm outline-none focus:border-slate-500 ${props.className || ""}`}
+      className={`w-full rounded-lg border border-slate-200 bg-white outline-none focus:border-slate-500 ${className}`}
     >
-      {props.children}
+      {children}
     </select>
   );
 }
@@ -360,14 +380,14 @@ export function SearchableSelect({
       (option) =>
         option.label.toLowerCase().includes(trimmed) ||
         String(option.value).toLowerCase().includes(trimmed) ||
-        (option.sublabel || "").toLowerCase().includes(trimmed)
+        (option.sublabel || "").toLowerCase().includes(trimmed),
     );
   }, [options, query]);
 
   const selected = options.find((option) => option.value === value);
   const displayLabel = selected?.label || (value && allowCustom ? value : "");
   const matchesExisting = filtered.some(
-    (option) => option.value === query.trim()
+    (option) => option.value === query.trim(),
   );
 
   function commit(next: string) {
@@ -385,9 +405,7 @@ export function SearchableSelect({
         onClick={() => setOpen((current) => !current)}
         className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
       >
-        <span
-          className={displayLabel ? "truncate" : "truncate text-slate-400"}
-        >
+        <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
           {displayLabel || placeholder}
         </span>
         <span className="ml-2 text-xs text-slate-400">{open ? "▲" : "▼"}</span>
@@ -444,11 +462,15 @@ export function SearchableSelect({
     </div>
   );
 }
-export function Button({ children, className = "", ...props }: any) {
+export function Button({
+  children,
+  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  ...props
+}: any) {
   return (
     <button
       {...props}
-      className={`rounded-lg bg-slate-900  ${className? className:'text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3'} font-bold text-white disabled:bg-slate-300`}
+      className={`rounded-lg bg-slate-900  ${className ? className : "text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"} font-bold text-white disabled:bg-slate-300`}
     >
       {children}
     </button>

@@ -1083,16 +1083,16 @@ export function SuperAdminDashboard({
 
   return (
     <div className="min-w-0 space-y-5">
-      <Card>
+      <Card className="rounded-lg">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h3 className="text-xl font-bold">MedizinHub HMS Primary Tenant</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-lg lg:text-xl font-bold">MedizinHub HMS Primary Tenant</h3>
+            <p className="text-xs lg:text-sm text-slate-500">
               Manage tenants, roles, subscriptions, and platform settings from
               separate pages.
             </p>
           </div>
-          <Badge tone="blue">Global Platform Access</Badge>
+          <Badge tone="blue" className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">Global Platform Access</Badge>
         </div>
       </Card>
       <StatusToast message={message} onClose={() => setMessage("")} />

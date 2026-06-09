@@ -1,9 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ActionButton, ActionGroup, Badge, Card, Input, Select } from "@/components/common/ui";
+import {
+  ActionButton,
+  ActionGroup,
+  Badge,
+  Card,
+  Input,
+  Select,
+} from "@/components/common/ui";
 import { FormField } from "@/components/FormElements";
-import { formatDate, groupRolesByName } from "../../../utils/superAdmin/superAdmin";
+import {
+  formatDate,
+  groupRolesByName,
+} from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "../shared/Empty";
 import { Pagination } from "../shared/Pagination";
@@ -105,7 +115,10 @@ export function RolesManagement({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone={selected?.is_primary ? "blue" : "slate"}>
+          <Badge
+            tone={selected?.is_primary ? "blue" : "slate"}
+            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
             {selected?.is_primary
               ? "Global templates"
               : `${filtered.length} roles`}
@@ -127,12 +140,14 @@ export function RolesManagement({
             value={filters.query}
             onChange={(e: any) => updateFilter("query", e.target.value)}
             placeholder="Role name"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
         <FormField label="Status">
           <Select
             value={filters.status}
             onChange={(e: any) => updateFilter("status", e.target.value)}
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             <option value="all">All status</option>
             <option value="active">Active</option>
@@ -143,6 +158,7 @@ export function RolesManagement({
           <Select
             value={filters.dateField}
             onChange={(e: any) => updateFilter("dateField", e.target.value)}
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             <option value="updated_at">Modified date</option>
             <option value="created_at">Created date</option>
@@ -153,6 +169,7 @@ export function RolesManagement({
             type="date"
             value={filters.fromDate}
             onChange={(e: any) => updateFilter("fromDate", e.target.value)}
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
         <FormField label="To">
@@ -160,17 +177,38 @@ export function RolesManagement({
             type="date"
             value={filters.toDate}
             onChange={(e: any) => updateFilter("toDate", e.target.value)}
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-        <div className="min-w-[1120px]">
-          <div className="hidden grid-cols-[1.15fr_1fr_.65fr_.7fr_.7fr_1.8fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid">
-            <SortButton label="Role" field="name" sort={sort} onSort={changeSort} />
+        <div className="min-w-[720px]">
+          <div className="hidden md:grid md:grid-cols-[2fr_1fr_.8fr_1fr_1fr_3fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+            <SortButton
+              label="Role"
+              field="name"
+              sort={sort}
+              onSort={changeSort}
+            />
             <span>Scope</span>
-            <SortButton label="Status" field="is_active" sort={sort} onSort={changeSort} />
-            <SortButton label="Created" field="created_at" sort={sort} onSort={changeSort} />
-            <SortButton label="Modified" field="updated_at" sort={sort} onSort={changeSort} />
+            <SortButton
+              label="Status"
+              field="is_active"
+              sort={sort}
+              onSort={changeSort}
+            />
+            <SortButton
+              label="Created"
+              field="created_at"
+              sort={sort}
+              onSort={changeSort}
+            />
+            <SortButton
+              label="Modified"
+              field="updated_at"
+              sort={sort}
+              onSort={changeSort}
+            />
             <span className="text-right">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
@@ -193,29 +231,29 @@ export function RolesManagement({
                       openRole(role);
                     }
                   }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1.15fr_1fr_.65fr_.7fr_.7fr_1.8fr] xl:items-center"
+                  className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[2fr_1fr_.8fr_1fr_1fr_3fr] md:items-center"
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <b>{role.name}</b>
+                      <b className="text-xs lg:text-sm">{role.name}</b>
                       {role.is_global_template && (
-                        <Badge tone="blue">Global</Badge>
+                        <Badge tone="blue" className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">Global</Badge>
                       )}
-                      {locked && <Badge tone="purple">Locked</Badge>}
+                      {locked && <Badge tone="purple" className="px-1 py-0.5 lg:px-2 lg:py-2 text-[10px] lg:text-xs">Locked</Badge>}
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs  text-slate-500">
                       {role.rows.length > 1
                         ? `${role.rows.length} branch variants grouped`
-                        : role.primary.id}
+                        : role.primary.id} 
                     </p>
                   </div>
-                  <span>{role.display_key}</span>
-                  <Badge tone={role.is_active ? "green" : "red"}>
+                  <span className="text-xs lg:text-sm">{role.display_key}</span>
+                  <Badge tone={role.is_active ? "green" : "red"} className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
                     {role.is_active ? "Active" : "Inactive"}
                   </Badge>
-                  <span>{formatDate(role.created_at)}</span>
-                  <span>{formatDate(role.updated_at)}</span>
-                  <ActionGroup>
+                  <span className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">{formatDate(role.created_at)}</span>
+                  <span className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">{formatDate(role.updated_at)}</span>
+                  <ActionGroup className="!flex-wrap xl:!flex-nowrap">
                     {!locked && (
                       <ActionButton
                         onClick={stop(() => openRole(role, "roleEdit"))}

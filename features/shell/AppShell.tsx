@@ -1,27 +1,13 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  Bell,
-  ChevronDown,
-  HeartPulse,
-  Home,
-  KeyRound,
-  LogOut,
-  Menu,
-  Settings,
-} from "lucide-react";
-import { Badge, Card, Select } from "@/components/common/ui";
-import { FormField } from "@/components/FormElements";
+import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
+import { Card } from "@/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
-import {
-  TenantAdmin,
-  canUseTenantAdminSection,
-  tenantAdminSections,
-} from "@/features/admin/TenantAdmin";
+import { TenantAdmin } from "@/features/admin/TenantAdmin";
+import { canUseTenantAdminSection } from "@/utils/tenantAdmin/permissions";
+import { tenantAdminSections } from "@/utils/tenantAdmin/constants";
 import { Billing } from "@/features/billing/Billing";
 import { Dashboard } from "@/features/dashboard/Dashboard";
 import { DoctorConsultation } from "@/features/doctor/DoctorConsultation";
@@ -207,16 +193,14 @@ export function AppShell(props: any) {
         !profileOpenRef.current.contains(event.target as Node)
       ) {
         setProfileOpen(false);
-        if(sideBarOpen){
-          setSidebarOpen(false)
+        if (sideBarOpen) {
+          setSidebarOpen(false);
         }
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.addEventListener("mousedown", handleClickOutside);
-  }, [sideBarOpen,profileOpenRef.current]);
-
-  
+  }, [sideBarOpen, profileOpenRef.current]);
 
   function renderPage() {
     switch (activePage) {

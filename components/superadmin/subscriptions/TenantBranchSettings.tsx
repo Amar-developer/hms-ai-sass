@@ -289,8 +289,8 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
           <div>
-            <h3 className="text-lg font-bold">Tenant & Branch Settings</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-base lg:text-lg font-bold">Tenant & Branch Settings</h3>
+            <p className="text-xs lg:text-sm text-slate-500">
               Configuration page for tenant type, enabled modules, branch
               settings, queue rules, invoice prefix, and communication
               providers.
@@ -386,12 +386,12 @@ export function TenantBranchSettings({
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h4 className="font-bold">Catalog Plugin Controls</h4>
-            <p className="text-sm text-slate-500">
+            <p className="text-xs lg:text-sm text-slate-500">
               Tenant-specific catalog source routing for custom integrations.
               Disabled plugins use MedizinHub local catalog data.
             </p>
           </div>
-          <Badge tone="blue">Tenant scoped</Badge>
+          <Badge tone="blue" className="text-center">Tenant scoped</Badge>
         </div>
         <StatusToast
           message={pluginMessage}
@@ -427,7 +427,7 @@ export function TenantBranchSettings({
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h4 className="font-bold">Plan Module Access</h4>
-            <p className="text-sm text-slate-500">
+            <p className="text-xs lg:text-sm text-slate-500">
               Modules are controlled by the active subscription plan. Upgrade
               the tenant plan from Subscription Management to change access.
             </p>
@@ -439,7 +439,7 @@ export function TenantBranchSettings({
                 <p className="mt-1 text-xs text-slate-500">Current plan</p>
               </>
             ) : (
-              <Badge tone="amber">No active plan</Badge>
+              <Badge tone="amber" className="text-center">No active plan</Badge>
             )}
           </div>
         </div>

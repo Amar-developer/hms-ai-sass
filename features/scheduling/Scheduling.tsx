@@ -715,7 +715,8 @@ function ScheduleForm({
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm
+ font-bold border"
         >
           Back to Schedules
         </button>
@@ -793,7 +794,7 @@ function ScheduleForm({
                 return (
                   <span
                     key={value}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800"
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-800"
                   >
                     {label}
                     <button
@@ -1133,7 +1134,7 @@ function ConfirmModal({ row, busy, onClose, onConfirm }: any) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-lg border text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4 font-bold"
           >
             Cancel
           </button>
