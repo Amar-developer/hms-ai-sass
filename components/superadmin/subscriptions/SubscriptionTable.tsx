@@ -2,7 +2,7 @@
 
 import { Badge, Card } from "@/components/common/ui";
 import { displayDate } from "@/utils/helper";
-import { Empty } from "../shared/Empty";
+import { Empty } from "@/components/admin/Empty";
 
 export function SubscriptionTable({ title, rows, columns }: any) {
   function cellValue(row: any, column: string) {

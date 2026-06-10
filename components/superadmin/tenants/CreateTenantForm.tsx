@@ -692,7 +692,7 @@ export function CreateTenantForm({
               <option value="false">No</option>
             </Select>
           </Field>
-          <div className="rounded-lg bg-slate-50 p-4 text-xs lg:  text-sm text-slate-600 md:col-span-3">
+          <div className="rounded-lg bg-slate-50 p-4 text-xs lg:text-sm text-slate-600 md:col-span-3">
             The wizard copies the Tenant Admin role template automatically and
             creates the first tenant admin user.
           </div>

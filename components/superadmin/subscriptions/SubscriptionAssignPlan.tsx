@@ -18,8 +18,8 @@ export function SubscriptionAssignPlan({
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-lg font-bold">Assign / Upgrade Tenant Plan</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="text-base lg:text-lg font-bold">Assign / Upgrade Tenant Plan</h3>
+          <p className="text-xs lg:text-sm text-slate-500">
             Assign immediately, schedule renewal, or upgrade a tenant when
             limits are reached.
           </p>
@@ -27,7 +27,7 @@ export function SubscriptionAssignPlan({
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
         >
           Back to Subscriptions
         </button>
@@ -77,7 +77,7 @@ export function SubscriptionAssignPlan({
         </FormField>
         <div className="md:col-span-2">
           {selectedTenant && (
-            <div className="mb-3 rounded-2xl bg-slate-50 p-4 text-sm">
+            <div className="mb-3 rounded-lg bg-slate-50 p-4 text-xs lg:text-sm">
               <b>Selected tenant:</b> {selectedTenant.name}
             </div>
           )}
@@ -88,7 +88,7 @@ export function SubscriptionAssignPlan({
             <button
               type="button"
               onClick={back}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold"
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
             >
               Cancel
             </button>

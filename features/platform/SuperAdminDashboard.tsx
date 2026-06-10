@@ -26,7 +26,7 @@ import { BranchesManagement } from "../../components/superadmin/branches/Branche
 import { CreateBranch } from "../../components/superadmin/branches/CreateBranch";
 import { EditBranch } from "../../components/superadmin/branches/EditBranch";
 import { AssignTemplate } from "../../components/superadmin/shared/AssignTemplate";
-import { ConfirmModal } from "../../components/superadmin/shared/ConfirmModal";
+import { ConfirmModal } from "../../components/admin/ConfirmModal";
 import { PasswordResetModal } from "../../components/superadmin/shared/PasswordResetModal";
 import { SubscriptionManagement } from "../../components/superadmin/subscriptions/SubscriptionManagement";
 import { TenantBranchSettings } from "../../components/superadmin/subscriptions/TenantBranchSettings";
@@ -1092,7 +1092,7 @@ export function SuperAdminDashboard({
               separate pages.
             </p>
           </div>
-          <Badge tone="blue" className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">Global Platform Access</Badge>
+          <Badge tone="blue" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm" >Global Platform Access</Badge>
         </div>
       </Card>
       <StatusToast message={message} onClose={() => setMessage("")} />

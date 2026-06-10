@@ -17,6 +17,7 @@ import { FormField } from "../FormElements";
 import { asOptionList, patientLabel } from "@/utils/tenantAdmin/helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { UPLOADS_BASE } from "@/lib/api";
+import { displayDateTime } from "@/utils/helper";
 
 export function FilesPanel({
   apiSession,
@@ -56,13 +57,13 @@ export function FilesPanel({
   const patientOptions = useMemo(
     () =>
       patients.slice(0, 500).map((patient: any) => {
-        const name = patient.full_name || patient.name || patient.id;
+        const name = patient.full_name || patient.name || "Patient";
         return {
           value: patient.id,
           label:
             name +
             (patient.patient_number ? ` — ${patient.patient_number}` : ""),
-          sublabel: patient.id,
+          sublabel: patient.patient_number || patient.mobile || "",
         };
       }),
     [patients],
@@ -103,11 +104,13 @@ export function FilesPanel({
         if (cancelled) return;
         const list = Array.isArray(rows) ? rows : [];
         setRecordOptions(
-          list.slice(0, 500).map((row: any) => ({
-            value: row.id,
-            label: fetcher.label(row),
-            sublabel: fetcher.sublabel ? fetcher.sublabel(row) : row.id,
-          })),
+          list
+            .slice(0, 500)
+            .map((row: any) => ({
+              value: row.id,
+              label: fetcher.label(row),
+              sublabel: fetcher.sublabel ? fetcher.sublabel(row) : row.id,
+            })),
         );
       })
       .catch(() => {
@@ -233,8 +236,8 @@ export function FilesPanel({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
-            <h3 className="text-lg font-bold">Files</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-bast lg:text-lg font-bold">Files</h3>
+            <p className="text-xs lg:text-sm text-slate-500">
               Central file registry for logos, patient photos, consent forms,
               discharge documents, reports, and module attachments. Pick a
               category and the dependent fields auto-fill with the matching
@@ -242,7 +245,7 @@ export function FilesPanel({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="blue">{files.length} files</Badge>
+            <Badge tone="blue" className="rounded-lg px-2 py-2 ">{files.length} files</Badge>
             <ActionButton
               type="button"
               onClick={syncUploadsFolder}
@@ -383,8 +386,8 @@ export function FilesPanel({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h4 className="font-bold">File Registry</h4>
-            <p className="text-sm text-slate-500">
+            <h4 className="text-base lg:text-lg font-bold">File Registry</h4>
+            <p className="text-xs lg:text-sm text-slate-500">
               Files created from module uploads appear here automatically. Use
               Sync Uploads Folder to register pre-existing files from the server
               uploads directory.
@@ -402,7 +405,7 @@ export function FilesPanel({
           <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-4 py-3">File</th>
+                <th className="px-4 py-3 w-[100px]">File</th>
                 <th>Category</th>
                 <th>Attached To</th>
                 <th>Patient</th>
@@ -427,25 +430,25 @@ export function FilesPanel({
                     </p>
                   </td>
                   <td>
-                    <Badge tone="blue">
+                    <Badge tone="blue" className="rounded-full px-2 py-2 text-xs lg:text-sm w-[50%]">
                       {humanizeOptionLabel(file.category)}
                     </Badge>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 text-xs lg:text-sm text-slate-500">
                       {file.source_module || "-"}
                     </p>
                   </td>
                   <td>
-                    <b>{file.attached_to_doctype || "-"}</b>
+                    <b className="text-xs lg:text-sm">{file.attached_to_doctype || "-"}</b>
                     <p className="break-all text-xs text-slate-500">
                       {[file.attached_to_name, file.attached_to_field]
                         .filter(Boolean)
                         .join(" / ") || "-"}
                     </p>
                   </td>
-                  <td>{patientLabel(patients, file.patient_id)}</td>
-                  <td>
+                  <td className="text-xs lg:text-sm">{patientLabel(patients, file.patient_id)}</td>
+                  <td className="text-xs lg:text-sm">
                     {file.created_at
-                      ? new Date(file.created_at).toLocaleString()
+                      ? displayDateTime(file.created_at)
                       : "-"}
                   </td>
                   <td className="pr-4">

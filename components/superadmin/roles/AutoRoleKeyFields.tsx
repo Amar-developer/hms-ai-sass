@@ -20,11 +20,11 @@ export function AutoRoleKeyFields({ role }: any) {
         />
       </Field>
       <input type="hidden" name="key" value={key} />
-      <div className="rounded-2xl bg-slate-50 p-4 text-sm">
-        <p className="text-xs font-bold uppercase text-slate-500">
-          Generated Role Key
+      <div className="rounded-lg bg-slate-50 p-4 text-sm">
+        <p className="text-xs lg:text-sm font-bold uppercase text-slate-500">
+          Generated Role Key 
         </p>
-        <p className="mt-1 font-bold text-slate-800">
+        <p className="mt-1 text-[11px] lg:text-xs font-bold text-slate-800">
           {key || "Enter role name"}
         </p>
       </div>

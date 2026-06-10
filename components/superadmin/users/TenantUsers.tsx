@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ActionButton, ActionGroup, Badge, Card, Field, Input, Select } from "@/components/common/ui";
+import {
+  ActionButton,
+  ActionGroup,
+  Badge,
+  Card,
+  Field,
+  Input,
+  Select,
+} from "@/components/common/ui";
 import { formatDate, formatTitle } from "../../../utils/superAdmin/superAdmin";
 import { userTypes } from "../../../utils/superAdmin/constants";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "../shared/Empty";
-import { Pagination } from "../shared/Pagination";
+import { Empty } from "@/components/admin/Empty";
+import { Pagination } from "@/components/admin/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { UserRoleList } from "./UserRoleList";
@@ -99,7 +107,7 @@ export function TenantUsers({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="blue">{filtered.length} users</Badge>
+          <Badge tone="blue" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">{filtered.length} users</Badge>
           <CreateActionButton
             label="Create User"
             onClick={() => setSection("userCreate")}
@@ -117,6 +125,7 @@ export function TenantUsers({
             value={filters.query}
             onChange={(e: any) => updateFilter("query", e.target.value)}
             placeholder="Name, email, mobile, type"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </Field>
         <Field label="Status">
@@ -145,7 +154,7 @@ export function TenantUsers({
             type="date"
             value={filters.fromDate}
             onChange={(e: any) => updateFilter("fromDate", e.target.value)}
-            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </Field>
         <Field label="To">
@@ -153,21 +162,51 @@ export function TenantUsers({
             type="date"
             value={filters.toDate}
             onChange={(e: any) => updateFilter("toDate", e.target.value)}
-            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </Field>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1420px]">
           <div className="hidden md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
-            <SortButton label="User" field="name" sort={sort} onSort={changeSort} />
-            <SortButton label="Email" field="email" sort={sort} onSort={changeSort} />
-            <SortButton label="Type" field="user_type" sort={sort} onSort={changeSort} />
+            <SortButton
+              label="User"
+              field="name"
+              sort={sort}
+              onSort={changeSort}
+            />
+            <SortButton
+              label="Email"
+              field="email"
+              sort={sort}
+              onSort={changeSort}
+            />
+            <SortButton
+              label="Type"
+              field="user_type"
+              sort={sort}
+              onSort={changeSort}
+            />
             <span>Roles</span>
             <span>Mobile</span>
-            <SortButton label="Status" field="is_active" sort={sort} onSort={changeSort} />
-            <SortButton label="Created" field="created_at" sort={sort} onSort={changeSort} />
-            <SortButton label="Modified" field="updated_at" sort={sort} onSort={changeSort} />
+            <SortButton
+              label="Status"
+              field="is_active"
+              sort={sort}
+              onSort={changeSort}
+            />
+            <SortButton
+              label="Created"
+              field="created_at"
+              sort={sort}
+              onSort={changeSort}
+            />
+            <SortButton
+              label="Modified"
+              field="updated_at"
+              sort={sort}
+              onSort={changeSort}
+            />
             <span className="text-right">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
@@ -198,7 +237,7 @@ export function TenantUsers({
                       open();
                     }
                   }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] xl:items-center"
+                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.70fr_.65fr_.65fr_1.45fr] md:items-center"
                 >
                   <div>
                     <b className="text-xs lg:text-sm">{user.name}</b>
@@ -206,15 +245,24 @@ export function TenantUsers({
                       {user.user_number || "User account"}
                     </p>
                   </div>
-                  <span className="break-all text-xs lg:text-sm">{user.email}</span>
+                  <span className="break-all text-xs lg:text-sm">
+                    {user.email}
+                  </span>
                   <span className="text-xs lg:text-sm">{typeLabel}</span>
                   <UserRoleList user={user} />
-                  <span>{user.mobile || "-"}</span>
-                  <Badge tone={user.is_active ? "green" : "red"}>
+                  <span className="text-xs lg:text-sm">{user.mobile || "-"}</span>
+                  <Badge
+                    tone={user.is_active ? "green" : "red"}
+                    className="rounded-full text-xs py-1 px-1"
+                  >
                     {user.is_active ? "Active" : "Inactive"}
                   </Badge>
-                  <span className="text-xs lg:text-sm flex justify-start items-center">{formatDate(user.created_at)}</span>
-                  <span className="text-xs lg:text-sm flex justify-start items-center">{formatDate(user.updated_at)}</span>
+                  <span className="text-xs lg:text-sm flex justify-start items-center">
+                    {formatDate(user.created_at)}
+                  </span>
+                  <span className="text-xs lg:text-sm flex justify-start items-center">
+                    {formatDate(user.updated_at)}
+                  </span>
                   <ActionGroup>
                     <ActionButton onClick={stop(open)}>Edit</ActionButton>
                     <ActionButton

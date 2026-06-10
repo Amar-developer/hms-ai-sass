@@ -9,8 +9,8 @@ import {
   formatTenantType,
 } from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "../shared/Empty";
-import { Pagination } from "../shared/Pagination";
+import { Empty } from "@/components/admin/Empty";
+import { Pagination } from "@/components/admin/Pagination";
 import { SortButton } from "../shared/SortButton";
 
 export function TenantManagement({
@@ -109,7 +109,7 @@ export function TenantManagement({
         <div className="flex flex-wrap items-center gap-2">
           <Badge
             tone="blue"
-            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             {filtered.length} tenants
           </Badge>
@@ -238,7 +238,7 @@ export function TenantManagement({
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <b className="truncate text-xs md:text-sm">{tenant.name}</b>
-                  {tenant.is_primary && <Badge tone="blue">Primary</Badge>}
+                  {tenant.is_primary && <Badge tone="blue" className="rounded-xl px-2 py-1">Primary</Badge>}
                 </div>
                 <p className="break-all text-[10px] lg:text-xs text-slate-500 ">{tenant.id}</p>
               </div>
@@ -257,6 +257,7 @@ export function TenantManagement({
                         ? "amber"
                         : "red"
                   }
+                  className="rounded-xl px-2 py-1"
                 >
                   {tenant.status}
                 </Badge>

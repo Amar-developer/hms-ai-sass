@@ -27,7 +27,7 @@ export function SubscriptionDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
           >
             Close
           </button>
@@ -70,7 +70,7 @@ export function SubscriptionDetailModal({
           <button
             type="button"
             onClick={onCredits}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
           >
             Credits
           </button>

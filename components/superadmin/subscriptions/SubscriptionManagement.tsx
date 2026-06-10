@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Card, Input, Select, StatusToast } from "@/components/common/ui";
+import {
+  Badge,
+  Card,
+  Input,
+  Select,
+  StatusToast,
+} from "@/components/common/ui";
 import { FormField } from "@/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import {
@@ -13,9 +19,9 @@ import {
   moduleKeysWithDependencies,
 } from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "../shared/Empty";
 import { Info } from "../shared/Info";
-import { Pagination } from "../shared/Pagination";
+import {Empty} from "@/components/admin/Empty";
+import { Pagination } from "@/components/admin/Pagination";
 import { PlanDetailModal } from "./PlanDetailModal";
 import { SubscriptionAssignPlan } from "./SubscriptionAssignPlan";
 import { SubscriptionCreatePlan } from "./SubscriptionCreatePlan";
@@ -58,15 +64,16 @@ export function SubscriptionManagement({
     (tenant: any) => tenant.id === selectedId,
   );
   const planById = new Map(plans.map((plan: any) => [plan.id, plan]));
-  const tenantById = new Map(
-    tenants.map((tenant: any) => [tenant.id, tenant]),
-  );
+  const tenantById = new Map(tenants.map((tenant: any) => [tenant.id, tenant]));
   const editableModules = entitlementModules(modules);
   const pageSize = 8;
 
   function notifyEntitlementsChanged() {
     try {
-      localStorage.setItem("medizinhub.entitlements.refresh", String(Date.now()));
+      localStorage.setItem(
+        "medizinhub.entitlements.refresh",
+        String(Date.now()),
+      );
       window.dispatchEvent(new Event("medizinhub.entitlements.refresh"));
     } catch {}
   }
@@ -401,31 +408,35 @@ export function SubscriptionManagement({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h3 className="text-lg font-bold">Subscription Management</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="text-base lg:text-lg font-bold">
+              Subscription Management
+            </h3>
+            <p className="text-xs lg:text-sm text-slate-500">
               Search tenant subscriptions, review SaaS revenue, and open focused
               pages for plan setup, upgrades, and credits.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap justify-start lg:justify-around items-center  gap-2 w-[38%] lg:w-[30%]">
             <CreateActionButton
               label="Create Custom Plan"
               onClick={() => openSubscriptionView("createPlan")}
             />
-            <button
-              type="button"
-              onClick={() => openSubscriptionView("assign")}
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-            >
-              Assign / Upgrade
-            </button>
-            <button
-              type="button"
-              onClick={() => openSubscriptionView("credits")}
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
-            >
-              Additional Credits
-            </button>
+            <div className="flex justify-between lg:justify-around w-full">
+              <button
+                type="button"
+                onClick={() => openSubscriptionView("assign")}
+                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+              >
+                Assign / Upgrade
+              </button>
+              <button
+                type="button"
+                onClick={() => openSubscriptionView("credits")}
+                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+              >
+                Additional Credits
+              </button>
+            </div>
           </div>
         </div>
         <StatusToast message={message} onClose={() => setMessage("")} />
@@ -458,13 +469,15 @@ export function SubscriptionManagement({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h4 className="font-bold">Subscriptions</h4>
-            <p className=" text-xs text-sm text-slate-500">
+            <h4 className="text-base lg:text-lg font-bold">Subscriptions</h4>
+            <p className=" text-xs lg:text-sm text-slate-500">
               Compact tenant subscription list. Open details for IDs, notes, and
               module information.
             </p>
           </div>
-          <Badge tone="blue" className="w-[30%] lg:w-[10%] text-center">{filtered.length} records</Badge>
+          <Badge tone="blue" className="px-2 py-2 rounded-lg md:w-[15%] lg:w-[10%] text-center">
+            {filtered.length} records
+          </Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <FormField label="Tenant / Plan">
@@ -526,7 +539,7 @@ export function SubscriptionManagement({
         </div>
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
           <div className="min-w-[980px]">
-            <div className="grid grid-cols-[1.25fr_1.2fr_.92fr_.52fr_.52fr_.42fr_1.15fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+            <div className="grid grid-cols-[1fr_1fr_.6fr_.52fr_.52fr_.52fr_1.5fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
               <span>Tenant</span>
               <span>Plan</span>
               <span>Status</span>
@@ -551,7 +564,7 @@ export function SubscriptionManagement({
                 return (
                   <div
                     key={subscription.id}
-                    className="grid grid-cols-[1.25fr_1.2fr_.92fr_.52fr_.52fr_.42fr_1.15fr] gap-3 px-4 py-4 text-sm items-center"
+                    className="grid grid-cols-[.8fr_.8fr_.5fr_.52fr_.52fr_.42fr_1.15fr] gap-3 px-4 py-4 text-sm items-center"
                   >
                     <div className="min-w-0">
                       <b className=" text-xs lg:text-sm block truncate">
@@ -582,13 +595,20 @@ export function SubscriptionManagement({
                                 ? "slate"
                                 : "red"
                         }
+                        className="rounded-full px-1 py-1 text-xs lg:text-sm"
                       >
                         {subscription.status}
                       </Badge>
                     </div>
-                    <span className="text-xs lg:text-sm">{formatDate(subscription.starts_on)}</span>
-                    <span className="text-xs lg:text-sm">{formatDate(subscription.ends_on)}</span>
-                    <b className="text-xs lg:text-sm">₹{subscription.billing_amount}</b>
+                    <span className="text-xs lg:text-sm">
+                      {formatDate(subscription.starts_on)}
+                    </span>
+                    <span className="text-xs lg:text-sm">
+                      {formatDate(subscription.ends_on)}
+                    </span>
+                    <b className="text-xs lg:text-sm">
+                      ₹{subscription.billing_amount}
+                    </b>
                     <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">
                       <button
                         type="button"
@@ -641,13 +661,13 @@ export function SubscriptionManagement({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h4 className="font-bold">Plan Catalog</h4>
-            <p className="text-sm text-slate-500">
+            <h4 className="text-base lg:text-lg font-bold">Plan Catalog</h4>
+            <p className="text-xs lg:text-sm text-slate-500">
               Reusable DB-backed SaaS plan catalog. Module lists and IDs live in
               details.
             </p>
           </div>
-          <Badge tone="blue">{catalogPlans.length} plans</Badge>
+          <Badge tone="blue" className="px-2 py-2 rounded-lg md:w-[15%] lg:w-[10%] text-center">{catalogPlans.length} plans</Badge>
         </div>
         <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
           <div className="min-w-[900px]">
@@ -666,18 +686,22 @@ export function SubscriptionManagement({
                   className="grid grid-cols-[1.35fr_.75fr_1fr_.75fr_.75fr_1.2fr] gap-3 px-4 py-4 text-sm items-center"
                 >
                   <div className="min-w-0">
-                    <b className="text-xs lg:text-sm block truncate">{plan.name}</b>
-                    <span className="text-[10px] text-xs text-slate-500">{plan.key}</span>
+                    <b className="text-xs lg:text-sm block truncate">
+                      {plan.name}
+                    </b>
+                    <span className="text-[10px] text-xs text-slate-500">
+                      {plan.key}
+                    </span>
                   </div>
                   <b>₹{plan.price_inr_monthly}</b>
                   <span className="text-slate-600 text-xs lg:text-sm">
                     {limitLabel(plan.monthly_patient_limit)} patients ·{" "}
                     {limitLabel(plan.included_branches)} branches
                   </span>
-                  <Badge tone="slate">
+                  <Badge tone="slate" className="rounded-full text-xs lg:text-sm py-1 px-1">
                     {(plan.enabled_modules || []).length}
                   </Badge>
-                  <Badge tone={plan.is_active ? "green" : "slate"}>
+                  <Badge tone={plan.is_active ? "green" : "slate"} className="rounded-full text-xs lg:text-sm py-1 px-1">
                     {plan.is_active ? "Active" : "Inactive"}
                   </Badge>
                   <div className="flex flex-nowrap justify-end gap-2 whitespace-nowrap">

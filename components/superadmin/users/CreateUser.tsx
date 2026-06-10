@@ -43,7 +43,7 @@ export function CreateUser({
           setSelectedId={setSelectedId}
         />
         <Field label="Name">
-          <Input name="name" required placeholder="Clinic Admin" />
+          <Input name="name" required placeholder="Clinic Admin" className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'/>
         </Field>
         <Field label="Email">
           <Input
@@ -51,6 +51,7 @@ export function CreateUser({
             type="email"
             required
             placeholder="admin@clinic.local"
+            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
           />
         </Field>
         <Field label="User Type">
@@ -68,10 +69,11 @@ export function CreateUser({
             type="password"
             required
             placeholder="Minimum 8 characters"
+            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
           />
         </Field>
         <Field label="Mobile">
-          <Input name="mobile" />
+          <Input name="mobile" className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'/>
         </Field>
         <BranchSelect branches={branches} />
         <Field label="Must Change Password">

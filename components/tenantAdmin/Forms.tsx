@@ -26,7 +26,14 @@ import {
 import { KeyRound } from "lucide-react";
 import { basicMedicalDepartmentSuggestions } from "@/lib/options";
 
-export function RoleForm({ title, role, permissions, busy, onSubmit, back }: any) {
+export function RoleForm({
+  title,
+  role,
+  permissions,
+  busy,
+  onSubmit,
+  back,
+}: any) {
   const [roleName, setRoleName] = useState(role?.name || "");
   const generatedKey = roleKeyFromName(roleName || role?.key || "");
   return (
@@ -44,7 +51,6 @@ export function RoleForm({ title, role, permissions, busy, onSubmit, back }: any
             onChange={(event: any) => setRoleName(event.target.value)}
             required
             disabled={isLocked(role)}
-            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
           />
         </FormField>
         <input type="hidden" name="key" value={generatedKey} />
@@ -333,7 +339,14 @@ export function DepartmentForm({
   );
 }
 
-export function BranchForm({ title, branch, branchCount, busy, onSubmit, back }: any) {
+export function BranchForm({
+  title,
+  branch,
+  branchCount,
+  busy,
+  onSubmit,
+  back,
+}: any) {
   return (
     <Card>
       <Header
@@ -473,7 +486,14 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
   );
 }
 
-export function TaxRuleForm({ title, rule, branches, busy, onSubmit, back }: any) {
+export function TaxRuleForm({
+  title,
+  rule,
+  branches,
+  busy,
+  onSubmit,
+  back,
+}: any) {
   return (
     <Card>
       <Header
@@ -693,13 +713,13 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
     <div>
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
-          <h4 className="font-bold">Module Permissions</h4>
-          <p className="text-sm text-slate-500">
+          <h4 className="text-base lg:text-lg font-bold">Module Permissions</h4>
+          <p className="text-xs lg:text-sm text-slate-500">
             Enable permissions by module. Use Manage for full workflow/action
             access, then Create, Read, Edit, and Delete as needed.
           </p>
         </div>
-        <Badge tone="slate">{selectedSet.size} selected</Badge>
+        <Badge tone="slate" className="w-[20%] lg:w-[15%] py-2 rounded-lg">{selectedSet.size} selected</Badge>
       </div>
       <div className="mt-3 grid gap-4 xl:grid-cols-2">
         {modules.map((module) => (
@@ -714,7 +734,7 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                   {grouped[module].length} permissions
                 </p>
               </div>
-              <Badge tone="slate">Module</Badge>
+              <Badge tone="slate" className="rounded-lg py-2 px-2">Module</Badge>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {buckets.map((bucket: any) => {

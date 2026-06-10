@@ -25,7 +25,7 @@ export function EditUser({
         <button
           type="button"
           onClick={back}
-          className="mt-4 rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="mt-4 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
         >
           Back to Users
         </button>
@@ -36,13 +36,13 @@ export function EditUser({
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-lg font-bold">Edit User</h3>
-          <p className="text-sm text-slate-500">{user.email}</p>
+          <h3 className="text-base lg:text-lg font-bold">Edit User</h3>
+          <p className="text-xs lg:text-sm text-slate-500">{user.email}</p>
         </div>
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
         >
           Back to Users
         </button>
@@ -52,13 +52,28 @@ export function EditUser({
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
         <Field label="Name">
-          <Input name="name" defaultValue={user.name} required />
+          <Input
+            name="name"
+            defaultValue={user.name}
+            required
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
         </Field>
         <Field label="Email">
-          <Input name="email" type="email" defaultValue={user.email} required />
+          <Input
+            name="email"
+            type="email"
+            defaultValue={user.email}
+            required
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
         </Field>
         <Field label="User Type">
-          <Select name="userType" defaultValue={user.user_type || "staff"}>
+          <Select
+            name="userType"
+            defaultValue={user.user_type || "staff"}
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
             {userTypes.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -67,11 +82,19 @@ export function EditUser({
           </Select>
         </Field>
         <Field label="Mobile">
-          <Input name="mobile" defaultValue={user.mobile || ""} />
+          <Input
+            name="mobile"
+            defaultValue={user.mobile || ""}
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
         </Field>
         <BranchSelect branches={branches} defaultValue={user.branch_id} />
         <Field label="Status">
-          <Select name="isActive" defaultValue={String(user.is_active)}>
+          <Select
+            name="isActive"
+            defaultValue={String(user.is_active)}
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
             <option value="true">Active</option>
             <option value="false">Inactive</option>
           </Select>
@@ -80,6 +103,7 @@ export function EditUser({
           <Select
             name="mustChangePassword"
             defaultValue={String(user.must_change_password)}
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             <option value="true">Yes</option>
             <option value="false">No</option>
@@ -114,7 +138,7 @@ export function EditUser({
           <button
             type="button"
             onClick={back}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
           >
             Cancel
           </button>

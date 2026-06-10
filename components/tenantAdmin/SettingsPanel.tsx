@@ -19,9 +19,12 @@ import {
 import { MultiCheckSelect } from "./Shared";
 import { humanizeOptionLabel, paymentMethodOptions } from "@/lib/options";
 import { defaultNumberingEntities } from "@/utils/tenantAdmin/constants";
+import { SidebarModuleAccessCard } from "./SidebarModuleAccessCard";
+import { displayDateTime } from "@/utils/helper";
 
 export function SettingsPanel(props: any) {
   const {
+    apiSession,
     settings,
     invoicePrefix,
     setInvoicePrefix,
@@ -79,8 +82,8 @@ export function SettingsPanel(props: any) {
   return (
     <div className="space-y-5">
       <Card>
-        <h3 className="text-lg font-bold">Tenant & Branch Settings</h3>
-        <p className="text-sm text-slate-500">
+        <h3 className="text-base lg:text-lg font-bold">Tenant & Branch Settings</h3>
+        <p className="text-xs lg:text-sm text-slate-500">
           Configuration affects invoice numbering, queue behavior, appointment
           slots, payments, and communications for this tenant.
         </p>
@@ -108,8 +111,8 @@ export function SettingsPanel(props: any) {
           </FormField>
           <div className="md:col-span-2 xl:col-span-4">
             <Field label="Invoice Logo">
-              <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50/60 p-4 lg:grid-cols-[160px_minmax(0,1fr)]">
-                <div className="grid h-32 place-items-center overflow-hidden rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4 lg:grid-cols-[160px_minmax(0,1fr)]">
+                <div className="grid h-32 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
                   {effectiveInvoiceLogoUrl ? (
                     <img
                       src={assetUrl(effectiveInvoiceLogoUrl)}
@@ -133,12 +136,12 @@ export function SettingsPanel(props: any) {
                       <button
                         type="button"
                         onClick={() => setInvoiceLogoUrl(tenantLogoUrl)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50"
                       >
                         Use Tenant Logo
                       </button>
                     )}
-                    <label className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50">
+                    <label className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50">
                       Choose Logo
                       <input
                         type="file"
@@ -157,7 +160,7 @@ export function SettingsPanel(props: any) {
                         setInvoiceLogoFile(null);
                       }}
                       disabled={!invoiceLogoFile || busy}
-                      className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                      className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
                     >
                       {busy ? "Uploading..." : "Upload Logo"}
                     </button>
@@ -237,20 +240,20 @@ export function SettingsPanel(props: any) {
             </FormField>
           ))}
         </div>
-        <div className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+        <div className="mt-3 rounded-lg bg-slate-50 p-4 text-sm text-slate-600">
           Example:{" "}
           {(numberingRules.prefix || invoicePrefix || "SUN").toUpperCase()}-
           {numberingRules.entities?.patient || "PAT"}-
           {String(1).padStart(Number(numberingRules.digits || 5), "0")}
         </div>
-        <Button onClick={saveSettings} disabled={busy} className="mt-4 text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4">
+        <Button onClick={saveSettings} disabled={busy} className="mt-4 px-2 py-2 rounded-lg text-xs lg:text-sm">
           Save Settings
         </Button>
         <div className="mt-5 grid gap-2 md:grid-cols-2">
           {settings.slice(0, 10).map((setting: any) => (
             <div
               key={setting.id}
-              className="rounded-2xl bg-slate-50 p-3 text-sm"
+              className="rounded-lg bg-slate-50 p-3 text-sm"
             >
               <b>{settingLabel(setting.key)}</b>
               <p className="break-words text-slate-500">
@@ -260,17 +263,18 @@ export function SettingsPanel(props: any) {
           ))}
         </div>
       </Card>
+      <SidebarModuleAccessCard apiSession={apiSession} />
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
-            <h3 className="text-lg font-bold">Monthly Email Reports</h3>
-            <p className="text-sm text-slate-500">
-              Send last month revenue, doctor settlement, medical department
-              revenue, and paid invoice profit as an Excel-compatible
-              spreadsheet through the Redis report worker.
+            <h3 className="text-base lg:text-lg font-bold">Monthly Email Reports</h3>
+            <p className="text-xs lg:text-sm text-slate-500">
+              Send last month revenue, doctor settlement, medical department revenue,
+              and paid invoice profit as an Excel-compatible spreadsheet through
+              the Redis report worker.
             </p>
           </div>
-          <Badge tone={reportEnabled ? "green" : "slate"}>
+          <Badge tone={reportEnabled ? "green" : "slate"} className="rounded-lg py-2 px-2 w-[20%] lg:w-[15%]">
             {reportEnabled ? "Automatic" : "Manual"}
           </Badge>
         </div>
@@ -310,7 +314,7 @@ export function SettingsPanel(props: any) {
             </Select>
           </FormField>
         </div>
-        <div className="mt-4 grid gap-2 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-2 rounded-lg bg-slate-50 p-4 sm:grid-cols-2 xl:grid-cols-4">
           {[
             ["overall", "Overall summary"],
             ["doctor", "Doctor revenue"],
@@ -342,12 +346,12 @@ export function SettingsPanel(props: any) {
             type="button"
             onClick={sendMonthlyReportNow}
             disabled={reportBusy === "send"}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold text-slate-700 disabled:text-slate-300"
+            className="rounded-lg border px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm font-bold text-slate-700 disabled:text-slate-300"
           >
             {reportBusy === "send" ? "Queueing..." : "Send Last Month Now"}
           </button>
         </div>
-        <div className="mt-5 overflow-auto rounded-2xl border border-slate-200">
+        <div className="mt-5 overflow-auto rounded-lg border border-slate-200">
           <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
@@ -372,7 +376,7 @@ export function SettingsPanel(props: any) {
                   <td className="px-4 py-4">
                     <b>Report {index + 1}</b>
                     <p className="text-xs text-slate-500">
-                      {new Date(job.created_at).toLocaleString()}
+                      {displayDateTime(job.created_at)}
                     </p>
                   </td>
                   <td>
@@ -403,17 +407,13 @@ export function SettingsPanel(props: any) {
                         onClick={() => resendMonthlyReport(job)}
                         disabled={reportBusy === `resend-${job.id}`}
                       >
-                        {reportBusy === `resend-${job.id}`
-                          ? "Sending..."
-                          : "Resend"}
+                        {reportBusy === `resend-${job.id}` ? "Sending..." : "Resend"}
                       </ActionButton>
                       <ActionButton
                         onClick={() => downloadMonthlyReport(job)}
                         disabled={reportBusy === `download-${job.id}`}
                       >
-                        {reportBusy === `download-${job.id}`
-                          ? "Downloading..."
-                          : "Download"}
+                        {reportBusy === `download-${job.id}` ? "Downloading..." : "Download"}
                       </ActionButton>
                     </ActionGroup>
                   </td>

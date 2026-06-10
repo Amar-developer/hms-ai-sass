@@ -15,7 +15,7 @@ import {
   formatTenantType,
   limitLabel,
 } from "../../../utils/superAdmin/superAdmin";
-import { Empty } from "../shared/Empty";
+import { Empty } from "@/components/admin/Empty";
 import { Info } from "../shared/Info";
 import { TenantPicker } from "../shared/TenantPicker";
 
@@ -296,11 +296,13 @@ export function TenantBranchSettings({
               providers.
             </p>
           </div>
-          <TenantPicker
+         <div className="w-[30%] lg:w-[15%]">
+           <TenantPicker
             tenants={tenants}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
           />
+         </div>
         </div>
         {selected && (
           <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -319,13 +321,13 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="font-bold">Document Numbering</h4>
-            <p className="text-sm text-slate-500">
+            <h4 className="text-base lg:text-lg font-bold">Document Numbering</h4>
+            <p className="text-xs lg:text-sm text-slate-500">
               Set the tenant prefix, digit length, and module codes used for
               generated IDs.
             </p>
           </div>
-          <Badge tone="blue">
+          <Badge tone="blue" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
             {settingsLoading ? "Loading" : "Tenant scoped"}
           </Badge>
         </div>
@@ -385,13 +387,13 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="font-bold">Catalog Plugin Controls</h4>
+            <h4 className="text-base lg:text-lg font-bold">Catalog Plugin Controls</h4>
             <p className="text-xs lg:text-sm text-slate-500">
               Tenant-specific catalog source routing for custom integrations.
               Disabled plugins use MedizinHub local catalog data.
             </p>
           </div>
-          <Badge tone="blue" className="text-center">Tenant scoped</Badge>
+          <Badge tone="blue" className="rounded-lg w-[25%] lg:w-[15%] px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">Tenant scoped</Badge>
         </div>
         <StatusToast
           message={pluginMessage}
@@ -426,16 +428,16 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="font-bold">Plan Module Access</h4>
+            <h4 className="text-base lg:text-lg font-bold">Plan Module Access</h4>
             <p className="text-xs lg:text-sm text-slate-500">
               Modules are controlled by the active subscription plan. Upgrade
               the tenant plan from Subscription Management to change access.
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-right w-[30%] lg:w-[15%]">
             {activePlan ? (
               <>
-                <Badge tone="blue">{activePlan.name}</Badge>
+                <Badge tone="blue" className=" rounded-lg py-1 px-1 ">{activePlan.name}</Badge>
                 <p className="mt-1 text-xs text-slate-500">Current plan</p>
               </>
             ) : (

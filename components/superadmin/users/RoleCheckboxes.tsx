@@ -32,16 +32,16 @@ export function RoleCheckboxes({ roles, selected = [] }: any) {
               type="checkbox"
               value={role.key}
               defaultChecked={selectedSet.has(role.key)}
-              className="mt-1 h-4 w-4"
+              className="mt-1 h-3 w-3 lg:h-4 lg:w-4"
             />
             <span>
-              <b>{roleDisplayName(role)}</b>
+              <b className="text-xs lg:text-sm">{roleDisplayName(role)}</b>
               {role.is_template_locked && (
-                <span className="ml-2 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700">
+                <span className="ml-2 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-[10px] lg:text-xs font-bold text-purple-700">
                   Template
                 </span>
               )}
-              <span className="block text-xs text-slate-500">
+              <span className="block text-[10px] lg:text-xs text-slate-500">
                 {role.permission_keys?.length
                   ? `${role.permission_keys.length} permissions`
                   : "Default admin access"}

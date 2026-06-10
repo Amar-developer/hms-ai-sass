@@ -11,7 +11,7 @@ export function UserRoleList({ user }: any) {
         <span
           key={label}
           title={labels.join(", ")}
-          className="max-w-full truncate rounded-lg bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 flex justify-center items-center"
+          className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 flex justify-center items-center"
         >
           {label}
         </span>

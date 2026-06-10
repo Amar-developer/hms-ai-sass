@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { Badge, Card, Input } from "@/components/common/ui";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "../shared/Empty";
-import { Pagination } from "../shared/Pagination";
+import {Empty} from "@/components/admin/Empty";
+import { Pagination } from "@/components/admin/Pagination";
 import { TenantPicker } from "../shared/TenantPicker";
 import { displayDate } from "@/utils/helper";
 
@@ -45,8 +45,8 @@ export function DepartmentsManagement({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-lg font-bold">Medical Departments</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="text-base lg:text-lg font-bold">Medical Departments</h3>
+          <p className="text-xs lg:text-sm text-slate-500">
             {selected?.is_primary
               ? "Primary tenant medical departments are global templates. Assign templates to customer tenants to keep clinical routing consistent."
               : "Manage tenant medical departments used for practitioner mapping, schedules, and appointment booking."}
@@ -74,7 +74,7 @@ export function DepartmentsManagement({
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1180px]">
-          <div className="hidden grid-cols-[1.15fr_.65fr_1.35fr_.65fr_.7fr_1.65fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
+          <div className="hidden grid-cols-[1fr_1fr_1.2fr_.7fr_0.7fr_1.7fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
             <span>Medical Department</span>
             <span>Code</span>
             <span>Description</span>
@@ -93,7 +93,7 @@ export function DepartmentsManagement({
               return (
                 <div
                   key={department.id}
-                  className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.15fr_.65fr_1.35fr_.65fr_.7fr_1.65fr] md:items-center"
+                  className="grid gap-3 px-4 py-4 text-sm  md:grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr] lg:grid-cols-[1fr_1fr_1fr_.75fr_.7fr_1.65fr] items-center"
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -101,7 +101,7 @@ export function DepartmentsManagement({
                       {department.is_global_template && (
                         <Badge tone="blue">Global</Badge>
                       )}
-                      {locked && <Badge tone="purple">Locked</Badge>}
+                      {locked && <Badge tone="purple" className="text-xs rounded-full">Locked</Badge>}
                     </div>
                     <p className="break-all text-[10px] lg:text-xs text-slate-500">
                       {department.id}
@@ -111,7 +111,7 @@ export function DepartmentsManagement({
                   <span className="text-slate-500 text-xs lg:text-sm">
                     {department.description || "-"}
                   </span>
-                  <Badge tone={department.is_active ? "green" : "red"} >
+                  <Badge tone={department.is_active ? "green" : "red"} className="rounded-full px-1 py-1 text-xs lg:text-sm">
                     {department.is_active ? "Active" : "Inactive"}
                   </Badge>
                   <span className="text-xs lg:text-sm">

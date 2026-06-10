@@ -4,25 +4,27 @@ import {
   ActionButton,
   Card,
   Field,
-  Input,  
+  Input,
   Select,
 } from "../common/ui";
-import { useState,useMemo,useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { FormField } from "../FormElements";
 import { Plus } from "lucide-react";
 import { isLocked } from "@/utils/tenantAdmin/helpers";
+import { Empty } from "../admin/Empty";
+import { Pagination } from "../admin/Pagination";
 
 export function Header({ title, subtitle, back }: any) {
   return (
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div>
-        <h3 className="text-lg font-bold">{title}</h3>
-        <p className="text-sm text-slate-500">{subtitle}</p>
+        <h3 className="text-base lg:text-lg font-bold">{title}</h3>
+        <p className="text-xs lg:text-sm text-slate-500">{subtitle}</p>
       </div>
       <button
         type="button"
         onClick={back}
-        className="rounded-2xl border px-4 py-3 text-sm font-bold"
+        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
       >
         Back
       </button>
@@ -37,51 +39,10 @@ export function Actions({ busy, back, disabled, label }: any) {
       <button
         type="button"
         onClick={back}
-        className="rounded-lg border text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4 font-bold"
+        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
       >
         Cancel
       </button>
-    </div>
-  );
-}
-
-export function Empty({ text }: any) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
-      {text}
-    </div>
-  );
-}
-
-export function Pagination({ page, totalPages, total, pageSize, onPage }: any) {
-  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-  return (
-    <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center">
-      <span>
-        Showing {start}-{end} of {total}
-      </span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onPage(Math.max(1, page - 1))}
-          disabled={page <= 1}
-          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
-        >
-          Previous
-        </button>
-        <span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-700">
-          Page {page} / {totalPages}
-        </span>
-        <button
-          type="button"
-          onClick={() => onPage(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
-          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
-        >
-          Next
-        </button>
-      </div>
     </div>
   );
 }
@@ -136,40 +97,13 @@ export function RoleList({ labels }: { labels: string[] }) {
       {labels.map((label) => (
         <span
           key={label}
-          className="max-w-full truncate rounded-full bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700"
+          className="max-w-full truncate rounded-full bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
           title={labels.join(", ")}
         >
           {label}
         </span>
       ))}
     </span>
-  );
-}
-
-export function ConfirmModal({ action, busy, onCancel, onConfirm }: any) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <Card className="max-w-md">
-        <h3 className="text-lg font-bold">Confirm {action.kind}</h3>
-        <p className="mt-2 text-sm text-slate-500">
-          This will{" "}
-          {action.kind === "delete" ? "deactivate/delete" : "change status for"}{" "}
-          {action.row.name || action.row.email}. Continue?
-        </p>
-        <div className="mt-4 flex gap-2">
-          <Button onClick={onConfirm} disabled={busy}>
-            Confirm
-          </Button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
-          >
-            Cancel
-          </button>
-        </div>
-      </Card>
-    </div>
   );
 }
 
@@ -244,7 +178,7 @@ export function MultiCheckSelect({
     onChange(Array.from(next));
   }
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
+    <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-4">
       <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
         <p className="truncate text-sm font-bold text-slate-800">{summary}</p>
         <label className="inline-flex w-fit items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold">
@@ -401,7 +335,7 @@ export function ListCard({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-lg font-bold">{title}</h3>
+          <h3 className="text-base lg:text-lg font-bold">{title}</h3>
           <p className="text-xs lg:text-sm text-slate-500">
             Latest created or updated records appear first. Click a row to open
             it, or use the action buttons.
@@ -410,7 +344,7 @@ export function ListCard({
         <button
           type="button"
           onClick={onCreate}
-          className="inline-flex items-center justify-center w-1/3 lg:w-full gap-2 bg-slate-900 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm font-bold text-white"
+          className={`inline-flex items-center justify-center ${createLabel == "Create Role" || createLabel == "Create User" || createLabel == 'Create Offer'? "w-[20%] lg:w-[20%]" : "w-[35%] lg:w-[25%]"}  gap-2 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm bg-slate-900 px-4 py-3 font-bold text-white`}
         >
           <Plus size={16} />
           {createLabel}
@@ -428,7 +362,7 @@ export function ListCard({
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className={tableMinWidth}>
           <div
-            className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${gridClass}`}
+            className={`gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${gridClass}`}
           >
             {columns.map((column: string, index: number) => (
               <span

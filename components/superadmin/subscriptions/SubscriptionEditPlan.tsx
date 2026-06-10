@@ -15,13 +15,13 @@ export function SubscriptionEditPlan({
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-lg font-bold">Edit Subscription Plan</h3>
-          <p className="text-sm text-slate-500">{plan.key}</p>
+          <h3 className="text-xs lg:text-lg font-bold">Edit Subscription Plan</h3>
+          <p className="text-xs lg:text-sm text-slate-500">{plan.key}</p>
         </div>
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
         >
           Back to Subscriptions
         </button>
@@ -79,7 +79,7 @@ export function SubscriptionEditPlan({
           <button
             type="button"
             onClick={back}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
           >
             Cancel
           </button>

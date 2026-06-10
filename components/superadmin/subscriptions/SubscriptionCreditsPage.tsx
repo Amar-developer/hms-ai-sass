@@ -2,7 +2,7 @@
 
 import { Button, Card, Input, Select } from "@/components/common/ui";
 import { FormField } from "@/components/FormElements";
-import { Empty } from "../shared/Empty";
+import { Empty } from "@/components/admin/Empty";
 import { Info } from "../shared/Info";
 import { TenantPicker } from "../shared/TenantPicker";
 import { SubscriptionTable } from "./SubscriptionTable";

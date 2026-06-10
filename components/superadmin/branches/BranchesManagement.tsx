@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { Badge, Card, Input } from "@/components/common/ui";
 import { formatDate } from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "../shared/Empty";
-import { Pagination } from "../shared/Pagination";
+import {Empty} from "@/components/admin/Empty";
+import { Pagination } from "@/components/admin/Pagination";
 import { TenantPicker } from "../shared/TenantPicker";
 
 export function BranchesManagement({
@@ -47,8 +47,8 @@ export function BranchesManagement({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-lg font-bold">Branches</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="text-base lg:text-lg font-bold">Branches</h3>
+          <p className="text-xs lg:text-sm text-slate-500">
             {selected?.is_primary
               ? "Primary tenant branches are reusable templates. Assign them to clinics to avoid duplicate setup."
               : "Manage tenant branches used by appointments, users, billing, lab, pharmacy, and reports."}
@@ -75,7 +75,7 @@ export function BranchesManagement({
         />
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-        <div className="hidden grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
+        <div className="hidden grid-cols-[1.1fr_.8fr_1.3fr_.5fr_.8fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
           <span>Branch</span>
           <span>Code</span>
           <span>Location</span>
@@ -91,7 +91,8 @@ export function BranchesManagement({
             return (
               <div
                 key={branch.id}
-                className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr] md:items-center"
+                className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr] 
+                lg:grid-cols-[1.1fr_.8fr_1.2fr_.5fr_.8fr_1.2fr] md:items-center"
               >
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -111,7 +112,10 @@ export function BranchesManagement({
                     .filter(Boolean)
                     .join(", ") || "-"}
                 </span>
-                <Badge tone={branch.is_active ? "green" : "red"}>
+                <Badge
+                  tone={branch.is_active ? "green" : "red"}
+                  className="rounded-full py-1 px-1 text-xs lg:text-sm"
+                >
                   {branch.is_active ? "Active" : "Inactive"}
                 </Badge>
                 <span className="text-xs lg:text-sm">

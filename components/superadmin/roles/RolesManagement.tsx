@@ -15,8 +15,8 @@ import {
   groupRolesByName,
 } from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "../shared/Empty";
-import { Pagination } from "../shared/Pagination";
+import {Empty} from "@/components/admin/Empty";
+import { Pagination } from "@/components/admin/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
 
@@ -117,7 +117,7 @@ export function RolesManagement({
         <div className="flex flex-wrap items-center gap-2">
           <Badge
             tone={selected?.is_primary ? "blue" : "slate"}
-            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             {selected?.is_primary
               ? "Global templates"
@@ -147,7 +147,7 @@ export function RolesManagement({
           <Select
             value={filters.status}
             onChange={(e: any) => updateFilter("status", e.target.value)}
-            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            className="rounded-full px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             <option value="all">All status</option>
             <option value="active">Active</option>
@@ -237,22 +237,41 @@ export function RolesManagement({
                     <div className="flex flex-wrap items-center gap-2">
                       <b className="text-xs lg:text-sm">{role.name}</b>
                       {role.is_global_template && (
-                        <Badge tone="blue" className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">Global</Badge>
+                        <Badge
+                          tone="blue"
+                          className="rounded-full px-2 py-2  lg:px-4 lg:py-3 text-xs lg:text-sm"
+                        >
+                          Global
+                        </Badge>
                       )}
-                      {locked && <Badge tone="purple" className="px-1 py-0.5 lg:px-2 lg:py-2 text-[10px] lg:text-xs">Locked</Badge>}
+                      {locked && (
+                        <Badge
+                          tone="purple"
+                          className="rounded-full px-1.5 py-1 lg:px-2 lg:py-2 text-[10px] lg:text-xs"
+                        >
+                          Locked
+                        </Badge>
+                      )}
                     </div>
                     <p className="text-xs  text-slate-500">
                       {role.rows.length > 1
                         ? `${role.rows.length} branch variants grouped`
-                        : role.primary.id} 
+                        : role.primary.id}
                     </p>
                   </div>
                   <span className="text-xs lg:text-sm">{role.display_key}</span>
-                  <Badge tone={role.is_active ? "green" : "red"} className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+                  <Badge
+                    tone={role.is_active ? "green" : "red"}
+                    className=" rounded-full px-1.5 py-1.5  text-xs "
+                  >
                     {role.is_active ? "Active" : "Inactive"}
                   </Badge>
-                  <span className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">{formatDate(role.created_at)}</span>
-                  <span className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">{formatDate(role.updated_at)}</span>
+                  <span className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+                    {formatDate(role.created_at)}
+                  </span>
+                  <span className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+                    {formatDate(role.updated_at)}
+                  </span>
                   <ActionGroup className="!flex-wrap xl:!flex-nowrap">
                     {!locked && (
                       <ActionButton

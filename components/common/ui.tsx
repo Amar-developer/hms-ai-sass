@@ -1,17 +1,24 @@
-import { AlertTriangle, CalendarDays, CheckCircle2, Info, X, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  Info,
+  X,
+  XCircle,
+} from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { displayToIsoDate, isoToDisplayDate } from "@/utils/helper";
 
 export function Card({
   children,
-  className = "",
+  className = "px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
 }: {
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
-      className={`border border-slate-200 bg-white p-5 shadow-sm ${className}`}
+      className={`rounded-lg border border-slate-200 bg-white p-5 shadow-sm ${className}`}
     >
       {children}
     </div>
@@ -36,7 +43,7 @@ export function Badge({
   };
   return (
     <span
-      className={`inline-block rounded-lg px-3 py-1 text-[10px] lg:text-xs font-bold ${m[tone]} ${className}`}
+      className={` flex justify-center items-center font-bold ${m[tone]} ${className}`}
     >
       {children}
     </span>
@@ -88,7 +95,9 @@ export function StatusToast({
       requestAnimationFrame(() => setShrink(true)),
     );
     const timer =
-      onClose && duration > 0 ? window.setTimeout(onClose, duration) : undefined;
+      onClose && duration > 0
+        ? window.setTimeout(onClose, duration)
+        : undefined;
     return () => {
       cancelAnimationFrame(raf);
       if (timer) window.clearTimeout(timer);
@@ -166,7 +175,8 @@ export function StatusToast({
             className={`h-full ${current.bar}`}
             style={{
               width: shrink ? "100%" : "0%",
-              transition: duration > 0 ? `width ${duration}ms linear` : undefined,
+              transition:
+                duration > 0 ? `width ${duration}ms linear` : undefined,
             }}
           />
         </div>
@@ -222,25 +232,52 @@ function submitNearestFormOnEnter(event: any) {
   }
 }
 const DATE_MONTH_LABELS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 const DATE_WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function parseIsoParts(iso: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
   if (!match) return null;
-  return { year: Number(match[1]), month: Number(match[2]) - 1, day: Number(match[3]) };
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]) - 1,
+    day: Number(match[3]),
+  };
 }
 
-export function DateInput({ className = "", onChange, value, defaultValue, name, min, max, disabled, required, ...props }: any) {
+export function DateInput({
+  className = "",
+  onChange,
+  value,
+  defaultValue,
+  name,
+  min,
+  max,
+  disabled,
+  required,
+  ...props
+}: any) {
   const isControlled = value !== undefined;
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [innerValue, setInnerValue] = useState(String(defaultValue || ""));
   const isoValue = String(isControlled ? value || "" : innerValue || "");
   const [displayValue, setDisplayValue] = useState(isoToDisplayDate(isoValue));
   const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+    null,
+  );
   const [viewMonth, setViewMonth] = useState(() => {
     const parsed = parseIsoParts(isoValue);
     const base = parsed ? new Date(parsed.year, parsed.month, 1) : new Date();
@@ -261,13 +298,20 @@ export function DateInput({ className = "", onChange, value, defaultValue, name,
       const GAP = 4;
       const MARGIN = 8;
       let left = rect.left;
-      if (left + POPUP_W > window.innerWidth - MARGIN) left = rect.right - POPUP_W;
-      left = Math.min(Math.max(left, MARGIN), Math.max(MARGIN, window.innerWidth - POPUP_W - MARGIN));
+      if (left + POPUP_W > window.innerWidth - MARGIN)
+        left = rect.right - POPUP_W;
+      left = Math.min(
+        Math.max(left, MARGIN),
+        Math.max(MARGIN, window.innerWidth - POPUP_W - MARGIN),
+      );
       let top = rect.bottom + GAP;
       if (top + POPUP_H > window.innerHeight - MARGIN && rect.top > POPUP_H) {
         top = rect.top - POPUP_H - GAP;
       }
-      top = Math.min(Math.max(top, MARGIN), Math.max(MARGIN, window.innerHeight - POPUP_H - MARGIN));
+      top = Math.min(
+        Math.max(top, MARGIN),
+        Math.max(MARGIN, window.innerHeight - POPUP_H - MARGIN),
+      );
       setCoords({ top, left });
     }
     reposition();
@@ -329,7 +373,11 @@ export function DateInput({ className = "", onChange, value, defaultValue, name,
 
   const selectedParts = parseIsoParts(hiddenValue);
   const firstWeekday = new Date(viewMonth.year, viewMonth.month, 1).getDay();
-  const daysInMonth = new Date(viewMonth.year, viewMonth.month + 1, 0).getDate();
+  const daysInMonth = new Date(
+    viewMonth.year,
+    viewMonth.month + 1,
+    0,
+  ).getDate();
   const calendarCells = [
     ...Array.from({ length: firstWeekday }, () => null),
     ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
@@ -343,7 +391,9 @@ export function DateInput({ className = "", onChange, value, defaultValue, name,
         type="text"
         value={displayValue}
         onChange={(event: any) => changeDisplay(event.target.value)}
-        onBlur={() => setDisplayValue(isoToDisplayDate(hiddenValue, displayValue))}
+        onBlur={() =>
+          setDisplayValue(isoToDisplayDate(hiddenValue, displayValue))
+        }
         onFocus={(event: any) => props.onFocus?.(event)}
         aria-required={required || undefined}
         disabled={disabled}
@@ -411,7 +461,9 @@ export function DateInput({ className = "", onChange, value, defaultValue, name,
                 selectedParts.year === viewMonth.year &&
                 selectedParts.month === viewMonth.month &&
                 selectedParts.day === day;
-              const isDisabled = Boolean((min && iso < min) || (max && iso > max));
+              const isDisabled = Boolean(
+                (min && iso < min) || (max && iso > max),
+              );
               return (
                 <button
                   key={iso}
@@ -434,7 +486,10 @@ export function DateInput({ className = "", onChange, value, defaultValue, name,
               type="button"
               onClick={() => {
                 const today = new Date();
-                setViewMonth({ year: today.getFullYear(), month: today.getMonth() });
+                setViewMonth({
+                  year: today.getFullYear(),
+                  month: today.getMonth(),
+                });
               }}
               className="font-bold text-slate-600 hover:text-slate-900"
             >
@@ -458,7 +513,11 @@ export function DateInput({ className = "", onChange, value, defaultValue, name,
   );
 }
 
-export function Input({ className = "", onKeyDown, ...props }: any) {
+export function Input({
+  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  onKeyDown,
+  ...props
+}: any) {
   if (props.type === "date") {
     return <DateInput {...props} className={className} />;
   }
@@ -526,7 +585,7 @@ export function SuggestionInput({
           setOpen(true);
         }}
         autoComplete="off"
-        className={`w-full rounded-lg border border-slate-200 px-2 py-2 lg:px-4 lg:py-3 text-[10px]  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-lg border border-slate-200 px-2 py-2 lg:px-4 lg:py-3 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
       {open && !disabled && filtered.length > 0 && (
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
@@ -640,7 +699,7 @@ export function SearchableSelect({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 text-left text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white py-2 px-2 lg:px-4 lg:py-3 text-left text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
       >
         <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
           {displayLabel || placeholder}
@@ -707,7 +766,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`rounded-lg bg-brand  ${className? className:'text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3'} font-bold text-brand-fg disabled:bg-slate-300`}
+      className={`rounded-lg bg-brand  ${className ? className : "text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"} font-bold text-brand-fg disabled:bg-slate-300`}
     >
       {children}
     </button>
@@ -737,7 +796,8 @@ export function ActionButton({
   const tones: any = {
     neutral: "border-slate-200 bg-white text-slate-900 hover:bg-slate-50",
     primary: "border-brand bg-brand text-brand-fg hover:bg-brand-hover",
-    danger: "border-danger-border bg-white text-danger-fg hover:bg-danger-subtle",
+    danger:
+      "border-danger-border bg-white text-danger-fg hover:bg-danger-subtle",
   };
   return (
     <button
