@@ -1,7 +1,7 @@
 function CompactControl({ label, children }: any) {
   return (
     <label
-      className={`grid min-w-0 content-center rounded-xl border border-slate-200 bg-white px-3 py-2 h-12 md:h-12 lg:h-14 ${label=="Tenant"? 'mt-3':''}`}
+      className={`grid min-w-0 content-center rounded-lg border border-slate-200 bg-white px-3 py-2 h-12 md:h-12 lg:h-14 ${label=="Tenant"? 'mt-3':''}`}
     >
       <span
         className="text-[10px] font-bold uppercase leading-none text-slate-500 lg:text-xs"

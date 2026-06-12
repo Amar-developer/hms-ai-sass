@@ -3,20 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
-/*   CalendarDays,
-  ChevronDown,
-  Download,
-  IndianRupee,
-  Mail,
-  Percent,
-  ReceiptIndianRupee,
-  Stethoscope, */
   FileText,
   Receipt,
   Users,
   FlaskConical,
 } from "lucide-react";
-import { Badge, Card, Field, Input, Select } from "@/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import {
@@ -26,7 +17,6 @@ import {
   normalized,
   isCompleted,
   currentRange,
-  toInputDate,
   percent,
   settlementPaidBasis,
   rowDate,
@@ -34,10 +24,8 @@ import {
   isPaidInvoice,
   invoiceType,
   invoiceTypeLabel,
-  csvCell,
   downloadBlob,
   tableToCsv,
-  // htmlEscape,
   htmlTable,
   titledHtmlTable,
   parseEmailList,

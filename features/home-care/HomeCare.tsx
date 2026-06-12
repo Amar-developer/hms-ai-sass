@@ -94,7 +94,9 @@ function patientCode(p: any) {
 }
 
 function userName(user: any) {
-  return user?.full_name || user?.name || user?.email || user?.mobile || "Staff";
+  return (
+    user?.full_name || user?.name || user?.email || user?.mobile || "Staff"
+  );
 }
 
 function userTypeKey(user: any) {
@@ -140,7 +142,9 @@ function mergeServices(...groups: any[][]) {
         return map;
       }, new Map<string, any>())
       .values(),
-  ).sort((a: any, b: any) => String(a.name || "").localeCompare(String(b.name || "")));
+  ).sort((a: any, b: any) =>
+    String(a.name || "").localeCompare(String(b.name || "")),
+  );
 }
 
 function serviceRowsFromResponse(response: any) {
@@ -163,7 +167,12 @@ const emptyForm = {
   notes: "",
 };
 
-const emptyLine = { service_id: "", description: "", quantity: "1", unit_amount: "0" };
+const emptyLine = {
+  service_id: "",
+  description: "",
+  quantity: "1",
+  unit_amount: "0",
+};
 
 export function HomeCare({
   apiSession,
@@ -205,13 +214,15 @@ export function HomeCare({
     return searchPatients(patients, query).slice(0, 6);
   }, [form.patient_id, patientSearch, patients]);
   const normalizedStaffType =
-    form.staff_type && staffTypeOptions.some(([value]) => value === form.staff_type)
+    form.staff_type &&
+    staffTypeOptions.some(([value]) => value === form.staff_type)
       ? form.staff_type
       : "custom";
   const filteredStaff = useMemo(
     () =>
       staff.filter(
-        (user: any) => staffType === "custom" || userTypeKey(user) === staffType,
+        (user: any) =>
+          staffType === "custom" || userTypeKey(user) === staffType,
       ),
     [staff, staffType],
   );
@@ -294,10 +305,12 @@ export function HomeCare({
       );
       setServices(serviceRows);
       const [bookingRows, staffRows] = await Promise.all([
-        apiFetch(`/home-care/bookings?branch_id=${branchId}`, apiSession).catch((err: any) => {
-          setError(err.message || "Unable to load home care bookings.");
-          return [];
-        }),
+        apiFetch(`/home-care/bookings?branch_id=${branchId}`, apiSession).catch(
+          (err: any) => {
+            setError(err.message || "Unable to load home care bookings.");
+            return [];
+          },
+        ),
         apiFetch("/identity/users", apiSession).catch(() => []),
       ]);
       setBookings(bookingRows);
@@ -372,9 +385,7 @@ export function HomeCare({
     setError("");
     try {
       const saved = await apiFetch(
-        editing
-          ? `/home-care/bookings/${editing.id}`
-          : "/home-care/bookings",
+        editing ? `/home-care/bookings/${editing.id}` : "/home-care/bookings",
         apiSession,
         {
           method: editing ? "PATCH" : "POST",
@@ -384,7 +395,9 @@ export function HomeCare({
       await load();
       if (loadLiveData) await loadLiveData(apiSession);
       setSelectedId(saved.id);
-      setMessage(editing ? "Home care booking updated." : "Home care booking created.");
+      setMessage(
+        editing ? "Home care booking updated." : "Home care booking created.",
+      );
       setEditing(null);
       setView("view");
     } catch (err: any) {
@@ -447,14 +460,18 @@ export function HomeCare({
     });
     setPatientSearch(patientSearchLabel(patientMap.get(booking.patient_id)));
     const assigned = staffMap.get(booking.assigned_staff_user_id);
-    setStaffType(booking.staff_type || (assigned ? userTypeKey(assigned) : "custom"));
+    setStaffType(
+      booking.staff_type || (assigned ? userTypeKey(assigned) : "custom"),
+    );
     const bookingDays = dayCount(booking.start_date, booking.end_date);
     setLineItems(
       booking.services?.length
         ? booking.services.map((row: any) => ({
             service_id: row.service_id || "",
             description: row.description || "",
-            quantity: String(Math.max(1, Math.round(Number(row.quantity || 1) / bookingDays))),
+            quantity: String(
+              Math.max(1, Math.round(Number(row.quantity || 1) / bookingDays)),
+            ),
             unit_amount: String(row.unit_amount || 0),
           }))
         : [{ ...emptyLine }],
@@ -506,7 +523,8 @@ export function HomeCare({
 
   const days = dayCount(form.start_date, form.end_date);
   const formLineTotal = lineItems.reduce(
-    (sum, row) => sum + Number(row.quantity || 0) * Number(row.unit_amount || 0) * days,
+    (sum, row) =>
+      sum + Number(row.quantity || 0) * Number(row.unit_amount || 0) * days,
     0,
   );
   const isFormView = view === "create" || view === "edit";
@@ -519,7 +537,11 @@ export function HomeCare({
         onList={backToList}
         onCreate={openCreate}
       />
-      <StatusToast message={message} tone="success" onClose={() => setMessage("")} />
+      <StatusToast
+        message={message}
+        tone="success"
+        onClose={() => setMessage("")}
+      />
       <StatusToast message={error} tone="error" onClose={() => setError("")} />
 
       {view === "list" && (
@@ -552,7 +574,10 @@ export function HomeCare({
             </div>
             <ActionButton onClick={backToList}>Back to list</ActionButton>
           </div>
-          <form onSubmit={saveBooking} className="mt-5 grid gap-3 md:grid-cols-4">
+          <form
+            onSubmit={saveBooking}
+            className="mt-5 grid gap-3 md:grid-cols-4"
+          >
             <div className="relative md:col-span-2">
               <TextField
                 label="Patient Search"
@@ -601,7 +626,10 @@ export function HomeCare({
                 setField("staff_type", value === "custom" ? "" : value);
                 setField("assigned_staff_user_id", "");
               }}
-              options={staffTypeOptions.map(([value, label]) => ({ value, label }))}
+              options={staffTypeOptions.map(([value, label]) => ({
+                value,
+                label,
+              }))}
             />
             {normalizedStaffType === "custom" ? (
               <TextField
@@ -648,9 +676,16 @@ export function HomeCare({
               label="Recurrence"
               value={form.recurrence}
               onChange={(value) => setField("recurrence", value)}
-              options={recurrenceOptions.map(([value, label]) => ({ value, label }))}
+              options={recurrenceOptions.map(([value, label]) => ({
+                value,
+                label,
+              }))}
             />
-            <DateField label="Start Date" value={form.start_date} onChange={(value) => setField("start_date", value)} />
+            <DateField
+              label="Start Date"
+              value={form.start_date}
+              onChange={(value) => setField("start_date", value)}
+            />
             <DateField
               label="End Date"
               value={form.end_date}
@@ -694,7 +729,10 @@ export function HomeCare({
               </div>
               <div className="space-y-3">
                 {lineItems.map((line, index) => (
-                  <div key={index} className="grid gap-3 rounded-xl bg-white p-3 md:grid-cols-[1.2fr_1.4fr_.55fr_.75fr_auto]">
+                  <div
+                    key={index}
+                    className="grid gap-3 rounded-xl bg-white p-3 md:grid-cols-[1.2fr_1.4fr_.55fr_.75fr_auto]"
+                  >
                     <SelectField
                       label="Service"
                       value={line.service_id}
@@ -708,22 +746,50 @@ export function HomeCare({
                       ]}
                     />
                     <div>
-                      <TextField label="Description" value={line.description} onChange={(value) => setLine(index, "description", value)} />
+                      <TextField
+                        label="Description"
+                        value={line.description}
+                        onChange={(value) =>
+                          setLine(index, "description", value)
+                        }
+                      />
                       <p className="mt-1 text-xs font-bold text-blue-600">
-                        × {days} day{days > 1 ? "s" : ""} ({displayDate(form.start_date)} → {displayDate(form.end_date || form.start_date)})
+                        × {days} day{days > 1 ? "s" : ""} (
+                        {displayDate(form.start_date)} →{" "}
+                        {displayDate(form.end_date || form.start_date)})
                       </p>
                     </div>
-                    <NumberField label="Hours/Day" value={line.quantity} onChange={(value) => setLine(index, "quantity", value)} min={1} />
-                    <NumberField label="Hourly Rate" value={line.unit_amount} onChange={(value) => setLine(index, "unit_amount", value)} min={0} />
+                    <NumberField
+                      label="Hours/Day"
+                      value={line.quantity}
+                      onChange={(value) => setLine(index, "quantity", value)}
+                      min={1}
+                    />
+                    <NumberField
+                      label="Hourly Rate"
+                      value={line.unit_amount}
+                      onChange={(value) => setLine(index, "unit_amount", value)}
+                      min={0}
+                    />
                     <div className="flex items-end">
-                      <ActionButton tone="danger" onClick={() => removeLine(index)} disabled={lineItems.length === 1}>
+                      <ActionButton
+                        tone="danger"
+                        onClick={() => removeLine(index)}
+                        disabled={lineItems.length === 1}
+                      >
                         Remove
                       </ActionButton>
                     </div>
                     <div className="text-right text-xs text-slate-500 md:col-span-5">
-                      {Number(line.quantity || 0)} hr × {money(line.unit_amount)} × {days} day{days > 1 ? "s" : ""} ={" "}
+                      {Number(line.quantity || 0)} hr ×{" "}
+                      {money(line.unit_amount)} × {days} day
+                      {days > 1 ? "s" : ""} ={" "}
                       <b className="text-slate-700">
-                        {money(Number(line.quantity || 0) * Number(line.unit_amount || 0) * days)}
+                        {money(
+                          Number(line.quantity || 0) *
+                            Number(line.unit_amount || 0) *
+                            days,
+                        )}
                       </b>
                     </div>
                   </div>
@@ -734,7 +800,13 @@ export function HomeCare({
               </div>
             </div>
             <div className="flex items-end gap-2 md:col-span-4">
-              <Button disabled={busy === "save"}>{busy === "save" ? "Saving..." : editing ? "Update Booking" : "Create Booking"}</Button>
+              <Button disabled={busy === "save"}>
+                {busy === "save"
+                  ? "Saving..."
+                  : editing
+                    ? "Update Booking"
+                    : "Create Booking"}
+              </Button>
               <ActionButton onClick={backToList}>Cancel</ActionButton>
             </div>
           </form>
@@ -751,7 +823,8 @@ export function HomeCare({
           onEdit={() => selected && startEdit(selected)}
           onInvoice={() => selected && openInvoice(selected)}
           onOpenInvoiceModule={() =>
-            invoiceDetail?.invoice && goToInvoiceModule(invoiceDetail.invoice.id)
+            invoiceDetail?.invoice &&
+            goToInvoiceModule(invoiceDetail.invoice.id)
           }
         />
       )}
@@ -767,7 +840,8 @@ export function HomeCare({
           onGenerate={generateInvoice}
           onBack={() => (selected ? openView(selected) : backToList())}
           onOpenInvoiceModule={() =>
-            invoiceDetail?.invoice && goToInvoiceModule(invoiceDetail.invoice.id)
+            invoiceDetail?.invoice &&
+            goToInvoiceModule(invoiceDetail.invoice.id)
           }
         />
       )}
@@ -776,7 +850,8 @@ export function HomeCare({
 }
 
 function Header({ view, count, onList, onCreate }: any) {
-  const listActive = view === "list" || view === "view" || view === "edit" || view === "invoice";
+  const listActive =
+    view === "list" || view === "view" || view === "edit" || view === "invoice";
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
@@ -837,23 +912,32 @@ function BookingsList({
           <TextField
             label="Search"
             value={filters.query}
-            onChange={(value: string) => setFilters({ ...filters, query: value })}
+            onChange={(value: string) =>
+              setFilters({ ...filters, query: value })
+            }
             placeholder="Booking, patient, staff, status"
           />
           <SelectField
             label="Status"
             value={filters.status}
-            onChange={(value: string) => setFilters({ ...filters, status: value })}
-            options={[{ value: "all", label: "All statuses" }, ...statuses.map(([value, label]) => ({ value, label }))]}
+            onChange={(value: string) =>
+              setFilters({ ...filters, status: value })
+            }
+            options={[
+              { value: "all", label: "All statuses" },
+              ...statuses.map(([value, label]) => ({ value, label })),
+            ]}
           />
           <div className="flex items-end">
-            <Button type="button" onClick={onCreate}>New Booking</Button>
+            <Button type="button" onClick={onCreate}>
+              New Booking
+            </Button>
           </div>
         </div>
       </div>
       <div className="mt-2 flex items-center gap-2">
         <RefreshButton onRefresh={onRefresh} />
-        <Badge tone="blue">{bookings.length} shown</Badge>
+        <Badge tone="blue" className="normal-badge">{bookings.length} shown</Badge>
         <span className="text-xs text-slate-400">of {total} bookings</span>
       </div>
       <div className="mt-4 overflow-auto rounded-2xl border">
@@ -883,7 +967,9 @@ function BookingsList({
                 <tr key={booking.id}>
                   <td className="px-4 py-3">
                     <b>{booking.booking_number}</b>
-                    <p className="text-xs text-slate-500">{booking.services?.length || 0} services</p>
+                    <p className="text-xs text-slate-500">
+                      {booking.services?.length || 0} services
+                    </p>
                   </td>
                   <td>{patientName(patient)}</td>
                   <td>
@@ -896,24 +982,35 @@ function BookingsList({
                     )}
                   </td>
                   <td>
-                    {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
+                    {displayDate(booking.start_date)} to{" "}
+                    {displayDate(booking.end_date)}
                     <p className="text-xs text-slate-500">
                       {humanizeOptionLabel(booking.recurrence || "daily")}
                     </p>
                   </td>
-                  <td><Badge>{humanizeOptionLabel(booking.status)}</Badge></td>
+                  <td>
+                    <Badge>{humanizeOptionLabel(booking.status)}</Badge>
+                  </td>
                   <td>{money(bookingTotal(booking))}</td>
                   <td className="pr-4">
                     <ActionGroup>
-                      <ActionButton onClick={() => onView(booking)}>View</ActionButton>
+                      <ActionButton onClick={() => onView(booking)}>
+                        View
+                      </ActionButton>
                       <ActionButton
                         onClick={() => onEdit(booking)}
                         disabled={isBookingLocked(booking)}
-                        title={isBookingLocked(booking) ? "Locked after billing/completion" : undefined}
+                        title={
+                          isBookingLocked(booking)
+                            ? "Locked after billing/completion"
+                            : undefined
+                        }
                       >
                         Edit
                       </ActionButton>
-                      <ActionButton onClick={() => onInvoice(booking)}>Invoice</ActionButton>
+                      <ActionButton onClick={() => onInvoice(booking)}>
+                        Invoice
+                      </ActionButton>
                     </ActionGroup>
                   </td>
                 </tr>
@@ -955,22 +1052,37 @@ function BookingDetail({
           <div>
             <h3 className="text-xl font-bold">{booking.booking_number}</h3>
             <p className="text-sm text-slate-500">
-              {patientName(patient)} · {patientCode(patient) || patient?.mobile || ""}
+              {patientName(patient)} ·{" "}
+              {patientCode(patient) || patient?.mobile || ""}
             </p>
           </div>
           <Badge>{humanizeOptionLabel(booking.status)}</Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <Info title="Staff" value={booking.assigned_staff_name || userName(staffMap.get(booking.assigned_staff_user_id))} />
-          <Info title="Staff Type" value={humanizeOptionLabel(booking.staff_type || "-")} />
-          <Info title="Recurrence" value={humanizeOptionLabel(booking.recurrence || "daily")} />
+          <Info
+            title="Staff"
+            value={
+              booking.assigned_staff_name ||
+              userName(staffMap.get(booking.assigned_staff_user_id))
+            }
+          />
+          <Info
+            title="Staff Type"
+            value={humanizeOptionLabel(booking.staff_type || "-")}
+          />
+          <Info
+            title="Recurrence"
+            value={humanizeOptionLabel(booking.recurrence || "daily")}
+          />
           <Info title="Start Date" value={displayDate(booking.start_date)} />
           <Info title="End Date" value={displayDate(booking.end_date)} />
           <Info title="Total" value={money(bookingTotal(booking))} />
         </div>
         {booking.complaints && (
           <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
-            <p className="text-xs font-bold uppercase text-slate-500">Complaints</p>
+            <p className="text-xs font-bold uppercase text-slate-500">
+              Complaints
+            </p>
             <p className="mt-1 text-slate-700">{booking.complaints}</p>
           </div>
         )}
@@ -993,7 +1105,9 @@ function BookingDetail({
             <tbody className="divide-y">
               {(booking.services || []).length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-4 text-slate-500">No service lines.</td>
+                  <td colSpan={4} className="px-4 py-4 text-slate-500">
+                    No service lines.
+                  </td>
                 </tr>
               )}
               {(booking.services || []).map((row: any) => (
@@ -1038,9 +1152,18 @@ function BookingDetail({
               <Badge>{humanizeOptionLabel(invoiceDetail.invoice.status)}</Badge>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-slate-600">
-              <span>Total</span><b className="text-right text-slate-900">{money(invoiceDetail.invoice.total_amount)}</b>
-              <span>Paid</span><b className="text-right text-slate-900">{money(invoiceDetail.invoice.paid_amount)}</b>
-              <span>Balance</span><b className="text-right text-slate-900">{money(invoiceDetail.invoice.balance_amount)}</b>
+              <span>Total</span>
+              <b className="text-right text-slate-900">
+                {money(invoiceDetail.invoice.total_amount)}
+              </b>
+              <span>Paid</span>
+              <b className="text-right text-slate-900">
+                {money(invoiceDetail.invoice.paid_amount)}
+              </b>
+              <span>Balance</span>
+              <b className="text-right text-slate-900">
+                {money(invoiceDetail.invoice.balance_amount)}
+              </b>
             </div>
           </div>
         ) : (
@@ -1088,7 +1211,8 @@ function InvoiceCard({
       <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
         <b>{booking.booking_number}</b>
         <p className="mt-1 text-slate-500">
-          {patientName(patientMap.get(booking.patient_id))} · {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
+          {patientName(patientMap.get(booking.patient_id))} ·{" "}
+          {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
         </p>
         <p className="text-xs text-slate-500">
           {humanizeOptionLabel(booking.recurrence || "daily")}
@@ -1102,22 +1226,46 @@ function InvoiceCard({
             <Badge>{humanizeOptionLabel(invoiceDetail.invoice.status)}</Badge>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 text-slate-600">
-            <span>Subtotal</span><b className="text-right text-slate-900">{money(invoiceDetail.invoice.subtotal_amount)}</b>
-            <span>Discount</span><b className="text-right text-slate-900">{money(invoiceDetail.invoice.discount_amount)}</b>
-            <span>Tax</span><b className="text-right text-slate-900">{money(invoiceDetail.invoice.tax_amount)}</b>
-            <span>Total</span><b className="text-right text-slate-900">{money(invoiceDetail.invoice.total_amount)}</b>
-            <span>Balance</span><b className="text-right text-slate-900">{money(invoiceDetail.invoice.balance_amount)}</b>
+            <span>Subtotal</span>
+            <b className="text-right text-slate-900">
+              {money(invoiceDetail.invoice.subtotal_amount)}
+            </b>
+            <span>Discount</span>
+            <b className="text-right text-slate-900">
+              {money(invoiceDetail.invoice.discount_amount)}
+            </b>
+            <span>Tax</span>
+            <b className="text-right text-slate-900">
+              {money(invoiceDetail.invoice.tax_amount)}
+            </b>
+            <span>Total</span>
+            <b className="text-right text-slate-900">
+              {money(invoiceDetail.invoice.total_amount)}
+            </b>
+            <span>Balance</span>
+            <b className="text-right text-slate-900">
+              {money(invoiceDetail.invoice.balance_amount)}
+            </b>
           </div>
           <p className="mt-3 text-xs text-slate-500">
             Payment and receipt are handled from the Invoices module.
           </p>
-          <Button type="button" className="mt-3 w-full" onClick={onOpenInvoiceModule}>
+          <Button
+            type="button"
+            className="mt-3 w-full"
+            onClick={onOpenInvoiceModule}
+          >
             Open in Invoices Module
           </Button>
         </div>
       ) : (
         <div className="mt-4 grid gap-3">
-          <NumberField label="Discount" value={discount} onChange={setDiscount} min={0} />
+          <NumberField
+            label="Discount"
+            value={discount}
+            onChange={setDiscount}
+            min={0}
+          />
           <Button type="button" disabled={busy} onClick={onGenerate}>
             {busy ? "Generating..." : "Generate Invoice"}
           </Button>

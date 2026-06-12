@@ -21,6 +21,9 @@ import { SearchPicker } from "@/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { Column, DataTable } from "@/components/reports/DataTable";
 import { displayDate, displayDateTime } from "@/utils/helper";
+import { Pagination } from "@/components/common/Pagination";
+import { isBilledIssue, isCancelledIssue, isDispensed } from "@/utils/pharmacy/helpers";
+import { ConsultPrescriptionModal, MedicineDetailModal } from "@/components/pharmacy/Shared";
 
 const pageSize = 10;
 
@@ -628,13 +631,14 @@ export function Pharmacy({
               value={externalPrescriber}
               onChange={setExternalPrescriber}
               disabled={source !== "external_prescription"}
+              className="search-input"
             />
           </div>
           <div className="flex items-end gap-2">
-            <ActionButton type="button" onClick={addIssueItem}>
+            <ActionButton type="button" onClick={addIssueItem} className='close-button'>
               Add
             </ActionButton>
-            <Button disabled={busy === "create"}>
+            <Button disabled={busy === "create"} className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs lg:text-sm'>
               {busy === "create" ? "Saving..." : "Create Issue"}
             </Button>
           </div>
@@ -656,7 +660,7 @@ export function Pharmacy({
         </form>
       </Card>
       <Card>
-        <h3 className="text-lg font-bold">Doctor Prescriptions</h3>
+        <h3 className="card-title font-bold">Doctor Prescriptions</h3>
         <div className="mt-4 grid gap-3">
           {(() => {
             const visible = prescriptionReady.filter(
@@ -665,30 +669,31 @@ export function Pharmacy({
             return (
               <>
                 {visible.length === 0 && (
-                  <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+                  <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
                     No signed prescriptions ready.
                   </div>
                 )}
                 {visible.slice(0, 6).map((a: any) => (
                   <div
                     key={a.id}
-                    className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"
+                    className="flex flex-col justify-between gap-3 rounded-lg border p-4 md:flex-row md:items-center"
                   >
                     <div>
-                      <b>
+                      <b className="card-title">
                         {a.token} · {a.patient}
                       </b>
-                      <p className="text-sm text-slate-500">
+                      <p className="table-data text-slate-500">
                         Signed prescription ready
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <ActionButton onClick={() => loadConsultDetail(a)}>
+                      <ActionButton onClick={() => loadConsultDetail(a)} className='close-button'>
                         View Rx
                       </ActionButton>
                       <Button
                         disabled={busy === a.consultationId}
                         onClick={() => createFromConsultation(a)}
+                        className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs lg:text-sm'
                       >
                         {busy === a.consultationId
                           ? "Creating..."
@@ -701,6 +706,7 @@ export function Pharmacy({
                             a.consultationId,
                           ])
                         }
+                        className='close-button'
                       >
                         Remove
                       </ActionButton>
@@ -733,7 +739,7 @@ export function Pharmacy({
             <tbody className="divide-y">
               {issues.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-4 text-slate-500">
+                  <td colSpan={7} className="table-data px-4 py-4 text-slate-500">
                     No pharmacy issues yet.
                   </td>
                 </tr>
@@ -894,287 +900,7 @@ export function Pharmacy({
   );
 }
 
-function isDispensed(issue: any) {
-  return ["dispensed"].includes(String(issue?.status || ""));
-}
 
-function isCancelledIssue(issue: any) {
-  return String(issue?.status || "") === "cancelled";
-}
 
-function isBilledIssue(issue: any) {
-  return String(issue?.status || "") === "billed";
-}
 
-function splitList(value: any) {
-  return String(value || "")
-    .split(/\n|,(?=\s*[A-Za-z0-9])|\s+\|\s+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
-function parseMedicines(text: string) {
-  return String(text || "")
-    .split(/\n|,\s+(?=[A-Za-z])/)
-    .map((l) => l.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const parts = line.split(/\s*\|\s*/).map((p: string) => p.trim());
-      return normalizeMedicineSchedule({
-        name: parts[0] || "",
-        dosage: parts[1] || "",
-        frequency: parts[2] || "",
-        duration: parts[3] || "",
-        instructions: parts[4] || "",
-      });
-    });
-}
-
-function looksLikeFrequency(value: any) {
-  const text = String(value || "")
-    .trim()
-    .toLowerCase();
-  return (
-    /^\d+\s*[-–]\s*\d+\s*[-–]\s*\d+$/.test(text) ||
-    [
-      "od",
-      "bd",
-      "tds",
-      "qid",
-      "hs",
-      "sos",
-      "daily",
-      "once daily",
-      "twice daily",
-    ].includes(text)
-  );
-}
-
-function looksLikeDuration(value: any) {
-  return /\b\d+\s*(d|day|days|week|weeks|month|months)\b/i.test(
-    String(value || "").trim(),
-  );
-}
-
-function normalizeMedicineSchedule(row: any) {
-  if (
-    looksLikeFrequency(row?.dosage) &&
-    looksLikeDuration(row?.frequency) &&
-    !looksLikeDuration(row?.duration)
-  ) {
-    return {
-      ...row,
-      dosage: "",
-      frequency: row.dosage,
-      duration: row.frequency,
-      instructions: row.duration || row.instructions || "",
-    };
-  }
-  return row;
-}
-
-function MedicineDetailModal({ issue, apiSession, patient, onClose }: any) {
-  const [consultMedicines, setConsultMedicines] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    async function loadLinkedConsultation() {
-      if (!apiSession || !issue?.consultation_id) return;
-      setLoading(true);
-      try {
-        const detail = await apiFetch(
-          `/consultations/${issue.consultation_id}`,
-          apiSession,
-        );
-        if (!cancelled) setConsultMedicines(detail?.medicines || []);
-      } catch {
-        if (!cancelled) setConsultMedicines([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    loadLinkedConsultation();
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.token, issue?.consultation_id]);
-  const parsedMedicines = parseMedicines(issue?.medicine_text);
-  const medicines = consultMedicines.length
-    ? consultMedicines.map((m: any) =>
-        normalizeMedicineSchedule({
-          name: m.medicine_name,
-          dosage: m.dosage,
-          frequency: m.frequency,
-          duration: m.duration,
-          instructions: m.instructions,
-        }),
-      )
-    : parsedMedicines;
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-xl font-bold">Medicine List</h3>
-            <p className="mt-1 text-sm text-slate-500">{patient}</p>
-            <p className="text-xs text-slate-500">
-              {issue?.created_at ? displayDateTime(issue.created_at) : ""}
-            </p>
-          </div>
-          <ActionButton onClick={onClose}>Close</ActionButton>
-        </div>
-        {loading && (
-          <p className="mt-4 text-sm text-slate-500">
-            Loading prescription details...
-          </p>
-        )}
-        {medicines.length > 0 ? (
-          <div className="mt-5 overflow-auto rounded-2xl border">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Medicine</th>
-                  <th>Dosage</th>
-                  <th>Frequency</th>
-                  <th>Duration</th>
-                  <th className="pr-4">Instructions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {medicines.map((m: any, i: number) => (
-                  <tr key={i}>
-                    <td className="px-4 py-3 font-semibold">{m.name}</td>
-                    <td>{m.dosage || "-"}</td>
-                    <td>{m.frequency || "-"}</td>
-                    <td>{m.duration || "-"}</td>
-                    <td className="pr-4 text-slate-500">
-                      {m.instructions || "-"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
-            No medicines found.
-          </p>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function ConsultPrescriptionModal({
-  a,
-  detail,
-  loading,
-  busy,
-  onClose,
-  onCreate,
-}: any) {
-  const medicines = (detail?.medicines || []).map((m: any) =>
-    normalizeMedicineSchedule({
-      medicine_name: m.medicine_name,
-      dosage: m.dosage,
-      frequency: m.frequency,
-      duration: m.duration,
-      instructions: m.instructions,
-    }),
-  );
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-xl font-bold">Prescription Detail</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              {a.token} · {a.patient}
-            </p>
-          </div>
-          <ActionButton onClick={onClose}>Close</ActionButton>
-        </div>
-        {loading && <p className="mt-4 text-sm text-slate-500">Loading...</p>}
-        {medicines.length > 0 && (
-          <div className="mt-4 overflow-auto rounded-2xl border">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr>
-                  <th className="px-4 py-3">Medicine</th>
-                  <th>Dosage</th>
-                  <th>Frequency</th>
-                  <th>Duration</th>
-                  <th>Instructions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {medicines.map((m: any, i: number) => (
-                  <tr key={i}>
-                    <td className="px-4 py-3 font-semibold">
-                      {m.medicine_name}
-                    </td>
-                    <td>{m.dosage || "-"}</td>
-                    <td>{m.frequency || "-"}</td>
-                    <td>{m.duration || "-"}</td>
-                    <td className="pr-4 text-slate-500">
-                      {m.instructions || "-"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {detail && medicines.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
-            No medicines in this prescription.
-          </p>
-        )}
-        <div className="mt-4 flex gap-2">
-          <Button
-            disabled={busy === a.consultationId || loading}
-            onClick={() => onCreate(a)}
-          >
-            {busy === a.consultationId
-              ? "Creating..."
-              : "Create Pharmacy Issue"}
-          </Button>
-          <ActionButton onClick={onClose}>Cancel</ActionButton>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function Pagination({ page, totalPages, total, onPage }: any) {
-  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-  return (
-    <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center">
-      <span>
-        Showing {start}-{end} of {total}
-      </span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onPage(Math.max(1, page - 1))}
-          disabled={page <= 1}
-          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
-        >
-          Previous
-        </button>
-        <span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-700">
-          Page {page} / {totalPages}
-        </span>
-        <button
-          type="button"
-          onClick={() => onPage(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
-          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  );
-}

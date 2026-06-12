@@ -1,0 +1,124 @@
+import { displayDate } from "../helper";
+
+export function invoiceSourceKey(invoice: any) {
+  if (invoice.lab_order_id) return "lab_scan";
+  if (invoice.pharmacy_issue_id) return "pharmacy";
+  if (invoice.physiotherapy_case_id) return "physiotherapy";
+  if (invoice.home_care_booking_id) return "home_care";
+  if (invoice.ip_admission_id) return "ip_billing";
+  if (invoice.consultation_id || invoice.appointment_id) return "consultation";
+  return "direct";
+}
+
+export function invoiceSource(invoice: any) {
+  const sources: Record<
+    string,
+    { label: string; tone: "slate" | "blue" | "amber" | "purple" }
+  > = {
+    lab_scan: { label: "Lab / Scan", tone: "blue" },
+    pharmacy: { label: "Pharmacy", tone: "amber" },
+    physiotherapy: { label: "Physiotherapy", tone: "purple" },
+    home_care: { label: "Home Care / Visit", tone: "blue" },
+    ip_billing: { label: "IP Billing", tone: "blue" },
+    consultation: { label: "Consultation", tone: "slate" },
+    direct: { label: "Direct", tone: "amber" },
+  };
+  return sources[invoiceSourceKey(invoice)] || sources.direct;
+}
+
+export function invoiceLinkedRecord(invoice: any) {
+  if (invoice.ip_admission_id) return "IP admission";
+  if (invoice.physiotherapy_case_id) return "Physiotherapy case";
+  if (invoice.home_care_booking_id) return "Home care / visit booking";
+  if (invoice.pharmacy_issue_id) return "Pharmacy issue";
+  if (invoice.lab_order_id) return "Lab / Scan order";
+  if (invoice.consultation_id) return "Consultation";
+  if (invoice.appointment_id) return "Appointment";
+  return "Direct invoice";
+}
+
+export function money(value: any) {
+  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
+export function numberValue(value: any) {
+  return Number(value || 0);
+}
+
+export function invoiceDiscountParts(invoice: any) {
+  const discount = numberValue(invoice.discount_amount);
+  const membership = numberValue(invoice.membership_discount_amount);
+  return {
+    offerDiscount: Math.max(discount - membership, 0),
+    membershipDiscount: membership,
+  };
+}
+
+export function invoiceMembershipLabel(invoice: any) {
+  if (numberValue(invoice.membership_discount_amount) > 0)
+    return "Membership benefit applied";
+  if (
+    invoice.patient_subscription_enrollment_id ||
+    invoice.patient_subscription_plan_id
+  )
+    return "Membership plan invoice";
+  return "";
+}
+
+export function percentLabel(amount: any, base: any) {
+  const value = numberValue(amount);
+  const total = numberValue(base);
+  if (value <= 0 || total <= 0) return "0%";
+  const percent = (value * 100) / total;
+  return `${Number(percent.toFixed(1)).toLocaleString("en-IN")}%`;
+}
+
+export function claimedDetail(amount: any, base: any, verb = "claimed") {
+  return `${money(amount)} of ${money(base)} (${percentLabel(amount, base)} ${verb})`;
+}
+
+export function invoiceDateKey(invoice: any) {
+  const raw =
+    invoice.invoice_date ||
+    invoice.created_at ||
+    invoice.updated_at ||
+    invoice.paid_at;
+  if (!raw) return "";
+  if (typeof raw === "string") return raw.slice(0, 10);
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+export function formatInvoiceDate(invoice: any) {
+  const key = invoiceDateKey(invoice);
+  if (!key) return "-";
+  const date = new Date(`${key}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? key : displayDate(key);
+}
+
+export function invoicePaidStatus(invoice: any) {
+  const paid = Number(invoice.paid_amount || 0);
+  const balance = Number(invoice.balance_amount || 0);
+  const status = String(invoice.status || "").toLowerCase();
+  if (status === "paid" || balance <= 0) return "paid";
+  if (status === "partially_paid" || paid > 0) return "partially_paid";
+  return "unpaid";
+}
+
+export function itemTypeLabel(type: any) {
+  const labels: Record<string, string> = {
+    consultation: "Consultation",
+    lab: "Lab / Scan",
+    pharmacy: "Medicine",
+    ip_room: "IP Room",
+    ip_consultation: "IP Doctor",
+    ip_medication: "IP Medicine",
+    ip_lab: "IP Lab / Scan",
+    ip_charge: "IP Charge",
+    physiotherapy: "Physiotherapy",
+    home_care: "Home Care / Visit",
+  };
+  return (
+    labels[String(type || "")] || String(type || "Service").replaceAll("_", " ")
+  );
+}

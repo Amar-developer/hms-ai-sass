@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { ActionButton, ActionGroup, Badge, Button, Card, RefreshButton, StatusToast } from "@/components/common/ui";
 import { apiFetch } from "@/lib/api";
-import { DateField, NumberField, SelectField, TextField } from "@/components/FormElements";
+import {
+  DateField,
+  NumberField,
+  SelectField,
+  TextField,
+} from "@/components/FormElements";
 import { humanizeOptionLabel } from "@/lib/options";
 
 const itemTypes = [
@@ -344,9 +349,7 @@ export function Items({ apiSession, branchId }: any) {
         setPackageTestIds([]);
       } else if (type === "home_care_service") {
         savedHomeCareService = await apiFetch(
-          editing
-            ? `/home-care/services/${editing.id}`
-            : "/home-care/services",
+          editing ? `/home-care/services/${editing.id}` : "/home-care/services",
           apiSession,
           {
             method,
@@ -389,7 +392,9 @@ export function Items({ apiSession, branchId }: any) {
       if (type === "home_care_service" && savedHomeCareService) {
         setHomeCareServices((prev: any[]) =>
           wasEditing
-            ? prev.map((row) => (row.id === savedHomeCareService.id ? savedHomeCareService : row))
+            ? prev.map((row) =>
+                row.id === savedHomeCareService.id ? savedHomeCareService : row,
+              )
             : [savedHomeCareService, ...prev],
         );
         void load();
@@ -599,8 +604,8 @@ export function Items({ apiSession, branchId }: any) {
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
-            <h3 className="text-xl font-bold">Items</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="card-title font-bold">Items</h3>
+            <p className="table-status text-slate-500">
               ERP-style item master for medicines, lab tests, lab packages,
               physiotherapy equipment, and home care / visit services.
             </p>
@@ -624,6 +629,7 @@ export function Items({ apiSession, branchId }: any) {
               value={form.code}
               onChange={setCodeOrSerial}
               placeholder="Auto generated if blank"
+              className="search-input"
             />
           )}
           <TextField
@@ -631,6 +637,7 @@ export function Items({ apiSession, branchId }: any) {
             value={form.name}
             onChange={(v) => setField("name", v)}
             required
+            className="search-input"
           />
           {type !== "physio_equipment" && (
             <NumberField
@@ -655,7 +662,10 @@ export function Items({ apiSession, branchId }: any) {
                 onChange={(v) => setField("supplier_id", v)}
                 options={[
                   { value: "", label: "No supplier" },
-                  ...stockSuppliers.map((s: any) => ({ value: s.id, label: s.name })),
+                  ...stockSuppliers.map((s: any) => ({
+                    value: s.id,
+                    label: s.name,
+                  })),
                 ]}
               />
               <NumberField
@@ -672,6 +682,7 @@ export function Items({ apiSession, branchId }: any) {
                 label="Generic"
                 value={form.generic_name}
                 onChange={(v) => setField("generic_name", v)}
+                className="search-input"
               />
               <NumberField
                 label="Reorder Level"
@@ -752,13 +763,19 @@ export function Items({ apiSession, branchId }: any) {
               <TextField
                 label="Serial Number"
                 value={form.serial_number}
-                onChange={(v) => { setField("serial_number", v); setField("code", v); }}
+                onChange={(v) => {
+                  setField("serial_number", v);
+                  setField("code", v);
+                }}
               />
               <SelectField
                 label="Portable"
                 value={form.is_portable}
                 onChange={(v) => setField("is_portable", v)}
-                options={[{ value: "false", label: "No" }, { value: "true", label: "Yes" }]}
+                options={[
+                  { value: "false", label: "No" },
+                  { value: "true", label: "Yes" },
+                ]}
               />
               <SelectField
                 label="Scope"
@@ -788,23 +805,33 @@ export function Items({ apiSession, branchId }: any) {
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
-            <h3 className="text-lg font-bold">Pharmacy Stock</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="card-title font-bold">Pharmacy Stock</h3>
+            <p className="table-data text-slate-500">
               Suppliers, purchases, batches, stock ledger, and low-stock alerts.
             </p>
           </div>
-          <Badge tone={stockLow.length ? "amber" : "green"}>
+          <div className="w-[15%]">
+            <Badge
+            tone={stockLow.length ? "amber" : "green"}
+            className="normal-badge"
+          >
             {stockLow.length} low stock
           </Badge>
+          </div>
         </div>
         <div className="mt-4 grid gap-3 lg:grid-cols-3">
           <div className="rounded-2xl bg-slate-50 p-4">
-            <TextField label="Supplier Name" value={suppNameInput} onChange={setSuppNameInput} />
+            <TextField
+              label="Supplier Name"
+              value={suppNameInput}
+              onChange={setSuppNameInput}
+              className="search-input"
+            />
             <button
               type="button"
               onClick={createSupplier}
               disabled={busy === "supplier"}
-              className="mt-2 rounded-xl border px-3 py-2 text-xs font-bold disabled:text-slate-300"
+              className="mt-2 close-button font-bold disabled:text-slate-300"
             >
               {busy === "supplier" ? "Adding..." : "Add Supplier"}
             </button>
@@ -814,25 +841,59 @@ export function Items({ apiSession, branchId }: any) {
           </div>
           <div className="rounded-2xl bg-slate-50 p-4">
             <div className="grid gap-2 md:grid-cols-2">
-              <TextField label="PO ID" value={poId} onChange={setPoId} />
-              <DateField label="Purchase Date" value={poDate} onChange={setPoDate} />
+              <TextField label="PO ID" value={poId} onChange={setPoId} className="search-input" />
+              <DateField
+                label="Purchase Date"
+                value={poDate}
+                onChange={setPoDate}
+              />
               <SelectField
                 label="Medicine"
                 value={stockMedId}
                 onChange={setStockMedId}
-                options={medicines.map((m: any) => ({ value: m.id, label: m.name }))}
+                options={medicines.map((m: any) => ({
+                  value: m.id,
+                  label: m.name,
+                }))}
               />
-              <NumberField label="Quantity" value={poQty} onChange={setPoQty} min={1} />
-              <NumberField label="Header Discount %" value={poHdrDisc} onChange={setPoHdrDisc} min={0} max={100} />
-              <NumberField label="Line Discount %" value={poLineDisc} onChange={setPoLineDisc} min={0} max={100} />
-              <NumberField label="CGST %" value={poCgst} onChange={setPoCgst} min={0} />
-              <NumberField label="SGST %" value={poSgst} onChange={setPoSgst} min={0} />
+              <NumberField
+                label="Quantity"
+                value={poQty}
+                onChange={setPoQty}
+                min={1}
+              />
+              <NumberField
+                label="Header Discount %"
+                value={poHdrDisc}
+                onChange={setPoHdrDisc}
+                min={0}
+                max={100}
+              />
+              <NumberField
+                label="Line Discount %"
+                value={poLineDisc}
+                onChange={setPoLineDisc}
+                min={0}
+                max={100}
+              />
+              <NumberField
+                label="CGST %"
+                value={poCgst}
+                onChange={setPoCgst}
+                min={0}
+              />
+              <NumberField
+                label="SGST %"
+                value={poSgst}
+                onChange={setPoSgst}
+                min={0}
+              />
             </div>
             <button
               type="button"
               onClick={createPurchase}
               disabled={busy === "purchase"}
-              className="mt-2 rounded-xl border px-3 py-2 text-xs font-bold disabled:text-slate-300"
+              className="mt-2 close-button font-bold disabled:text-slate-300"
             >
               {busy === "purchase" ? "Saving..." : "Create Purchase"}
             </button>
@@ -865,15 +926,23 @@ export function Items({ apiSession, branchId }: any) {
                 onChange={setStockBatchId}
                 options={stockBatches
                   .filter((b: any) => b.medicine_id === stockMedId)
-                  .map((b: any) => ({ value: b.id, label: `${b.batch_number} · Qty ${b.quantity_on_hand}` }))}
+                  .map((b: any) => ({
+                    value: b.id,
+                    label: `${b.batch_number} · Qty ${b.quantity_on_hand}`,
+                  }))}
               />
-              <NumberField label="Return Qty" value={retQty} onChange={setRetQty} min={1} />
+              <NumberField
+                label="Return Qty"
+                value={retQty}
+                onChange={setRetQty}
+                min={1}
+              />
             </div>
             <button
               type="button"
               onClick={returnExpiredStock}
               disabled={busy === "return"}
-              className="mt-2 rounded-xl border px-3 py-2 text-xs font-bold text-red-600 disabled:text-slate-300"
+              className="mt-2 close-button font-bold text-red-600 disabled:text-slate-300"
             >
               {busy === "return" ? "Returning..." : "Return Expired"}
             </button>
@@ -883,8 +952,8 @@ export function Items({ apiSession, branchId }: any) {
       <Card>
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h3 className="text-lg font-bold">Item List</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="card-title font-bold">Item List</h3>
+            <p className="table-data text-slate-500">
               Filter, edit, or delete catalog items used by Lab, Pharmacy,
               Physiotherapy, and Home Care / Visit.
             </p>
@@ -895,6 +964,7 @@ export function Items({ apiSession, branchId }: any) {
               value={filters.query}
               onChange={(v) => setFiltersAndReset({ ...filters, query: v })}
               placeholder="Name, code, type"
+              className="search-input"
             />
             <SelectField
               label="Type"
@@ -920,7 +990,7 @@ export function Items({ apiSession, branchId }: any) {
           <table className="w-full min-w-[1240px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3 text-center">Type</th>
                 <th>Item</th>
                 <th>Code</th>
                 <th>Details</th>
@@ -941,16 +1011,20 @@ export function Items({ apiSession, branchId }: any) {
               {pagedRows.map((row: any) => (
                 <tr key={`${row.kind}-${row.id}`}>
                   <td className="px-4 py-3">
-                    <Badge>{humanizeOptionLabel(row.kind)}</Badge>
+                    <Badge className="table-status">{humanizeOptionLabel(row.kind)}</Badge>
                   </td>
-                  <td>
+                  <td className="table-data">
                     <b>{row.name}</b>
                   </td>
-                  <td>{row.code || "-"}</td>
-                  <td>{row.meta}</td>
-                  <td>{row.supplier}</td>
-                  <td>{row.purchase_price === null ? "-" : `₹${row.purchase_price || 0}`}</td>
-                  <td>
+                  <td className="table-data">{row.code || "-"}</td>
+                  <td className="table-data">{row.meta}</td>
+                  <td className="table-data">{row.supplier}</td>
+                  <td className="table-data">
+                    {row.purchase_price === null
+                      ? "-"
+                      : `₹${row.purchase_price || 0}`}
+                  </td>
+                  <td className="table-data"  >
                     {row.price === null
                       ? "-"
                       : row.type === "home_care_service"

@@ -51,6 +51,7 @@ export function RoleForm({
             onChange={(event: any) => setRoleName(event.target.value)}
             required
             disabled={isLocked(role)}
+            placeholder="Enter role name"
           />
         </FormField>
         <input type="hidden" name="key" value={generatedKey} />
@@ -145,12 +146,18 @@ export function UserForm({
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
         <FormField label="Name">
-          <Input name="name" defaultValue={user?.name || ""} required />
+          <Input
+            name="name"
+            defaultValue={user?.name || ""}
+            placeholder="Enter user name"
+            required
+          />
         </FormField>
         <FormField label="Email">
           <Input
             name="email"
             type="email"
+            placeholder="Enter user email"
             defaultValue={user?.email || ""}
             required
           />
@@ -169,7 +176,11 @@ export function UserForm({
           </Select>
         </FormField>
         <FormField label="Mobile">
-          <Input name="mobile" defaultValue={user?.mobile || ""} />
+          <Input
+            name="mobile"
+            defaultValue={user?.mobile || ""}
+            placeholder="Enter user mobile number"
+          />
         </FormField>
         <Field label="Branch Access">
           <Select
@@ -323,6 +334,7 @@ export function DepartmentForm({
               name="description"
               defaultValue={department?.description || ""}
               disabled={isLocked(department)}
+              placeholder="Enter department description"
             />
           </FormField>
         </div>
@@ -372,6 +384,7 @@ export function BranchForm({
             defaultValue={branch?.name || ""}
             required
             disabled={isLocked(branch)}
+            placeholder="Enter branch name"
           />
         </FormField>
         <FormField label="Code">
@@ -380,6 +393,7 @@ export function BranchForm({
             defaultValue={branch?.code || ""}
             required
             disabled={isLocked(branch)}
+            placeholder="Enter branch code"
           />
         </FormField>
         <FormField label="City">
@@ -387,6 +401,7 @@ export function BranchForm({
             name="city"
             defaultValue={branch?.city || ""}
             disabled={isLocked(branch)}
+            placeholder="Enter city name"
           />
         </FormField>
         <Field label="Area">
@@ -394,6 +409,7 @@ export function BranchForm({
             name="area"
             defaultValue={branch?.area || ""}
             disabled={isLocked(branch)}
+            placeholder="Enter branch area"
           />
         </Field>
         <Field label="State">
@@ -401,6 +417,7 @@ export function BranchForm({
             name="state"
             defaultValue={branch?.state || ""}
             disabled={isLocked(branch)}
+            placeholder="Enter state name"
           />
         </Field>
         {branch && (
@@ -421,6 +438,7 @@ export function BranchForm({
               name="address"
               defaultValue={branch?.address || ""}
               disabled={isLocked(branch)}
+              placeholder="Enter branch address"
             />
           </FormField>
         </div>
@@ -448,19 +466,33 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
         <FormField label="Supplier Name">
-          <Input name="name" defaultValue={supplier?.name || ""} required />
+          <Input
+            name="name"
+            defaultValue={supplier?.name || ""}
+            required
+            placeholder="Enter supplier name"
+          />
         </FormField>
         <FormField label="GSTIN">
-          <Input name="gstin" defaultValue={supplier?.gstin || ""} />
+          <Input
+            name="gstin"
+            defaultValue={supplier?.gstin || ""}
+            placeholder="Enter GSTIN"
+          />
         </FormField>
         <FormField label="Phone">
-          <Input name="phone" defaultValue={supplier?.phone || ""} />
+          <Input
+            name="phone"
+            defaultValue={supplier?.phone || ""}
+            placeholder="Enter supplier mobile number"
+          />
         </FormField>
         <FormField label="Email">
           <Input
             name="email"
             type="email"
             defaultValue={supplier?.email || ""}
+            placeholder="Enter supplier email"
           />
         </FormField>
         {supplier && (
@@ -473,7 +505,7 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
         )}
         <div className="md:col-span-2">
           <FormField label="Address">
-            <Input name="address" defaultValue={supplier?.address || ""} />
+            <Input name="address" defaultValue={supplier?.address || ""} placeholder="Enter supplier address"/>
           </FormField>
         </div>
         <Actions
@@ -503,7 +535,7 @@ export function TaxRuleForm({
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
         <FormField label="Name">
-          <Input name="name" defaultValue={rule?.name || ""} required />
+          <Input name="name" defaultValue={rule?.name || ""} required placeholder='Enter tax name'/>
         </FormField>
         <FormField label="Branch">
           <Select name="branchId" defaultValue={rule?.branch_id || ""}>
@@ -579,7 +611,7 @@ export function DiscountOfferForm({
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
         <FormField label="Offer Name">
-          <Input name="name" defaultValue={offer?.name || ""} required />
+          <Input name="name" defaultValue={offer?.name || ""} required placeholder="Enter offer name" />
         </FormField>
         <FormField label="Code">
           <Input
@@ -642,6 +674,7 @@ export function DiscountOfferForm({
             type="number"
             min="0"
             defaultValue={offer?.max_discount_amount ?? ""}
+            placeholder="Enter maximum amount"
           />
         </FormField>
         <FormField label="Valid From">
@@ -719,7 +752,9 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
             access, then Create, Read, Edit, and Delete as needed.
           </p>
         </div>
-        <Badge tone="slate" className="w-[20%] lg:w-[15%] py-2 rounded-lg">{selectedSet.size} selected</Badge>
+        <Badge tone="slate" className="w-[20%] lg:w-[15%] py-2 rounded-lg">
+          {selectedSet.size} selected
+        </Badge>
       </div>
       <div className="mt-3 grid gap-4 xl:grid-cols-2">
         {modules.map((module) => (
@@ -734,7 +769,9 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                   {grouped[module].length} permissions
                 </p>
               </div>
-              <Badge tone="slate" className="rounded-lg py-2 px-2">Module</Badge>
+              <Badge tone="slate" className="rounded-lg py-2 px-2">
+                Module
+              </Badge>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {buckets.map((bucket: any) => {

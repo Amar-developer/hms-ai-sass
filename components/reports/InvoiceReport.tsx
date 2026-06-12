@@ -165,95 +165,14 @@ const InvoiceReport = ({
     <Card>
       <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Invoice Profit Details</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Invoice Profit Details</h3>
+          <p className="table-data text-slate-500">
             Only paid invoices are shown in profit details.
           </p>
         </div>
-        <Badge tone="green">{filteredInvoices.length} paid invoices</Badge>
+        <Badge tone="green" className="normal-badge">{filteredInvoices.length} paid invoices</Badge>
       </div>
-      <div className="mt-4 overflow-auto rounded-2xl border">
-        {/* <table className="w-full min-w-[1520px] text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-            <tr>
-              <th className="px-4 py-3 text-xs lg:text-sm">Invoice</th>
-              <th className="text-xs lg:text-sm">Type</th>
-              <th className="text-xs lg:text-sm">Patient</th>
-              <th className="text-xs lg:text-sm">Doctor</th>
-              <th className="text-xs lg:text-sm">Status</th>
-              <th className="text-xs lg:text-sm">Total</th>
-              <th className="text-xs lg:text-sm">Paid</th>
-              <th className="text-xs lg:text-sm">Balance</th>
-              <th className="text-xs lg:text-sm">Membership</th>
-              <th className="text-xs lg:text-sm">Doctor Fee</th>
-              <th className="text-xs lg:text-sm">Settlement</th>
-              <th className="text-xs lg:text-sm">Clinic Profit</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filteredInvoices.length === 0 && (
-              <tr>
-                <td colSpan={12} className="px-4 py-4 text-xs lg:text-sm text-slate-500">
-                  No paid invoices match this filter.
-                </td>
-              </tr>
-            )}
-            {invoicePageRows.map((invoice: any) => {
-              const appointment: any = appointmentById.get(
-                invoice.appointment_id,
-              );
-              const patient: any = patientById.get(invoice.patient_id);
-              const settlement = settlementPaidBasis(invoice);
-              const paid = numberValue(invoice.paid_amount);
-              const doctorName =
-                appointment?.doctor ||
-                doctorById.get(
-                  appointment?.doctorId || appointment?.practitioner_id,
-                ) ||
-                "Unassigned";
-              return (
-                <tr key={invoice.id}>
-                  <td className="px-4 py-4">
-                    <b>{invoice.invoice_number}</b>
-                    <p className="text-xs text-slate-500">{rowDate(invoice)}</p>
-                  </td>
-                  <td>{invoiceTypeLabel(invoiceType(invoice))}</td>
-                  <td>
-                    <b>
-                      {patient?.name ||
-                        patient?.full_name ||
-                        invoice.patient_name ||
-                        publicDisplayValue(invoice.patient_id)}
-                    </b>
-                  </td>
-                  <td>{doctorName}</td>
-                  <td>
-                    <Badge
-                      tone={
-                        invoice.status === "paid"
-                          ? "green"
-                          : invoice.status === "partially_paid"
-                            ? "amber"
-                            : "slate"
-                      }
-                    >
-                      {humanizeOptionLabel(invoice.status)}
-                    </Badge>
-                  </td>
-                  <td>{money(invoice.total_amount)}</td>
-                  <td>{money(paid)}</td>
-                  <td>{money(invoice.balance_amount)}</td>
-                  <td>{money(invoice.membership_discount_amount)}</td>
-                  <td>{money(invoice.doctor_share_amount)}</td>
-                  <td>{money(settlement)}</td>
-                  <td className="font-bold">
-                    {money(Math.max(paid - settlement, 0))}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table> */}
+      <div className="mt-4 overflow-auto rounded-lg border">       
         <DataTable
           className="w-full min-w-[1520px] text-left text-sm"
           columns={invoiceColumns}

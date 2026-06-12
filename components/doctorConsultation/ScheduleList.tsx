@@ -8,9 +8,9 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
     <div className="mt-6">
       <div className="mb-3 flex items-center justify-between gap-3">
         <h4 className="text-lg font-bold">Schedule List</h4>
-        <Badge>{rows.length} rows</Badge>
+        <Badge className="normal-badge">{rows.length} rows</Badge>
       </div>
-      <div className="overflow-hidden rounded-3xl border border-slate-200">
+      <div className="overflow-hidden rounded-lg border border-slate-200">
         <div className="hidden grid-cols-[1.2fr_1.2fr_1fr_0.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
           <span>Patient</span>
           <span>Date & Time</span>
@@ -18,7 +18,7 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
           <span>Mode</span>
         </div>
         {rows.length === 0 && (
-          <div className="p-5 text-sm text-slate-500">
+          <div className="p-5 table-data text-slate-500">
             No appointment scheduled for the selected doctor.
           </div>
         )}

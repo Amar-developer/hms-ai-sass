@@ -305,18 +305,18 @@ export function Dashboard({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 md:grid-cols-3">
         {cards.map(({ title, value, detail, icon: Icon, target }: any) => (
           <button
             key={title}
             type="button"
             onClick={() => setActive?.(target)}
-            className="rounded-3xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+            className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
           >
             <Icon className="mb-3 text-slate-500" />
-            <p className="text-sm text-slate-500">{title}</p>
-            <p className="mt-1 text-2xl font-bold">{value}</p>
-            <p className="mt-2 text-xs font-semibold text-slate-500">{detail}</p>
+            <p className="table-data text-slate-500">{title}</p>
+            <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
+            <p className="mt-2 text-[11px] lg:text-xs font-semibold text-slate-500">{detail}</p>
           </button>
         ))}
       </div>
@@ -341,12 +341,12 @@ export function Dashboard({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h3 className="text-lg font-bold">Tenant Operations Analysis</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="card-title font-bold">Tenant Operations Analysis</h3>
+            <p className="table-data text-slate-500">
               Today workload, collections, queue pressure, and module usage.
             </p>
           </div>
-          <Badge tone="blue">Tenant Admin Only</Badge>
+          <Badge tone="blue" className="normal-badge">Tenant Admin Only</Badge>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Insight label="Booked Today" value={todayAppointments.length} />
@@ -362,7 +362,7 @@ export function Dashboard({
         <h3 className="text-lg font-bold">Enabled Plug-and-Play Modules</h3>
         <div className="mt-4 flex flex-wrap gap-2">
           {clinic.modules.map((module: string) => (
-            <Badge key={module} tone="green">
+            <Badge key={module} tone="green" className="normal-badge">
               {module}
             </Badge>
           ))}
@@ -376,11 +376,11 @@ function AnalysisCard({ title, subtitle, rows, empty }: any) {
   const max = Math.max(...rows.map((row: any) => row.count), 1);
   return (
     <Card>
-      <h3 className="text-lg font-bold">{title}</h3>
-      <p className="text-sm text-slate-500">{subtitle}</p>
+      <h3 className="card-title font-bold">{title}</h3>
+      <p className="table-data text-slate-500">{subtitle}</p>
       <div className="mt-4 grid gap-3">
         {rows.length === 0 && (
-          <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+          <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
             {empty}
           </div>
         )}
@@ -423,14 +423,14 @@ function QuickAccess({ enabled, setActive }: { enabled?: (id: string) => boolean
   return (
     <div>
       <div className="mb-4">
-        <h3 className="text-lg font-bold">Quick Access</h3>
-        <p className="text-sm text-slate-500">Jump to any module — grouped by function.</p>
+        <h3 className="card-title font-bold">Quick Access</h3>
+        <p className="table-data text-slate-500">Jump to any module — grouped by function.</p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {visibleCategories.map((cat) => (
           <div
             key={cat.label}
-            className={`rounded-2xl border p-4 ${cat.color}`}
+            className={`rounded-lg border p-4 ${cat.color}`}
           >
             <p className={`mb-3 text-xs font-bold uppercase tracking-wide ${cat.headerColor}`}>
               {cat.label}
@@ -441,10 +441,10 @@ function QuickAccess({ enabled, setActive }: { enabled?: (id: string) => boolean
                   key={id}
                   type="button"
                   onClick={() => setActive?.("target" in mod ? mod.target : id)}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-white/70 active:scale-[0.98]"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-white/70 active:scale-[0.98]"
                 >
                   <Icon size={16} className={cat.iconColor} />
-                  <span className="flex-1 text-sm font-semibold text-slate-800">{label}</span>
+                  <span className="flex-1 table-data font-semibold text-slate-800">{label}</span>
                   <ArrowRight size={13} className="text-slate-400" />
                 </button>
               ))}

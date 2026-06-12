@@ -619,7 +619,7 @@ export function Select({
   return (
     <select
       {...props}
-      className={`w-full rounded-lg border border-slate-200 bg-white outline-none focus:border-slate-500 ${className}`}
+      className={`w-full border border-slate-200 bg-white outline-none focus:border-slate-500 ${className}`}
     >
       {children}
     </select>
@@ -791,7 +791,7 @@ export function ActionGroup({
 export function ActionButton({
   children,
   tone = "neutral",
-  className = "",
+  className = "rounded-lg border px-3 text-[10px] lg:text-xs",
   ...props
 }: any) {
   const tones: any = {
@@ -804,7 +804,7 @@ export function ActionButton({
     <button
       type="button"
       {...props}
-      className={`inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-3 text-[10px] lg:text-xs font-bold disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 ${tones[tone] || tones.neutral} ${className}`}
+      className={`inline-flex h-9 shrink-0 items-center justify-center font-bold disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 ${tones[tone] || tones.neutral} ${className}`}
     >
       {children}
     </button>

@@ -149,7 +149,9 @@ export function AppointmentCalendarBooking(props: Props) {
     );
   });
   const filteredAppointments = appointments.filter((appointment: any) => {
-    const patient = patientMap.get(appointment.patientId || appointment.patient_id);
+    const patient = patientMap.get(
+      appointment.patientId || appointment.patient_id,
+    );
     const text = [
       appointment.patient,
       appointment.patient_name,
@@ -816,8 +818,8 @@ export function AppointmentCalendarBooking(props: Props) {
         <Card>
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h3 className="text-lg font-bold">Book OP Appointment</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="card-title font-bold">Book OP Appointment</h3>
+              <p className="table-data text-slate-500">
                 Search patient, register if needed, then select medical
                 department, doctor, date, and timing slot.
               </p>
@@ -825,7 +827,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <button
               type="button"
               onClick={closeBooking}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold"
+              className=" close-button font-bold"
             >
               Close
             </button>
@@ -835,13 +837,14 @@ export function AppointmentCalendarBooking(props: Props) {
 
         {bookingStep === "search" && (
           <Card>
-            <h4 className="font-bold">Search Patient / Mobile</h4>
+            <h4 className="card-title font-bold">Search Patient / Mobile</h4>
             <div className="mt-4 flex gap-2">
               <TextField
                 value={patientSearch}
                 onChange={setPatientSearch}
                 label="Patient Name or Mobile"
                 placeholder="Enter patient name or mobile"
+                className="px-2 py-2 lg:px-4 lg:py-3"
               />
               <Search className="mt-8 text-slate-400" size={18} />
             </div>
@@ -859,10 +862,10 @@ export function AppointmentCalendarBooking(props: Props) {
                   key={patient.id}
                   className="grid gap-3 rounded-2xl border p-4 text-sm md:grid-cols-[1.2fr_.8fr_.9fr_.9fr_auto] md:items-center"
                 >
-                  <b>{patient.full_name}</b>
-                  <span>{patient.mobile || "No mobile"}</span>
-                  <span>{patient.gender || "-"}</span>
-                  <span>{patient.area || patient.guardian_mobile || "-"}</span>
+                  <b className="table-data">{patient.full_name}</b>
+                  <span className="table-data">{patient.mobile || "No mobile"}</span>
+                  <span className="table-data">{patient.gender || "-"}</span>
+                  <span className="table-data">{patient.area || patient.guardian_mobile || "-"}</span>
                   <Button
                     onClick={() => {
                       setSelectedPatient(patient);
@@ -895,10 +898,10 @@ export function AppointmentCalendarBooking(props: Props) {
                 bookAppointment();
               }}
             >
-              <h4 className="font-bold">Appointment Details</h4>
-              <div className="mt-3 rounded-2xl bg-slate-50 p-4 text-sm">
-                <b>{selectedPatient.full_name}</b>
-                <p className="text-slate-500">
+              <h4 className="card-title font-bold">Appointment Details</h4>
+              <div className="mt-3 rounded-lg bg-slate-50 p-4 table-data">
+                <b className="table-data">{selectedPatient.full_name}</b>
+                <p className="text-slate-500 table-data">
                   {selectedPatient.mobile || "No mobile"} ·{" "}
                   {selectedPatient.area ||
                     selectedPatient.guardian_mobile ||
@@ -906,7 +909,8 @@ export function AppointmentCalendarBooking(props: Props) {
                 </p>
               </div>
               <div className="mt-4 grid gap-3 md:grid-cols-4">
-                <Field label="Medical Department">
+                <Field label="
+                Department">
                   <Select
                     value={departmentId}
                     onChange={(e: any) => setDepartmentId(e.target.value)}
@@ -974,18 +978,18 @@ export function AppointmentCalendarBooking(props: Props) {
                     ))}
                   </Select>
                 </Field>
-                <div className="rounded-2xl bg-slate-50 p-4">
+                <div className="rounded-lg bg-slate-50 p-4">
                   <p className="text-xs font-bold uppercase text-slate-500">
                     Doctor Fee
                   </p>
-                  <p className="mt-1 text-lg font-black">
+                  <p className="mt-1 table-data font-black">
                     {isBillable
                       ? selectedFeeAmount !== undefined
                         ? `₹${Number(selectedFeeAmount).toLocaleString("en-IN")}`
                         : "Not configured"
                       : "Free"}
                   </p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-[10px] lg:text-slate-500">
                     {doctorId
                       ? doctor?.full_name || doctor?.name || "Selected doctor"
                       : "Select doctor"}
@@ -1038,7 +1042,7 @@ export function AppointmentCalendarBooking(props: Props) {
                   </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
                     {visibleSlots.length === 0 && (
-                      <div className="col-span-full rounded-2xl bg-amber-50 p-4 text-sm text-amber-700">
+                      <div className="col-span-full rounded-lg bg-amber-50 p-4 table-data text-amber-700">
                         No consultation timing available for this doctor/date.
                       </div>
                     )}
@@ -1048,7 +1052,7 @@ export function AppointmentCalendarBooking(props: Props) {
                         type="button"
                         disabled={!slot.available || busy}
                         onClick={() => setSelectedSlot(slot)}
-                        className={`rounded-2xl border p-4 text-left text-sm font-bold disabled:cursor-not-allowed ${
+                        className={`rounded-lg border p-4 text-left text-sm font-bold disabled:cursor-not-allowed ${
                           (selectedSlot?.id || selectedSlot?.start_time) ===
                           (slot.id || slot.start_time)
                             ? "border-slate-900 bg-slate-900 text-white"
@@ -1073,16 +1077,16 @@ export function AppointmentCalendarBooking(props: Props) {
               {appointmentType !== "emergency" &&
                 !slotIntervalsEnabled &&
                 !selectedTimingSlot && (
-                  <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm font-semibold text-amber-700">
+                  <div className="mt-4 rounded-lg bg-amber-50 p-4 table-data font-semibold text-amber-700">
                     No consultation timing available for this doctor/date.
                   </div>
                 )}
-              <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+              <div className="mt-4 rounded-lg bg-slate-50 p-4">
                 <div className="flex items-baseline justify-between">
-                  <h5 className="text-sm font-bold uppercase text-slate-700">
+                  <h5 className="table-data font-bold uppercase text-slate-700">
                     Intake (Optional)
                   </h5>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-[10px] text-xs text-slate-500">
                     Pre-fills the doctor consultation page.
                   </span>
                 </div>
@@ -1092,6 +1096,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     value={intakeVitals}
                     onChange={setIntakeVitals}
                     placeholder="BP=120/80 mmHg, Pulse=78 bpm"
+                    className="px-2 py-2 lg:px-4 lg:py-3"
                   />
                   <TextareaField
                     label="Complaint Rows"
@@ -1101,6 +1106,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       "Fever | 2 days | medium\nCough | 1 day | mild"
                     }
                     rows={3}
+                    className="placeholder:table-data px-2 py-2"
                   />
                 </div>
               </div>
@@ -1116,9 +1122,9 @@ export function AppointmentCalendarBooking(props: Props) {
                 <button
                   type="button"
                   onClick={() => setBookingStep("search")}
-                  className="rounded-2xl border px-4 py-3 text-sm font-bold"
+                  className="close-button font-bold"
                 >
-                  Cancel
+                  Cancel 
                 </button>
               </div>
             </form>
@@ -1206,7 +1212,7 @@ export function AppointmentCalendarBooking(props: Props) {
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="text-base lg:text-lg font-bold">Appointments</h3>
-          <p className="text-xs md:text-sm text-slate-500">
+          <p className="text-xs lg:text-sm text-slate-500">
             {isSuperAdmin
               ? "Combined all-tenant appointment grid for MedizinHub HMS primary tenant."
               : "Row based OP appointment view with patient, mobile, medical department, doctor, date, and consultation status."}
@@ -1214,9 +1220,12 @@ export function AppointmentCalendarBooking(props: Props) {
         </div>
         <Button
           onClick={openBooking}
-          className="flex items-center rounded-lg gap-2 w-44 lg:w-56 text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"
+          className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-48 text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"
         >
-          <CalendarPlus size={16} /> New Appointment
+          <div className="flex justify-between">
+            <CalendarPlus size={16} />
+            <p className="pl-2">New Appointment </p>
+          </div>
         </Button>
       </div>
       <div className="mt-4 grid gap-3 grid-cols-4 lg::grid-cols-3">
@@ -1247,11 +1256,13 @@ export function AppointmentCalendarBooking(props: Props) {
             onChange={(e: any) => setFilterDate(e.target.value)}
           />
         </Field>
-        <Field label="Medical Department">
+        <Field label="
+        Department">
           {isSuperAdmin ? (
             <Select
               value={platformDepartment}
               onChange={(e: any) => setPlatformDepartment(e.target.value)}
+              className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm'
             >
               <option value="all">All medical departments</option>
               {platformDepartmentOptions.map((department: string) => (
@@ -1264,6 +1275,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <Select
               value={filterDepartment}
               onChange={(e: any) => setFilterDepartment(e.target.value)}
+              className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm'
             >
               <option value="all">All medical departments</option>
               {departmentOptions.map((department: any) => (
@@ -1275,18 +1287,20 @@ export function AppointmentCalendarBooking(props: Props) {
           )}
         </Field>
       </div>
-      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+      <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
         <div
-          className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 xl:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[1fr_.7fr_.8fr_.95fr_.78fr_.72fr_1.55fr]"}`}
+          className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.65fr_.71fr_.9fr_.85fr_.68fr_.62fr_.9fr]"}
+          lg:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.65fr_.6fr_.65fr_.85fr_.68fr_.6fr_1.45fr]"}`
+        }
         >
           {isSuperAdmin && <span>Tenant</span>}
-          <span>Patient</span>
-          <span>Mobile</span>
-          <span>Medical Department</span>
-          <span>Doctor</span>
-          <span>Appointment Date</span>
-          <span>Consultation Status</span>
-          {!isSuperAdmin && <span className="text-right">Links</span>}
+          <span className="table-data">Patient</span>
+          <span className="table-data">Mobile</span>
+          <span className="table-data">Department</span>
+          <span className="table-data">Doctor</span>
+          <span className="table-data lg:text-left lg:pl ">Date</span>
+          <span className="table-data text-center">Status</span>
+          {!isSuperAdmin && <span className="table-data md:text-center lg:text-right">Links</span>}
         </div>
         <div className="divide-y divide-slate-200">
           {rows.length === 0 && (
@@ -1299,24 +1313,24 @@ export function AppointmentCalendarBooking(props: Props) {
               return (
                 <div
                   key={appointment.id}
-                  className="grid gap-3 px-4 py-4 text-sm xl:grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr] xl:items-center"
+                  className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr] md:items-center"
                 >
                   <div>
-                    <b>{appointment.tenant_name}</b>
-                    <p className="text-xs text-slate-500">
+                    <b className="table-data">{appointment.tenant_name}</b>
+                    <p className="text-[10px] lg:text-xs text-slate-500">
                       {appointment.branch_name}
                     </p>
                   </div>
                   <div>
-                    <b>{appointment.patient_name}</b>
+                    <b className="table-data">{appointment.patient_name}</b>
                     <p className="text-xs text-slate-500">
                       {appointment.token_number || appointment.id}
                     </p>
                   </div>
-                  <span>{appointment.patient_mobile || "-"}</span>
-                  <span>{appointment.department_name || "-"}</span>
-                  <span>{appointment.practitioner_name || "-"}</span>
-                  <span>
+                  <span className="table-data">{appointment.patient_mobile || "-"}</span>
+                  <span className="table-data">{appointment.department_name || "-"}</span>
+                  <span className="table-data">{appointment.practitioner_name || "-"}</span>
+                  <span className="table-data">
                     {displayDate(appointment.appointment_date)}
                     {appointment.appointment_time
                       ? ` ${String(appointment.appointment_time).slice(0, 5)}`
@@ -1330,6 +1344,7 @@ export function AppointmentCalendarBooking(props: Props) {
                           ? "red"
                           : "slate"
                     }
+                    className="table-status"
                   >
                     {humanizeOptionLabel(
                       appointment.consultation_status || appointment.status,
@@ -1351,26 +1366,26 @@ export function AppointmentCalendarBooking(props: Props) {
                     openConsultation(appointment);
                   }
                 }}
-                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:grid-cols-[1fr_.7fr_.8fr_.95fr_.78fr_.72fr_1.55fr] xl:items-center"
+                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[.7fr_.8fr_1fr_.95fr_.78fr_.72fr_1fr] lg:grid-cols-[.75fr_.7fr_.75fr_.95fr_.78fr_.72fr_1.55fr] md:items-center"
               >
                 <div>
-                  <b>{appointment.patient}</b>
-                  <p className="text-xs text-slate-500">
+                  <b className="table-data">{appointment.patient}</b>
+                  <p className="text-[10px] lg:text-xs text-slate-500">
                     {appointment.token ||
                       publicDisplayValue(appointment.id, "-")}
                   </p>
                 </div>
-                <span>{patient?.mobile || "-"}</span>
-                <span>
+                <span className="text-[10px] lg:text-sm">{patient?.mobile || "-"}</span>
+                <span className="table-data">
                   {departmentOptions.find(
                     (d: any) => d.id === appointment.departmentId,
                   )?.name || publicDisplayValue(appointment.departmentId)}
                 </span>
-                <span>
+                <span className="table-data">
                   {appointment.doctor ||
                     publicDisplayValue(appointment.doctorId, "Doctor")}
                 </span>
-                <span>
+                <span className="table-data">
                   {appointment.appointmentDate || appointment.time || "-"}
                 </span>
                 <Badge
@@ -1381,26 +1396,27 @@ export function AppointmentCalendarBooking(props: Props) {
                         ? "red"
                         : "slate"
                   }
+                  className="table-status"
                 >
                   {humanizeOptionLabel(
                     appointment.consultationStatus || appointment.status,
                   )}
                 </Badge>
                 <div
-                  className="flex flex-nowrap items-center justify-start gap-2 xl:justify-end"
+                  className="flex flex-wrap lg:flex-nowrap items-center justify-center lg:justify-start gap-2 xl:justify-end"
                   onClick={(event) => event.stopPropagation()}
                 >
                   <button
                     type="button"
                     onClick={() => openConsultation(appointment)}
-                    className="whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50"
+                    className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-sm font-bold hover:bg-slate-50"
                   >
                     Consultation
                   </button>
                   <button
                     type="button"
                     onClick={() => openPatient(appointment)}
-                    className="whitespace-nowrap rounded-xl border px-3 py-2 text-xs font-bold hover:bg-slate-50"
+                    className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-sm font-bold hover:bg-slate-50"
                   >
                     Patient Details
                   </button>
@@ -1522,7 +1538,7 @@ function Pagination({ page, totalPages, total, onPage }: any) {
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
   return (
-    <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center">
+    <div className="mt-4 flex flex-col justify-between gap-3 table-data text-slate-500 sm:flex-row sm:items-center">
       <span>
         Showing {start}-{end} of {total}
       </span>
@@ -1531,18 +1547,18 @@ function Pagination({ page, totalPages, total, onPage }: any) {
           type="button"
           onClick={() => onPage(Math.max(1, page - 1))}
           disabled={page <= 1}
-          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
+          className="rounded-lg border px-3 py-2 table-data font-bold text-slate-700 disabled:text-slate-300"
         >
           Previous
         </button>
-        <span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-700">
+        <span className="rounded-lg bg-slate-50 table-data px-3 py-2 font-bold text-slate-700">
           Page {page} / {totalPages}
         </span>
         <button
           type="button"
           onClick={() => onPage(Math.min(totalPages, page + 1))}
           disabled={page >= totalPages}
-          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
+          className="rounded-lg table-data border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
         >
           Next
         </button>

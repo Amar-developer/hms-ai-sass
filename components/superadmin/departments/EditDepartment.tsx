@@ -18,7 +18,7 @@ export function EditDepartment({
           onClick={back}
           className="mt-4 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
         >
-          Back to Medical Departments Moses
+          Back to Medical Departments
         </button>
       </Card>
     );

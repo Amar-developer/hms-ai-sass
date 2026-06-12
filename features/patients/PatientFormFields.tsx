@@ -134,10 +134,11 @@ export function PatientFormFields({
           name="fullName"
           defaultValue={patientField(patient, "full_name", "fullName")}
           required
+          placeholder='Enter patient full name'
         />
       </Field>
       <Field label="Mobile">
-        <Input name="mobile" defaultValue={patient?.mobile || ""} />
+        <Input name="mobile" defaultValue={patient?.mobile || ""} placeholder='Enter patient mobile number'/>
       </Field>
       <Field label="Branch">
         <Select
@@ -189,18 +190,21 @@ export function PatientFormFields({
         <Input
           name="guardianName"
           defaultValue={patientField(patient, "guardian_name", "guardianName")}
+          placeholder='Enter guardian name'
         />
       </Field>
       <Field label="Guardian Mobile">
         <Input
           name="guardianMobile"
           defaultValue={patientField(patient, "guardian_mobile", "guardianMobile")}
+          placeholder='Enter guardian mobile'
         />
       </Field>
       <Field label="Alternate Mobile">
         <Input
           name="alternateMobile"
           defaultValue={patientField(patient, "alternate_mobile", "alternateMobile")}
+          placeholder='Enter guardian mobile number'
         />
       </Field>
       <Field label="Email">
@@ -208,10 +212,11 @@ export function PatientFormFields({
           name="email"
           type="email"
           defaultValue={patientField(patient, "email")}
+          placeholder='Enter patient email'
         />
       </Field>
       <Field label="Area">
-        <Input name="area" defaultValue={patientField(patient, "area")} />
+        <Input name="area" defaultValue={patientField(patient, "area")} placeholder='Enter patient area'/>
       </Field>
       <Field label="Blood Group">
         <Select
@@ -243,6 +248,7 @@ export function PatientFormFields({
           <Input
             name="address"
             defaultValue={patientField(patient, "address")}
+            placeholder='Enter patient Address'
           />
         </Field>
       </div>

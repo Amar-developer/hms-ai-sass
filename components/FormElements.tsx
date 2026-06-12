@@ -59,14 +59,16 @@ type TextFieldProps = BaseFieldProps & {
   type?: "text" | "email" | "tel" | "url" | "search";
   autoComplete?: string;
   maxLength?: number;
+  inputClass?:string
 };
 
 export function TextField({
-  label, error, hint, required, disabled, className,
+  label, error, hint, required, disabled, className='',
   value, onChange, placeholder, type = "text", autoComplete, maxLength,
+  inputClass
 }: TextFieldProps) {
   return (
-    <FormField label={label} error={error} hint={hint} required={required} className={className}>
+    <FormField label={label} error={error} hint={hint} required={required} >
       <input
         type={type}
         value={value}
@@ -76,7 +78,7 @@ export function TextField({
         disabled={disabled}
         autoComplete={autoComplete}
         maxLength={maxLength}
-        className={`w-full rounded-lg border px-2 py-0.5 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full rounded-lg border table-data text-[10px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)} ${className}`}
       />
     </FormField>
   );
@@ -107,7 +109,7 @@ export function PasswordField({
           required={required}
           disabled={disabled}
           autoComplete={autoComplete}
-          className={`w-full rounded-2xl border px-4 py-3 pr-14 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+          className={`w-full rounded-lg border px-4 py-3 pr-14 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
         />
         <button
           type="button"
@@ -149,7 +151,7 @@ export function NumberField({
         min={min}
         max={max}
         step={step}
-        className={`w-full rounded-lg border px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full placeholder:table-data rounded-lg border px-2 py-2 lg:px-4 lg:py-3 table-data outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
       />
     </FormField>
   );
@@ -177,7 +179,7 @@ export function DateField({
         disabled={disabled}
         min={min}
         max={max}
-        className={`w-full rounded-lg border px-2 py-0 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full rounded-lg border px-2 py-2 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
       />
     </FormField>
   );
@@ -206,7 +208,7 @@ export function TimeField({
         disabled={disabled}
         min={min}
         max={max}
-        className={`w-full rounded-2xl border px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full rounded-lg border px-2 py-2 lg:px-4 lg:py-3 table-data outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
       />
     </FormField>
   );
@@ -223,7 +225,7 @@ type TextareaFieldProps = BaseFieldProps & {
 };
 
 export function TextareaField({
-  label, error, hint, required, disabled, className,
+  label, error, hint, required, disabled, className ="px-4 px-2",
   value, onChange, placeholder, rows = 3, maxLength,
 }: TextareaFieldProps) {
   return (
@@ -236,7 +238,7 @@ export function TextareaField({
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}
-        className={`w-full resize-y rounded-2xl border px-4 py-3 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full resize-y rounded-lg border  text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)} ${className}`}
       />
     </FormField>
   );
@@ -263,7 +265,7 @@ export function SelectField({
         onChange={(e) => onChange(e.target.value)}
         required={required}
         disabled={disabled}
-        className={`w-full rounded-lg border bg-white px-3 py-3 lg:px-4 lg:py-3 text-[10px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
+        className={`w-full rounded-lg border bg-white px-2 py-2 lg:px-4 lg:py-3 text-[12px] lg:text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)}`}
       >
         {placeholder && (
           <option value="" disabled>

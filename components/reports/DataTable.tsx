@@ -25,7 +25,7 @@ export function DataTable<T>({
   onRowClick,
 }: DataTableProps<T>) {
   return (
-    <div className="overflow-auto rounded-2xl border">
+    <div className="overflow-auto rounded-lg border">
       <table className={className}>
         <thead className="bg-slate-50 text-xs uppercase text-slate-500">
           <tr>

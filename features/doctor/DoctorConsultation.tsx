@@ -564,9 +564,7 @@ export function DoctorConsultation({
             setScanTests(c.scan_referral_text);
           }
         }
-      } catch {
-
-      }
+      } catch {}
     }
     loadConsultationData();
     return () => {
@@ -1221,8 +1219,8 @@ export function DoctorConsultation({
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-bold">Patient Queue</h3>
-              <p className="text-xs lg:text-sm text-slate-500">
+              <h3 className="card-title font-bold">Patient Queue</h3>
+              <p className="table-data text-slate-500">
                 Select any waiting patient for consultation.
               </p>
             </div>
@@ -1242,7 +1240,7 @@ export function DoctorConsultation({
                 ))}
               </Select>
               <Badge
-                className="h-12 w-44 lg:w-52 flex justify-center items-center"
+                className="normal-badge text-center"
                 tone="blue"
               >
                 {branch.name}
@@ -1429,13 +1427,15 @@ export function DoctorConsultation({
         <Card>
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
-              <h3 className="text-lg font-bold">Upcoming Appointments</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="card-title font-bold">Upcoming Appointments</h3>
+              <p className="table-data text-slate-500">
                 Doctor schedule, queue status, visit purpose, and consultation
                 mode.
               </p>
             </div>
-            <Badge tone="blue">Refresh #{tick}</Badge>
+            <Badge tone="blue" className="normal-badge">
+              Refresh #{tick}
+            </Badge>
           </div>
           <div className="mt-5 grid grid-cols-4 gap-2 sm:grid-cols-7">
             {appointmentDays.map((day: any) => (
@@ -1466,15 +1466,21 @@ export function DoctorConsultation({
             onConsult={openConsultation}
           />
         </Card>
+
+        {/* Today's booked appointments */}
         <Card>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-bold">Today's Booked Appointments</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="card-title font-bold">
+                Today's Booked Appointments
+              </h3>
+              <p className="table-data text-slate-500">
                 {displayDate(selectedDate)} · {appointmentListLabel}
               </p>
             </div>
-            <Badge tone="blue">{branch.name}</Badge>
+            <Badge tone="blue" className="normal-badge text-center">
+              {branch.name} 
+            </Badge>
           </div>
           <StatusToast message={message} onClose={() => setMessage("")} />
           <div className="mt-4 grid gap-3">
@@ -1494,9 +1500,11 @@ export function DoctorConsultation({
                 ))}
               </Select>
             </FormField>
-            <Button onClick={callNext} disabled={!current || busy}>
-              Call Next Patient
-            </Button>
+            <div className="w-[20%] lg:w-full">
+              <Button onClick={callNext} disabled={!current || busy}>
+                Call Next Patient
+              </Button>
+            </div>
           </div>
           <div className="mt-5 space-y-3">
             {scheduleRows.map((a: any) => (
@@ -1558,33 +1566,33 @@ export function DoctorConsultation({
       <Card>
         <h3 className="text-lg font-bold">Doctor Revenue Tracking Logic</h3>
         <div className="mt-3 grid gap-3 md:grid-cols-4 lg:grid-cols-5">
-          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
             <b>Consultation</b>
-            <p className="text-[10px] lg:text-sm text-slate-500">
+            <p className="text-[11px] lg:text-sm text-slate-500">
               OP/IP/Online/Home Visit
             </p>
           </div>
-          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
             <b>Lab Referral</b>
-            <p className="text-[10px] lg:text-sm text-slate-500">
+            <p className="text-[11px] lg:text-sm text-slate-500">
               Lab tests written
             </p>
           </div>
-          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
             <b>Scan Referral</b>
-            <p className="text-[10px] lg:text-sm text-slate-500">
+            <p className="text-[11px] lg:text-sm text-slate-500">
               Diagnostics referred
             </p>
           </div>
-          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
             <b>Pharmacy</b>
-            <p className="text-[10px] lg:text-sm text-slate-500">
+            <p className="text-[11px] lg:text-sm text-slate-500">
               Medicine value referred
             </p>
           </div>
-          <div className="text-base lg:text-xl rounded-2xl bg-slate-50 p-4">
+          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
             <b>Reports</b>
-            <p className="text-[10px] lg:text-sm text-slate-500">
+            <p className="text-[11px] lg:text-sm text-slate-500">
               Admin revenue analytics
             </p>
           </div>

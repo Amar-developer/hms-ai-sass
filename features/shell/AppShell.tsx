@@ -125,7 +125,8 @@ export function AppShell(props: any) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [reportsSection, setReportsSection] = useState("metrix");
-  const [sideBarOpen, setSidebarOpen] = useState(false);
+  const [sideBarOpen, setSidebarOpen] = useState(true);
+  const [tabletCollapsed, setTabletCollapsed] = useState(true);
   const profileOpenRef = useRef<HTMLDivElement>(null);
   const activeNavLabel =
     visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
@@ -186,21 +187,28 @@ export function AppShell(props: any) {
     setActive(nextPage);
   }
 
+  // useEffect(() => {
+  //   const handleClickOutside = (event: MouseEvent) => {
+  //     if (
+  //       profileOpenRef.current &&
+  //       !profileOpenRef.current.contains(event.target as Node)
+  //     ) {
+  //       setProfileOpen(false);
+  //       if (sideBarOpen) {
+  //         setSidebarOpen(false);
+  //       }
+  //     }
+  //   };
+  //   document.addEventListener("mousedown", handleClickOutside);
+  //   return () => document.addEventListener("mousedown", handleClickOutside);
+  // }, [sideBarOpen, profileOpenRef.current]);
+
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        profileOpenRef.current &&
-        !profileOpenRef.current.contains(event.target as Node)
-      ) {
-        setProfileOpen(false);
-        if (sideBarOpen) {
-          setSidebarOpen(false);
-        }
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.addEventListener("mousedown", handleClickOutside);
-  }, [sideBarOpen, profileOpenRef.current]);
+    if (window.innerWidth > 1024) {
+      setSidebarOpen(true);
+      setTabletCollapsed(false);
+    }
+  }, [window.innerWidth]);
 
   function renderPage() {
     switch (activePage) {
@@ -289,26 +297,16 @@ export function AppShell(props: any) {
 
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
-      {/* Sidebar Toggle Button */}
-      <button
-        type="button"
-        onClick={() => setSidebarOpen(!sideBarOpen)}
-        className="hidden md:block lg:hidden fixed left-0 top-1/2 z-50 -translate-y-1/2 rounded-r-xl border border-slate-200 bg-white p-2 shadow-lg"
-      >
-        {sideBarOpen ? <ArrowLeft size={18} /> : <ArrowRight size={18} />}
-      </button>
-
       {/* Sidebar */}
       <div
         className={`
-    fixed left-0 top-0 z-40 h-screen w-64 lg:w-72 bg-white border-r border-slate-200
-    transition-transform duration-300
+    fixed left-0 top-0 z-40 h-screen ${tabletCollapsed ? "w-auto" : "w-64"} lg:w-72 bg-white border-r border-slate-200
+    transition-transform duration-300 
     ${sideBarOpen ? "translate-x-0" : "-translate-x-full"}
-    lg:translate-x-0 
-  `}
-        onClick={() => setSidebarOpen(false)}
+    lg:translate-x-0 border-red-400 border `}
       >
-        <div className="scrollbar-hidden h-full overflow-y-auto  ">
+        {/* Tablet view Sidebar */}
+        <div className="w-fit lg:w-full scrollbar-hidden h-full overflow-y-auto  ">
           <Sidebar
             visibleNav={visibleNav}
             activePage={activePage}
@@ -330,20 +328,24 @@ export function AppShell(props: any) {
             enabled={enabled}
             clinic={clinic}
             setSidebarOpen={setSidebarOpen}
+            sideBarOpen={sideBarOpen}
             reportSections={reportSections}
             reportSection={reportsSection}
             superAdminSections={superAdminSections}
-          />
+            tabletCollapsed={tabletCollapsed}
+            setTabletCollapsed={setTabletCollapsed}
+          />           
         </div>
       </div>
-      <div className="h-full lg:flex">
+      <div className="h-full lg:flex ">
         <aside className="scrollbar-hidden hidden h-screen w-64 lg:w-72 shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
-          {/* <BrandBlock /> */}
+          Desktop view
           <div
             className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-72 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
               sideBarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
+          
             <Sidebar
               visibleNav={visibleNav}
               activePage={activePage}
@@ -365,14 +367,16 @@ export function AppShell(props: any) {
               enabled={enabled}
               clinic={clinic}
               setSidebarOpen={setSidebarOpen}
+              sideBarOpen={sideBarOpen}
               reportSections={reportSections}
               reportSection={reportsSection}
               superAdminSections={superAdminSections}
+              tabletCollapsed={tabletCollapsed}
+              setTabletCollapsed={setTabletCollapsed}
             />
           </div>
-          <Menu />
 
-          <div className="mt-8 rounded-2xl bg-slate-50 p-4 text-xs leading-5 text-slate-500">
+          <div className="mt-8 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
               {isSuperAdmin ? "Primary Tenant" : clinic.type}
             </b>
@@ -387,7 +391,13 @@ export function AppShell(props: any) {
           </div>
         </aside>
 
-        <main className="scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto bg-white">
+        <main
+          className={`
+      scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto bg-white
+      lg:ml-0
+      ${tabletCollapsed ? "md:ml-14" : "md:ml-64"}
+    `}
+        >
           <AppHeader
             isSuperAdmin={isSuperAdmin}
             apiSession={apiSession}
@@ -414,6 +424,7 @@ export function AppShell(props: any) {
             handleLogout={handleLogout}
             setShowPassword={setShowPassword}
             setReportsOpen={setReportsOpen}
+            // setTabletCollapsed={setTabletCollapsed}
           />
 
           {showPassword && (

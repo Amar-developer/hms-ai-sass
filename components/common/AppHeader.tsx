@@ -1,6 +1,6 @@
 import React from "react";
 import { BrandBlock } from "./BrandBlock";
-import CompactControl from "../CompactControl";
+import CompactControl from "./CompactControl";
 import { Bell, LogOut, KeyRound } from "lucide-react";
 import ProfileRow from "../ProfileRow";
 import { userInitials } from "@/utils/helper";
@@ -71,9 +71,11 @@ const AppHeader = ({
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur lg:px-5">
       <div className="grid min-w-0 gap-2 grid-cols-[minmax(200px,1.25fr)_minmax(150px,.9fr)_minmax(150px,.9fr)_auto] lg:grid-cols-[minmax(260px,1.25fr)_minmax(180px,.9fr)_minmax(180px,.9fr)_auto] lg:items-center">
         <div className="min-w-0">
-          <div className="lg:hidden">
-            <BrandBlock compact setSidebarOpen={setReportsOpen} />
-          </div>
+          {/* {!isSuperAdmin && (
+            <div className="lg:hidden">
+              <BrandBlock compact setSidebarOpen={setReportsOpen} />
+            </div>
+          )} */}
           {isSuperAdmin && apiSession ? (
             <CompactControl label="Tenant">
               <select
@@ -108,7 +110,7 @@ const AppHeader = ({
               className="w-full bg-transparent text-xs lg:text-sm font-semibold outline-none"
             >
               {clinic.branches.map((b: any) => (
-                <option key={b.id} value={b.id} >
+                <option key={b.id} value={b.id}>
                   {b.name}
                 </option>
               ))}
@@ -203,8 +205,6 @@ const AppHeader = ({
             )}
           </div>
         </div>
-
-        
       </div>
     </header>
   );

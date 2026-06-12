@@ -15,132 +15,11 @@ import {
 import { DateField, SelectField, TextField } from "@/components/FormElements";
 import { apiBlob, apiFetch } from "@/lib/api";
 import { paymentMethodOptions } from "@/lib/options";
-import { displayDate } from "@/utils/helper";
+import { Pagination } from "@/components/common/Pagination";
+import { formatInvoiceDate, invoiceDateKey, invoicePaidStatus, invoiceSource, invoiceSourceKey, money } from "@/utils/billing/helpers";
+import { pageSize } from "@/utils/constants";
+import { InvoiceDetailPage } from "@/components/billing/Shared";
 
-const pageSize = 10;
-
-function invoiceSourceKey(invoice: any) {
-  if (invoice.lab_order_id) return "lab_scan";
-  if (invoice.pharmacy_issue_id) return "pharmacy";
-  if (invoice.physiotherapy_case_id) return "physiotherapy";
-  if (invoice.home_care_booking_id) return "home_care";
-  if (invoice.ip_admission_id) return "ip_billing";
-  if (invoice.consultation_id || invoice.appointment_id) return "consultation";
-  return "direct";
-}
-
-function invoiceSource(invoice: any) {
-  const sources: Record<
-    string,
-    { label: string; tone: "slate" | "blue" | "amber" | "purple" }
-  > = {
-    lab_scan: { label: "Lab / Scan", tone: "blue" },
-    pharmacy: { label: "Pharmacy", tone: "amber" },
-    physiotherapy: { label: "Physiotherapy", tone: "purple" },
-    home_care: { label: "Home Care / Visit", tone: "blue" },
-    ip_billing: { label: "IP Billing", tone: "blue" },
-    consultation: { label: "Consultation", tone: "slate" },
-    direct: { label: "Direct", tone: "amber" },
-  };
-  return sources[invoiceSourceKey(invoice)] || sources.direct;
-}
-
-function invoiceLinkedRecord(invoice: any) {
-  if (invoice.ip_admission_id) return "IP admission";
-  if (invoice.physiotherapy_case_id) return "Physiotherapy case";
-  if (invoice.home_care_booking_id) return "Home care / visit booking";
-  if (invoice.pharmacy_issue_id) return "Pharmacy issue";
-  if (invoice.lab_order_id) return "Lab / Scan order";
-  if (invoice.consultation_id) return "Consultation";
-  if (invoice.appointment_id) return "Appointment";
-  return "Direct invoice";
-}
-
-function money(value: any) {
-  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
-}
-
-function numberValue(value: any) {
-  return Number(value || 0);
-}
-
-function invoiceDiscountParts(invoice: any) {
-  const discount = numberValue(invoice.discount_amount);
-  const membership = numberValue(invoice.membership_discount_amount);
-  return {
-    offerDiscount: Math.max(discount - membership, 0),
-    membershipDiscount: membership,
-  };
-}
-
-function invoiceMembershipLabel(invoice: any) {
-  if (numberValue(invoice.membership_discount_amount) > 0)
-    return "Membership benefit applied";
-  if (
-    invoice.patient_subscription_enrollment_id ||
-    invoice.patient_subscription_plan_id
-  )
-    return "Membership plan invoice";
-  return "";
-}
-
-function percentLabel(amount: any, base: any) {
-  const value = numberValue(amount);
-  const total = numberValue(base);
-  if (value <= 0 || total <= 0) return "0%";
-  const percent = (value * 100) / total;
-  return `${Number(percent.toFixed(1)).toLocaleString("en-IN")}%`;
-}
-
-function claimedDetail(amount: any, base: any, verb = "claimed") {
-  return `${money(amount)} of ${money(base)} (${percentLabel(amount, base)} ${verb})`;
-}
-
-function invoiceDateKey(invoice: any) {
-  const raw =
-    invoice.invoice_date ||
-    invoice.created_at ||
-    invoice.updated_at ||
-    invoice.paid_at;
-  if (!raw) return "";
-  if (typeof raw === "string") return raw.slice(0, 10);
-  const date = new Date(raw);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-}
-
-function formatInvoiceDate(invoice: any) {
-  const key = invoiceDateKey(invoice);
-  if (!key) return "-";
-  const date = new Date(`${key}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? key : displayDate(key);
-}
-
-function invoicePaidStatus(invoice: any) {
-  const paid = Number(invoice.paid_amount || 0);
-  const balance = Number(invoice.balance_amount || 0);
-  const status = String(invoice.status || "").toLowerCase();
-  if (status === "paid" || balance <= 0) return "paid";
-  if (status === "partially_paid" || paid > 0) return "partially_paid";
-  return "unpaid";
-}
-
-function itemTypeLabel(type: any) {
-  const labels: Record<string, string> = {
-    consultation: "Consultation",
-    lab: "Lab / Scan",
-    pharmacy: "Medicine",
-    ip_room: "IP Room",
-    ip_consultation: "IP Doctor",
-    ip_medication: "IP Medicine",
-    ip_lab: "IP Lab / Scan",
-    ip_charge: "IP Charge",
-    physiotherapy: "Physiotherapy",
-    home_care: "Home Care / Visit",
-  };
-  return (
-    labels[String(type || "")] || String(type || "Service").replaceAll("_", " ")
-  );
-}
 
 export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoices}:any){
   const [busy,setBusy]=useState('');
@@ -687,13 +566,13 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
             <button
               type="button"
               onClick={finalizeSettlement}
-              className="mt-2 rounded-xl border px-3 py-2 text-xs font-bold"
+              className="mt-2 rounded-lg border px-3 py-2 text-xs font-bold"
               disabled={busy === "settlement"}
             >
               {busy === "settlement" ? "Finalizing..." : "Finalize"}
             </button>
           ) : (
-            <Badge tone="green">Finalized</Badge>
+            <Badge tone="green" className="inline table-status rounded-lg text-[11px] lg:text-sm w-2/3">Finalized</Badge>
           )}
         </Card>
       </div>
@@ -702,7 +581,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         <h3 className="text-base lg:text-lg font-bold">
           Pending Consultation Invoices
         </h3>
-        <p className="text-xs lg:text-sm text-slate-500">
+        <p className="table-data text-slate-500">
           Reception can generate the consultation-fee invoice after the doctor
           signs the consultation. Lab, pharmacy, IP, and physiotherapy each have
           their own invoices created by those modules.
@@ -710,7 +589,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         <StatusToast message={message} onClose={() => setMessage("")} />
         <div className="mt-4 grid gap-3">
           {signedReady.length === 0 && (
-            <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+            <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
               All signed consultations already have invoices.
             </div>
           )}
@@ -751,17 +630,18 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
           </div>
           <div className="flex items-center gap-2">
             <RefreshButton onRefresh={loadReports} />
-            <Badge tone="slate">
+            <Badge tone="slate" className="normal-badge">
               {filteredInvoices.length} of {invoices.length} invoices
             </Badge>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 grid-cols-6 xl:grid-cols-[1.2fr_.85fr_.85fr_.75fr_.75fr_auto] xl:items-end">
+        <div className="mt-4 grid gap-3 grid-cols-6 xl:grid-cols-[1.2fr_.85fr_.85fr_.75fr_.75fr_auto] xl:items-end items-end">
           <TextField
             label="Search"
             value={filters.query}
             onChange={(v) => updateFilter("query", v)}
             placeholder="Invoice, patient, source"
+            className="search-input"
           />
           <SelectField
             label="Source"
@@ -860,7 +740,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                     </td>
                     <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-sm">
                       <div className="flex flex-col items-start gap-1">
-                        <Badge tone={source.tone as any}>{source.label}</Badge>
+                        <Badge tone={source.tone as any} className="rounded-full text-xs lg:text-sm p-2">{source.label}</Badge>
                       </div>
                     </td>
                     <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-sm font-medium">
@@ -875,6 +755,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                               ? "amber"
                               : "slate"
                         }
+                        className="table-status"
                       >
                         {invoice.status}
                       </Badge>
@@ -913,552 +794,4 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
   );
 }
 
-function InvoiceDetailPage({
-  detail,
-  patient,
-  onClose,
-  methods,
-  setMethods,
-  amounts,
-  setAmounts,
-  references,
-  setReferences,
-  invoicePaymentOptions,
-  defaultPaymentMethod,
-  busy,
-  collectPayment,
-  collectSplitPayment,
-  refreshConsultationInvoice,
-  applyMembershipBenefit,
-  openReceipt,
-  issueCreditNote,
-  supplierOptions={},
-  updateInvoiceItemSupplier,
-}:any){
-  const invoice=detail.invoice||{};
-  const items=detail.items||[];
-  const payments=detail.payments||[];
-  const source=invoiceSource(invoice);
-  const showInternalLabPrices=Boolean(invoice.lab_order_id);
-  const linkedRecord=invoiceLinkedRecord(invoice);
-  const discountParts=invoiceDiscountParts(invoice);
-  const membershipLabel=invoiceMembershipLabel(invoice);
-  const membershipBenefit=detail.membership_benefit;
-  const taxableAmount=numberValue(invoice.taxable_amount);
-  const taxAmount=numberValue(invoice.tax_amount);
-  const canRefresh=invoice.consultation_id&&!invoice.lab_order_id&&!invoice.pharmacy_issue_id&&!invoice.ip_admission_id&&!invoice.physiotherapy_case_id;
-  const balanceDue=numberValue(invoice.balance_amount);
-  const [payRows,setPayRows]=useState<any[]>([{method:defaultPaymentMethod,amount:"",reference:""}]);
-  useEffect(()=>{
-    setPayRows([{method:defaultPaymentMethod,amount:String(balanceDue||""),reference:""}]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[invoice.id,invoice.balance_amount,defaultPaymentMethod]);
-  const enteredTotal=payRows.reduce((sum,row)=>sum+Number(row.amount||0),0);
-  const remaining=balanceDue-enteredTotal;
-  function updatePayRow(index:number,key:string,value:any){
-    setPayRows((rows)=>rows.map((row,i)=>i===index?{...row,[key]:value}:row));
-  }
-  function addPayRow(){
-    setPayRows((rows)=>[...rows,{method:defaultPaymentMethod,amount:remaining>0?String(remaining):"",reference:""}]);
-  }
-  function removePayRow(index:number){
-    setPayRows((rows)=>rows.length>1?rows.filter((_,i)=>i!==index):rows);
-  }
-  return (
-    <div className="space-y-5">
-      <Card>
-        <div className="-mx-6 -mt-6 border-b border-slate-200 bg-white px-6 py-5">
-          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-xl font-bold">{source.label} Invoice</h3>
-                <Badge
-                  tone={
-                    invoice.status === "paid"
-                      ? "green"
-                      : invoice.status === "partially_paid"
-                        ? "amber"
-                        : "slate"
-                  }
-                >
-                  {invoice.status}
-                </Badge>
-                {membershipLabel && (
-                  <Badge tone="green">{membershipLabel}</Badge>
-                )}
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                <b>{invoice.invoice_number}</b>
-                <span className="text-slate-500">
-                  {patient?.name || patient?.full_name || "Patient"}
-                </span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-2xl border px-4 py-3 text-sm font-bold hover:bg-slate-50"
-            >
-              Back to Invoices
-            </button>
-          </div>
-        </div>
-
-        <div className="pt-5">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-            <div className="grid gap-3 text-sm md:grid-cols-4">
-              <InvoiceMeta label="Type" value={source.label} />
-              <InvoiceMeta label="Source" value={linkedRecord} />
-              <InvoiceMeta
-                label="Patient"
-                value={patient?.name || patient?.full_name || "Patient"}
-              />
-              <InvoiceMeta
-                label="Status"
-                value={String(invoice.status || "issued").replaceAll("_", " ")}
-              />
-            </div>
-          </div>
-
-          <div className="mt-5 space-y-5">
-            <div className="rounded-2xl border border-slate-200 bg-white">
-              <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h4 className="font-bold">{source.label} Bill Items</h4>
-                  <p className="text-xs text-slate-500">
-                    Line items linked to this invoice.
-                  </p>
-                </div>
-                <div className="rounded-xl bg-slate-50 px-3 py-2 text-right">
-                  <p className="text-[11px] font-bold uppercase text-slate-500">
-                    Items
-                  </p>
-                  <p className="text-sm font-black tabular-nums text-slate-950">
-                    {items.length}
-                  </p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className={`w-full text-left text-sm ${showInternalLabPrices?'min-w-[1080px]':'min-w-[760px]'}`}>
-                  <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Item</th>
-                      <th className="px-3 py-3">Description</th>
-                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">MRP</th>}
-                      {showInternalLabPrices&&<th className="px-3 py-3">Supplier</th>}
-                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">Buying</th>}
-                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">Selling</th>}
-                      <th className="px-3 py-3 text-right">Qty</th>
-                      <th className="px-3 py-3 text-right">Rate</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {items.length === 0 && (
-                      <tr>
-                        <td colSpan={showInternalLabPrices?9:5} className="px-4 py-5 text-sm font-semibold text-slate-500">No bill items found.</td>
-                      </tr>
-                    )}
-                    {items.map((item:any)=>{
-                      const itemSupplierOptions=supplierOptions[item.id]||[];
-                      return (
-                      <tr key={item.id} className="align-middle">
-                        <td className="px-4 py-4">
-                          <Badge tone={source.tone as any}>
-                            {itemTypeLabel(item.item_type)}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-4">
-                          <span
-                            className="block max-w-[520px] break-words font-semibold text-slate-950"
-                            title={
-                              item.description || itemTypeLabel(item.item_type)
-                            }
-                          >
-                            {item.description || itemTypeLabel(item.item_type)}
-                          </span>
-                          {showInternalLabPrices&&item.external_item_code&&<span className="mt-1 block text-xs text-slate-500">{item.external_item_code}</span>}
-                        </td>
-                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.mrp_amount||0)}</td>}
-                        {showInternalLabPrices&&(
-                          <td className="px-3 py-4">
-                            <Select
-                              value={item.supplier_id||''}
-                              onChange={(event:any)=>updateInvoiceItemSupplier?.(invoice,item,event.target.value)}
-                              disabled={busy===`supplier-${item.id}`}
-                              className="min-w-[170px]"
-                            >
-                              <option value="">No supplier</option>
-                              {itemSupplierOptions.map((supplier:any)=>(
-                                <option key={supplier.supplier} value={supplier.supplier}>{supplier.supplier_name} · {money(supplier.buying_price)}</option>
-                              ))}
-                            </Select>
-                          </td>
-                        )}
-                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.buying_amount||0)}</td>}
-                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.selling_amount||item.unit_amount||0)}</td>}
-                        <td className="px-3 py-4 text-right font-bold tabular-nums">{item.quantity}</td>
-                        <td className="px-3 py-4 text-right tabular-nums">{money(item.unit_amount)}</td>
-                        <td className="px-4 py-4 text-right font-black tabular-nums text-slate-950">{money(item.total_amount)}</td>
-                      </tr>
-                    )})}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <aside className="rounded-2xl border border-slate-200 bg-white">
-              <div className="border-b border-slate-200 px-4 py-4">
-                <h4 className="font-bold">Payment Summary</h4>
-                <p className="text-xs text-slate-500">Staff collection view</p>
-              </div>
-              <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <div className="divide-y">
-                  <BillLine
-                    label="Item total"
-                    value={money(invoice.subtotal_amount)}
-                  />
-                  <BillLine
-                    label="Offer discount"
-                    value={`-${money(discountParts.offerDiscount)}`}
-                    muted={discountParts.offerDiscount <= 0}
-                    savings={discountParts.offerDiscount > 0}
-                    note={
-                      discountParts.offerDiscount > 0
-                        ? claimedDetail(
-                            discountParts.offerDiscount,
-                            invoice.subtotal_amount,
-                          )
-                        : "No offer discount applied"
-                    }
-                  />
-                  <BillLine
-                    label="Membership benefit"
-                    value={`-${money(discountParts.membershipDiscount)}`}
-                    muted={discountParts.membershipDiscount <= 0}
-                    savings={discountParts.membershipDiscount > 0}
-                    note={
-                      discountParts.membershipDiscount > 0
-                        ? `${membershipLabel} · ${claimedDetail(discountParts.membershipDiscount, invoice.subtotal_amount)}`
-                        : membershipBenefit?.reason ||
-                          "No membership benefit applied"
-                    }
-                    action={
-                      membershipBenefit?.is_applied ? (
-                        <ActionButton disabled>Applied</ActionButton>
-                      ) : !membershipBenefit?.is_applied &&
-                        membershipBenefit?.can_apply ? (
-                        <ActionButton
-                          onClick={() => applyMembershipBenefit(invoice)}
-                          disabled={busy === `membership-${invoice.id}`}
-                        >
-                          {busy === `membership-${invoice.id}`
-                            ? "Applying..."
-                            : `Apply ${money(membershipBenefit.discount_amount)}`}
-                        </ActionButton>
-                      ) : null
-                    }
-                  />
-                  <BillLine label="Subtotal" value={money(taxableAmount)} />
-                  <BillLine
-                    label="Tax"
-                    value={money(taxAmount)}
-                    muted={taxAmount <= 0}
-                    note={
-                      taxAmount > 0
-                        ? claimedDetail(taxAmount, taxableAmount, "applied")
-                        : "No tax applied"
-                    }
-                  />
-                  <BillLine
-                    label="Grand total"
-                    value={money(invoice.total_amount)}
-                    strong
-                  />
-                  <BillLine
-                    label="Paid amount"
-                    value={money(invoice.paid_amount)}
-                    savings={numberValue(invoice.paid_amount) > 0}
-                  />
-                  <BillLine
-                    label="Balance due"
-                    value={money(invoice.balance_amount)}
-                    strong
-                    danger={numberValue(invoice.balance_amount) > 0}
-                  />
-                </div>
-                <div className="space-y-3">
-                  <div className="rounded-2xl bg-slate-50 p-4">
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                      <InvoiceMeta
-                        label="Tax rule"
-                        value={invoice.tax_rule_id ? "Applied" : "Not applied"}
-                      />
-                      <InvoiceMeta
-                        label="Offer"
-                        value={
-                          invoice.discount_offer_id ? "Applied" : "Not applied"
-                        }
-                      />
-                    </div>
-                  </div>
-                  {numberValue(invoice.balance_amount) > 0 ? (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                      <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-bold text-slate-900">
-                            Collect Payment
-                          </p>
-                          <p className="text-xs text-slate-500">
-                            Split across multiple modes if needed
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={addPayRow}
-                          className="rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 hover:border-slate-900 hover:bg-slate-50"
-                        >
-                          + Add mode
-                        </button>
-                      </div>
-                      <div className="mt-3 space-y-3">
-                        {payRows.map((row, index) => (
-                          <div
-                            key={index}
-                            className="rounded-xl border border-slate-200 bg-slate-50 p-3"
-                          >
-                            <div className="grid gap-2 sm:grid-cols-2">
-                              <Select
-                                value={row.method}
-                                onChange={(e: any) =>
-                                  updatePayRow(index, "method", e.target.value)
-                                }
-                              >
-                                {invoicePaymentOptions.map((option) => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </Select>
-                              <Input
-                                className="text-right tabular-nums"
-                                type="number"
-                                min="0"
-                                placeholder="Amount"
-                                value={row.amount}
-                                onChange={(e: any) =>
-                                  updatePayRow(index, "amount", e.target.value)
-                                }
-                              />
-                            </div>
-                            <div className="mt-2 flex items-center gap-2">
-                              <Input
-                                placeholder="Reference number (optional)"
-                                value={row.reference}
-                                onChange={(e: any) =>
-                                  updatePayRow(index, "reference", e.target.value)
-                                }
-                              />
-                              {payRows.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => removePayRow(index)}
-                                  className="shrink-0 rounded-xl border border-rose-200 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50"
-                                >
-                                  Remove
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-3 flex items-center justify-between rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold">
-                        <span className="text-slate-500">Entering</span>
-                        <span className="tabular-nums text-slate-900">
-                          {money(enteredTotal)} / {money(balanceDue)}
-                        </span>
-                      </div>
-                      {remaining < 0 && (
-                        <p className="mt-1 text-xs font-bold text-rose-600">
-                          Exceeds balance by {money(Math.abs(remaining))}
-                        </p>
-                      )}
-                      {remaining > 0 && enteredTotal > 0 && (
-                        <p className="mt-1 text-xs font-bold text-amber-600">
-                          {money(remaining)} will remain due (partial payment)
-                        </p>
-                      )}
-                      <button
-                        type="button"
-                        disabled={busy === invoice.id || enteredTotal <= 0 || remaining < 0}
-                        onClick={() => collectSplitPayment(invoice, payRows)}
-                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-3.5 text-base font-black tracking-wide text-white shadow-lg shadow-slate-900/20 transition hover:from-slate-800 hover:to-slate-600 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-                      >
-                        {busy === invoice.id ? (
-                          "Saving Payment..."
-                        ) : (
-                          <>
-                            <span>
-                              {payRows.filter((r) => Number(r.amount) > 0).length > 1
-                                ? "Pay (Split)"
-                                : "Pay"}
-                            </span>
-                            <span className="tabular-nums">{money(enteredTotal)}</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
-                      <span>Payment settled</span>
-                      <span>{money(invoice.paid_amount)}</span>
-                    </div>
-                  )}
-                  <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
-                    {canRefresh && (
-                      <ActionButton
-                        onClick={() => refreshConsultationInvoice(invoice)}
-                        disabled={busy === `refresh-${invoice.id}`}
-                      >
-                        {busy === `refresh-${invoice.id}`
-                          ? "Refreshing..."
-                          : "Refresh"}
-                      </ActionButton>
-                    )}
-                    <ActionButton onClick={() => openReceipt(invoice)}>
-                      Receipt
-                    </ActionButton>
-                    <ActionButton onClick={() => issueCreditNote(invoice)}>
-                      Credit Note
-                    </ActionButton>
-                  </div>
-                </div>
-              </div>
-            </aside>
-          </div>
-
-          <div className="mt-5 rounded-2xl border border-slate-200">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <h4 className="font-bold">Payments</h4>
-            </div>
-            <div className="grid gap-2 p-4">
-              {payments.length === 0 && (
-                <p className="text-sm text-slate-500">
-                  No payments recorded yet.
-                </p>
-              )}
-              {payments.map((payment: any) => (
-                <div
-                  key={payment.id}
-                  className="flex flex-col justify-between gap-2 rounded-2xl bg-slate-50 p-3 text-sm md:flex-row md:items-center"
-                >
-                  <div>
-                    <b className="capitalize">
-                      {String(payment.method || "payment").replaceAll("_", " ")}
-                    </b>
-                    {payment.reference_number && (
-                      <p className="text-xs text-slate-500">
-                        {payment.reference_number}
-                      </p>
-                    )}
-                  </div>
-                  <Badge
-                    tone={payment.status === "recorded" ? "green" : "amber"}
-                  >
-                    {payment.status}
-                  </Badge>
-                  <b>{money(payment.amount)}</b>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function BillLine({
-  label,
-  value,
-  note,
-  muted = false,
-  savings = false,
-  strong = false,
-  danger = false,
-  action = null,
-}: any) {
-  const valueClass = danger
-    ? "text-rose-700"
-    : savings
-      ? "text-emerald-700"
-      : "text-slate-950";
-  return (
-    <div className="flex items-start justify-between gap-4 py-3 text-sm">
-      <div>
-        <p
-          className={
-            muted
-              ? "font-semibold text-slate-400"
-              : "font-semibold text-slate-700"
-          }
-        >
-          {label}
-        </p>
-        {note && <p className="mt-1 text-xs text-slate-500">{note}</p>}
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-2">
-        <p
-          className={`${strong ? "text-base font-black" : "font-bold"} ${muted ? "text-slate-400" : valueClass} tabular-nums`}
-        >
-          {value}
-        </p>
-        {action}
-      </div>
-    </div>
-  );
-}
-
-function InvoiceMeta({ label, value }: any) {
-  return (
-    <div>
-      <p className="text-[11px] font-bold uppercase text-slate-500">{label}</p>
-      <p className="mt-1 break-words font-bold capitalize text-slate-950">
-        {value}
-      </p>
-    </div>
-  );
-}
-
-function Pagination({ page, totalPages, total, onPage }: any) {
-  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-  return (
-    <div className="mt-4 flex flex-col justify-between gap-3 text-sm text-slate-500 sm:flex-row sm:items-center">
-      <span>
-        Showing {start}-{end} of {total}
-      </span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onPage(Math.max(1, page - 1))}
-          disabled={page <= 1}
-          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
-        >
-          Previous
-        </button>
-        <span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-700">
-          Page {page} / {totalPages}
-        </span>
-        <button
-          type="button"
-          onClick={() => onPage(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
-          className="rounded-xl border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
-        >
-          Next
-        </button>
-      </div>
-    </div>
-  );
-}
+  

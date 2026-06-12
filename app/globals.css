@@ -42,6 +42,41 @@
   --info-fg: #1d4ed8;        /* blue-700 */
 }
 
+@layer components {
+  .table-status {
+    @apply rounded-full text-xs lg:text-sm py-1 px-1;
+  }
+}
+
+@layer components {
+  .table-data {
+    @apply text-xs lg:text-sm;
+  }
+}
+@layer components {
+  .card-title {
+    @apply text-base lg:text-lg;
+  }
+}
+@layer components {
+  .close-button {
+    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border;
+  }
+}
+
+@layer components {
+  .search-input {
+    @apply px-2 py-2 lg:px-4 lg:py-3;
+  }
+}
+@layer components {
+  .normal-badge {
+    @apply px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm rounded-lg;
+  }
+}
+
+
+
 body {
   background: #ffffff;
   font-family: "Poppins" ,"Inter", "Segoe UI", Arial, sans-serif;

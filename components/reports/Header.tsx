@@ -105,7 +105,7 @@ const Header = ({
             final profit, and paid-basis settlement.
           </p>
         </div>
-        <Badge tone="blue">
+        <Badge tone="blue" className="normal-badge w-[15%]">
           {apiSession?.user?.is_super_admin ? "Super Admin" : "Tenant Admin"}
         </Badge>
       </div>
@@ -114,7 +114,7 @@ const Header = ({
         <button
           type="button"
           onClick={exportCsv}
-          className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs lg:text-sm font-bold"
+          className="inline-flex items-center gap-2 close-button font-bold"
         >
           <Download size={15} />
           CSV
@@ -122,14 +122,14 @@ const Header = ({
         <button
           type="button"
           onClick={exportExcel}
-          className="rounded-2xl border px-3 py-2 text-xs lg:text-sm font-bold"
+          className="close-button font-bold"
         >
           Excel
         </button>
         <button
           type="button"
           onClick={exportPdf}
-          className="rounded-2xl border px-3 py-2 text-xs lg:text-sm font-bold"
+          className="close-button font-bold"
         >
           PDF
         </button>
@@ -141,7 +141,7 @@ const Header = ({
               setSendMessage("");
               setSendError("");
             }}
-            className="inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-sm font-bold disabled:text-slate-400"
+            className="inline-flex items-center gap-2 close-button font-bold disabled:text-slate-400  "
           >
             <Mail size={15} />
             Send
@@ -149,14 +149,14 @@ const Header = ({
         )}
       </div>
       {canSendEmail && sendPanelOpen && (
-        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
           <Field label="Email recipients">
             <textarea
               value={recipientInput}
               onChange={(event: any) => setRecipientInput(event.target.value)}
               placeholder="Enter one or more email IDs, separated by comma"
               rows={3}
-              className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500"
+              className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 table-data outline-none focus:border-slate-500"
             />
           </Field>
           {recentEmails.length > 0 && (
@@ -178,7 +178,7 @@ const Header = ({
               type="button"
               onClick={sendEmailReport}
               disabled={sendBusy}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:bg-slate-300"
+              className="inline-flex items-center gap-2 py-2 px-2 lg:px-4 lg:py-3 rounded-lg bg-slate-900 font-bold text-white disabled:bg-slate-300"
             >
               <Mail size={15} />
               {sendBusy ? "Sending..." : "Send Excel"}
@@ -187,7 +187,7 @@ const Header = ({
               type="button"
               onClick={() => setSendPanelOpen(false)}
               disabled={sendBusy}
-              className="rounded-2xl border bg-white px-4 py-2 text-sm font-bold"
+              className="close-button font-bold"
             >
               Cancel
             </button>

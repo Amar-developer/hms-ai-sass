@@ -226,10 +226,10 @@ export function ConsultationWorkspace(props: any) {
     <Card>
       <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">
+          <h3 className="card-title font-bold">
             Consultation Workspace
           </h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <p className="table-data text-slate-500">
             Structured vitals, complaints, diagnosis, prescription, referrals,
             follow-up and addendums.
           </p>
@@ -237,38 +237,38 @@ export function ConsultationWorkspace(props: any) {
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setActive?.("doctor")}
-            className="rounded-lg border px-4 py-3 text-xs lg:text-sm font-bold"
+            className="close-button font-bold"
           >
             ← Dashboard
           </button>
           <button
             onClick={() => selected && callPatient(selected)}
-            className="rounded-lg border px-4 py-3 text-xs lg:text-sm font-bold"
+            className="close-button font-bold"
           >
             Call
           </button>
           <button
             onClick={skipPatient}
-            className="rounded-lg border px-4 py-3 text-xs lg:text-sm font-bold"
+            className="close-button font-bold"
           >
             Not Present
           </button>
           <button
             onClick={() => requeuePatient("after2")}
-            className="rounded-lg border px-4 py-3 text-xs lg:text-sm font-bold"
+            className="close-button font-bold"
           >
             Requeue
           </button>
           <button
             onClick={cancelAppointment}
-            className="rounded-lg border px-4 py-3 text-xs lg:text-sm font-bold text-red-600"
+            className="close-button font-bold text-red-600"
           >
             Cancel
           </button>
         </div>
       </div>
       {!selected ? (
-        <div className="mt-5 rounded-lg bg-amber-50 p-4 text-xs lg:text-sm text-amber-700">
+        <div className="mt-5 rounded-lg bg-amber-50 p-4 table-data text-amber-700">
           No appointment selected.
         </div>
       ) : (
