@@ -8,6 +8,7 @@ import {
   Card,
   Field,
   Input,
+  RefreshButton,
   Select,
 } from "@/components/common/ui";
 import { formatDate, formatTitle } from "../../../utils/superAdmin/superAdmin";
@@ -27,6 +28,7 @@ export function TenantUsers({
   setSelectedUserId,
   setSection,
   setConfirmAction,
+  onRefresh,
 }: any) {
   const [filters, setFilters] = useState({
     query: "",
@@ -107,6 +109,7 @@ export function TenantUsers({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
           <Badge tone="blue" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">{filtered.length} users</Badge>
           <CreateActionButton
             label="Create User"

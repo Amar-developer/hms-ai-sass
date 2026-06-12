@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { sections, parseNumberingRules } from "@/utils/tenantAdmin/constants";
 import { canUseTenantAdminSection } from "@/utils/tenantAdmin/permissions";
-import { Badge, Card, StatusToast } from "../../components/common/ui";
+import { Card, StatusToast } from "../../components/common/ui";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { apiBlob, apiFetch, apiUpload } from "@/lib/api";
 import {
@@ -1137,25 +1137,6 @@ export function TenantAdmin({
 
   return (
     <div className="space-y-5">
-      <Card>
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <h3 className="text-xl font-bold">
-              {clinic?.name || "Tenant"} Administration
-            </h3>
-            <p className="text-xs lg:text-sm text-slate-500">
-              Manage only this tenant’s users, roles, medical departments,
-              branches, and settings.
-            </p>
-          </div>
-          <Badge
-            tone="green"
-            className="w-[20%] lg:w-[15%] rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
-          >
-            Tenant scoped
-          </Badge>
-        </div>
-      </Card>
       <StatusToast message={message} onClose={() => setMessage("")} />
       {section === "users" && view === "list" && (
         <ListCard
@@ -1164,6 +1145,7 @@ export function TenantAdmin({
           searchKeys={["name", "email", "mobile", "user_type", "roles", "id"]}
           createLabel="Create User"
           onCreate={() => setView("create")}
+          onRefresh={loadAdmin}
           columns={[
             "Name",
             "Email",
@@ -1227,6 +1209,7 @@ export function TenantAdmin({
           searchKeys={["name", "key", "id"]}
           createLabel="Create Role"
           onCreate={() => setView("create")}
+          onRefresh={loadAdmin}
           columns={["Role", "Key", "Status", "Modified", "Actions"]}
           render={(role: any) => (
             <RoleRow
@@ -1273,6 +1256,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "branch_names", "description", "id"]}
           createLabel="Create Medical Department"
           onCreate={() => setView("create")}
+          onRefresh={loadAdmin}
           columns={[
             "Medical Department",
             "Code",
@@ -1334,6 +1318,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "city", "state", "id"]}
           createLabel="Create Branch"
           onCreate={() => setView("create")}
+          onRefresh={loadAdmin}
           columns={["Branch", "Code", "Location", "Status", "Actions"]}
           render={(branch: any) => (
             <BranchRow
@@ -1379,6 +1364,7 @@ export function TenantAdmin({
           searchKeys={["name", "gstin", "phone", "email", "address", "id"]}
           createLabel="Create Supplier"
           onCreate={() => setView("create")}
+          onRefresh={loadAdmin}
           columns={["Supplier", "GSTIN", "Contact", "Status", "Actions"]}
           render={(supplier: any) => (
             <SupplierRow
@@ -1431,6 +1417,7 @@ export function TenantAdmin({
           searchKeys={["name", "tax_label", "service_scope", "id"]}
           createLabel="Create Tax Rule"
           onCreate={() => setView("create")}
+          onRefresh={loadAdmin}
           columns={["Tax Rule", "Scope", "Percentage", "Status", "Actions"]}
           render={(rule: any) => (
             <TaxRuleRow
@@ -1478,6 +1465,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "service_scope", "discount_type", "id"]}
           createLabel="Create Offer"
           onCreate={() => setView("create")}
+          onRefresh={loadAdmin}
           columns={["Offer", "Scope", "Value", "Status", "Actions"]}
           render={(offer: any) => (
             <DiscountOfferRow

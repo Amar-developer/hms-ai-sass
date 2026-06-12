@@ -88,7 +88,7 @@ class FrappeCatalogClient:
         request = Request(
             endpoint,
             data=body,
-            method="GET",
+            method="POST" if payload else "GET",
             headers={
                 "Authorization": self.token,
                 "Content-Type": "application/json",

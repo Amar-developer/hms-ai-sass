@@ -68,8 +68,14 @@ export function Reports({
   livePractitioners = [],
   section,
   setSection,
+  loadLiveData,
 }: any) {
   const [period, setPeriod] = useState("monthly");
+  const [refreshTick, setRefreshTick] = useState(0);
+  async function refreshReports() {
+    if (loadLiveData && apiSession) await loadLiveData(apiSession);
+    setRefreshTick((tick) => tick + 1);
+  }
   const [rangeStart, rangeEnd] = currentRange(period);
   const [fromDate, setFromDate] = useState(rangeStart);
   const [toDate, setToDate] = useState(rangeEnd);
@@ -241,7 +247,7 @@ export function Reports({
     return () => {
       cancelled = true;
     };
-  }, [apiSession?.token, apiSession?.tenantId, liveInvoices.length]);
+  }, [apiSession?.token, apiSession?.tenantId, liveInvoices.length, refreshTick]);
 
   useEffect(() => {
     if (!apiSession?.token) return;
@@ -274,7 +280,7 @@ export function Reports({
     return () => {
       cancelled = true;
     };
-  }, [apiSession?.token, apiSession?.tenantId, liveInvoices.length]);
+  }, [apiSession?.token, apiSession?.tenantId, liveInvoices.length, refreshTick]);
 
   const completedAppointments = scopedAppointments.filter((row: any) => {
     const appointmentDate = dateKey(
@@ -971,6 +977,7 @@ export function Reports({
     <div className="space-y-6">
       <Header
         apiSession={apiSession}
+        onRefresh={refreshReports}
         exportCsv={exportCsv}
         exportExcel={exportExcel}
         exportPdf={exportPdf}

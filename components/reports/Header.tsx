@@ -1,44 +1,10 @@
 import React from "react";
-import { Card, Badge, Field, Input, Select } from "../common/ui";
+import { Card, Badge, Field, Input, RefreshButton, Select } from "../common/ui";
 import { Download, Mail } from "lucide-react";
-
-// type HeaderProps = {
-//   apiSession: any;
-//   exportCsv: any;
-//   exportExcel: any;
-//   exportPdf: any;
-//   canSendEmail: any;
-//   sendPanelOpen: any;
-//   setSendPanelOpen: any;
-//   sendMessage: any;
-//   setSendMessage: any;
-//   sendError: any;
-//   setSendError: any;
-//   recipientInput: any;
-//   setRecipientInput: any;
-//   recentEmails: any;
-//   addRecipientSuggestion: any;
-//   sendEmailReport: any;
-//   sendBusy: any;
-//   period: any;
-//   changePeriod: any;
-//   fromDate: any;
-//   setFromDate: any;
-//   toDate: any;
-//   setToDate: any;
-//   doctorId: any;
-//   setDoctorId: any;
-//   doctorOptions: any;
-//   typeFilter: any;
-//   setTypeFilter: any;
-//   supplierFilter: any;
-//   setSupplierFilter: any;
-//   suppliers: any;
-//   setPeriod:any
-// };
 
 type HeaderProps = {
   apiSession: any;
+  onRefresh?: () => void | Promise<unknown>;
 
   exportCsv: () => void;
   exportExcel: () => void;
@@ -94,6 +60,7 @@ type HeaderProps = {
 
 const Header = ({
   apiSession,
+  onRefresh,
   exportCsv,
   exportExcel,
   exportPdf,
@@ -143,6 +110,7 @@ const Header = ({
         </Badge>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
+        {onRefresh ? <RefreshButton onRefresh={onRefresh} label="Refresh" className="rounded-2xl" /> : null}
         <button
           type="button"
           onClick={exportCsv}

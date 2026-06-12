@@ -30,7 +30,7 @@ def upgrade() -> None:
                 "min_discount_amount",
                 sa.Integer(),
                 nullable=False,
-                server_default="500",
+                server_default="0",
             ),
         )
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ActionButton, ActionGroup, Badge, Button, Card, StatusToast } from "@/components/common/ui";
+import { ActionButton, ActionGroup, Badge, Button, Card, RefreshButton, StatusToast } from "@/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import { DateField, NumberField, SelectField, TextField } from "@/components/FormElements";
 import { humanizeOptionLabel } from "@/lib/options";
@@ -605,7 +605,10 @@ export function Items({ apiSession, branchId }: any) {
               physiotherapy equipment, and home care / visit services.
             </p>
           </div>
-          <Badge tone="blue">{filteredRows.length} items</Badge>
+          <div className="flex items-center gap-2">
+            <RefreshButton onRefresh={load} />
+            <Badge tone="blue">{filteredRows.length} items</Badge>
+          </div>
         </div>
         <StatusToast message={message} onClose={() => setMessage("")} />
         <form onSubmit={createItem} className="mt-5 grid gap-3 md:grid-cols-4">

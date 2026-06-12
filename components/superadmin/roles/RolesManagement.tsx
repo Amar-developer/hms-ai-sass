@@ -7,6 +7,7 @@ import {
   Badge,
   Card,
   Input,
+  RefreshButton,
   Select,
 } from "@/components/common/ui";
 import { FormField } from "@/components/FormElements";
@@ -29,6 +30,7 @@ export function RolesManagement({
   setSelectedRoleId,
   setSection,
   setConfirmAction,
+  onRefresh,
 }: any) {
   const [filters, setFilters] = useState({
     query: "",
@@ -115,6 +117,7 @@ export function RolesManagement({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
           <Badge
             tone={selected?.is_primary ? "blue" : "slate"}
             className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"

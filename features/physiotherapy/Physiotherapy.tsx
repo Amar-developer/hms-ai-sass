@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Button, Card, Input, Select, StatusToast } from "@/components/common/ui";
+import { Badge, Button, Card, Input, RefreshButton, Select, StatusToast } from "@/components/common/ui";
 import { FormField, NumberField } from "@/components/FormElements";
 import {
   UPLOADS_BASE,
@@ -389,7 +389,10 @@ export function Physiotherapy({
           <Card>
             <div className="flex items-center justify-between gap-3">
               <h4 className="text-lg font-bold">Physiotherapy Cases</h4>
-              <Badge tone="blue">{cases.length} active</Badge>
+              <div className="flex items-center gap-2">
+                <RefreshButton onRefresh={loadPhysio} />
+                <Badge tone="blue">{cases.length} active</Badge>
+              </div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <button

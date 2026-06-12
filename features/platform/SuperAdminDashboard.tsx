@@ -1114,6 +1114,7 @@ export function SuperAdminDashboard({
           apiSession={apiSession}
           busy={busy}
           suspendTenant={suspendTenant}
+          onRefresh={loadPlatform}
         />
       )}
       {currentSection === "tenantEdit" && selected && (
@@ -1146,6 +1147,7 @@ export function SuperAdminDashboard({
           setSelectedRoleId={setSelectedRoleId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
+          onRefresh={loadPlatform}
         />
       )}
       {currentSection === "roleCreate" && (
@@ -1197,6 +1199,7 @@ export function SuperAdminDashboard({
           setSelectedUserId={setSelectedUserId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
+          onRefresh={loadPlatform}
         />
       )}
       {currentSection === "userCreate" && (
@@ -1235,6 +1238,7 @@ export function SuperAdminDashboard({
           setSelectedDepartmentId={setSelectedDepartmentId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
+          onRefresh={loadPlatform}
         />
       )}
       {currentSection === "departmentCreate" && (
@@ -1279,6 +1283,7 @@ export function SuperAdminDashboard({
           setSelectedBranchId={setSelectedBranchId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
+          onRefresh={loadPlatform}
         />
       )}
       {currentSection === "branchCreate" && (

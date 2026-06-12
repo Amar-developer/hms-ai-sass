@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {ChevronDown} from 'lucide-react';
-import {Badge,Button,Card,Input,Select,StatusToast} from '@/components/common/ui';
+import {Badge,Button,Card,Input,RefreshButton,Select,StatusToast} from '@/components/common/ui';
 import {FormField} from '@/components/FormElements';
 import {SearchPicker,TagEntryBox,medicineFrequencyOptions,rowTagLabel} from '@/components/clinicalRows';
 import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';
@@ -452,6 +452,7 @@ export function IPAdmission({
               <p className="text-sm text-slate-500">Select active or completed admissions to view the full IP workflow below.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <RefreshButton onRefresh={refresh} />
               <Badge tone="blue">{activeAdmissions.length} active</Badge>
               <Badge tone="green">{completedAdmissions.length} completed</Badge>
             </div>

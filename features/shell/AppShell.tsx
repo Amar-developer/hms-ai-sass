@@ -424,61 +424,88 @@ export function AppShell(props: any) {
           )}
 
           <div className="bg-white px-4 py-2 lg:px-6">
-            <div className="flex min-w-0 items-center gap-3 text-sm">
-              {/* Back / Forward group */}
-              <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
-                <button
-                  type="button"
-                  onClick={() => goHistory(-1)}
-                  disabled={!canGoBack}
-                  title="Back"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
-                >
-                  <ArrowLeft size={14} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => goHistory(1)}
-                  disabled={!canGoForward}
-                  title="Forward"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
-                >
-                  <ArrowRight size={14} />
-                </button>
+            <div className="flex min-w-0 flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                {/* Back / Forward group */}
+                <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
+                  <button
+                    type="button"
+                    onClick={() => goHistory(-1)}
+                    disabled={!canGoBack}
+                    title="Back"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
+                  >
+                    <ArrowLeft size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goHistory(1)}
+                    disabled={!canGoForward}
+                    title="Forward"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
+                  >
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
+
+                {/* Divider */}
+                <span className="h-5 w-px bg-slate-200" />
+
+                {/* Breadcrumb */}
+                <div className="flex min-w-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigatePage("dashboard")}
+                    disabled={
+                      activePage === "dashboard" || !enabled("dashboard")
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
+                  >
+                    <Home size={14} /> Dashboard
+                  </button>
+
+                  {activePage !== "dashboard" && (
+                    <>
+                      <span className="text-slate-300">/</span>
+                      <span className="truncate text-xs font-bold text-slate-900">
+                        {activeNavLabel}
+                      </span>
+                    </>
+                  )}
+
+                  {activeSectionLabel && (
+                    <>
+                      <span className="hidden text-slate-300 sm:inline">/</span>
+                      <span className="hidden truncate text-xs text-slate-500 sm:inline">
+                        {activeSectionLabel}
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
 
-              {/* Divider */}
-              <span className="h-5 w-px bg-slate-200" />
-
-              {/* Breadcrumb */}
-              <div className="flex min-w-0 items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => navigatePage("dashboard")}
-                  disabled={activePage === "dashboard" || !enabled("dashboard")}
-                  className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-default disabled:text-slate-900 disabled:hover:bg-transparent"
-                >
-                  <Home size={14} /> Dashboard
-                </button>
-
-                {activePage !== "dashboard" && (
-                  <>
-                    <span className="text-slate-300">/</span>
-                    <span className="truncate text-xs font-bold text-slate-900">
-                      {activeNavLabel}
+              {activePage === "admin" &&
+                visibleTenantAdminSections.length > 0 && (
+                  <div className="flex shrink-0 items-center justify-end gap-2">
+                    <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
+                      Tenant Admin
                     </span>
-                  </>
+                    <select
+                      value={tenantAdminSection}
+                      onChange={(event) => {
+                        setTenantAdminSettingsOpen(true);
+                        setTenantAdminSection(event.target.value);
+                      }}
+                      className="h-9 min-w-[190px] rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition  bg-white"
+                    >
+                      {visibleTenantAdminSections.map(([id, label]: any) => (
+                        <option key={id} value={id}>
+                          {label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 )}
-
-                {activeSectionLabel && (
-                  <>
-                    <span className="hidden text-slate-300 sm:inline">/</span>
-                    <span className="hidden truncate text-xs text-slate-500 sm:inline">
-                      {activeSectionLabel}
-                    </span>
-                  </>
-                )}
-              </div>
             </div>
           </div>
 

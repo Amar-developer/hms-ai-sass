@@ -235,6 +235,7 @@ def create_consultation_invoice(
             service_type="consultation",
             item_ids=[],
             subtotal_amount=subtotal,
+            department_id=appointment.department_id,
         )
         membership_discount = int(preview["discount_amount"] or 0)
         if membership_discount > 0:
@@ -329,7 +330,9 @@ def update_invoice_payment_status(session: Session, invoice: Invoice) -> Invoice
     ).one()
     invoice.paid_amount = int(paid_amount or 0)
     invoice.balance_amount = max(invoice.total_amount - invoice.paid_amount, 0)
-    if invoice.paid_amount <= 0:
+    if invoice.total_amount <= 0 or invoice.balance_amount <= 0:
+        invoice.status = InvoiceStatus.PAID
+    elif invoice.paid_amount <= 0:
         invoice.status = InvoiceStatus.ISSUED
     elif invoice.paid_amount < invoice.total_amount:
         invoice.status = InvoiceStatus.PARTIALLY_PAID

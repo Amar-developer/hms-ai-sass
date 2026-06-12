@@ -5,6 +5,7 @@ import {
   Card,
   Field,
   Input,
+  RefreshButton,
   Select,
 } from "../common/ui";
 import { useState, useMemo, useEffect } from "react";
@@ -295,6 +296,7 @@ export function ListCard({
   searchKeys,
   createLabel,
   onCreate,
+  onRefresh,
   columns,
   render,
 }: any) {
@@ -341,14 +343,17 @@ export function ListCard({
             it, or use the action buttons.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onCreate}
-          className={`inline-flex items-center justify-center ${createLabel == "Create Role" || createLabel == "Create User" || createLabel == 'Create Offer'? "w-[20%] lg:w-[20%]" : "w-[35%] lg:w-[25%]"}  gap-2 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm bg-slate-900 px-4 py-3 font-bold text-white`}
-        >
-          <Plus size={16} />
-          {createLabel}
-        </button>
+        <div className="flex items-center gap-2">
+          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
+          <button
+            type="button"
+            onClick={onCreate}
+            className={`inline-flex items-center justify-center ${createLabel == "Create Role" || createLabel == "Create User" || createLabel == 'Create Offer'? "w-[20%] lg:w-[20%]" : "w-[35%] lg:w-[25%]"}  gap-2 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm bg-slate-900 px-4 py-3 font-bold text-white`}
+          >
+            <Plus size={16} />
+            {createLabel}
+          </button>
+        </div>
       </div>
       <div className="mt-4 max-w-md">
         <FormField label={`Search ${title}`}>

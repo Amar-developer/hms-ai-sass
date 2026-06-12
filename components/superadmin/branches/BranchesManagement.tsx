@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Card, Input } from "@/components/common/ui";
+import { Badge, Card, Input, RefreshButton } from "@/components/common/ui";
 import { formatDate } from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import {Empty} from "@/components/admin/Empty";
@@ -17,6 +17,7 @@ export function BranchesManagement({
   setSelectedBranchId,
   setSection,
   setConfirmAction,
+  onRefresh,
 }: any) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -54,7 +55,8 @@ export function BranchesManagement({
               : "Manage tenant branches used by appointments, users, billing, lab, pharmacy, and reports."}
           </p>
         </div>
-        <div className="">
+        <div className="flex items-center gap-2">
+          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
           <CreateActionButton
             label="Create Branch"
             onClick={() => setSection("branchCreate")}

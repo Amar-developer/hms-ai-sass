@@ -11,14 +11,19 @@ class PatientSubscriptionPlanCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     code: str | None = Field(default=None, max_length=60)
     price_amount: int = Field(default=0, ge=0)
-    duration_days: int = Field(default=30, ge=1)
+    duration_days: int = Field(ge=1)
+    activation_after_days: int = Field(default=0, ge=0)
     free_consultations: int = Field(default=0, ge=0)
+    free_consultation_department_ids: list[str] = Field(default_factory=list)
     lab_discount_percentage: int = Field(default=0, ge=0, le=100)
     pharmacy_discount_percentage: int = Field(default=0, ge=0, le=100)
-    min_discount_amount: int = Field(default=500, ge=0)
+    min_discount_amount: int = Field(default=0, ge=0)
+    pharmacy_discount_slabs: list[dict[str, int | None]] = Field(default_factory=list)
     free_lab_test_ids: list[str] = Field(default_factory=list)
+    free_lab_test_quantities: dict[str, int] = Field(default_factory=dict)
     discounted_lab_test_ids: list[str] = Field(default_factory=list)
     free_medicine_ids: list[str] = Field(default_factory=list)
+    free_medicine_quantities: dict[str, int] = Field(default_factory=dict)
     discounted_medicine_ids: list[str] = Field(default_factory=list)
     created_by_user_id: str | None = None
 
@@ -29,13 +34,18 @@ class PatientSubscriptionPlanUpdate(BaseModel):
     code: str | None = Field(default=None, max_length=60)
     price_amount: int | None = Field(default=None, ge=0)
     duration_days: int | None = Field(default=None, ge=1)
+    activation_after_days: int | None = Field(default=None, ge=0)
     free_consultations: int | None = Field(default=None, ge=0)
+    free_consultation_department_ids: list[str] | None = None
     lab_discount_percentage: int | None = Field(default=None, ge=0, le=100)
     pharmacy_discount_percentage: int | None = Field(default=None, ge=0, le=100)
     min_discount_amount: int | None = Field(default=None, ge=0)
+    pharmacy_discount_slabs: list[dict[str, int | None]] | None = None
     free_lab_test_ids: list[str] | None = None
+    free_lab_test_quantities: dict[str, int] | None = None
     discounted_lab_test_ids: list[str] | None = None
     free_medicine_ids: list[str] | None = None
+    free_medicine_quantities: dict[str, int] | None = None
     discounted_medicine_ids: list[str] | None = None
     is_active: bool | None = None
     updated_by_user_id: str | None = None
@@ -58,6 +68,16 @@ class PatientSubscriptionEnrollmentCreate(BaseModel):
     paid_amount: int | None = Field(default=None, ge=0)
     payment_method: PaymentMethod = PaymentMethod.CASH
     created_by_user_id: str | None = None
+
+
+class PatientSubscriptionEnrollmentUpdate(BaseModel):
+    branch_id: str | None = None
+    starts_on: date | None = None
+    ends_on: date | None = None
+    status: PatientSubscriptionEnrollmentStatus | None = None
+    used_consultations: int | None = Field(default=None, ge=0)
+    paid_amount: int | None = Field(default=None, ge=0)
+    updated_by_user_id: str | None = None
 
 
 class PatientSubscriptionEnrollmentRead(BaseModel):
@@ -85,6 +105,7 @@ class PatientBenefitPreviewRequest(BaseModel):
     service_type: str = Field(pattern="^(consultation|lab|pharmacy)$")
     item_ids: list[str] = Field(default_factory=list)
     subtotal_amount: int = Field(default=0, ge=0)
+    department_id: str | None = None
 
 
 class PatientBenefitPreviewRead(BaseModel):

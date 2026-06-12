@@ -7,11 +7,13 @@ import {
   Button,
   Card,
   Input,
+  RefreshButton,
   Select,
   StatusToast,
 } from "@/components/common/ui";
 import { FormField } from "@/components/FormElements";
 import { apiFetch } from "@/lib/api";
+import { uniqueDepartmentRows } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
 
 function money(value: any) {
@@ -39,6 +41,75 @@ function benefitLabel(value: any, rows: any[]) {
   const row = rows.find((item: any) => item.id === value);
   return row?.name || value;
 }
+// Re-key a quantity map from picker selection values onto resolved backend ids.
+// resolveLabBenefitIds/resolveMedicineBenefitIds preserve order, so zip by index.
+function mapQuantitiesToIds(
+  selectionValues: string[],
+  resolvedIds: string[],
+  quantities: Record<string, number>,
+) {
+  const result: Record<string, number> = {};
+  resolvedIds.forEach((id: string, index: number) => {
+    const selectionValue = selectionValues[index];
+    result[id] = Math.max(Number(quantities?.[selectionValue]) || 1, 1);
+  });
+  return result;
+}
+
+function normalizePharmacySlabs(slabs: any[]) {
+  const rows = (slabs || [])
+    .map((slab: any) => ({
+      min_amount: Number(slab?.min_amount || 0),
+      max_amount:
+        slab?.max_amount === null || slab?.max_amount === undefined
+          ? null
+          : Number(slab.max_amount),
+      discount_percentage: Number(slab?.discount_percentage || 0),
+    }))
+    .filter((slab) => slab.discount_percentage > 0);
+  return rows.length ? rows : [{ min_amount: 0, max_amount: null, discount_percentage: 0 }];
+}
+
+function parsePharmacySlabs(fd: FormData) {
+  const minAmounts = fd.getAll("pharmacySlabMin");
+  const maxAmounts = fd.getAll("pharmacySlabMax");
+  const discounts = fd.getAll("pharmacySlabDiscount");
+  return minAmounts
+    .map((value, index) => {
+      const minAmount = Number(value || 0);
+      const maxText = String(maxAmounts[index] || "").trim();
+      const discount = Number(discounts[index] || 0);
+      if (discount <= 0) return null;
+      return {
+        min_amount: Math.max(minAmount, 0),
+        max_amount: maxText ? Math.max(Number(maxText), 0) : null,
+        discount_percentage: Math.min(Math.max(discount, 0), 100),
+      };
+    })
+    .filter(Boolean);
+}
+
+function pharmacyBenefitLabel(plan: any) {
+  const slabs = plan?.pharmacy_discount_slabs || [];
+  if (slabs.length) {
+    return slabs
+      .map(
+        (slab: any) =>
+          `${slab.discount_percentage || 0}% ₹${slab.min_amount || 0}-${slab.max_amount ?? "above"}`,
+      )
+      .join(", ");
+  }
+  return `${plan?.pharmacy_discount_percentage || 0}%`;
+}
+
+function canDeleteMembershipPlans(user: any) {
+  const roles = Array.isArray(user?.roles) ? user.roles : [];
+  return (
+    Boolean(user?.is_super_admin) ||
+    user?.user_type === "tenant_admin" ||
+    roles.includes("tenant_admin")
+  );
+}
 
 const enrollmentPageSize = 10;
 
@@ -54,6 +125,7 @@ export function PatientSubscriptions({
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [labTests, setLabTests] = useState<any[]>([]);
   const [medicines, setMedicines] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
   const [view, setView] = useState("list");
   const [toast, setToast] = useState<{
     text: string;
@@ -63,45 +135,50 @@ export function PatientSubscriptions({
   const [busy, setBusy] = useState("");
   const [selectedPatient, setSelectedPatient] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
+  const [freeConsultDeptIds, setFreeConsultDeptIds] = useState<string[]>([]);
+  const [editFreeConsultDeptIds, setEditFreeConsultDeptIds] = useState<string[]>(
+    [],
+  );
   const [freeLabTestIds, setFreeLabTestIds] = useState<string[]>([]);
+  const [freeLabQuantities, setFreeLabQuantities] = useState<
+    Record<string, number>
+  >({});
   const [discountedLabTestIds, setDiscountedLabTestIds] = useState<string[]>(
     [],
   );
   const [freeMedicineIds, setFreeMedicineIds] = useState<string[]>([]);
+  const [freeMedicineQuantities, setFreeMedicineQuantities] = useState<
+    Record<string, number>
+  >({});
   const [discountedMedicineIds, setDiscountedMedicineIds] = useState<string[]>(
     [],
   );
   const [editingPlan, setEditingPlan] = useState<any | null>(null);
   const [editFreeLabIds, setEditFreeLabIds] = useState<string[]>([]);
+  const [editFreeLabQuantities, setEditFreeLabQuantities] = useState<
+    Record<string, number>
+  >({});
   const [editDiscountedLabIds, setEditDiscountedLabIds] = useState<string[]>(
     [],
   );
   const [editFreeMedIds, setEditFreeMedIds] = useState<string[]>([]);
+  const [editFreeMedQuantities, setEditFreeMedQuantities] = useState<
+    Record<string, number>
+  >({});
   const [editDiscountedMedIds, setEditDiscountedMedIds] = useState<string[]>(
     [],
   );
   const [confirmDelete, setConfirmDelete] = useState("");
   const [detailPlanId, setDetailPlanId] = useState("");
-  const [createBranchIds, setCreateBranchIds] = useState<string[]>(
-    branchId ? [branchId] : [""],
-  );
   const patientMap = useMemo<Map<string, any>>(
     () => new Map((patients || []).map((p: any) => [p.id, p])),
     [patients],
   );
-  const branchRows = (branches?.length ? branches : clinic?.branches) || [];
-  const branchMap = useMemo<Map<string, any>>(
-    () => new Map((branchRows || []).map((branch: any) => [branch.id, branch])),
-    [branchRows],
-  );
-  const branchName = (id: any) =>
-    id ? branchMap.get(id)?.name || "Assigned branch" : "All branches";
-
   async function load() {
     if (!apiSession) return;
     setLoadError("");
     try {
-      const [planRows, enrollmentRows, testRows, medicineRows] =
+      const [planRows, enrollmentRows, testRows, medicineRows, departmentRows] =
         await Promise.all([
           apiFetch(
             "/patient-subscriptions/plans?include_inactive=true",
@@ -116,11 +193,20 @@ export function PatientSubscriptions({
             `/pharmacy/medicines?branch_id=${encodeURIComponent(branchId || "")}`,
             apiSession,
           ).catch(() => []),
+          apiFetch(
+            `/tenants/${apiSession.tenantId}/departments`,
+            apiSession,
+          ).catch(() => []),
         ]);
       setPlans(planRows);
       setEnrollments(enrollmentRows);
       setLabTests(testRows);
       setMedicines(medicineRows);
+      setDepartments(
+        uniqueDepartmentRows(
+          (departmentRows || []).filter((dept: any) => dept?.is_active !== false),
+        ),
+      );
       setDetailPlanId((current) =>
         planRows.some((row: any) => row.id === current) ? current : "",
       );
@@ -220,63 +306,57 @@ export function PatientSubscriptions({
     setBusy("plan");
     setToast(null);
     try {
-      const selectedBranches = createBranchIds.length
-        ? createBranchIds
-        : [branchId || ""];
       const basePayload = {
         name: fd.get("name"),
         code: fd.get("code") || null,
         price_amount: Number(fd.get("priceAmount") || 0),
-        duration_days: Number(fd.get("durationDays") || 30),
+        duration_days: Number(fd.get("durationDays") || 0),
+        activation_after_days: Number(fd.get("activationAfterDays") || 0),
         free_consultations: Number(fd.get("freeConsultations") || 0),
+        free_consultation_department_ids: freeConsultDeptIds,
         lab_discount_percentage: Number(fd.get("labDiscount") || 0),
         pharmacy_discount_percentage: Number(fd.get("pharmacyDiscount") || 0),
         min_discount_amount: Number(fd.get("minDiscountAmount") || 0),
+        pharmacy_discount_slabs: parsePharmacySlabs(fd),
         created_by_user_id: apiSession.user?.id,
       };
-      for (const selectedBranch of selectedBranches) {
-        const branchValue = String(selectedBranch || "");
-        const freeLabIds = await resolveLabBenefitIds(
-          freeLabTestIds,
-          branchValue,
-        );
-        const discountedLabIds = await resolveLabBenefitIds(
-          discountedLabTestIds,
-          branchValue,
-        );
-        const freeMedIds = await resolveMedicineBenefitIds(
-          freeMedicineIds,
-          branchValue,
-        );
-        const discountedMedIds = await resolveMedicineBenefitIds(
-          discountedMedicineIds,
-          branchValue,
-        );
-        await apiFetch("/patient-subscriptions/plans", apiSession, {
-          method: "POST",
-          body: JSON.stringify({
-            ...basePayload,
-            branch_id: branchValue || null,
-            free_lab_test_ids: freeLabIds,
-            discounted_lab_test_ids: discountedLabIds,
-            free_medicine_ids: freeMedIds,
-            discounted_medicine_ids: discountedMedIds,
-          }),
-        });
-      }
+      const freeLabIds = await resolveLabBenefitIds(freeLabTestIds, branchId || "");
+      const discountedLabIds = await resolveLabBenefitIds(discountedLabTestIds, branchId || "");
+      const freeMedIds = await resolveMedicineBenefitIds(freeMedicineIds, branchId || "");
+      const discountedMedIds = await resolveMedicineBenefitIds(discountedMedicineIds, branchId || "");
+      await apiFetch("/patient-subscriptions/plans", apiSession, {
+        method: "POST",
+        body: JSON.stringify({
+          ...basePayload,
+          branch_id: null,
+          free_lab_test_ids: freeLabIds,
+          free_lab_test_quantities: mapQuantitiesToIds(
+            freeLabTestIds,
+            freeLabIds,
+            freeLabQuantities,
+          ),
+          discounted_lab_test_ids: discountedLabIds,
+          free_medicine_ids: freeMedIds,
+          free_medicine_quantities: mapQuantitiesToIds(
+            freeMedicineIds,
+            freeMedIds,
+            freeMedicineQuantities,
+          ),
+          discounted_medicine_ids: discountedMedIds,
+        }),
+      });
       form.reset();
-      setCreateBranchIds(branchId ? [branchId] : [""]);
+      setFreeConsultDeptIds([]);
       setFreeLabTestIds([]);
+      setFreeLabQuantities({});
       setDiscountedLabTestIds([]);
       setFreeMedicineIds([]);
+      setFreeMedicineQuantities({});
       setDiscountedMedicineIds([]);
       setView("list");
       await load();
       setToast({
-        text:
-          selectedBranches.length > 1
-            ? "Patient subscription plans created for selected branches."
-            : "Patient subscription plan created.",
+        text: "Tenant-scoped patient subscription plan created.",
         kind: "success",
       });
     } catch (err: any) {
@@ -326,9 +406,12 @@ export function PatientSubscriptions({
   function startEdit(plan: any) {
     setEditingPlan(plan);
     setView("edit");
+    setEditFreeConsultDeptIds(plan.free_consultation_department_ids || []);
     setEditFreeLabIds(plan.free_lab_test_ids || []);
+    setEditFreeLabQuantities(plan.free_lab_test_quantities || {});
     setEditDiscountedLabIds(plan.discounted_lab_test_ids || []);
     setEditFreeMedIds(plan.free_medicine_ids || []);
+    setEditFreeMedQuantities(plan.free_medicine_quantities || {});
     setEditDiscountedMedIds(plan.discounted_medicine_ids || []);
     setToast(null);
   }
@@ -352,20 +435,32 @@ export function PatientSubscriptions({
         {
           method: "PATCH",
           body: JSON.stringify({
-            branch_id: fd.get("branchId") || null,
             name: fd.get("name"),
             code: fd.get("code") || null,
             price_amount: Number(fd.get("priceAmount") || 0),
-            duration_days: Number(fd.get("durationDays") || 30),
+            duration_days: Number(fd.get("durationDays") || 0),
+            activation_after_days: Number(fd.get("activationAfterDays") || 0),
             free_consultations: Number(fd.get("freeConsultations") || 0),
+            free_consultation_department_ids: editFreeConsultDeptIds,
             lab_discount_percentage: Number(fd.get("labDiscount") || 0),
             pharmacy_discount_percentage: Number(
               fd.get("pharmacyDiscount") || 0,
             ),
             min_discount_amount: Number(fd.get("minDiscountAmount") || 0),
+            pharmacy_discount_slabs: parsePharmacySlabs(fd),
             free_lab_test_ids: editFreeLabIds,
+            free_lab_test_quantities: mapQuantitiesToIds(
+              editFreeLabIds,
+              editFreeLabIds,
+              editFreeLabQuantities,
+            ),
             discounted_lab_test_ids: editDiscountedLabIds,
             free_medicine_ids: editFreeMedIds,
+            free_medicine_quantities: mapQuantitiesToIds(
+              editFreeMedIds,
+              editFreeMedIds,
+              editFreeMedQuantities,
+            ),
             discounted_medicine_ids: editDiscountedMedIds,
             updated_by_user_id: apiSession.user?.id,
           }),
@@ -421,16 +516,56 @@ export function PatientSubscriptions({
       setConfirmDelete("");
       setDetailPlanId((current) => (current === planId ? "" : current));
       await load();
-      setToast({ text: "Plan deleted.", kind: "success" });
+      setToast({ text: "Plan deactivated.", kind: "success" });
     } catch (err: any) {
+      const message = String(err.message || "");
       setToast({
-        text: err.message || "Could not delete plan.",
+        text: message || "Could not deactivate plan.",
         kind: "error",
       });
       setConfirmDelete("");
     } finally {
       setBusy("");
     }
+  }
+
+  async function updateEnrollment(row: any, updates: any) {
+    if (!canDeletePlans) {
+      setToast({ kind: "warn", text: "Tenant admin access required." });
+      return;
+    }
+    setBusy(`enrollment-${row.id}`);
+    setToast(null);
+    try {
+      await apiFetch(`/patient-subscriptions/enrollments/${row.id}`, apiSession, {
+        method: "PATCH",
+        body: JSON.stringify({
+          ...updates,
+          updated_by_user_id: apiSession.user?.id,
+        }),
+      });
+      await load();
+      setToast({ kind: "success", text: "Enrollment updated." });
+    } catch (err: any) {
+      setToast({ kind: "error", text: err.message || "Could not update enrollment." });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  function cancelEnrollment(row: any) {
+    const patientName =
+      patientMap.get(row.patient_id)?.name ||
+      patientMap.get(row.patient_id)?.full_name ||
+      "this patient";
+    const planName = row.plan?.name || "membership plan";
+    if (!window.confirm(`Cancel ${planName} enrollment for ${patientName}?`)) {
+      return;
+    }
+    updateEnrollment(row, {
+      status: "cancelled",
+      ends_on: new Date().toISOString().slice(0, 10),
+    });
   }
 
   if (!apiSession)
@@ -446,31 +581,24 @@ export function PatientSubscriptions({
   const activeEnrollments = enrollments.filter(
     (row: any) => row.status === "active",
   );
+  const canDeletePlans = canDeleteMembershipPlans(apiSession.user);
+  const activeEnrollmentCountByPlan = useMemo(() => {
+    const counts = new Map<string, number>();
+    activeEnrollments.forEach((row: any) => {
+      counts.set(row.plan_id, (counts.get(row.plan_id) || 0) + 1);
+    });
+    return counts;
+  }, [activeEnrollments]);
   const detailPlan = detailPlanId
     ? plans.find((plan: any) => plan.id === detailPlanId)
     : null;
 
+  function requestDeletePlan(plan: any) {
+    setConfirmDelete(plan.id);
+  }
+
   return (
     <div className="space-y-5">
-      <Card>
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-          <div>
-            <h3 className="text-lg lg:text-xl font-bold">
-              Patient Subscriptions
-            </h3>
-            <p className="text-sm text-slate-500">
-              Create clinic membership plans with free consultations, lab
-              benefits, and pharmacy benefits.
-            </p>
-          </div>
-          <Badge
-            tone="green"
-            className="w-[20%] lg:w-[15%] rounded-lg py-2 px-2"
-          >
-            Tenant module
-          </Badge>
-        </div>
-      </Card>
       {loadError && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <span className="font-bold">⚠ Could not load plans:</span>
@@ -503,34 +631,41 @@ export function PatientSubscriptions({
           plan={detailPlan}
           labTests={labTests}
           medicines={medicines}
-          branchName={branchName}
+          departments={departments}
           onBack={() => {
             setDetailPlanId("");
             setView("list");
           }}
           onEdit={() => startEdit(detailPlan)}
           onToggle={() => togglePlanActive(detailPlan)}
+          activeEnrollmentCount={
+            activeEnrollmentCountByPlan.get(detailPlan.id) || 0
+          }
         />
       )}
       {view === "create" && (
         <PlanForm
           title="Create Plan"
           apiSession={apiSession}
-          branches={branchRows}
-          selectedBranches={createBranchIds}
-          setSelectedBranches={setCreateBranchIds}
           busy={busy === "plan"}
           submitLabel="Create Plan"
           onSubmit={createPlan}
           back={() => setView("list")}
           labTests={labTests}
           medicines={medicines}
+          departments={departments}
+          freeConsultDeptIds={freeConsultDeptIds}
+          setFreeConsultDeptIds={setFreeConsultDeptIds}
           freeLabTestIds={freeLabTestIds}
           setFreeLabTestIds={setFreeLabTestIds}
+          freeLabQuantities={freeLabQuantities}
+          setFreeLabQuantities={setFreeLabQuantities}
           discountedLabTestIds={discountedLabTestIds}
           setDiscountedLabTestIds={setDiscountedLabTestIds}
           freeMedicineIds={freeMedicineIds}
           setFreeMedicineIds={setFreeMedicineIds}
+          freeMedicineQuantities={freeMedicineQuantities}
+          setFreeMedicineQuantities={setFreeMedicineQuantities}
           discountedMedicineIds={discountedMedicineIds}
           setDiscountedMedicineIds={setDiscountedMedicineIds}
         />
@@ -540,19 +675,25 @@ export function PatientSubscriptions({
           title="Edit Plan"
           apiSession={apiSession}
           plan={editingPlan}
-          branches={branchRows}
           busy={busy === "edit"}
           submitLabel="Save Changes"
           onSubmit={updatePlan}
           back={cancelEdit}
           labTests={labTests}
           medicines={medicines}
+          departments={departments}
+          freeConsultDeptIds={editFreeConsultDeptIds}
+          setFreeConsultDeptIds={setEditFreeConsultDeptIds}
           freeLabTestIds={editFreeLabIds}
           setFreeLabTestIds={setEditFreeLabIds}
+          freeLabQuantities={editFreeLabQuantities}
+          setFreeLabQuantities={setEditFreeLabQuantities}
           discountedLabTestIds={editDiscountedLabIds}
           setDiscountedLabTestIds={setEditDiscountedLabIds}
           freeMedicineIds={editFreeMedIds}
           setFreeMedicineIds={setEditFreeMedIds}
+          freeMedicineQuantities={editFreeMedQuantities}
+          setFreeMedicineQuantities={setEditFreeMedQuantities}
           discountedMedicineIds={editDiscountedMedIds}
           setDiscountedMedicineIds={setEditDiscountedMedIds}
         />
@@ -609,146 +750,101 @@ export function PatientSubscriptions({
                   Create and manage branch-specific patient membership plans.
                 </p>
               </div>
-              <Button
-                type="button"
-                onClick={() => setView("create")}
-                className="w-[20%] lg:[w-10%] rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
-              >
-                Create Plan
-              </Button>
+              <div className="flex items-center gap-2">
+                <RefreshButton onRefresh={load} />
+                <Button
+                  type="button"
+                  onClick={() => setView("create")}
+                  className="w-full rounded-lg px-3 py-2 text-xs sm:w-auto lg:px-4 lg:py-3 lg:text-sm"
+                >
+                  Create Plan
+                </Button>
+              </div>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
               {plans.length === 0 && (
-                <p className="text-sm text-slate-500 md:col-span-2 xl:col-span-3">
+                <p className="p-4 text-sm text-slate-500">
                   No patient plans yet.
                 </p>
               )}
-              {plans.map((plan: any) => (
-                <div
-                  key={plan.id}
-                  className={`rounded-2xl border p-4 text-sm transition ${editingPlan?.id === plan.id ? "border-slate-900 bg-slate-50" : ""}`}
-                >
-                  <div className="grid gap-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <b className="block break-words text-base">
-                          {plan.name}
-                        </b>
-                        {plan.code && (
-                          <p className="break-all text-xs text-slate-500">
-                            {plan.code}
-                          </p>
-                        )}
-                      </div>
-                      <Badge
-                        tone={plan.is_active ? "green" : "red"}
-                        className="text-xs lg:text-sm rounded-full py-2 px-2"
-                      >
-                        {plan.is_active ? "Active" : "Paused"}
-                      </Badge>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <PlanMetric
-                        label="Price"
-                        value={money(plan.price_amount)}
-                      />
-                      <PlanMetric
-                        label="Duration"
-                        value={`${plan.duration_days} days`}
-                      />
-                      <PlanMetric
-                        label="Branch"
-                        value={branchName(plan.branch_id)}
-                      />
-                      <PlanMetric
-                        label="Consults"
-                        value={plan.free_consultations}
-                      />
-                      <PlanMetric
-                        label="Lab"
-                        value={`${plan.lab_discount_percentage}%`}
-                      />
-                      <PlanMetric
-                        label="Pharmacy"
-                        value={`${plan.pharmacy_discount_percentage}%`}
-                      />
-                      <PlanMetric
-                        label="Benefits"
-                        value={`${(plan.free_lab_test_ids?.length || 0) + (plan.discounted_lab_test_ids?.length || 0) + (plan.free_medicine_ids?.length || 0) + (plan.discounted_medicine_ids?.length || 0)} items`}
-                      />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <ActionButton
-                        onClick={() => {
-                          setDetailPlanId(plan.id);
-                          setView("detail");
-                        }}
-                      >
-                        View
-                      </ActionButton>
-                      <button
-                        type="button"
-                        title="Edit"
-                        onClick={() => startEdit(plan)}
-                        className="rounded-lg px-2 py-2 text-xs lg:text-sm border border-slate-200  font-bold text-slate-600 hover:bg-white"
-                      >
-                        ✏ Edit
-                      </button>
-                      <button
-                        type="button"
-                        title={plan.is_active ? "Pause" : "Activate"}
-                        disabled={busy === `toggle-${plan.id}`}
-                        onClick={() => togglePlanActive(plan)}
-                        className={`rounded-lg px-2 py-2 text-xs lg:text-sm border font-bold ${plan.is_active ? "border-amber-200 text-amber-700 hover:bg-amber-50" : "border-green-200 text-green-700 hover:bg-green-50"}`}
-                      >
-                        {busy === `toggle-${plan.id}`
-                          ? "..."
-                          : plan.is_active
-                            ? "⏸ Pause"
-                            : "▶ Activate"}
-                      </button>
-                      <button
-                        type="button"
-                        title="Delete"
-                        onClick={() => setConfirmDelete(plan.id)}
-                        className="rounded-lg px-2 py-2 text-xs lg:text-sm border border-red-200 px-2 py-1 text-xs font-bold text-red-600 hover:bg-red-50"
-                      >
-                        🗑
-                      </button>
-                    </div>
+              {plans.length > 0 && (
+                <div>
+                  <div className="hidden min-w-full overflow-x-auto lg:block">
+                    <table className="min-w-full text-left text-sm">
+                      <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3">Plan</th>
+                          <th className="px-4 py-3">Price</th>
+                          <th className="px-4 py-3">Duration</th>
+                          <th className="px-4 py-3">Consults</th>
+                          <th className="px-4 py-3">Scope</th>
+                          <th className="px-4 py-3">Status</th>
+                          <th className="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {plans.map((plan: any) => {
+                          const activeEnrollmentCount =
+                            activeEnrollmentCountByPlan.get(plan.id) || 0;
+                          return (
+                            <PlanTableRow
+                              key={plan.id}
+                              plan={plan}
+                              activeEnrollmentCount={activeEnrollmentCount}
+                              busy={busy}
+                              confirmDelete={confirmDelete}
+                              setConfirmDelete={setConfirmDelete}
+                              deletePlan={deletePlan}
+                              requestDeletePlan={requestDeletePlan}
+                              startEdit={startEdit}
+                              togglePlanActive={togglePlanActive}
+                              canDeletePlans={canDeletePlans}
+                              openDetail={() => {
+                                setDetailPlanId(plan.id);
+                                setView("detail");
+                              }}
+                            />
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                  {confirmDelete === plan.id && (
-                    <div className="mt-3 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-3">
-                      <span className="flex-1 text-xs font-semibold text-red-700">
-                        Delete <b>{plan.name}</b>? This cannot be undone.
-                      </span>
-                      <button
-                        type="button"
-                        disabled={busy === `delete-${plan.id}`}
-                        onClick={() => deletePlan(plan.id)}
-                        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
-                      >
-                        {busy === `delete-${plan.id}`
-                          ? "Deleting..."
-                          : "Yes, Delete"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete("")}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-white"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
+                  <div className="divide-y divide-slate-100 lg:hidden">
+                    {plans.map((plan: any) => {
+                      const activeEnrollmentCount =
+                        activeEnrollmentCountByPlan.get(plan.id) || 0;
+                      return (
+                        <PlanMobileRow
+                          key={plan.id}
+                          plan={plan}
+                          activeEnrollmentCount={activeEnrollmentCount}
+                          busy={busy}
+                          confirmDelete={confirmDelete}
+                          setConfirmDelete={setConfirmDelete}
+                          deletePlan={deletePlan}
+                          requestDeletePlan={requestDeletePlan}
+                          startEdit={startEdit}
+                          togglePlanActive={togglePlanActive}
+                          canDeletePlans={canDeletePlans}
+                          openDetail={() => {
+                            setDetailPlanId(plan.id);
+                            setView("detail");
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
                 </div>
-              ))}
+              )}
             </div>
           </Card>
           <ActiveEnrollmentsTable
             rows={activeEnrollments}
             patientMap={patientMap}
-            branchName={branchName}
+            canManage={canDeletePlans}
+            busy={busy}
+            onUpdate={updateEnrollment}
+            onCancel={cancelEnrollment}
           />
         </>
       )}
@@ -766,6 +862,8 @@ function BenefitPicker({
   emptyHint,
   apiSession,
   searchPath,
+  quantities,
+  onQuantityChange,
 }: any) {
   const [query, setQuery] = useState("");
   const [remote, setRemote] = useState<any[]>([]);
@@ -845,19 +943,51 @@ function BenefitPicker({
       </FormField>
       {selected.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-2">
-          {selected.map((value: string) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => remove(value)}
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700"
-            >
-              {value.startsWith("new:")
-                ? value.slice(4)
-                : benefitLabel(value, rows)}{" "}
-              ×
-            </button>
-          ))}
+          {selected.map((value: string) => {
+            const itemLabel = value.startsWith("new:")
+              ? value.slice(4)
+              : benefitLabel(value, rows);
+            if (!onQuantityChange) {
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => remove(value)}
+                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700"
+                >
+                  {itemLabel} ×
+                </button>
+              );
+            }
+            return (
+              <span
+                key={value}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700"
+              >
+                <span>{itemLabel}</span>
+                <span className="flex items-center gap-1 text-slate-500">
+                  free ×
+                  <input
+                    type="number"
+                    min={1}
+                    value={Number(quantities?.[value]) || 1}
+                    onChange={(e: any) =>
+                      onQuantityChange(value, Math.max(Number(e.target.value) || 1, 1))
+                    }
+                    className="w-12 rounded-md border border-slate-200 px-1 py-0.5 text-center text-xs font-bold text-slate-700"
+                  />
+                </span>
+                <button
+                  type="button"
+                  onClick={() => remove(value)}
+                  className="text-slate-400 hover:text-red-500"
+                  aria-label={`Remove ${itemLabel}`}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
         </div>
       )}
       {query && (
@@ -928,25 +1058,39 @@ function BenefitPicker({
 function PlanForm({
   title,
   plan,
-  branches,
-  selectedBranches,
-  setSelectedBranches,
   busy,
   submitLabel,
   onSubmit,
   back,
   labTests,
   medicines,
+  departments,
+  freeConsultDeptIds,
+  setFreeConsultDeptIds,
   freeLabTestIds,
   setFreeLabTestIds,
+  freeLabQuantities,
+  setFreeLabQuantities,
   discountedLabTestIds,
   setDiscountedLabTestIds,
   freeMedicineIds,
   setFreeMedicineIds,
+  freeMedicineQuantities,
+  setFreeMedicineQuantities,
   discountedMedicineIds,
   setDiscountedMedicineIds,
   apiSession,
 }: any) {
+  const [pharmacySlabs, setPharmacySlabs] = useState<any[]>(() =>
+    normalizePharmacySlabs(plan?.pharmacy_discount_slabs || []),
+  );
+
+  useEffect(() => {
+    setPharmacySlabs(
+      normalizePharmacySlabs(plan?.pharmacy_discount_slabs || []),
+    );
+  }, [plan?.id]);
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -955,7 +1099,7 @@ function PlanForm({
           <p className="text-sm text-slate-500">
             {plan
               ? "Update this membership plan."
-              : "Choose one or more branches for this membership plan."}
+              : "Create one tenant-scoped membership plan for all branches."}
           </p>
         </div>
         <button
@@ -974,7 +1118,7 @@ function PlanForm({
           <Input
             name="name"
             defaultValue={plan?.name || ""}
-            placeholder="Silver 199"
+            placeholder="Membership plan name"
             required
           />
         </FormField>
@@ -982,7 +1126,7 @@ function PlanForm({
           <Input
             name="code"
             defaultValue={plan?.code || ""}
-            placeholder="SILVER199"
+            placeholder="Optional plan code"
           />
         </FormField>
         <FormField label="Price">
@@ -990,7 +1134,7 @@ function PlanForm({
             name="priceAmount"
             type="number"
             min="0"
-            defaultValue={plan?.price_amount ?? 199}
+            defaultValue={plan?.price_amount ?? 0}
           />
         </FormField>
         <FormField label="Duration Days">
@@ -998,7 +1142,16 @@ function PlanForm({
             name="durationDays"
             type="number"
             min="1"
-            defaultValue={plan?.duration_days ?? 30}
+            defaultValue={plan?.duration_days ?? ""}
+            required
+          />
+        </FormField>
+        <FormField label="Activation After Days">
+          <Input
+            name="activationAfterDays"
+            type="number"
+            min="0"
+            defaultValue={plan?.activation_after_days ?? 0}
           />
         </FormField>
         <FormField label="Free Consultations">
@@ -1006,16 +1159,55 @@ function PlanForm({
             name="freeConsultations"
             type="number"
             min="0"
-            defaultValue={plan?.free_consultations ?? 1}
+            defaultValue={plan?.free_consultations ?? 0}
           />
         </FormField>
+        <div className="md:col-span-2">
+          <FormField label="Free Consultation Departments">
+            <div className="flex flex-wrap gap-2">
+              {(departments || []).length === 0 && (
+                <span className="text-xs text-slate-400">
+                  No medical departments available.
+                </span>
+              )}
+              {(departments || []).map((dept: any) => {
+                const selected = (freeConsultDeptIds || []).includes(dept.id);
+                return (
+                  <button
+                    key={dept.id}
+                    type="button"
+                    onClick={() =>
+                      setFreeConsultDeptIds((prev: string[]) =>
+                        (prev || []).includes(dept.id)
+                          ? prev.filter((id: string) => id !== dept.id)
+                          : [...(prev || []), dept.id],
+                      )
+                    }
+                    className={`rounded-xl border px-3 py-2 text-xs font-bold ${
+                      selected
+                        ? "border-slate-900 bg-slate-900 text-white"
+                        : "border-slate-200 bg-white text-slate-700"
+                    }`}
+                  >
+                    {dept.name}
+                  </button>
+                );
+              })}
+            </div>
+          </FormField>
+          <p className="mt-1 text-xs text-slate-500">
+            Leave empty to allow free consultations in any department. Select one
+            or more (e.g. General Medicine) to restrict the free consultation
+            benefit to those departments only.
+          </p>
+        </div>
         <FormField label="Lab Discount %">
           <Input
             name="labDiscount"
             type="number"
             min="0"
             max="100"
-            defaultValue={plan?.lab_discount_percentage ?? 5}
+            defaultValue={plan?.lab_discount_percentage ?? 0}
           />
         </FormField>
         <FormField label="Pharmacy Discount %">
@@ -1024,7 +1216,7 @@ function PlanForm({
             type="number"
             min="0"
             max="100"
-            defaultValue={plan?.pharmacy_discount_percentage ?? 5}
+            defaultValue={plan?.pharmacy_discount_percentage ?? 0}
           />
         </FormField>
         <FormField label="Min Bill for % Discount (₹)">
@@ -1032,30 +1224,16 @@ function PlanForm({
             name="minDiscountAmount"
             type="number"
             min="0"
-            defaultValue={plan?.min_discount_amount ?? 500}
+            defaultValue={plan?.min_discount_amount ?? 0}
             placeholder="0 = no minimum"
           />
         </FormField>
-        {plan ? (
-          <FormField label="Branch">
-            <Select name="branchId" defaultValue={plan.branch_id || ""}>
-              <option value="">All branches</option>
-              {branches.map((branch: any) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        ) : (
-          <div className="md:col-span-2 xl:col-span-4">
-            <BranchPicker
-              branches={branches}
-              selected={selectedBranches}
-              onChange={setSelectedBranches}
-            />
-          </div>
-        )}
+        <div className="md:col-span-2 xl:col-span-4">
+          <PharmacySlabEditor
+            slabs={pharmacySlabs}
+            onChange={setPharmacySlabs}
+          />
+        </div>
         <div className="md:col-span-2">
           <BenefitPicker
             label="Free Lab Tests"
@@ -1063,6 +1241,10 @@ function PlanForm({
             rows={labTests}
             selected={freeLabTestIds}
             onChange={setFreeLabTestIds}
+            quantities={freeLabQuantities}
+            onQuantityChange={(value: string, qty: number) =>
+              setFreeLabQuantities((prev: any) => ({ ...prev, [value]: qty }))
+            }
             priceKey="default_price"
             apiSession={apiSession}
             searchPath="/lab/catalog/available-tests"
@@ -1088,6 +1270,10 @@ function PlanForm({
             rows={medicines}
             selected={freeMedicineIds}
             onChange={setFreeMedicineIds}
+            quantities={freeMedicineQuantities}
+            onQuantityChange={(value: string, qty: number) =>
+              setFreeMedicineQuantities((prev: any) => ({ ...prev, [value]: qty }))
+            }
             priceKey="default_sale_price"
             apiSession={apiSession}
             searchPath="/pharmacy/catalog/available-medicines"
@@ -1121,48 +1307,95 @@ function PlanForm({
   );
 }
 
-function BranchPicker({ branches, selected, onChange }: any) {
-  const selectedSet = new Set(selected || []);
-  function toggle(value: string, checked: boolean) {
-    if (value === "" && checked) {
-      onChange([""]);
-      return;
-    }
-    const next = new Set(
-      Array.from(selectedSet).filter((item: any) => item !== ""),
+function PharmacySlabEditor({ slabs, onChange }: any) {
+  function update(index: number, key: string, value: string) {
+    const next = slabs.map((row: any, rowIndex: number) =>
+      rowIndex === index
+        ? {
+            ...row,
+            [key]:
+              key === "max_amount" && value.trim() === ""
+                ? null
+                : Number(value || 0),
+          }
+        : row,
     );
-    if (checked) next.add(value);
-    else next.delete(value);
-    onChange(Array.from(next).length ? Array.from(next) : [""]);
+    onChange(next);
   }
+
+  function addRow() {
+    onChange([...slabs, { min_amount: 0, max_amount: null, discount_percentage: 0 }]);
+  }
+
+  function removeRow(index: number) {
+    const next = slabs.filter((_row: any, rowIndex: number) => rowIndex !== index);
+    onChange(next.length ? next : [{ min_amount: 0, max_amount: null, discount_percentage: 0 }]);
+  }
+
   return (
     <div>
-      <p className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
-        Branches
-      </p>
-      <div className="grid gap-2 rounded-2xl border border-slate-200 p-3 md:grid-cols-2 xl:grid-cols-3">
-        <label
-          className={`flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${selectedSet.has("") ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-700"}`}
-        >
-          <input
-            type="checkbox"
-            checked={selectedSet.has("")}
-            onChange={(e: any) => toggle("", e.target.checked)}
-          />
-          All branches
-        </label>
-        {branches.map((branch: any) => (
-          <label
-            key={branch.id}
-            className={`flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold ${selectedSet.has(branch.id) ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-700"}`}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+            Pharmacy Discount Slabs
+          </p>
+          <p className="text-xs text-slate-500">
+            Add one row for each bill range. Leave To Amount empty for above.
+          </p>
+        </div>
+        <ActionButton onClick={addRow}>Add Slab</ActionButton>
+      </div>
+      <div className="space-y-2">
+        {slabs.map((slab: any, index: number) => (
+          <div
+            key={index}
+            className="grid gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]"
           >
-            <input
-              type="checkbox"
-              checked={selectedSet.has(branch.id)}
-              onChange={(e: any) => toggle(branch.id, e.target.checked)}
-            />
-            {branch.name}
-          </label>
+            <FormField label="From Amount">
+              <Input
+                name="pharmacySlabMin"
+                type="number"
+                min="0"
+                value={slab.min_amount ?? 0}
+                onChange={(event: any) =>
+                  update(index, "min_amount", event.target.value)
+                }
+              />
+            </FormField>
+            <FormField label="To Amount">
+              <Input
+                name="pharmacySlabMax"
+                type="number"
+                min="0"
+                value={slab.max_amount ?? ""}
+                placeholder="Above"
+                onChange={(event: any) =>
+                  update(index, "max_amount", event.target.value)
+                }
+              />
+            </FormField>
+            <FormField label="Discount %">
+              <Input
+                name="pharmacySlabDiscount"
+                type="number"
+                min="0"
+                max="100"
+                value={slab.discount_percentage ?? 0}
+                onChange={(event: any) =>
+                  update(index, "discount_percentage", event.target.value)
+                }
+              />
+            </FormField>
+            <div className="flex items-end">
+              <ActionButton
+                tone="danger"
+                className="w-full sm:w-auto"
+                onClick={() => removeRow(index)}
+              >
+                Remove
+              </ActionButton>
+            </div>
+          </div>
         ))}
       </div>
     </div>
@@ -1171,10 +1404,269 @@ function BranchPicker({ branches, selected, onChange }: any) {
 
 function PlanMetric({ label, value }: any) {
   return (
-    <div className="rounded-xl bg-slate-50 p-3">
-      <p className="text-[11px] font-bold uppercase text-slate-500">{label}</p>
-      <p className="mt-1 font-semibold text-slate-900">{value}</p>
+    <div className="min-h-[58px] rounded-xl bg-slate-50 px-3 py-2.5 ring-1 ring-slate-100">
+      <p className="text-[10px] font-bold uppercase text-slate-500">{label}</p>
+      <p className="mt-1 break-words text-sm font-semibold text-slate-950">
+        {value}
+      </p>
     </div>
+  );
+}
+
+function PlanTableRow({
+  plan,
+  activeEnrollmentCount,
+  busy,
+  confirmDelete,
+  setConfirmDelete,
+  deletePlan,
+  requestDeletePlan,
+  startEdit,
+  togglePlanActive,
+  canDeletePlans,
+  openDetail,
+}: any) {
+  return (
+    <>
+      <tr className="bg-white align-middle hover:bg-slate-50">
+        <td className="px-4 py-3">
+          <button
+            type="button"
+            onClick={openDetail}
+            className="text-left"
+          >
+            <b className="block text-sm text-slate-950">{plan.name}</b>
+            <span className="text-xs font-semibold uppercase text-slate-500">
+              {plan.code || "-"}
+            </span>
+          </button>
+        </td>
+        <td className="px-4 py-3 font-semibold text-slate-950">
+          {money(plan.price_amount)}
+        </td>
+        <td className="px-4 py-3 text-slate-700">{plan.duration_days} days</td>
+        <td className="px-4 py-3 text-slate-700">{plan.free_consultations}</td>
+        <td className="max-w-[180px] px-4 py-3 text-slate-700">Tenant</td>
+        <td className="px-4 py-3">
+          <div className="flex flex-col items-start gap-1">
+            <Badge
+              tone={plan.is_active ? "green" : "red"}
+              className="rounded-full px-2 py-1 text-xs"
+            >
+              {plan.is_active ? "Active" : "Paused"}
+            </Badge>
+            {activeEnrollmentCount > 0 && (
+              <span className="text-[11px] font-semibold text-slate-500">
+                {activeEnrollmentCount} enrolled
+              </span>
+            )}
+          </div>
+        </td>
+        <td className="px-4 py-3">
+          <PlanRowActions
+            plan={plan}
+            activeEnrollmentCount={activeEnrollmentCount}
+            busy={busy}
+            openDetail={openDetail}
+            startEdit={startEdit}
+            togglePlanActive={togglePlanActive}
+            requestDeletePlan={requestDeletePlan}
+            canDeletePlans={canDeletePlans}
+          />
+        </td>
+      </tr>
+      {confirmDelete === plan.id && (
+        <tr>
+          <td colSpan={7} className="bg-red-50 px-4 py-3">
+            <DeleteConfirm
+              plan={plan}
+              busy={busy}
+              deletePlan={deletePlan}
+              onCancel={() => setConfirmDelete("")}
+            />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function PlanMobileRow({
+  plan,
+  activeEnrollmentCount,
+  busy,
+  confirmDelete,
+  setConfirmDelete,
+  deletePlan,
+  requestDeletePlan,
+  startEdit,
+  togglePlanActive,
+  canDeletePlans,
+  openDetail,
+}: any) {
+  return (
+    <div className="bg-white px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <button type="button" onClick={openDetail} className="min-w-0 text-left">
+          <b className="block break-words text-sm text-slate-950">
+            {plan.name}
+          </b>
+          <span className="text-xs font-semibold uppercase text-slate-500">
+            {plan.code || "-"}
+          </span>
+        </button>
+        <Badge
+          tone={plan.is_active ? "green" : "red"}
+          className="rounded-full px-2 py-1 text-xs"
+        >
+          {plan.is_active ? "Active" : "Paused"}
+        </Badge>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+        <PlanInlineDetail label="Price" value={money(plan.price_amount)} />
+        <PlanInlineDetail label="Duration" value={`${plan.duration_days} days`} />
+        <PlanInlineDetail label="Consults" value={plan.free_consultations} />
+        <PlanInlineDetail label="Scope" value="Tenant" />
+      </div>
+      {activeEnrollmentCount > 0 && (
+        <p className="mt-2 text-[11px] font-semibold text-slate-500">
+          {activeEnrollmentCount} enrolled
+        </p>
+      )}
+      <div className="mt-3">
+        <PlanRowActions
+          plan={plan}
+          activeEnrollmentCount={activeEnrollmentCount}
+          busy={busy}
+          openDetail={openDetail}
+          startEdit={startEdit}
+          togglePlanActive={togglePlanActive}
+          requestDeletePlan={requestDeletePlan}
+          canDeletePlans={canDeletePlans}
+        />
+      </div>
+      {confirmDelete === plan.id && (
+        <div className="mt-3 rounded-xl bg-red-50 p-3">
+          <DeleteConfirm
+            plan={plan}
+            busy={busy}
+            deletePlan={deletePlan}
+            onCancel={() => setConfirmDelete("")}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanRowActions({
+  plan,
+  activeEnrollmentCount,
+  busy,
+  openDetail,
+  startEdit,
+  togglePlanActive,
+  requestDeletePlan,
+  canDeletePlans,
+}: any) {
+  return (
+    <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+      <PlanIconButton title="View" onClick={openDetail}>
+        View
+      </PlanIconButton>
+      <PlanIconButton title="Edit" onClick={() => startEdit(plan)}>
+        Edit
+      </PlanIconButton>
+      <PlanIconButton
+        title={plan.is_active ? "Pause" : "Activate"}
+        disabled={busy === `toggle-${plan.id}`}
+        onClick={() => togglePlanActive(plan)}
+        tone={plan.is_active ? "amber" : "green"}
+      >
+        {plan.is_active ? "Pause" : "Activate"}
+      </PlanIconButton>
+      {canDeletePlans && (
+        <PlanIconButton
+          title="Deactivate (keeps patient records)"
+          onClick={() => requestDeletePlan(plan)}
+          tone="red"
+        >
+          Deactivate
+        </PlanIconButton>
+      )}
+    </div>
+  );
+}
+
+function PlanIconButton({
+  children,
+  tone = "slate",
+  className = "",
+  ...props
+}: any) {
+  const tones: any = {
+    slate: "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+    amber: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
+    green: "border-green-200 bg-green-50 text-green-800 hover:bg-green-100",
+    red: "border-red-200 bg-white text-red-600 hover:bg-red-50",
+  };
+  return (
+    <button
+      type="button"
+      {...props}
+      className={`inline-flex h-9 items-center justify-center rounded-lg border px-3 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${tones[tone] || tones.slate} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function DeleteConfirm({ plan, busy, deletePlan, onCancel }: any) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <span className="flex-1 text-xs font-semibold text-red-700">
+        Deactivate <b>{plan.name}</b>? Existing patient records are kept and the plan
+        can be reactivated later.
+      </span>
+      <button
+        type="button"
+        disabled={busy === `delete-${plan.id}`}
+        onClick={() => deletePlan(plan.id)}
+        className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-700"
+      >
+        {busy === `delete-${plan.id}` ? "Deactivating..." : "Yes, Deactivate"}
+      </button>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+function PlanActionButton({
+  children,
+  tone = "slate",
+  className = "",
+  ...props
+}: any) {
+  const tones: any = {
+    slate: "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+    amber: "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100",
+    green: "border-green-200 bg-green-50 text-green-800 hover:bg-green-100",
+    red: "border-red-200 bg-white text-red-600 hover:bg-red-50",
+  };
+  return (
+    <button
+      type="button"
+      {...props}
+      className={`inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border px-3 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${tones[tone] || tones.slate} ${className}`}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -1182,11 +1674,28 @@ function PlanDetailPage({
   plan,
   labTests,
   medicines,
-  branchName,
+  departments,
   onBack,
   onEdit,
   onToggle,
+  activeEnrollmentCount = 0,
 }: any) {
+  const consultDeptIds = plan.free_consultation_department_ids || [];
+  const consultDeptLabel =
+    consultDeptIds.length === 0
+      ? "All departments"
+      : consultDeptIds
+          .map(
+            (id: string) =>
+              (departments || []).find((dept: any) => dept.id === id)?.name || id,
+          )
+          .join(", ");
+  const benefitItemCount =
+    (plan.free_lab_test_ids?.length || 0) +
+    (plan.discounted_lab_test_ids?.length || 0) +
+    (plan.free_medicine_ids?.length || 0) +
+    (plan.discounted_medicine_ids?.length || 0);
+
   return (
     <div className="space-y-5">
       <Card>
@@ -1215,33 +1724,52 @@ function PlanDetailPage({
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            <ActionButton onClick={onEdit}>Edit</ActionButton>
-            <ActionButton onClick={onToggle}>
+            <PlanActionButton onClick={onEdit}>Edit</PlanActionButton>
+            <PlanActionButton
+              onClick={onToggle}
+              tone={plan.is_active ? "amber" : "green"}
+            >
               {plan.is_active ? "Pause" : "Activate"}
-            </ActionButton>
+            </PlanActionButton>
           </div>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <PlanMetric label="Price" value={money(plan.price_amount)} />
           <PlanMetric label="Duration" value={`${plan.duration_days} days`} />
+          <PlanMetric
+            label="Activation"
+            value={`${plan.activation_after_days || 0} days`}
+          />
           <PlanMetric label="Consults" value={plan.free_consultations} />
+          <PlanMetric label="Consult Departments" value={consultDeptLabel} />
           <PlanMetric
             label="Lab Discount"
             value={`${plan.lab_discount_percentage}%`}
           />
           <PlanMetric
             label="Pharmacy"
-            value={`${plan.pharmacy_discount_percentage}%`}
+            value={pharmacyBenefitLabel(plan)}
           />
-          <PlanMetric label="Branch" value={branchName(plan.branch_id)} />
+          <PlanMetric label="Scope" value="Tenant" />
+          <PlanMetric label="Benefit Items" value={`${benefitItemCount} items`} />
+          <PlanMetric
+            label="Min Bill"
+            value={money(plan.min_discount_amount)}
+          />
+          <PlanMetric
+            label="Enrollments"
+            value={activeEnrollmentCount}
+          />
         </div>
       </Card>
       <div className="grid gap-4 xl:grid-cols-2">
+        <PharmacySlabList slabs={plan.pharmacy_discount_slabs || []} />
         <BenefitList
           title="Free Lab Tests"
           ids={plan.free_lab_test_ids}
           rows={labTests}
           priceKey="default_price"
+          quantities={plan.free_lab_test_quantities}
         />
         <BenefitList
           title="Discounted Lab Tests"
@@ -1254,6 +1782,7 @@ function PlanDetailPage({
           ids={plan.free_medicine_ids}
           rows={medicines}
           priceKey="default_sale_price"
+          quantities={plan.free_medicine_quantities}
         />
         <BenefitList
           title="Discounted Medicines"
@@ -1266,7 +1795,58 @@ function PlanDetailPage({
   );
 }
 
-function BenefitList({ title, ids, rows, priceKey }: any) {
+function PharmacySlabList({ slabs }: any) {
+  return (
+    <Card>
+      <div className="flex items-center justify-between gap-3">
+        <h4 className="font-bold">Pharmacy Discount Slabs</h4>
+        <Badge tone="blue">{slabs.length}</Badge>
+      </div>
+      <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
+        {slabs.length === 0 ? (
+          <p className="p-4 text-sm text-slate-500">No slabs configured.</p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {slabs.map((slab: any, index: number) => (
+              <div
+                key={`${slab.min_amount}-${slab.max_amount}-${index}`}
+                className="grid grid-cols-3 gap-3 px-4 py-3 text-sm"
+              >
+                <PlanInlineDetail
+                  label="From"
+                  value={money(slab.min_amount)}
+                />
+                <PlanInlineDetail
+                  label="To"
+                  value={
+                    slab.max_amount === null || slab.max_amount === undefined
+                      ? "Above"
+                      : money(slab.max_amount)
+                  }
+                />
+                <PlanInlineDetail
+                  label="Discount"
+                  value={`${slab.discount_percentage || 0}%`}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function PlanInlineDetail({ label, value }: any) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase text-slate-500">{label}</p>
+      <p className="mt-1 font-semibold text-slate-950">{value}</p>
+    </div>
+  );
+}
+
+function BenefitList({ title, ids, rows, priceKey, quantities }: any) {
   const selected = (ids || []).map(
     (id: string) =>
       rows.find((row: any) => row.id === id) || { id, name: "Selected item" },
@@ -1281,33 +1861,45 @@ function BenefitList({ title, ids, rows, priceKey }: any) {
         {selected.length === 0 && (
           <p className="p-4 text-sm text-slate-500">No items selected.</p>
         )}
-        {selected.map((row: any) => (
-          <div
-            key={row.id}
-            className="grid gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[1fr_auto] sm:items-center"
-          >
-            <div>
-              <b>{row.name}</b>
-              <p className="break-all text-xs text-slate-500">
-                {row.code ||
-                  row.generic_name ||
-                  row.department ||
-                  row.form ||
-                  "-"}
-              </p>
+        {selected.map((row: any) => {
+          const qty = quantities ? Number(quantities[row.id]) || 1 : null;
+          return (
+            <div
+              key={row.id}
+              className="grid gap-2 border-b border-slate-100 px-4 py-3 text-sm last:border-b-0 sm:grid-cols-[1fr_auto] sm:items-center"
+            >
+              <div>
+                <b>{row.name}</b>
+                <p className="break-all text-xs text-slate-500">
+                  {row.code ||
+                    row.generic_name ||
+                    row.department ||
+                    row.form ||
+                    "-"}
+                </p>
+              </div>
+              <span className="flex items-center justify-end gap-2 font-bold">
+                {qty !== null && <Badge tone="green">Free × {qty}</Badge>}
+                {row[priceKey] !== undefined ? money(row[priceKey]) : "-"}
+              </span>
             </div>
-            <span className="font-bold">
-              {row[priceKey] !== undefined ? money(row[priceKey]) : "-"}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Card>
   );
 }
 
-function ActiveEnrollmentsTable({ rows, patientMap, branchName }: any) {
+function ActiveEnrollmentsTable({
+  rows,
+  patientMap,
+  canManage,
+  busy,
+  onUpdate,
+  onCancel,
+}: any) {
   const [page, setPage] = useState(1);
+  const [editing, setEditing] = useState<any | null>(null);
   const totalPages = Math.max(1, Math.ceil(rows.length / enrollmentPageSize));
   const safePage = Math.min(page, totalPages);
   const pageRows = rows.slice(
@@ -1317,6 +1909,32 @@ function ActiveEnrollmentsTable({ rows, patientMap, branchName }: any) {
   useEffect(() => {
     setPage(1);
   }, [rows.length]);
+
+  function startEdit(row: any) {
+    setEditing({
+      id: row.id,
+      starts_on: String(row.starts_on || "").slice(0, 10),
+      ends_on: String(row.ends_on || "").slice(0, 10),
+      paid_amount: String(row.paid_amount ?? 0),
+      used_consultations: String(row.used_consultations ?? 0),
+    });
+  }
+
+  function editValue(key: string, value: string) {
+    setEditing((current: any) => ({ ...current, [key]: value }));
+  }
+
+  function saveEdit(row: any) {
+    if (!editing) return;
+    onUpdate(row, {
+      starts_on: editing.starts_on,
+      ends_on: editing.ends_on,
+      paid_amount: Number(editing.paid_amount || 0),
+      used_consultations: Number(editing.used_consultations || 0),
+    });
+    setEditing(null);
+  }
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
@@ -1334,73 +1952,157 @@ function ActiveEnrollmentsTable({ rows, patientMap, branchName }: any) {
         </Badge>
       </div>
       <div className="mt-4 overflow-auto rounded-2xl border border-slate-200">
-        <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+        <table className="w-full min-w-[860px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
             <col className="w-[230px]" />
             <col className="w-[220px]" />
-            <col className="w-[180px]" />
             <col className="w-[140px]" />
+            <col className="w-[110px]" />
             <col className="w-[120px]" />
             <col className="w-[120px]" />
+            {canManage && <col className="w-[150px]" />}
           </colgroup>
           <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
             <tr>
               <th className="px-4 py-3">#</th>
               <th>Patient</th>
               <th>Plan</th>
-              <th>Branch</th>
               <th>Validity</th>
+              <th>Used</th>
               <th className="text-left">Paid</th>
               <th>Status</th>
+              {canManage && <th className="text-right pr-4">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-4 text-slate-500 text-xs lg:text-sm" >
+                <td colSpan={canManage ? 8 : 7} className="px-4 py-4 text-slate-500 text-xs lg:text-sm" >
                   No active enrollments yet.
                 </td>
               </tr>
             )}
-            {pageRows.map((row: any, index: number) => (
-              <tr key={row.id} className="hover:bg-slate-50">
-                <td className="px-4 py-4 font-semibold text-slate-500 text-xs lg:text-sm">
-                  {(safePage - 1) * enrollmentPageSize + index + 1}
-                </td>
-                <td>
-                  <b className="text-xs lg:text-sm">
-                    {patientMap.get(row.patient_id)?.name ||
-                      patientMap.get(row.patient_id)?.full_name ||
-                      "Patient"}
-                  </b>
-                  <p className="text-xs text-slate-500 text-xs lg:text-sm">
-                    {patientMap.get(row.patient_id)?.patient_number || ""}
-                  </p>
-                </td>
-                <td>
-                  <b className="text-xs lg:text-sm">{row.plan?.name || "Membership plan"}</b>
-                  {row.plan?.code && (
-                    <p className="text-xs text-slate-500">{row.plan.code}</p>
+            {pageRows.map((row: any, index: number) => {
+              const isEditing = editing?.id === row.id;
+              return (
+                <tr key={row.id} className="hover:bg-slate-50">
+                  <td className="px-4 py-4 font-semibold text-slate-500 text-xs lg:text-sm">
+                    {(safePage - 1) * enrollmentPageSize + index + 1}
+                  </td>
+                  <td>
+                    <b className="text-xs lg:text-sm">
+                      {patientMap.get(row.patient_id)?.name ||
+                        patientMap.get(row.patient_id)?.full_name ||
+                        "Patient"}
+                    </b>
+                    <p className="text-xs text-slate-500 text-xs lg:text-sm">
+                      {patientMap.get(row.patient_id)?.patient_number || ""}
+                    </p>
+                  </td>
+                  <td>
+                    <b className="text-xs lg:text-sm">{row.plan?.name || "Membership plan"}</b>
+                    {row.plan?.code && (
+                      <p className="text-xs text-slate-500">{row.plan.code}</p>
+                    )}
+                  </td>
+                  <td className="text-xs lg:text-sm">
+                    {isEditing ? (
+                      <div className="grid gap-1">
+                        <input
+                          type="date"
+                          value={editing.starts_on}
+                          onChange={(event: any) => editValue("starts_on", event.target.value)}
+                          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                        />
+                        <input
+                          type="date"
+                          value={editing.ends_on}
+                          onChange={(event: any) => editValue("ends_on", event.target.value)}
+                          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        {displayDate(row.starts_on)} to {displayDate(row.ends_on)}
+                      </>
+                    )}
+                  </td>
+                  <td className="text-left font-semibold tabular-nums text-xs lg:text-sm">
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={editing.used_consultations}
+                        onChange={(event: any) => editValue("used_consultations", event.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
+                      />
+                    ) : (
+                      `${row.used_consultations || 0}/${row.plan?.free_consultations ?? 0}`
+                    )}
+                  </td>
+                  <td className="text-left font-semibold tabular-nums text-xs lg:text-sm">
+                    {isEditing ? (
+                      <input
+                        type="number"
+                        min="0"
+                        value={editing.paid_amount}
+                        onChange={(event: any) => editValue("paid_amount", event.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
+                      />
+                    ) : (
+                      money(row.paid_amount)
+                    )}
+                  </td>
+                  <td>
+                    <Badge
+                      tone="green"
+                      className="text-xs lg:text-sm rounded-full py-2 px-2"
+                    >
+                      {row.status}
+                    </Badge>
+                  </td>
+                  {canManage && (
+                    <td className="pr-4">
+                      <div className="flex justify-end gap-2">
+                        {isEditing ? (
+                          <>
+                            <PlanIconButton
+                              title="Save"
+                              disabled={busy === `enrollment-${row.id}`}
+                              onClick={() => saveEdit(row)}
+                              tone="green"
+                            >
+                              Save
+                            </PlanIconButton>
+                            <PlanIconButton
+                              title="Cancel"
+                              onClick={() => setEditing(null)}
+                            >
+                              Cancel
+                            </PlanIconButton>
+                          </>
+                        ) : (
+                          <>
+                            <PlanIconButton title="Edit enrollment" onClick={() => startEdit(row)}>
+                              Edit
+                            </PlanIconButton>
+                            <PlanIconButton
+                              title="Cancel enrollment"
+                              disabled={busy === `enrollment-${row.id}`}
+                              onClick={() => onCancel(row)}
+                              tone="amber"
+                            >
+                              Cancel
+                            </PlanIconButton>
+                          </>
+                        )}
+                      </div>
+                    </td>
                   )}
-                </td>
-                <td className="text-xs lg:text-sm">{branchName(row.branch_id)}</td>
-                <td className="text-xs lg:text-sm">
-                  {displayDate(row.starts_on)} to {displayDate(row.ends_on)}
-                </td>
-                <td className="text-left font-semibold tabular-nums text-xs lg:text-sm">
-                  {money(row.paid_amount)}
-                </td>
-                <td>
-                  <Badge
-                    tone="green"
-                    className="text-xs lg:text-sm rounded-full py-2 px-2"
-                  >
-                    {row.status}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

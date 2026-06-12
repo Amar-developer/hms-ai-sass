@@ -8,6 +8,7 @@ import {
   Button,
   Card,
   Input,
+  RefreshButton,
   Select,
   StatusToast,
 } from "@/components/common/ui";
@@ -748,9 +749,12 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
               collection in one list.
             </p>
           </div>
-          <Badge tone="slate">
-            {filteredInvoices.length} of {invoices.length} invoices
-          </Badge>
+          <div className="flex items-center gap-2">
+            <RefreshButton onRefresh={loadReports} />
+            <Badge tone="slate">
+              {filteredInvoices.length} of {invoices.length} invoices
+            </Badge>
+          </div>
         </div>
         <div className="mt-4 grid gap-3 grid-cols-6 xl:grid-cols-[1.2fr_.85fr_.85fr_.75fr_.75fr_auto] xl:items-end">
           <TextField

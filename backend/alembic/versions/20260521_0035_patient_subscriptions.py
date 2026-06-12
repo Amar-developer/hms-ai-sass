@@ -38,7 +38,7 @@ def upgrade() -> None:
             sa.Column("name", sa.String(length=160), nullable=False),
             sa.Column("code", sa.String(length=60), nullable=True),
             sa.Column("price_amount", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("duration_days", sa.Integer(), nullable=False, server_default="30"),
+            sa.Column("duration_days", sa.Integer(), nullable=False),
             sa.Column("free_consultations", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("lab_discount_percentage", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("pharmacy_discount_percentage", sa.Integer(), nullable=False, server_default="0"),

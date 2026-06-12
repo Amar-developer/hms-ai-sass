@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Card, Field, Input, Select } from "@/components/common/ui";
+import { Badge, Card, Field, Input, RefreshButton, Select } from "@/components/common/ui";
 import { tenantTypes } from "../../../utils/superAdmin/constants";
 import {
   addressText,
@@ -21,6 +21,7 @@ export function TenantManagement({
   apiSession,
   busy,
   suspendTenant,
+  onRefresh,
 }: any) {
   const [filters, setFilters] = useState({
     tenant: "",
@@ -107,6 +108,7 @@ export function TenantManagement({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
           <Badge
             tone="blue"
             className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"

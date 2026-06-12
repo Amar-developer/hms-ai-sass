@@ -1,8 +1,6 @@
 from datetime import date, datetime, time
 from enum import Enum
-
 from sqlmodel import Field, SQLModel
-
 from app.modules.tenants.models import new_id, now_utc
 
 

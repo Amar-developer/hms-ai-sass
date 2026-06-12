@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  RefreshButton,
   StatusToast,
 } from "@/components/common/ui";
 import { apiBlob, apiFetch } from "@/lib/api";
@@ -730,7 +731,10 @@ export function Lab({
         </div>
       </Card>
       <Card>
-        <h3 className="text-lg font-bold">Lab Worklist</h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-lg font-bold">Lab Worklist</h3>
+          <RefreshButton onRefresh={load} />
+        </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
           <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">

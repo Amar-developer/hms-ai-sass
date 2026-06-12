@@ -5,7 +5,7 @@ from sqlmodel import SQLModel, Session, create_engine
 from app.core.config import get_settings
 
 # Ensure models are registered
-import app.models  # noqa
+import app.models  # noqa: F401
 
 
 def _connect_args(database_url: str) -> dict:

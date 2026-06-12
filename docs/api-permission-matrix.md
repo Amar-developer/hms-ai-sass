@@ -165,6 +165,8 @@ Patient APIs enforce the `patients` module entitlement and branch scope for bran
 | `DELETE` | `/api/v1/patient-subscriptions/plans/{plan_id}` | `patient_subscriptions.delete` |
 | `POST` | `/api/v1/patient-subscriptions/enrollments` | `patient_subscriptions.create` |
 | `GET` | `/api/v1/patient-subscriptions/enrollments` | `patient_subscriptions.read` |
+| `PATCH` | `/api/v1/patient-subscriptions/enrollments/{enrollment_id}` | `patient_subscriptions.edit` |
+| `DELETE` | `/api/v1/patient-subscriptions/enrollments/{enrollment_id}` | `patient_subscriptions.delete` |
 | `POST` | `/api/v1/patient-subscriptions/benefits/preview` | `patient_subscriptions.read` |
 
 Patient subscription APIs enforce the `patient_subscriptions` module entitlement, tenant ownership, and branch scope. Plans define free consultations plus lab/pharmacy free or discounted benefits. Enrollments create the active patient membership window and can link to the purchase invoice; benefit preview is used before billing to calculate free items, discounted items, and payable amount.

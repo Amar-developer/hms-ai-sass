@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Card,Select,StatusToast} from '@/components/common/ui';
+import {ActionButton,ActionGroup,Badge,Card,RefreshButton,Select,StatusToast} from '@/components/common/ui';
 import {FormField} from '@/components/FormElements';
 import {apiFetch,type ApiSession} from '@/lib/api';
 import {sortQueue} from '@/lib/hmsLogic';
@@ -187,13 +187,18 @@ export function TokenQueue({
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div>
-          <h3 className="text-lg font-bold">Patient Queue & Token Priority</h3>
-          <p className="text-sm text-slate-500">
-            {apiSession
-              ? 'Reception can manually call, skip, requeue, or close remaining tokens at end of day.'
-              : 'Emergency tokens appear first. Skipped patients can be requeued.'}
-          </p>
+        <div className="flex items-start gap-2">
+          <div>
+            <h3 className="text-lg font-bold">Patient Queue & Token Priority</h3>
+            <p className="text-sm text-slate-500">
+              {apiSession
+                ? 'Reception can manually call, skip, requeue, or close remaining tokens at end of day.'
+                : 'Emergency tokens appear first. Skipped patients can be requeued.'}
+            </p>
+          </div>
+          {apiSession ? (
+            <RefreshButton onRefresh={() => loadLiveData(apiSession)} />
+          ) : null}
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           <FormField label="Display Mode">

@@ -215,6 +215,36 @@ def _invoice_membership_item_ids(session: Session, invoice: Invoice, service_typ
     return []
 
 
+def _invoice_membership_item_amounts(session: Session, invoice: Invoice, service_type: str) -> dict[str, int]:
+    if service_type == "lab" and invoice.lab_order_id:
+        from app.modules.lab.models import LabOrderItem
+
+        amounts: dict[str, int] = {}
+        for item in session.exec(
+            select(LabOrderItem).where(
+                LabOrderItem.tenant_id == invoice.tenant_id,
+                LabOrderItem.lab_order_id == invoice.lab_order_id,
+            )
+        ).all():
+            if item.test_id:
+                amounts[item.test_id] = amounts.get(item.test_id, 0) + int(item.price or 0)
+        return amounts
+    if service_type == "pharmacy" and invoice.pharmacy_issue_id:
+        from app.modules.pharmacy.models import PharmacyIssueItem
+
+        amounts: dict[str, int] = {}
+        for item in session.exec(
+            select(PharmacyIssueItem).where(
+                PharmacyIssueItem.tenant_id == invoice.tenant_id,
+                PharmacyIssueItem.pharmacy_issue_id == invoice.pharmacy_issue_id,
+            )
+        ).all():
+            if item.medicine_id:
+                amounts[item.medicine_id] = amounts.get(item.medicine_id, 0) + int(item.quantity * item.unit_price)
+        return amounts
+    return {}
+
+
 def _invoice_membership_benefit(session: Session, invoice: Invoice) -> InvoiceMembershipBenefitRead | None:
     service_type = _invoice_membership_service(invoice)
     if not service_type:
@@ -232,7 +262,12 @@ def _invoice_membership_benefit(session: Session, invoice: Invoice) -> InvoiceMe
             reason="Membership benefit applied",
         )
     try:
-        from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
+        from app.modules.patient_subscriptions.service import (
+            active_patient_enrollment,
+            benefit_preview,
+            consultation_department_id,
+            sync_free_item_usage_from_invoices,
+        )
     except Exception:
         return None
     membership = active_patient_enrollment(
@@ -252,12 +287,17 @@ def _invoice_membership_benefit(session: Session, invoice: Invoice) -> InvoiceMe
             reason="No active patient subscription",
         )
     enrollment, plan = membership
+    sync_free_item_usage_from_invoices(session, enrollment, plan)
     preview = benefit_preview(
         plan=plan,
         enrollment=enrollment,
         service_type=service_type,
         item_ids=_invoice_membership_item_ids(session, invoice, service_type),
+        item_amounts=_invoice_membership_item_amounts(session, invoice, service_type),
         subtotal_amount=int(invoice.subtotal_amount or 0),
+        department_id=consultation_department_id(
+            session, appointment_id=invoice.appointment_id, consultation_id=invoice.consultation_id
+        ) if service_type == "consultation" else None,
     )
     discount_amount = int(preview["discount_amount"] or 0)
     return InvoiceMembershipBenefitRead(
@@ -281,7 +321,13 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
     service_type = _invoice_membership_service(invoice)
     if not service_type:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Membership benefit is not available for this invoice type")
-    from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
+    from app.modules.patient_subscriptions.service import (
+        active_patient_enrollment,
+        benefit_preview,
+        consultation_department_id,
+        consume_free_items,
+        sync_free_item_usage_from_invoices,
+    )
 
     membership = active_patient_enrollment(
         session,
@@ -292,12 +338,17 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
     if not membership:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active patient membership found")
     enrollment, plan = membership
+    sync_free_item_usage_from_invoices(session, enrollment, plan)
     preview = benefit_preview(
         plan=plan,
         enrollment=enrollment,
         service_type=service_type,
         item_ids=_invoice_membership_item_ids(session, invoice, service_type),
+        item_amounts=_invoice_membership_item_amounts(session, invoice, service_type),
         subtotal_amount=int(invoice.subtotal_amount or 0),
+        department_id=consultation_department_id(
+            session, appointment_id=invoice.appointment_id, consultation_id=invoice.consultation_id
+        ) if service_type == "consultation" else None,
     )
     membership_discount = int(preview["discount_amount"] or 0)
     if membership_discount <= 0:
@@ -325,6 +376,9 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
     invoice.patient_subscription_plan_id = plan.id
     if service_type == "consultation":
         enrollment.used_consultations += 1
+        session.add(enrollment)
+    elif service_type in ("lab", "pharmacy") and preview.get("free_item_ids"):
+        consume_free_items(enrollment, service_type=service_type, free_item_ids=preview["free_item_ids"])
         session.add(enrollment)
     session.add(invoice)
     session.commit()
@@ -628,6 +682,7 @@ def _build_receipt_pdf(
 
 
 def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
+    invoice = _normalize_invoice_status(session, invoice)
     items = list(
         session.exec(
             select(InvoiceItem)
@@ -650,6 +705,14 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
     )
 
 
+def _normalize_invoice_status(session: Session, invoice: Invoice) -> Invoice:
+    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+        return invoice
+    if int(invoice.total_amount or 0) <= 0 or int(invoice.balance_amount or 0) <= 0:
+        return update_invoice_payment_status(session, invoice)
+    return invoice
+
+
 def _create_service_invoice(
     session: Session,
     *,
@@ -669,6 +732,7 @@ def _create_service_invoice(
     tax_rule_id: str | None = None,
     discount_offer_id: str | None = None,
     benefit_item_ids: list[str] | None = None,
+    benefit_item_amounts: dict[str, int] | None = None,
 ) -> Invoice:
     discount_amount, offer = calculate_offer_discount(
         session,
@@ -691,7 +755,13 @@ def _create_service_invoice(
     membership_enrollment_id = None
     membership_plan_id = None
     try:
-        from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
+        from app.modules.patient_subscriptions.service import (
+            active_patient_enrollment,
+            benefit_preview,
+            consultation_department_id,
+            consume_free_items,
+            sync_free_item_usage_from_invoices,
+        )
 
         membership = active_patient_enrollment(
             session,
@@ -701,17 +771,28 @@ def _create_service_invoice(
         )
         if membership:
             enrollment, plan = membership
+            sync_free_item_usage_from_invoices(session, enrollment, plan)
             preview = benefit_preview(
                 plan=plan,
                 enrollment=enrollment,
                 service_type=service_scope,
                 item_ids=benefit_item_ids or [],
+                item_amounts=benefit_item_amounts or {},
                 subtotal_amount=amount,
+                department_id=consultation_department_id(
+                    session, appointment_id=appointment_id, consultation_id=consultation_id
+                ) if service_scope == "consultation" else None,
             )
             membership_discount = int(preview["discount_amount"] or 0)
             if membership_discount > 0:
                 membership_enrollment_id = enrollment.id
                 membership_plan_id = plan.id
+                if service_scope == "consultation":
+                    enrollment.used_consultations += 1
+                    session.add(enrollment)
+                elif service_scope in ("lab", "pharmacy") and preview.get("free_item_ids"):
+                    consume_free_items(enrollment, service_type=service_scope, free_item_ids=preview["free_item_ids"])
+                    session.add(enrollment)
             discount_amount = min(discount_amount + membership_discount, amount)
             taxable_amount = amount - discount_amount
             tax_amount = round(taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100)
@@ -1170,6 +1251,55 @@ def create_invoice_from_consultation(
     return _read_invoice_detail(session, invoice)
 
 
+def _reprice_zero_lab_items(session: Session, tenant_id: str, order, items: list) -> None:
+    """Backfill prices for zero-priced lab items from the external catalog.
+
+    Orders captured while the external catalog was misconfigured can persist a
+    price of 0. When the integration is healthy, re-fetch the price at invoice
+    time so the lab bill reflects the real catalog price instead of zero."""
+    from app.api.v1.lab import (
+        _external_lab_items_enabled,
+        _find_lab_test,
+        _resolve_lab_price,
+    )
+    from app.api.v1.lab import _frappe_catalog_client as _lab_frappe_client
+    from app.modules.lab.models import LabTestCatalog
+
+    zero_items = [item for item in items if int(item.price or 0) <= 0]
+    if not zero_items or not _external_lab_items_enabled(session, tenant_id):
+        return
+    try:
+        client = _lab_frappe_client()
+    except Exception:
+        return
+    changed = False
+    for item in zero_items:
+        test = session.get(LabTestCatalog, item.test_id) if item.test_id else None
+        if test is None:
+            test = _find_lab_test(session, tenant_id, order.branch_id, item.test_name)
+        pricing = _resolve_lab_price(client, test, item.test_name)
+        new_price = int(pricing.get("price") or 0)
+        if new_price <= 0:
+            continue
+        item.price = new_price
+        item.mrp_price = int(pricing.get("mrp_price") or item.mrp_price or 0)
+        item.selling_price = int(pricing.get("selling_price") or new_price)
+        item.buying_price = int(pricing.get("buying_price") or item.buying_price or 0)
+        if pricing.get("external_source"):
+            item.external_source = str(pricing.get("external_source"))
+            item.external_slug = str(pricing.get("external_slug") or item.external_slug or "")
+            item.external_item_code = str(pricing.get("external_item_code") or item.external_item_code or "")
+        session.add(item)
+        changed = True
+    if changed:
+        if int(order.amount or 0) <= 0:
+            order.amount = sum(int(item.price or 0) for item in items)
+            session.add(order)
+        session.commit()
+        for item in items:
+            session.refresh(item)
+
+
 @router.post("/invoices/from-lab-order", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
 def create_invoice_from_lab_order(
     payload: InvoiceCreateFromLabOrder,
@@ -1202,6 +1332,7 @@ def create_invoice_from_lab_order(
             select(LabOrderItem).where(LabOrderItem.tenant_id == tenant_id, LabOrderItem.lab_order_id == order.id)
         ).all()
     )
+    _reprice_zero_lab_items(session, tenant_id, order, items)
     amount = int(order.amount or sum(item.price for item in items) or 0)
     if amount <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Lab order amount is zero")
@@ -1245,6 +1376,10 @@ def create_invoice_from_lab_order(
             "external_item_code": item.external_item_code,
         }
 
+    lab_benefit_amounts: dict[str, int] = {}
+    for item in items:
+        if item.test_id:
+            lab_benefit_amounts[item.test_id] = lab_benefit_amounts.get(item.test_id, 0) + int(item.price or 0)
     invoice = _create_service_invoice(
         session,
         tenant_id=tenant_id,
@@ -1260,6 +1395,7 @@ def create_invoice_from_lab_order(
         tax_rule_id=payload.tax_rule_id,
         discount_offer_id=payload.discount_offer_id,
         benefit_item_ids=[item.test_id for item in items if item.test_id],
+        benefit_item_amounts=lab_benefit_amounts,
         line_items=[lab_line_item(item) for item in items] or None,
         created_by_user_id=payload.created_by_user_id,
     )
@@ -1317,6 +1453,12 @@ def create_invoice_from_pharmacy_issue(
     amount = int(issue.amount or sum(item.quantity * item.unit_price for item in items) or 0)
     if amount <= 0:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pharmacy issue amount is zero")
+    pharmacy_benefit_amounts: dict[str, int] = {}
+    for item in items:
+        if item.medicine_id:
+            pharmacy_benefit_amounts[item.medicine_id] = pharmacy_benefit_amounts.get(item.medicine_id, 0) + int(
+                item.quantity * item.unit_price
+            )
     invoice = _create_service_invoice(
         session,
         tenant_id=tenant_id,
@@ -1332,6 +1474,7 @@ def create_invoice_from_pharmacy_issue(
         tax_rule_id=payload.tax_rule_id,
         discount_offer_id=payload.discount_offer_id,
         benefit_item_ids=[item.medicine_id for item in items if item.medicine_id],
+        benefit_item_amounts=pharmacy_benefit_amounts,
         line_items=[
             {
                 "item_type": "pharmacy",
@@ -1375,7 +1518,8 @@ def list_invoices(
         statement = statement.where(Invoice.branch_id == branch_id)
     if patient_id:
         statement = statement.where(Invoice.patient_id == patient_id)
-    return list(session.exec(statement.order_by(Invoice.created_at.desc())).all())
+    invoices = list(session.exec(statement.order_by(Invoice.created_at.desc())).all())
+    return [_normalize_invoice_status(session, invoice) for invoice in invoices]
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDetailRead)

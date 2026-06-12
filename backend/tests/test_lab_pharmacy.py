@@ -1,5 +1,9 @@
 from datetime import date
 
+from sqlmodel import Session, select
+
+from app.modules.lab.models import LabOrder, LabOrderItem, LabOrderSource
+
 
 def setup_lab_pharmacy_tenant(client):
     tenant = client.post("/api/v1/tenants", json={"name": "Diagnostics Pharmacy Clinic"}).json()
@@ -131,6 +135,100 @@ def test_create_lab_order_from_consultation_and_release_result(client):
     assert result.json()["order"]["status"] == "result_ready"
     assert result.json()["results"][0]["abnormal_flag"] is True
     assert len(listed) == 1
+
+
+def test_zero_amount_lab_order_reprices_from_external_catalog(test_engine, monkeypatch):
+    from app.api.v1 import lab as lab_api
+
+    class FakeFrappeClient:
+        def get_lab_items(self, search=None):
+            return []
+
+        def get_lab_item_details(self, slug):
+            assert slug == "random-blood-sugar"
+            return {
+                "slug": "random-blood-sugar",
+                "item_code": "RBS",
+                "item_name": "Random Blood Sugar",
+                "mrp_price": 100,
+                "selling_price": 75,
+                "buying_price": 20,
+                "suppliers": [{"supplier": "Neuberg", "supplier_name": "Neuberg", "buying_price": 20}],
+            }
+
+    monkeypatch.setattr(lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True)
+    monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
+
+    with Session(test_engine) as session:
+        order = LabOrder(
+            tenant_id="tenant_lab_price",
+            branch_id="branch_main",
+            patient_id="patient_lab",
+            source=LabOrderSource.CONSULTATION,
+            tests="Random Blood Sugar",
+            amount=0,
+        )
+        session.add(order)
+        session.commit()
+        session.refresh(order)
+        item = LabOrderItem(
+            tenant_id=order.tenant_id,
+            branch_id=order.branch_id,
+            lab_order_id=order.id,
+            test_name="Random Blood Sugar",
+            price=0,
+        )
+        session.add(item)
+        session.commit()
+
+        changed = lab_api._reprice_zero_order_items(session, order)
+
+    assert changed is True
+    assert order.amount == 75
+
+
+def test_text_only_lab_order_creates_priced_external_items(test_engine, monkeypatch):
+    from app.api.v1 import lab as lab_api
+
+    class FakeFrappeClient:
+        def get_lab_items(self, search=None):
+            return []
+
+        def get_lab_item_details(self, slug):
+            assert slug == "random-blood-sugar"
+            return {
+                "slug": "random-blood-sugar",
+                "item_code": "RBS",
+                "item_name": "Random Blood Sugar",
+                "mrp_price": 100,
+                "selling_price": 75,
+                "buying_price": 20,
+                "suppliers": [{"supplier": "Neuberg", "supplier_name": "Neuberg", "buying_price": 20}],
+            }
+
+    monkeypatch.setattr(lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True)
+    monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
+
+    with Session(test_engine) as session:
+        order = LabOrder(
+            tenant_id="tenant_lab_price",
+            branch_id="branch_main",
+            patient_id="patient_lab",
+            source=LabOrderSource.OP_DIRECT,
+            tests="Random Blood Sugar",
+            amount=0,
+        )
+        session.add(order)
+        session.commit()
+        session.refresh(order)
+
+        changed = lab_api._reprice_zero_order_items(session, order)
+        items = session.exec(select(LabOrderItem).where(LabOrderItem.lab_order_id == order.id)).all()
+
+    assert changed is True
+    assert order.amount == 75
+    assert len(items) == 1
+    assert items[0].price == 75
 
 
 def test_create_direct_op_and_external_lab_orders(client):

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Card, Input } from "@/components/common/ui";
+import { Badge, Card, Input, RefreshButton } from "@/components/common/ui";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import {Empty} from "@/components/admin/Empty";
 import { Pagination } from "@/components/admin/Pagination";
 import { TenantPicker } from "../shared/TenantPicker";
 import { displayDate } from "@/utils/helper";
+
 
 export function DepartmentsManagement({
   tenants,
@@ -17,6 +18,7 @@ export function DepartmentsManagement({
   setSelectedDepartmentId,
   setSection,
   setConfirmAction,
+  onRefresh,
 }: any) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -52,7 +54,8 @@ export function DepartmentsManagement({
               : "Manage tenant medical departments used for practitioner mapping, schedules, and appointment booking."}
           </p>
         </div>
-        <div className="flex justify-start item-center">
+        <div className="flex items-center justify-start gap-2">
+          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
           <CreateActionButton
           label="Create Medical Department"
           onClick={() => setSection("departmentCreate")}

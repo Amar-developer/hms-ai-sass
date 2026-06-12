@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import datetime, timezone
 
@@ -59,9 +60,16 @@ from app.modules.tenants.models import Branch, now_utc
 
 router = APIRouter(prefix="/lab")
 
+logger = logging.getLogger(__name__)
+
 
 def _catalog_key(value: str | None) -> str:
     return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def _slugify(value: str | None) -> str:
+    """Kebab-case slug, matching ERPNext lab item slugs (e.g. 'random-blood-sugar')."""
+    return re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower()).strip("-")
 
 
 def _find_lab_test(session: Session, tenant_id: str, branch_id: str, test_name: str) -> LabTestCatalog | None:
@@ -165,7 +173,7 @@ def _get_order_or_404(session: Session, tenant_id: str, order_id: str) -> LabOrd
 
 def _external_lab_items_enabled(session: Session, tenant_id: str) -> bool:
     settings = get_settings()
-    value, _scope, _scope_id = resolve_setting(
+    value, scope, _scope_id = resolve_setting(
         session,
         tenant_id=tenant_id,
         module="integrations",
@@ -173,6 +181,8 @@ def _external_lab_items_enabled(session: Session, tenant_id: str) -> bool:
     )
     lab_items = value.get("lab_items") if isinstance(value, dict) else {}
     if isinstance(lab_items, dict) and "enabled" in lab_items:
+        if scope is None and settings.maha_clinic_url and settings.maha_clinic_token:
+            return lab_items.get("provider") != "local" or not lab_items.get("enabled")
         return bool(lab_items.get("enabled")) and lab_items.get("provider") != "local"
     return bool(settings.external_lab_items_enabled)
 
@@ -239,8 +249,12 @@ def _local_lab_price(test: LabTestCatalog | None) -> dict[str, int | str | None]
 
 
 def _external_lab_price(client: FrappeCatalogClient, item_name: str) -> dict[str, int | str | None]:
-    matches = client.get_lab_items(item_name)
     requested = _catalog_key(item_name)
+    try:
+        matches = client.get_lab_items(item_name)
+    except Exception:
+        logger.warning("External lab search failed for %r", item_name, exc_info=True)
+        matches = []
     exact = next(
         (
             item
@@ -250,19 +264,165 @@ def _external_lab_price(client: FrappeCatalogClient, item_name: str) -> dict[str
         ),
         matches[0] if matches else None,
     )
-    if not exact:
-        return _price_payload(price=0)
-    detail = client.get_lab_item_details(str(exact.get("slug") or exact.get("id") or exact.get("erpnext_name") or item_name))
-    selling_price = _round_price(detail.get("selling_price"))
-    return _price_payload(
-        price=selling_price,
-        mrp_price=_round_price(detail.get("mrp_price")),
-        selling_price=selling_price,
-        buying_price=_round_price(detail.get("buying_price")),
-        external_source="erpnext",
-        external_slug=str(detail.get("slug") or exact.get("slug") or ""),
-        external_item_code=str(detail.get("item_code") or detail.get("name") or ""),
+    # Build slug candidates: whatever the search returned, plus the kebab-case
+    # name (ERPNext lab item slugs look like "random-blood-sugar"). This lets
+    # pricing work even when the name search misses or omits a usable slug.
+    candidate_slugs: list[str] = []
+    for source in (exact or {}, {}):
+        for key in ("slug", "id", "erpnext_name"):
+            value = str(source.get(key) or "").strip()
+            if value and value not in candidate_slugs:
+                candidate_slugs.append(value)
+    for guess in (_slugify(item_name), item_name.strip()):
+        if guess and guess not in candidate_slugs:
+            candidate_slugs.append(guess)
+
+    for slug in candidate_slugs:
+        try:
+            detail = client.get_lab_item_details(slug)
+        except Exception:
+            continue
+        selling_price = _round_price(detail.get("selling_price"))
+        if selling_price <= 0:
+            continue
+        return _price_payload(
+            price=selling_price,
+            mrp_price=_round_price(detail.get("mrp_price")),
+            selling_price=selling_price,
+            buying_price=_round_price(detail.get("buying_price")),
+            external_source="erpnext",
+            external_slug=str(detail.get("slug") or slug or ""),
+            external_item_code=str(detail.get("item_code") or detail.get("name") or ""),
+        )
+    return _price_payload(price=0)
+
+
+def _resolve_lab_price(
+    frappe_client: FrappeCatalogClient | None,
+    test: LabTestCatalog | None,
+    item_name: str,
+) -> dict[str, int | str | None]:
+    """Price a lab item, falling back to the local catalog when the external
+    catalog lookup fails or returns no price, so order creation is never blocked
+    or silently zero-priced by the integration."""
+    if frappe_client is not None:
+        try:
+            pricing = _external_lab_price(frappe_client, item_name)
+        except Exception:
+            logger.warning(
+                "External lab pricing failed for %r; using local catalog price",
+                item_name,
+                exc_info=True,
+            )
+        else:
+            if int(pricing.get("price") or 0) > 0:
+                return pricing
+            logger.warning(
+                "External lab pricing returned no price for %r; using local catalog price",
+                item_name,
+            )
+    return _local_lab_price(test)
+
+
+def _add_priced_order_items_from_names(
+    session: Session,
+    *,
+    order: LabOrder,
+    item_names: list[str],
+    seen_keys: set[str] | None = None,
+) -> int:
+    """Create LabOrderItem rows for external/manual test names and return total price."""
+    seen_keys = seen_keys or set()
+    frappe_client = _frappe_catalog_client() if _external_lab_items_enabled(session, order.tenant_id) else None
+    total = 0
+    for raw_name in item_names:
+        item_name = str(raw_name or "").strip()
+        item_key = _catalog_key(item_name)
+        if not item_name or not item_key or item_key in seen_keys:
+            continue
+        test = _find_lab_test(session, order.tenant_id, order.branch_id, item_name)
+        pricing = _resolve_lab_price(frappe_client, test, item_name)
+        price = int(pricing.get("price") or 0)
+        if price <= 0:
+            continue
+        seen_keys.add(item_key)
+        total += price
+        session.add(
+            LabOrderItem(
+                tenant_id=order.tenant_id,
+                branch_id=order.branch_id,
+                lab_order_id=order.id,
+                test_id=test.id if test else None,
+                test_name=test.name if test else item_name,
+                sample_type=test.sample_type if test else None,
+                **pricing,
+            )
+        )
+    return total
+
+
+def _reprice_zero_order_items(session: Session, order: LabOrder) -> bool:
+    """Fill zero-priced lab order items from the active external/local catalog."""
+    items = list(
+        session.exec(
+            select(LabOrderItem).where(
+                LabOrderItem.tenant_id == order.tenant_id,
+                LabOrderItem.lab_order_id == order.id,
+            )
+        ).all()
     )
+    if not items:
+        total = _add_priced_order_items_from_names(
+            session,
+            order=order,
+            item_names=[str(row["item_name"] or "") for row in _fallback_lab_referrals(order.tests)],
+        )
+        if total > 0:
+            order.amount = total
+            order.updated_at = now_utc()
+            session.add(order)
+            session.commit()
+            session.refresh(order)
+            return True
+        return False
+    zero_items = [item for item in items if int(item.price or 0) <= 0]
+    if not zero_items:
+        return False
+    frappe_client = _frappe_catalog_client() if _external_lab_items_enabled(session, order.tenant_id) else None
+    changed = False
+    for item in zero_items:
+        test = session.get(LabTestCatalog, item.test_id) if item.test_id else None
+        if test is None:
+            test = _find_lab_test(session, order.tenant_id, order.branch_id, item.test_name)
+        pricing = _resolve_lab_price(frappe_client, test, item.test_name)
+        new_price = int(pricing.get("price") or 0)
+        if new_price <= 0:
+            continue
+        item.price = new_price
+        item.mrp_price = int(pricing.get("mrp_price") or item.mrp_price or 0)
+        item.selling_price = int(pricing.get("selling_price") or new_price)
+        item.buying_price = int(pricing.get("buying_price") or item.buying_price or 0)
+        item.supplier_id = str(pricing.get("supplier_id") or item.supplier_id or "") or None
+        item.external_source = str(pricing.get("external_source") or item.external_source or "") or None
+        item.external_slug = str(pricing.get("external_slug") or item.external_slug or "") or None
+        item.external_item_code = str(pricing.get("external_item_code") or item.external_item_code or "") or None
+        session.add(item)
+        changed = True
+    if changed:
+        order.amount = sum(
+            int(item.price or 0)
+            for item in session.exec(
+                select(LabOrderItem).where(
+                    LabOrderItem.tenant_id == order.tenant_id,
+                    LabOrderItem.lab_order_id == order.id,
+                )
+            ).all()
+        )
+        order.updated_at = now_utc()
+        session.add(order)
+        session.commit()
+        session.refresh(order)
+    return changed
 
 
 @router.get("/external/items")
@@ -338,6 +498,8 @@ def list_available_lab_tests(
 
 
 def _read_detail(session: Session, order: LabOrder) -> LabOrderDetailRead:
+    if int(order.amount or 0) <= 0:
+        _reprice_zero_order_items(session, order)
     items = list(
         session.exec(
             select(LabOrderItem)
@@ -421,6 +583,7 @@ def _add_order_items(
     total = 0
     names: list[str] = []
     seen_tests: set[str] = set()
+    seen_names: set[str] = set()
     for package_id in package_ids:
         package = session.get(LabTestPackage, package_id)
         if not package or package.tenant_id != order.tenant_id or not package.is_active:
@@ -441,6 +604,7 @@ def _add_order_items(
             if not test or test.tenant_id != order.tenant_id or not test.is_active:
                 continue
             seen_tests.add(test.id)
+            seen_names.add(_catalog_key(test.name))
             names.append(test.name)
             session.add(
                 LabOrderItem(
@@ -461,6 +625,7 @@ def _add_order_items(
         if not test or test.tenant_id != order.tenant_id or not test.is_active:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid lab test")
         seen_tests.add(test.id)
+        seen_names.add(_catalog_key(test.name))
         total += test.default_price
         names.append(test.name)
         session.add(
@@ -474,6 +639,23 @@ def _add_order_items(
                 **_local_lab_price(test),
             )
         )
+    manual_names = []
+    if not test_ids and not package_ids:
+        manual_names = [
+            str(row["item_name"] or "")
+            for row in _fallback_lab_referrals(order.tests)
+            if _catalog_key(str(row["item_name"] or "")) not in seen_names
+        ]
+    if manual_names:
+        manual_total = _add_priced_order_items_from_names(
+            session,
+            order=order,
+            item_names=manual_names,
+            seen_keys=seen_names,
+        )
+        if manual_total > 0:
+            total += manual_total
+            names.extend(manual_names)
     if names:
         order.tests = ", ".join(names)
         if order.amount == 0:
@@ -757,6 +939,8 @@ def create_lab_order(
     session.commit()
     session.refresh(order)
     _add_order_items(session, order=order, test_ids=payload.test_ids, package_ids=payload.package_ids)
+    if order.amount == 0:
+        _reprice_zero_order_items(session, order)
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -832,7 +1016,7 @@ def create_lab_order_from_consultation(
         if not item_name:
             continue
         test = _find_lab_test(session, tenant_id, consultation.branch_id, item_name)
-        pricing = _external_lab_price(frappe_client, item_name) if frappe_client else _local_lab_price(test)
+        pricing = _resolve_lab_price(frappe_client, test, item_name)
         total += int(pricing.get("price") or 0)
         session.add(
             LabOrderItem(
@@ -850,6 +1034,8 @@ def create_lab_order_from_consultation(
     session.add(order)
     session.commit()
     session.refresh(order)
+    if order.amount == 0:
+        _reprice_zero_order_items(session, order)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -881,7 +1067,11 @@ def list_lab_orders(
         statement = statement.where(LabOrder.patient_id == patient_id)
     if status_filter:
         statement = statement.where(LabOrder.status == status_filter)
-    return list(session.exec(statement.order_by(LabOrder.created_at.desc())).all())
+    rows = list(session.exec(statement.order_by(LabOrder.created_at.desc())).all())
+    for order in rows:
+        if int(order.amount or 0) <= 0:
+            _reprice_zero_order_items(session, order)
+    return rows
 
 
 @router.get("/orders/{order_id}", response_model=LabOrderDetailRead)

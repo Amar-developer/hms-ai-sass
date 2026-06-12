@@ -3,6 +3,7 @@ import {
   CalendarDays,
   CheckCircle2,
   Info,
+  RefreshCw,
   X,
   XCircle,
 } from "lucide-react";
@@ -806,6 +807,44 @@ export function ActionButton({
       className={`inline-flex h-9 shrink-0 items-center justify-center rounded-xl border px-3 text-[10px] lg:text-xs font-bold disabled:border-slate-200 disabled:bg-white disabled:text-slate-300 ${tones[tone] || tones.neutral} ${className}`}
     >
       {children}
+    </button>
+  );
+}
+
+// Reusable refresh control for list/table headers. `onRefresh` may be sync or
+// async; the icon spins while an async refresh is in flight.
+export function RefreshButton({
+  onRefresh,
+  title = "Refresh",
+  label,
+  className = "",
+}: {
+  onRefresh: () => void | Promise<unknown>;
+  title?: string;
+  label?: string;
+  className?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function handleClick() {
+    if (busy) return;
+    try {
+      setBusy(true);
+      await onRefresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={busy}
+      title={title}
+      aria-label={title}
+      className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 text-[10px] lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className}`}
+    >
+      <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+      {label ? <span>{label}</span> : null}
     </button>
   );
 }

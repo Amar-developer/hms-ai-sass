@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.access_control import enforce_entitlement, require_branch_in_tenant, require_user_branch_access, scoped_branch_id
-from app.core.auth import require_any_permission
+from app.core.access_control import enforce_entitlement, require_branch_in_tenant, require_user_branch_access
+from app.core.auth import require_any_permission, user_role_keys
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
@@ -22,6 +22,7 @@ from app.modules.patient_subscriptions.schemas import (
     PatientBenefitPreviewRequest,
     PatientSubscriptionEnrollmentCreate,
     PatientSubscriptionEnrollmentRead,
+    PatientSubscriptionEnrollmentUpdate,
     PatientSubscriptionPlanCreate,
     PatientSubscriptionPlanRead,
     PatientSubscriptionPlanUpdate,
@@ -30,8 +31,10 @@ from app.modules.patient_subscriptions.service import (
     active_patient_enrollment,
     benefit_preview,
     enrollment_end_date,
+    free_items_to_json,
     ids_to_json,
     plan_to_read_dict,
+    slabs_to_json,
 )
 from app.modules.patients.models import Patient
 from app.modules.tenants.models import Branch
@@ -58,6 +61,22 @@ def _get_plan(session: Session, tenant_id: str, plan_id: str) -> PatientSubscrip
     return plan
 
 
+def _get_enrollment(session: Session, tenant_id: str, enrollment_id: str) -> PatientSubscriptionEnrollment:
+    enrollment = session.get(PatientSubscriptionEnrollment, enrollment_id)
+    if not enrollment or enrollment.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient subscription enrollment not found")
+    return enrollment
+
+
+def _require_tenant_admin_or_super_admin(session: Session, tenant_id: str, user: User) -> None:
+    if user.is_super_admin:
+        return
+    roles = user_role_keys(session, user)
+    if user.tenant_id == tenant_id and (user.user_type == "tenant_admin" or "tenant_admin" in roles):
+        return
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant admin access required")
+
+
 def _resolve_enrollment_branch(
     session: Session,
     *,
@@ -66,7 +85,10 @@ def _resolve_enrollment_branch(
     patient: Patient,
     plan: PatientSubscriptionPlan,
 ) -> str:
-    branch_id = payload_branch_id or patient.branch_id or plan.branch_id
+    # Membership is tenant-scoped for benefit claims. Keep a branch on the
+    # enrollment for invoice numbering/access, but prefer the patient's home
+    # branch and do not treat the plan branch as a claim boundary.
+    branch_id = patient.branch_id or payload_branch_id or plan.branch_id
     if not branch_id:
         branch_id = session.exec(
             select(Branch.id)
@@ -79,10 +101,6 @@ def _resolve_enrollment_branch(
             detail="Select a branch before enrolling the patient in a membership plan",
         )
     require_branch_in_tenant(session, tenant_id, branch_id)
-    if patient.branch_id and patient.branch_id != branch_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Patient does not belong to this branch")
-    if plan.branch_id and plan.branch_id != branch_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Plan is not valid for this branch")
     return branch_id
 
 
@@ -94,39 +112,40 @@ def create_plan(
     current_user: User = Depends(require_any_permission(permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> PatientSubscriptionPlanRead:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
-    require_branch_in_tenant(session, tenant_id, payload.branch_id)
-    require_user_branch_access(current_user, payload.branch_id)
     name_norm = (payload.name or "").strip().lower()
-    branch_filter = (
-        PatientSubscriptionPlan.branch_id == payload.branch_id
-        if payload.branch_id
-        else PatientSubscriptionPlan.branch_id.is_(None)
-    )
     duplicate = session.exec(
         select(PatientSubscriptionPlan).where(
             PatientSubscriptionPlan.tenant_id == tenant_id,
             PatientSubscriptionPlan.is_active == True,  # noqa: E712
-            branch_filter,
         )
     ).all()
     if any((existing.name or "").strip().lower() == name_norm for existing in duplicate):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="An active subscription plan with this name already exists for this branch",
+            detail="An active subscription plan with this name already exists for this tenant",
         )
+    plan_data = payload.model_dump(
+        exclude={
+            "branch_id",
+            "pharmacy_discount_slabs",
+            "free_consultation_department_ids",
+            "free_lab_test_ids",
+            "free_lab_test_quantities",
+            "discounted_lab_test_ids",
+            "free_medicine_ids",
+            "free_medicine_quantities",
+            "discounted_medicine_ids",
+        }
+    )
     plan = PatientSubscriptionPlan(
-        **payload.model_dump(
-            exclude={
-                "free_lab_test_ids",
-                "discounted_lab_test_ids",
-                "free_medicine_ids",
-                "discounted_medicine_ids",
-            }
-        ),
+        **plan_data,
         tenant_id=tenant_id,
-        free_lab_test_ids_json=ids_to_json(payload.free_lab_test_ids),
+        branch_id=None,
+        pharmacy_discount_slabs_json=slabs_to_json(payload.pharmacy_discount_slabs),
+        free_consultation_department_ids_json=ids_to_json(payload.free_consultation_department_ids),
+        free_lab_test_ids_json=free_items_to_json(payload.free_lab_test_ids, payload.free_lab_test_quantities),
         discounted_lab_test_ids_json=ids_to_json(payload.discounted_lab_test_ids),
-        free_medicine_ids_json=ids_to_json(payload.free_medicine_ids),
+        free_medicine_ids_json=free_items_to_json(payload.free_medicine_ids, payload.free_medicine_quantities),
         discounted_medicine_ids_json=ids_to_json(payload.discounted_medicine_ids),
     )
     session.add(plan)
@@ -135,7 +154,7 @@ def create_plan(
     record_audit_event(
         session,
         tenant_id=tenant_id,
-        branch_id=plan.branch_id,
+        branch_id=None,
         actor_user_id=payload.created_by_user_id,
         action="patient_subscription_plan.created",
         resource_type="patient_subscription_plan",
@@ -162,10 +181,7 @@ def list_plans(
     ),
 ) -> list[PatientSubscriptionPlanRead]:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
-    branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(PatientSubscriptionPlan).where(PatientSubscriptionPlan.tenant_id == tenant_id)
-    if branch_id:
-        statement = statement.where((PatientSubscriptionPlan.branch_id == branch_id) | (PatientSubscriptionPlan.branch_id.is_(None)))
     if not include_inactive:
         statement = statement.where(PatientSubscriptionPlan.is_active == True)  # noqa: E712
     return [_read_plan(plan) for plan in session.exec(statement.order_by(PatientSubscriptionPlan.created_at.desc())).all()]
@@ -181,20 +197,26 @@ def update_plan(
 ) -> PatientSubscriptionPlanRead:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
     plan = _get_plan(session, tenant_id, plan_id)
-    branch_id = payload.branch_id if payload.branch_id is not None else plan.branch_id
-    require_branch_in_tenant(session, tenant_id, branch_id)
-    require_user_branch_access(current_user, branch_id)
     updates = payload.model_dump(exclude_unset=True)
+    updates.pop("branch_id", None)
+    free_lab_quantities = updates.pop("free_lab_test_quantities", None)
+    free_medicine_quantities = updates.pop("free_medicine_quantities", None)
+    if "free_lab_test_ids" in updates:
+        plan.free_lab_test_ids_json = free_items_to_json(updates.pop("free_lab_test_ids"), free_lab_quantities)
+    if "free_medicine_ids" in updates:
+        plan.free_medicine_ids_json = free_items_to_json(updates.pop("free_medicine_ids"), free_medicine_quantities)
     for source, target in [
-        ("free_lab_test_ids", "free_lab_test_ids_json"),
+        ("pharmacy_discount_slabs", "pharmacy_discount_slabs_json"),
+        ("free_consultation_department_ids", "free_consultation_department_ids_json"),
         ("discounted_lab_test_ids", "discounted_lab_test_ids_json"),
-        ("free_medicine_ids", "free_medicine_ids_json"),
         ("discounted_medicine_ids", "discounted_medicine_ids_json"),
     ]:
         if source in updates:
-            setattr(plan, target, ids_to_json(updates.pop(source)))
+            value = updates.pop(source)
+            setattr(plan, target, slabs_to_json(value) if source == "pharmacy_discount_slabs" else ids_to_json(value))
     for key, value in updates.items():
         setattr(plan, key, value)
+    plan.branch_id = None
     plan.updated_at = datetime.now(timezone.utc)
     session.add(plan)
     session.commit()
@@ -202,7 +224,7 @@ def update_plan(
     record_audit_event(
         session,
         tenant_id=tenant_id,
-        branch_id=plan.branch_id,
+        branch_id=None,
         actor_user_id=payload.updated_by_user_id or current_user.id,
         action="patient_subscription_plan.updated",
         resource_type="patient_subscription_plan",
@@ -220,30 +242,25 @@ def delete_plan(
     current_user: User = Depends(require_any_permission(permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE)),
 ) -> None:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
+    _require_tenant_admin_or_super_admin(session, tenant_id, current_user)
     plan = _get_plan(session, tenant_id, plan_id)
-    active_enrollment = session.exec(
-        select(PatientSubscriptionEnrollment).where(
-            PatientSubscriptionEnrollment.plan_id == plan_id,
-            PatientSubscriptionEnrollment.status == PatientSubscriptionEnrollmentStatus.ACTIVE,
-        )
-    ).first()
-    if active_enrollment:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot delete plan with active enrollments. Pause the plan instead.",
-        )
+    # Soft-delete: deactivate the plan instead of removing it, so existing patient
+    # enrollments and their records (invoices, history) are preserved.
+    plan.is_active = False
+    plan.updated_by_user_id = current_user.id
+    plan.updated_at = datetime.now(timezone.utc)
+    session.add(plan)
+    session.commit()
     record_audit_event(
         session,
         tenant_id=tenant_id,
         branch_id=plan.branch_id,
         actor_user_id=current_user.id,
-        action="patient_subscription_plan.deleted",
+        action="patient_subscription_plan.deactivated",
         resource_type="patient_subscription_plan",
         resource_id=plan.id,
         purpose="patient_subscription_configuration",
     )
-    session.delete(plan)
-    session.commit()
 
 
 @router.post("/enrollments", response_model=PatientSubscriptionEnrollmentRead, status_code=status.HTTP_201_CREATED)
@@ -381,14 +398,89 @@ def list_enrollments(
     ),
 ) -> list[PatientSubscriptionEnrollmentRead]:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
-    branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(PatientSubscriptionEnrollment).where(PatientSubscriptionEnrollment.tenant_id == tenant_id)
-    if branch_id:
-        statement = statement.where(PatientSubscriptionEnrollment.branch_id == branch_id)
     if patient_id:
         statement = statement.where(PatientSubscriptionEnrollment.patient_id == patient_id)
     rows = session.exec(statement.order_by(PatientSubscriptionEnrollment.created_at.desc())).all()
     return [_read_enrollment(session, row) for row in rows]
+
+
+@router.patch("/enrollments/{enrollment_id}", response_model=PatientSubscriptionEnrollmentRead)
+def update_enrollment(
+    enrollment_id: str,
+    payload: PatientSubscriptionEnrollmentUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_any_permission(permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE)),
+) -> PatientSubscriptionEnrollmentRead:
+    enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
+    _require_tenant_admin_or_super_admin(session, tenant_id, current_user)
+    enrollment = _get_enrollment(session, tenant_id, enrollment_id)
+    require_user_branch_access(current_user, enrollment.branch_id)
+    updates = payload.model_dump(exclude_unset=True)
+    branch_id = updates.get("branch_id")
+    if branch_id:
+        require_branch_in_tenant(session, tenant_id, branch_id)
+        require_user_branch_access(current_user, branch_id)
+    for key in ("branch_id", "starts_on", "ends_on", "status", "used_consultations", "paid_amount"):
+        if key in updates:
+            setattr(enrollment, key, updates[key])
+    if enrollment.ends_on < enrollment.starts_on:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Enrollment end date cannot be before start date")
+    if enrollment.status == PatientSubscriptionEnrollmentStatus.CANCELLED:
+        enrollment.cancelled_by_user_id = payload.updated_by_user_id or current_user.id
+    enrollment.updated_at = datetime.now(timezone.utc)
+    session.add(enrollment)
+    session.commit()
+    session.refresh(enrollment)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=enrollment.branch_id,
+        actor_user_id=payload.updated_by_user_id or current_user.id,
+        action="patient_subscription_enrollment.updated",
+        resource_type="patient_subscription_enrollment",
+        resource_id=enrollment.id,
+        purpose="patient_subscription_enrollment",
+    )
+    return _read_enrollment(session, enrollment)
+
+
+@router.delete("/enrollments/{enrollment_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_enrollment(
+    enrollment_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_any_permission(permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE)),
+) -> None:
+    enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=current_user)
+    _require_tenant_admin_or_super_admin(session, tenant_id, current_user)
+    enrollment = _get_enrollment(session, tenant_id, enrollment_id)
+    require_user_branch_access(current_user, enrollment.branch_id)
+    benefit_invoice = session.exec(
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.patient_subscription_enrollment_id == enrollment.id,
+            Invoice.membership_discount_amount > 0,
+        )
+    ).first()
+    if benefit_invoice:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot delete enrollment with claimed membership benefits. Cancel it instead.",
+        )
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=enrollment.branch_id,
+        actor_user_id=current_user.id,
+        action="patient_subscription_enrollment.deleted",
+        resource_type="patient_subscription_enrollment",
+        resource_id=enrollment.id,
+        purpose="patient_subscription_enrollment",
+    )
+    session.delete(enrollment)
+    session.commit()
 
 
 @router.post("/benefits/preview", response_model=PatientBenefitPreviewRead)
@@ -434,5 +526,6 @@ def preview_benefits(
             service_type=payload.service_type,
             item_ids=payload.item_ids,
             subtotal_amount=payload.subtotal_amount,
+            department_id=payload.department_id,
         ),
     )

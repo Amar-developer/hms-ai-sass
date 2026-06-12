@@ -10,6 +10,7 @@ import {
   Card,
   Field,
   Input,
+  RefreshButton,
   Select,
   StatusToast,
 } from "@/components/common/ui";
@@ -462,14 +463,17 @@ export function Scheduling({ apiSession, branchId }: any) {
             medical department, room, and slot duration.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => open("create")}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
-        >
-          <Plus size={16} />
-          Create Schedule
-        </button>
+        <div className="flex items-center gap-2">
+          <RefreshButton onRefresh={() => loadData(tenantId)} />
+          <button
+            type="button"
+            onClick={() => open("create")}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-bold text-white"
+          >
+            <Plus size={16} />
+            Create Schedule
+          </button>
+        </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-7">

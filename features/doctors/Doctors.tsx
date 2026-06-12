@@ -10,6 +10,7 @@ import {
   Card,
   Field,
   Input,
+  RefreshButton,
   Select,
   StatusToast,
 } from "@/components/common/ui";
@@ -366,7 +367,8 @@ export function Doctors({ apiSession, clinic }: any) {
             and medical departments.
           </p>
         </div>
-        <div className="flex justify-center items-center">
+        <div className="flex justify-center items-center gap-2">
+          <RefreshButton onRefresh={() => loadData(tenantId)} />
           <button
             type="button"
             onClick={() => open("create")}

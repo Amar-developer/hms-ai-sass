@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   Card,
+  RefreshButton,
   StatusToast,
 } from "@/components/common/ui";
 import {
@@ -529,6 +530,7 @@ export function HomeCare({
           setFilters={setFilters}
           patientMap={patientMap}
           staffMap={staffMap}
+          onRefresh={load}
           onCreate={openCreate}
           onView={openView}
           onEdit={startEdit}
@@ -815,6 +817,7 @@ function BookingsList({
   setFilters,
   patientMap,
   staffMap,
+  onRefresh,
   onCreate,
   onView,
   onEdit,
@@ -849,6 +852,7 @@ function BookingsList({
         </div>
       </div>
       <div className="mt-2 flex items-center gap-2">
+        <RefreshButton onRefresh={onRefresh} />
         <Badge tone="blue">{bookings.length} shown</Badge>
         <span className="text-xs text-slate-400">of {total} bookings</span>
       </div>
