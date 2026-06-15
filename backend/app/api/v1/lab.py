@@ -1,6 +1,5 @@
 import json
 import logging
-import logging
 import re
 from datetime import datetime, timezone
 
@@ -640,11 +639,13 @@ def _add_order_items(
                 **_local_lab_price(test),
             )
         )
-    manual_names = [
-        str(row["item_name"] or "")
-        for row in _fallback_lab_referrals(order.tests)
-        if _catalog_key(str(row["item_name"] or "")) not in seen_names
-    ]
+    manual_names = []
+    if not test_ids and not package_ids:
+        manual_names = [
+            str(row["item_name"] or "")
+            for row in _fallback_lab_referrals(order.tests)
+            if _catalog_key(str(row["item_name"] or "")) not in seen_names
+        ]
     if manual_names:
         manual_total = _add_priced_order_items_from_names(
             session,
