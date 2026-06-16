@@ -239,7 +239,7 @@ export function ConsultationWorkspace(props: any) {
             onClick={() => setActive?.("doctor")}
             className="close-button font-bold"
           >
-            ← Dashboard
+           Back
           </button>
           <button
             onClick={() => selected && callPatient(selected)}
@@ -263,7 +263,7 @@ export function ConsultationWorkspace(props: any) {
             onClick={cancelAppointment}
             className="close-button font-bold text-red-600"
           >
-            Cancel
+            Cancel Appointment
           </button>
         </div>
       </div>

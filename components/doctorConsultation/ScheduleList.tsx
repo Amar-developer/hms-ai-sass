@@ -46,6 +46,7 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
                     ? "red"
                     : toneForQueue(row.queueStatus)
                 }
+                className="normal-badge"
               >
                 {humanizeOptionLabel(row.visitType || row.tokenType || "OP")}
               </Badge>

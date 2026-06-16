@@ -300,10 +300,14 @@ export function AppShell(props: any) {
       {/* Sidebar */}
       <div
         className={`
-    fixed left-0 top-0 z-40 h-screen ${tabletCollapsed ? "w-auto" : "w-64"} lg:w-72 bg-white border-r border-slate-200
-    transition-transform duration-300 
-    ${sideBarOpen ? "translate-x-0" : "-translate-x-full"}
-    lg:translate-x-0 border-red-400 border `}
+    fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200
+    transition-all duration-300
+
+    md:w-14
+    ${!tabletCollapsed ? "md:w-64" : ""}
+
+    lg:w-72
+  `}
       >
         {/* Tablet view Sidebar */}
         <div className="w-fit lg:w-full scrollbar-hidden h-full overflow-y-auto  ">
@@ -334,7 +338,7 @@ export function AppShell(props: any) {
             superAdminSections={superAdminSections}
             tabletCollapsed={tabletCollapsed}
             setTabletCollapsed={setTabletCollapsed}
-          />           
+          />
         </div>
       </div>
       <div className="h-full lg:flex ">
@@ -345,7 +349,6 @@ export function AppShell(props: any) {
               sideBarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
-          
             <Sidebar
               visibleNav={visibleNav}
               activePage={activePage}
@@ -375,7 +378,6 @@ export function AppShell(props: any) {
               setTabletCollapsed={setTabletCollapsed}
             />
           </div>
-
           <div className="mt-8 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
               {isSuperAdmin ? "Primary Tenant" : clinic.type}
@@ -393,10 +395,10 @@ export function AppShell(props: any) {
 
         <main
           className={`
-      scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto bg-white
-      lg:ml-0
-      ${tabletCollapsed ? "md:ml-14" : "md:ml-64"}
-    `}
+    scrollbar-hidden h-screen min-w-0 flex-1 overflow-y-auto bg-white
+    md:ml-14
+    lg:ml-0
+  `}
         >
           <AppHeader
             isSuperAdmin={isSuperAdmin}

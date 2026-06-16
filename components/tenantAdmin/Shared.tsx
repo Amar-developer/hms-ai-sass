@@ -337,8 +337,8 @@ export function ListCard({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">{title}</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">{title}</h3>
+          <p className="table-data text-slate-500">
             Latest created or updated records appear first. Click a row to open
             it, or use the action buttons.
           </p>

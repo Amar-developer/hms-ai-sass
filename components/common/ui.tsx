@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   Info,
   RefreshCw,
   X,
@@ -704,7 +705,9 @@ export function SearchableSelect({
         <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
           {displayLabel || placeholder}
         </span>
-        <span className="ml-2 text-xs text-slate-400">{open ? "▲" : "▼"}</span>
+        <ChevronDown
+          className={`${open ? "rotate-180" : ""} h-4 w-4 text-black font-bold`}
+        />
       </button>
       {open && (
         <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-2xl border border-slate-200 bg-white shadow-lg">

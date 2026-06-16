@@ -1258,7 +1258,7 @@ export function AppointmentCalendarBooking(props: Props) {
               <button
                 type="button"
                 onClick={() => window.print()}
-                className="rounded-2xl border px-4 py-3 text-sm font-bold"
+                className="close-button font-bold"
               >
                 Print Token
               </button>

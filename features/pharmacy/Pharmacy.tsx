@@ -564,7 +564,7 @@ export function Pharmacy({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <Card>
-        <h3 className="text-lg font-bold">Create Pharmacy Issue</h3>
+        <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
         <form
           onSubmit={createDirect}
           className="mt-4 grid gap-3 md:grid-cols-4"

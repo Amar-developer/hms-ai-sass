@@ -705,6 +705,7 @@ export function Items({ apiSession, branchId }: any) {
                 label="Description"
                 value={form.description}
                 onChange={(v) => setField("description", v)}
+                className="search-input"
               />
               <SelectField
                 label="Scope"
