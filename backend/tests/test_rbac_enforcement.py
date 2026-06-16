@@ -160,7 +160,7 @@ def test_suspended_tenant_blocks_tenant_user_access(client):
     assert response.json()["detail"] == "Tenant is suspended"
 
 
-def test_branch_scoped_user_cannot_read_other_branch_patient(client):
+def test_branch_scoped_user_can_read_tenant_patient_from_other_branch(client):
     tenant = client.post("/api/v1/tenants", json={"name": "Branch Scoped Clinic"}).json()
     main = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
@@ -200,6 +200,12 @@ def test_branch_scoped_user_cannot_read_other_branch_patient(client):
         f"/api/v1/patients/{patient['id']}",
         headers={"Authorization": f"Bearer {login.json()['access_token']}", "X-Tenant-ID": tenant["id"]},
     )
+    search = client.get(
+        "/api/v1/patients?q=Other",
+        headers={"Authorization": f"Bearer {login.json()['access_token']}", "X-Tenant-ID": tenant["id"]},
+    )
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Branch access denied"
+    assert response.status_code == 200
+    assert response.json()["id"] == patient["id"]
+    assert search.status_code == 200
+    assert [row["id"] for row in search.json()] == [patient["id"]]

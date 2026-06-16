@@ -167,3 +167,35 @@ def test_patient_membership_enrollment_resolves_missing_branch(client: TestClien
         },
     ).json()
     assert after_payment["has_active_subscription"] is True
+
+    paid_patient = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "Paid Membership Patient", "branch_id": branch["id"]},
+    ).json()
+    paid_enrollment = client.post(
+        "/api/v1/patient-subscriptions/enrollments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "patient_id": paid_patient["id"],
+            "plan_id": plan["id"],
+            "branch_id": branch["id"],
+            "starts_on": date.today().isoformat(),
+            "paid_amount": 500,
+            "payment_method": "cash",
+        },
+    )
+
+    assert paid_enrollment.status_code == 201
+    paid_body = paid_enrollment.json()
+    assert paid_body["paid_amount"] == 500
+    paid_invoices = client.get(
+        f"/api/v1/billing/invoices?patient_id={paid_patient['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    ).json()
+    paid_purchase_invoice = next(
+        invoice for invoice in paid_invoices if invoice["id"] == paid_body["purchase_invoice_id"]
+    )
+    assert paid_purchase_invoice["total_amount"] == 500
+    assert paid_purchase_invoice["paid_amount"] == 500
+    assert paid_purchase_invoice["balance_amount"] == 0

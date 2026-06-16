@@ -45,6 +45,10 @@ class Appointment(SQLModel, table=True):
     visit_purpose: str | None = Field(default=None, max_length=120, index=True)
     source_appointment_id: str | None = Field(default=None, index=True)
     is_billable: bool = Field(default=True, index=True)
+    # Custom consultation price set at booking for non-OP visit types
+    # (follow-up, doctor review, fitness certificate, etc.). OP keeps the
+    # configured fee rule price. None means "use the fee rule".
+    custom_fee_amount: int | None = Field(default=None)
     billing_note: str | None = Field(default=None, max_length=500)
     emergency_reason: str | None = Field(default=None, max_length=500)
     intake_vitals: str | None = Field(default=None, max_length=1000)

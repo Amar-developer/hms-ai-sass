@@ -73,6 +73,11 @@ class InvoiceItemSupplierUpdate(BaseModel):
     supplier_id: str | None = None
 
 
+class InvoiceAmountUpdate(BaseModel):
+    amount: int = Field(ge=0)
+    updated_by_user_id: str | None = None
+
+
 class InvoiceItemSupplierOptionRead(BaseModel):
     supplier: str
     supplier_name: str
@@ -85,6 +90,7 @@ class InvoiceRead(BaseModel):
     branch_id: str
     patient_id: str
     appointment_id: str | None
+    appointment_type: AppointmentType | None = None
     consultation_id: str | None
     lab_order_id: str | None = None
     pharmacy_issue_id: str | None = None

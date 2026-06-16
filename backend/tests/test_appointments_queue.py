@@ -172,6 +172,18 @@ def _create_doctor_login(client: TestClient, tenant_id: str, branch_id: str, nam
             "department_ids": ["ent"],
         },
     ).json()
+    client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "branch_id": branch_id,
+            "department_id": "ent",
+            "weekday": date.today().weekday(),
+            "start_time": "09:00:00",
+            "end_time": "17:00:00",
+            "slot_minutes": 15,
+        },
+    )
     login = client.post(
         "/api/v1/auth/login",
         json={"email": email, "password": "DoctorPass123", "tenant_id": tenant_id},

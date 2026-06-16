@@ -320,6 +320,8 @@ def benefit_preview(
 ) -> dict:
     item_set = set(item_ids or [])
     item_amounts = item_amounts or {}
+    if service_type != "consultation":
+        department_id = None
     discount_amount = 0
     free_item_ids: list[str] = []
     discounted_item_ids: list[str] = []

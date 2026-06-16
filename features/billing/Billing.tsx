@@ -234,6 +234,18 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     } catch {}
   }
 
+  async function refreshBillingData() {
+    if (!apiSession) return;
+    setMessage("");
+    try {
+      await loadLiveData(apiSession);
+      await loadReports();
+      setMessage("Invoices refreshed.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not refresh invoices.");
+    }
+  }
+
   async function generateInvoice(a: any) {
     if (!apiSession) return;
     setBusy(a.id);
@@ -462,6 +474,21 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     finally{setBusy('')}
   }
 
+  async function updateInvoiceAmount(invoice:any,amount:number){
+    if(!apiSession)return;
+    setBusy(`amount-${invoice.id}`);
+    setMessage('');
+    try{
+      const row=await apiFetch(`/billing/invoices/${invoice.id}/amount`,apiSession,{
+        method:'PATCH',
+        body:JSON.stringify({amount,updated_by_user_id:apiSession.user?.id}),
+      });
+      setDetail(row);
+      setMessage('Invoice amount updated.');
+    }catch(err:any){setMessage(err.message||'Could not update amount.')}
+    finally{setBusy('')}
+  }
+
   async function finalizeSettlement(){
     if(!apiSession)return;
     setBusy('settlement');
@@ -522,6 +549,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         issueCreditNote={issueCreditNote}
         supplierOptions={supplierOptions}
         updateInvoiceItemSupplier={updateInvoiceItemSupplier}
+        updateInvoiceAmount={updateInvoiceAmount}
       />
     );
   }
@@ -629,7 +657,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <RefreshButton onRefresh={loadReports} />
+            <RefreshButton onRefresh={refreshBillingData} />
             <Badge tone="slate" className="normal-badge">
               {filteredInvoices.length} of {invoices.length} invoices
             </Badge>
@@ -793,5 +821,3 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     </div>
   );
 }
-
-  

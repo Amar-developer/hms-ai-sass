@@ -468,11 +468,41 @@ export function Pharmacy({
     }
   }
 
+  async function generateInvoice(issue: any) {
+    setBusy(`invoice-${issue.id}`);
+    setMessage("");
+    try {
+      const detail = await apiFetch(
+        "/billing/invoices/from-pharmacy-issue",
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            pharmacy_issue_id: issue.id,
+            created_by_user_id: apiSession.user?.id,
+          }),
+        },
+      );
+      setLocalInvoicedIssueIds((ids) =>
+        ids.includes(issue.id) ? ids : [...ids, issue.id],
+      );
+      await load();
+      await loadLiveData?.(apiSession);
+      setMessage(
+        `Pharmacy invoice ${detail.invoice?.invoice_number || ""} generated.`,
+      );
+    } catch (err: any) {
+      setMessage(err.message || "Could not generate pharmacy invoice.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function handleIssueAction(issue: any, action: string) {
     if (!action) return;
     if (action === "partial") return updateStatus(issue, "partially_dispensed");
     if (action === "dispense") return updateStatus(issue, "dispensed");
-    if (action === "billed") return updateStatus(issue, "billed");
+    if (action === "invoice") return generateInvoice(issue);
     if (action === "cancel") return updateStatus(issue, "cancelled");
   }
 
@@ -752,8 +782,10 @@ export function Pharmacy({
                 const selected = selectedIssue?.id === issue.id;
                 const dispensed = isDispensed(issue);
                 const cancelled = isCancelledIssue(issue);
-                const billed = isBilledIssue(issue);
+                const invoiced = invoicedIssueIds.has(issue.id);
+                const billed = isBilledIssue(issue) || invoiced;
                 const rowBusy = busy === issue.id;
+                const invoiceBusy = busy === `invoice-${issue.id}`;
                 const amountBusy = busy === `amount-${issue.id}`;
                 const statusLabel = billed
                   ? "Billed"
@@ -853,33 +885,35 @@ export function Pharmacy({
                       <div className="ml-auto w-[190px]">
                         <select
                           value=""
-                          disabled={rowBusy || cancelled || billed}
+                          disabled={rowBusy || invoiceBusy || cancelled || invoiced}
                           onChange={(event: any) =>
                             handleIssueAction(issue, event.target.value)
                           }
                           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
                         >
                           <option value="">
-                            {rowBusy ? "Updating..." : "Select action"}
+                            {rowBusy || invoiceBusy
+                              ? "Updating..."
+                              : "Select action"}
                           </option>
                           <option
                             value="partial"
-                            disabled={dispensed || cancelled || billed}
+                            disabled={dispensed || cancelled || invoiced}
                           >
                             Partial dispense
                           </option>
                           <option
                             value="dispense"
-                            disabled={dispensed || cancelled || billed}
+                            disabled={dispensed || cancelled || invoiced}
                           >
                             Dispense
                           </option>
-                          <option value="billed" disabled={cancelled || billed}>
-                            Mark billed
-                          </option>
+                          {!invoiced && (
+                            <option value="invoice">Generate invoice</option>
+                          )}
                           <option
                             value="cancel"
-                            disabled={dispensed || cancelled || billed}
+                            disabled={dispensed || cancelled || invoiced}
                           >
                             Cancel order
                           </option>

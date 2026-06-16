@@ -38,6 +38,7 @@ class MedicineCatalog(SQLModel, table=True):
     strength: str | None = Field(default=None, max_length=80)
     manufacturer: str | None = Field(default=None, max_length=220)
     supplier_id: str | None = Field(default=None, index=True, foreign_key="pharmacysupplier.id")
+    mrp_price: int = Field(default=0, ge=0)
     purchase_price: int = Field(default=0, ge=0)
     default_sale_price: int = Field(default=0, ge=0)
     reorder_level: int = Field(default=0, ge=0)

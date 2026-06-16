@@ -8,6 +8,7 @@ class HomeCareServiceCreate(BaseModel):
     code: str | None = Field(default=None, min_length=2, max_length=60)
     name: str = Field(min_length=2, max_length=160)
     description: str | None = Field(default=None, max_length=500)
+    mrp_price: int = Field(default=0, ge=0)
     default_price: int = Field(default=0, ge=0)
 
 
@@ -16,6 +17,7 @@ class HomeCareServiceUpdate(BaseModel):
     code: str | None = Field(default=None, min_length=2, max_length=60)
     name: str | None = Field(default=None, min_length=2, max_length=160)
     description: str | None = Field(default=None, max_length=500)
+    mrp_price: int | None = Field(default=None, ge=0)
     default_price: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
 

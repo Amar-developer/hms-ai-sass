@@ -18,6 +18,7 @@ class AppointmentCreate(BaseModel):
     visit_purpose: str | None = Field(default=None, max_length=120)
     source_appointment_id: str | None = None
     is_billable: bool | None = None
+    custom_fee_amount: int | None = Field(default=None, ge=0)
     billing_note: str | None = Field(default=None, max_length=500)
     emergency_reason: str | None = Field(default=None, max_length=500)
     intake_vitals: str | None = Field(default=None, max_length=1000)
@@ -49,6 +50,7 @@ class AppointmentRead(BaseModel):
     visit_purpose: str | None
     source_appointment_id: str | None
     is_billable: bool
+    custom_fee_amount: int | None = None
     billing_note: str | None
     emergency_reason: str | None
     intake_vitals: str | None

@@ -77,6 +77,8 @@ export function mapAppointment(
     practitioner_id: row.practitioner_id || '',
     doctor: row.practitioner_name || practitioner?.full_name || practitioner?.name || 'Unassigned',
     appointmentDate: row.appointment_date,
+    appointment_time: row.appointment_time,
+    appointmentTime: row.appointment_time,
     time: row.appointment_time || 'Today',
     status: row.status,
     queueStatus: q?.status || row.status,
@@ -85,6 +87,8 @@ export function mapAppointment(
     intakeVitals: row.intake_vitals || '',
     intakeComplaints: row.intake_complaints || '',
     isBillable: row.is_billable,
+    appointmentType: row.appointment_type || 'op',
+    customFeeAmount: row.custom_fee_amount ?? null,
     visitType: row.appointment_type?.replaceAll?.('_', ' ')?.toUpperCase?.() || 'OP',
     roomNumber,
   };

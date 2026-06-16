@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.modules.appointments.models import Appointment
+from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.billing.models import (
     DoctorFeeRule,
     DiscountOffer,
@@ -43,15 +43,23 @@ def next_credit_note_number(session: Session, tenant_id: str) -> str:
 
 
 def find_fee_rule(session: Session, appointment: Appointment, treatment_type: str | None = None) -> DoctorFeeRule:
-    rules = list(
-        session.exec(
-            select(DoctorFeeRule).where(
-                DoctorFeeRule.tenant_id == appointment.tenant_id,
-                DoctorFeeRule.appointment_type == appointment.appointment_type,
-                DoctorFeeRule.is_active == True,  # noqa: E712
-            )
-        ).all()
-    )
+    def _rules_for(appointment_type: AppointmentType) -> list[DoctorFeeRule]:
+        return list(
+            session.exec(
+                select(DoctorFeeRule).where(
+                    DoctorFeeRule.tenant_id == appointment.tenant_id,
+                    DoctorFeeRule.appointment_type == appointment_type,
+                    DoctorFeeRule.is_active == True,  # noqa: E712
+                )
+            ).all()
+        )
+
+    rules = _rules_for(appointment.appointment_type)
+    # Emergency visits are urgent OP consultations. When no emergency-specific
+    # fee rule is configured, fall back to the standard OP fee so the visit can
+    # still be invoiced instead of failing with "no fee rule".
+    if not rules and appointment.appointment_type == AppointmentType.EMERGENCY:
+        rules = _rules_for(AppointmentType.OP)
     if not rules:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -87,8 +95,8 @@ def find_fee_rule(session: Session, appointment: Appointment, treatment_type: st
     return sorted(eligible, key=score, reverse=True)[0]
 
 
-def calculate_fee_split(fee_rule: DoctorFeeRule) -> FeeCalculation:
-    fee = fee_rule.fee_amount
+def calculate_fee_split(fee_rule: DoctorFeeRule, amount: int | None = None) -> FeeCalculation:
+    fee = fee_rule.fee_amount if amount is None else amount
     if fee_rule.share_type == FeeShareType.FIXED:
         doctor_share = min(fee_rule.doctor_fixed_amount or 0, fee)
     else:
@@ -151,6 +159,28 @@ def find_tax_rule(
     return matching_rules[0]
 
 
+def _offer_discount_value(offer: DiscountOffer, subtotal: int) -> int:
+    """Discount this offer yields for the subtotal, or 0 if it is not eligible."""
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc)
+    valid_from = offer.valid_from.replace(tzinfo=timezone.utc) if offer.valid_from and offer.valid_from.tzinfo is None else offer.valid_from
+    valid_until = offer.valid_until.replace(tzinfo=timezone.utc) if offer.valid_until and offer.valid_until.tzinfo is None else offer.valid_until
+    if valid_from and valid_from > now:
+        return 0
+    if valid_until and valid_until < now:
+        return 0
+    if subtotal < offer.minimum_bill_amount:
+        return 0
+    if offer.discount_type == DiscountType.FIXED:
+        discount = offer.value
+    else:
+        discount = round(subtotal * offer.value / 100)
+    if offer.max_discount_amount is not None:
+        discount = min(discount, offer.max_discount_amount)
+    return max(min(discount, subtotal), 0)
+
+
 def calculate_offer_discount(
     session: Session,
     *,
@@ -160,35 +190,42 @@ def calculate_offer_discount(
     subtotal: int,
     discount_offer_id: str | None,
 ) -> tuple[int, DiscountOffer | None]:
-    if not discount_offer_id or subtotal <= 0:
+    if subtotal <= 0:
         return 0, None
-    offer = session.get(DiscountOffer, discount_offer_id)
-    if (
-        not offer
-        or offer.tenant_id != tenant_id
-        or not offer.is_active
-        or not _service_matches(offer.service_scope, service_scope)
-        or (offer.branch_id and offer.branch_id != branch_id)
-    ):
-        return 0, None
-    from datetime import datetime, timezone
+    # An explicitly chosen offer is used as-is. Otherwise auto-apply the best
+    # eligible active offer (mirrors tax-rule auto-selection), so configured
+    # offers actually reach the bill instead of showing "Offer not applied".
+    if discount_offer_id:
+        offer = session.get(DiscountOffer, discount_offer_id)
+        if (
+            not offer
+            or offer.tenant_id != tenant_id
+            or not offer.is_active
+            or not _service_matches(offer.service_scope, service_scope)
+            or (offer.branch_id and offer.branch_id != branch_id)
+        ):
+            return 0, None
+        discount = _offer_discount_value(offer, subtotal)
+        return (discount, offer) if discount > 0 else (0, None)
 
-    now = datetime.now(timezone.utc)
-    valid_from = offer.valid_from.replace(tzinfo=timezone.utc) if offer.valid_from and offer.valid_from.tzinfo is None else offer.valid_from
-    valid_until = offer.valid_until.replace(tzinfo=timezone.utc) if offer.valid_until and offer.valid_until.tzinfo is None else offer.valid_until
-    if valid_from and valid_from > now:
-        return 0, None
-    if valid_until and valid_until < now:
-        return 0, None
-    if subtotal < offer.minimum_bill_amount:
-        return 0, None
-    if offer.discount_type == DiscountType.FIXED:
-        discount = offer.value
-    else:
-        discount = round(subtotal * offer.value / 100)
-    if offer.max_discount_amount is not None:
-        discount = min(discount, offer.max_discount_amount)
-    return min(discount, subtotal), offer
+    offers = session.exec(
+        select(DiscountOffer).where(
+            DiscountOffer.tenant_id == tenant_id,
+            DiscountOffer.is_active == True,  # noqa: E712
+        )
+    ).all()
+    best_offer: DiscountOffer | None = None
+    best_discount = 0
+    for offer in offers:
+        if not _service_matches(offer.service_scope, service_scope):
+            continue
+        if offer.branch_id and offer.branch_id != branch_id:
+            continue
+        discount = _offer_discount_value(offer, subtotal)
+        if discount > best_discount:
+            best_discount = discount
+            best_offer = offer
+    return (best_discount, best_offer) if best_offer else (0, None)
 
 
 def create_consultation_invoice(
@@ -204,9 +241,23 @@ def create_consultation_invoice(
     treatment_type: str | None = None,
 ) -> tuple[Invoice, InvoiceItem]:
     if appointment.is_billable:
-        calculation = calculate_fee_split(find_fee_rule(session, appointment, treatment_type))
-        subtotal = calculation.consultation_amount
-        fee_rule_id = calculation.fee_rule.id
+        # Non-OP visits can carry a custom price set at booking. Use it as the
+        # subtotal and still derive the doctor share from a matching fee rule's
+        # share config when one exists; otherwise the clinic keeps the full fee.
+        custom_amount = getattr(appointment, "custom_fee_amount", None)
+        use_custom = custom_amount is not None and appointment.appointment_type != AppointmentType.OP
+        if use_custom:
+            try:
+                fee_rule = find_fee_rule(session, appointment, treatment_type)
+            except HTTPException:
+                fee_rule = None
+            subtotal = int(custom_amount)
+            calculation = calculate_fee_split(fee_rule, subtotal) if fee_rule else None
+            fee_rule_id = fee_rule.id if fee_rule else None
+        else:
+            calculation = calculate_fee_split(find_fee_rule(session, appointment, treatment_type))
+            subtotal = calculation.consultation_amount
+            fee_rule_id = calculation.fee_rule.id
     else:
         calculation = None
         subtotal = 0

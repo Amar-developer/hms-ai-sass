@@ -9,11 +9,13 @@ from fastapi import HTTPException, status
 def normalize_frappe_item(row: dict) -> dict[str, str]:
     item_name = str(row.get("item_name") or row.get("name") or "").strip()
     name = str(row.get("name") or item_name).strip()
+    item_code = str(row.get("item_code") or name or item_name).strip()
     slug = str(row.get("slug") or name).strip()
     return {
         "id": slug or name or item_name,
         "name": item_name or name,
         "item_name": item_name or name,
+        "item_code": item_code,
         "slug": slug,
         "erpnext_name": name,
         "source": "erpnext",

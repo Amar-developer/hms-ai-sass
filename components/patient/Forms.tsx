@@ -2,13 +2,12 @@ import { patientFormPayload } from "@/features/patients/PatientFormFields";
 import { Card, Button } from "../common/ui";
 import { PatientFormFields } from "@/features/patients/PatientFormFields";
 import {
-  TextField,
   NumberField,
   SelectField,
   DateField,
 } from "../FormElements";
 import { paymentMethodOptions } from "@/lib/options";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export function PatientForm({
   title,
@@ -67,6 +66,7 @@ export function PatientForm({
 export function MembershipEnrollForm({
   membershipPlans,
   patient,
+  branches = [],
   loading,
   onSubmit,
 }: any) {
@@ -78,6 +78,25 @@ export function MembershipEnrollForm({
   );
   const [paidAmount, setPaidAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
+  const selectedPlan = activePlans.find((plan: any) => plan.id === planId);
+  const branchOptions = useMemo(() => {
+    const options = branches.map((branch: any) => ({
+      value: branch.id,
+      label: branch.name || branch.branch_name || branch.id,
+    }));
+    if (branchId && !options.some((option: any) => option.value === branchId)) {
+      options.unshift({
+        value: branchId,
+        label: patient?.branch?.name || patient?.branch_name || branchId,
+      });
+    }
+    return [{ value: "", label: "Select branch" }, ...options];
+  }, [branches, branchId, patient?.branch?.name, patient?.branch_name]);
+
+  useEffect(() => {
+    if (!selectedPlan) return;
+    setPaidAmount(String(Number(selectedPlan.price_amount || 0)));
+  }, [selectedPlan]);
 
   function handleSubmit(e: any) {
     e.preventDefault();
@@ -98,11 +117,11 @@ export function MembershipEnrollForm({
           })),
         ]}
       />
-      <TextField
-        label="Branch ID"
+      <SelectField
+        label="Branch"
         value={branchId}
         onChange={setBranchId}
-        className="search-input"
+        options={branchOptions}
       />
       <DateField label="Starts On" value={startsOn} onChange={setStartsOn} />
       <NumberField
@@ -110,7 +129,7 @@ export function MembershipEnrollForm({
         value={paidAmount}
         onChange={setPaidAmount}
         min={0}
-        placeholder="0 if unpaid"
+        placeholder="Auto-filled from plan"
       />
       <SelectField
         label="Payment Method"
@@ -120,7 +139,7 @@ export function MembershipEnrollForm({
       />
       <div className="md:col-span-5">
         <Button disabled={loading || activePlans.length === 0}>
-          {loading ? "Saving..." : "Enroll Membership"}
+          {loading ? "Saving..." : "Enroll & Create Invoice"}
         </Button>
       </div>
     </form>

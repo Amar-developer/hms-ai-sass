@@ -62,6 +62,42 @@ function formatDisplayTime(value: any) {
   return `${hour12}:${minuteText.padStart(2, "0")} ${period}`;
 }
 
+// Normalizes an appointment (clinic or platform shape) into a display status
+// used for the badge, the status filter, and list ordering. `order` controls
+// sort position: active first, then cancelled, completed last.
+function appointmentStatusInfo(appointment: any) {
+  const consult = String(
+    appointment.consultationStatus || appointment.consultation_status || "",
+  ).toLowerCase();
+  const status = String(appointment.status || "").toLowerCase();
+  const queue = String(
+    appointment.queueStatus || appointment.queue_status || "",
+  ).toLowerCase();
+  if (status === "cancelled" || status === "no_show" || queue === "cancelled")
+    return { key: "cancelled", label: "Cancelled", tone: "red" as const, order: 1 };
+  if (
+    consult === "signed" ||
+    status === "consultation_completed" ||
+    status === "billed" ||
+    queue === "completed" ||
+    queue === "consultation_completed"
+  )
+    return { key: "completed", label: "Completed", tone: "green" as const, order: 2 };
+  return {
+    key: "active",
+    label: humanizeOptionLabel(queue || consult || status) || "Waiting",
+    tone: "slate" as const,
+    order: 0,
+  };
+}
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All Status" },
+  { value: "active", label: "Active" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
 export function AppointmentCalendarBooking(props: Props) {
   const {
     clinic,
@@ -95,14 +131,13 @@ export function AppointmentCalendarBooking(props: Props) {
   >("op");
   const [isBillable, setIsBillable] = useState(true);
   const [billingNote, setBillingNote] = useState("");
+  const [customFee, setCustomFee] = useState("");
   const [emergencyReason, setEmergencyReason] = useState("");
   const [intakeVitals, setIntakeVitals] = useState("");
   const [intakeComplaints, setIntakeComplaints] = useState("");
   const [liveDoctors, setLiveDoctors] = useState<any[]>([]);
   const [doctorFeeRules, setDoctorFeeRules] = useState<any[]>([]);
   const [doctorId, setDoctorId] = useState("");
-  const [calendar, setCalendar] = useState<any>(null);
-  const [selectedSlot, setSelectedSlot] = useState<any>(null);
   const [booked, setBooked] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const bookingInFlightRef = useRef(false);
@@ -113,6 +148,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const [platformRows, setPlatformRows] = useState<any[]>([]);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [filterDepartment, setFilterDepartment] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
 
   const patientMap = useMemo(
@@ -179,12 +215,19 @@ export function AppointmentCalendarBooking(props: Props) {
         ).startsWith(filterDate) ||
         String(appointment.time || "").startsWith(filterDate)) &&
       (filterDepartment === "all" ||
-        appointment.departmentId === filterDepartment)
+        appointment.departmentId === filterDepartment) &&
+      (filterStatus === "all" ||
+        appointmentStatusInfo(appointment).key === filterStatus)
     );
   });
+  // Active (waiting/requeued/etc.) first, completed last; stable within a group.
+  const sortedAppointments = [...filteredAppointments].sort(
+    (a: any, b: any) =>
+      appointmentStatusInfo(a).order - appointmentStatusInfo(b).order,
+  );
   const listRecords = isSuperAdmin
     ? filteredPlatformRows
-    : filteredAppointments;
+    : sortedAppointments;
   const totalPages = Math.max(1, Math.ceil(listRecords.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const rows = listRecords.slice(
@@ -201,6 +244,13 @@ export function AppointmentCalendarBooking(props: Props) {
     const doctorId = appointment.doctorId || appointment.practitioner_id;
     if (doctorId)
       sessionStorage.setItem("medizinhub.consultationDoctorId", doctorId);
+    // Align the shared department context with this appointment so the
+    // consultation page keeps the selection (a department mismatch makes the
+    // workspace drop it and show "No appointment selected").
+    const appointmentDepartmentId =
+      appointment.departmentId || appointment.department_id;
+    if (appointmentDepartmentId && appointmentDepartmentId !== departmentId)
+      setDepartmentId(appointmentDepartmentId);
     setActive?.("consultation");
   }
 
@@ -212,15 +262,14 @@ export function AppointmentCalendarBooking(props: Props) {
   }
 
   const doctors = liveDoctors;
-  const doctor =
-    doctors.find((item: any) => item.id === doctorId) || doctors[0];
-  const doctorDepartmentOptions = useMemo(() => {
-    if (!doctor) return departmentOptions;
-    const mappedIds = new Set(doctor.department_ids || []);
-    return departmentOptions.filter((department: any) =>
-      mappedIds.has(department.id),
-    );
-  }, [doctor, departmentOptions]);
+  const doctor = doctors.find((item: any) => item.id === doctorId);
+  const selectedDepartmentName =
+    departmentOptions.find((department: any) => department.id === departmentId)
+      ?.name || "selected department";
+  const hasAvailableDoctor = appointmentType === "emergency" || doctors.length > 0;
+  const doctorAvailabilityMessage = hasAvailableDoctor
+    ? ""
+    : `No doctor is available for ${selectedDepartmentName} on ${displayDate(appointmentDate)}. Check doctor mapping and scheduling timings.`;
   const selectedFeeRule = useMemo(() => {
     const candidates = doctorFeeRules.filter((rule: any) => {
       if (!rule.is_active) return false;
@@ -241,6 +290,11 @@ export function AppointmentCalendarBooking(props: Props) {
     })[0];
   }, [doctorFeeRules, appointmentType, branchId, departmentId, doctorId]);
   const selectedFeeAmount = selectedFeeRule?.fee_amount;
+  // Non-OP visit types take a custom price set here instead of a fixed fee rule.
+  const supportsCustomFee =
+    appointmentType === "follow_up" ||
+    appointmentType === "doctor_review" ||
+    appointmentType === "fitness_certificate";
   const patientMatches = (
     apiSession
       ? liveMatches
@@ -262,7 +316,7 @@ export function AppointmentCalendarBooking(props: Props) {
 
   useEffect(
     () => setPage(1),
-    [query, filterDate, filterDepartment, appointments.length],
+    [query, filterDate, filterDepartment, filterStatus, appointments.length],
   );
   useEffect(
     () => setPage(1),
@@ -322,10 +376,6 @@ export function AppointmentCalendarBooking(props: Props) {
     listRefreshKey,
   ]);
   useEffect(() => {
-    setSelectedSlot(null);
-  }, [departmentId, doctorId, appointmentDate]);
-
-  useEffect(() => {
     let alive = true;
     async function runSearch() {
       if (!apiSession || patientSearch.trim().length < 2) {
@@ -337,7 +387,6 @@ export function AppointmentCalendarBooking(props: Props) {
           q: patientSearch.trim(),
           limit: "10",
         });
-        if (branchId) params.set("branch_id", branchId);
         const rows = await apiFetch(
           `/patients?${params.toString()}`,
           apiSession,
@@ -351,7 +400,7 @@ export function AppointmentCalendarBooking(props: Props) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, patientSearch]);
+  }, [apiSession?.token, apiSession?.tenantId, patientSearch]);
 
   useEffect(() => {
     let alive = true;
@@ -401,20 +450,53 @@ export function AppointmentCalendarBooking(props: Props) {
         setDoctorId("");
         return;
       }
+      if (!branchId || !departmentId || !appointmentDate) {
+        setLiveDoctors([]);
+        setDoctorId("");
+        return;
+      }
       try {
+        const params = new URLSearchParams({
+          branch_id: branchId,
+          department_id: departmentId,
+        });
         const rows = await fetchDoctors(
-          `/practitioners?branch_id=${encodeURIComponent(branchId)}`,
+          `/practitioners?${params.toString()}`,
         );
+        const availabilityRows = await Promise.all(
+          rows.map(async (row: any) => {
+            try {
+              const calendarParams = new URLSearchParams({
+                branch_id: branchId,
+                department_id: departmentId,
+                start_date: appointmentDate,
+                end_date: appointmentDate,
+              });
+              const calendar = await apiFetch(
+                `/practitioners/${row.id}/calendar?${calendarParams.toString()}`,
+                apiSession,
+              );
+              const day = calendar?.days?.[0];
+              const hasAvailableSlot =
+                Number(day?.available_slots || 0) > 0 ||
+                (day?.slots || []).some((slot: any) => slot.available);
+              return hasAvailableSlot ? row : null;
+            } catch {
+              return null;
+            }
+          }),
+        );
+        const availableRows = availabilityRows.filter(Boolean);
         if (!alive) return;
-        setLiveDoctors(rows);
+        setLiveDoctors(availableRows);
         setDoctorId((current) =>
-          rows.some((row: any) => row.id === current)
+          availableRows.some((row: any) => row.id === current)
             ? current
-            : rows[0]?.id || "",
+            : availableRows[0]?.id || "",
         );
-        if (rows.length === 0) {
+        if (availableRows.length === 0) {
           setMessage(
-            "No doctor is mapped to this branch. Ask the tenant admin to map a doctor and add scheduling timings.",
+            `No doctor is available for ${selectedDepartmentName} on ${displayDate(appointmentDate)}. Check doctor mapping and scheduling timings.`,
           );
         }
       } catch (err: any) {
@@ -432,57 +514,13 @@ export function AppointmentCalendarBooking(props: Props) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
-
-  useEffect(() => {
-    if (!doctor) return;
-    const mappedDepartmentIds: string[] = doctor.department_ids || [];
-    if (
-      mappedDepartmentIds.length > 0 &&
-      !mappedDepartmentIds.includes(departmentId)
-    ) {
-      setDepartmentId(mappedDepartmentIds[0]);
-    }
-  }, [doctorId, doctor, departmentId, setDepartmentId]);
-
-  useEffect(() => {
-    let alive = true;
-    async function loadSlots() {
-      if (!apiSession || !doctorId || bookingStep !== "appointment") {
-        setCalendar(null);
-        return;
-      }
-      try {
-        const params = new URLSearchParams({
-          branch_id: branchId,
-          department_id: departmentId,
-          start_date: appointmentDate,
-          end_date: appointmentDate,
-        });
-        const data = await apiFetch(
-          `/practitioners/${doctorId}/calendar?${params.toString()}`,
-          apiSession,
-        );
-        if (alive) setCalendar(data);
-      } catch (err: any) {
-        if (alive) {
-          setCalendar(null);
-          setMessage(err.message || "Could not load available slots.");
-        }
-      }
-    }
-    loadSlots();
-    return () => {
-      alive = false;
-    };
   }, [
     apiSession?.token,
     apiSession?.tenantId,
     branchId,
     departmentId,
-    doctorId,
     appointmentDate,
-    bookingStep,
+    selectedDepartmentName,
   ]);
 
   function openBooking() {
@@ -495,6 +533,7 @@ export function AppointmentCalendarBooking(props: Props) {
     setBooked(null);
     setMessage("");
     setAppointmentType("op");
+    setCustomFee("");
     setEmergencyReason("");
     setIntakeVitals("");
     setIntakeComplaints("");
@@ -517,7 +556,6 @@ export function AppointmentCalendarBooking(props: Props) {
     setLiveMatches([]);
     setPatientLookupOpen(false);
     setBooked(null);
-    setSelectedSlot(null);
     setMessage("");
     await refreshAppointmentList();
   }
@@ -630,10 +668,6 @@ export function AppointmentCalendarBooking(props: Props) {
       );
       return;
     }
-    if (appointmentType !== "emergency" && !selectedTimingSlot) {
-      setMessage("Select an available timing slot.");
-      return;
-    }
     bookingInFlightRef.current = true;
     setBusy(true);
     setMessage("");
@@ -647,14 +681,8 @@ export function AppointmentCalendarBooking(props: Props) {
             department_id: departmentId,
             practitioner_id: doctorId,
             appointment_type: appointmentType,
-            appointment_date:
-              appointmentType === "emergency"
-                ? appointmentDate
-                : selectedTimingSlot.appointment_date,
-            appointment_time:
-              appointmentType !== "emergency"
-                ? selectedTimingSlot.start_time
-                : null,
+            appointment_date: appointmentDate,
+            appointment_time: null,
             reason:
               appointmentType === "follow_up" ||
               appointmentType === "doctor_review"
@@ -670,6 +698,10 @@ export function AppointmentCalendarBooking(props: Props) {
                   ? "doctor_review"
                   : "consultation",
             is_billable: isBillable,
+            custom_fee_amount:
+              supportsCustomFee && isBillable && customFee !== ""
+                ? Number(customFee)
+                : null,
             billing_note: billingNote || null,
             emergency_reason:
               appointmentType === "emergency"
@@ -703,10 +735,7 @@ export function AppointmentCalendarBooking(props: Props) {
           doctorId: doctor?.id,
           doctor: doctor?.name,
           appointmentDate,
-          time:
-            appointmentType === "emergency"
-              ? "Emergency"
-              : selectedTimingSlot?.start_time || appointmentDate,
+          time: appointmentType === "emergency" ? "Emergency" : appointmentDate,
           status: "scheduled",
           queueStatus: "waiting",
           visitType:
@@ -730,36 +759,6 @@ export function AppointmentCalendarBooking(props: Props) {
       setBusy(false);
     }
   }
-
-  const day = calendar?.days?.[0];
-  const allDaySlots = day?.slots || [];
-  const mockSlots = [
-    "10:00",
-    "10:30",
-    "11:00",
-    "11:30",
-    "12:00",
-    "18:00",
-    "18:30",
-    "19:00",
-    "19:30",
-    "20:00",
-  ].map((time) => ({
-      appointment_date: appointmentDate,
-      start_time: time,
-      end_time: time,
-      available: true,
-      status: "available",
-    }));
-  const visibleSlots = Array.from(
-    new Map(
-      (apiSession ? allDaySlots : mockSlots).map((slot: any) => [
-        `${slot.appointment_date}-${slot.start_time}`,
-        slot,
-      ]),
-    ).values(),
-  );
-  const selectedTimingSlot = selectedSlot;
 
   if (mode === "book") {
     return (
@@ -948,53 +947,34 @@ export function AppointmentCalendarBooking(props: Props) {
                       value={departmentId}
                       onChange={(e: any) => setDepartmentId(e.target.value)}
                     >
-                      {doctorDepartmentOptions.map((department: any) => (
-                        <option key={department.id} value={department.id}>
-                          {department.name}
-                        </option>
-                      ))}
+	                      {departmentOptions.map((department: any) => (
+	                        <option key={department.id} value={department.id}>
+	                          {department.name}
+	                        </option>
+	                      ))}
                     </Select>
                   </Field>
                   <Field label="Doctor">
                     <Select
                       value={doctorId}
-                      onChange={(e: any) => {
-                        const nextDoctorId = e.target.value;
-                        const nextDoctor = doctors.find(
-                          (item: any) => item.id === nextDoctorId,
-                        );
-                        setDoctorId(nextDoctorId);
-                        const mappedDepartmentIds =
-                          nextDoctor?.department_ids || [];
-                        if (
-                          mappedDepartmentIds.length > 0 &&
-                          !mappedDepartmentIds.includes(departmentId)
-                        ) {
-                          setDepartmentId(mappedDepartmentIds[0]);
-                        }
-                      }}
+	                      onChange={(e: any) => setDoctorId(e.target.value)}
                       disabled={apiSession && doctors.length === 0}
                     >
                       {doctors.length === 0 && (
                         <option value="">No doctor available</option>
                       )}
                       {doctors.map((item: any) => {
-                        const departmentNames = (item.department_ids || [])
-                          .map(
-                            (id: string) =>
-                              departmentOptions.find(
-                                (department: any) => department.id === id,
-                              )?.name,
-                          )
-                          .filter(Boolean);
-                        return (
-                          <option key={item.id} value={item.id}>
-                            {item.full_name || item.name}
-                            {departmentNames.length
-                              ? ` - ${departmentNames.join(", ")}`
-                              : ""}
-                          </option>
-                        );
+	                        const departmentName =
+	                          departmentOptions.find(
+	                            (department: any) =>
+	                              department.id === departmentId,
+	                          )?.name || "";
+	                        return (
+	                          <option key={item.id} value={item.id}>
+	                            {item.full_name || item.name}
+	                            {departmentName ? ` - ${departmentName}` : ""}
+	                          </option>
+	                        );
                       })}
                     </Select>
                   </Field>
@@ -1019,63 +999,35 @@ export function AppointmentCalendarBooking(props: Props) {
                       onChange={(e: any) => setAppointmentDate(e.target.value)}
                     />
                   </Field>
-                <Field label="Timing Slots">
-                  <Select
-                    value={
-                      selectedSlot
-                        ? `${selectedSlot.appointment_date}-${selectedSlot.start_time}`
-                        : ""
-                    }
-                    onChange={(e: any) => {
-                      const slot = visibleSlots.find(
-                        (item: any) =>
-                          `${item.appointment_date}-${item.start_time}` ===
-                          e.target.value,
-                      );
-                      setSelectedSlot(slot || null);
-                    }}
-                    disabled={
-                      appointmentType !== "emergency" &&
-                      visibleSlots.length === 0
-                    }
-                  >
-                    <option value="">
-                      {visibleSlots.length
-                        ? "Select consultation time"
-                        : "No timing available"}
-                    </option>
-                    {visibleSlots.map((slot: any) => (
-                      <option
-                        key={`${slot.appointment_date}-${slot.start_time}`}
-                        value={`${slot.appointment_date}-${slot.start_time}`}
-                        disabled={!slot.available}
-                      >
-                        {formatDisplayTime(slot.start_time)}
-                        {!slot.available ? ` - ${slot.status || "booked"}` : ""}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <div className="rounded-lg bg-slate-50 p-4">
-                  <p className="text-xs font-bold uppercase text-slate-500">
-                    Doctor Fee
+	                <div className="rounded-lg bg-slate-50 p-4">
+	                  <p className="text-xs font-bold uppercase text-slate-500">
+	                    Doctor Fee
                   </p>
                   <p className="mt-1 table-data font-black">
-                    {isBillable
-                      ? selectedFeeAmount !== undefined
-                        ? `₹${Number(selectedFeeAmount).toLocaleString("en-IN")}`
-                        : "Not configured"
-                      : "Free"}
+                    {!isBillable
+                      ? "Free"
+                      : supportsCustomFee
+                        ? customFee
+                          ? `₹${Number(customFee).toLocaleString("en-IN")}`
+                          : "Set price below"
+                        : selectedFeeAmount !== undefined
+                          ? `₹${Number(selectedFeeAmount).toLocaleString("en-IN")}`
+                          : "Not configured"}
                   </p>
                   <p className="mt-1 text-[10px] lg:text-slate-500">
                     {doctorId
                       ? doctor?.full_name || doctor?.name || "Selected doctor"
                       : "Select doctor"}
-                  </p>
+	                  </p>
+	                </div>
+	              </div>
+              {doctorAvailabilityMessage && (
+                <div className="mt-4 rounded-lg bg-amber-50 p-4 table-data font-semibold text-amber-800">
+                  {doctorAvailabilityMessage}
                 </div>
-              </div>
-              {appointmentType === "emergency" && (
-                <div className="mt-4 rounded-2xl bg-red-50 p-4">
+              )}
+	              {appointmentType === "emergency" && (
+	                <div className="mt-4 rounded-2xl bg-red-50 p-4">
                   <TextField
                     label="Emergency Reason"
                     value={emergencyReason}
@@ -1102,6 +1054,17 @@ export function AppointmentCalendarBooking(props: Props) {
                       { value: "free", label: "Free Review" },
                     ]}
                   />
+                  {isBillable && (
+                    <Field label="Consultation Price (₹)">
+                      <Input
+                        type="number"
+                        min={0}
+                        value={customFee}
+                        onChange={(e: any) => setCustomFee(e.target.value)}
+                        placeholder="Set price for this visit"
+                      />
+                    </Field>
+                  )}
                   <TextField
                     label="Billing Note"
                     value={billingNote}
@@ -1112,35 +1075,9 @@ export function AppointmentCalendarBooking(props: Props) {
                 </div>
               )}
               {appointmentType !== "emergency" && (
-                <div className="mt-4">
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-                    {visibleSlots.length === 0 && (
-                      <div className="col-span-full rounded-lg bg-amber-50 p-4 table-data text-amber-700">
-                        No consultation timing available for this doctor/date.
-                      </div>
-                    )}
-                    {visibleSlots.map((slot: any) => (
-                      <button
-                        key={`${slot.appointment_date}-${slot.id || slot.start_time}`}
-                        type="button"
-                        disabled={!slot.available || busy}
-                        onClick={() => setSelectedSlot(slot)}
-                        className={`rounded-lg border p-4 text-left text-sm font-bold disabled:cursor-not-allowed ${
-                          (selectedSlot?.id || selectedSlot?.start_time) ===
-                          (slot.id || slot.start_time)
-                            ? "border-slate-900 bg-slate-900 text-white"
-                            : slot.available
-                              ? "bg-white hover:border-slate-900"
-                              : "bg-slate-100 text-slate-400"
-                        }`}
-                      >
-                        {formatDisplayTime(slot.start_time)}
-                        <p className="mt-1 text-xs font-medium opacity-70">
-                          {slot.status}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
+                <div className="mt-4 rounded-lg bg-blue-50 p-4 table-data text-blue-800">
+                  Consultation time will be auto-assigned from the doctor's
+                  schedule when you save.
                 </div>
               )}
               <div className="mt-4 rounded-lg bg-slate-50 p-4">
@@ -1173,14 +1110,9 @@ export function AppointmentCalendarBooking(props: Props) {
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
-                <Button
-                  disabled={
-                    busy ||
-                    (appointmentType !== "emergency" && !selectedTimingSlot)
-                  }
-                >
-                  {busy ? "Booking..." : "Save & Generate Token"}
-                </Button>
+	                <Button disabled={busy || !hasAvailableDoctor}>
+	                  {busy ? "Booking..." : "Save & Generate Token"}
+	                </Button>
                 <button
                   type="button"
                   onClick={closeBooking}
@@ -1224,10 +1156,7 @@ export function AppointmentCalendarBooking(props: Props) {
                 value={
                   booked.appointment?.appointment_time
                     ? formatDisplayTime(booked.appointment.appointment_time)
-                    : selectedTimingSlot?.label ||
-                      (selectedTimingSlot?.start_time
-                        ? formatDisplayTime(selectedTimingSlot.start_time)
-                        : "-")
+                    : "-"
                 }
               />
             </div>
@@ -1291,7 +1220,7 @@ export function AppointmentCalendarBooking(props: Props) {
           </div>
         </Button>
       </div>
-      <div className="mt-4 grid gap-3 grid-cols-4 lg::grid-cols-3">
+      <div className="mt-4 grid gap-3 grid-cols-2 md:grid-cols-4">
         {isSuperAdmin && (
           <SelectField
             label="Clinic / Tenant"
@@ -1349,6 +1278,21 @@ export function AppointmentCalendarBooking(props: Props) {
             </Select>
           )}
         </Field>
+        {!isSuperAdmin && (
+          <Field label="Status">
+            <Select
+              value={filterStatus}
+              onChange={(e: any) => setFilterStatus(e.target.value)}
+              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm"
+            >
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        )}
       </div>
       <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
         <div
@@ -1393,25 +1337,17 @@ export function AppointmentCalendarBooking(props: Props) {
                   <span className="table-data">{appointment.patient_mobile || "-"}</span>
                   <span className="table-data">{appointment.department_name || "-"}</span>
                   <span className="table-data">{appointment.practitioner_name || "-"}</span>
-                  <span className="table-data">
-                    {displayDate(appointment.appointment_date)}
-                    {appointment.appointment_time
-                      ? ` ${String(appointment.appointment_time).slice(0, 5)}`
-                      : ""}
-                  </span>
+	                  <span className="table-data">
+	                    {displayDate(appointment.appointment_date)}
+	                    {appointment.appointment_time
+	                      ? ` ${formatDisplayTime(appointment.appointment_time)}`
+	                      : ""}
+	                  </span>
                   <Badge
-                    tone={
-                      appointment.consultation_status === "signed"
-                        ? "green"
-                        : appointment.status === "cancelled"
-                          ? "red"
-                          : "slate"
-                    }
+                    tone={appointmentStatusInfo(appointment).tone}
                     className="table-status"
                   >
-                    {humanizeOptionLabel(
-                      appointment.consultation_status || appointment.status,
-                    )}
+                    {appointmentStatusInfo(appointment).label}
                   </Badge>
                 </div>
               );
@@ -1449,21 +1385,19 @@ export function AppointmentCalendarBooking(props: Props) {
                     publicDisplayValue(appointment.doctorId, "Doctor")}
                 </span>
                 <span className="table-data">
-                  {appointment.appointmentDate || appointment.time || "-"}
+                  {appointment.appointmentDate || "-"}
+                  {appointment.appointmentTime || appointment.appointment_time
+                    ? ` ${formatDisplayTime(
+                        appointment.appointmentTime ||
+                          appointment.appointment_time,
+                      )}`
+                    : ""}
                 </span>
                 <Badge
-                  tone={
-                    appointment.consultationStatus === "signed"
-                      ? "green"
-                      : appointment.status === "cancelled"
-                        ? "red"
-                        : "slate"
-                  }
+                  tone={appointmentStatusInfo(appointment).tone}
                   className="table-status"
                 >
-                  {humanizeOptionLabel(
-                    appointment.consultationStatus || appointment.status,
-                  )}
+                  {appointmentStatusInfo(appointment).label}
                 </Badge>
                 <div
                   className="flex flex-wrap lg:flex-nowrap items-center justify-center lg:justify-start gap-2 xl:justify-end"
