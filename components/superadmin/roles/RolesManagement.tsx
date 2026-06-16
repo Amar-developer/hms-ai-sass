@@ -16,8 +16,8 @@ import {
   groupRolesByName,
 } from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import {Empty} from "@/components/admin/Empty";
-import { Pagination } from "@/components/admin/Pagination";
+import { Empty } from "@/components/admin/Empty";
+import { Pagination } from "@/components/common/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
 
@@ -109,23 +109,25 @@ export function RolesManagement({
     <Card>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h3 className="text-lg font-bold">Roles</h3>
-          <p className="text-sm text-slate-500">
+          <div className="flex">
+            <h3 className="card-title font-bold mr-3">Roles</h3>
+            <Badge
+              tone={selected?.is_primary ? "blue" : "slate"}
+              className="table-status"
+            >
+              {selected?.is_primary
+                ? "Global templates"
+                : `${filtered.length} roles`}
+            </Badge>
+          </div>
+          <p className="table-data text-slate-500">
             {selected?.is_primary
               ? "Primary tenant roles are global templates. Assign templates to customer tenants to avoid duplicate setup."
               : "Create, edit, deactivate, and search tenant roles with latest changes shown first."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
-          <Badge
-            tone={selected?.is_primary ? "blue" : "slate"}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
-          >
-            {selected?.is_primary
-              ? "Global templates"
-              : `${filtered.length} roles`}
-          </Badge>
           <CreateActionButton
             label="Create Role"
             onClick={() => setSection("roleCreate")}
@@ -141,7 +143,7 @@ export function RolesManagement({
         <FormField label="Role">
           <Input
             value={filters.query}
-            onChange={(e: any) => updateFilter("query", e.target.value)}
+            onChange={(e: any) => updateFilter("query", e.target.value)}  
             placeholder="Role name"
             className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
@@ -150,7 +152,7 @@ export function RolesManagement({
           <Select
             value={filters.status}
             onChange={(e: any) => updateFilter("status", e.target.value)}
-            className="rounded-full px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           >
             <option value="all">All status</option>
             <option value="active">Active</option>

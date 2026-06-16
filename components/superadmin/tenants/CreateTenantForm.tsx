@@ -67,7 +67,7 @@ function OnboardingReview({ draft, validSteps, steps, onEdit }: any) {
                 </p>
                 <p className="font-bold text-base lg:text-lg">{label}</p>
               </div>
-              <Badge tone={validSteps[index] ? "green" : "red"} className="px-1.5 py-1.5 lg:px-4 lg:py-3 text-[10px] lg:text-xs">
+              <Badge tone={validSteps[index] ? "green" : "red"} className="normal-badge">
                 {validSteps[index] ? "Complete" : "Missing"}
               </Badge>
             </div>
@@ -202,7 +202,7 @@ function PlanModulePreview({ plan, modules }: any) {
               Tenant access follows these modules from the selected plan.
             </p>
           </div>
-          <Badge tone="blue">{moduleNames.length} modules</Badge>
+          <Badge tone="blue" className="normal-badge">{moduleNames.length} modules</Badge>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           {moduleNames.length ? (

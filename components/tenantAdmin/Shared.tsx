@@ -343,12 +343,12 @@ export function ListCard({
             it, or use the action buttons.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 ">
           {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
           <button
             type="button"
             onClick={onCreate}
-            className={`inline-flex items-center justify-center ${createLabel == "Create Role" || createLabel == "Create User" || createLabel == 'Create Offer'? "w-[20%] lg:w-[20%]" : "w-[35%] lg:w-[25%]"}  gap-2 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm bg-slate-900 px-4 py-3 font-bold text-white`}
+            className={`inline-flex items-center justify-center ${createLabel == "Create Role" || createLabel == "Create User" || createLabel == 'Create Offer'? "w-[30%] lg:w-[80%]" : "md:w-[40%] lg:w-[85%]"}  gap-2 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm bg-slate-900 px-4 py-3 font-bold text-white`}
           >
             <Plus size={16} />
             {createLabel}

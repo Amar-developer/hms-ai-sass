@@ -118,7 +118,7 @@ export function ConsultPrescriptionModal({
       <Card className="w-full max-w-3xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-xl font-bold">Prescription Detail</h3>
+            <h3 className="card-title font-bold">Prescription Detail</h3>
             <p className="mt-1 text-sm text-slate-500">
               {a.token} · {a.patient}
             </p>
@@ -165,12 +165,13 @@ export function ConsultPrescriptionModal({
           <Button
             disabled={busy === a.consultationId || loading}
             onClick={() => onCreate(a)}
+            className='save-button'
           >
             {busy === a.consultationId
               ? "Creating..."
               : "Create Pharmacy Issue"}
           </Button>
-          <ActionButton onClick={onClose}>Cancel</ActionButton>
+          <Button onClick={onClose} className='close-button'>Cancel</Button>
         </div>
       </Card>
     </div>

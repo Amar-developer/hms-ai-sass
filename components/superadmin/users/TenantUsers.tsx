@@ -103,14 +103,21 @@ export function TenantUsers({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-lg font-bold">Users</h3>
+          <div className="flex ">
+            <h3 className="text-lg font-bold mr-3">Users</h3>
+            <Badge
+              tone="blue"
+              className="table-status"
+            >
+              {filtered.length} users
+            </Badge>
+          </div>
           <p className="text-sm text-slate-500">
             Create, edit, activate/deactivate, and search tenant users.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2">
           {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
-          <Badge tone="blue" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">{filtered.length} users</Badge>
           <CreateActionButton
             label="Create User"
             onClick={() => setSection("userCreate")}
@@ -253,7 +260,9 @@ export function TenantUsers({
                   </span>
                   <span className="text-xs lg:text-sm">{typeLabel}</span>
                   <UserRoleList user={user} />
-                  <span className="text-xs lg:text-sm">{user.mobile || "-"}</span>
+                  <span className="text-xs lg:text-sm">
+                    {user.mobile || "-"}
+                  </span>
                   <Badge
                     tone={user.is_active ? "green" : "red"}
                     className="rounded-full text-xs py-1 px-1"

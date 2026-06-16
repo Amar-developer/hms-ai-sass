@@ -1267,7 +1267,7 @@ export function SuperAdminDashboard({
               separate pages.
             </p>
           </div>
-          <Badge tone="blue" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm" >Global Platform Access</Badge>
+          <Badge tone="blue" className="normal-badge text-center" >Global Platform Access</Badge>
         </div>
       </Card>
       <StatusToast message={message} onClose={() => setMessage("")} />

@@ -59,7 +59,7 @@ export const numberEntityLabel = (value: string) =>
 export const userTypes = [
   ["tenant_admin", "Tenant Admin"],
   ["doctor", "Doctor"],
-  ["reception", "Reception"],
+  ["receptionist", "Receptionist"],
   ["nurse", "Staff Nurse"],
   ["lab", "Lab Technician"],
   ["pharmacy", "Pharmacy User"],

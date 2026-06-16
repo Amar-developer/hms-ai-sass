@@ -80,10 +80,7 @@ function calculateAgeYears(dateOfBirth: string) {
   const today = new Date();
   let age = today.getFullYear() - dob.getFullYear();
   const monthDelta = today.getMonth() - dob.getMonth();
-  if (
-    monthDelta < 0 ||
-    (monthDelta === 0 && today.getDate() < dob.getDate())
-  ) {
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dob.getDate())) {
     age -= 1;
   }
   return age >= 0 && age <= 130 ? String(age) : "";
@@ -112,6 +109,7 @@ export function PatientFormFields({
   const calculatedAge = dateOfBirth
     ? calculateAgeYears(dateOfBirth)
     : patientField(patient, "age_years", "ageYears");
+  const [mobile, setMobile] = useState(patientField(patient, "mobile") || "");
   const branchOptions = [...branches];
   if (
     selectedBranchId &&
@@ -150,11 +148,17 @@ export function PatientFormFields({
           name="fullName"
           defaultValue={patientField(patient, "full_name", "fullName")}
           required
-          placeholder='Enter patient full name'
+          placeholder="Enter patient full name"
         />
       </Field>
       <Field label="Mobile">
-        <Input name="mobile" defaultValue={patient?.mobile || ""} placeholder='Enter patient mobile number'/>
+        <Input
+          name="mobile"
+          mobileNumber
+          value={mobile}
+          onChange={(e: any) => setMobile(e.target.value)}
+          placeholder="Enter patient mobile number"
+        />
       </Field>
       <Field label="Branch">
         <Select
@@ -173,10 +177,7 @@ export function PatientFormFields({
         </Select>
       </Field>
       <Field label="Gender">
-        <Select
-          name="gender"
-          defaultValue={patientField(patient, "gender")}
-        >
+        <Select name="gender" defaultValue={patientField(patient, "gender")}>
           {genders.map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -206,21 +207,29 @@ export function PatientFormFields({
         <Input
           name="guardianName"
           defaultValue={patientField(patient, "guardian_name", "guardianName")}
-          placeholder='Enter guardian name'
+          placeholder="Enter guardian name"
         />
       </Field>
       <Field label="Guardian Mobile">
         <Input
           name="guardianMobile"
-          defaultValue={patientField(patient, "guardian_mobile", "guardianMobile")}
-          placeholder='Enter guardian mobile'
+          defaultValue={patientField(
+            patient,
+            "guardian_mobile",
+            "guardianMobile",
+          )}
+          placeholder="Enter guardian mobile"
         />
       </Field>
       <Field label="Alternate Mobile">
         <Input
           name="alternateMobile"
-          defaultValue={patientField(patient, "alternate_mobile", "alternateMobile")}
-          placeholder='Enter guardian mobile number'
+          defaultValue={patientField(
+            patient,
+            "alternate_mobile",
+            "alternateMobile",
+          )}
+          placeholder="Enter guardian mobile number"
         />
       </Field>
       <Field label="Email">
@@ -228,11 +237,15 @@ export function PatientFormFields({
           name="email"
           type="email"
           defaultValue={patientField(patient, "email")}
-          placeholder='Enter patient email'
+          placeholder="Enter patient email"
         />
       </Field>
       <Field label="Area">
-        <Input name="area" defaultValue={patientField(patient, "area")} placeholder='Enter patient area'/>
+        <Input
+          name="area"
+          defaultValue={patientField(patient, "area")}
+          placeholder="Enter patient area"
+        />
       </Field>
       <Field label="Blood Group">
         <Select
@@ -264,7 +277,7 @@ export function PatientFormFields({
           <Input
             name="address"
             defaultValue={patientField(patient, "address")}
-            placeholder='Enter patient Address'
+            placeholder="Enter patient Address"
           />
         </Field>
       </div>

@@ -47,14 +47,14 @@ export function DepartmentsManagement({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Medical Departments</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Medical Departments</h3>
+          <p className="table-data text-slate-500">
             {selected?.is_primary
               ? "Primary tenant medical departments are global templates. Assign templates to customer tenants to keep clinical routing consistent."
               : "Manage tenant medical departments used for practitioner mapping, schedules, and appointment booking."}
           </p>
         </div>
-        <div className="flex items-center justify-start gap-2">
+        <div className="flex items-center justify-start gap-2 w-[80%] lg:w-[25%]">
           {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
           <CreateActionButton
           label="Create Medical Department"
@@ -102,9 +102,9 @@ export function DepartmentsManagement({
                     <div className="flex flex-wrap items-center gap-2">
                       <b className="text-xs lg:text-sm">{department.name}</b>
                       {department.is_global_template && (
-                        <Badge tone="blue">Global</Badge>
+                        <Badge tone="blue" className="table-status">Global</Badge>
                       )}
-                      {locked && <Badge tone="purple" className="text-xs rounded-full">Locked</Badge>}
+                      {locked && <Badge tone="purple" className="table-status">Locked</Badge>}
                     </div>
                     <p className="break-all text-[10px] lg:text-xs text-slate-500">
                       {department.id}
@@ -114,7 +114,7 @@ export function DepartmentsManagement({
                   <span className="text-slate-500 text-xs lg:text-sm">
                     {department.description || "-"}
                   </span>
-                  <Badge tone={department.is_active ? "green" : "red"} className="rounded-full px-1 py-1 text-xs lg:text-sm">
+                  <Badge tone={department.is_active ? "green" : "red"} className="table-status">
                     {department.is_active ? "Active" : "Inactive"}
                   </Badge>
                   <span className="text-xs lg:text-sm">

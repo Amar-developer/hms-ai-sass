@@ -504,7 +504,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
           <button
             type="button"
             onClick={() => open("create")}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-sm hover:bg-slate-800"
           >
             <Plus size={16} />
             Create Patient

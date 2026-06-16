@@ -101,20 +101,22 @@ export function TenantManagement({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-lg font-bold">Tenants</h3>
+          <div className="flex ">
+            <h3 className="text-lg font-bold mr-2">Tenants</h3>
+          <Badge
+            tone="blue"
+            className="table-status"
+          >
+            {filtered.length} tenants
+          </Badge>
+          </div>
           <p className="text-xs lg:text-sm text-slate-500">
             Latest created or updated tenants appear first. Use filters and
             sortable headers to manage tenant records.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
-          <Badge
-            tone="blue"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
-          >
-            {filtered.length} tenants
-          </Badge>
+        <div className="flex items-center gap-2 ">
+          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}          
           <CreateActionButton
             label="Create Tenant"
             onClick={() => setSection("createTenant")}
@@ -134,7 +136,7 @@ export function TenantManagement({
           <Select
             value={filters.type}
             onChange={(e: any) => updateFilter("type", e.target.value)}
-            className='py-3 px-2 text-xs lg:text-sm'
+            className='py-3 px-2 text-xs lg:text-sm rounded-lg'
           >
             <option value="all">All types</option>
             {tenantTypes.map(([value, label]) => (
@@ -148,7 +150,7 @@ export function TenantManagement({
           <Select
             value={filters.status}
             onChange={(e: any) => updateFilter("status", e.target.value)}
-            className='py-3 px-2 text-xs lg:text-sm'
+            className='py-3 px-2 text-xs lg:text-sm rounded-lg'
           >
             <option value="all">All status</option>
             <option value="trial">Trial</option>
@@ -167,7 +169,7 @@ export function TenantManagement({
           <Select
             value={filters.dateField}
             onChange={(e: any) => updateFilter("dateField", e.target.value)}
-            className='py-3 px-2 text-xs lg:text-sm'
+            className='py-3 px-2 text-xs lg:text-sm rounded-lg'
           >
             <option value="updated_at">Modified date</option>
             <option value="created_at">Created date</option>
@@ -259,7 +261,7 @@ export function TenantManagement({
                         ? "amber"
                         : "red"
                   }
-                  className="rounded-xl px-2 py-1"
+                  className="table-status"
                 >
                   {tenant.status}
                 </Badge>

@@ -236,8 +236,8 @@ export function FilesPanel({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
-            <h3 className="text-bast lg:text-lg font-bold">Files</h3>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <h3 className="card-title font-bold">Files</h3>
+            <p className="table-data text-slate-500">
               Central file registry for logos, patient photos, consent forms,
               discharge documents, reports, and module attachments. Pick a
               category and the dependent fields auto-fill with the matching

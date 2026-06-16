@@ -317,7 +317,7 @@ export function ConsultationWorkspace(props: any) {
                         .join("\n") || diagnosisRows,
                     );
                   }}
-                  className="rounded-xl border px-3 py-2 text-xs font-bold"
+                  className="rounded-lg border px-3 py-2 text-xs font-bold"
                 >
                   {template.name}
                 </button>
@@ -365,7 +365,7 @@ export function ConsultationWorkspace(props: any) {
               <textarea
                 value={complaints}
                 onChange={(e: any) => setComplaints(e.target.value)}
-                className="min-h-20 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+                className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
                 placeholder="Fever | 2 days | medium"
               />
             </FormField>
@@ -373,7 +373,7 @@ export function ConsultationWorkspace(props: any) {
               <textarea
                 value={diagnosisRows}
                 onChange={(e: any) => setDiagnosisRows(e.target.value)}
-                className="min-h-20 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+                className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
                 placeholder="Viral fever | primary | notes"
               />
             </FormField>
@@ -382,7 +382,7 @@ export function ConsultationWorkspace(props: any) {
             <textarea
               value={notes}
               onChange={(e: any) => setNotes(e.target.value)}
-              className="min-h-20 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none"
+              className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
               placeholder="Clinical notes, advice..."
             />
           </FormField>
@@ -403,7 +403,7 @@ export function ConsultationWorkspace(props: any) {
               }
             />
           </FormField>
-          <div className="rounded-3xl bg-slate-50 p-4">
+          <div className="rounded-lg bg-slate-50 p-4">
             <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr_auto] lg:items-end">
               <Field label="Medicine">
                 <SearchPicker
@@ -518,7 +518,7 @@ export function ConsultationWorkspace(props: any) {
                       item: medicine,
                     })
                   }
-                  className="rounded-xl border bg-white px-3 py-2 text-xs font-bold"
+                  className="rounded-lg border bg-white px-3 py-2 text-xs font-bold"
                 >
                   {medicine.item_name || medicine.name}
                 </button>
@@ -526,7 +526,7 @@ export function ConsultationWorkspace(props: any) {
             </div>
           </div>
           <div className="grid gap-3">
-            <div className="rounded-3xl bg-slate-50 p-4">
+            <div className="rounded-lg bg-slate-50 p-4">
               <Field label="Lab Tests">
                 <TagEntryBox
                   tags={referralItems.filter(
@@ -627,7 +627,7 @@ export function ConsultationWorkspace(props: any) {
               </div>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="rounded-lg bg-slate-50 p-4">
                 <label className="flex items-center gap-3 font-bold">
                   <input
                     type="checkbox"
@@ -647,11 +647,11 @@ export function ConsultationWorkspace(props: any) {
                 )}
                 <div className="mt-2 flex flex-wrap gap-1">
                   {scanCatalog.map((s: any) => (
-                    <Badge key={s.id}>{s.name}</Badge>
+                    <Badge key={s.id}>{s.name}moses</Badge>
                   ))}
                 </div>
               </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="rounded-lg bg-slate-50 p-4">
                 <label className="flex items-center gap-3 font-bold">
                   <input
                     type="checkbox"
@@ -679,7 +679,7 @@ export function ConsultationWorkspace(props: any) {
                   </FormField>
                 )}
               </div>
-              <div className="rounded-3xl bg-slate-50 p-4">
+              <div className="rounded-lg bg-slate-50 p-4">
                 <label className="flex items-center gap-3 font-bold">
                   <input
                     type="checkbox"
@@ -692,7 +692,7 @@ export function ConsultationWorkspace(props: any) {
             </div>
           </div>
           {selected?.consultationStatus === "signed" && (
-            <div className="rounded-3xl bg-emerald-50 p-4">
+            <div className="rounded-lg bg-emerald-50 p-4">
               <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
                   <p className="font-bold text-emerald-900">
@@ -703,13 +703,13 @@ export function ConsultationWorkspace(props: any) {
                     Invoices page.
                   </p>
                 </div>
-                <Badge tone="green">Ready for billing</Badge>
+                <Badge tone="green" className="normal-badge">Ready for billing</Badge>
               </div>
               <FormField label="Signed Record Addendum">
                 <textarea
                   value={addendumNote}
                   onChange={(e: any) => setAddendumNote(e.target.value)}
-                  className="min-h-20 w-full rounded-2xl border border-emerald-100 px-4 py-3 text-sm outline-none"
+                  className="min-h-20 w-full rounded-lg border border-emerald-100 px-4 py-3 text-sm outline-none"
                   placeholder="Add clarification without changing signed record"
                 />
               </FormField>
@@ -734,7 +734,7 @@ export function ConsultationWorkspace(props: any) {
                 disabled={busy || selected?.consultationStatus === "signed"}
                 className="bg-emerald-700 text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
               >
-                Sign & Lock
+                Complete
               </Button>
             )}
             <button

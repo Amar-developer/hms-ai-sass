@@ -516,37 +516,36 @@ export function DateInput({
 
 export function Input({
   className = "rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
-  onKeyDown,
+  mobileNumber = false,
   ...props
 }: any) {
-  if (props.type === "date") {
-    return <DateInput {...props} className={className} />;
-  }
+  const [error, setError] = useState("");
+
   return (
-    <input
-      {...props}
-      onKeyDown={(event: any) => {
-        onKeyDown?.(event);
-        if (
-          event.defaultPrevented ||
-          event.key !== "Enter" ||
-          event.shiftKey ||
-          event.altKey ||
-          event.ctrlKey ||
-          event.metaKey ||
-          event.nativeEvent?.isComposing ||
-          props.type === "button" ||
-          props.type === "checkbox" ||
-          props.type === "file" ||
-          props.type === "radio" ||
-          props.type === "range"
-        )
-          return;
-        event.preventDefault();
-        submitNearestFormOnEnter(event);
-      }}
-      className={`w-full rounded-lg border border-slate-200  outline-none focus:border-slate-500 ${className}`}
-    />
+    <>
+      <input
+        {...props}
+        onChange={(e) => {
+          let value = e.target.value;
+
+          if (mobileNumber) {
+            value = value.replace(/\D/g, "").slice(0, 10);
+            e.target.value = value;
+
+            if (value.length > 0 && value.length < 10) {
+              setError("Mobile number must be 10 digits");
+            } else {
+              setError("");
+            }
+          }
+
+          props.onChange?.(e);
+        }}
+        className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}
+      />
+
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </>
   );
 }
 
@@ -599,7 +598,7 @@ export function SuggestionInput({
                 setNext(item);
                 setOpen(false);
               }}
-              className={`block w-full rounded-lg px-3 py-2 text-xs lg:text-sm hover:bg-slate-50 ${
+              className={`block w-full rounded-lg px-3 py-2 text-xs lg:text-sm text-left scrollbar-hidden hover:bg-slate-50 ${
                 item.toLowerCase() === query ? "bg-slate-50 font-bold" : ""
               }`}
             >
@@ -841,7 +840,7 @@ export function RefreshButton({
       disabled={busy}
       title={title}
       aria-label={title}
-      className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-2.5 text-[10px] lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className}`}
+      className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className}`}
     >
       <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
       {label ? <span>{label}</span> : null}

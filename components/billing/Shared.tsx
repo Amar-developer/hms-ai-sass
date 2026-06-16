@@ -400,7 +400,7 @@ export function InvoiceDetailPage({
                       </button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between rounded-2xl bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
                       <span>Payment settled</span>
                       <span>{money(invoice.paid_amount)}</span>
                     </div>
@@ -455,6 +455,7 @@ export function InvoiceDetailPage({
                   </div>
                   <Badge
                     tone={payment.status === "recorded" ? "green" : "amber"}
+                    className="normal-badge"
                   >
                     {payment.status}
                   </Badge>

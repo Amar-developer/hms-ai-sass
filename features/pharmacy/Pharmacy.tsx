@@ -723,7 +723,7 @@ export function Pharmacy({
       </Card>
       <Card>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-lg font-bold">Pharmacy Worklist</h3>
+          <h3 className="card-title font-bold">Pharmacy Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
@@ -788,10 +788,10 @@ export function Pharmacy({
                         publicDisplayValue(issue.patient_id, "Patient")}
                     </td>
                     <td>
-                      <Badge>{humanizeOptionLabel(issue.source)}</Badge>
+                      <Badge className="table-status">{humanizeOptionLabel(issue.source)}</Badge>
                     </td>
                     <td>
-                      <Badge tone={statusTone as any}>{statusLabel}</Badge>
+                      <Badge tone={statusTone as any} className="table-status">{statusLabel}</Badge>
                     </td>
                     <td onClick={(event) => event.stopPropagation()}>
                       {editingAmountId === issue.id ? (

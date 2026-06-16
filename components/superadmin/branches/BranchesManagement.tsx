@@ -63,7 +63,7 @@ export function BranchesManagement({
           />
         </div>
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_280px]">
+      <div className="mt-4 grid gap-1 md:grid-cols-2 :grid-cols-[1fr_280px]">
         <Input
           value={query}
           onChange={(e: any) => setQuery(e.target.value)}

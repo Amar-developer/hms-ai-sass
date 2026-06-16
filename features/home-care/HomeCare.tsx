@@ -878,7 +878,7 @@ function Tab({ active, onClick, children }: any) {
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-2xl px-4 py-3 text-sm font-bold ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+      className={`rounded-lg px-4 py-3 text-sm font-bold ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
     >
       {children}
     </button>
@@ -916,6 +916,7 @@ function BookingsList({
               setFilters({ ...filters, query: value })
             }
             placeholder="Booking, patient, staff, status"
+            className="search-input"
           />
           <SelectField
             label="Status"

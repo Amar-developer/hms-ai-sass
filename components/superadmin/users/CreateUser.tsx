@@ -20,8 +20,8 @@ export function CreateUser({
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Create User</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Create User</h3>
+          <p className="table-data text-slate-500">
             Add a user under the selected tenant.
           </p>
         </div>

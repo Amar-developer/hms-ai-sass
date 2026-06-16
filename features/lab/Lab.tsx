@@ -813,10 +813,10 @@ export function Lab({
                       {p?.name || publicDisplayValue(o.patient_id, "Patient")}
                     </td>
                     <td>
-                      <Badge>{humanizeOptionLabel(o.source)}</Badge>
+                      <Badge className="normal-badge">{humanizeOptionLabel(o.source)}</Badge>
                     </td>
                     <td>
-                      <Badge tone={statusTone as any}>{statusLabel}</Badge>
+                      <Badge tone={statusTone as any} className="normal-badge">{statusLabel}</Badge>
                     </td>
                     <td>₹{o.amount}</td>
                     <td onClick={(event) => event.stopPropagation()}>
@@ -827,7 +827,7 @@ export function Lab({
                           <input
                             type="file"
                             accept="application/pdf,image/*"
-                            className="hidden"
+                            className="hidden file:rounded-lg"
                             disabled={released || cancelled}
                             onChange={(event: any) =>
                               setReportFiles({
@@ -851,7 +851,7 @@ export function Lab({
                           onChange={(event: any) =>
                             handleOrderAction(o, event.target.value)
                           }
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+                          className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
                         >
                           <option value="">
                             {rowBusy || invoiceBusy

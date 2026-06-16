@@ -29,7 +29,7 @@ interface SidebarProps {
   enabled: any;
   clinic: any;
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  sideBarOpen:boolean
+  sideBarOpen: boolean;
   reportSections: any;
   reportSection: any;
   superAdminSections: any;
@@ -144,9 +144,9 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                   {!props.tabletCollapsed && (
                     <ChevronDown
                       size={16}
-                      className={
+                      className={`transform transition-transform duration-200 ${
                         props.tenantAdminSettingsOpen ? "rotate-180" : ""
-                      }
+                      }`}
                     />
                   )}
                 </button>
@@ -273,7 +273,11 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
             >
               <Icon size={18} />
               {!props.tabletCollapsed && (
-                <span className="truncate text-xs lg:text-sm">{label}</span>
+                <span
+                  className={`truncate text-xs lg:text-sm ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-2xl" : ""}`}
+                >
+                  {label}
+                </span>
               )}
             </button>
           );

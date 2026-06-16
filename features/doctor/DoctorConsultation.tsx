@@ -1528,7 +1528,7 @@ export function DoctorConsultation({
                     </p>
                   </button>
                   <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                    <Badge tone={a.tokenType === "Emergency" ? "red" : "amber"}>
+                    <Badge tone={a.tokenType === "Emergency" ? "red" : "amber"} className="normal-badge">
                       {humanizeOptionLabel(a.tokenType)}
                     </Badge>
                     {a.consultationStatus && (
@@ -1536,6 +1536,7 @@ export function DoctorConsultation({
                         tone={
                           a.consultationStatus === "signed" ? "green" : "blue"
                         }
+                        className="normal-badge"
                       >
                         {humanizeOptionLabel(a.consultationStatus)}
                       </Badge>

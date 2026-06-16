@@ -45,7 +45,6 @@ export function CreateDepartment({
             required
             placeholder="General Medicine"
             suggestions={basicMedicalDepartmentSuggestions}
-
           />
         </Field>
         <div className="md:col-span-2">

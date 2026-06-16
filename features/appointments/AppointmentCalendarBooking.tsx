@@ -1081,6 +1081,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     value={emergencyReason}
                     onChange={setEmergencyReason}
                     placeholder="Severe pain, trauma, breathlessness"
+                    className="search-input"
                   />
                   <p className="mt-2 text-xs font-semibold text-red-700">
                     Emergency bookings skip normal slot availability and are
@@ -1106,6 +1107,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     value={billingNote}
                     onChange={setBillingNote}
                     placeholder="Within free review period, certificate request, etc."
+                    className="search-input"
                   />
                 </div>
               )}
