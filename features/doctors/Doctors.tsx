@@ -392,7 +392,7 @@ export function Doctors({ apiSession, clinic }: any) {
             and medical departments.
           </p>
         </div>
-        <div className="flex justify-center items-center gap-2">
+        <div className="flex justify-start items-center gap-2">
           <RefreshButton onRefresh={() => loadData(tenantId)} />
           <button
             type="button"

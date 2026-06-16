@@ -317,8 +317,8 @@ export function PatientDetail({
 
       {/* Consultations — complaints, symptoms, diagnosis, prescription */}
       <Card>
-        <h4 className="font-bold">Consultations</h4>
-        <p className="text-xs text-slate-500">
+        <h4 className="card-title font-bold">Consultations</h4>
+        <p className="table-data text-slate-500">
           Chief complaints, diagnosis, prescriptions and referrals from each
           visit.
         </p>

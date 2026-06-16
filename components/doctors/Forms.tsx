@@ -256,6 +256,7 @@ export function DoctorForm({
           <Input
             name="mobile"
             value={mobile}
+            mobileNumber
             onChange={(event: any) => setMobile(event.target.value)}
             placeholder='Enter mobile'
           />

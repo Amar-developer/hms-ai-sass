@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DateInput } from "@/components/common/ui";
+import { ChevronDown } from "lucide-react";
 
 // ─── Shared Types ────────────────────────────────────────────────────────────
 
@@ -354,13 +355,14 @@ export function SearchableSelectField({
           type="button"
           disabled={disabled}
           onClick={() => setOpen((c) => !c)}
-          className={`flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${triggerBorder}`}
+          className={`flex w-full items-center justify-between rounded-lg border bg-white px-4 py-3 text-left text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${triggerBorder}`}
         >
           <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
             {displayLabel || placeholder}
           </span>
           <span className="ml-2 shrink-0 text-xs text-slate-400">
-            {open ? "▲" : "▼"}
+            <ChevronDown className={`${open ? "rotate-180":""} h-4 w-4 text-black font-bold`}/>
+            {/* {open ? "▲" : "▼"} */}
           </span>
         </button>
 

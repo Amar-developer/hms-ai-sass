@@ -7,8 +7,8 @@ export function PatientHistoryPanel({ history, onOpenPatient }: any) {
     <div className="rounded-3xl bg-slate-50 p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h4 className="font-bold">Existing Treatment History</h4>
-          <p className="text-sm text-slate-500">
+          <h4 className="card-title font-bold">Existing Treatment History</h4>
+          <p className="table-data text-slate-500">
             Previous visits visible for clinical reference.
           </p>
         </div>
@@ -20,7 +20,7 @@ export function PatientHistoryPanel({ history, onOpenPatient }: any) {
           >
             Patient Details
           </button>
-          <Badge>{history.length} records</Badge>
+          <Badge className="normal-badge">{history.length} records</Badge>
         </div>
       </div>
       {history.length === 0 && (
@@ -53,6 +53,7 @@ export function PatientHistoryPanel({ history, onOpenPatient }: any) {
                   tone={
                     item.consultationStatus === "signed" ? "green" : "slate"
                   }
+                  className="normal-badge"
                 >
                   {humanizeOptionLabel(
                     item.consultationStatus || item.status || "Visit",

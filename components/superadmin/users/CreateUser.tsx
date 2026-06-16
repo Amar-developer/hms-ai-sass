@@ -5,6 +5,7 @@ import { userTypes } from "../../../utils/superAdmin/constants";
 import { BranchSelect } from "./BranchSelect";
 import { RoleCheckboxes } from "./RoleCheckboxes";
 import { TenantPicker } from "../shared/TenantPicker";
+import { useState } from "react";
 
 export function CreateUser({
   tenants,
@@ -16,6 +17,8 @@ export function CreateUser({
   createUser,
   back,
 }: any) {
+  const [mobile, setMobile] = useState(null);
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -43,7 +46,12 @@ export function CreateUser({
           setSelectedId={setSelectedId}
         />
         <Field label="Name">
-          <Input name="name" required placeholder="Clinic Admin" className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'/>
+          <Input
+            name="name"
+            required
+            placeholder="Clinic Admin"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
         </Field>
         <Field label="Email">
           <Input
@@ -51,11 +59,15 @@ export function CreateUser({
             type="email"
             required
             placeholder="admin@clinic.local"
-            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </Field>
         <Field label="User Type">
-          <Select name="userType" defaultValue="tenant_admin" className='rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm'>
+          <Select
+            name="userType"
+            defaultValue="tenant_admin"
+            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
             {userTypes.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
@@ -69,11 +81,17 @@ export function CreateUser({
             type="password"
             required
             placeholder="Minimum 8 characters"
-            className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </Field>
         <Field label="Mobile">
-          <Input name="mobile" className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'/>
+          <Input
+            name="mobile"
+            mobileNumber
+            value={mobile}
+            onChange={(e: any) => setMobile(e.target.value)}
+            placeholder="Enter patient mobile number"
+          />
         </Field>
         <BranchSelect branches={branches} />
         <Field label="Must Change Password">

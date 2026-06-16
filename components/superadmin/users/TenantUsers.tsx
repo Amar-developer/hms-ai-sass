@@ -104,7 +104,7 @@ export function TenantUsers({
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <div className="flex ">
-            <h3 className="text-lg font-bold mr-3">Users</h3>
+            <h3 className="card-title font-bold mr-3">Users</h3>
             <Badge
               tone="blue"
               className="table-status"
@@ -112,7 +112,7 @@ export function TenantUsers({
               {filtered.length} users
             </Badge>
           </div>
-          <p className="text-sm text-slate-500">
+          <p className="table-data text-slate-500">
             Create, edit, activate/deactivate, and search tenant users.
           </p>
         </div>

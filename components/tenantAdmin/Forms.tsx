@@ -121,6 +121,7 @@ export function UserForm({
   const [selectedBranch, setSelectedBranch] = useState(
     hasTenantAdminAccess ? "" : user?.branch_id || "",
   );
+  const [mobile, setMobile] = useState(user?.mobile || "");
   useEffect(() => {
     if (!hasTenantAdminAccess) return;
     setSelectedBranch("");
@@ -175,13 +176,15 @@ export function UserForm({
             ))}
           </Select>
         </FormField>
-        <FormField label="Mobile">
+        <Field label="Mobile">
           <Input
             name="mobile"
-            defaultValue={user?.mobile || ""}
-            placeholder="Enter user mobile number"
+            mobileNumber
+            value={mobile}
+            onChange={(e: any) => setMobile(e.target.value)}
+            placeholder="Enter patient mobile number"
           />
-        </FormField>
+        </Field>
         <Field label="Branch Access">
           <Select
             name="branchId"
@@ -454,6 +457,7 @@ export function BranchForm({
 }
 
 export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
+  const [mobile, setMobile] = useState(supplier?.mobile);
   return (
     <Card>
       <Header
@@ -483,8 +487,10 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
         <FormField label="Phone">
           <Input
             name="phone"
-            defaultValue={supplier?.phone || ""}
-            placeholder="Enter supplier mobile number"
+            mobileNumber
+            value={mobile}
+            onChange={(e: any) => setMobile(e.target.value)}
+            placeholder="Enter patient mobile number"
           />
         </FormField>
         <FormField label="Email">
@@ -505,7 +511,11 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
         )}
         <div className="md:col-span-2">
           <FormField label="Address">
-            <Input name="address" defaultValue={supplier?.address || ""} placeholder="Enter supplier address"/>
+            <Input
+              name="address"
+              defaultValue={supplier?.address || ""}
+              placeholder="Enter supplier address"
+            />
           </FormField>
         </div>
         <Actions
@@ -535,7 +545,12 @@ export function TaxRuleForm({
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
         <FormField label="Name">
-          <Input name="name" defaultValue={rule?.name || ""} required placeholder='Enter tax name'/>
+          <Input
+            name="name"
+            defaultValue={rule?.name || ""}
+            required
+            placeholder="Enter tax name"
+          />
         </FormField>
         <FormField label="Branch">
           <Select name="branchId" defaultValue={rule?.branch_id || ""}>
@@ -611,7 +626,12 @@ export function DiscountOfferForm({
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
         <FormField label="Offer Name">
-          <Input name="name" defaultValue={offer?.name || ""} required placeholder="Enter offer name" />
+          <Input
+            name="name"
+            defaultValue={offer?.name || ""}
+            required
+            placeholder="Enter offer name"
+          />
         </FormField>
         <FormField label="Code">
           <Input

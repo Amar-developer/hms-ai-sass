@@ -99,8 +99,8 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Sidebar Module Access</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Sidebar Module Access</h3>
+          <p className="table-data text-slate-500">
             Control which modules each role sees in the sidebar. This is separate from
             permissions. Roles left at default keep the built-in configuration.
           </p>
@@ -134,8 +134,8 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <b>{selectedRoleLabel}</b>
-                  <Badge tone={selectedRoleOverridden ? "amber" : "slate"}>
-                    {selectedRoleOverridden ? "Custom" : "Default"}
+                  <Badge tone={selectedRoleOverridden ? "amber" : "slate"} className="table-status">
+                    {selectedRoleOverridden ? "Custom" : "Default"} 
                   </Badge>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
@@ -162,7 +162,7 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
                 Toggle sidebar modules for the selected role.
               </p>
             </div>
-            <Badge tone="blue" className="rounded-lg py-2 px-2 ">{selectedRoleLabel}</Badge>
+            <Badge tone="blue" className="normal-badge">{selectedRoleLabel}</Badge>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             {SIDEBAR_MODULE_OPTIONS.map((m: any) => {

@@ -177,7 +177,6 @@ export function InvoiceDetailPage({
                               value={item.supplier_id||''}
                               onChange={(event:any)=>updateInvoiceItemSupplier?.(invoice,item,event.target.value)}
                               disabled={busy===`supplier-${item.id}`}
-                              className="min-w-[170px]"
                             >
                               <option value="">No supplier</option>
                               {itemSupplierOptions.map((supplier:any)=>(

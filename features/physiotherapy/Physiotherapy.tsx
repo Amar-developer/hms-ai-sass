@@ -346,17 +346,17 @@ export function Physiotherapy({
         <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
           <Card>
             <div className="flex items-center justify-between gap-3">
-              <h4 className="text-lg font-bold">Physiotherapy Cases</h4>
+              <h4 className="card-title font-bold">Physiotherapy Cases</h4>
               <div className="flex items-center gap-2">
                 <RefreshButton onRefresh={loadPhysio} />
-                <Badge tone="blue">{cases.length} active</Badge>
+                <Badge tone="blue" className="normal-badge">{cases.length} active</Badge>
               </div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
               <button
                 type="button"
                 onClick={() => setView("op")}
-                className="rounded-2xl bg-slate-900 p-4 text-left text-white"
+                className="rounded-lg bg-slate-900 p-4 text-left text-white"
               >
                 <b className="table-data">New OP Physio</b>
                 <p className="mt-1 table-data text-slate-300">

@@ -1,11 +1,19 @@
 "use client";
 
-import {useEffect,useState} from 'react';
-import {ActionButton,ActionGroup,Badge,Card,RefreshButton,Select,StatusToast} from '@/components/common/ui';
-import {FormField} from '@/components/FormElements';
-import {apiFetch,type ApiSession} from '@/lib/api';
-import {sortQueue} from '@/lib/hmsLogic';
-import {humanizeOptionLabel,publicDisplayValue} from '@/lib/options';
+import { useEffect, useState } from "react";
+import {
+  ActionButton,
+  ActionGroup,
+  Badge,
+  Card,
+  RefreshButton,
+  Select,
+  StatusToast,
+} from "@/components/common/ui";
+import { FormField } from "@/components/FormElements";
+import { apiFetch, type ApiSession } from "@/lib/api";
+import { sortQueue } from "@/lib/hmsLogic";
+import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 
 type TokenQueueProps = {
   scopedAppointments: any[];
@@ -305,18 +313,22 @@ export function TokenQueue({
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div className="flex items-start gap-2">
+        <div className="flex items-end  gap-2">
           <div>
-            <h3 className="text-lg font-bold">Patient Queue & Token Priority</h3>
-            <p className="text-sm text-slate-500">
+            <h3 className="card-title font-bold">
+              Patient Queue & Token Priority
+            </h3>
+            <p className="table-data text-slate-500">
               {apiSession
-                ? 'Reception can manually call, skip, requeue, or close remaining tokens at end of day.'
-                : 'Emergency tokens appear first. Skipped patients can be requeued.'}
+                ? "Reception can manually call, skip, requeue, or close remaining tokens at end of day."
+                : "Emergency tokens appear first. Skipped patients can be requeued."}
             </p>
           </div>
-          {apiSession ? (
-            <RefreshButton onRefresh={() => loadLiveData(apiSession)} />
-          ) : null}
+          <div className="">
+            {apiSession ? (
+              <RefreshButton onRefresh={() => loadLiveData(apiSession)} />
+            ) : null}
+          </div>
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           <FormField label="Display Mode">
@@ -427,13 +439,16 @@ export function TokenQueue({
                 </td>
                 <td>{appointment.doctor}</td>
                 <td>
-                  <Badge>{humanizeOptionLabel(appointment.status)}</Badge>
+                  <Badge className="normal-badge">
+                    {humanizeOptionLabel(appointment.status)}
+                  </Badge>
                 </td>
                 <td>
                   <Badge
                     tone={
                       appointment.tokenType === "Emergency" ? "red" : "slate"
                     }
+                    className="normal-badge"
                   >
                     {humanizeOptionLabel(appointment.queueStatus)}
                   </Badge>

@@ -564,10 +564,10 @@ export function HomeCare({
         <Card>
           <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
             <div>
-              <h3 className="text-xl font-bold">
+              <h3 className="card-title font-bold">
                 {editing ? "Edit Booking" : "New Booking"}
               </h3>
-              <p className="text-sm text-slate-500">
+              <p className="table-data text-slate-500">
                 Patient-linked home care / visit booking with assigned staff,
                 complaints, service lines, and schedule.
               </p>
@@ -591,6 +591,7 @@ export function HomeCare({
                 placeholder="Search patient name or mobile number"
                 required={!form.patient_id}
                 type="search"
+                className="search-input"
               />
               {selectedPatient && (
                 <div className="mt-2 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
@@ -651,6 +652,7 @@ export function HomeCare({
                   setField("assigned_staff_user_id", "");
                 }}
                 placeholder="Type staff name manually"
+                className="search-input"
               />
               {filteredStaff.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -752,6 +754,7 @@ export function HomeCare({
                         onChange={(value) =>
                           setLine(index, "description", value)
                         }
+                        className="search-input"
                       />
                       <p className="mt-1 text-xs font-bold text-blue-600">
                         × {days} day{days > 1 ? "s" : ""} (
@@ -771,7 +774,7 @@ export function HomeCare({
                       onChange={(value) => setLine(index, "unit_amount", value)}
                       min={0}
                     />
-                    <div className="flex items-end">
+                    <div className="flex items-center">
                       <ActionButton
                         tone="danger"
                         onClick={() => removeLine(index)}
@@ -807,7 +810,7 @@ export function HomeCare({
                     ? "Update Booking"
                     : "Create Booking"}
               </Button>
-              <ActionButton onClick={backToList}>Cancel</ActionButton>
+              <button onClick={backToList} className='close-button font-bold'>Cancel</button>
             </div>
           </form>
         </Card>
@@ -1202,12 +1205,12 @@ function InvoiceCard({
     <Card className="mx-auto max-w-2xl">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-lg font-bold">Generate Invoice</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="card-title font-bold">Generate Invoice</h3>
+          <p className="table-data text-slate-500">
             Bill the selected booking from its service lines.
           </p>
         </div>
-        <Badge>{humanizeOptionLabel(booking.status)}</Badge>
+        <Badge className="normal-badge">{humanizeOptionLabel(booking.status)}</Badge>
       </div>
       <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
         <b>{booking.booking_number}</b>
@@ -1224,7 +1227,7 @@ function InvoiceCard({
         <div className="mt-4 rounded-2xl border p-4 text-sm">
           <div className="flex items-center justify-between gap-3">
             <b>{invoiceDetail.invoice.invoice_number}</b>
-            <Badge>{humanizeOptionLabel(invoiceDetail.invoice.status)}</Badge>
+            <Badge className="normal-badge">{humanizeOptionLabel(invoiceDetail.invoice.status)}</Badge>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 text-slate-600">
             <span>Subtotal</span>
@@ -1253,7 +1256,7 @@ function InvoiceCard({
           </p>
           <Button
             type="button"
-            className="mt-3 w-full"
+            className="w-full rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             onClick={onOpenInvoiceModule}
           >
             Open in Invoices Module
