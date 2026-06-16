@@ -12,7 +12,7 @@ from app.core.auth import require_any_permission, require_permission
 from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
-from app.modules.appointments.models import Appointment
+from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.audit.service import record_audit_event
 
 from app.modules.billing.models import (
@@ -50,6 +50,7 @@ from app.modules.billing.schemas import (
     InvoiceCreateFromLabOrder,
     InvoiceCreateFromPharmacyIssue,
     InvoiceDetailRead,
+    InvoiceAmountUpdate,
     InvoiceItemRead,
     InvoiceItemSupplierOptionRead,
     InvoiceItemSupplierUpdate,
@@ -64,6 +65,7 @@ from app.modules.billing.schemas import (
     TaxRuleUpdate,
 )
 from app.modules.billing.service import (
+    calculate_fee_split,
     calculate_offer_discount,
     create_consultation_invoice,
     find_tax_rule,
@@ -132,6 +134,24 @@ def _sync_patient_membership_payment(session: Session, invoice: Invoice) -> None
     enrollment = session.get(PatientSubscriptionEnrollment, invoice.patient_subscription_enrollment_id)
     if not enrollment or enrollment.tenant_id != invoice.tenant_id:
         return
+    # Only the plan-purchase invoice drives the membership's paid amount.
+    # Benefit-usage invoices (lab/pharmacy/consultation with the membership
+    # applied) also carry the enrollment id, but paying/refunding them must not
+    # overwrite the membership's paid status.
+    is_purchase_invoice = (
+        invoice.id == enrollment.purchase_invoice_id
+        if enrollment.purchase_invoice_id
+        else not (
+            invoice.lab_order_id
+            or invoice.pharmacy_issue_id
+            or invoice.consultation_id
+            or invoice.ip_admission_id
+            or invoice.physiotherapy_case_id
+            or invoice.home_care_booking_id
+        )
+    )
+    if not is_purchase_invoice:
+        return
     paid_amount = max(0, min(int(invoice.paid_amount or 0), int(invoice.total_amount or 0)))
     if enrollment.paid_amount == paid_amount:
         return
@@ -158,10 +178,29 @@ def _invoice_item_external_slug(item: InvoiceItem) -> str:
     return re.sub(r"[^a-z0-9]+", "-", str(item.external_item_code or item.description or "").strip().lower()).strip("-")
 
 
+def _catalog_key(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
 def _external_supplier_options(item: InvoiceItem) -> list[dict[str, int | str]]:
     if item.external_source != "erpnext":
         return []
-    detail = _frappe_catalog_client().get_lab_item_details(_invoice_item_external_slug(item))
+    client = _frappe_catalog_client()
+    detail = None
+    for lookup in (item.external_item_code, _invoice_item_external_slug(item)):
+        lookup = str(lookup or "").strip()
+        if not lookup:
+            continue
+        try:
+            candidate = client.get_lab_item_details(lookup)
+        except HTTPException:
+            continue
+        if item.external_item_code and _catalog_key(str(candidate.get("item_code") or "")) != _catalog_key(item.external_item_code):
+            continue
+        detail = candidate
+        break
+    if detail is None:
+        return []
     suppliers = detail.get("suppliers") if isinstance(detail, dict) else []
     if not isinstance(suppliers, list):
         return []
@@ -698,8 +737,13 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
             .order_by(Payment.collected_at)
         ).all()
     )
+    invoice_read = InvoiceRead.model_validate(invoice, from_attributes=True)
+    if invoice.appointment_id:
+        appointment = session.get(Appointment, invoice.appointment_id)
+        if appointment and appointment.tenant_id == invoice.tenant_id:
+            invoice_read.appointment_type = appointment.appointment_type
     return InvoiceDetailRead(
-        invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
+        invoice=invoice_read,
         items=[InvoiceItemRead.model_validate(item, from_attributes=True) for item in items],
         payments=[PaymentRead.model_validate(payment, from_attributes=True) for payment in payments],
         membership_benefit=_invoice_membership_benefit(session, invoice),
@@ -1568,6 +1612,110 @@ def get_invoice(
     if not invoice or invoice.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
     require_user_branch_access(current_user, invoice.branch_id)
+    return _read_invoice_detail(session, invoice)
+
+
+@router.patch("/invoices/{invoice_id}/amount", response_model=InvoiceDetailRead)
+def update_invoice_amount(
+    invoice_id: str,
+    payload: InvoiceAmountUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    """Edit the consultation price on the bill for non-OP visits before payment.
+
+    OP visits keep their fixed fee-rule price. Lab/pharmacy/IP/etc. invoices are
+    priced from their own line items and are not editable here.
+    """
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    invoice = session.get(Invoice, invoice_id)
+    if not invoice or invoice.tenant_id != tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+    require_user_branch_access(current_user, invoice.branch_id)
+    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot edit {invoice.status.value} invoice")
+    if int(invoice.paid_amount or 0) > 0:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot edit amount after a payment is recorded")
+    if (
+        not invoice.consultation_id
+        or invoice.lab_order_id
+        or invoice.pharmacy_issue_id
+        or invoice.ip_admission_id
+        or invoice.physiotherapy_case_id
+        or invoice.home_care_booking_id
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Amount can be edited only for consultation invoices")
+    appointment = session.get(Appointment, invoice.appointment_id) if invoice.appointment_id else None
+    if not appointment or appointment.tenant_id != tenant_id or appointment.appointment_type == AppointmentType.OP:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Amount can be edited only for non-OP consultation visits")
+
+    new_subtotal = int(payload.amount)
+    # Keep the already-consumed membership benefit; re-evaluate the offer for the
+    # new subtotal so percentage offers stay correct.
+    membership_discount = min(int(invoice.membership_discount_amount or 0), new_subtotal)
+    offer_discount, offer = calculate_offer_discount(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        service_scope="consultation",
+        subtotal=new_subtotal,
+        discount_offer_id=invoice.discount_offer_id,
+    )
+    discount = min(membership_discount + offer_discount, new_subtotal)
+    taxable = new_subtotal - discount
+    tax_rule = find_tax_rule(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        service_scope="consultation",
+        tax_rule_id=invoice.tax_rule_id,
+    )
+    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    total = taxable + tax_amount
+    doctor_share = 0
+    fee_rule = session.get(DoctorFeeRule, invoice.fee_rule_id) if invoice.fee_rule_id else None
+    if fee_rule and new_subtotal > 0:
+        split = calculate_fee_split(fee_rule, new_subtotal)
+        share_basis = total if fee_rule.share_tax_with_doctor else taxable
+        doctor_share = round(split.doctor_share_amount * share_basis / new_subtotal)
+    invoice.subtotal_amount = new_subtotal
+    invoice.discount_amount = discount
+    invoice.membership_discount_amount = membership_discount
+    invoice.taxable_amount = taxable
+    invoice.tax_amount = tax_amount
+    invoice.tax_rule_id = tax_rule.id if tax_rule else invoice.tax_rule_id
+    invoice.total_amount = total
+    invoice.balance_amount = total
+    invoice.doctor_share_amount = doctor_share
+    invoice.clinic_share_amount = total - doctor_share
+    invoice.discount_offer_id = offer.id if offer else invoice.discount_offer_id
+    session.add(invoice)
+    item = session.exec(
+        select(InvoiceItem)
+        .where(InvoiceItem.tenant_id == tenant_id, InvoiceItem.invoice_id == invoice.id)
+        .order_by(InvoiceItem.created_at)
+    ).first()
+    if item:
+        item.unit_amount = new_subtotal
+        item.total_amount = new_subtotal
+        session.add(item)
+    appointment.custom_fee_amount = new_subtotal
+    appointment.updated_at = datetime.now(timezone.utc)
+    session.add(appointment)
+    session.commit()
+    session.refresh(invoice)
+    invoice = update_invoice_payment_status(session, invoice)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        actor_user_id=payload.updated_by_user_id or current_user.id,
+        action="invoice.amount_updated",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        purpose="billing",
+    )
     return _read_invoice_detail(session, invoice)
 
 

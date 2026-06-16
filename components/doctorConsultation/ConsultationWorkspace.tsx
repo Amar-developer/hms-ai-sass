@@ -101,6 +101,9 @@ export function ConsultationWorkspace(props: any) {
   const [externalLabCatalog, setExternalLabCatalog] = useState<any[]>([]);
   const [externalLabLoading, setExternalLabLoading] = useState(false);
   const [externalLabError, setExternalLabError] = useState("");
+  // A signed consultation is a locked clinical record — only the addendum may
+  // change. This flag locks every editable field below.
+  const signed = selected?.consultationStatus === "signed";
   const activeMedicineCatalog = availableMedicineCatalog;
   const medicineOptions = activeMedicineCatalog.map((medicine: any) => ({
     value: medicine.id || medicine.slug || medicine.name,
@@ -273,7 +276,7 @@ export function ConsultationWorkspace(props: any) {
         </div>
       ) : (
         <div className="mt-5 space-y-5">
-          <div className="grid gap-3 md:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
             <button
               type="button"
               onClick={() => openPatientDetails?.()}
@@ -292,6 +295,19 @@ export function ConsultationWorkspace(props: any) {
               </p>
             </div>
             <div className="rounded-lg bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">Visit Type</p>
+              <p className="font-bold capitalize">
+                {(selected?.visitType || "OP").toLowerCase()}
+              </p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {selected?.isBillable === false
+                  ? "Free"
+                  : selected?.customFeeAmount != null
+                    ? `Charge ₹${Number(selected.customFeeAmount).toLocaleString("en-IN")}`
+                    : "As per fee rule"}
+              </p>
+            </div>
+            <div className="rounded-lg bg-slate-50 p-4">
               <p className="text-xs text-slate-500">Allergies</p>
               <p className="font-bold">{patient?.allergies || "None"}</p>
             </div>
@@ -300,6 +316,10 @@ export function ConsultationWorkspace(props: any) {
             history={selectedPatientHistory}
             onOpenPatient={openPatientDetails}
           />
+          <fieldset
+            disabled={signed}
+            className={`m-0 min-w-0 space-y-5 border-0 p-0 ${signed ? "opacity-75" : ""}`}
+          >
           {templates.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {templates.map((template: any) => (
@@ -691,6 +711,7 @@ export function ConsultationWorkspace(props: any) {
               </div>
             </div>
           </div>
+          </fieldset>
           {selected?.consultationStatus === "signed" && (
             <div className="rounded-lg bg-emerald-50 p-4">
               <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">

@@ -6,8 +6,6 @@ from app.core.access_control import (
     current_doctor_practitioner_id,
     enforce_entitlement,
     require_branch_in_tenant,
-    require_user_branch_access,
-    scoped_branch_id,
 )
 from app.core.uploads import save_upload
 from app.core.auth import require_any_permission, require_permission, user_permission_keys
@@ -166,7 +164,6 @@ def create_patient(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     enforce_patient_limit(session, tenant_id)
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
-    require_user_branch_access(current_user, payload.branch_id)
     duplicates = _duplicate_candidates(session, tenant_id, payload)
     if any(candidate.confidence == "high" for candidate in duplicates):
         record_audit_event(
@@ -222,7 +219,6 @@ def detect_duplicate_patients(
 ) -> list[PatientDuplicateCandidate]:
     enforce_entitlement(session, tenant_id, "patients")
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
-    require_user_branch_access(current_user, payload.branch_id)
     candidates = _duplicate_candidates(session, tenant_id, payload)
     record_audit_event(
         session,
@@ -248,9 +244,9 @@ def search_patients(
     session: Session = Depends(get_session),
 ) -> list[PatientSearchResult]:
     enforce_entitlement(session, tenant_id, "patients")
-    branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(Patient).where(Patient.tenant_id == tenant_id)
     if branch_id:
+        require_branch_in_tenant(session, tenant_id, branch_id)
         statement = statement.where(Patient.branch_id == branch_id)
     if q:
         pattern = f"%{q.strip().lower()}%"
@@ -318,7 +314,6 @@ def get_patient(
 ) -> Patient:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
-    require_user_branch_access(current_user, patient.branch_id)
     user_permissions = set(user_permission_keys(session, current_user))
     has_patient_read = current_user.is_super_admin or permissions.PATIENTS_READ in user_permissions
     if not has_patient_read:
@@ -360,11 +355,9 @@ def update_patient(
 ) -> Patient:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
-    require_user_branch_access(current_user, patient.branch_id)
     updates = payload.model_dump(exclude_unset=True)
     if "branch_id" in updates:
         require_branch_in_tenant(session, tenant_id, updates["branch_id"])
-        require_user_branch_access(current_user, updates["branch_id"])
     for key, value in updates.items():
         setattr(patient, key, value)
     patient.updated_at = now_utc()
@@ -396,7 +389,6 @@ def delete_patient(
 ) -> dict[str, bool | str]:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
-    require_user_branch_access(current_user, patient.branch_id)
     patient.status = PatientStatus.INACTIVE
     patient.updated_at = now_utc()
     session.add(patient)
@@ -429,7 +421,6 @@ def create_patient_alert(
 ) -> PatientAlert:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
-    require_user_branch_access(current_user, patient.branch_id)
     alert = PatientAlert.model_validate(
         payload,
         update={
@@ -465,8 +456,7 @@ def list_patient_alerts(
     session: Session = Depends(get_session),
 ) -> list[PatientAlert]:
     enforce_entitlement(session, tenant_id, "patients")
-    patient = _get_patient_or_404(session, tenant_id, patient_id)
-    require_user_branch_access(current_user, patient.branch_id)
+    _get_patient_or_404(session, tenant_id, patient_id)
     return _active_alerts(session, tenant_id, patient_id)
 
 
@@ -483,7 +473,6 @@ def get_patient_summary(
 ) -> PatientSummary:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
-    require_user_branch_access(current_user, patient.branch_id)
     alerts = _active_alerts(session, tenant_id, patient_id)
     alert_reads = [PatientAlertRead.model_validate(alert, from_attributes=True) for alert in alerts]
     record_audit_event(
@@ -523,7 +512,6 @@ async def upload_patient_photo(
 ) -> Patient:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
-    require_user_branch_access(current_user, patient.branch_id)
     _filename, url_path = await save_upload(file, f"patient_{patient_id[:12]}")
     patient.photo_url = url_path
     patient.photo_file_name = file.filename or _filename

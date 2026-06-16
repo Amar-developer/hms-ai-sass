@@ -12,6 +12,7 @@ class HomeCareService(SQLModel, table=True):
     code: str = Field(index=True, min_length=2, max_length=60)
     name: str = Field(index=True, min_length=2, max_length=160)
     description: str | None = Field(default=None, max_length=500)
+    mrp_price: int = Field(default=0, ge=0)
     default_price: int = Field(default=0, ge=0)
     is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)

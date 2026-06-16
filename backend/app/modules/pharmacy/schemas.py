@@ -14,6 +14,7 @@ class MedicineCreate(BaseModel):
     strength: str | None = Field(default=None, max_length=80)
     manufacturer: str | None = Field(default=None, max_length=220)
     supplier_id: str | None = None
+    mrp_price: int = Field(default=0, ge=0)
     purchase_price: int = Field(default=0, ge=0)
     default_sale_price: int = Field(default=0, ge=0)
     reorder_level: int = Field(default=0, ge=0)
@@ -29,6 +30,7 @@ class MedicineUpdate(BaseModel):
     strength: str | None = Field(default=None, max_length=80)
     manufacturer: str | None = Field(default=None, max_length=220)
     supplier_id: str | None = None
+    mrp_price: int | None = Field(default=None, ge=0)
     purchase_price: int | None = Field(default=None, ge=0)
     default_sale_price: int | None = Field(default=None, ge=0)
     reorder_level: int | None = Field(default=None, ge=0)

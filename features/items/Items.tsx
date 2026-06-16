@@ -45,6 +45,42 @@ function generatedItemCode(type: string, name: string) {
   return `${prefixes[type] || "ITM"}-${compactName || "ITEM"}-${Date.now().toString().slice(-5)}`;
 }
 
+function itemCodePreview(type: string, name: string) {
+  const prefixes: Record<string, string> = {
+    medicine: "MED",
+    lab_test: "LAB",
+    lab_package: "PKG",
+    physio_equipment: "PHY",
+    home_care_service: "HC",
+  };
+  const compactName = String(name || "ITEM")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "")
+    .slice(0, 6);
+  return `${prefixes[type] || "ITM"}-${compactName || "ITEM"}-AUTO`;
+}
+
+function createEmptyForm(type: string) {
+  return {
+    code: "",
+    name: "",
+    generic_name: "",
+    mrp_price: "",
+    price: "",
+    purchase_price: type === "home_care_service" ? "" : "0",
+    supplier_id: "",
+    reorder_level: "",
+    sample_type: "",
+    description: "",
+    modality_type: "ift",
+    manufacturer: "",
+    model_number: "",
+    serial_number: "",
+    is_portable: "false",
+    branch_scope: "branch",
+  };
+}
+
 export function Items({ apiSession, branchId }: any) {
   const [type, setType] = useState("medicine");
   const [message, setMessage] = useState("");
@@ -83,23 +119,12 @@ export function Items({ apiSession, branchId }: any) {
   const [poCgst, setPoCgst] = useState("6");
   const [poSgst, setPoSgst] = useState("6");
   const [retQty, setRetQty] = useState("1");
-  const [form, setForm] = useState<any>({
-    code: "PCM500",
-    name: "Paracetamol 500mg",
-    generic_name: "Paracetamol",
-    price: "5",
-    purchase_price: "0",
-    supplier_id: "",
-    reorder_level: "10",
-    sample_type: "Blood",
-    description: "",
-    modality_type: "ift",
-    manufacturer: "",
-    model_number: "",
-    serial_number: "",
-    is_portable: "false",
-    branch_scope: "branch",
-  });
+  const [form, setForm] = useState<any>(() => createEmptyForm("medicine"));
+  const autoCode = editing
+    ? type === "physio_equipment"
+      ? form.serial_number || form.code || ""
+      : form.code || ""
+    : itemCodePreview(type, form.name);
 
   const supplierName = (id: string | null | undefined) =>
     stockSuppliers.find((supplier: any) => supplier.id === id)?.name || "-";
@@ -110,6 +135,7 @@ export function Items({ apiSession, branchId }: any) {
         kind: "Medicine",
         name: row.name,
         code: row.code,
+        mrp_price: row.mrp_price || 0,
         price: row.default_sale_price,
         purchase_price: row.purchase_price || 0,
         supplier: supplierName(row.supplier_id),
@@ -122,6 +148,7 @@ export function Items({ apiSession, branchId }: any) {
         kind: "Lab Test",
         name: row.name,
         code: row.code,
+        mrp_price: row.mrp_price || 0,
         price: row.default_price,
         purchase_price: row.purchase_price || 0,
         supplier: supplierName(row.supplier_id),
@@ -134,6 +161,7 @@ export function Items({ apiSession, branchId }: any) {
         kind: "Service",
         name: row.name,
         code: row.code,
+        mrp_price: row.mrp_price || 0,
         price: row.package_price,
         purchase_price: row.purchase_price || 0,
         supplier: supplierName(row.supplier_id),
@@ -146,6 +174,7 @@ export function Items({ apiSession, branchId }: any) {
         kind: "Physio Equipment",
         name: row.name,
         code: row.serial_number || row.code || "",
+        mrp_price: row.mrp_price || 0,
         price: null,
         purchase_price: row.purchase_price || 0,
         supplier: supplierName(row.supplier_id),
@@ -158,6 +187,7 @@ export function Items({ apiSession, branchId }: any) {
         kind: "Home Care / Visit Service",
         name: row.name,
         code: row.code,
+        mrp_price: row.mrp_price || 0,
         price: row.default_price,
         purchase_price: null,
         supplier: "-",
@@ -205,34 +235,15 @@ export function Items({ apiSession, branchId }: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
   }
 
-  function setCodeOrSerial(value: any) {
-    setForm((prev: any) => ({
-      ...prev,
-      code: value,
-      serial_number: type === "physio_equipment" ? value : prev.serial_number,
-    }));
-  }
-
   function changeItemType(nextType: string) {
     setType(nextType);
     setEditing(null);
     setPackageTestIds([]);
-    if (nextType === "home_care_service") {
-      resetHomeCareServiceForm();
-    }
+    resetItemForm(nextType);
   }
 
-  function resetHomeCareServiceForm() {
-    setForm((prev: any) => ({
-      ...prev,
-      code: "",
-      name: "",
-      price: "",
-      purchase_price: "0",
-      supplier_id: "",
-      description: "",
-      branch_scope: "branch",
-    }));
+  function resetItemForm(nextType = type) {
+    setForm(createEmptyForm(nextType));
   }
 
   async function load() {
@@ -281,10 +292,11 @@ export function Items({ apiSession, branchId }: any) {
       const method = editing ? "PATCH" : "POST";
       const supplierId = form.supplier_id || null;
       const purchasePrice = Number(form.purchase_price || 0);
-      const itemCode =
-        type === "home_care_service" && !editing
-          ? generatedItemCode(type, form.name)
-          : form.code || generatedItemCode(type, form.name);
+      const itemCode = editing
+        ? type === "physio_equipment"
+          ? form.serial_number || form.code || generatedItemCode(type, form.name)
+          : form.code || generatedItemCode(type, form.name)
+        : generatedItemCode(type, form.name);
       let savedHomeCareService: any = null;
       if (type === "medicine") {
         await apiFetch(
@@ -299,6 +311,7 @@ export function Items({ apiSession, branchId }: any) {
               generic_name: form.generic_name || null,
               form: "Tablet",
               supplier_id: supplierId,
+              mrp_price: Number(form.mrp_price || 0),
               purchase_price: purchasePrice,
               default_sale_price: Number(form.price || 0),
               reorder_level: Number(form.reorder_level || 0),
@@ -318,6 +331,7 @@ export function Items({ apiSession, branchId }: any) {
               code: itemCode,
               name: form.name,
               supplier_id: supplierId,
+              mrp_price: Number(form.mrp_price || 0),
               purchase_price: purchasePrice,
               sample_type: form.sample_type || null,
               default_price: Number(form.price || 0),
@@ -338,6 +352,7 @@ export function Items({ apiSession, branchId }: any) {
               code: itemCode,
               name: form.name,
               supplier_id: supplierId,
+              mrp_price: Number(form.mrp_price || 0),
               purchase_price: purchasePrice,
               package_price: Number(form.price || 0),
               test_ids: packageTestIds,
@@ -358,6 +373,7 @@ export function Items({ apiSession, branchId }: any) {
               code: itemCode,
               name: form.name,
               description: form.description || null,
+              mrp_price: Number(form.mrp_price || 0),
               default_price: Number(form.price || 0),
             }),
           },
@@ -375,10 +391,11 @@ export function Items({ apiSession, branchId }: any) {
               name: form.name,
               modality_type: form.modality_type,
               supplier_id: supplierId,
+              mrp_price: Number(form.mrp_price || 0),
               purchase_price: purchasePrice,
               manufacturer: form.manufacturer || null,
               model_number: form.model_number || null,
-              serial_number: form.serial_number || itemCode || null,
+              serial_number: itemCode,
               is_portable: form.is_portable === "true",
             }),
           },
@@ -386,9 +403,8 @@ export function Items({ apiSession, branchId }: any) {
       }
       const wasEditing = Boolean(editing);
       setEditing(null);
-      if (!wasEditing && type === "home_care_service") {
-        resetHomeCareServiceForm();
-      }
+      setPackageTestIds([]);
+      resetItemForm(type);
       if (type === "home_care_service" && savedHomeCareService) {
         setHomeCareServices((prev: any[]) =>
           wasEditing
@@ -419,6 +435,7 @@ export function Items({ apiSession, branchId }: any) {
         code: raw.code,
         name: raw.name,
         generic_name: raw.generic_name || "",
+        mrp_price: String(raw.mrp_price || 0),
         price: String(raw.default_sale_price || 0),
         purchase_price: String(raw.purchase_price || 0),
         supplier_id: raw.supplier_id || "",
@@ -429,6 +446,7 @@ export function Items({ apiSession, branchId }: any) {
         ...form,
         code: raw.code,
         name: raw.name,
+        mrp_price: String(raw.mrp_price || 0),
         price: String(raw.default_price || 0),
         purchase_price: String(raw.purchase_price || 0),
         supplier_id: raw.supplier_id || "",
@@ -439,6 +457,7 @@ export function Items({ apiSession, branchId }: any) {
         ...form,
         code: raw.code,
         name: raw.name,
+        mrp_price: String(raw.mrp_price || 0),
         price: String(raw.package_price || 0),
         purchase_price: String(raw.purchase_price || 0),
         supplier_id: raw.supplier_id || "",
@@ -449,6 +468,7 @@ export function Items({ apiSession, branchId }: any) {
         ...form,
         code: raw.code,
         name: raw.name,
+        mrp_price: String(raw.mrp_price || 0),
         price: String(raw.default_price || 0),
         description: raw.description || "",
         branch_scope: raw.branch_id ? "branch" : "tenant",
@@ -459,6 +479,7 @@ export function Items({ apiSession, branchId }: any) {
         code: raw.serial_number || "",
         name: raw.name,
         modality_type: raw.modality_type,
+        mrp_price: String(raw.mrp_price || 0),
         purchase_price: String(raw.purchase_price || 0),
         supplier_id: raw.supplier_id || "",
         manufacturer: raw.manufacturer || "",
@@ -473,6 +494,7 @@ export function Items({ apiSession, branchId }: any) {
   function cancelEdit() {
     setEditing(null);
     setPackageTestIds([]);
+    resetItemForm(type);
   }
 
   async function createSupplier() {
@@ -623,21 +645,26 @@ export function Items({ apiSession, branchId }: any) {
             onChange={changeItemType}
             options={itemTypes.map(([value, label]) => ({ value, label }))}
           />
-          {type !== "home_care_service" && (
-            <TextField
-              label="Code / Serial"
-              value={form.code}
-              onChange={setCodeOrSerial}
-              placeholder="Auto generated if blank"
-              className="search-input"
-            />
-          )}
+          <TextField
+            label="Code / Serial"
+            value={autoCode}
+            onChange={() => {}}
+            disabled
+            placeholder="Auto generated from item type"
+            className="search-input"
+          />
           <TextField
             label={type === "home_care_service" ? "Service Name" : "Item Name"}
             value={form.name}
             onChange={(v) => setField("name", v)}
             required
             className="search-input"
+          />
+          <NumberField
+            label="MRP Price"
+            value={form.mrp_price}
+            onChange={(v) => setField("mrp_price", v)}
+            min={0}
           />
           {type !== "physio_equipment" && (
             <NumberField
@@ -760,14 +787,6 @@ export function Items({ apiSession, branchId }: any) {
                 label="Model"
                 value={form.model_number}
                 onChange={(v) => setField("model_number", v)}
-              />
-              <TextField
-                label="Serial Number"
-                value={form.serial_number}
-                onChange={(v) => {
-                  setField("serial_number", v);
-                  setField("code", v);
-                }}
               />
               <SelectField
                 label="Portable"
@@ -997,6 +1016,7 @@ export function Items({ apiSession, branchId }: any) {
                 <th>Details</th>
                 <th>Supplier</th>
                 <th>Purchase</th>
+                <th>MRP</th>
                 <th>Price / Rate</th>
                 <th className="pr-4 text-right">Actions</th>
               </tr>
@@ -1004,7 +1024,7 @@ export function Items({ apiSession, branchId }: any) {
             <tbody className="divide-y">
               {filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-4 text-slate-500">
+                  <td colSpan={9} className="px-4 py-4 text-slate-500">
                     No items match your filter.
                   </td>
                 </tr>
@@ -1025,6 +1045,7 @@ export function Items({ apiSession, branchId }: any) {
                       ? "-"
                       : `₹${row.purchase_price || 0}`}
                   </td>
+                  <td className="table-data">₹{row.mrp_price || 0}</td>
                   <td className="table-data"  >
                     {row.price === null
                       ? "-"

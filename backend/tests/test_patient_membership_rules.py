@@ -200,6 +200,71 @@ def test_free_consultation_unrestricted_when_no_department_selected():
     assert result["discount_amount"] == 300
 
 
+def test_lab_discount_ignores_free_consultation_department_scope():
+    plan = PatientSubscriptionPlan(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        name="Premium Care Plan",
+        free_consultations=2,
+        free_consultation_department_ids_json='["dept_genmed"]',
+        lab_discount_percentage=5,
+        min_discount_amount=100,
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        patient_id="patient_lab_dept",
+        plan_id=plan.id,
+        starts_on=date.today(),
+        ends_on=date.today() + timedelta(days=119),
+    )
+
+    result = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="lab",
+        item_ids=["LABRBS"],
+        subtotal_amount=200,
+        department_id="dept_orthopaedics",
+    )
+
+    assert result["discount_amount"] == 10
+    assert result["reason"] == "5% lab discount"
+
+
+def test_pharmacy_discount_ignores_free_consultation_department_scope():
+    plan = PatientSubscriptionPlan(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        name="Smart Care Plan",
+        free_consultations=1,
+        free_consultation_department_ids_json='["dept_genmed"]',
+        pharmacy_discount_slabs_json=slabs_to_json(
+            [{"min_amount": 100, "max_amount": 500, "discount_percentage": 3}]
+        ),
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        patient_id="patient_pharmacy_dept",
+        plan_id=plan.id,
+        starts_on=date.today(),
+        ends_on=date.today() + timedelta(days=119),
+    )
+
+    result = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="pharmacy",
+        item_ids=["MED1"],
+        subtotal_amount=400,
+        department_id="dept_cardiology",
+    )
+
+    assert result["discount_amount"] == 12
+    assert result["reason"] == "3% pharmacy discount for ₹100 - ₹500 bill"
+
+
 def test_free_items_json_roundtrip_and_legacy():
     # Legacy plain list loads as quantity 1 each.
     assert free_items_from_json('["LABBP", "LABHB"]') == {"LABBP": 1, "LABHB": 1}

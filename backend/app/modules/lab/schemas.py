@@ -11,6 +11,7 @@ class LabTestCatalogCreate(BaseModel):
     name: str = Field(min_length=2, max_length=220)
     department: str | None = Field(default=None, max_length=120)
     sample_type: str | None = Field(default=None, max_length=120)
+    mrp_price: int = Field(default=0, ge=0)
     default_price: int = Field(default=0, ge=0)
     supplier_id: str | None = None
     purchase_price: int = Field(default=0, ge=0)
@@ -25,6 +26,7 @@ class LabTestCatalogUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=220)
     department: str | None = Field(default=None, max_length=120)
     sample_type: str | None = Field(default=None, max_length=120)
+    mrp_price: int | None = Field(default=None, ge=0)
     default_price: int | None = Field(default=None, ge=0)
     supplier_id: str | None = None
     purchase_price: int | None = Field(default=None, ge=0)
@@ -48,6 +50,7 @@ class LabTestPackageCreate(BaseModel):
     code: str = Field(min_length=2, max_length=40)
     name: str = Field(min_length=2, max_length=220)
     description: str | None = Field(default=None, max_length=1000)
+    mrp_price: int = Field(default=0, ge=0)
     package_price: int = Field(default=0, ge=0)
     supplier_id: str | None = None
     purchase_price: int = Field(default=0, ge=0)
@@ -60,6 +63,7 @@ class LabTestPackageUpdate(BaseModel):
     code: str | None = Field(default=None, min_length=2, max_length=40)
     name: str | None = Field(default=None, min_length=2, max_length=220)
     description: str | None = Field(default=None, max_length=1000)
+    mrp_price: int | None = Field(default=None, ge=0)
     package_price: int | None = Field(default=None, ge=0)
     supplier_id: str | None = None
     purchase_price: int | None = Field(default=None, ge=0)
@@ -75,6 +79,7 @@ class LabTestPackageRead(BaseModel):
     code: str
     name: str
     description: str | None
+    mrp_price: int = 0
     package_price: int
     supplier_id: str | None = None
     purchase_price: int = 0
@@ -105,6 +110,12 @@ class LabResultTemplateRead(BaseModel):
     updated_at: datetime
 
 
+class LabOrderExternalItem(BaseModel):
+    name: str = Field(min_length=1, max_length=220)
+    external_item_code: str | None = Field(default=None, max_length=220)
+    external_slug: str | None = Field(default=None, max_length=220)
+
+
 class LabOrderCreate(BaseModel):
     branch_id: str
     patient_id: str
@@ -114,6 +125,7 @@ class LabOrderCreate(BaseModel):
     tests: str = Field(min_length=2, max_length=2000)
     test_ids: list[str] = Field(default_factory=list)
     package_ids: list[str] = Field(default_factory=list)
+    external_items: list[LabOrderExternalItem] = Field(default_factory=list)
     notes: str | None = Field(default=None, max_length=2000)
     external_referrer: str | None = Field(default=None, max_length=220)
     amount: int = Field(default=0, ge=0)

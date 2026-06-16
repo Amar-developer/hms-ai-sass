@@ -44,7 +44,6 @@ export function Lab({
   const [patientId, setPatientId] = useState(patients[0]?.id || "");
   const [source, setSource] = useState("op_direct");
   const [externalReferrer, setExternalReferrer] = useState("");
-  const [manualTests, setManualTests] = useState("CBC");
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
   const [availableTests, setAvailableTests] = useState<any[]>([]);
   const [testSearch, setTestSearch] = useState("");
@@ -63,7 +62,6 @@ export function Lab({
       return [];
     }
   });
-  const [selectedPackageId, setSelectedPackageId] = useState("");
   const [testName, setTestName] = useState("Complete Blood Count");
   const [testCode, setTestCode] = useState("CBC");
   const [sampleType, setSampleType] = useState("Blood");
@@ -287,14 +285,16 @@ export function Lab({
     const localTestIds = orderTests
       .filter((t: any) => t.id)
       .map((t: any) => t.id);
-    const packageName = packages.find(
-      (pkg: any) => pkg.id === selectedPackageId,
-    )?.name;
-    const testsText = [manualTests, ...selectedNames, packageName]
-      .filter(Boolean)
-      .join(", ");
+    const externalItems = orderTests
+      .filter((t: any) => t.source === "erpnext")
+      .map((t: any) => ({
+        name: t.name,
+        external_item_code: t.external_item_code || null,
+        external_slug: t.external_slug || null,
+      }));
+    const testsText = selectedNames.filter(Boolean).join(", ");
     if (!testsText) {
-      setMessage("Select at least one lab test, package, or manual test.");
+      setMessage("Select at least one lab test.");
       setBusy("");
       return;
     }
@@ -307,7 +307,8 @@ export function Lab({
           source,
           tests: testsText,
           test_ids: localTestIds,
-          package_ids: selectedPackageId ? [selectedPackageId] : [],
+          package_ids: [],
+          external_items: externalItems,
           external_referrer:
             source === "external_referral" ? externalReferrer : null,
           amount: 0,
@@ -315,8 +316,6 @@ export function Lab({
         }),
       });
       setOrderTests([]);
-      setManualTests("");
-      setSelectedPackageId("");
       setSelectedAvailableTestId("");
       setTestSearch("");
       await load();
@@ -341,6 +340,11 @@ export function Lab({
               id: t?.source === "local" ? t.id || "" : "",
               name,
               source: t?.source || "typed",
+              external_item_code:
+                t?.source === "erpnext"
+                  ? t.item_code || t.erpnext_name || t.name || ""
+                  : "",
+              external_slug: t?.source === "erpnext" ? t.slug || t.id || "" : "",
             },
           ],
     );
@@ -640,25 +644,6 @@ export function Lab({
               Add
             </ActionButton>
           </div>
-          <SelectField
-            label="Service"
-            value={selectedPackageId}
-            onChange={setSelectedPackageId}
-            options={[
-              { value: "", label: "No service" },
-              ...packages.map((pkg: any) => ({
-                value: pkg.id,
-                label: `${pkg.name} · ₹${pkg.package_price}`,
-              })),
-            ]}
-          />
-          <TextField
-            label="Manual Tests"
-            value={manualTests}
-            onChange={setManualTests}
-            placeholder="Optional external test"
-            className="search-input"
-          />
           <TextField
             label="External Referrer"
             value={externalReferrer}

@@ -18,6 +18,7 @@ export function PatientDetail({
   membershipPlans,
   membershipEnrollments,
   patientInvoices,
+  branches,
   loading,
   message,
   onMessageClose,
@@ -52,15 +53,27 @@ export function PatientDetail({
     uniquePharmacyIssues,
     (issue: any) => issue.medicine_text,
   );
-  const membershipInvoices = patientInvoices.filter(
-    (invoice: any) =>
+  // A plan-purchase invoice is the membership fee invoice itself. Benefit-usage
+  // invoices (lab/pharmacy/consultation with the membership applied) also carry
+  // the enrollment/plan id, so exclude any invoice linked to a service.
+  const isPlanPurchaseInvoice = (invoice: any) =>
+    Boolean(
       invoice.patient_subscription_enrollment_id ||
-      invoice.patient_subscription_plan_id,
-  );
+        invoice.patient_subscription_plan_id,
+    ) &&
+    !invoice.lab_order_id &&
+    !invoice.pharmacy_issue_id &&
+    !invoice.consultation_id &&
+    !invoice.ip_admission_id &&
+    !invoice.physiotherapy_case_id &&
+    !invoice.home_care_booking_id;
+  const membershipInvoices = patientInvoices.filter(isPlanPurchaseInvoice);
   const purchaseInvoiceFor = (enrollment: any) =>
     membershipInvoices.find(
+      (invoice: any) => invoice.id === enrollment.purchase_invoice_id,
+    ) ||
+    membershipInvoices.find(
       (invoice: any) =>
-        invoice.id === enrollment.purchase_invoice_id ||
         invoice.patient_subscription_enrollment_id === enrollment.id,
     );
   const isEnrollmentPaid = (enrollment: any) => {
@@ -92,35 +105,38 @@ export function PatientDetail({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div className="flex items-start gap-4">
-            {patient.photo_url ? (
-              <img
-                src={`${UPLOADS_BASE}${patient.photo_url}`}
-                alt="Patient"
-                className="h-16 w-16 rounded-lg object-cover border border-slate-200 shrink-0"
+            <label className="group relative block h-16 w-16 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
+              {patient.photo_url ? (
+                <img
+                  src={`${UPLOADS_BASE}${patient.photo_url}`}
+                  alt="Patient"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="flex h-full w-full items-center justify-center text-2xl font-bold text-slate-400">
+                  {patient.full_name?.[0]?.toUpperCase() || "P"}
+                </span>
+              )}
+              <span className="absolute inset-x-0 bottom-0 bg-slate-900/75 px-1 py-1 text-center text-[9px] font-bold text-white opacity-0 transition group-hover:opacity-100">
+                {patient.photo_url ? "Change" : "Upload"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e: any) => {
+                  const f = e.target.files?.[0];
+                  if (f) onUploadPhoto(f);
+                  e.currentTarget.value = "";
+                }}
               />
-            ) : (
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl font-bold text-slate-400">
-                {patient.full_name?.[0]?.toUpperCase() || "P"}
-              </div>
-            )}
+            </label>
             <div>
               <h3 className="card-title font-bold">Patient Details</h3>
               <p className="table-data text-slate-500">
                 Audited EMR view with demographics, alerts, history, treatment,
                 and timeline.
               </p>
-              <label className="mt-1 inline-block cursor-pointer rounded-xl border px-3 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50">
-                {patient.photo_url ? "Change Photo" : "Upload Photo"}
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="sr-only"
-                  onChange={(e: any) => {
-                    const f = e.target.files?.[0];
-                    if (f) onUploadPhoto(f);
-                  }}
-                />
-              </label>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -201,6 +217,7 @@ export function PatientDetail({
         <MembershipEnrollForm
           membershipPlans={membershipPlans}
           patient={patient}
+          branches={branches}
           loading={loading}
           onSubmit={onEnrollMembership}
         />

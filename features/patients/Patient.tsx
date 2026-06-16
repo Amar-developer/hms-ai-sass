@@ -24,6 +24,7 @@ import { PatientRow } from "@/components/patient/PatientRow";
 type PatientProps = {
   apiSession: ApiSession | null;
   branchId?: string;
+  loadLiveData?: (session: ApiSession) => void | Promise<unknown>;
 };
 
 const pageSize = 10;
@@ -34,7 +35,7 @@ const genders = [
   ["unknown", "Unknown"],
 ] as const;
 
-export function Patient({ apiSession, branchId }: PatientProps) {
+export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
@@ -392,6 +393,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
         }),
       });
       await loadPatientDetail(selectedId);
+      if (loadLiveData) await loadLiveData(scopedSession);
       setMessage("Patient membership enrolled and purchase invoice created.");
     } catch (err: any) {
       setMessage(err.message || "Could not enroll membership.");

@@ -33,10 +33,11 @@ from app.modules.audit.service import record_audit_event
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
-from app.modules.practitioners.models import Practitioner, PractitionerSchedule
+from app.modules.practitioners.models import Practitioner
 from app.modules.practitioners.service import (
     check_practitioner_availability,
     check_practitioner_date_availability,
+    generate_practitioner_calendar,
     practitioner_is_eligible,
 )
 from app.modules.consultations.models import Consultation
@@ -213,6 +214,47 @@ def _enforce_practitioner_slot_conflict(
         )
 
 
+def _first_available_practitioner_slot(
+    session: Session,
+    *,
+    tenant_id: str,
+    practitioner_id: str,
+    branch_id: str,
+    department_id: str | None,
+    appointment_date: date,
+) -> time:
+    calendar = generate_practitioner_calendar(
+        session,
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        department_id=department_id,
+        start_date=appointment_date,
+        end_date=appointment_date,
+    )
+    day = calendar.days[0] if calendar.days else None
+    if not day or not day.slots:
+        availability = check_practitioner_date_availability(
+            session,
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            branch_id=branch_id,
+            department_id=department_id,
+            appointment_date=appointment_date,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=availability.reason or "No consultation timing available for this doctor/date",
+        )
+    first_available_slot = next((slot for slot in day.slots if slot.available), None)
+    if not first_available_slot:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="No available consultation slot for this doctor/date",
+        )
+    return first_available_slot.start_time
+
+
 def _review_billing_defaults(
     session: Session,
     *,
@@ -306,11 +348,11 @@ def book_appointment(
         source_appointment = session.get(Appointment, payload.source_appointment_id)
         if not source_appointment or source_appointment.tenant_id != tenant_id or source_appointment.patient_id != patient.id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source appointment")
-    _enforce_duplicate_booking_rules(session, tenant_id, payload)
-    _enforce_practitioner_slot_conflict(session, tenant_id, payload)
+    practitioner_requires_schedule = False
     if payload.practitioner_id:
         practitioner = session.get(Practitioner, payload.practitioner_id)
         if practitioner:
+            practitioner_requires_schedule = payload.appointment_type.value != "emergency"
             if not practitioner_is_eligible(
                 session,
                 tenant_id=tenant_id,
@@ -323,42 +365,33 @@ def book_appointment(
                     detail="Practitioner is not assigned to this branch and department",
                 )
             if payload.appointment_type.value != "emergency":
-                if payload.appointment_time:
-                    availability = check_practitioner_availability(
+                if not payload.appointment_time:
+                    appointment_time = _first_available_practitioner_slot(
                         session,
                         tenant_id=tenant_id,
                         practitioner_id=payload.practitioner_id,
                         branch_id=payload.branch_id,
                         department_id=payload.department_id,
                         appointment_date=payload.appointment_date,
-                        appointment_time=payload.appointment_time,
                     )
-                else:
-                    has_schedules = session.exec(
-                        select(PractitionerSchedule).where(
-                            PractitionerSchedule.tenant_id == tenant_id,
-                            PractitionerSchedule.practitioner_id == payload.practitioner_id,
-                            PractitionerSchedule.branch_id == payload.branch_id,
-                            PractitionerSchedule.is_active == True,  # noqa: E712
-                        )
-                    ).first()
-                    availability = (
-                        check_practitioner_date_availability(
-                            session,
-                            tenant_id=tenant_id,
-                            practitioner_id=payload.practitioner_id,
-                            branch_id=payload.branch_id,
-                            department_id=payload.department_id,
-                            appointment_date=payload.appointment_date,
-                        )
-                        if has_schedules
-                        else None
-                    )
-                if availability and not availability.available:
-                    raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=availability.reason or "Practitioner is not available on this date",
-                    )
+                    payload = payload.model_copy(update={"appointment_time": appointment_time})
+    _enforce_duplicate_booking_rules(session, tenant_id, payload)
+    _enforce_practitioner_slot_conflict(session, tenant_id, payload)
+    if practitioner_requires_schedule and payload.appointment_time:
+        availability = check_practitioner_availability(
+            session,
+            tenant_id=tenant_id,
+            practitioner_id=payload.practitioner_id,
+            branch_id=payload.branch_id,
+            department_id=payload.department_id,
+            appointment_date=payload.appointment_date,
+            appointment_time=payload.appointment_time,
+        )
+        if not availability.available:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=availability.reason or "Practitioner is not available at this time",
+            )
 
     is_billable, billing_note = _review_billing_defaults(
         session,
@@ -366,9 +399,21 @@ def book_appointment(
         branch_id=payload.branch_id,
         payload=payload,
     )
+    # Custom price applies only to chargeable, non-OP visits. OP uses the fee
+    # rule; free visits carry no price.
+    custom_fee_amount = (
+        payload.custom_fee_amount
+        if is_billable and payload.appointment_type != AppointmentType.OP
+        else None
+    )
     appointment = Appointment.model_validate(
         payload,
-        update={"tenant_id": tenant_id, "is_billable": is_billable, "billing_note": billing_note},
+        update={
+            "tenant_id": tenant_id,
+            "is_billable": is_billable,
+            "billing_note": billing_note,
+            "custom_fee_amount": custom_fee_amount,
+        },
     )
     session.add(appointment)
     session.commit()

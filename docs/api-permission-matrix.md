@@ -290,6 +290,7 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
+| `PATCH` | `/api/v1/billing/invoices/{invoice_id}/amount` | `billing.manage` |
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/cancel` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier-options` | `billing.manage` |

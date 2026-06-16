@@ -81,6 +81,15 @@ export function ScheduleForm({
   useEffect(() => {
     if (selectedDoctorId) applyDoctorLinks(selectedDoctorId);
   }, [selectedDoctorId, doctors.length]);
+  // Branch options are limited to the branches this doctor is mapped to.
+  // Single-branch doctors get a fixed branch (no dropdown); multi-branch
+  // doctors can pick a branch or schedule across "All branches".
+  const selectedDoctorBranchIds =
+    doctors.find((item: any) => item.id === selectedDoctorId)?.branch_ids || [];
+  const doctorBranches = branches.filter((branch: any) =>
+    selectedDoctorBranchIds.includes(branch.id),
+  );
+  const isSingleBranchDoctor = doctorBranches.length === 1;
   const addDay = (value: string) => {
     if (value && !selectedDays.includes(value))
       setSelectedDays((current) => [...current, value]);
@@ -143,23 +152,45 @@ export function ScheduleForm({
         </div>
         <div>
           <Field label="Branch">
-            <Select
-              name="branchId"
-              value={selectedBranchId}
-              onChange={(event: any) => setSelectedBranchId(event.target.value)}
-              required
-            >
-              <option value="">Select branch</option>
-              {(doctors.find((item: any) => item.id === selectedDoctorId)
-                ?.branch_ids?.length || 0) > 1 && (
-                <option value={ALL_BRANCHES}>All branches</option>
-              )}
-              {branches.map((branch: any) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
+            {isSingleBranchDoctor ? (
+              <>
+                {/* Single-branch doctor: branch is fixed, not selectable.
+                    Disabled selects are excluded from FormData, so mirror the
+                    value into a hidden input the submit handler reads. */}
+                <input
+                  type="hidden"
+                  name="branchId"
+                  value={selectedBranchId}
+                />
+                <Select value={selectedBranchId} disabled>
+                  {doctorBranches.map((branch: any) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            ) : (
+              <Select
+                name="branchId"
+                value={selectedBranchId}
+                onChange={(event: any) => setSelectedBranchId(event.target.value)}
+                required
+                disabled={!selectedDoctorId}
+              >
+                <option value="">
+                  {selectedDoctorId ? "Select branch" : "Select doctor first"}
                 </option>
-              ))}
-            </Select>
+                {doctorBranches.length > 1 && (
+                  <option value={ALL_BRANCHES}>All branches</option>
+                )}
+                {doctorBranches.map((branch: any) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </Select>
+            )}
           </Field>
         </div>
         <Field label="Medical Department">

@@ -231,6 +231,79 @@ def test_text_only_lab_order_creates_priced_external_items(test_engine, monkeypa
     assert items[0].price == 75
 
 
+def test_selected_external_lab_item_uses_exact_item_code(test_engine, monkeypatch):
+    from app.api.v1 import lab as lab_api
+
+    class FakeFrappeClient:
+        def get_lab_items(self, search=None):
+            return [
+                {
+                    "id": "hemoglobin",
+                    "slug": "hemoglobin",
+                    "item_name": "HEMOGLOBIN",
+                    "item_code": "HEMO",
+                    "erpnext_name": "HEMO",
+                },
+                {
+                    "id": "bp-test",
+                    "slug": "bp-test",
+                    "item_name": "BP Test",
+                    "item_code": "BP",
+                    "erpnext_name": "BP",
+                },
+            ]
+
+        def get_lab_item_details(self, slug):
+            if slug == "BP":
+                return {
+                    "slug": "bp-test",
+                    "item_code": "BP",
+                    "item_name": "BP Test",
+                    "mrp_price": 100,
+                    "selling_price": 30,
+                    "buying_price": 0,
+                    "suppliers": [{"supplier": "Sri Maha Clinic", "supplier_name": "Sri Maha Clinic", "buying_price": 0}],
+                }
+            return {
+                "slug": "hemoglobin",
+                "item_code": "HEMO",
+                "item_name": "HEMOGLOBIN",
+                "mrp_price": 300,
+                "selling_price": 150,
+                "buying_price": 0,
+                "suppliers": [],
+            }
+
+    monkeypatch.setattr(lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True)
+    monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
+
+    with Session(test_engine) as session:
+        order = LabOrder(
+            tenant_id="tenant_lab_price",
+            branch_id="branch_main",
+            patient_id="patient_lab",
+            source=LabOrderSource.OP_DIRECT,
+            tests="BP Test",
+            amount=0,
+        )
+        session.add(order)
+        session.commit()
+        session.refresh(order)
+
+        total = lab_api._add_priced_order_items_from_names(
+            session,
+            order=order,
+            item_names=[{"item_name": "BP Test", "external_item_code": "BP", "external_slug": "bp-test"}],
+        )
+        items = session.exec(select(LabOrderItem).where(LabOrderItem.lab_order_id == order.id)).all()
+
+    assert total == 30
+    assert len(items) == 1
+    assert items[0].test_name == "BP Test"
+    assert items[0].external_item_code == "BP"
+    assert items[0].price == 30
+
+
 def test_create_direct_op_and_external_lab_orders(client):
     tenant, branch, patient = setup_lab_pharmacy_tenant(client)
 

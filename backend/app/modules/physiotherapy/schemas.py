@@ -11,6 +11,7 @@ class PhysiotherapyEquipmentCreate(BaseModel):
     model_number: str | None = Field(default=None, max_length=120)
     serial_number: str | None = Field(default=None, max_length=120)
     supplier_id: str | None = None
+    mrp_price: int = Field(default=0, ge=0)
     purchase_price: int = Field(default=0, ge=0)
     is_portable: bool = False
 
@@ -23,6 +24,7 @@ class PhysiotherapyEquipmentUpdate(BaseModel):
     model_number: str | None = Field(default=None, max_length=120)
     serial_number: str | None = Field(default=None, max_length=120)
     supplier_id: str | None = None
+    mrp_price: int | None = Field(default=None, ge=0)
     purchase_price: int | None = Field(default=None, ge=0)
     is_portable: bool | None = None
     is_active: bool | None = None

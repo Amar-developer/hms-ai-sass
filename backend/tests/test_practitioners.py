@@ -660,7 +660,7 @@ def test_date_only_appointment_requires_practitioner_scheduled_weekday(client):
     assert response.json()["detail"] == "Practitioner is not scheduled on this date"
 
 
-def test_session_token_booking_allows_multiple_patients_before_exact_slot_selection(client):
+def test_backend_auto_assigns_next_available_exact_slots(client):
     tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
     second_patient = client.post(
         "/api/v1/patients",
@@ -716,8 +716,8 @@ def test_session_token_booking_allows_multiple_patients_before_exact_slot_select
 
     assert first.status_code == 201
     assert second.status_code == 201
-    assert first.json()["appointment"]["appointment_time"] is None
-    assert second.json()["appointment"]["appointment_time"] is None
+    assert first.json()["appointment"]["appointment_time"] == "10:00:00"
+    assert second.json()["appointment"]["appointment_time"] == "10:15:00"
     assert first.json()["queue_entry"]["token_number"] == "N-001"
     assert second.json()["queue_entry"]["token_number"] == "N-002"
 

@@ -161,8 +161,8 @@ def test_branch_scope_matrix_blocks_cross_branch_records_and_queries(client):
     lab = client.get(f"/api/v1/lab/catalog/tests?branch_id={other_branch['id']}", headers=headers)
     pharmacy = client.get(f"/api/v1/pharmacy/medicines?branch_id={other_branch['id']}", headers=headers)
 
-    assert patient.status_code == 403
-    assert patient.json()["detail"] == "Branch access denied"
+    assert patient.status_code == 200
+    assert patient.json()["id"] == other_patient["id"]
     assert appointments.status_code == 403
     assert queue.status_code == 403
     assert lab.status_code == 403

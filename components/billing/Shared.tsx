@@ -24,6 +24,7 @@ export function InvoiceDetailPage({
   issueCreditNote,
   supplierOptions={},
   updateInvoiceItemSupplier,
+  updateInvoiceAmount,
 }:any){
   const invoice=detail.invoice||{};
   const items=detail.items||[];
@@ -45,6 +46,26 @@ export function InvoiceDetailPage({
   },[invoice.id,invoice.balance_amount,defaultPaymentMethod]);
   const enteredTotal=payRows.reduce((sum,row)=>sum+Number(row.amount||0),0);
   const remaining=balanceDue-enteredTotal;
+  // Lab bills cannot be paid until every lab line that has supplier options has a
+  // supplier chosen (items without any supplier option are left as-is).
+  const labSupplierMissing=items.some((item:any)=>
+    item.item_type==='lab'&&
+    (supplierOptions[item.id]?.length||0)>0&&
+    !item.supplier_id,
+  );
+  // Non-OP consultation bills are custom-priced, so allow editing the amount on
+  // the bill until a payment is recorded. OP and service invoices are fixed.
+  const canEditAmount=Boolean(
+    updateInvoiceAmount&&
+    invoice.consultation_id&&
+    !invoice.lab_order_id&&!invoice.pharmacy_issue_id&&!invoice.ip_admission_id&&
+    !invoice.physiotherapy_case_id&&!invoice.home_care_booking_id&&
+    invoice.appointment_type&&invoice.appointment_type!=='op'&&
+    numberValue(invoice.paid_amount)<=0&&
+    !['cancelled','refunded'].includes(String(invoice.status)),
+  );
+  const [editingAmount,setEditingAmount]=useState(false);
+  const [amountDraft,setAmountDraft]=useState("");
   function updatePayRow(index:number,key:string,value:any){
     setPayRows((rows)=>rows.map((row,i)=>i===index?{...row,[key]:value}:row));
   }
@@ -195,6 +216,50 @@ export function InvoiceDetailPage({
                   </tbody>
                 </table>
               </div>
+              {canEditAmount && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
+                  {editingAmount ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        autoFocus
+                        value={amountDraft}
+                        onChange={(e:any)=>setAmountDraft(e.target.value)}
+                        className="w-32"
+                      />
+                      <button
+                        type="button"
+                        disabled={busy===`amount-${invoice.id}`||amountDraft===""||Number(amountDraft)<0}
+                        onClick={()=>{updateInvoiceAmount(invoice,Number(amountDraft));setEditingAmount(false);}}
+                        className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+                      >
+                        {busy===`amount-${invoice.id}`?"Saving...":"Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={()=>setEditingAmount(false)}
+                        className="rounded-lg border px-3 py-2 text-xs font-bold"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="text-xs font-bold text-slate-500">
+                        Consultation price is editable for this visit type until payment.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={()=>{setAmountDraft(String(numberValue(invoice.subtotal_amount)));setEditingAmount(true);}}
+                        className="rounded-lg border px-3 py-2 text-xs font-bold hover:bg-white"
+                      >
+                        Edit amount
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <aside className="rounded-lg border border-slate-200 bg-white">
@@ -378,9 +443,14 @@ export function InvoiceDetailPage({
                           {money(remaining)} will remain due (partial payment)
                         </p>
                       )}
+                      {labSupplierMissing && (
+                        <p className="mt-1 text-xs font-bold text-rose-600">
+                          Select a supplier for every lab item before collecting payment.
+                        </p>
+                      )}
                       <button
                         type="button"
-                        disabled={busy === invoice.id || enteredTotal <= 0 || remaining < 0}
+                        disabled={busy === invoice.id || enteredTotal <= 0 || remaining < 0 || labSupplierMissing}
                         onClick={() => collectSplitPayment(invoice, payRows)}
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-3.5 text-sm lg:text-base   font-black tracking-wide text-white shadow-lg shadow-slate-900/20 transition hover:from-slate-800 hover:to-slate-600 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                       >
