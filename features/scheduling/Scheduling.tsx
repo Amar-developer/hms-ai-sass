@@ -114,7 +114,24 @@ export function Scheduling({ apiSession, branchId }: any) {
     const practitionerId = String(fd.get("practitionerId") || "");
     const doctorBranchIds =
       doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
+    const doctorDepartmentIds =
+      doctors.find((item: any) => item.id === practitionerId)?.department_ids ||
+      [];
     const schedulePayloads = selectedSchedulePayloads(fd, doctorBranchIds);
+    if (!practitionerId || schedulePayloads.length === 0) {
+      setMessage("Select a doctor and medical department.");
+      return;
+    }
+    if (
+      schedulePayloads.some(
+        (item) =>
+          !item.department_id ||
+          !doctorDepartmentIds.includes(String(item.department_id)),
+      )
+    ) {
+      setMessage("Select a medical department mapped to this doctor.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -155,7 +172,21 @@ export function Scheduling({ apiSession, branchId }: any) {
     );
     const doctorBranchIds =
       doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
+    const doctorDepartmentIds =
+      doctors.find((item: any) => item.id === practitionerId)?.department_ids ||
+      [];
     const schedulePayloads = selectedSchedulePayloads(fd, doctorBranchIds);
+    if (
+      schedulePayloads.length === 0 ||
+      schedulePayloads.some(
+        (item) =>
+          !item.department_id ||
+          !doctorDepartmentIds.includes(String(item.department_id)),
+      )
+    ) {
+      setMessage("Select a medical department mapped to this doctor.");
+      return;
+    }
     const [firstPayload, ...extraPayloads] = schedulePayloads;
     // Only reuse active rows. Soft-deleted (is_active=false) rows are ghosts:
     // patching or counting them resurfaces removed ranges in the editor.
@@ -413,7 +444,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             }}
             className='rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-[11px] lg:text-sm'
           >
-            <option value="all">All medical departments</option>
+            <option value="all">All Departments</option>
             {departments.map((department: any) => (
               <option key={department.id} value={department.id}>
                 {department.name}
@@ -504,6 +535,4 @@ export function Scheduling({ apiSession, branchId }: any) {
     </Card>
   );
 }
-
-
 

@@ -38,6 +38,30 @@ export function activeDoctorFeeRule(feeRules: any[], doctor: any) {
   );
 }
 
+export function activeDoctorDepartmentFeeRules(feeRules: any[], doctor: any) {
+  if (!doctor) return [];
+  const departmentIds = new Set(doctor.department_ids || []);
+  const rulesByDepartment = new Map<string, any>();
+  for (const rule of [...(feeRules || [])]
+    .filter(
+      (item: any) =>
+        item.is_active &&
+        item.practitioner_id === doctor.id &&
+        item.appointment_type === "op" &&
+        item.department_id &&
+        departmentIds.has(item.department_id),
+    )
+    .sort(
+      (a: any, b: any) =>
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime(),
+    )) {
+    if (!rulesByDepartment.has(rule.department_id))
+      rulesByDepartment.set(rule.department_id, rule);
+  }
+  return Array.from(rulesByDepartment.values());
+}
+
 
 
 
@@ -47,4 +71,3 @@ export function formatPractitionerName(row: any) {
   const withoutSuffix = name.replace(/,\s*PT$/i, "");
   return `${withoutSuffix}, PT`;
 }
-

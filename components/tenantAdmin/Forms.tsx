@@ -460,7 +460,7 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
         title={title}
         subtitle={
           supplier?.id ||
-          "Suppliers can be used by medicines, lab tests, lab packages, and physiotherapy equipment."
+          "Suppliers can be used by medicines, lab tests, Service, and physiotherapy equipment."
         }
         back={back}
       />

@@ -57,11 +57,12 @@ export function selectedSchedulePayloads(fd: FormData, allBranchIds: string[] = 
     branchValue === ALL_BRANCHES
       ? allBranchIds.filter(Boolean)
       : [branchValue];
+  const departmentId = String(fd.get("departmentId") || "") || null;
   return branchIds.flatMap((branch_id) =>
     selectedWeekdays.flatMap((weekday) =>
       ranges.map((range) => ({
         branch_id,
-        department_id: fd.get("departmentId") || null,
+        department_id: departmentId,
         weekday,
         start_time: range.start_time,
         end_time: range.end_time,
@@ -80,6 +81,7 @@ export function scheduleGroupKey(row: any) {
     row.department_id || "",
     row.room_number || "",
     row.slot_minutes,
+    row.is_active === false ? "inactive" : "active",
   ].join("|");
 }
 

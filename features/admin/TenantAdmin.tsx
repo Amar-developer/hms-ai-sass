@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { sections, parseNumberingRules } from "@/utils/tenantAdmin/constants";
 import { canUseTenantAdminSection } from "@/utils/tenantAdmin/permissions";
 import { Card, StatusToast } from "../../components/common/ui";
@@ -86,6 +86,7 @@ export function TenantAdmin({
   });
   const [reportJobs, setReportJobs] = useState<any[]>([]);
   const [reportBusy, setReportBusy] = useState("");
+  const loadSequence = useRef(0);
   const selectedRole = roles.find((row: any) => row.id === selectedId);
   const selectedUser = users.find((row: any) => row.id === selectedId);
   const departmentGroups = useMemo(
@@ -125,6 +126,7 @@ export function TenantAdmin({
 
   async function loadAdmin() {
     if (!apiSession) return;
+    const requestSequence = ++loadSequence.current;
     setBusy(true);
     setMessage("");
     try {
@@ -183,6 +185,7 @@ export function TenantAdmin({
             )
           : Promise.resolve([]),
       ]);
+      if (requestSequence !== loadSequence.current) return;
       setRoles(roleRows);
       setUsers(userRows);
       setDepartments(departmentRows);
@@ -242,15 +245,47 @@ export function TenantAdmin({
       }
       setReportJobs(reportJobRows || []);
     } catch (err: any) {
+      if (requestSequence !== loadSequence.current) return;
       setMessage(err.message || "Could not load tenant admin data.");
     } finally {
-      setBusy(false);
+      if (requestSequence === loadSequence.current) setBusy(false);
     }
   }
 
   useEffect(() => {
     loadAdmin();
   }, [apiSession?.token, apiSession?.tenantId]);
+  useEffect(() => {
+    setView("list");
+    setSelectedId("");
+    setConfirm(null);
+    setPasswordUser(null);
+  }, [section]);
+  useEffect(() => {
+    if (view !== "edit") return;
+    const selectedExists =
+      (section === "users" && Boolean(selectedUser)) ||
+      (section === "roles" && Boolean(selectedRole)) ||
+      (section === "departments" && Boolean(selectedDepartment)) ||
+      (section === "branches" && Boolean(selectedBranch)) ||
+      (section === "suppliers" && Boolean(selectedSupplier)) ||
+      (section === "tax" && Boolean(selectedTaxRule)) ||
+      (section === "offers" && Boolean(selectedOffer));
+    if (!selectedExists) {
+      setView("list");
+      setSelectedId("");
+    }
+  }, [
+    section,
+    view,
+    selectedUser,
+    selectedRole,
+    selectedDepartment,
+    selectedBranch,
+    selectedSupplier,
+    selectedTaxRule,
+    selectedOffer,
+  ]);
   useEffect(() => {
     if (
       apiSession &&
@@ -259,7 +294,11 @@ export function TenantAdmin({
     ) {
       open(visibleSections[0][0]);
     }
-  }, [apiSession?.token, section, visibleSections.length]);
+  }, [
+    apiSession?.token,
+    section,
+    visibleSections.map(([sectionId]) => sectionId).join(","),
+  ]);
 
   async function createRole(e: any) {
     e.preventDefault();

@@ -15,7 +15,7 @@ import { SelectField, TextField } from "@/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { doctorTypes } from "@/utils/doctors/constants";
 import { Empty,Pagination,ConfirmModal,DoctorRow } from "@/components/doctors/Shared";
-import { activeDoctorFeeRule, activeTenantOptions, } from "@/utils/doctors/helpers";
+import { activeTenantOptions } from "@/utils/doctors/helpers";
 import { DoctorForm } from "@/components/doctors/Forms";
 
 const pageSize = 10;
@@ -108,36 +108,69 @@ export function Doctors({ apiSession, clinic }: any) {
 
   async function saveDoctorFeeRules(practitionerId: string, data: any) {
     if (!scopedSession) return;
-    const feeAmount = Number(data.consultationFee || 0);
-    const doctorSharePercentage = Number(data.doctorSharePercentage || 0);
     const practitionerType = String(data.practitionerType || "doctor");
-    if (feeAmount <= 0) return;
     const branchIds: string[] = data.branchIds || [];
-    const targets = branchIds.length ? branchIds : [null];
+    const specialtyFees: any[] = data.specialtyFees || [];
+    const targets = (branchIds.length ? branchIds : [null]).flatMap(
+      (branchId: string | null) =>
+        specialtyFees.map((specialty) => ({
+          branchId,
+          departmentId: specialty.departmentId,
+          feeAmount: Number(specialty.fee),
+          doctorSharePercentage: Math.min(
+            100,
+            Math.max(0, Number(specialty.doctorSharePercentage || 0)),
+          ),
+        })),
+    );
     await Promise.all(
-      targets.map((branch: any) =>
-        apiFetch("/billing/doctor-fee-rules", scopedSession, {
+      targets.map((target) => {
+        const existing = [...feeRules]
+          .filter(
+            (rule: any) =>
+              rule.is_active &&
+              rule.practitioner_id === practitionerId &&
+              rule.branch_id === target.branchId &&
+              rule.department_id === target.departmentId &&
+              rule.appointment_type === "op" &&
+              (practitionerType === "physiotherapist"
+                ? rule.treatment_type === "physiotherapy_session"
+                : !rule.treatment_type),
+          )
+          .sort(
+            (a: any, b: any) =>
+              new Date(b.created_at || 0).getTime() -
+              new Date(a.created_at || 0).getTime(),
+          )[0];
+        if (
+          existing &&
+          Number(existing.fee_amount) === target.feeAmount &&
+          Number(existing.doctor_share_percentage || 0) ===
+            target.doctorSharePercentage &&
+          Boolean(existing.share_tax_with_doctor) ===
+            (data.shareTaxWithDoctor === "true")
+        ) {
+          return Promise.resolve(existing);
+        }
+        return apiFetch("/billing/doctor-fee-rules", scopedSession, {
           method: "POST",
           body: JSON.stringify({
-            branch_id: branch,
-            department_id: null,
+            branch_id: target.branchId,
+            department_id: target.departmentId,
             practitioner_id: practitionerId,
             appointment_type: "op",
             treatment_type:
               practitionerType === "physiotherapist"
                 ? "physiotherapy_session"
                 : null,
-            fee_amount: feeAmount,
+            fee_amount: target.feeAmount,
             share_type: "percentage",
-            doctor_share_percentage: Math.min(
-              100,
-              Math.max(0, doctorSharePercentage),
-            ),
+            doctor_share_percentage: target.doctorSharePercentage,
             doctor_fixed_amount: null,
             share_tax_with_doctor: data.shareTaxWithDoctor === "true",
           }),
-        }),
-      ),
+        });
+      }),
     );
   }
 
@@ -473,7 +506,5 @@ export function Doctors({ apiSession, clinic }: any) {
     </Card>
   );
 }
-
-
 
 

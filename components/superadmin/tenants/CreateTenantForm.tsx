@@ -1,7 +1,18 @@
 "use client";
 
-import { Pencil } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  Building2,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  CircleUserRound,
+  ClipboardCheck,
+  LayoutGrid,
+  LockKeyhole,
+  Pencil,
+  ShieldCheck,
+} from "lucide-react";
+import { useRef, useState } from "react";
 import { Badge, Button, Card, Field, Input, Select } from "@/components/common/ui";
 import { tenantTypes } from "../../../utils/superAdmin/constants";
 import {
@@ -267,16 +278,18 @@ export function CreateTenantForm({
 }: any) {
   const [branches, setBranches] = useState([{ id: Date.now() }]);
   const [step, setStep] = useState(0);
-  const [maxStepReached, setMaxStepReached] = useState(0);
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(
+    () => new Set(),
+  );
   const [, setReviewTick] = useState(0);
   const formRef = useRef<HTMLFormElement | null>(null);
   const steps = [
-    "Tenant",
-    "Plan & Branches",
-    "Included Modules",
-    "Templates",
-    "Admin User",
-    "Review",
+    { label: "Tenant Details", shortLabel: "Tenant", icon: Building2 },
+    { label: "Plan & Branches", shortLabel: "Plan", icon: LayoutGrid },
+    { label: "Included Modules", shortLabel: "Modules", icon: ShieldCheck },
+    { label: "Default Templates", shortLabel: "Templates", icon: ClipboardCheck },
+    { label: "Tenant Admin", shortLabel: "Admin", icon: CircleUserRound },
+    { label: "Review & Create", shortLabel: "Review", icon: Check },
   ];
   const roleDefaults = new Set(["tenant_admin"]);
   const departmentDefaults = new Set(["general_medicine", "general"]);
@@ -288,48 +301,91 @@ export function CreateTenantForm({
     moduleRegistry,
     templates,
   );
-  const validSteps = [
-    Boolean(
-      draft.name &&
-      draft.tenantType &&
-      draft.status &&
-      draft.country &&
-      draft.timezone,
-    ),
-    Boolean(
-      draft.planId &&
-      draft.branches.length &&
-      draft.branches.every((branch: any) => branch.name && branch.code),
-    ),
-    Boolean(draft.planId),
-    true,
-    Boolean(draft.adminName && draft.adminEmail && draft.adminPassword),
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const branchCodes = draft.branches.map((branch: any) =>
+    String(branch.code || "").trim().toLowerCase(),
+  );
+  const validationMessages = [
+    draft.name.length < 2
+      ? "Tenant name must contain at least 2 characters."
+      : draft.email && !emailPattern.test(draft.email)
+        ? "Enter a valid tenant email address."
+        : draft.country.length !== 2
+          ? "Country must be a 2-letter code."
+          : !draft.tenantType || !draft.status || !draft.timezone
+            ? "Tenant type, status, and timezone are required."
+            : "",
+    !draft.planId
+      ? "Select a subscription plan."
+      : !draft.branches.length
+        ? "Add at least one branch."
+        : draft.branches.some(
+              (branch: any) =>
+                branch.name.trim().length < 2 ||
+                branch.code.trim().length < 2,
+            )
+          ? "Every branch name and code must contain at least 2 characters."
+          : new Set(branchCodes).size !== branchCodes.length
+            ? "Branch codes must be unique within the tenant."
+            : "",
+    !draft.planId ? "Select a subscription plan before reviewing modules." : "",
+    "",
+    draft.adminName.length < 2
+      ? "Admin name must contain at least 2 characters."
+      : !emailPattern.test(draft.adminEmail)
+        ? "Enter a valid admin email address."
+        : draft.adminPassword.length < 8
+          ? "Temporary password must contain at least 8 characters."
+          : "",
   ];
+  const validSteps = validationMessages.map((message) => !message);
   const firstInvalidStep = validSteps.findIndex((valid) => !valid);
   const allSetupValid = firstInvalidStep === -1;
-  const canComplete = step === steps.length - 1 && allSetupValid && !busy;
+  const setupStepsCompleted = validSteps.every(
+    (valid, index) => valid && completedSteps.has(index),
+  );
+  const canComplete =
+    step === steps.length - 1 && setupStepsCompleted && !busy;
   const currentStepValid =
     step >= validSteps.length ? allSetupValid : validSteps[step];
-  const furthestStep = allSetupValid ? steps.length - 1 : firstInvalidStep;
-
-  useEffect(() => {
-    setMaxStepReached((previous) => Math.max(previous, step));
-  }, [step]);
+  const completedCount = validSteps.filter(
+    (valid, index) => valid && completedSteps.has(index),
+  ).length;
 
   function refreshDraft() {
     setReviewTick((value) => value + 1);
   }
+  function isStepUnlocked(index: number) {
+    if (index === 0) return true;
+    return validSteps
+      .slice(0, index)
+      .every((valid, previousIndex) => valid && completedSteps.has(previousIndex));
+  }
   function goToStep(index: number) {
-    if (index <= furthestStep || index < step) setStep(index);
+    if (isStepUnlocked(index)) setStep(index);
   }
   function nextStep() {
     if (!currentStepValid) return;
+    if (step < validSteps.length) {
+      setCompletedSteps((previous) => {
+        const next = new Set(previous);
+        next.add(step);
+        return next;
+      });
+    }
     setStep(Math.min(steps.length - 1, step + 1));
   }
   function submitWizard(event: any) {
+    event.preventDefault();
+    if (step < steps.length - 1) {
+      nextStep();
+      return;
+    }
     if (!canComplete) {
-      event.preventDefault();
-      setStep(firstInvalidStep >= 0 ? firstInvalidStep : steps.length - 1);
+      const firstIncompleteStep = validSteps.findIndex(
+        (valid, index) => !valid || !completedSteps.has(index),
+      );
+      setStep(firstIncompleteStep >= 0 ? firstIncompleteStep : 0);
       return;
     }
     createTenant(event);
@@ -343,72 +399,146 @@ export function CreateTenantForm({
     "Admin name, email, and temporary password are required.",
     "Review every section, then complete onboarding.",
   ];
+  const currentStep = steps[step];
+  const CurrentStepIcon = currentStep.icon;
 
   return (
-    <Card>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between rounded-lg ">
-        <div>
-          <h3 className=" text-lg font-bold">Tenant Onboarding Wizard</h3>
-          <p className="mt-1 text-xs lg:text-sm text-slate-500">
-            Create tenant, assign plan, module entitlements, branches, default
-            templates, tenant admin credentials, and onboarding checklist in one
-            guided flow.
-          </p>
+    <Card className="overflow-hidden border-slate-200 bg-slate-50/60 p-0">
+      <div className="border-b border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 px-5 py-6 text-white lg:px-7">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl">
+            <Badge
+              tone="blue"
+              className="mb-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-blue-100"
+            >
+              Super Admin Workspace
+            </Badge>
+            <h3 className="text-xl font-bold lg:text-2xl">
+              New Tenant Onboarding
+            </h3>
+            <p className="mt-2 text-xs leading-5 text-slate-300 lg:text-sm">
+              Complete each section in order. The final action provisions the
+              tenant, branches, subscription, templates, and first admin
+              account as one guided workflow.
+            </p>
+          </div>
+          <div className="min-w-52 rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="flex items-center justify-between text-xs text-slate-300">
+              <span>Setup progress</span>
+              <b className="text-white">{completedCount}/5 complete</b>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-full rounded-full bg-blue-400 transition-all duration-300"
+                style={{ width: `${(completedCount / 5) * 100}%` }}
+              />
+            </div>
+          </div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {steps.map((label, index) => {
+      </div>
+      <div className="grid lg:grid-cols-[250px_minmax(0,1fr)]">
+        <aside className="border-b border-slate-200 bg-white p-4 lg:border-b-0 lg:border-r lg:p-5">
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-1">
+          {steps.map(({ label, shortLabel, icon: StepIcon }, index) => {
             const stepValid =
               index < validSteps.length ? validSteps[index] : allSetupValid;
-            // Only show the green tick once the user has actually advanced past
-            // the step — otherwise later steps that pass on default values
-            // (default plan, optional templates) look "complete" before they
-            // are ever visited.
-            const complete = stepValid && index < maxStepReached;
-            const locked = index > furthestStep && index > step;
-            const editable = complete && index !== step;
+            const complete =
+              index < validSteps.length
+                ? stepValid && completedSteps.has(index)
+                : setupStepsCompleted;
+            const locked = !isStepUnlocked(index);
             return (
               <button
                 key={label}
                 type="button"
                 onClick={() => goToStep(index)}
                 disabled={locked}
-                title={editable ? "Go back and edit this step" : undefined}
-                className={`group inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-300 ${step === index ? "bg-brand text-brand-fg" : complete ? "bg-success-subtle text-success-fg hover:bg-success-soft" : "bg-slate-100 text-slate-600"}`}
+                className={`group flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition disabled:cursor-not-allowed ${
+                  step === index
+                    ? "border-blue-200 bg-blue-50 text-blue-950 shadow-sm"
+                    : complete
+                      ? "border-emerald-100 bg-emerald-50/70 text-emerald-900 hover:border-emerald-200"
+                      : locked
+                        ? "border-transparent bg-slate-50 text-slate-400"
+                        : "border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-50"
+                }`}
               >
-                <span>
-                  {index + 1}. {label}
-                  {editable ? " ✓" : ""}
+                <span
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+                    step === index
+                      ? "bg-blue-600 text-white"
+                      : complete
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {locked ? (
+                    <LockKeyhole size={14} />
+                  ) : complete ? (
+                    <Check size={16} />
+                  ) : (
+                    <StepIcon size={16} />
+                  )}
                 </span>
-                {editable && (
-                  <Pencil
-                    size={12}
-                    className="opacity-60 transition group-hover:opacity-100"
-                    aria-label="Edit step"
-                  />
+                <span className="min-w-0">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Step {index + 1}
+                  </span>
+                  <span className="hidden truncate text-xs font-bold lg:block">
+                    {label}
+                  </span>
+                  <span className="block truncate text-[10px] font-bold sm:text-xs lg:hidden">
+                    {shortLabel}
+                  </span>
+                </span>
+                {complete && index !== step && (
+                  <Pencil size={12} className="ml-auto hidden lg:block" />
                 )}
               </button>
             );
           })}
-        </div>
-      </div>
+          </div>
+          <div className="mt-5 hidden rounded-2xl bg-slate-950 p-4 text-white lg:block">
+            <p className="text-xs font-bold">Provisioning rule</p>
+            <p className="mt-2 text-xs leading-5 text-slate-300">
+              Tenant access is based on the selected plan. The first admin is
+              created with tenant-wide administration access.
+            </p>
+          </div>
+        </aside>
       <form
         ref={formRef}
         onSubmit={submitWizard}
         onChange={refreshDraft}
         onInput={refreshDraft}
         noValidate
-        className="mt-5 grid gap-4"
+        className="min-w-0 bg-white"
       >
         <input type="hidden" name="branchCount" value={branches.length} />
-        <div className="rounded-lg bg-slate-50 p-3 text-xs lg:text-sm font-semibold text-slate-600">
-          {stepHelp[step]}{" "}
-          {!currentStepValid && step < 5 && (
-            <span className="text-red-600">
-              {" "}
-              Complete this step to continue.
+        <div className="border-b border-slate-100 px-5 py-5 lg:px-7">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
+              <CurrentStepIcon size={20} />
             </span>
-          )}
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600">
+                Step {step + 1} of {steps.length}
+              </p>
+              <h4 className="mt-1 text-lg font-bold text-slate-950">
+                {currentStep.label}
+              </h4>
+              <p className="mt-1 text-xs text-slate-500 lg:text-sm">
+                {stepHelp[step]}
+              </p>
+              {!currentStepValid && step < 5 && (
+                <p className="mt-2 text-xs font-semibold text-red-600">
+                  {validationMessages[step]}
+                </p>
+              )}
+            </div>
+          </div>
         </div>
+        <div className="min-h-[430px] px-5 py-6 lg:px-7">
         <div className={step === 0 ? "grid gap-4 md:grid-cols-3" : "hidden"}>
           <Field label="Tenant Name">
             <Input
@@ -669,8 +799,9 @@ export function CreateTenantForm({
           <Field label="Temporary Password">
             <Input
               name="adminPassword"
-              type="text"
-              defaultValue="TempPass123"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Minimum 8 characters"
               required
               className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
@@ -701,7 +832,7 @@ export function CreateTenantForm({
           <OnboardingReview
             draft={draft}
             validSteps={validSteps}
-            steps={steps}
+            steps={steps.map((item) => item.label)}
             onEdit={setStep}
           />
           <div className="rounded-lg  bg-blue-50 p-4 text-xs lg:text-sm font-semibold text-blue-700">
@@ -711,33 +842,37 @@ export function CreateTenantForm({
             first.
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
+        </div>
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur lg:px-7">
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setStep(Math.max(0, step - 1))}
               disabled={step === 0}
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold disabled:text-slate-300"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
             >
+              <ChevronLeft size={15} />
               Previous
             </button>
             <button
               type="button"
               onClick={nextStep}
               disabled={step === steps.length - 1 || !currentStepValid}
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold disabled:text-slate-300"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
             >
-              Next
+              Save & Continue
+              <ChevronRight size={15} />
             </button>
           </div>
           <Button
             disabled={!canComplete}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            className="rounded-xl px-5 py-2.5 text-xs lg:text-sm"
           >
             {busy ? "Onboarding..." : "Complete Onboarding"}
           </Button>
         </div>
       </form>
+      </div>
     </Card>
   );
 }

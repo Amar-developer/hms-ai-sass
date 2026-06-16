@@ -289,7 +289,24 @@ def update_practitioner_schedule(
     practitioner_id = updates.get("practitioner_id", schedule.practitioner_id)
     branch_id = updates.get("branch_id", schedule.branch_id)
     _get_practitioner(session, tenant_id, practitioner_id)
-    _validate_links(session, tenant_id, [branch_id], [])
+    department_id = updates.get("department_id", schedule.department_id)
+    _validate_links(
+        session,
+        tenant_id,
+        [branch_id],
+        [department_id] if department_id else [],
+    )
+    if department_id and not practitioner_is_eligible(
+        session,
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        department_id=department_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Practitioner is not assigned to this branch and department",
+        )
     start_time = updates.get("start_time", schedule.start_time)
     end_time = updates.get("end_time", schedule.end_time)
     _validate_time_window(start_time, end_time)
@@ -425,7 +442,23 @@ def create_practitioner_schedule(
     ),
 ) -> PractitionerSchedule:
     _get_practitioner(session, tenant_id, practitioner_id)
-    _validate_links(session, tenant_id, [payload.branch_id], [])
+    _validate_links(
+        session,
+        tenant_id,
+        [payload.branch_id],
+        [payload.department_id] if payload.department_id else [],
+    )
+    if payload.department_id and not practitioner_is_eligible(
+        session,
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=payload.branch_id,
+        department_id=payload.department_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Practitioner is not assigned to this branch and department",
+        )
     _validate_time_window(payload.start_time, payload.end_time)
     schedule = PractitionerSchedule.model_validate(payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id})
     session.add(schedule)

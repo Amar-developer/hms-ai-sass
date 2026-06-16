@@ -1,17 +1,45 @@
 'use client';
 
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
 import {API_BASE,AUTH_SESSION_EXPIRED_EVENT,apiFetch,type ApiSession} from '@/lib/api';
 import {demoUsers,loginPresets} from '@/lib/authPresets';
 import {type LiveSummary,mapAppointment,mapPatient} from '@/lib/liveData';
 import {canOpenModule} from '@/lib/moduleAccess';
 import {nav,roleModules} from '@/lib/navigation';
 import {uniqueDepartmentRows} from '@/lib/options';
+import {normalizeSidebarModuleMap,resolveSidebarModules} from '@/lib/sidebarAccess';
 
 const allModuleIds = nav.map(([id]) => id);
 const defaultEntitlementModuleIds = Array.from(new Set([...allModuleIds, 'patient_subscriptions']));
 const defaultBranch = {id: 'default-branch', name: 'Default Branch', city: ''};
 const defaultDepartment = {id: 'general', name: 'General Medicine', prefix: 'GEN'};
+
+type WorkspaceState = {
+  active?: string;
+  branchId?: string;
+  departmentId?: string;
+};
+
+function workspaceKey(session: ApiSession) {
+  const userKey = session.user?.id || session.email || 'user';
+  return `medizinhub.workspace.${userKey}.${session.tenantId}`;
+}
+
+function readWorkspace(session: ApiSession): WorkspaceState {
+  try {
+    return JSON.parse(localStorage.getItem(workspaceKey(session)) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveWorkspace(session: ApiSession, patch: WorkspaceState) {
+  const current = readWorkspace(session);
+  localStorage.setItem(
+    workspaceKey(session),
+    JSON.stringify({...current, ...patch}),
+  );
+}
 
 export function useAppController() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -36,6 +64,27 @@ export function useAppController() {
   const [appointments, setAppointments] = useState<any[]>([]);
   const [ipAdmissions, setIpAdmissions] = useState<any[]>([]);
   const [roleModuleOverrides, setRoleModuleOverrides] = useState<Record<string, string[]>>({});
+  const activeRef = useRef(active);
+  const branchIdRef = useRef(branchId);
+  const liveBranchIdRef = useRef(liveBranchId);
+  const departmentIdRef = useRef(departmentId);
+
+  function updateActive(value: string) {
+    activeRef.current = value;
+    setActive(value);
+    if (apiSession) saveWorkspace(apiSession, {active: value});
+  }
+
+  function updateDepartment(value: string) {
+    departmentIdRef.current = value;
+    setDepartmentId(value);
+    if (apiSession) saveWorkspace(apiSession, {departmentId: value});
+  }
+
+  function setCurrentLiveBranch(value: string) {
+    liveBranchIdRef.current = value;
+    setLiveBranchId(value);
+  }
 
   function hasPermission(session: ApiSession, permission: string) {
     const keys = session.user?.permissions || [];
@@ -78,6 +127,9 @@ export function useAppController() {
     setAppointments([]);
     setIpAdmissions([]);
     setRoleModuleOverrides({});
+    activeRef.current = 'dashboard';
+    liveBranchIdRef.current = '';
+    departmentIdRef.current = defaultDepartment.id;
     setActive('dashboard');
     setRole('tenant_admin');
     setShowPassword(false);
@@ -113,7 +165,11 @@ export function useAppController() {
     const isPlatformPrimaryTenant = Boolean(session.user?.is_super_admin && (activeTenant?.is_primary || session.user?.tenant_id === session.tenantId));
     const isDoctorUser = session.user?.user_type === 'doctor' || session.user?.roles?.includes('doctor');
     let scopedBranchRows = branchRows;
-    let scopedDepartmentRows = uniqueDepartmentRows(departmentRows, departmentId);
+    const preferredDepartmentId = departmentIdRef.current;
+    let scopedDepartmentRows = uniqueDepartmentRows(
+      departmentRows,
+      preferredDepartmentId,
+    );
 
     const entitlementsPromise = isPlatformPrimaryTenant ? Promise.resolve<any>(null) : apiFetchIfAllowed<any>('/subscription-plans/entitlements', session, [
       'reports.read',
@@ -131,7 +187,18 @@ export function useAppController() {
       'home_care.create',
       'platform.subscriptions.manage',
     ], null);
-    const [patientRows, appointmentRows, queueRows, consultationRows, invoiceRows, ipRows, practitionerRows, scheduleRows, entitlements] = await Promise.all([
+    const [
+      patientRows,
+      appointmentRows,
+      queueRows,
+      consultationRows,
+      invoiceRows,
+      ipRows,
+      practitionerRows,
+      scheduleRows,
+      entitlements,
+      sidebarRoleMap,
+    ] = await Promise.all([
       isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/patients', session, ['patients.read', 'patients.create', 'patients.write'], []),
       isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/appointments', session, ['appointments.manage', 'appointments.read', 'appointments.create'], []),
       isPlatformPrimaryTenant ? Promise.resolve<any[]>([]) : apiFetchIfAllowed<any[]>('/queue?include_completed=true', session, 'queue.manage', []),
@@ -141,6 +208,7 @@ export function useAppController() {
       apiFetchIfAllowed<any[]>('/practitioners', session, [...referenceReadPermissions, 'practitioners.create'], []),
       apiFetchIfAllowed<any[]>('/practitioners/schedules?is_active=true', session, [...referenceReadPermissions, 'practitioners.create'], []),
       entitlementsPromise,
+      apiFetch('/settings/sidebar-modules', session).catch(() => ({})),
     ]);
 
     const linkedPractitioner = isDoctorUser
@@ -153,7 +221,7 @@ export function useAppController() {
     const doctorDepartmentIds = new Set((linkedPractitioner?.department_ids || []).filter(Boolean));
     if (isDoctorUser) {
       scopedBranchRows = doctorBranchIds.size ? branchRows.filter((row: any) => doctorBranchIds.has(row.id)) : [];
-      scopedDepartmentRows = doctorDepartmentIds.size ? uniqueDepartmentRows(departmentRows.filter((row: any) => doctorDepartmentIds.has(row.id)), departmentId) : [];
+      scopedDepartmentRows = doctorDepartmentIds.size ? uniqueDepartmentRows(departmentRows.filter((row: any) => doctorDepartmentIds.has(row.id)), preferredDepartmentId) : [];
       setDoctorScope({
         practitionerId: linkedPractitioner?.id || null,
         branchIds: Array.from(doctorBranchIds),
@@ -166,12 +234,31 @@ export function useAppController() {
     setLiveTenants(activeTenantOptions(tenantRows));
     setLiveBranches(scopedBranchRows);
     setLiveDepartments(scopedDepartmentRows);
-    const backendBranchId = session.user?.is_super_admin
-      ? (scopedBranchRows[0]?.id || liveBranchId || branchId)
-      : (session.user?.branch_id || scopedBranchRows[0]?.id || liveBranchId || branchId);
-    if (backendBranchId) setLiveBranchId(backendBranchId);
-    if (scopedDepartmentRows.length && !scopedDepartmentRows.some((row: any) => row.id === departmentId)) {
-      setDepartmentId(scopedDepartmentRows[0].id);
+    const currentPreferredBranchId =
+      liveBranchIdRef.current || branchIdRef.current;
+    const currentPreferredDepartmentId = departmentIdRef.current;
+    const backendBranchId =
+      scopedBranchRows.find(
+        (row: any) => row.id === currentPreferredBranchId,
+      )?.id ||
+      scopedBranchRows.find((row: any) => row.id === session.user?.branch_id)
+        ?.id ||
+      scopedBranchRows[0]?.id ||
+      '';
+    if (backendBranchId) {
+      setCurrentLiveBranch(backendBranchId);
+      saveWorkspace(session, {branchId: backendBranchId});
+    }
+    const nextDepartmentId =
+      scopedDepartmentRows.find(
+        (row: any) => row.id === currentPreferredDepartmentId,
+      )?.id ||
+      scopedDepartmentRows[0]?.id ||
+      '';
+    if (nextDepartmentId && nextDepartmentId !== departmentIdRef.current) {
+      departmentIdRef.current = nextDepartmentId;
+      setDepartmentId(nextDepartmentId);
+      saveWorkspace(session, {departmentId: nextDepartmentId});
     }
 
     const mappedPatients = patientRows.map(mapPatient);
@@ -187,9 +274,7 @@ export function useAppController() {
     setIpAdmissions(ipRows);
     setLiveInvoices(invoiceRows);
     setEnabledModules(entitlements?.enabled_modules?.length ? entitlements.enabled_modules : defaultEntitlementModuleIds);
-    apiFetch('/settings/sidebar-modules', session)
-      .then((map: any) => setRoleModuleOverrides(map && typeof map === 'object' && !Array.isArray(map) ? map : {}))
-      .catch(() => setRoleModuleOverrides({}));
+    setRoleModuleOverrides(normalizeSidebarModuleMap(sidebarRoleMap));
     setLiveSummary({
       patients: patientRows.length,
       appointments: appointmentRows.length,
@@ -216,10 +301,22 @@ export function useAppController() {
     if (raw) {
       try {
         const saved = JSON.parse(raw);
+        const workspace = readWorkspace(saved);
+        const restoredActive =
+          workspace.active ||
+          (saved.user?.is_super_admin ? 'superadmin' : 'dashboard');
+        const restoredBranchId = workspace.branchId || '';
+        const restoredDepartmentId =
+          workspace.departmentId || defaultDepartment.id;
+        activeRef.current = restoredActive;
+        liveBranchIdRef.current = restoredBranchId;
+        departmentIdRef.current = restoredDepartmentId;
+        setActive(restoredActive);
+        setLiveBranchId(restoredBranchId);
+        setDepartmentId(restoredDepartmentId);
         setApiSession(saved);
         const savedRole = saved.user?.roles?.[0] || (saved.user?.is_super_admin ? 'super_admin' : 'tenant_admin');
         setRole(savedRole);
-        if (savedRole === 'super_admin') setActive('superadmin');
         setAuthenticated(true);
         loadLiveData(saved).catch((err:any) => {
           setLiveStatus(err.message || 'Connected, but live data could not be loaded.');
@@ -306,10 +403,20 @@ export function useAppController() {
 
     const session = {token: body.access_token, tenantId, email: input.email, user: body.user};
     localStorage.setItem('medizinhub.session', JSON.stringify(session));
+    const workspace = readWorkspace(session);
     setApiSession(session);
     const nextRole = body.user.roles?.[0] || (body.user.is_super_admin ? 'super_admin' : 'tenant_admin');
+    const nextActive =
+      workspace.active ||
+      (nextRole === 'super_admin' ? 'superadmin' : 'dashboard');
+    activeRef.current = nextActive;
+    liveBranchIdRef.current = workspace.branchId || '';
+    departmentIdRef.current =
+      workspace.departmentId || defaultDepartment.id;
     setRole(nextRole);
-    setActive(nextRole === 'super_admin' ? 'superadmin' : 'dashboard');
+    setActive(nextActive);
+    setLiveBranchId(liveBranchIdRef.current);
+    setDepartmentId(departmentIdRef.current);
     setAuthenticated(true);
     await loadLiveData(session).catch((err:any) => {
       setLiveStatus(err.message || 'Connected, but live data could not be loaded.');
@@ -327,9 +434,19 @@ export function useAppController() {
   async function switchTenant(tenantId: string) {
     if (!apiSession || !tenantId) return;
     const next = {...apiSession, tenantId};
+    const workspace = readWorkspace(next);
     localStorage.setItem('medizinhub.session', JSON.stringify(next));
     setApiSession(next);
-    setLiveBranchId('');
+    const nextActive =
+      workspace.active ||
+      (next.user?.is_super_admin ? 'superadmin' : 'dashboard');
+    activeRef.current = nextActive;
+    liveBranchIdRef.current = workspace.branchId || '';
+    departmentIdRef.current =
+      workspace.departmentId || defaultDepartment.id;
+    setActive(nextActive);
+    setLiveBranchId(liveBranchIdRef.current);
+    setDepartmentId(departmentIdRef.current);
     setLiveBranches([]);
     setLiveDepartments([]);
     setLiveStatus(`Switching to ${tenantId}...`);
@@ -340,7 +457,8 @@ export function useAppController() {
 
   function changeClinic(id: string) {
     setClinicId(id);
-    if (!apiSession && active !== 'dashboard') setActive('dashboard');
+    if (!apiSession && activeRef.current !== 'dashboard')
+      updateActive('dashboard');
   }
 
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
@@ -369,10 +487,12 @@ export function useAppController() {
 
   function selectBranch(id: string) {
     if (liveBranches.length) {
-      setLiveBranchId(id);
+      setCurrentLiveBranch(id);
     } else {
+      branchIdRef.current = id;
       setBranchId(id);
     }
+    if (apiSession) saveWorkspace(apiSession, {branchId: id});
   }
 
   const scopedAppointments = appointments.filter((a) => {
@@ -384,7 +504,7 @@ export function useAppController() {
     branch,
     branchId: effectiveBranchId,
     departmentId,
-    setDepartmentId,
+    setDepartmentId: updateDepartment,
     allowedDepartments,
     doctorScope,
     livePractitioners,
@@ -399,7 +519,6 @@ export function useAppController() {
     loadLiveData,
     liveInvoices,
   };
-  const allowedForRole = roleModules[role] || roleModules.tenant_admin;
   const permissionModules = new Set<string>();
   const permissionKeys = apiSession?.user?.permissions || [];
   const navHasAnyPermission = (...keys: string[]) =>
@@ -432,13 +551,13 @@ export function useAppController() {
   // users with no recognized role fall back to permission-derived modules.
   // Tenant-admin-configurable per-role sidebar modules override the built-in defaults
   // (lib/navigation.ts). Unconfigured roles keep their defaults.
-  const effectiveRoleModules: Record<string, string[]> = { ...roleModules, ...roleModuleOverrides };
-  const knownRoleNames: string[] = ((apiSession?.user?.roles as string[]) || []).filter(
-    (name) => Boolean(effectiveRoleModules[name]),
-  );
-  const roleAllowedModules: string[] = knownRoleNames.length
-    ? Array.from(new Set<string>(knownRoleNames.flatMap((name) => effectiveRoleModules[name])))
-    : Array.from(new Set<string>([...allowedForRole, ...Array.from(permissionModules)]));
+  const roleAllowedModules = resolveSidebarModules({
+    user: apiSession?.user,
+    fallbackRole: role,
+    defaults: roleModules,
+    overrides: roleModuleOverrides,
+    permissionModules,
+  });
   const enabled = (id: string) => {
     if (id === 'dashboard') return isTenantAdminDashboardUser;
     if (id === 'reports') return Boolean(isSuperAdmin || isTenantAdminUser) && canOpenModule(id, roleAllowedModules, clinic);
@@ -450,7 +569,7 @@ export function useAppController() {
     authScreenProps: {role, setRole, onLogin: handleLogin, demoUsers, loginPresets},
     shellProps: {
       active,
-      setActive,
+      setActive: updateActive,
       nav,
       enabled,
       clinic,
@@ -461,7 +580,7 @@ export function useAppController() {
       branchId: effectiveBranchId,
       setBranchId: selectBranch,
       departmentId,
-      setDepartmentId,
+      setDepartmentId: updateDepartment,
       allowedDepartments,
       isDoctorUser,
       doctorScope,

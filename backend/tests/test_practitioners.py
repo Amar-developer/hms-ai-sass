@@ -479,6 +479,75 @@ def test_schedule_management_list_update_and_delete(client):
     assert inactive_list.json()[0]["is_active"] is False
 
 
+def test_schedule_rejects_department_not_mapped_to_practitioner(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. General Only",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
+    ).json()
+
+    response = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "department_id": "orthopaedics",
+            "weekday": 1,
+            "start_time": "09:00:00",
+            "end_time": "12:00:00",
+            "slot_minutes": 15,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Practitioner is not assigned to this branch and department"
+
+
+def test_schedule_allows_same_timing_as_separate_department_records(client):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Shared Timing",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general", "ped"],
+        },
+    ).json()
+    payload = {
+        "branch_id": branch["id"],
+        "weekday": 1,
+        "start_time": "09:00:00",
+        "end_time": "13:00:00",
+        "slot_minutes": 15,
+    }
+
+    general = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={**payload, "department_id": "general"},
+    )
+    pediatrics = client.post(
+        f"/api/v1/practitioners/{practitioner['id']}/schedules",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={**payload, "department_id": "ped"},
+    )
+    schedules = client.get(
+        f"/api/v1/practitioners/schedules?practitioner_id={practitioner['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert general.status_code == 201
+    assert pediatrics.status_code == 201
+    assert {row["department_id"] for row in schedules.json()} == {"general", "ped"}
+    assert len({row["id"] for row in schedules.json()}) == 2
+
+
 def test_appointment_rejects_practitioner_not_assigned_to_department(client):
     tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
     practitioner = client.post(
@@ -877,6 +946,87 @@ def test_same_patient_cannot_book_two_doctors_at_same_exact_time(client):
     assert first.status_code == 201
     assert second.status_code == 409
     assert second.json()["detail"] == "Patient already has an active appointment at this time"
+
+
+def test_same_doctor_cannot_book_two_patients_across_departments_at_same_time(client):
+    tenant, branch, _other_branch, first_patient = setup_tenant_branch_departments_patient(client)
+    second_patient = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "Second Department Patient"},
+    ).json()
+    practitioner = client.post(
+        "/api/v1/practitioners",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Dr. Cross Department",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general", "ped"],
+        },
+    ).json()
+    for department_id in ("general", "ped"):
+        schedule = client.post(
+            f"/api/v1/practitioners/{practitioner['id']}/schedules",
+            headers={"X-Tenant-ID": tenant["id"]},
+            json={
+                "branch_id": branch["id"],
+                "department_id": department_id,
+                "weekday": 0,
+                "start_time": "09:00:00",
+                "end_time": "12:00:00",
+                "slot_minutes": 15,
+            },
+        )
+        assert schedule.status_code == 201
+
+    first = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": first_patient["id"],
+            "department_id": "general",
+            "practitioner_id": practitioner["id"],
+            "appointment_type": "op",
+            "appointment_date": "2026-05-04",
+            "appointment_time": "09:15:00",
+        },
+    )
+    orthopaedic_calendar = client.get(
+        f"/api/v1/practitioners/{practitioner['id']}/calendar",
+        headers={"X-Tenant-ID": tenant["id"]},
+        params={
+            "branch_id": branch["id"],
+            "department_id": "ped",
+            "start_date": "2026-05-04",
+            "end_date": "2026-05-04",
+        },
+    )
+    second = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": second_patient["id"],
+            "department_id": "ped",
+            "practitioner_id": practitioner["id"],
+            "appointment_type": "op",
+            "appointment_date": "2026-05-04",
+            "appointment_time": "09:15:00",
+        },
+    )
+
+    blocked_slot = next(
+        slot
+        for slot in orthopaedic_calendar.json()["days"][0]["slots"]
+        if slot["start_time"] == "09:15:00"
+    )
+    assert first.status_code == 201
+    assert orthopaedic_calendar.status_code == 200
+    assert blocked_slot["available"] is False
+    assert blocked_slot["status"] == "booked"
+    assert second.status_code == 409
+    assert second.json()["detail"] == "Doctor already has an active appointment at this time"
 
 
 def test_practitioner_leave_blocks_timed_appointment(client):

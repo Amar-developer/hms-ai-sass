@@ -67,7 +67,6 @@ export function Sidebar(props: SidebarProps) {
                     props.setSuperAdminSettingsOpen(
                       !props.superAdminSettingsOpen,
                     );
-                    props.setReportsOpen(!props.reportsOpen);
                   }}
                   className={`flex w-full items-center rounded-2xl py-3
                   ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
@@ -99,8 +98,10 @@ export function Sidebar(props: SidebarProps) {
                             key={sectionId}
                             type="button"
                             onClick={() => {
-                              props.navigatePage("superadmin");
-                              props.setSuperAdminSection(sectionId);
+                              props.navigatePage({
+                                id: "superadmin",
+                                section: sectionId,
+                              });
                             }}
                             className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                               props.superAdminSection === sectionId
@@ -111,7 +112,7 @@ export function Sidebar(props: SidebarProps) {
                             <SectionIcon size={15} />
                             {!props.tabletCollapsed && (
                               <span className="truncate text-xs lg:text-sm">
-                                {label}
+                                {sectionLabel}
                               </span>
                             )}
                           </button>
@@ -129,12 +130,9 @@ export function Sidebar(props: SidebarProps) {
                   type="button"
                   onClick={() => {
                     props.navigatePage(id);
-                      props.setTenantAdminSettingsOpen(true);
-                    if (props.visibleTenantAdminSections.length > 0) {
-                      props.setTenantAdminSection(
-                        props.visibleTenantAdminSections[0][0],
-                      );
-                    }
+                    props.setTenantAdminSettingsOpen(
+                      !props.tenantAdminSettingsOpen,
+                    );
                   }}
                   className={`flex w-full items-center rounded-2xl py-3
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
@@ -166,8 +164,10 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                             key={sectionId}
                             type="button"
                             onClick={() => {
-                              props.navigatePage("admin");
-                              props.setTenantAdminSection(sectionId);
+                              props.navigatePage({
+                                id: "admin",
+                                section: sectionId,
+                              });
                             }}
                             className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                               props.tenantAdminSection === sectionId
@@ -232,8 +232,10 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                           key={sectionId}
                           type="button"
                           onClick={() => {
-                            props.navigatePage("reports");
-                            props.setReportsSection(sectionId);
+                            props.navigatePage({
+                              id: "reports",
+                              section: sectionId,
+                            });
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
                             props.reportsSection === sectionId

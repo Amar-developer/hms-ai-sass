@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Field, Input, Select } from "@/components/common/ui";
+import { patientDateInputValue } from "@/utils/patient/helpers";
 
 type BranchOption = {
   id: string;
@@ -103,7 +104,9 @@ export function PatientFormFields({
     patientField(patient, "branch_id", "branchId") || defaultBranchId || "",
   );
   const [dateOfBirth, setDateOfBirth] = useState(
-    patientField(patient, "date_of_birth", "dateOfBirth"),
+    patientDateInputValue(
+      patientField(patient, "date_of_birth", "dateOfBirth"),
+    ),
   );
   const [status, setStatus] = useState(patient?.status || "active");
   const calculatedAge = dateOfBirth
@@ -116,6 +119,19 @@ export function PatientFormFields({
   ) {
     branchOptions.unshift({ id: selectedBranchId, name: "Selected branch" });
   }
+  useEffect(() => {
+    setSelectedBranchId(
+      patientField(patient, "branch_id", "branchId") ||
+        defaultBranchId ||
+        "",
+    );
+    setDateOfBirth(
+      patientDateInputValue(
+        patientField(patient, "date_of_birth", "dateOfBirth"),
+      ),
+    );
+    setStatus(patient?.status || "active");
+  }, [patient?.id, patient?.updated_at, defaultBranchId]);
   useEffect(() => {
     if (selectedBranchId || !branchOptions.length) return;
     const nextBranchId =

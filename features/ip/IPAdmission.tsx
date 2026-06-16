@@ -2,7 +2,7 @@
 
 import {useEffect,useMemo,useState} from 'react';
 import {ChevronDown} from 'lucide-react';
-import {Badge,Button,Card,Input,RefreshButton,Select,StatusToast} from '@/components/common/ui';
+import {Badge,Button,Card,Input,RefreshButton,SearchableSelect,Select,StatusToast} from '@/components/common/ui';
 import {FormField} from '@/components/FormElements';
 import {SearchPicker,TagEntryBox,medicineFrequencyOptions,rowTagLabel} from '@/components/clinicalRows';
 import {UPLOADS_BASE,apiFetch,apiUpload} from '@/lib/api';
@@ -197,6 +197,7 @@ export function IPAdmission({
     const fd=new FormData(e.currentTarget);
     const sourceAppointmentId=String(fd.get('source_appointment_id')||'');
     const patientId=String(fd.get('patient_id')||'');
+    if(!fromAppointment&&!patientId){setError('Select a patient.');return;}
     const payload={
       branch_id: branchId,
       patient_id: patientId,
@@ -1081,6 +1082,7 @@ function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmiss
   const [ward,setWard]=useState('');
   const [roomNumber,setRoomNumber]=useState('');
   const [roomId,setRoomId]=useState('');
+  const [patientId,setPatientId]=useState('');
   const wardRooms=rooms.filter((room:any)=>!ward||room.ward_name===ward);
   const roomNumbers=Array.from(new Set(wardRooms.map((room:any)=>room.room_number).filter(Boolean)));
   const bedRows=wardRooms.filter((room:any)=>!roomNumber||room.room_number===roomNumber);
@@ -1106,10 +1108,14 @@ function AdmissionFields({patients,departmentId,rooms=[],admissionDate,setAdmiss
     <>
       {!hidePatient&&(
         <FormField label="Patient">
-          <Select name="patient_id" required>
-            <option value="">Select patient</option>
-            {patients.map((p:any)=><option key={p.id} value={p.id}>{patientName(p)} · {p.mobile||p.patientNumber||p.id}</option>)}
-          </Select>
+          <SearchableSelect
+            name="patient_id"
+            value={patientId}
+            onChange={setPatientId}
+            placeholder="Select patient"
+            searchPlaceholder="Search patient by name, mobile, or number"
+            options={patients.map((p:any)=>({value:p.id,label:`${patientName(p)} · ${p.mobile||p.patientNumber||p.id}`}))}
+          />
         </FormField>
       )}
       <input type="hidden" name="department_id" value={departmentId||''}/>

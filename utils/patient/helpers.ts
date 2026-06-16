@@ -18,6 +18,12 @@ export function toRow(patient: any) {
   return { ...patient, active_alert_count: 0, critical_alert_count: 0 };
 }
 
+export function patientDateInputValue(value: any) {
+  const text = String(value || "").trim();
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+  return match?.[1] || "";
+}
+
 export function patientSearchText(patient: any, branch?: any) {
   return [
     patient.id,

@@ -134,6 +134,39 @@ def test_create_fee_rule_and_generate_op_invoice_with_percentage_split(client: T
     assert detail["items"][0]["description"] == "Op general consultation"
 
 
+def test_doctor_fee_rules_allow_different_departments_but_reject_identical_context(client: TestClient):
+    data = setup_signed_consultation(client, "op")
+    tenant_id = data["tenant"]["id"]
+    common = {
+        "appointment_type": "op",
+        "fee_amount": 650,
+        "share_type": "percentage",
+        "doctor_share_percentage": 60,
+        "practitioner_id": "doctor_demo",
+    }
+
+    general = client.post(
+        "/api/v1/billing/doctor-fee-rules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={**common, "department_id": "general"},
+    )
+    orthopaedics = client.post(
+        "/api/v1/billing/doctor-fee-rules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={**common, "department_id": "orthopaedics", "fee_amount": 800},
+    )
+    duplicate = client.post(
+        "/api/v1/billing/doctor-fee-rules",
+        headers={"X-Tenant-ID": tenant_id},
+        json={**common, "department_id": "general"},
+    )
+
+    assert general.status_code == 201
+    assert orthopaedics.status_code == 201
+    assert duplicate.status_code == 409
+    assert duplicate.json()["detail"] == "An identical active doctor fee rule already exists"
+
+
 def test_invoice_number_uses_configured_branch_prefix(client: TestClient):
     data = setup_signed_consultation(client, "op")
     tenant_id = data["tenant"]["id"]

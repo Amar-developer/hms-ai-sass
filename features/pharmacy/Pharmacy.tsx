@@ -14,6 +14,7 @@ import {
   FormField,
   NumberField,
   SelectField,
+  SearchableSelectField,
   TextField,
   DateField,
 } from "@/components/FormElements";
@@ -568,11 +569,13 @@ export function Pharmacy({
           onSubmit={createDirect}
           className="mt-4 grid gap-3 md:grid-cols-4"
         >
-          <SelectField
+          <SearchableSelectField
             label="Patient"
             value={patientId}
             onChange={setPatientId}
             options={patients.map((p: any) => ({ value: p.id, label: p.name }))}
+            placeholder="Select patient"
+            searchPlaceholder="Search patient by name"
           />
           <SelectField
             label="Source"

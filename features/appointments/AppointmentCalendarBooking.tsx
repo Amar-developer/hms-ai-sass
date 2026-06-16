@@ -49,19 +49,9 @@ type Props = {
   setActive?: (page: string) => void;
 };
 
-type BookingStep = "search" | "newPatient" | "appointment" | "success";
+type BookingStep = "appointment" | "newPatient" | "success";
 
 const pageSize = 8;
-const slotGroups = [
-  {
-    id: "morning",
-    label: "Morning 10 AM - 1 PM",
-    start: "10:00",
-    end: "13:00",
-  },
-  { id: "evening", label: "Evening 6 PM - 9 PM", start: "18:00", end: "21:00" },
-] as const;
-
 function formatDisplayTime(value: any) {
   const raw = String(value || "").slice(0, 5);
   const [hourText, minuteText = "00"] = raw.split(":");
@@ -94,7 +84,9 @@ export function AppointmentCalendarBooking(props: Props) {
   const [patientSearch, setPatientSearch] = useState("");
   const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
-  const [bookingStep, setBookingStep] = useState<BookingStep>("search");
+  const [patientLookupOpen, setPatientLookupOpen] = useState(false);
+  const [bookingStep, setBookingStep] =
+    useState<BookingStep>("appointment");
   const [appointmentDate, setAppointmentDate] = useState(
     new Date().toISOString().slice(0, 10),
   );
@@ -106,9 +98,6 @@ export function AppointmentCalendarBooking(props: Props) {
   const [emergencyReason, setEmergencyReason] = useState("");
   const [intakeVitals, setIntakeVitals] = useState("");
   const [intakeComplaints, setIntakeComplaints] = useState("");
-  const [slotGroup, setSlotGroup] = useState("morning");
-  const [slotIntervalsEnabled, setSlotIntervalsEnabled] = useState(false);
-  const [slotIntervalMinutes, setSlotIntervalMinutes] = useState(5);
   const [liveDoctors, setLiveDoctors] = useState<any[]>([]);
   const [doctorFeeRules, setDoctorFeeRules] = useState<any[]>([]);
   const [doctorId, setDoctorId] = useState("");
@@ -225,6 +214,13 @@ export function AppointmentCalendarBooking(props: Props) {
   const doctors = liveDoctors;
   const doctor =
     doctors.find((item: any) => item.id === doctorId) || doctors[0];
+  const doctorDepartmentOptions = useMemo(() => {
+    if (!doctor) return departmentOptions;
+    const mappedIds = new Set(doctor.department_ids || []);
+    return departmentOptions.filter((department: any) =>
+      mappedIds.has(department.id),
+    );
+  }, [doctor, departmentOptions]);
   const selectedFeeRule = useMemo(() => {
     const candidates = doctorFeeRules.filter((rule: any) => {
       if (!rule.is_active) return false;
@@ -245,18 +241,24 @@ export function AppointmentCalendarBooking(props: Props) {
     })[0];
   }, [doctorFeeRules, appointmentType, branchId, departmentId, doctorId]);
   const selectedFeeAmount = selectedFeeRule?.fee_amount;
-  const patientMatches = apiSession
-    ? liveMatches
-    : searchPatients(patients, patientSearch).map((patient: any) => ({
-        id: patient.id,
-        full_name: patient.name,
-        mobile: patient.mobile,
-        guardian_name: patient.guardian,
-        guardian_mobile: patient.guardianMobile,
-        area: patient.area,
-        age_years: patient.age,
-        gender: patient.gender,
-      }));
+  const patientMatches = (
+    apiSession
+      ? liveMatches
+      : searchPatients(patients, patientSearch).map((patient: any) => ({
+          id: patient.id,
+          full_name: patient.name,
+          mobile: patient.mobile,
+          guardian_name: patient.guardian,
+          guardian_mobile: patient.guardianMobile,
+          area: patient.area,
+          age_years: patient.age,
+          gender: patient.gender,
+          status: patient.status,
+        }))
+  ).filter(
+    (patient: any) =>
+      !patient.status || String(patient.status).toLowerCase() === "active",
+  );
 
   useEffect(
     () => setPage(1),
@@ -321,47 +323,7 @@ export function AppointmentCalendarBooking(props: Props) {
   ]);
   useEffect(() => {
     setSelectedSlot(null);
-  }, [
-    departmentId,
-    doctorId,
-    appointmentDate,
-    slotGroup,
-    slotIntervalsEnabled,
-  ]);
-
-  useEffect(() => {
-    let alive = true;
-    async function loadSlotSettings() {
-      if (!apiSession || !branchId) {
-        setSlotIntervalsEnabled(false);
-        setSlotIntervalMinutes(5);
-        return;
-      }
-      try {
-        const [enabled, minutes] = await Promise.all([
-          apiFetch(
-            `/settings/resolve?module=appointments&key=appointment.slot_intervals_enabled&branch_id=${encodeURIComponent(branchId)}`,
-            apiSession,
-          ),
-          apiFetch(
-            `/settings/resolve?module=appointments&key=appointment.slot_interval_minutes&branch_id=${encodeURIComponent(branchId)}`,
-            apiSession,
-          ),
-        ]);
-        if (!alive) return;
-        setSlotIntervalsEnabled(Boolean(enabled.value));
-        setSlotIntervalMinutes(Number(minutes.value || 5));
-      } catch {
-        if (!alive) return;
-        setSlotIntervalsEnabled(false);
-        setSlotIntervalMinutes(5);
-      }
-    }
-    loadSlotSettings();
-    return () => {
-      alive = false;
-    };
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+  }, [departmentId, doctorId, appointmentDate]);
 
   useEffect(() => {
     let alive = true;
@@ -375,6 +337,7 @@ export function AppointmentCalendarBooking(props: Props) {
           q: patientSearch.trim(),
           limit: "10",
         });
+        if (branchId) params.set("branch_id", branchId);
         const rows = await apiFetch(
           `/patients?${params.toString()}`,
           apiSession,
@@ -388,7 +351,7 @@ export function AppointmentCalendarBooking(props: Props) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, patientSearch]);
+  }, [apiSession?.token, apiSession?.tenantId, branchId, patientSearch]);
 
   useEffect(() => {
     let alive = true;
@@ -439,8 +402,9 @@ export function AppointmentCalendarBooking(props: Props) {
         return;
       }
       try {
-        const exactPath = `/practitioners?branch_id=${encodeURIComponent(branchId)}&department_id=${encodeURIComponent(departmentId)}`;
-        const rows = await fetchDoctors(exactPath);
+        const rows = await fetchDoctors(
+          `/practitioners?branch_id=${encodeURIComponent(branchId)}`,
+        );
         if (!alive) return;
         setLiveDoctors(rows);
         setDoctorId((current) =>
@@ -450,7 +414,7 @@ export function AppointmentCalendarBooking(props: Props) {
         );
         if (rows.length === 0) {
           setMessage(
-            "No doctor is mapped for this branch and medical department. Ask the tenant admin to map a doctor and add Doctor Scheduling timings.",
+            "No doctor is mapped to this branch. Ask the tenant admin to map a doctor and add scheduling timings.",
           );
         }
       } catch (err: any) {
@@ -468,7 +432,18 @@ export function AppointmentCalendarBooking(props: Props) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, departmentId]);
+  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+
+  useEffect(() => {
+    if (!doctor) return;
+    const mappedDepartmentIds: string[] = doctor.department_ids || [];
+    if (
+      mappedDepartmentIds.length > 0 &&
+      !mappedDepartmentIds.includes(departmentId)
+    ) {
+      setDepartmentId(mappedDepartmentIds[0]);
+    }
+  }, [doctorId, doctor, departmentId, setDepartmentId]);
 
   useEffect(() => {
     let alive = true;
@@ -512,8 +487,11 @@ export function AppointmentCalendarBooking(props: Props) {
 
   function openBooking() {
     setMode("book");
-    setBookingStep("search");
+    setBookingStep("appointment");
     setSelectedPatient(null);
+    setPatientSearch("");
+    setLiveMatches([]);
+    setPatientLookupOpen(false);
     setBooked(null);
     setMessage("");
     setAppointmentType("op");
@@ -533,8 +511,11 @@ export function AppointmentCalendarBooking(props: Props) {
 
   async function closeBooking() {
     setMode("list");
-    setBookingStep("search");
+    setBookingStep("appointment");
     setSelectedPatient(null);
+    setPatientSearch("");
+    setLiveMatches([]);
+    setPatientLookupOpen(false);
     setBooked(null);
     setSelectedSlot(null);
     setMessage("");
@@ -569,7 +550,9 @@ export function AppointmentCalendarBooking(props: Props) {
         );
         if (highConfidenceDuplicates.length > 0) {
           setLiveMatches(highConfidenceDuplicates);
-          setBookingStep("search");
+          setPatientSearch(data.fullName || data.mobile || "");
+          setPatientLookupOpen(true);
+          setBookingStep("appointment");
           setMessage(
             "Possible duplicate patient found. Please select the existing patient or verify before creating a new record.",
           );
@@ -628,6 +611,8 @@ export function AppointmentCalendarBooking(props: Props) {
           mobile: patient.mobile,
         });
       }
+      setPatientSearch("");
+      setPatientLookupOpen(false);
       setBookingStep("appointment");
     } catch (err: any) {
       setMessage(err.message || "Could not save patient.");
@@ -667,7 +652,7 @@ export function AppointmentCalendarBooking(props: Props) {
                 ? appointmentDate
                 : selectedTimingSlot.appointment_date,
             appointment_time:
-              appointmentType !== "emergency" && slotIntervalsEnabled
+              appointmentType !== "emergency"
                 ? selectedTimingSlot.start_time
                 : null,
             reason:
@@ -676,9 +661,7 @@ export function AppointmentCalendarBooking(props: Props) {
                 ? "Doctor review appointment booked from MedizinHub HMS"
                 : appointmentType === "fitness_certificate"
                   ? "Fitness certificate consultation booked from MedizinHub HMS"
-                  : slotIntervalsEnabled
-                    ? "OP appointment booked from MedizinHub HMS"
-                    : `OP appointment booked for ${selectedTimingSlot.label || "consultation timing"} from MedizinHub HMS`,
+                  : "OP appointment booked from MedizinHub HMS",
             visit_purpose:
               appointmentType === "fitness_certificate"
                 ? "fitness_certificate"
@@ -723,9 +706,7 @@ export function AppointmentCalendarBooking(props: Props) {
           time:
             appointmentType === "emergency"
               ? "Emergency"
-              : slotIntervalsEnabled
-                ? selectedTimingSlot?.start_time || appointmentDate
-                : selectedTimingSlot?.label || appointmentDate,
+              : selectedTimingSlot?.start_time || appointmentDate,
           status: "scheduled",
           queueStatus: "waiting",
           visitType:
@@ -752,21 +733,6 @@ export function AppointmentCalendarBooking(props: Props) {
 
   const day = calendar?.days?.[0];
   const allDaySlots = day?.slots || [];
-  const consultationSessions = sessionOptionsFromSlots(
-    allDaySlots,
-    appointmentDate,
-  );
-  const timingOptions = apiSession ? consultationSessions : slotGroups;
-  const selectedGroup =
-    timingOptions.find((group: any) => group.id === slotGroup) ||
-    timingOptions[0] ||
-    null;
-  const slots = allDaySlots.filter((slot: any) => {
-    const start = String(slot.start_time || "").slice(0, 5);
-    return (
-      selectedGroup && start >= selectedGroup.start && start < selectedGroup.end
-    );
-  });
   const mockSlots = [
     "10:00",
     "10:30",
@@ -778,39 +744,22 @@ export function AppointmentCalendarBooking(props: Props) {
     "19:00",
     "19:30",
     "20:00",
-  ]
-    .filter(
-      (time) =>
-        selectedGroup &&
-        time >= selectedGroup.start &&
-        time < selectedGroup.end,
-    )
-    .map((time) => ({
+  ].map((time) => ({
       appointment_date: appointmentDate,
       start_time: time,
       end_time: time,
       available: true,
       status: "available",
     }));
-  const sessionChoices = timingOptions.map((session: any) => ({
-    ...session,
-    appointment_date: appointmentDate,
-    start_time: session.start,
-    end_time: session.end,
-    available: session.available !== false,
-    status: session.available === false ? "unavailable" : "available",
-  }));
-  const visibleSlots = slotIntervalsEnabled
-    ? apiSession
-      ? slots
-      : mockSlots
-    : sessionChoices;
-  const selectedSessionSlot = selectedGroup
-    ? sessionChoices.find((slot: any) => slot.id === selectedGroup.id) || null
-    : null;
-  const selectedTimingSlot = slotIntervalsEnabled
-    ? selectedSlot
-    : selectedSessionSlot;
+  const visibleSlots = Array.from(
+    new Map(
+      (apiSession ? allDaySlots : mockSlots).map((slot: any) => [
+        `${slot.appointment_date}-${slot.start_time}`,
+        slot,
+      ]),
+    ).values(),
+  );
+  const selectedTimingSlot = selectedSlot;
 
   if (mode === "book") {
     return (
@@ -820,8 +769,8 @@ export function AppointmentCalendarBooking(props: Props) {
             <div>
               <h3 className="card-title font-bold">Book OP Appointment</h3>
               <p className="table-data text-slate-500">
-                Search patient, register if needed, then select medical
-                department, doctor, date, and timing slot.
+                Select or register the patient, then complete the appointment
+                details on this page.
               </p>
             </div>
             <button
@@ -835,145 +784,274 @@ export function AppointmentCalendarBooking(props: Props) {
           <StatusToast message={message} onClose={() => setMessage("")} />
         </Card>
 
-        {bookingStep === "search" && (
+        {bookingStep !== "success" && (
           <Card>
-            <h4 className="card-title font-bold">Search Patient / Mobile</h4>
-            <div className="mt-4 flex gap-2">
-              <TextField
-                value={patientSearch}
-                onChange={setPatientSearch}
-                label="Patient Name or Mobile"
-                placeholder="Enter patient name or mobile"
-                className="px-2 py-2 lg:px-4 lg:py-3"
-              />
-              <Search className="mt-8 text-slate-400" size={18} />
-            </div>
-            <div className="mt-4 space-y-3">
-              {patientSearch && patientMatches.length === 0 && (
-                <div className="flex flex-col justify-between gap-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-700 sm:flex-row sm:items-center">
-                  <span>No patient found. Create a new patient record.</span>
-                  <Button onClick={() => setBookingStep("newPatient")}>
-                    New Patient
-                  </Button>
-                </div>
-              )}
-              {patientMatches.map((patient: any) => (
-                <div
-                  key={patient.id}
-                  className="grid gap-3 rounded-2xl border p-4 text-sm md:grid-cols-[1.2fr_.8fr_.9fr_.9fr_auto] md:items-center"
-                >
-                  <b className="table-data">{patient.full_name}</b>
-                  <span className="table-data">{patient.mobile || "No mobile"}</span>
-                  <span className="table-data">{patient.gender || "-"}</span>
-                  <span className="table-data">{patient.area || patient.guardian_mobile || "-"}</span>
-                  <Button
-                    onClick={() => {
-                      setSelectedPatient(patient);
-                      setBookingStep("appointment");
-                    }}
-                  >
-                    Select
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {bookingStep === "newPatient" && (
-          <NewPatientForm
-            busy={busy}
-            branches={clinic?.branches || []}
-            defaultBranchId={branchId}
-            onSave={savePatient}
-            onCancel={() => setBookingStep("search")}
-          />
-        )}
-
-        {bookingStep === "appointment" && selectedPatient && (
-          <Card>
-            <form
-              onSubmit={(event: any) => {
-                event.preventDefault();
-                bookAppointment();
-              }}
-            >
-              <h4 className="card-title font-bold">Appointment Details</h4>
-              <div className="mt-3 rounded-lg bg-slate-50 p-4 table-data">
-                <b className="table-data">{selectedPatient.full_name}</b>
-                <p className="text-slate-500 table-data">
-                  {selectedPatient.mobile || "No mobile"} ·{" "}
-                  {selectedPatient.area ||
-                    selectedPatient.guardian_mobile ||
-                    "-"}
-                </p>
-              </div>
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
-                <Field label="
-                Department">
-                  <Select
-                    value={departmentId}
-                    onChange={(e: any) => setDepartmentId(e.target.value)}
-                  >
-                    {departmentOptions.map((department: any) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Doctor">
-                  <Select
-                    value={doctorId}
-                    onChange={(e: any) => setDoctorId(e.target.value)}
-                    disabled={apiSession && doctors.length === 0}
-                  >
-                    {doctors.length === 0 && (
-                      <option value="">No doctor available</option>
+            <h4 className="card-title font-bold">Appointment Details</h4>
+            <div className="mt-4">
+              <div>
+                <span className="mb-1 block text-[10px] font-bold uppercase tracking-wide text-slate-500 lg:text-xs">
+                  Patient
+                </span>
+                {selectedPatient ? (
+                  <div className="flex flex-col justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center">
+                    <div>
+                      <b className="table-data text-slate-900">
+                        {selectedPatient.full_name}
+                      </b>
+                      <p className="table-data text-slate-500">
+                        {selectedPatient.patient_number
+                          ? `${selectedPatient.patient_number} · `
+                          : ""}
+                        {selectedPatient.mobile || "No mobile"} ·{" "}
+                        {selectedPatient.area ||
+                          selectedPatient.guardian_mobile ||
+                          "-"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPatient(null);
+                        setPatientSearch("");
+                        setBookingStep("appointment");
+                        setPatientLookupOpen(true);
+                      }}
+                      className="rounded-lg border border-blue-200 bg-white px-3 py-2 table-data font-bold text-blue-700"
+                    >
+                      Change Patient
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <Search
+                      className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-400"
+                      size={17}
+                    />
+                    <Input
+                      value={patientSearch}
+                      onFocus={() => setPatientLookupOpen(true)}
+                      onChange={(event: any) => {
+                        setPatientSearch(event.target.value);
+                        setPatientLookupOpen(true);
+                        if (bookingStep === "newPatient")
+                          setBookingStep("appointment");
+                      }}
+                      onKeyDown={(event: any) => {
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          setPatientLookupOpen(false);
+                        }
+                      }}
+                      placeholder="Search patient name, mobile, or patient ID"
+                      autoComplete="off"
+                      className="rounded-lg py-3 pl-10 pr-10 text-sm"
+                    />
+                    {patientSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPatientSearch("");
+                          setLiveMatches([]);
+                        }}
+                        className="absolute right-3 top-1/2 z-10 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                        aria-label="Clear patient search"
+                      >
+                        <X size={16} />
+                      </button>
                     )}
-                    {doctors.map((item: any) => (
-                      <option key={item.id} value={item.id}>
-                        {item.full_name || item.name}
+                    {patientLookupOpen && patientSearch.trim() && (
+                      <div className="absolute z-30 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
+                        {patientSearch.trim().length < 2 && (
+                          <p className="px-3 py-3 table-data text-slate-500">
+                            Enter at least 2 characters to search.
+                          </p>
+                        )}
+                        {patientSearch.trim().length >= 2 &&
+                          patientMatches.map((patient: any) => (
+                            <button
+                              key={patient.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedPatient(patient);
+                                setPatientSearch("");
+                                setPatientLookupOpen(false);
+                                setBookingStep("appointment");
+                                setMessage("");
+                              }}
+                              className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left hover:bg-slate-50"
+                            >
+                              <span>
+                                <b className="block table-data text-slate-900">
+                                  {patient.full_name}
+                                </b>
+                                <span className="table-data text-slate-500">
+                                  {patient.patient_number
+                                    ? `${patient.patient_number} · `
+                                    : ""}
+                                  {patient.mobile || "No mobile"}
+                                  {patient.area ? ` · ${patient.area}` : ""}
+                                </span>
+                              </span>
+                              <span className="text-xs font-bold text-blue-600">
+                                Select
+                              </span>
+                            </button>
+                          ))}
+                        {patientSearch.trim().length >= 2 &&
+                          patientMatches.length === 0 && (
+                            <p className="px-3 py-2 table-data text-slate-500">
+                              No active patient found.
+                            </p>
+                          )}
+                        {patientSearch.trim().length >= 2 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPatientLookupOpen(false);
+                              setBookingStep("newPatient");
+                            }}
+                            className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-3 text-left table-data font-bold text-blue-700 hover:bg-blue-50"
+                          >
+                            <span className="text-lg leading-none">+</span>
+                            Create a new Patient
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {bookingStep === "newPatient" && !selectedPatient && (
+              <NewPatientForm
+                busy={busy}
+                branches={clinic?.branches || []}
+                defaultBranchId={branchId}
+                searchValue={patientSearch}
+                onSave={savePatient}
+                onCancel={() => setBookingStep("appointment")}
+              />
+            )}
+
+            {bookingStep === "appointment" && selectedPatient && (
+              <form
+                className="mt-5 border-t border-slate-100 pt-5"
+                onSubmit={(event: any) => {
+                  event.preventDefault();
+                  bookAppointment();
+                }}
+              >
+                <div className="grid gap-3 md:grid-cols-4">
+                  <Field label="Department">
+                    <Select
+                      value={departmentId}
+                      onChange={(e: any) => setDepartmentId(e.target.value)}
+                    >
+                      {doctorDepartmentOptions.map((department: any) => (
+                        <option key={department.id} value={department.id}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  <Field label="Doctor">
+                    <Select
+                      value={doctorId}
+                      onChange={(e: any) => {
+                        const nextDoctorId = e.target.value;
+                        const nextDoctor = doctors.find(
+                          (item: any) => item.id === nextDoctorId,
+                        );
+                        setDoctorId(nextDoctorId);
+                        const mappedDepartmentIds =
+                          nextDoctor?.department_ids || [];
+                        if (
+                          mappedDepartmentIds.length > 0 &&
+                          !mappedDepartmentIds.includes(departmentId)
+                        ) {
+                          setDepartmentId(mappedDepartmentIds[0]);
+                        }
+                      }}
+                      disabled={apiSession && doctors.length === 0}
+                    >
+                      {doctors.length === 0 && (
+                        <option value="">No doctor available</option>
+                      )}
+                      {doctors.map((item: any) => {
+                        const departmentNames = (item.department_ids || [])
+                          .map(
+                            (id: string) =>
+                              departmentOptions.find(
+                                (department: any) => department.id === id,
+                              )?.name,
+                          )
+                          .filter(Boolean);
+                        return (
+                          <option key={item.id} value={item.id}>
+                            {item.full_name || item.name}
+                            {departmentNames.length
+                              ? ` - ${departmentNames.join(", ")}`
+                              : ""}
+                          </option>
+                        );
+                      })}
+                    </Select>
+                  </Field>
+                  <Field label="Visit Type">
+                    <Select
+                      value={appointmentType}
+                      onChange={(e: any) => setAppointmentType(e.target.value)}
+                    >
+                      <option value="op">OP</option>
+                      <option value="follow_up">Follow-up</option>
+                      <option value="doctor_review">Doctor Review</option>
+                      <option value="fitness_certificate">
+                        Fitness Certificate
                       </option>
-                    ))}
-                  </Select>
-                </Field>
-                <Field label="Visit Type">
-                  <Select
-                    value={appointmentType}
-                    onChange={(e: any) => setAppointmentType(e.target.value)}
-                  >
-                    <option value="op">OP</option>
-                    <option value="follow_up">Follow-up</option>
-                    <option value="doctor_review">Doctor Review</option>
-                    <option value="fitness_certificate">
-                      Fitness Certificate
-                    </option>
-                    <option value="emergency">Emergency</option>
-                  </Select>
-                </Field>
-                <Field label="Appointment Date">
-                  <Input
-                    type="date"
-                    value={appointmentDate}
-                    onChange={(e: any) => setAppointmentDate(e.target.value)}
-                  />
-                </Field>
+                      <option value="emergency">Emergency</option>
+                    </Select>
+                  </Field>
+                  <Field label="Appointment Date">
+                    <Input
+                      type="date"
+                      value={appointmentDate}
+                      onChange={(e: any) => setAppointmentDate(e.target.value)}
+                    />
+                  </Field>
                 <Field label="Timing Slots">
                   <Select
-                    value={selectedGroup?.id || ""}
-                    onChange={(e: any) => setSlotGroup(e.target.value)}
+                    value={
+                      selectedSlot
+                        ? `${selectedSlot.appointment_date}-${selectedSlot.start_time}`
+                        : ""
+                    }
+                    onChange={(e: any) => {
+                      const slot = visibleSlots.find(
+                        (item: any) =>
+                          `${item.appointment_date}-${item.start_time}` ===
+                          e.target.value,
+                      );
+                      setSelectedSlot(slot || null);
+                    }}
                     disabled={
                       appointmentType !== "emergency" &&
-                      timingOptions.length === 0
+                      visibleSlots.length === 0
                     }
                   >
-                    {timingOptions.length === 0 && (
-                      <option value="">No timing available</option>
-                    )}
-                    {timingOptions.map((group: any) => (
-                      <option key={group.id} value={group.id}>
-                        {group.label}
+                    <option value="">
+                      {visibleSlots.length
+                        ? "Select consultation time"
+                        : "No timing available"}
+                    </option>
+                    {visibleSlots.map((slot: any) => (
+                      <option
+                        key={`${slot.appointment_date}-${slot.start_time}`}
+                        value={`${slot.appointment_date}-${slot.start_time}`}
+                        disabled={!slot.available}
+                      >
+                        {formatDisplayTime(slot.start_time)}
+                        {!slot.available ? ` - ${slot.status || "booked"}` : ""}
                       </option>
                     ))}
                   </Select>
@@ -1031,15 +1109,8 @@ export function AppointmentCalendarBooking(props: Props) {
                   />
                 </div>
               )}
-              {appointmentType !== "emergency" && slotIntervalsEnabled && (
+              {appointmentType !== "emergency" && (
                 <div className="mt-4">
-                  <div className="mb-3 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                    Detailed interval slot mode is enabled
-                    {slotIntervalMinutes
-                      ? ` (${slotIntervalMinutes} minute intervals configured)`
-                      : ""}
-                    .
-                  </div>
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
                     {visibleSlots.length === 0 && (
                       <div className="col-span-full rounded-lg bg-amber-50 p-4 table-data text-amber-700">
@@ -1061,26 +1132,15 @@ export function AppointmentCalendarBooking(props: Props) {
                               : "bg-slate-100 text-slate-400"
                         }`}
                       >
-                        {slotIntervalsEnabled
-                          ? formatDisplayTime(slot.start_time)
-                          : slot.label}
+                        {formatDisplayTime(slot.start_time)}
                         <p className="mt-1 text-xs font-medium opacity-70">
-                          {slotIntervalsEnabled
-                            ? slot.status
-                            : "Consultation timing"}
+                          {slot.status}
                         </p>
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-              {appointmentType !== "emergency" &&
-                !slotIntervalsEnabled &&
-                !selectedTimingSlot && (
-                  <div className="mt-4 rounded-lg bg-amber-50 p-4 table-data font-semibold text-amber-700">
-                    No consultation timing available for this doctor/date.
-                  </div>
-                )}
               <div className="mt-4 rounded-lg bg-slate-50 p-4">
                 <div className="flex items-baseline justify-between">
                   <h5 className="table-data font-bold uppercase text-slate-700">
@@ -1121,13 +1181,14 @@ export function AppointmentCalendarBooking(props: Props) {
                 </Button>
                 <button
                   type="button"
-                  onClick={() => setBookingStep("search")}
+                  onClick={closeBooking}
                   className="close-button font-bold"
                 >
-                  Cancel 
+                  Cancel
                 </button>
               </div>
             </form>
+            )}
           </Card>
         )}
 
@@ -1264,7 +1325,7 @@ export function AppointmentCalendarBooking(props: Props) {
               onChange={(e: any) => setPlatformDepartment(e.target.value)}
               className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm'
             >
-              <option value="all">All medical departments</option>
+              <option value="all">All Departments</option>
               {platformDepartmentOptions.map((department: string) => (
                 <option key={department} value={department}>
                   {department}
@@ -1277,7 +1338,7 @@ export function AppointmentCalendarBooking(props: Props) {
               onChange={(e: any) => setFilterDepartment(e.target.value)}
               className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm'
             >
-              <option value="all">All medical departments</option>
+              <option value="all">All Departments</option>
               {departmentOptions.map((department: any) => (
                 <option key={department.id} value={department.id}>
                   {department.name}
@@ -1440,18 +1501,31 @@ function NewPatientForm({
   busy,
   branches,
   defaultBranchId,
+  searchValue,
   onSave,
   onCancel,
 }: any) {
+  const normalizedSearch = String(searchValue || "").trim();
+  const patientDefaults = normalizedSearch
+    ? /^[+\d][\d\s()-]*$/.test(normalizedSearch)
+      ? { mobile: normalizedSearch }
+      : { full_name: normalizedSearch }
+    : undefined;
+
   function handleSubmit(e: any) {
     e.preventDefault();
     onSave(patientFormPayload(new FormData(e.currentTarget)));
   }
 
   return (
-    <Card>
+    <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
       <div className="flex justify-between gap-3">
-        <h4 className="font-bold">New Patient</h4>
+        <div>
+          <h4 className="font-bold">Create New Patient</h4>
+          <p className="mt-1 table-data text-slate-500">
+            Save this record to select the patient and continue the appointment.
+          </p>
+        </div>
         <button
           type="button"
           onClick={onCancel}
@@ -1463,6 +1537,7 @@ function NewPatientForm({
       </div>
       <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-3">
         <PatientFormFields
+          patient={patientDefaults}
           branches={branches}
           defaultBranchId={defaultBranchId}
         />
@@ -1477,7 +1552,7 @@ function NewPatientForm({
           </button>
         </div>
       </form>
-    </Card>
+    </div>
   );
 }
 
@@ -1501,37 +1576,6 @@ function activeTenantOptions(tenants: any[]) {
     if (key) seen.add(key);
     return true;
   });
-}
-
-function sessionOptionsFromSlots(slots: any[], appointmentDate: string) {
-  const bySchedule = new Map<string, any[]>();
-  for (const slot of slots || []) {
-    const key = String(
-      slot.schedule_id || `${slot.start_time}-${slot.end_time}`,
-    );
-    bySchedule.set(key, [...(bySchedule.get(key) || []), slot]);
-  }
-  return Array.from(bySchedule.entries())
-    .map(([scheduleId, rows]) => {
-      const sorted = [...rows].sort((a: any, b: any) =>
-        String(a.start_time).localeCompare(String(b.start_time)),
-      );
-      const first = sorted[0];
-      const last = sorted[sorted.length - 1];
-      const start = String(first?.start_time || "").slice(0, 5);
-      const end = String(last?.end_time || last?.start_time || "").slice(0, 5);
-      const period =
-        start < "13:00" ? "Morning" : start < "18:00" ? "Afternoon" : "Evening";
-      return {
-        id: scheduleId,
-        label: `${period} ${formatDisplayTime(start)} - ${formatDisplayTime(end)}`,
-        start,
-        end,
-        appointment_date: appointmentDate,
-        available: sorted.some((slot: any) => slot.available),
-      };
-    })
-    .sort((a, b) => a.start.localeCompare(b.start));
 }
 
 function Pagination({ page, totalPages, total, onPage }: any) {

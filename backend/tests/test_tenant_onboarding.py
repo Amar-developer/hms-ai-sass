@@ -44,6 +44,44 @@ def test_super_admin_onboards_tenant_with_branch_subscription_and_admin(client: 
     assert "tenant_admin" in login.json()["user"]["roles"]
 
 
+def test_tenant_onboarding_rejects_invalid_references_before_creating_tenant(client: TestClient):
+    invalid_plan = client.post(
+        "/api/v1/tenants/onboard",
+        json={
+            "tenant": {"name": "Invalid Plan Clinic", "email": "invalid-plan@test.local"},
+            "branches": [{"name": "Main Branch", "code": "MAIN"}],
+            "subscription_plan_id": "plan_missing",
+            "admin_user": {
+                "name": "Tenant Admin",
+                "email": "admin@invalid-plan.test",
+                "password": "TenantPass123",
+            },
+        },
+    )
+
+    assert invalid_plan.status_code == 400
+    assert not any(tenant["name"] == "Invalid Plan Clinic" for tenant in client.get("/api/v1/tenants").json())
+
+    duplicate_branches = client.post(
+        "/api/v1/tenants/onboard",
+        json={
+            "tenant": {"name": "Duplicate Branch Clinic", "email": "duplicate-branch@test.local"},
+            "branches": [
+                {"name": "First Main Branch", "code": "MAIN"},
+                {"name": "Second Main Branch", "code": "main"},
+            ],
+            "admin_user": {
+                "name": "Tenant Admin",
+                "email": "admin@duplicate-branch.test",
+                "password": "TenantPass123",
+            },
+        },
+    )
+
+    assert duplicate_branches.status_code == 400
+    assert not any(tenant["name"] == "Duplicate Branch Clinic" for tenant in client.get("/api/v1/tenants").json())
+
+
 def test_patient_membership_enrollment_resolves_missing_branch(client: TestClient):
     tenant = client.post("/api/v1/tenants", json={"name": "Membership Branch Fallback Clinic"}).json()
     starter = next(plan for plan in client.get("/api/v1/subscription-plans").json() if plan["key"] == "starter")

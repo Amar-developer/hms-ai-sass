@@ -169,13 +169,25 @@ export function ScheduleForm({
             onChange={(event: any) =>
               setSelectedDepartmentId(event.target.value)
             }
+            required
+            disabled={!selectedDoctorId}
           >
-            <option value="">All medical departments</option>
-            {departments.map((department: any) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
+            <option value="">
+              {selectedDoctorId
+                ? "Select medical department"
+                : "Select doctor first"}
+            </option>
+            {(doctors.find((item: any) => item.id === selectedDoctorId)
+              ?.department_ids || []).map((departmentId: string) => {
+                const department = departments.find(
+                  (item: any) => item.id === departmentId,
+                );
+                return department ? (
+                  <option key={department.id} value={department.id}>
+                    {department.name}
+                  </option>
+                ) : null;
+              })}
           </Select>
         </Field>
         <div className="md:col-span-2 xl:col-span-3">

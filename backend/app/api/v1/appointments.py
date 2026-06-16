@@ -187,6 +187,32 @@ def _enforce_duplicate_booking_rules(session: Session, tenant_id: str, payload: 
                 )
 
 
+def _enforce_practitioner_slot_conflict(
+    session: Session,
+    tenant_id: str,
+    payload: AppointmentCreate,
+) -> None:
+    if (
+        payload.appointment_type == AppointmentType.EMERGENCY
+        or not payload.practitioner_id
+        or not payload.appointment_time
+    ):
+        return
+    existing_rows = session.exec(
+        select(Appointment).where(
+            Appointment.tenant_id == tenant_id,
+            Appointment.practitioner_id == payload.practitioner_id,
+            Appointment.appointment_date == payload.appointment_date,
+            Appointment.appointment_time == payload.appointment_time,
+        )
+    ).all()
+    if any(row.status in ACTIVE_APPOINTMENT_STATUSES for row in existing_rows):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Doctor already has an active appointment at this time",
+        )
+
+
 def _review_billing_defaults(
     session: Session,
     *,
@@ -281,6 +307,7 @@ def book_appointment(
         if not source_appointment or source_appointment.tenant_id != tenant_id or source_appointment.patient_id != patient.id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source appointment")
     _enforce_duplicate_booking_rules(session, tenant_id, payload)
+    _enforce_practitioner_slot_conflict(session, tenant_id, payload)
     if payload.practitioner_id:
         practitioner = session.get(Practitioner, payload.practitioner_id)
         if practitioner:

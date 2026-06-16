@@ -1,6 +1,6 @@
 import { doctorTypes } from "@/utils/doctors/constants";
 import { ActionButton,ActionGroup,Badge,Card,Button } from "../common/ui";
-import { activeDoctorFeeRule, formatPractitionerName } from "@/utils/doctors/helpers";
+import { activeDoctorDepartmentFeeRules, formatPractitionerName } from "@/utils/doctors/helpers";
 
 export function DoctorRow({
   row,
@@ -15,14 +15,19 @@ export function DoctorRow({
     (id: string) =>
       branches.find((branch: any) => branch.id === id)?.name || id,
   );
-  const departmentNames = (row.department_ids || []).map(
-    (id: string) =>
-      departments.find((department: any) => department.id === id)?.name || id,
-  );
   const typeLabel =
     doctorTypes.find(([value]) => value === row.practitioner_type)?.[1] ||
     row.practitioner_type;
-  const feeRule = activeDoctorFeeRule(feeRules, row);
+  const departmentFeeRules = activeDoctorDepartmentFeeRules(feeRules, row);
+  const specialties = (row.department_ids || []).map((departmentId: string) => ({
+    departmentId,
+    departmentName:
+      departments.find((department: any) => department.id === departmentId)
+        ?.name || departmentId,
+    feeRule: departmentFeeRules.find(
+      (rule: any) => rule.department_id === departmentId,
+    ),
+  }));
   const stop = (handler: any) => (event: any) => {
     event.stopPropagation();
     handler();
@@ -47,15 +52,29 @@ export function DoctorRow({
       <span className="text-slate-600 table-data">
         {branchNames.length ? branchNames.join(", ") : "-"}
       </span>
-      <span className="text-slate-600 table-data">
-        {departmentNames.length ? departmentNames.join(", ") : "-"}
-      </span>
-      <span className="break-all table-data">{row.mobile || row.email || "-"}</span>
-      <span className="table-data">
-        {feeRule
-          ? `₹${Number(feeRule.fee_amount || 0).toLocaleString("en-IN")} · ${feeRule.doctor_share_percentage || 0}:${100 - Number(feeRule.doctor_share_percentage || 0)}`
+      <div className="grid gap-1 text-slate-600 table-data">
+        {specialties.length
+          ? specialties.map((specialty: any) => (
+              <span key={specialty.departmentId}>
+                {specialty.departmentName}
+              </span>
+            ))
           : "-"}
-      </span>
+      </div>
+      <span className="break-all table-data">{row.mobile || row.email || "-"}</span>
+      <div className="grid gap-1 table-data">
+        {specialties.length
+          ? specialties.map((specialty: any) => (
+              <span key={specialty.departmentId}>
+                {specialty.feeRule
+                  ? `₹${Number(
+                      specialty.feeRule.fee_amount || 0,
+                    ).toLocaleString("en-IN")}`
+                  : "-"}
+              </span>
+            ))
+          : "-"}
+      </div>
       <Badge tone={row.status === "active" ? "green" : "red"} className="table-status">
         {row.status === "active" ? "Active" : "Inactive"}
       </Badge>

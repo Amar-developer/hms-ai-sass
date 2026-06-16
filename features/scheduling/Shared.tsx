@@ -58,7 +58,7 @@ export function ScheduleRow({
         </p>
       </div>
       <span className="table-data">{branch?.name || publicDisplayValue(row.branch_id, "Assigned branch")}</span>
-      <span className="table-data">{department?.name || "All medical departments"}</span>
+      <span className="table-data">{department?.name || "All Departments"}</span>
       <span className="table-data">{row.room_number ? row.room_number.padStart(3, "0") : "-"}</span>
       <span className="table-data">
         {formatDisplayRange(firstSchedule.start_time, firstSchedule.end_time)}

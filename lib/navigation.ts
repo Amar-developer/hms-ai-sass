@@ -31,7 +31,7 @@ export const nav = [
   ['ip', 'IP Admission', BedDouble],
   ['doctor', 'Doctor Workspace', Stethoscope],
   ['consultation', 'Consultation Workflow', ClipboardList],
-  ['lab', 'Lab', FlaskConical],
+  ['lab', 'Lab/Service', FlaskConical],
   ['pharmacy', 'Prescription', Pill],
   ['physiotherapy', 'Physiotherapy', Dumbbell],
   ['home_care', 'Home Care / Visit Booking', Home],

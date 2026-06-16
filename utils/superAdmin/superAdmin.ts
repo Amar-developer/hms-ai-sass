@@ -304,7 +304,7 @@ export function readTenantOnboardingDraft(
     ),
     adminName: value("adminName", "Tenant Admin"),
     adminEmail: value("adminEmail"),
-    adminPassword: value("adminPassword", "TempPass123"),
+    adminPassword: value("adminPassword"),
     adminMobile: value("adminMobile"),
     adminMustChangePassword:
       value("adminMustChangePassword", "true") === "true" ? "Yes" : "No",

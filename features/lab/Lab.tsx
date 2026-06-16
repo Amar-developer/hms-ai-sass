@@ -10,7 +10,7 @@ import {
   StatusToast,
 } from "@/components/common/ui";
 import { apiBlob, apiFetch } from "@/lib/api";
-import { FormField, SelectField, TextField } from "@/components/FormElements";
+import { FormField, SelectField, SearchableSelectField, TextField } from "@/components/FormElements";
 import { SearchPicker } from "@/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
@@ -320,9 +320,9 @@ export function Lab({
       setSelectedAvailableTestId("");
       setTestSearch("");
       await load();
-      setMessage("Lab order created.");
+      setMessage("Lab / Service order created.");
     } catch (err: any) {
-      setMessage(err.message || "Could not create lab order.");
+      setMessage(err.message || "Could not create lab / service order.");
     } finally {
       setBusy("");
     }
@@ -580,16 +580,18 @@ export function Lab({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <Card>
-        <h3 className="card-title font-bold">Create Lab Order</h3>
+        <h3 className="card-title font-bold">Create Lab / Service Order</h3>
         <form
           onSubmit={createDirect}
           className="mt-4 grid gap-3 md:grid-cols-4"
         >
-          <SelectField
+          <SearchableSelectField
             label="Patient"
             value={patientId}
             onChange={setPatientId}
             options={patients.map((p: any) => ({ value: p.id, label: p.name }))}
+            placeholder="Select patient"
+            searchPlaceholder="Search patient by name"
           />
           <SelectField
             label="Source"
@@ -639,11 +641,11 @@ export function Lab({
             </ActionButton>
           </div>
           <SelectField
-            label="Package"
+            label="Service"
             value={selectedPackageId}
             onChange={setSelectedPackageId}
             options={[
-              { value: "", label: "No package" },
+              { value: "", label: "No service" },
               ...packages.map((pkg: any) => ({
                 value: pkg.id,
                 label: `${pkg.name} · ₹${pkg.package_price}`,
@@ -723,7 +725,7 @@ export function Lab({
                       >
                         {busy === a.consultationId
                           ? "Creating..."
-                          : "Create Lab Order"}
+                          : "Create Lab / Service Order"}
                       </Button>
                       <ActionButton
                         onClick={() =>
@@ -746,7 +748,7 @@ export function Lab({
       </Card>
       <Card>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-lg font-bold">Lab Worklist</h3>
+          <h3 className="text-lg font-bold">Lab / Service Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">

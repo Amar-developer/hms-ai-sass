@@ -5,7 +5,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlmodel import Session, delete, select
 
 from app.core.access_control import require_branch_in_tenant, require_user_branch_access, scoped_branch_id
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.core.uploads import save_upload
@@ -413,7 +413,7 @@ def list_rooms(
     include_occupied: bool = True,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> list[IPRoomRead]:
     _assert_ip_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
@@ -461,7 +461,7 @@ def list_admissions(
     status_filter: str | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> list[IPAdmission]:
     _assert_ip_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
@@ -673,7 +673,7 @@ def list_admission_documents(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> list[IPDocument]:
     _assert_ip_enabled(session, tenant_id)
     ensure_upload_schema(session)
@@ -794,7 +794,7 @@ def list_treatments(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> list[IPTreatment]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
@@ -1015,7 +1015,7 @@ def list_charges(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> list[IPCharge]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
@@ -1056,7 +1056,7 @@ def list_billing_items(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> list[IPBillingItem]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
@@ -1102,7 +1102,7 @@ def list_medication_orders(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> list[IPMedicationOrder]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
@@ -1166,7 +1166,7 @@ def list_medication_administrations(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> list[IPMedicationAdministration]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
@@ -1351,7 +1351,7 @@ def discharge_summary_pdf(
     summary_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.IP_READ)),
+    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
 ) -> Response:
     summary = session.get(IPDischargeSummary, summary_id)
     if not summary or summary.tenant_id != tenant_id:

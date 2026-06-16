@@ -8,6 +8,7 @@ import {
   Card,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/components/common/ui";
@@ -708,16 +709,16 @@ export function PatientSubscriptions({
                 className="mt-4 grid gap-3 md:grid-cols-3"
               >
                 <FormField label="Patient">
-                  <Select
+                  <SearchableSelect
                     value={selectedPatient}
-                    onChange={(e: any) => setSelectedPatient(e.target.value)}
-                  >
-                    {(patients || []).map((p: any) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name || p.full_name}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={(value: string) => setSelectedPatient(value)}
+                    placeholder="Select patient"
+                    searchPlaceholder="Search patient by name"
+                    options={(patients || []).map((p: any) => ({
+                      value: p.id,
+                      label: p.name || p.full_name || p.id,
+                    }))}
+                  />
                 </FormField>
                 <FormField label="Plan">
                   <Select

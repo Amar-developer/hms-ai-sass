@@ -4,7 +4,11 @@ import { Card,Field,Select,Input,Button } from "../common/ui";
 import { NumberField,SelectField } from "../FormElements";
 import { doctorTypes } from "@/utils/doctors/constants";
 import { CheckboxGroup } from "./Shared";
-import { activeDoctorFeeRule } from "@/utils/doctors/helpers";
+import {
+  activeDoctorDepartmentFeeRules,
+  activeDoctorFeeRule,
+} from "@/utils/doctors/helpers";
+import { Plus, X } from "lucide-react";
 
 export function DoctorForm({
   title,
@@ -19,10 +23,18 @@ export function DoctorForm({
   back,
 }: any) {
   const initialDepartmentIds = doctor?.department_ids || [];
-  const initialDepartmentName =
-    departments.find(
-      (department: any) => department.id === initialDepartmentIds[0],
-    )?.name || "";
+  const departmentFeeRules = activeDoctorDepartmentFeeRules(feeRules, doctor);
+  const fallbackFeeRule = activeDoctorFeeRule(feeRules, doctor);
+  const orderedDepartmentIds = [...initialDepartmentIds].sort((a, b) => {
+    const primary = String(doctor?.primary_specialty || "").toLowerCase();
+    const aName = String(
+      departments.find((department: any) => department.id === a)?.name || "",
+    ).toLowerCase();
+    const bName = String(
+      departments.find((department: any) => department.id === b)?.name || "",
+    ).toLowerCase();
+    return Number(bName === primary) - Number(aName === primary);
+  });
   const [practitionerType, setPractitionerType] = useState(
     doctor?.practitioner_type || "doctor",
   );
@@ -33,27 +45,37 @@ export function DoctorForm({
   const [selectedBranches, setSelectedBranches] = useState<string[]>(
     doctor?.branch_ids || [],
   );
-  const [selectedDepartments, setSelectedDepartments] =
-    useState<string[]>(initialDepartmentIds);
-  const [primarySpecialty, setPrimarySpecialty] = useState(
-    doctor?.primary_specialty || initialDepartmentName,
+  const [specialtyFees, setSpecialtyFees] = useState<any[]>(
+    orderedDepartmentIds.length
+      ? orderedDepartmentIds.map((departmentId: string) => ({
+          departmentId,
+          fee: String(
+            departmentFeeRules.find(
+              (rule: any) => rule.department_id === departmentId,
+            )?.fee_amount ??
+              fallbackFeeRule?.fee_amount ??
+              "",
+          ),
+          doctorSharePercentage: String(
+            departmentFeeRules.find(
+              (rule: any) => rule.department_id === departmentId,
+            )?.doctor_share_percentage ??
+              fallbackFeeRule?.doctor_share_percentage ??
+              70,
+          ),
+        }))
+      : [{ departmentId: "", fee: "", doctorSharePercentage: "70" }],
   );
-  const [specialtyTouched, setSpecialtyTouched] = useState(
-    Boolean(doctor?.primary_specialty),
-  );
-  const activeFeeRule = activeDoctorFeeRule(feeRules, doctor);
   const [registrationNumber, setRegistrationNumber] = useState(
     doctor?.registration_number || "",
   );
   const [status, setStatus] = useState(doctor?.status || "active");
-  const [consultationFee, setConsultationFee] = useState(
-    String(activeFeeRule?.fee_amount ?? ""),
-  );
-  const [doctorSharePercentage, setDoctorSharePercentage] = useState(
-    String(activeFeeRule?.doctor_share_percentage ?? 70),
-  );
   const [shareTaxWithDoctor, setShareTaxWithDoctor] = useState(
-    String(activeFeeRule?.share_tax_with_doctor ?? false),
+    String(
+      departmentFeeRules[0]?.share_tax_with_doctor ??
+        fallbackFeeRule?.share_tax_with_doctor ??
+        false,
+    ),
   );
 
   const isPhysiotherapist = practitionerType === "physiotherapist";
@@ -81,24 +103,23 @@ export function DoctorForm({
     if (user.branch_id) setSelectedBranches([user.branch_id]);
     else if (branches.length) setSelectedBranches(branches.map((branch: any) => branch.id));
   }
-  function handleDepartmentsChange(next: string[]) {
-    const previousFirst =
-      departments.find(
-        (department: any) => department.id === selectedDepartments[0],
-      )?.name || "";
-    const nextFirst =
-      departments.find((department: any) => department.id === next[0])?.name ||
-      "";
-    setSelectedDepartments(next);
-    if (
-      !specialtyTouched ||
-      !primarySpecialty ||
-      primarySpecialty === previousFirst
-    ) {
-      setPrimarySpecialty(nextFirst);
-      setSpecialtyTouched(false);
-    }
-  }
+  const updateSpecialty = (index: number, key: string, value: string) =>
+    setSpecialtyFees((current) =>
+      current.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [key]: value } : row,
+      ),
+    );
+  const addSpecialty = () =>
+    setSpecialtyFees((current) => [
+      ...current,
+      { departmentId: "", fee: "", doctorSharePercentage: "70" },
+    ]);
+  const removeSpecialty = (index: number) =>
+    setSpecialtyFees((current) =>
+      current.length > 1
+        ? current.filter((_, rowIndex) => rowIndex !== index)
+        : current,
+    );
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -126,20 +147,63 @@ export function DoctorForm({
             );
             return;
           }
+          const configuredSpecialties = specialtyFees.filter(
+            (row) => row.departmentId,
+          );
+          if (configuredSpecialties.length === 0) {
+            window.alert("Select at least one specialty.");
+            return;
+          }
+          if (
+            new Set(
+              configuredSpecialties.map((row) => row.departmentId),
+            ).size !== configuredSpecialties.length
+          ) {
+            window.alert(
+              "The same specialty cannot be added more than once for this doctor.",
+            );
+            return;
+          }
+          if (
+            configuredSpecialties.some(
+              (row) => row.fee === "" || Number(row.fee) < 0,
+            )
+          ) {
+            window.alert("Enter a valid OP consultation fee for every specialty.");
+            return;
+          }
+          if (
+            configuredSpecialties.some(
+              (row) =>
+                row.doctorSharePercentage === "" ||
+                Number(row.doctorSharePercentage) < 0 ||
+                Number(row.doctorSharePercentage) > 100,
+            )
+          ) {
+            window.alert(
+              "Enter a doctor share from 0 to 100 for every specialty.",
+            );
+            return;
+          }
           const fd = new FormData(event.currentTarget);
+          const primaryDepartment = departments.find(
+            (department: any) =>
+              department.id === configuredSpecialties[0].departmentId,
+          );
           onSubmit({
             userId: selectedUserId,
             fullName,
             practitionerType,
-            primarySpecialty,
+            primarySpecialty: primaryDepartment?.name || null,
             registrationNumber: fd.get("registrationNumber") || "",
             mobile,
             email,
             status,
             branchIds: selectedBranches,
-            departmentIds: selectedDepartments,
-            consultationFee,
-            doctorSharePercentage,
+            departmentIds: configuredSpecialties.map(
+              (row) => row.departmentId,
+            ),
+            specialtyFees: configuredSpecialties,
             shareTaxWithDoctor,
           });
         }}
@@ -181,17 +245,6 @@ export function DoctorForm({
             ))}
           </Select>
         </Field>
-        <Field label="Primary Specialty">
-          <Input
-            name="primarySpecialty"
-            value={primarySpecialty}
-            onChange={(event: any) => {
-              setPrimarySpecialty(event.target.value);
-              setSpecialtyTouched(true);
-            }}
-            placeholder="General Medicine"
-          />
-        </Field>
         <Field label="Registration Number">
           <Input
             name="registrationNumber"
@@ -227,25 +280,6 @@ export function DoctorForm({
             ]}
           />
         )}
-        <NumberField
-          label={
-            isPhysiotherapist
-              ? "Physiotherapy / Session Price"
-              : "OP Consultation Fee"
-          }
-          value={consultationFee}
-          onChange={setConsultationFee}
-          min={0}
-          placeholder="600"
-        />
-        <NumberField
-          label="Doctor Share %"
-          value={doctorSharePercentage}
-          onChange={setDoctorSharePercentage}
-          min={0}
-          max={100}
-          placeholder="70"
-        />
         <SelectField
           label="Tax Sharing"
           value={shareTaxWithDoctor}
@@ -267,14 +301,113 @@ export function DoctorForm({
           />
         </div>
         <div className="md:col-span-2 xl:col-span-3">
-          <CheckboxGroup
-            title="Medical Departments"
-            name="departmentIds"
-            rows={departments}
-            selected={selectedDepartments}
-            onChange={handleDepartmentsChange}
-            empty="Create medical departments before mapping doctors."
-          />
+          <div className="rounded-lg border border-slate-200 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="table-data font-bold text-slate-900">
+                  Specialties & Consultation Prices
+                </h4>
+                <p className="mt-1 text-xs text-slate-500">
+                  The first row is the primary specialty. Each specialty can
+                  have a different consultation fee and doctor share.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addSpecialty}
+                disabled={specialtyFees.length >= departments.length}
+                className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold disabled:text-slate-300"
+              >
+                <Plus size={14} />
+                Add Specialty
+              </button>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {specialtyFees.map((row, index) => {
+                const selectedElsewhere = new Set(
+                  specialtyFees
+                    .filter((_, rowIndex) => rowIndex !== index)
+                    .map((item) => item.departmentId)
+                    .filter(Boolean),
+                );
+                return (
+                  <div
+                    key={index}
+                    className="grid gap-3 rounded-lg bg-slate-50 p-3 md:grid-cols-[1fr_220px_180px_auto] md:items-end"
+                  >
+                    <Field
+                      label={
+                        index === 0
+                          ? "Primary Specialty"
+                          : `Additional Specialty ${index}`
+                      }
+                    >
+                      <Select
+                        value={row.departmentId}
+                        onChange={(event: any) =>
+                          updateSpecialty(
+                            index,
+                            "departmentId",
+                            event.target.value,
+                          )
+                        }
+                        required
+                      >
+                        <option value="">Select tenant department</option>
+                        {departments.map((department: any) => (
+                          <option
+                            key={department.id}
+                            value={department.id}
+                            disabled={selectedElsewhere.has(department.id)}
+                          >
+                            {department.name}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <NumberField
+                      label={
+                        isPhysiotherapist
+                          ? "Session Price"
+                          : "OP Consultation Fee"
+                      }
+                      value={row.fee}
+                      onChange={(value) =>
+                        updateSpecialty(index, "fee", value)
+                      }
+                      min={0}
+                      required
+                      placeholder="650"
+                    />
+                    <NumberField
+                      label="Doctor Share %"
+                      value={row.doctorSharePercentage}
+                      onChange={(value) =>
+                        updateSpecialty(
+                          index,
+                          "doctorSharePercentage",
+                          value,
+                        )
+                      }
+                      min={0}
+                      max={100}
+                      required
+                      placeholder="70"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSpecialty(index)}
+                      disabled={specialtyFees.length === 1}
+                      className="close-button bg-white disabled:text-slate-300"
+                      aria-label={`Remove specialty ${index + 1}`}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
           <Button disabled={busy}>

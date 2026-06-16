@@ -115,7 +115,7 @@ export function ConsultReferralModal({
             disabled={busy === a.consultationId || loading}
             onClick={() => onCreate(a)}
           >
-            {busy === a.consultationId ? "Creating..." : "Create Lab Order"}
+            {busy === a.consultationId ? "Creating..." : "Create Lab / Service Order"}
           </Button>
           <ActionButton onClick={onClose}>Cancel</ActionButton>
         </div>

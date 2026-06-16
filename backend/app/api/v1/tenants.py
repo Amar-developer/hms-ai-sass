@@ -344,6 +344,42 @@ def onboard_tenant(
     if payload.tenant.is_primary or payload.tenant.tenant_type in (TenantType.PRIMARY, TenantType.PRIMARY.value):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use bootstrap for the primary tenant")
 
+    plan_id = payload.subscription_plan_id
+    plan = session.get(SubscriptionPlan, plan_id) if plan_id else None
+    if plan_id and (not plan or not plan.is_active):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan")
+
+    role_template_ids = list(dict.fromkeys(payload.role_template_ids))
+    department_template_ids = list(dict.fromkeys(payload.department_template_ids))
+    branch_template_ids = list(dict.fromkeys(payload.branch_template_ids))
+    for role_id in role_template_ids:
+        source_role = session.get(Role, role_id)
+        if not source_role:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source role not found")
+        if source_role.key == "super_admin":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Super Admin role can only belong to the primary tenant",
+            )
+    for department_id in department_template_ids:
+        if not session.get(Department, department_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source department not found")
+
+    branch_codes = [branch.code.strip().lower() for branch in payload.branches]
+    if len(set(branch_codes)) != len(branch_codes):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Branch codes must be unique")
+    selected_branch_codes = set(branch_codes)
+    for branch_id in branch_template_ids:
+        source_branch = session.get(Branch, branch_id)
+        if not source_branch:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source branch not found")
+        selected_branch_codes.add(source_branch.code.strip().lower())
+    if plan and len(selected_branch_codes) > plan.included_branches:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail=f"Branch limit reached for plan {plan.name}. Select fewer branches or upgrade the plan.",
+        )
+
     tenant = Tenant.model_validate(
         payload.tenant,
         update={
@@ -371,13 +407,9 @@ def onboard_tenant(
         session.refresh(branch)
         branches.append(branch)
 
-    plan_id = payload.subscription_plan_id
-
     subscription_id = None
     if plan_id:
-        plan = session.get(SubscriptionPlan, plan_id)
-        if not plan or not plan.is_active:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan")
+        assert plan is not None
         subscription_ends_on = payload.subscription_ends_on
         if subscription_ends_on is None:
             duration_days = plan_duration_days(plan.key)
@@ -433,7 +465,6 @@ def onboard_tenant(
         plan_id = trial_subscription.plan_id
 
     role_count = 0
-    role_template_ids = list(dict.fromkeys(payload.role_template_ids))
     if payload.admin_user:
         tenant_admin_role = _ensure_tenant_admin_role(session, tenant.id, current_user)
         role_count += 1
@@ -446,9 +477,9 @@ def onboard_tenant(
         _copy_role_template(session, role_id, tenant.id, current_user)
         role_count += 1
 
-    for department_id in payload.department_template_ids:
+    for department_id in department_template_ids:
         _copy_department_template(session, department_id, tenant.id, current_user)
-    for branch_id in payload.branch_template_ids:
+    for branch_id in branch_template_ids:
         branches.append(_copy_branch_template(session, branch_id, tenant.id, current_user))
 
     admin_user_id = None
@@ -496,8 +527,8 @@ def onboard_tenant(
         tenant=TenantRead.model_validate(tenant, from_attributes=True),
         branches=[BranchRead.model_validate(branch, from_attributes=True) for branch in branches],
         role_count=role_count,
-        department_count=len(payload.department_template_ids),
-        branch_template_count=len(payload.branch_template_ids),
+        department_count=len(department_template_ids),
+        branch_template_count=len(branch_template_ids),
         subscription_id=subscription_id,
         subscription_plan_id=plan_id,
         admin_user_id=admin_user_id,

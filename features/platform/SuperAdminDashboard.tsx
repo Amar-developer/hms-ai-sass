@@ -48,6 +48,7 @@ export function SuperAdminDashboard({
   const [users, setUsers] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [tenantBranches, setTenantBranches] = useState<any[]>([]);
+  const [tenantSubscriptions, setTenantSubscriptions] = useState<any[]>([]);
   const [primaryTemplates, setPrimaryTemplates] = useState<any>({
     roles: [],
     departments: [],
@@ -66,6 +67,7 @@ export function SuperAdminDashboard({
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const onboardingInFlight = useRef(false);
+  const tenantAccessLoadSequence = useRef(0);
   const selectableTenants = tenantSelectOptions(tenants);
   const selected =
     selectableTenants.find((t) => t.id === selectedId) ||
@@ -73,6 +75,16 @@ export function SuperAdminDashboard({
     selectableTenants[0];
   const customerTenants = tenantSelectOptions(
     tenants.filter((t) => !t.is_primary),
+  );
+  const currentTenantPlanIds = new Set(
+    tenantSubscriptions.map((subscription: any) => subscription.plan_id),
+  );
+  const catalogPlanIds = new Set(
+    catalogSubscriptionPlans(plans).map((plan: any) => plan.id),
+  );
+  const tenantEditPlans = plans.filter(
+    (plan: any) =>
+      catalogPlanIds.has(plan.id) || currentTenantPlanIds.has(plan.id),
   );
   const activeTenants = customerTenants.filter(
     (t) => t.status === "active",
@@ -148,26 +160,34 @@ export function SuperAdminDashboard({
 
   async function loadTenantAccess(tenantId: string) {
     if (!apiSession || !tenantId) return;
+    const requestSequence = ++tenantAccessLoadSequence.current;
     try {
       const scoped = { ...apiSession, tenantId };
-      const [roleRows, userRows, departmentRows, branchRows, permissionRows] =
+      const [roleRows, userRows, departmentRows, branchRows, permissionRows, subscriptionRows] =
         await Promise.all([
           apiFetch("/identity/roles", scoped),
           apiFetch("/identity/users", scoped),
           apiFetch(`/tenants/${tenantId}/departments`, scoped),
           apiFetch(`/tenants/${tenantId}/branches`, scoped),
           apiFetch("/identity/permissions", scoped),
+          apiFetch("/subscription-plans/tenant-subscriptions", scoped).catch(
+            () => [],
+          ),
         ]);
+      if (requestSequence !== tenantAccessLoadSequence.current) return;
       setRoles(roleRows);
       setUsers(userRows);
       setDepartments(departmentRows);
       setTenantBranches(branchRows);
       setPermissionCatalog(permissionRows);
+      setTenantSubscriptions(subscriptionRows);
     } catch {
+      if (requestSequence !== tenantAccessLoadSequence.current) return;
       setRoles([]);
       setUsers([]);
       setDepartments([]);
       setTenantBranches([]);
+      setTenantSubscriptions([]);
     }
   }
 
@@ -177,6 +197,64 @@ export function SuperAdminDashboard({
   useEffect(() => {
     if (selectedId) loadTenantAccess(selectedId);
   }, [selectedId, apiSession?.token]);
+  useEffect(() => {
+    const detailRoutes: Record<string, { list: string; exists: boolean }> = {
+      tenantEdit: { list: "tenants", exists: Boolean(selected) },
+      roleEdit: {
+        list: "roles",
+        exists: roles.some((role: any) => role.id === selectedRoleId),
+      },
+      rolePermissions: {
+        list: "roles",
+        exists: roles.some((role: any) => role.id === selectedRoleId),
+      },
+      roleAssign: {
+        list: "roles",
+        exists: roles.some((role: any) => role.id === selectedRoleId),
+      },
+      userEdit: {
+        list: "users",
+        exists: users.some((user: any) => user.id === selectedUserId),
+      },
+      departmentEdit: {
+        list: "departments",
+        exists: departments.some(
+          (department: any) => department.id === selectedDepartmentId,
+        ),
+      },
+      departmentAssign: {
+        list: "departments",
+        exists: departments.some(
+          (department: any) => department.id === selectedDepartmentId,
+        ),
+      },
+      branchEdit: {
+        list: "branches",
+        exists: tenantBranches.some(
+          (branch: any) => branch.id === selectedBranchId,
+        ),
+      },
+      branchAssign: {
+        list: "branches",
+        exists: tenantBranches.some(
+          (branch: any) => branch.id === selectedBranchId,
+        ),
+      },
+    };
+    const route = detailRoutes[currentSection];
+    if (route && !route.exists) changeSection(route.list);
+  }, [
+    currentSection,
+    selected,
+    selectedRoleId,
+    selectedUserId,
+    selectedDepartmentId,
+    selectedBranchId,
+    roles,
+    users,
+    departments,
+    tenantBranches,
+  ]);
 
   async function createTenant(e: any) {
     e.preventDefault();
@@ -216,135 +294,91 @@ export function SuperAdminDashboard({
     setBusy(true);
     setMessage("");
     try {
-      const created = await apiFetch("/tenants", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          name: fd.get("name"),
-          legal_name: fd.get("legalName") || null,
-          description: fd.get("description") || null,
-          email: fd.get("email") || null,
-          phone: fd.get("phone") || null,
-          address: fd.get("address") || null,
-          tenant_type: fd.get("tenantType") || "clinic",
-          status: fd.get("status") || "trial",
-          country: String(fd.get("country") || "IN").toUpperCase(),
-          timezone: fd.get("timezone") || "Asia/Kolkata",
-        }),
-      });
-      const logoFile = fd.get("logoFile") as File | null;
-      let tenantWithLogo = created;
-      if (logoFile && logoFile.size > 0) {
-        const logoData = new FormData();
-        logoData.append("file", logoFile);
-        tenantWithLogo = await apiUpload(
-          `/tenants/${created.id}/logo`,
-          apiSession,
-          logoData,
-        );
-      }
       const branchCount = Number(fd.get("branchCount") || 1);
-      let firstBranchId = "";
+      const branches = [];
       for (let index = 0; index < branchCount; index += 1) {
         const branchName = String(fd.get(`branchName_${index}`) || "").trim();
         if (!branchName) continue;
-        const branch = await apiFetch(
-          `/tenants/${created.id}/branches`,
-          { ...apiSession, tenantId: created.id },
-          {
-            method: "POST",
-            body: JSON.stringify({
-              name: branchName,
-              code: String(
-                fd.get(`branchCode_${index}`) || `BR${index + 1}`,
-              ).trim(),
-              area: fd.get(`branchArea_${index}`) || null,
-              address:
-                fd.get(`branchAddress_${index}`) || fd.get("address") || null,
-              city: fd.get(`branchCity_${index}`) || null,
-              state: fd.get(`branchState_${index}`) || null,
-            }),
-          },
-        );
-        firstBranchId = firstBranchId || branch.id;
+        branches.push({
+          name: branchName,
+          code: String(
+            fd.get(`branchCode_${index}`) || `BR${index + 1}`,
+          ).trim(),
+          area: fd.get(`branchArea_${index}`) || null,
+          address:
+            fd.get(`branchAddress_${index}`) || fd.get("address") || null,
+          city: fd.get(`branchCity_${index}`) || null,
+          state: fd.get(`branchState_${index}`) || null,
+        });
       }
       const planId = String(fd.get("planId") || "");
       const selectedPlan = plans.find((plan: any) => plan.id === planId);
       const enabledModules = selectedPlan?.enabled_modules || [];
-      const subscriptionPlanId = planId;
-      if (subscriptionPlanId && selectedPlan?.key !== "free_trial") {
-        await apiFetch(
-          "/subscription-plans/tenant-subscriptions",
-          { ...apiSession, tenantId: created.id },
-          {
-            method: "POST",
-            body: JSON.stringify({
-              plan_id: subscriptionPlanId,
-              starts_on: new Date().toISOString().slice(0, 10),
-              billing_amount: Number(selectedPlan?.price_inr_monthly || 0),
-              notes: "Assigned during tenant onboarding",
-            }),
-          },
-        );
-      }
       const roleTemplateIds = fd
         .getAll("roleTemplateIds")
         .map((value) => String(value));
-      const tenantAdminTemplate = primaryTemplates.roles.find(
-        (role: any) => role.key === "tenant_admin",
-      );
-      if (
-        fd.get("adminEmail") &&
-        tenantAdminTemplate &&
-        !roleTemplateIds.includes(tenantAdminTemplate.id)
-      )
-        roleTemplateIds.push(tenantAdminTemplate.id);
-      for (const roleId of roleTemplateIds) {
-        await apiFetch(
-          `/identity/roles/${roleId}/assign/${created.id}`,
-          apiSession,
-          { method: "POST" },
-        );
-      }
-      for (const departmentId of fd
+      const departmentTemplateIds = fd
         .getAll("departmentTemplateIds")
-        .map((value) => String(value))) {
-        await apiFetch(
-          `/tenants/departments/${departmentId}/assign/${created.id}`,
-          apiSession,
-          { method: "POST" },
-        );
-      }
-      for (const branchId of fd
+        .map((value) => String(value));
+      const branchTemplateIds = fd
         .getAll("branchTemplateIds")
-        .map((value) => String(value))) {
-        await apiFetch(
-          `/tenants/branches/${branchId}/assign/${created.id}`,
-          apiSession,
-          { method: "POST" },
-        );
-      }
+        .map((value) => String(value));
       const adminEmail = String(fd.get("adminEmail") || "").trim();
       const adminPassword = String(fd.get("adminPassword") || "").trim();
-      let tenantAdminUser = null;
-      if (adminEmail && adminPassword) {
-        tenantAdminUser = await apiFetch(
-          "/identity/users",
-          { ...apiSession, tenantId: created.id },
-          {
-            method: "POST",
-            body: JSON.stringify({
-              name: fd.get("adminName") || "Tenant Admin",
-              email: adminEmail,
-              password: adminPassword,
-              mobile: fd.get("adminMobile") || null,
-              user_type: "tenant_admin",
-              branch_id: firstBranchId || null,
-              role_keys: ["tenant_admin"],
-              must_change_password:
-                fd.get("adminMustChangePassword") !== "false",
-            }),
+      const onboarding = await apiFetch("/tenants/onboard", apiSession, {
+        method: "POST",
+        body: JSON.stringify({
+          tenant: {
+            name: fd.get("name"),
+            legal_name: fd.get("legalName") || null,
+            description: fd.get("description") || null,
+            email: fd.get("email") || null,
+            phone: fd.get("phone") || null,
+            address: fd.get("address") || null,
+            tenant_type: fd.get("tenantType") || "clinic",
+            status: fd.get("status") || "trial",
+            country: String(fd.get("country") || "IN").toUpperCase(),
+            timezone: fd.get("timezone") || "Asia/Kolkata",
           },
-        );
+          branches,
+          subscription_plan_id: planId || null,
+          enabled_modules: enabledModules,
+          monthly_patient_limit: Number(
+            selectedPlan?.monthly_patient_limit || 0,
+          ),
+          included_branches: selectedPlan?.included_branches ?? null,
+          included_doctors: Number(selectedPlan?.included_doctors || 0),
+          price_inr_monthly: Number(selectedPlan?.price_inr_monthly || 0),
+          subscription_starts_on: new Date().toISOString().slice(0, 10),
+          role_template_ids: roleTemplateIds,
+          department_template_ids: departmentTemplateIds,
+          branch_template_ids: branchTemplateIds,
+          admin_user: {
+            name: fd.get("adminName") || "Tenant Admin",
+            email: adminEmail,
+            password: adminPassword,
+            mobile: fd.get("adminMobile") || null,
+            must_change_password:
+              fd.get("adminMustChangePassword") !== "false",
+          },
+        }),
+      });
+      const logoFile = fd.get("logoFile") as File | null;
+      let tenantWithLogo = onboarding.tenant;
+      let logoWarning = "";
+      if (logoFile && logoFile.size > 0) {
+        try {
+          const logoData = new FormData();
+          logoData.append("file", logoFile);
+          tenantWithLogo = await apiUpload(
+            `/tenants/${onboarding.tenant.id}/logo`,
+            apiSession,
+            logoData,
+          );
+        } catch {
+          logoWarning =
+            "Tenant provisioning completed, but the logo could not be uploaded.";
+        }
       }
       form.reset();
       setSelectedId(tenantWithLogo.id);
@@ -356,20 +390,21 @@ export function SuperAdminDashboard({
       await loadPlatform();
       setTenantSuccess({
         tenant: tenantWithLogo,
-        branchCount,
-        hasSubscription: Boolean(subscriptionPlanId),
+        branchCount: onboarding.branches.length,
+        hasSubscription: Boolean(onboarding.subscription_id),
         moduleCount: enabledModules.length,
         onboardingPlan: selectedPlan,
-        roleCount: roleTemplateIds.length,
-        departmentCount: fd.getAll("departmentTemplateIds").length,
-        branchTemplateCount: fd.getAll("branchTemplateIds").length,
-        adminUser: tenantAdminUser,
-        adminPassword,
+        roleCount: onboarding.role_count,
+        departmentCount: onboarding.department_count,
+        branchTemplateCount: onboarding.branch_template_count,
+        adminUserId: onboarding.admin_user_id,
+        adminEmail,
+        logoWarning,
       });
       setMessage(
-        `Tenant onboarding completed successfully: ${tenantWithLogo.name}`,
+        logoWarning ||
+          `Tenant onboarding completed successfully: ${tenantWithLogo.name}`,
       );
-      window.setTimeout(() => window.location.assign("/"), 600);
     } catch (err: any) {
       setMessage(err.message || "Could not create tenant.");
     } finally {
@@ -382,6 +417,31 @@ export function SuperAdminDashboard({
     e.preventDefault();
     if (!apiSession || !selected) return;
     const fd = new FormData(e.currentTarget);
+    const requestedPlanId = String(fd.get("planId") || "");
+    const requestedPlan = plans.find(
+      (plan: any) => plan.id === requestedPlanId,
+    );
+    const requestedBranchCount = Number(fd.get("branchCount") || 0);
+    const assignedBranchTemplateIds = new Set(
+      String(fd.get("assignedBranchTemplateIds") || "")
+        .split(",")
+        .filter(Boolean),
+    );
+    const newBranchTemplateCount = fd
+      .getAll("branchTemplateIds")
+      .map((value) => String(value))
+      .filter((id) => !assignedBranchTemplateIds.has(id)).length;
+    if (
+      !selected.is_primary &&
+      requestedPlan &&
+      requestedBranchCount + newBranchTemplateCount >
+        Number(requestedPlan.included_branches || 0)
+    ) {
+      setMessage(
+        `${requestedPlan.name} allows ${requestedPlan.included_branches} branches. Remove branches or select a plan with a higher limit.`,
+      );
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -442,6 +502,120 @@ export function SuperAdminDashboard({
           );
         }
       }
+      const selectedPlanId = String(fd.get("planId") || "");
+      const currentPlanId = String(fd.get("currentPlanId") || "");
+      if (
+        !isPrimary &&
+        selectedPlanId &&
+        selectedPlanId !== currentPlanId
+      ) {
+        const selectedPlan = plans.find(
+          (plan: any) => plan.id === selectedPlanId,
+        );
+        await apiFetch(
+          "/subscription-plans/tenant-subscriptions",
+          { ...apiSession, tenantId: updated.id },
+          {
+            method: "POST",
+            body: JSON.stringify({
+              plan_id: selectedPlanId,
+              starts_on: new Date().toISOString().slice(0, 10),
+              billing_amount: Number(selectedPlan?.price_inr_monthly || 0),
+              notes: "Updated from tenant edit workspace",
+            }),
+          },
+        );
+        try {
+          localStorage.setItem(
+            "medizinhub.entitlements.refresh",
+            String(Date.now()),
+          );
+          window.dispatchEvent(
+            new Event("medizinhub.entitlements.refresh"),
+          );
+        } catch {}
+      }
+      const assignedRoleTemplateIds = new Set(
+        String(fd.get("assignedRoleTemplateIds") || "")
+          .split(",")
+          .filter(Boolean),
+      );
+      for (const roleId of fd
+        .getAll("roleTemplateIds")
+        .map((value) => String(value))) {
+        if (assignedRoleTemplateIds.has(roleId)) continue;
+        await apiFetch(
+          `/identity/roles/${roleId}/assign/${updated.id}`,
+          apiSession,
+          { method: "POST" },
+        );
+      }
+      const assignedDepartmentTemplateIds = new Set(
+        String(fd.get("assignedDepartmentTemplateIds") || "")
+          .split(",")
+          .filter(Boolean),
+      );
+      for (const departmentId of fd
+        .getAll("departmentTemplateIds")
+        .map((value) => String(value))) {
+        if (assignedDepartmentTemplateIds.has(departmentId)) continue;
+        await apiFetch(
+          `/tenants/departments/${departmentId}/assign/${updated.id}`,
+          apiSession,
+          { method: "POST" },
+        );
+      }
+      const existingBranchTemplateIds = new Set(
+        String(fd.get("assignedBranchTemplateIds") || "")
+          .split(",")
+          .filter(Boolean),
+      );
+      for (const branchId of fd
+        .getAll("branchTemplateIds")
+        .map((value) => String(value))) {
+        if (existingBranchTemplateIds.has(branchId)) continue;
+        await apiFetch(
+          `/tenants/branches/${branchId}/assign/${updated.id}`,
+          apiSession,
+          { method: "POST" },
+        );
+      }
+      const adminUserId = String(fd.get("adminUserId") || "");
+      if (!isPrimary && adminUserId) {
+        await apiFetch(
+          `/identity/users/${adminUserId}`,
+          { ...apiSession, tenantId: updated.id },
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              name: fd.get("adminName"),
+              email: fd.get("adminEmail"),
+              mobile: fd.get("adminMobile") || null,
+              user_type: "tenant_admin",
+              branch_id: null,
+              is_active: fd.get("adminIsActive") === "true",
+              must_change_password:
+                fd.get("adminMustChangePassword") === "true",
+              role_keys: ["tenant_admin"],
+            }),
+          },
+        );
+        const newPassword = String(fd.get("adminNewPassword") || "");
+        if (newPassword) {
+          await apiFetch(
+            `/identity/users/${adminUserId}/password-reset`,
+            { ...apiSession, tenantId: updated.id },
+            {
+              method: "POST",
+              body: JSON.stringify({
+                new_password: newPassword,
+                must_change_password:
+                  fd.get("adminMustChangePassword") === "true",
+              }),
+            },
+          );
+        }
+      }
       setSelectedId(updated.id);
       setTenants((previous) => [
         tenantRow,
@@ -449,6 +623,7 @@ export function SuperAdminDashboard({
       ]);
       openListing("tenants");
       await loadPlatform();
+      await loadTenantAccess(updated.id);
       setMessage(`Tenant has been updated successfully: ${updated.name}`);
     } catch (err: any) {
       setMessage(err.message || "Could not update tenant.");
@@ -1121,6 +1296,13 @@ export function SuperAdminDashboard({
         <EditTenant
           selected={selected}
           branches={tenantBranches}
+          plans={tenantEditPlans}
+          moduleRegistry={moduleRegistry}
+          templates={primaryTemplates}
+          roles={roles}
+          departments={departments}
+          users={users}
+          subscriptions={tenantSubscriptions}
           busy={busy}
           updateTenant={updateTenant}
           suspendTenant={suspendTenant}

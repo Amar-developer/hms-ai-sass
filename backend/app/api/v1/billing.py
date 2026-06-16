@@ -73,6 +73,7 @@ from app.modules.billing.service import (
     refundable_paid_total,
     update_invoice_payment_status,
 )
+from app.modules.practitioners.models import Practitioner, PractitionerDepartment
 from app.modules.consultations.models import Consultation, ConsultationStatus
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -882,6 +883,26 @@ def create_doctor_fee_rule(
     enforce_entitlement(session, tenant_id, "billing_basic", current_user=current_user)
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
+    if payload.practitioner_id:
+        practitioner = session.get(Practitioner, payload.practitioner_id)
+        if (
+            practitioner
+            and practitioner.tenant_id == tenant_id
+            and payload.department_id
+        ):
+            department_link = session.get(
+                PractitionerDepartment,
+                (payload.practitioner_id, payload.department_id),
+            )
+            if (
+                not department_link
+                or department_link.tenant_id != tenant_id
+                or not department_link.is_active
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Practitioner is not assigned to this department",
+                )
     if payload.share_type.value == "percentage" and payload.doctor_share_percentage is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -903,6 +924,19 @@ def create_doctor_fee_rule(
             DoctorFeeRule.is_active == True,  # noqa: E712
         )
     ).all()
+    if any(
+        existing.fee_amount == payload.fee_amount
+        and existing.share_type == payload.share_type
+        and existing.doctor_share_percentage
+        == payload.doctor_share_percentage
+        and existing.doctor_fixed_amount == payload.doctor_fixed_amount
+        and existing.share_tax_with_doctor == payload.share_tax_with_doctor
+        for existing in existing_rules
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An identical active doctor fee rule already exists",
+        )
     for existing in existing_rules:
         existing.is_active = False
         session.add(existing)

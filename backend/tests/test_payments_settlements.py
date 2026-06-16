@@ -49,7 +49,6 @@ def test_gpay_and_paytm_methods_are_supported(client):
 
     second_data, second_invoice = create_invoice(client, "home_visit", 800)
     second_tenant_id = second_data["tenant"]["id"]
-    create_fee_rule(client, second_tenant_id, "home_visit", 800)
     second = client.post(
         f"/api/v1/billing/invoices/{second_invoice['id']}/payments",
         headers={"X-Tenant-ID": second_tenant_id},

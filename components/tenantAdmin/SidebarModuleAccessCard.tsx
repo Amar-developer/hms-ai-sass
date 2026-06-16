@@ -3,39 +3,55 @@ import { apiFetch } from "@/lib/api";
 import { nav,roleModules } from "@/lib/navigation";
 import { Card,Field,Select,StatusToast,Badge,Button } from "../common/ui";
 import { title } from "@/utils/tenantAdmin/helpers";
+import { normalizeSidebarModuleMap, normalizeSidebarRole } from "@/lib/sidebarAccess";
 
 
-const SIDEBAR_EDITABLE_ROLES = [
-  "reception",
-  "nurse",
-  "staff_nurse",
-  "staff",
-  "doctor",
-  "lab",
-  "pharmacy",
-  "billing",
-  "back_office",
-];
 const SIDEBAR_MODULE_OPTIONS = nav
   .map(([id, label]: any) => ({ id, label }))
   .filter((m: any) => !["superadmin", "admin", "dashboard"].includes(m.id));
 
+interface RoleOption {
+  value: string;
+  label: string;
+}
+
 export function SidebarModuleAccessCard({ apiSession }: any) {
   const [map, setMap] = useState<Record<string, string[]>>({});
-  const [selectedRole, setSelectedRole] = useState("reception");
+  const [roleOptions, setRoleOptions] = useState<RoleOption[]>([]);
+  const [selectedRole, setSelectedRole] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (!apiSession) return;
-    apiFetch("/settings/sidebar-modules", apiSession)
-      .then((data: any) =>
-        setMap(data && typeof data === "object" && !Array.isArray(data) ? data : {}),
-      )
-      .catch(() => {});
+    Promise.all([
+      apiFetch("/settings/sidebar-modules", apiSession).catch(() => ({})),
+      apiFetch("/identity/roles", apiSession).catch(() => []),
+    ]).then(([moduleMap, roles]: any) => {
+      setMap(normalizeSidebarModuleMap(moduleMap));
+      // Drive the dropdown from the tenant's own roles so the configured role
+      // identity always matches the role keys carried on a user's session.
+      const seen = new Set<string>();
+      const options: RoleOption[] = (Array.isArray(roles) ? roles : [])
+        .filter((role: any) => role?.is_active !== false && role?.key)
+        .map((role: any) => ({
+          value: normalizeSidebarRole(role.key),
+          label: role.name || title(String(role.key).replaceAll("_", " ")),
+        }))
+        .filter((option: RoleOption) => {
+          if (seen.has(option.value)) return false;
+          seen.add(option.value);
+          return true;
+        });
+      setRoleOptions(options);
+      setSelectedRole((current) =>
+        current || options[0]?.value || "",
+      );
+    });
   }, [apiSession?.token, apiSession?.tenantId]);
 
-  const modulesFor = (role: string) => map[role] ?? roleModules[role] ?? [];
+  const modulesFor = (role: string) =>
+    map[role] ?? roleModules[role] ?? roleModules[normalizeSidebarRole(role)] ?? [];
 
   function toggle(role: string, moduleId: string) {
     const current = new Set(modulesFor(role));
@@ -75,7 +91,9 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
 
   const selectedModules = new Set(modulesFor(selectedRole));
   const selectedRoleOverridden = Boolean(map[selectedRole]);
-  const selectedRoleLabel = title(selectedRole.replaceAll("_", " "));
+  const selectedRoleLabel =
+    roleOptions.find((option) => option.value === selectedRole)?.label ||
+    title(selectedRole.replaceAll("_", " "));
 
   return (
     <Card>
@@ -98,12 +116,17 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
                 <Select
                   value={selectedRole}
                   onChange={(event: any) => setSelectedRole(event.target.value)}
+                  disabled={roleOptions.length === 0}
                 >
-                  {SIDEBAR_EDITABLE_ROLES.map((role) => (
-                    <option key={role} value={role}>
-                      {title(role.replaceAll("_", " "))}
-                    </option>
-                  ))}
+                  {roleOptions.length === 0 ? (
+                    <option value="">No roles available</option>
+                  ) : (
+                    roleOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))
+                  )}
                 </Select>
               </Field>
             </div>
@@ -158,7 +181,7 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
           </div>
         </div>
       </div>
-      <Button onClick={save} disabled={busy} className="mt-4 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+      <Button onClick={save} disabled={busy || !selectedRole} className="mt-4 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
         {busy ? "Saving..." : "Save Sidebar Access"}
       </Button>
     </Card>

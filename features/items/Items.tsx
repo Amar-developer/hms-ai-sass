@@ -14,7 +14,7 @@ import { humanizeOptionLabel } from "@/lib/options";
 const itemTypes = [
   ["medicine", "Medicine"],
   ["lab_test", "Lab Test"],
-  ["lab_package", "Lab Package"],
+  ["lab_package", "Service"],
   ["physio_equipment", "Physiotherapy Equipment"],
   ["home_care_service", "Home Care / Visit Service"],
 ];
@@ -131,7 +131,7 @@ export function Items({ apiSession, branchId }: any) {
       })),
       ...packages.map((row: any) => ({
         type: "lab_package",
-        kind: "Lab Package",
+        kind: "Service",
         name: row.name,
         code: row.code,
         price: row.package_price,
@@ -606,7 +606,7 @@ export function Items({ apiSession, branchId }: any) {
           <div>
             <h3 className="card-title font-bold">Items</h3>
             <p className="table-status text-slate-500">
-              ERP-style item master for medicines, lab tests, lab packages,
+              ERP-style item master for medicines, lab tests, Service,
               physiotherapy equipment, and home care / visit services.
             </p>
           </div>
@@ -645,7 +645,7 @@ export function Items({ apiSession, branchId }: any) {
                 type === "home_care_service"
                   ? "Rate / Hour"
                   : type === "lab_package"
-                    ? "Package Price"
+                    ? "Service Price"
                     : "Price"
               }
               value={form.price}
@@ -720,7 +720,7 @@ export function Items({ apiSession, branchId }: any) {
           {type === "lab_package" && (
             <div className="md:col-span-4 rounded-2xl bg-slate-50 p-4">
               <p className="mb-3 text-xs font-bold uppercase text-slate-500">
-                Package Tests
+                Service Tests
               </p>
               <div className="flex flex-wrap gap-2">
                 {tests.map((test: any) => (

@@ -109,6 +109,36 @@ def test_patient_view_blocks_cross_tenant_access(client: TestClient):
     assert response.json()["detail"] == "Patient not found"
 
 
+def test_patient_detail_preserves_all_edit_form_fields(client: TestClient):
+    tenant = create_tenant(client)
+    patient = create_patient(
+        client,
+        tenant["id"],
+        date_of_birth="1991-04-09",
+        email="ravi.patient@example.test",
+        alternate_mobile="9000011111",
+        address="12 Lake View Road",
+    )
+
+    search_row = client.get(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+    ).json()[0]
+    detail = client.get(
+        f"/api/v1/patients/{patient['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert "date_of_birth" not in search_row
+    assert "email" not in search_row
+    assert detail.status_code == 200
+    assert detail.json()["date_of_birth"] == "1991-04-09"
+    assert detail.json()["email"] == "ravi.patient@example.test"
+    assert detail.json()["alternate_mobile"] == "9000011111"
+    assert detail.json()["address"] == "12 Lake View Road"
+    assert detail.json()["blood_group"] == "B+"
+
+
 def test_update_and_delete_patient_management(client: TestClient):
     tenant = create_tenant(client)
     patient = create_patient(client, tenant["id"], full_name="Before Update")

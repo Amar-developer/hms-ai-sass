@@ -214,6 +214,35 @@ export function Patient({ apiSession, branchId }: PatientProps) {
     );
   }
 
+  async function openPatientEdit(id: string) {
+    if (!scopedSession || !id) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const hasCompleteEditRecord =
+        selectedDetail?.id === id &&
+        "date_of_birth" in selectedDetail &&
+        "email" in selectedDetail &&
+        "alternate_mobile" in selectedDetail &&
+        "address" in selectedDetail &&
+        "blood_group" in selectedDetail;
+      const detail =
+        hasCompleteEditRecord
+          ? selectedDetail
+          : await apiFetch(`/patients/${id}`, scopedSession);
+      setSelectedId(id);
+      setSelectedDetail(detail);
+      setView("edit");
+      requestAnimationFrame(() =>
+        window.scrollTo({ top: 0, behavior: "smooth" }),
+      );
+    } catch (err: any) {
+      setMessage(err.message || "Could not load the complete patient record.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function createPatient(data: any) {
     if (!scopedSession) return;
     setBusy(true);
@@ -395,6 +424,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
   if (view === "edit" && selected)
     return (
       <PatientForm
+        key={`${selected.id}:${selected.updated_at || ""}`}
         title="Edit Patient"
         patient={selected}
         branches={branches}
@@ -423,7 +453,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
         onMessageClose={() => setMessage("")}
         onEnrollMembership={enrollMembership}
         onBack={() => open("list")}
-        onEdit={() => open("edit", selected.id)}
+        onEdit={() => openPatientEdit(selected.id)}
         onUploadPhoto={uploadPhoto}
       />
     );
@@ -604,10 +634,7 @@ export function Patient({ apiSession, branchId }: PatientProps) {
                 row={row}
                 branches={branches}
                 onView={() => open("detail", row.id)}
-                onEdit={() => {
-                  setSelectedDetail(row);
-                  open("edit", row.id);
-                }}
+                onEdit={() => openPatientEdit(row.id)}
                 onDelete={() => setConfirm({ row })}
               />
             ))}
