@@ -25,7 +25,7 @@ export function RoleCheckboxes({ roles, selected = [] }: any) {
         {effectiveRoles.map((role: any) => (
           <label
             key={role.id}
-            className="flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-sm"
+            className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm"
           >
             <input
               name="roleKeys"

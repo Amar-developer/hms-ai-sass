@@ -176,7 +176,7 @@ export function TenantUsers({
           />
         </Field>
       </div>
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+      <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
         <div className="min-w-[1420px]">
           <div className="hidden md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
             <SortButton

@@ -437,11 +437,11 @@ export function TenantBranchSettings({
           <div className="text-right w-[30%] lg:w-[15%]">
             {activePlan ? (
               <>
-                <Badge tone="blue" className=" rounded-lg py-1 px-1 ">{activePlan.name}</Badge>
+                <Badge tone="blue" className="normal-badge">{activePlan.name}</Badge>
                 <p className="mt-1 text-xs text-slate-500">Current plan</p>
               </>
             ) : (
-              <Badge tone="amber" className="text-center">No active plan</Badge>
+              <Badge tone="amber" className="normal-badge">No active plan</Badge>
             )}
           </div>
         </div>
@@ -473,7 +473,7 @@ export function TenantBranchSettings({
                   <span className="flex flex-wrap items-center gap-2">
                     <b>{module.name}</b>
                     {key === "patient_subscriptions" && (
-                      <Badge tone="green">Patient Membership</Badge>
+                      <Badge tone="green" className="normal-badge">Patient Membership</Badge>
                     )}
                   </span>
                   <span className="mt-1 block text-xs text-slate-500">

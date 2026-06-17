@@ -762,7 +762,7 @@ export function PatientSubscriptions({
                 </Button>
               </div>
             </div>
-            <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
+            <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
               {plans.length === 0 && (
                 <p className="p-4 text-sm text-slate-500">
                   No patient plans yet.
@@ -954,7 +954,7 @@ function BenefitPicker({
                   key={value}
                   type="button"
                   onClick={() => remove(value)}
-                  className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700"
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700"
                 >
                   {itemLabel} ×
                 </button>
@@ -963,7 +963,7 @@ function BenefitPicker({
             return (
               <span
                 key={value}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700"
+                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-700"
               >
                 <span>{itemLabel}</span>
                 <span className="flex items-center gap-1 text-slate-500">
@@ -975,7 +975,7 @@ function BenefitPicker({
                     onChange={(e: any) =>
                       onQuantityChange(value, Math.max(Number(e.target.value) || 1, 1))
                     }
-                    className="w-12 rounded-md border border-slate-200 px-1 py-0.5 text-center text-xs font-bold text-slate-700"
+                    className="w-12 rounded-lg border border-slate-200 px-1 py-0.5 text-center text-xs font-bold text-slate-700"
                   />
                 </span>
                 <button
@@ -992,7 +992,7 @@ function BenefitPicker({
         </div>
       )}
       {query && (
-        <div className="mt-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
+        <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2 shadow-sm">
           <div className="max-h-56 overflow-auto">
             {filtered.length === 0 && remoteSuggestions.length === 0 && (
               <p className="px-3 py-2 text-sm text-slate-500">
@@ -1004,7 +1004,7 @@ function BenefitPicker({
                 key={row.id}
                 type="button"
                 onClick={() => add(row.id)}
-                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50"
+                className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50"
               >
                 <span>
                   <b>{row.name}</b>
@@ -1024,7 +1024,7 @@ function BenefitPicker({
                 key={`remote-${item.id || item.slug || index}`}
                 type="button"
                 onClick={() => addRemote(item)}
-                className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50"
+                className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50"
               >
                 <span>
                   <b>{item.name}</b>
@@ -1042,7 +1042,7 @@ function BenefitPicker({
             <button
               type="button"
               onClick={() => add(`new:${query.trim()}`)}
-              className="mt-2 w-full rounded-xl bg-slate-900 px-3 py-2 text-left text-sm font-bold text-white"
+              className="mt-2 w-full rounded-lg bg-slate-900 px-3 py-2 text-left text-sm font-bold text-white"
             >
               Add new {kind}: {query.trim()}
             </button>
@@ -1106,7 +1106,7 @@ function PlanForm({
         <button
           type="button"
           onClick={back}
-          className="rounded-2xl border px-4 py-3 text-sm font-bold"
+          className="rounded-lg border px-4 py-3 text-sm font-bold"
         >
           Back to Plans
         </button>
@@ -1184,7 +1184,7 @@ function PlanForm({
                           : [...(prev || []), dept.id],
                       )
                     }
-                    className={`rounded-xl border px-3 py-2 text-xs font-bold ${
+                    className={`rounded-lg border px-3 py-2 text-xs font-bold ${
                       selected
                         ? "border-slate-900 bg-slate-900 text-white"
                         : "border-slate-200 bg-white text-slate-700"
@@ -1298,9 +1298,9 @@ function PlanForm({
           <button
             type="button"
             onClick={back}
-            className="rounded-2xl border px-4 py-3 text-sm font-bold"
+            className="close-button font-bold"
           >
-            Cancel
+            Cancel 
           </button>
         </div>
       </form>
@@ -1337,7 +1337,7 @@ function PharmacySlabEditor({ slabs, onChange }: any) {
     <div>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          <p className="card-title font-bold uppercase tracking-wide text-slate-500">
             Pharmacy Discount Slabs
           </p>
           <p className="text-xs text-slate-500">
@@ -1390,7 +1390,7 @@ function PharmacySlabEditor({ slabs, onChange }: any) {
             <div className="flex items-end">
               <ActionButton
                 tone="danger"
-                className="w-full sm:w-auto"
+                className="close-button"
                 onClick={() => removeRow(index)}
               >
                 Remove
@@ -1705,7 +1705,7 @@ function PlanDetailPage({
             <button
               type="button"
               onClick={onBack}
-              className="mb-3 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+              className="mb-3 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
             >
               Back to Plans
             </button>
@@ -1713,7 +1713,7 @@ function PlanDetailPage({
               <h3 className="text-xl font-bold">{plan.name}</h3>
               <Badge
                 tone={plan.is_active ? "green" : "red"}
-                className="text-xs lg:text-sm rounded-full py-2 px-2"
+                className="table-status p-2"
               >
                 {plan.is_active ? "Active" : "Paused"}
               </Badge>
@@ -1800,8 +1800,8 @@ function PharmacySlabList({ slabs }: any) {
   return (
     <Card>
       <div className="flex items-center justify-between gap-3">
-        <h4 className="font-bold">Pharmacy Discount Slabs</h4>
-        <Badge tone="blue">{slabs.length}</Badge>
+        <h4 className="card-title font-bold">Pharmacy Discount Slabs</h4>
+        <Badge tone="blue" className="normal-badge">{slabs.length}</Badge>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
         {slabs.length === 0 ? (
@@ -1855,10 +1855,10 @@ function BenefitList({ title, ids, rows, priceKey, quantities }: any) {
   return (
     <Card>
       <div className="flex items-center justify-between gap-3">
-        <h4 className="font-bold">{title}</h4>
-        <Badge tone="blue">{selected.length}</Badge>
+        <h4 className="card-title font-bold">{title}</h4>
+        <Badge tone="blue" className="normal-badge">{selected.length}</Badge>
       </div>
-      <div className="mt-4 max-h-[420px] overflow-auto rounded-2xl border border-slate-200">
+      <div className="mt-4 max-h-[420px] overflow-auto rounded-lg border border-slate-200">
         {selected.length === 0 && (
           <p className="p-4 text-sm text-slate-500">No items selected.</p>
         )}
@@ -1880,7 +1880,7 @@ function BenefitList({ title, ids, rows, priceKey, quantities }: any) {
                 </p>
               </div>
               <span className="flex items-center justify-end gap-2 font-bold">
-                {qty !== null && <Badge tone="green">Free × {qty}</Badge>}
+                {qty !== null && <Badge tone="green" className="normal-badge">Free × {qty}</Badge>}
                 {row[priceKey] !== undefined ? money(row[priceKey]) : "-"}
               </span>
             </div>

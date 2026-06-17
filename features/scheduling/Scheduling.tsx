@@ -19,7 +19,8 @@ import { uniqueDepartmentRows } from "@/lib/options";
 import { activeTenantOptions, groupSchedules, selectedSchedulePayloads } from "@/utils/schedule/helpers";
 import { ScheduleForm } from "@/components/schedule/Forms";
 import { pageSize, weekdays } from "@/utils/schedule/constants";
-import { ConfirmModal, Empty, Pagination, ScheduleRow } from "./Shared";
+import { ConfirmModal, Empty, ScheduleRow } from "./Shared";
+import { Pagination } from "@/components/common/Pagination";
 
 
 export function Scheduling({ apiSession, branchId }: any) {
@@ -386,7 +387,7 @@ export function Scheduling({ apiSession, branchId }: any) {
           <button
             type="button"
             onClick={() => open("create")}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 table-data font-bold text-white"
           >
             <Plus size={16} />
             Create Schedule

@@ -104,13 +104,11 @@ export function FilesPanel({
         if (cancelled) return;
         const list = Array.isArray(rows) ? rows : [];
         setRecordOptions(
-          list
-            .slice(0, 500)
-            .map((row: any) => ({
-              value: row.id,
-              label: fetcher.label(row),
-              sublabel: fetcher.sublabel ? fetcher.sublabel(row) : row.id,
-            })),
+          list.slice(0, 500).map((row: any) => ({
+            value: row.id,
+            label: fetcher.label(row),
+            sublabel: fetcher.sublabel ? fetcher.sublabel(row) : row.id,
+          })),
         );
       })
       .catch(() => {
@@ -238,14 +236,14 @@ export function FilesPanel({
           <div>
             <h3 className="card-title font-bold">Files</h3>
             <p className="table-data text-slate-500">
-              Central file registry for logos, patient photos, consent forms,
-              discharge documents, reports, and module attachments. Pick a
-              category and the dependent fields auto-fill with the matching
-              modules and doctypes.
+              Centralized file storage with automatic module and document type
+              mapping.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="blue" className="rounded-lg px-2 py-2 ">{files.length} files</Badge>
+            <Badge tone="blue" className="rounded-lg px-2 py-2 ">
+              {files.length} files
+            </Badge>
             <ActionButton
               type="button"
               onClick={syncUploadsFolder}
@@ -388,9 +386,8 @@ export function FilesPanel({
           <div>
             <h4 className="text-base lg:text-lg font-bold">File Registry</h4>
             <p className="text-xs lg:text-sm text-slate-500">
-              Files created from module uploads appear here automatically. Use
-              Sync Uploads Folder to register pre-existing files from the server
-              uploads directory.
+              Uploaded files appear automatically. Sync existing server files
+              when needed.
             </p>
           </div>
           <FormField label="Search">
@@ -424,32 +421,44 @@ export function FilesPanel({
               {visible.map((file: any) => (
                 <tr key={file.id} className="align-top">
                   <td className="px-4 py-4">
-                    <b>{file.file_name}</b>
-                    <p className="break-all text-xs text-slate-500">
-                      {file.file_url}
-                    </p>
+                    <div className="max-w-[200px]">
+                      <p className="font-bold truncate" title={file?.file_name}>{file.file_name}</p>
+                    </div>
+                    <div className="max-w-[200px]">
+                      <p
+                        className="truncate text-xs text-slate-500"
+                        title={file.file_url}
+                      >
+                        {file.file_url}
+                      </p>
+                    </div>
                   </td>
                   <td>
-                    <Badge tone="blue" className="rounded-full px-2 py-2 text-xs lg:text-sm w-[50%]">
+                    <Badge
+                      tone="blue"
+                      className="rounded-full px-2 py-2 text-xs lg:text-sm w-[50%]"
+                    >
                       {humanizeOptionLabel(file.category)}
                     </Badge>
-                    <p className="mt-1 text-xs lg:text-sm text-slate-500">
+                    <p className="mt-1 text-xs pl-2 lg:text-sm text-slate-500">
                       {file.source_module || "-"}
                     </p>
                   </td>
                   <td>
-                    <b className="text-xs lg:text-sm">{file.attached_to_doctype || "-"}</b>
+                    <b className="text-xs lg:text-sm">
+                      {file.attached_to_doctype || "-"}
+                    </b>
                     <p className="break-all text-xs text-slate-500">
                       {[file.attached_to_name, file.attached_to_field]
                         .filter(Boolean)
                         .join(" / ") || "-"}
                     </p>
                   </td>
-                  <td className="text-xs lg:text-sm">{patientLabel(patients, file.patient_id)}</td>
                   <td className="text-xs lg:text-sm">
-                    {file.created_at
-                      ? displayDateTime(file.created_at)
-                      : "-"}
+                    {patientLabel(patients, file.patient_id)}
+                  </td>
+                  <td className="text-xs lg:text-sm">
+                    {file.created_at ? displayDateTime(file.created_at) : "-"}
                   </td>
                   <td className="pr-4">
                     <a
