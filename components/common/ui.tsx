@@ -186,6 +186,7 @@ export function StatusToast({
     </div>
   );
 }
+
 export function Field({
   label,
   children,
@@ -202,6 +203,7 @@ export function Field({
     </label>
   );
 }
+
 function submitNearestFormOnEnter(event: any) {
   const control = event.currentTarget;
   if (control.form) {
@@ -611,6 +613,7 @@ export function SuggestionInput({
     </div>
   );
 }
+
 export function Select({
   className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm",
   children,
@@ -710,14 +713,14 @@ export function SearchableSelect({
         />
       </button>
       {open && (
-        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-2xl border border-slate-200 bg-white shadow-lg">
+        <div className="absolute z-30 mt-1 max-h-72 w-full scrollbar-thin  overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
           <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2">
             <input
               autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
             />
           </div>
           {value && (
@@ -761,6 +764,7 @@ export function SearchableSelect({
     </div>
   );
 }
+
 export function Button({
   children,
   className = "rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
@@ -775,6 +779,7 @@ export function Button({
     </button>
   );
 }
+
 export function ActionGroup({
   children,
   className = "",
@@ -790,6 +795,7 @@ export function ActionGroup({
     </div>
   );
 }
+
 export function ActionButton({
   children,
   tone = "neutral",

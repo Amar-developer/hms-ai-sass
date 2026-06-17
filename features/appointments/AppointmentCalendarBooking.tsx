@@ -1294,20 +1294,20 @@ export function AppointmentCalendarBooking(props: Props) {
           </Field>
         )}
       </div>
-      <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
+      <div className="mt-4  rounded-lg border border-slate-200">
         <div
           className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.65fr_.71fr_.9fr_.85fr_.68fr_.62fr_.9fr]"}
-          lg:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.65fr_.6fr_.65fr_.85fr_.68fr_.6fr_1.45fr]"}`
+          lg:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.95fr_.6fr_.65fr_.85fr_.68fr_.6fr_1.45fr]"}`
         }
         >
           {isSuperAdmin && <span>Tenant</span>}
-          <span className="table-data">Patient</span>
-          <span className="table-data">Mobile</span>
-          <span className="table-data">Department</span>
-          <span className="table-data">Doctor</span>
-          <span className="table-data lg:text-left lg:pl ">Date</span>
-          <span className="table-data text-center">Status</span>
-          {!isSuperAdmin && <span className="table-data md:text-center lg:text-right">Links</span>}
+          <span className="text-[10px] lg:text-sm">Patient</span>
+          <span className="text-[10px] lg:text-sm">Mobile</span>
+          <span className="text-[10px] lg:text-sm">Department</span>
+          <span className="text-[10px] lg:text-sm">Doctor</span>
+          <span className="text-[10px] lg:text-sm lg:text-left lg:pl ">Date</span>
+          <span className="text-[10px] lg:text-sm text-center">Status</span>
+          {!isSuperAdmin && <span className="text-[10px] lg:text-sm md:text-center lg:text-right">Links</span>}
         </div>
         <div className="divide-y divide-slate-200">
           {rows.length === 0 && (
@@ -1365,26 +1365,26 @@ export function AppointmentCalendarBooking(props: Props) {
                     openConsultation(appointment);
                   }
                 }}
-                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[.7fr_.8fr_1fr_.95fr_.78fr_.72fr_1fr] lg:grid-cols-[.75fr_.7fr_.75fr_.95fr_.78fr_.72fr_1.55fr] md:items-center"
+                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_.7fr_.75fr_.95fr_.78fr_.72fr_1.55fr] lg:grid-cols-[1fr_.7fr_.75fr_.95fr_.78fr_.72fr_1.55fr] md:items-center"
               >
                 <div>
-                  <b className="table-data">{appointment.patient}</b>
+                  <p className="text-[10px] lg:text-xs break-all">{appointment.patient}</p>
                   <p className="text-[10px] lg:text-xs text-slate-500">
                     {appointment.token ||
                       publicDisplayValue(appointment.id, "-")}
                   </p>
                 </div>
                 <span className="text-[10px] lg:text-sm">{patient?.mobile || "-"}</span>
-                <span className="table-data">
+                <span className="text-[10px] lg:text-sm ">
                   {departmentOptions.find(
                     (d: any) => d.id === appointment.departmentId,
                   )?.name || publicDisplayValue(appointment.departmentId)}
                 </span>
-                <span className="table-data">
+                <span className="text-[10px] lg:text-sm ">
                   {appointment.doctor ||
                     publicDisplayValue(appointment.doctorId, "Doctor")}
                 </span>
-                <span className="table-data">
+                <span className="text-[10px] lg:text-sm ">
                   {appointment.appointmentDate || "-"}
                   {appointment.appointmentTime || appointment.appointment_time
                     ? ` ${formatDisplayTime(
@@ -1395,7 +1395,7 @@ export function AppointmentCalendarBooking(props: Props) {
                 </span>
                 <Badge
                   tone={appointmentStatusInfo(appointment).tone}
-                  className="table-status"
+                  className="table-status text-[10px] lg:text-sm"
                 >
                   {appointmentStatusInfo(appointment).label}
                 </Badge>

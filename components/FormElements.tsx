@@ -355,7 +355,7 @@ export function SearchableSelectField({
           type="button"
           disabled={disabled}
           onClick={() => setOpen((c) => !c)}
-          className={`flex w-full items-center justify-between rounded-lg border bg-white px-4 py-3 text-left text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${triggerBorder}`}
+          className={`flex w-full items-center justify-between rounded-lg border bg-white py-2 px-2 lg:px-4 lg:py-3 text-left table-data outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${triggerBorder}`}
         >
           <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
             {displayLabel || placeholder}

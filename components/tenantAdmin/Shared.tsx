@@ -13,7 +13,7 @@ import { FormField } from "../FormElements";
 import { Plus } from "lucide-react";
 import { isLocked } from "@/utils/tenantAdmin/helpers";
 import { Empty } from "../admin/Empty";
-import { Pagination } from "../admin/Pagination";
+import { Pagination } from "../common/Pagination";
 
 export function Header({ title, subtitle, back }: any) {
   return (

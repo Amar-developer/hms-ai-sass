@@ -627,14 +627,14 @@ export function Items({ apiSession, branchId }: any) {
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Items</h3>
-            <p className="table-status text-slate-500">
+            <p className="table-data text-slate-500">
               ERP-style item master for medicines, lab tests, Service,
               physiotherapy equipment, and home care / visit services.
             </p>
           </div>
           <div className="flex items-center gap-2">
             <RefreshButton onRefresh={load} />
-            <Badge tone="blue">{filteredRows.length} items</Badge>
+            <Badge tone="blue" className="normal-badge">{filteredRows.length} items</Badge>
           </div>
         </div>
         <StatusToast message={message} onClose={() => setMessage("")} />
@@ -724,6 +724,7 @@ export function Items({ apiSession, branchId }: any) {
               label="Sample Type"
               value={form.sample_type}
               onChange={(v) => setField("sample_type", v)}
+              className="search-input"
             />
           )}
           {type === "home_care_service" && (
@@ -782,11 +783,13 @@ export function Items({ apiSession, branchId }: any) {
                 label="Manufacturer"
                 value={form.manufacturer}
                 onChange={(v) => setField("manufacturer", v)}
+                className="search-input"
               />
               <TextField
                 label="Model"
                 value={form.model_number}
                 onChange={(v) => setField("model_number", v)}
+                className="search-input"
               />
               <SelectField
                 label="Portable"
