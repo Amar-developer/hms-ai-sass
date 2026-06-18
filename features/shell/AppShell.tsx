@@ -117,7 +117,7 @@ export function AppShell(props: any) {
   const [superAdminSection, setSuperAdminSection] = useState("overview");
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
   const [tenantAdminSection, setTenantAdminSection] = useState("users");
-  const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(true);
+  const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
   const visibleTenantAdminSections = tenantAdminSections.filter(
     ([sectionId]: any) => canUseTenantAdminSection(sectionId, apiSession?.user),
   );

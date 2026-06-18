@@ -542,7 +542,7 @@ export function useAppController() {
   if (navHasAnyPermission('home_care.manage', 'home_care.read', 'home_care.create', 'home_care.edit', 'home_care.delete')) permissionModules.add('home_care');
   if (navHasAnyPermission('billing.manage', 'invoices.read', 'invoices.create', 'payments.manage')) permissionModules.add('billing');
   if (isTenantAdminUser || canOpenTenantAdmin || navHasAnyPermission('patient_subscriptions.manage', 'patient_subscriptions.read', 'patient_subscriptions.create')) permissionModules.add('subscriptions');
-  if ((isSuperAdmin || isTenantAdminUser) && navHasAnyPermission('reports.read', 'audit.read')) permissionModules.add('reports');
+  if (navHasAnyPermission('reports.read', 'audit.read')) permissionModules.add('reports');
   const isTenantAdminDashboardUser = Boolean(!isSuperAdmin && (role === 'tenant_admin' || apiSession?.user?.roles?.includes('tenant_admin') || apiSession?.user?.user_type === 'tenant_admin'));
   // Role-based sidebar control: when the user has one or more predefined roles, the
   // sidebar is gated strictly by those roles' module lists (e.g. reception never sees
@@ -559,7 +559,7 @@ export function useAppController() {
   });
   const enabled = (id: string) => {
     if (id === 'dashboard') return isTenantAdminDashboardUser;
-    if (id === 'reports') return Boolean(isSuperAdmin || isTenantAdminUser) && canOpenModule(id, roleAllowedModules, clinic);
+    if (id === 'reports') return canOpenModule(id, roleAllowedModules, clinic);
     return canOpenModule(id, roleAllowedModules, clinic);
   };
 

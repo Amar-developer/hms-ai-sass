@@ -1,6 +1,6 @@
 import { doctorTypes } from "@/utils/doctors/constants";
 import { ActionButton,ActionGroup,Badge,Card,Button } from "../common/ui";
-import { activeDoctorDepartmentFeeRules, formatPractitionerName } from "@/utils/doctors/helpers";
+import { activeDoctorDepartmentFeeRules, activeDoctorFeeRule, formatPractitionerName } from "@/utils/doctors/helpers";
 
 export function DoctorRow({
   row,
@@ -19,6 +19,7 @@ export function DoctorRow({
     doctorTypes.find(([value]) => value === row.practitioner_type)?.[1] ||
     row.practitioner_type;
   const departmentFeeRules = activeDoctorDepartmentFeeRules(feeRules, row);
+  const fallbackFeeRule = activeDoctorFeeRule(feeRules, row);
   const specialties = (row.department_ids || []).map((departmentId: string) => ({
     departmentId,
     departmentName:
@@ -26,7 +27,7 @@ export function DoctorRow({
         ?.name || departmentId,
     feeRule: departmentFeeRules.find(
       (rule: any) => rule.department_id === departmentId,
-    ),
+    ) || fallbackFeeRule,
   }));
   const stop = (handler: any) => (event: any) => {
     event.stopPropagation();

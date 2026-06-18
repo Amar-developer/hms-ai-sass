@@ -134,7 +134,7 @@ export function Sidebar(props: SidebarProps) {
                       !props.tenantAdminSettingsOpen,
                     );
                   }}
-                  className={`flex w-full items-center rounded-2xl ${props.tenantAdminSettingsOpen ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
+                  className={`flex w-full items-center rounded-2xl ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
                   <Icon size={18} />

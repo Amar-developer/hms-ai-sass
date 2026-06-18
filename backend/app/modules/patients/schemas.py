@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.modules.patients.models import (
     AlertSeverity,
@@ -26,6 +26,13 @@ class PatientCreate(BaseModel):
     address: str | None = Field(default=None, max_length=500)
     blood_group: str | None = Field(default=None, max_length=8)
 
+    @field_validator("date_of_birth")
+    @classmethod
+    def date_of_birth_cannot_be_future(cls, value: date | None) -> date | None:
+        if value and value > date.today():
+            raise ValueError("Date of birth cannot be in the future")
+        return value
+
 
 class PatientUpdate(BaseModel):
     branch_id: str | None = None
@@ -42,6 +49,13 @@ class PatientUpdate(BaseModel):
     address: str | None = Field(default=None, max_length=500)
     blood_group: str | None = Field(default=None, max_length=8)
     status: PatientStatus | None = None
+
+    @field_validator("date_of_birth")
+    @classmethod
+    def date_of_birth_cannot_be_future(cls, value: date | None) -> date | None:
+        if value and value > date.today():
+            raise ValueError("Date of birth cannot be in the future")
+        return value
 
 
 class PatientRead(BaseModel):
@@ -101,6 +115,8 @@ class PatientSearchResult(BaseModel):
     updated_at: datetime
     active_alert_count: int
     critical_alert_count: int
+    subscription_plan_name: str | None = None
+    subscription_status: str | None = None
 
 
 class PatientDuplicateCandidate(PatientSearchResult):

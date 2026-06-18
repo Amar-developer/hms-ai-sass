@@ -1970,7 +1970,7 @@ function ActiveEnrollmentsTable({
               <th>Patient</th>
               <th>Plan</th>
               <th>Validity</th>
-              <th>Used</th>
+              <th>Benefits Used</th>
               <th className="text-left">Paid</th>
               <th>Status</th>
               {canManage && <th className="text-right pr-4">Actions</th>}
@@ -2039,7 +2039,16 @@ function ActiveEnrollmentsTable({
                         className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
                       />
                     ) : (
-                      `${row.used_consultations || 0}/${row.plan?.free_consultations ?? 0}`
+                      <div className="space-y-1">
+                        <div>
+                          Consults {row.used_consultations || 0}/
+                          {row.plan?.free_consultations ?? 0}
+                        </div>
+                        <div className="font-medium text-slate-500">
+                          Lab {row.used_free_lab_count || 0} used ·{" "}
+                          {row.remaining_free_lab_count || 0} left
+                        </div>
+                      </div>
                     )}
                   </td>
                   <td className="text-left font-semibold tabular-nums text-xs lg:text-sm">

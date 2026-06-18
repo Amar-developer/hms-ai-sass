@@ -86,6 +86,13 @@ function calculateAgeYears(dateOfBirth: string) {
   return age >= 0 && age <= 130 ? String(age) : "";
 }
 
+function todayInputValue() {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${today.getFullYear()}-${month}-${day}`;
+}
+
 export function PatientFormFields({
   patient,
   branches,
@@ -97,6 +104,7 @@ export function PatientFormFields({
   defaultBranchId?: string;
   includeStatus?: boolean;
 }) {
+  const today = todayInputValue();
   const [selectedBranchId, setSelectedBranchId] = useState(
     patientField(patient, "branch_id", "branchId") || defaultBranchId || "",
   );
@@ -189,6 +197,7 @@ export function PatientFormFields({
         <Input
           name="dateOfBirth"
           type="date"
+          max={today}
           value={dateOfBirth}
           onChange={(event: any) => setDateOfBirth(event.target.value)}
         />

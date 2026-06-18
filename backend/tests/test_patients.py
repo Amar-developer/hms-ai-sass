@@ -1,4 +1,12 @@
+from datetime import date, timedelta
+
 from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.modules.patient_subscriptions.models import (
+    PatientSubscriptionEnrollment,
+    PatientSubscriptionPlan,
+)
 
 
 def create_tenant(client: TestClient, name: str = "Care Clinic") -> dict:
@@ -39,6 +47,22 @@ def test_create_patient_generates_patient_number_and_audit(client: TestClient):
     assert patient["tenant_id"] == tenant["id"]
     assert patient["patient_number"] == "PAT-000001"
     assert any(event["action"] == "patient.created" for event in audit)
+
+
+def test_create_patient_rejects_future_date_of_birth(client: TestClient):
+    tenant = create_tenant(client)
+
+    response = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Future DOB Patient",
+            "date_of_birth": (date.today() + timedelta(days=1)).isoformat(),
+        },
+    )
+
+    assert response.status_code == 422
+    assert "Date of birth cannot be in the future" in str(response.json())
 
 
 def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient):
@@ -95,6 +119,50 @@ def test_patient_search_is_tenant_isolated(client: TestClient):
 
     assert response.status_code == 200
     assert [row["full_name"] for row in response.json()] == ["Tenant One Patient"]
+
+
+def test_patient_search_includes_subscription_plan_name_and_status(
+    client: TestClient,
+    test_engine,
+):
+    tenant = create_tenant(client)
+    branch = client.post(
+        f"/api/v1/tenants/{tenant['id']}/branches",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "Main Branch", "code": "MAIN"},
+    ).json()
+    patient = create_patient(client, tenant["id"], branch_id=branch["id"])
+    with Session(test_engine) as session:
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant["id"],
+            name="Gold Care",
+            price_amount=500,
+            duration_days=30,
+        )
+        session.add(plan)
+        session.commit()
+        session.refresh(plan)
+        session.add(
+            PatientSubscriptionEnrollment(
+                tenant_id=tenant["id"],
+                branch_id=branch["id"],
+                patient_id=patient["id"],
+                plan_id=plan.id,
+                starts_on=date.today(),
+                ends_on=date.today(),
+            )
+        )
+        session.commit()
+
+    response = client.get(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    row = response.json()[0]
+    assert row["subscription_plan_name"] == "Gold Care"
+    assert row["subscription_status"] == "active"
 
 
 def test_patient_view_blocks_cross_tenant_access(client: TestClient):
