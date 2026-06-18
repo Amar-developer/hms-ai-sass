@@ -1,5 +1,5 @@
 import { money, numberValue } from "@/features/reports/utils";
-import { claimedDetail, invoiceDiscountParts, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, itemTypeLabel } from "@/utils/billing/helpers";
+import { claimedDetail, invoiceDiscountParts, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, itemTypeLabel } from "@/utils/billing/helpers";
 import { useEffect, useState } from "react";
 import { Badge,ActionButton,Select,Card,Input } from "../common/ui";
 
@@ -35,6 +35,8 @@ export function InvoiceDetailPage({
   const discountParts=invoiceDiscountParts(invoice);
   const membershipLabel=invoiceMembershipLabel(invoice);
   const membershipBenefit=detail.membership_benefit;
+  const membershipEffectiveSaving=invoiceTaxAdjustedDiscount(invoice,discountParts.membershipDiscount);
+  const membershipTaxSaving=Math.max(membershipEffectiveSaving-discountParts.membershipDiscount,0);
   const taxableAmount=numberValue(invoice.taxable_amount);
   const taxAmount=numberValue(invoice.tax_amount);
   const canRefresh=invoice.consultation_id&&!invoice.lab_order_id&&!invoice.pharmacy_issue_id&&!invoice.ip_admission_id&&!invoice.physiotherapy_case_id;
@@ -294,7 +296,11 @@ export function InvoiceDetailPage({
                     savings={discountParts.membershipDiscount > 0}
                     note={
                       discountParts.membershipDiscount > 0
-                        ? `${membershipLabel} · ${claimedDetail(discountParts.membershipDiscount, invoice.subtotal_amount)}`
+                        ? `${membershipLabel} · ${
+                            membershipTaxSaving > 0
+                              ? `${claimedDetail(membershipEffectiveSaving, invoice.subtotal_amount)} effective saving (${money(discountParts.membershipDiscount)} benefit + ${money(membershipTaxSaving)} tax saved)`
+                              : claimedDetail(discountParts.membershipDiscount, invoice.subtotal_amount)
+                          }`
                         : membershipBenefit?.reason ||
                           "No membership benefit applied"
                     }

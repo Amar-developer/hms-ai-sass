@@ -185,6 +185,7 @@ class EntitlementRead(BaseModel):
     starts_on: date
     ends_on: date | None
     monthly_patient_limit: int
+    included_branches: int
     additional_patient_credits: int = 0
     effective_patient_limit: int
     current_patient_count: int

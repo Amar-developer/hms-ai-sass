@@ -1,0 +1,65 @@
+name: Deploy to Dev
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - develop
+
+concurrency:
+  group: dev-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Dev
+    runs-on: ubuntu-latest
+    environment: development
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'develop')
+
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEV_EC2_HOST }}
+          username: ${{ secrets.DEV_EC2_USER }}
+          key: ${{ secrets.DEV_EC2_SSH_KEY }}
+          port: ${{ secrets.DEV_EC2_SSH_PORT }}
+          script_stop: true
+          script: |
+            cd "${{ secrets.DEV_EC2_APP_DIR }}"
+
+            # Pull latest code from develop
+            git fetch origin
+            git checkout develop
+            git pull --ff-only origin develop
+
+            # Check disk before deploy
+            docker system df
+
+            # Clean dangling images and stopped containers
+            docker builder prune -af
+            docker image prune -f
+            docker container prune -f
+
+            # Build and deploy using dev compose
+            docker compose -f docker-compose.dev.yml build --pull
+            docker compose -f docker-compose.dev.yml up -d --remove-orphans
+
+            # Check disk after deploy
+            docker system df
+            docker compose -f docker-compose.dev.yml ps
+            
+            # Wait for backend to start
+            sleep 15
+
+            # Health checks (dev server uses port 8081)
+            curl -f http://127.0.0.1:8081/health
+            curl -f http://127.0.0.1:8081/api/v1/health

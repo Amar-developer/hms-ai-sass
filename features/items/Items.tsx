@@ -187,7 +187,7 @@ export function Items({ apiSession, branchId }: any) {
         kind: "Home Care / Visit Service",
         name: row.name,
         code: row.code,
-        mrp_price: row.mrp_price || 0,
+        mrp_price: null,
         price: row.default_price,
         purchase_price: null,
         supplier: "-",
@@ -373,7 +373,6 @@ export function Items({ apiSession, branchId }: any) {
               code: itemCode,
               name: form.name,
               description: form.description || null,
-              mrp_price: Number(form.mrp_price || 0),
               default_price: Number(form.price || 0),
             }),
           },
@@ -468,7 +467,6 @@ export function Items({ apiSession, branchId }: any) {
         ...form,
         code: raw.code,
         name: raw.name,
-        mrp_price: String(raw.mrp_price || 0),
         price: String(raw.default_price || 0),
         description: raw.description || "",
         branch_scope: raw.branch_id ? "branch" : "tenant",
@@ -660,12 +658,14 @@ export function Items({ apiSession, branchId }: any) {
             required
             className="search-input"
           />
-          <NumberField
-            label="MRP Price"
-            value={form.mrp_price}
-            onChange={(v) => setField("mrp_price", v)}
-            min={0}
-          />
+          {type !== "home_care_service" && (
+            <NumberField
+              label="MRP Price"
+              value={form.mrp_price}
+              onChange={(v) => setField("mrp_price", v)}
+              min={0}
+            />
+          )}
           {type !== "physio_equipment" && (
             <NumberField
               label={
@@ -1048,7 +1048,9 @@ export function Items({ apiSession, branchId }: any) {
                       ? "-"
                       : `₹${row.purchase_price || 0}`}
                   </td>
-                  <td className="table-data">₹{row.mrp_price || 0}</td>
+                  <td className="table-data">
+                    {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
+                  </td>
                   <td className="table-data"  >
                     {row.price === null
                       ? "-"

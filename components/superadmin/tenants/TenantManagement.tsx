@@ -111,8 +111,8 @@ export function TenantManagement({
           </Badge>
           </div>
           <p className="text-xs lg:text-sm text-slate-500">
-            Latest created or updated tenants appear first. Use filters and
-            sortable headers to manage tenant records.
+            Active and trial tenants appear here. Deactivated tenants are
+            suspended and hidden from this workspace.
           </p>
         </div>
         <div className="flex items-center gap-2 ">

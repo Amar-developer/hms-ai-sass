@@ -92,7 +92,9 @@ def test_platform_super_admin_can_manage_tenant_metadata(client: TestClient):
 
     deleted = client.delete(f"/api/v1/tenants/{tenant['id']}")
     assert deleted.status_code == 200
-    assert deleted.json()["mode"] == "suspended"
+    assert deleted.json()["mode"] == "deactivated"
+    assert deleted.json()["deleted"] is False
+    assert deleted.json()["deactivated"] is True
 
     after_delete = client.get(f"/api/v1/tenants/{tenant['id']}")
     assert after_delete.json()["status"] == "suspended"
@@ -484,6 +486,44 @@ def test_settings_manage_permission_can_crud_tenant_branches_and_departments(cli
     assert updated_department.json()["name"] == "General Medicine Updated"
     assert deleted_department.status_code == 200
     assert deleted_department.json()["mode"] == "deactivated"
+
+
+def test_department_scope_conflict_blocks_all_branch_and_branch_specific_mix(client: TestClient):
+    tenant = client.post("/api/v1/tenants", json={"name": "Department Scope Clinic"}).json()
+    branch = client.post(
+        f"/api/v1/tenants/{tenant['id']}/branches",
+        json={"name": "Main Branch", "code": "MAIN"},
+    ).json()
+
+    all_branch_department = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "General Medicine"},
+    )
+    branch_duplicate = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "General Medicine", "branch_id": branch["id"]},
+    )
+
+    assert all_branch_department.status_code == 201
+    assert branch_duplicate.status_code == 409
+    assert "all branches" in branch_duplicate.json()["detail"].lower()
+
+    branch_department = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "Cardiology", "branch_id": branch["id"]},
+    )
+    all_branch_duplicate = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"name": "Cardiology"},
+    )
+
+    assert branch_department.status_code == 201
+    assert all_branch_duplicate.status_code == 409
+    assert "one or more branches" in all_branch_duplicate.json()["detail"].lower()
 
 
 def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_permissions(client: TestClient):

@@ -634,17 +634,27 @@ export function SuperAdminDashboard({
 
   async function suspendTenant(tenant = selected) {
     if (!apiSession || !tenant || tenant.is_primary) return;
-    if (!window.confirm(`Suspend tenant ${tenant.name}?`)) return;
+    if (
+      !window.confirm(
+        `Deactivate tenant ${tenant.name}? This suspends access and keeps tenant records for audit and compliance.`,
+      )
+    )
+      return;
     setBusy(true);
     setMessage("");
     try {
       await apiFetch(`/tenants/${tenant.id}`, apiSession, {
         method: "DELETE",
       });
+      setTenants((previous) =>
+        previous.map((row: any) =>
+          row.id === tenant.id ? { ...row, status: "suspended" } : row,
+        ),
+      );
       await loadPlatform();
-      setMessage(`Tenant suspended: ${tenant.name}`);
+      setMessage(`Tenant deactivated: ${tenant.name}`);
     } catch (err: any) {
-      setMessage(err.message || "Could not suspend tenant.");
+      setMessage(err.message || "Could not deactivate tenant.");
     } finally {
       setBusy(false);
     }

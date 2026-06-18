@@ -77,6 +77,15 @@ export function claimedDetail(amount: any, base: any, verb = "claimed") {
   return `${money(amount)} of ${money(base)} (${percentLabel(amount, base)} ${verb})`;
 }
 
+export function invoiceTaxAdjustedDiscount(invoice: any, amount: any) {
+  const discount = numberValue(amount);
+  if (discount <= 0) return 0;
+  const taxable = numberValue(invoice?.taxable_amount);
+  const tax = numberValue(invoice?.tax_amount);
+  if (taxable <= 0 || tax <= 0) return discount;
+  return discount + Math.round(discount * (tax / taxable));
+}
+
 export function invoiceDateKey(invoice: any) {
   const raw =
     invoice.invoice_date ||

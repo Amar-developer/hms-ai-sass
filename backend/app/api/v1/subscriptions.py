@@ -469,6 +469,7 @@ def get_entitlements(
         starts_on=subscription.starts_on,
         ends_on=subscription.ends_on,
         monthly_patient_limit=plan.monthly_patient_limit,
+        included_branches=plan.included_branches,
         additional_patient_credits=credits,
         effective_patient_limit=limit,
         current_patient_count=patient_count,

@@ -683,14 +683,14 @@ def delete_tenant(
         AuditEvent(
             tenant_id=tenant.id,
             actor_user_id=current_user.id,
-            action="tenant.deleted",
+            action="tenant.deactivated",
             resource_type="tenant",
             resource_id=tenant.id,
             purpose="platform_management_soft_delete",
         )
     )
     session.commit()
-    return {"deleted": True, "mode": "suspended", "tenant_id": tenant.id}
+    return {"deleted": False, "deactivated": True, "mode": "deactivated", "tenant_id": tenant.id}
 
 @router.post(
     "/{tenant_id}/branches",
@@ -970,11 +970,33 @@ def create_department(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Branch is not part of this tenant")
 
     existing_departments = session.exec(select(Department).where(Department.tenant_id == tenant_id)).all()
+    normalized_name = _normal_key(payload.name)
+    conflicting_scope = next(
+        (
+            department
+            for department in existing_departments
+            if _normal_key(department.name) == normalized_name
+            and department.branch_id != payload.branch_id
+            and (department.branch_id is None or payload.branch_id is None)
+            and department.is_active
+        ),
+        None,
+    )
+    if conflicting_scope:
+        if payload.branch_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This department already exists for all branches. Edit that department or choose a different name before creating a branch-specific mapping.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This department already exists for one or more branches. Remove those branch-specific mappings before creating an all-branches department.",
+        )
     existing = next(
         (
             department
             for department in existing_departments
-            if department.branch_id == payload.branch_id and _normal_key(department.name) == _normal_key(payload.name)
+            if department.branch_id == payload.branch_id and _normal_key(department.name) == normalized_name
         ),
         None,
     )

@@ -1,25 +1,20 @@
-import { humanizeOptionLabel,publicDisplayValue } from "@/lib/options";
-import { userTypes } from "@/utils/tenantAdmin/constants";
+import { publicDisplayValue } from "@/lib/options";
 import { userRoleLabels,formatDate,isLocked,roleKeyLabel,scopeLabel } from "@/utils/tenantAdmin/helpers";
 import { ClickableRow,RoleList,RowActions } from "./Shared";
 import { Badge } from "../common/ui";
 
 export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
   const branch = branches.find((row: any) => row.id === user.branch_id);
-  const typeLabel =
-    userTypes.find(([value]) => value === user.user_type)?.[1] ||
-    humanizeOptionLabel(user.user_type, "Staff");
   const roleLabels = userRoleLabels(user);
   return (
     <ClickableRow
       onClick={onEdit}
-      className="md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
+      className="md:grid-cols-[1fr_1.15fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
     >
       <div>
         <b className="text-xs lg:text-sm">{user.name}</b>
       </div>
       <span className="break-all text-xs lg:text-sm">{user.email}</span>
-      <span className="text-xs lg:text-sm">{typeLabel}</span>
       <RoleList labels={roleLabels} />
       <span className="text-xs lg:text-sm">{branch?.name || "All branches"}</span>
       <Badge tone={user.is_active ? "green" : "red"} className="rounded-full text-xs lg:text-sm py-1 px-1">

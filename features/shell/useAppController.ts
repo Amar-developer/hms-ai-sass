@@ -406,15 +406,14 @@ export function useAppController() {
     const workspace = readWorkspace(session);
     setApiSession(session);
     const nextRole = body.user.roles?.[0] || (body.user.is_super_admin ? 'super_admin' : 'tenant_admin');
-    const nextActive =
-      workspace.active ||
-      (nextRole === 'super_admin' ? 'superadmin' : 'dashboard');
+    const nextActive = nextRole === 'super_admin' ? 'superadmin' : 'dashboard';
     activeRef.current = nextActive;
     liveBranchIdRef.current = workspace.branchId || '';
     departmentIdRef.current =
       workspace.departmentId || defaultDepartment.id;
     setRole(nextRole);
     setActive(nextActive);
+    saveWorkspace(session, {active: nextActive});
     setLiveBranchId(liveBranchIdRef.current);
     setDepartmentId(departmentIdRef.current);
     setAuthenticated(true);

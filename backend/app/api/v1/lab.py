@@ -172,8 +172,7 @@ def _get_order_or_404(session: Session, tenant_id: str, order_id: str) -> LabOrd
 
 
 def _external_lab_items_enabled(session: Session, tenant_id: str) -> bool:
-    settings = get_settings()
-    value, scope, _scope_id = resolve_setting(
+    value, _scope, _scope_id = resolve_setting(
         session,
         tenant_id=tenant_id,
         module="integrations",
@@ -181,10 +180,10 @@ def _external_lab_items_enabled(session: Session, tenant_id: str) -> bool:
     )
     lab_items = value.get("lab_items") if isinstance(value, dict) else {}
     if isinstance(lab_items, dict) and "enabled" in lab_items:
-        if scope is None and settings.maha_clinic_url and settings.maha_clinic_token:
-            return lab_items.get("provider") != "local" or not lab_items.get("enabled")
+        # Tenant catalog controls are authoritative. Disabled plugins and the
+        # local provider must use MedizinHub's local lab catalog everywhere.
         return bool(lab_items.get("enabled")) and lab_items.get("provider") != "local"
-    return bool(settings.external_lab_items_enabled)
+    return bool(get_settings().external_lab_items_enabled)
 
 
 def _frappe_catalog_client() -> FrappeCatalogClient:
@@ -600,7 +599,10 @@ def _package_read(session: Session, package: LabTestPackage) -> LabTestPackageRe
         code=package.code,
         name=package.name,
         description=package.description,
+        mrp_price=package.mrp_price,
         package_price=package.package_price,
+        supplier_id=package.supplier_id,
+        purchase_price=package.purchase_price,
         test_ids=[item.test_id for item in item_rows],
         is_active=package.is_active,
         created_by_user_id=package.created_by_user_id,

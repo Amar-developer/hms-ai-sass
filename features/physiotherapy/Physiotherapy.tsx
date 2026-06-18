@@ -44,7 +44,16 @@ export function Physiotherapy({
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
-  const selected = cases.find((row) => row.id === selectedId) || cases[0];
+  const departmentCases = cases.filter(
+    (row: any) =>
+      !departmentId ||
+      row.department_id === departmentId ||
+      row.departmentId === departmentId,
+  );
+  const selected =
+    departmentCases.find((row) => row.id === selectedId) ||
+    departmentCases[0] ||
+    cases[0];
   const physiotherapists = useMemo(
     () =>
       practitioners.filter(
@@ -58,7 +67,11 @@ export function Physiotherapy({
     branchId,
   );
   const opAppointments = appointments.filter(
-    (row: any) => row.patientId || row.patient_id,
+    (row: any) =>
+      (row.patientId || row.patient_id) &&
+      (!departmentId ||
+        row.departmentId === departmentId ||
+        row.department_id === departmentId),
   );
 
   useEffect(() => {
@@ -349,7 +362,7 @@ export function Physiotherapy({
               <h4 className="card-title font-bold">Physiotherapy Cases</h4>
               <div className="flex items-center gap-2">
                 <RefreshButton onRefresh={loadPhysio} />
-                <Badge tone="blue" className="normal-badge">{cases.length} active</Badge>
+                <Badge tone="blue" className="normal-badge">{departmentCases.length} active</Badge>
               </div>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -375,12 +388,12 @@ export function Physiotherapy({
               </button>
             </div>
             <div className="mt-4 grid gap-3">
-              {cases.length === 0 && (
+              {departmentCases.length === 0 && (
                 <p className="rounded-lg bg-slate-50 p-4 table-data text-slate-500">
                   No physiotherapy cases yet.
                 </p>
               )}
-              {cases.map((row: any) => {
+              {departmentCases.map((row: any) => {
                 const patient = patientMap.get(row.patient_id);
                 const active = selected?.id === row.id;
                 return (
@@ -731,8 +744,6 @@ export function Physiotherapy({
     </div>
   );
 }
-
-
 
 
 

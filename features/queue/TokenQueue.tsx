@@ -119,6 +119,12 @@ export function TokenQueue({
             appointment.practitioner_id === doctorScope.practitionerId
           );
         }
+        if (
+          departmentId &&
+          appointment.departmentId !== departmentId &&
+          appointment.department_id !== departmentId
+        )
+          return false;
         return true;
       }),
     ),

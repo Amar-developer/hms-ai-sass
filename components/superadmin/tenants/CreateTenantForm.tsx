@@ -70,8 +70,8 @@ function OnboardingReview({ draft, validSteps, steps, onEdit }: any) {
               <Badge tone={validSteps[index] ? "green" : "red"} className="normal-badge">
                 {validSteps[index] ? "Complete" : "Missing"}
               </Badge>
-            </div>
-            <button
+              </div>
+              <button
               type="button"
               onClick={() => onEdit(index)}
               className="mt-3 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[10px] lg:text-xs bg-white border font-bold"
@@ -233,8 +233,8 @@ function TemplateChecklist({
   empty,
 }: any) {
   return (
-    <div className="rounded-lg border border-slate-200 p-4">
-      <h4 className="font-bold">{title}</h4>
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+      <h4 className="text-sm font-black text-slate-950">{title}</h4>
       <div className="mt-3 grid gap-2">
         {items.length === 0 && (
           <p className="text-xs lg:text-sm text-slate-500">{empty}</p>
@@ -242,7 +242,7 @@ function TemplateChecklist({
         {items.map((item: any) => (
           <label
             key={item.id}
-            className="flex items-start gap-2 rounded-lg bg-slate-50 p-3 text-sm"
+            className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"
           >
             <input
               type="checkbox"
@@ -257,7 +257,7 @@ function TemplateChecklist({
                 {item.key || item.code}
               </span>
               {item.is_global_template && (
-                <span className="mt-1 inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">
+                <span className="mt-1 inline-block rounded-md bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">
                   Global
                 </span>
               )}
@@ -403,41 +403,49 @@ export function CreateTenantForm({
   const CurrentStepIcon = currentStep.icon;
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-slate-50/60 p-0">
-      <div className="border-b border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 px-5 py-6 text-white lg:px-7">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl">
-            <Badge
-              tone="blue"
-              className="mb-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-blue-100"
-            >
-              Super Admin Workspace
-            </Badge>
-            <h3 className="text-xl font-bold lg:text-2xl">
+    <Card className="overflow-hidden border-slate-200 bg-white p-0 shadow-sm">
+      <div className="border-b border-slate-200 bg-white px-5 py-4 lg:px-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="blue" className="rounded-md px-2 py-1 text-[10px] uppercase">
+                Tenant Setup
+              </Badge>
+              <span className="text-xs font-semibold text-slate-500">
+                Billing workspace provisioning
+              </span>
+            </div>
+            <h3 className="mt-2 text-lg font-black text-slate-950 lg:text-xl">
               New Tenant Onboarding
             </h3>
-            <p className="mt-2 text-xs leading-5 text-slate-300 lg:text-sm">
-              Complete each section in order. The final action provisions the
-              tenant, branches, subscription, templates, and first admin
-              account as one guided workflow.
+            <p className="mt-1 text-xs text-slate-500 lg:text-sm">
+              Configure plan, branches, templates, and the first billing admin account.
             </p>
           </div>
-          <div className="min-w-52 rounded-2xl border border-white/10 bg-white/5 p-4">
-            <div className="flex items-center justify-between text-xs text-slate-300">
-              <span>Setup progress</span>
-              <b className="text-white">{completedCount}/5 complete</b>
+          <div className="grid gap-2 sm:grid-cols-3 xl:min-w-[520px]">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase text-slate-500">Progress</p>
+              <p className="mt-1 text-sm font-black text-slate-950">{completedCount}/5 complete</p>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-blue-400 transition-all duration-300"
-                style={{ width: `${(completedCount / 5) * 100}%` }}
-              />
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase text-slate-500">Branches</p>
+              <p className="mt-1 text-sm font-black text-slate-950">{branches.length} configured</p>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[10px] font-bold uppercase text-slate-500">Plan</p>
+              <p className="mt-1 truncate text-sm font-black text-slate-950">{draft.planName || "Pending"}</p>
             </div>
           </div>
         </div>
+        <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-100">
+          <div
+            className="h-full rounded-full bg-blue-600 transition-all duration-300"
+            style={{ width: `${(completedCount / 5) * 100}%` }}
+          />
+        </div>
       </div>
-      <div className="grid lg:grid-cols-[250px_minmax(0,1fr)]">
-        <aside className="border-b border-slate-200 bg-white p-4 lg:border-b-0 lg:border-r lg:p-5">
+      <div className="grid lg:grid-cols-[245px_minmax(0,1fr)]">
+        <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:border-b-0 lg:border-r lg:p-4">
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-1">
           {steps.map(({ label, shortLabel, icon: StepIcon }, index) => {
             const stepValid =
@@ -453,14 +461,14 @@ export function CreateTenantForm({
                 type="button"
                 onClick={() => goToStep(index)}
                 disabled={locked}
-                className={`group flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition disabled:cursor-not-allowed ${
+                className={`group flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition disabled:cursor-not-allowed ${
                   step === index
-                    ? "border-blue-200 bg-blue-50 text-blue-950 shadow-sm"
+                    ? "border-blue-300 bg-white text-blue-950 shadow-sm"
                     : complete
-                      ? "border-emerald-100 bg-emerald-50/70 text-emerald-900 hover:border-emerald-200"
+                      ? "border-emerald-200 bg-white text-emerald-900 hover:border-emerald-300"
                       : locked
-                        ? "border-transparent bg-slate-50 text-slate-400"
-                        : "border-transparent bg-white text-slate-700 hover:border-slate-200 hover:bg-slate-50"
+                        ? "border-transparent bg-slate-100 text-slate-400"
+                        : "border-transparent bg-slate-50 text-slate-700 hover:border-slate-200 hover:bg-white"
                 }`}
               >
                 <span
@@ -469,7 +477,7 @@ export function CreateTenantForm({
                       ? "bg-blue-600 text-white"
                       : complete
                         ? "bg-emerald-600 text-white"
-                        : "bg-slate-100 text-slate-500"
+                        : "bg-white text-slate-500"
                   }`}
                 >
                   {locked ? (
@@ -498,11 +506,10 @@ export function CreateTenantForm({
             );
           })}
           </div>
-          <div className="mt-5 hidden rounded-2xl bg-slate-950 p-4 text-white lg:block">
-            <p className="text-xs font-bold">Provisioning rule</p>
-            <p className="mt-2 text-xs leading-5 text-slate-300">
-              Tenant access is based on the selected plan. The first admin is
-              created with tenant-wide administration access.
+          <div className="mt-4 hidden rounded-lg border border-slate-200 bg-white p-3 lg:block">
+            <p className="text-xs font-bold text-slate-950">Provisioning rule</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">
+              Tenant access follows the selected billing plan. The first admin receives tenant-wide access.
             </p>
           </div>
         </aside>
@@ -515,16 +522,16 @@ export function CreateTenantForm({
         className="min-w-0 bg-white"
       >
         <input type="hidden" name="branchCount" value={branches.length} />
-        <div className="border-b border-slate-100 px-5 py-5 lg:px-7">
+        <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4 lg:px-6">
           <div className="flex items-start gap-3">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-700">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-blue-100 bg-white text-blue-700">
               <CurrentStepIcon size={20} />
             </span>
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-blue-600">
                 Step {step + 1} of {steps.length}
               </p>
-              <h4 className="mt-1 text-lg font-bold text-slate-950">
+              <h4 className="mt-1 text-lg font-black text-slate-950">
                 {currentStep.label}
               </h4>
               <p className="mt-1 text-xs text-slate-500 lg:text-sm">
@@ -538,7 +545,7 @@ export function CreateTenantForm({
             </div>
           </div>
         </div>
-        <div className="min-h-[430px] px-5 py-6 lg:px-7">
+        <div className="min-h-[430px] px-5 py-5 lg:px-6">
         <div className={step === 0 ? "grid gap-4 md:grid-cols-3" : "hidden"}>
           <Field label="Tenant Name">
             <Input
@@ -662,19 +669,19 @@ export function CreateTenantForm({
                   ]);
                   setTimeout(refreshDraft, 0);
                 }}
-                className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50"
               >
-                Add More Branch
+                Add Branch
               </button>
             </div>
             <div className="mt-3 grid gap-3">
               {branches.map((branch: any, index: number) => (
                 <div
                   key={branch.id}
-                  className="rounded-2xl border border-slate-200 p-4"
+                  className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div className="mb-3 flex items-center justify-between gap-3">
-                    <b>Branch {index + 1}</b>
+                    <b className="text-sm font-black text-slate-950">Branch {index + 1}</b>
                     {branches.length > 1 && (
                       <button
                         type="button"
@@ -686,7 +693,7 @@ export function CreateTenantForm({
                           );
                           setTimeout(refreshDraft, 0);
                         }}
-                        className="rounded-xl border px-3 py-2 text-xs font-bold text-red-600"
+                        className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-600"
                       >
                         Cancel Branch
                       </button>
@@ -823,7 +830,7 @@ export function CreateTenantForm({
               <option value="false">No</option>
             </Select>
           </Field>
-          <div className="rounded-lg bg-slate-50 p-4 text-xs lg:text-sm text-slate-600 md:col-span-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-xs lg:text-sm text-slate-600 md:col-span-3">
             The wizard copies the Tenant Admin role template automatically and
             creates the first tenant admin user.
           </div>
@@ -835,7 +842,7 @@ export function CreateTenantForm({
             steps={steps.map((item) => item.label)}
             onEdit={setStep}
           />
-          <div className="rounded-lg  bg-blue-50 p-4 text-xs lg:text-sm font-semibold text-blue-700">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-xs lg:text-sm font-semibold text-blue-700">
             Submitting this wizard creates the tenant, assigns the selected
             catalog plan, copies selected defaults, creates the tenant admin
             user, and returns to the Tenants listing with the latest tenant
@@ -843,13 +850,13 @@ export function CreateTenantForm({
           </div>
         </div>
         </div>
-        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur lg:px-7">
+        <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur lg:px-6">
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setStep(Math.max(0, step - 1))}
               disabled={step === 0}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-300"
             >
               <ChevronLeft size={15} />
               Previous
@@ -858,7 +865,7 @@ export function CreateTenantForm({
               type="button"
               onClick={nextStep}
               disabled={step === steps.length - 1 || !currentStepValid}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
+              className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400"
             >
               Save & Continue
               <ChevronRight size={15} />
@@ -866,7 +873,7 @@ export function CreateTenantForm({
           </div>
           <Button
             disabled={!canComplete}
-            className="rounded-xl px-5 py-2.5 text-xs lg:text-sm"
+            className="rounded-lg px-5 py-2.5 text-xs lg:text-sm"
           >
             {busy ? "Onboarding..." : "Complete Onboarding"}
           </Button>

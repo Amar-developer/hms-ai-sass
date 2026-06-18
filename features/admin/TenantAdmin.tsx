@@ -56,6 +56,8 @@ export function TenantAdmin({
   const [settings, setSettings] = useState<any[]>([]);
   const [files, setFiles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
+  const [subscriptionEntitlements, setSubscriptionEntitlements] =
+    useState<any>(null);
   const [selectedId, setSelectedId] = useState("");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -162,6 +164,7 @@ export function TenantAdmin({
         permissionRows,
         reportConfig,
         reportJobRows,
+        entitlements,
       ] = await Promise.all([
         safeFetch("/identity/roles", canRoles),
         safeFetch("/identity/users", canUsers),
@@ -184,6 +187,7 @@ export function TenantAdmin({
               () => [],
             )
           : Promise.resolve([]),
+        safeFetch("/subscription-plans/entitlements", canBranches),
       ]);
       if (requestSequence !== loadSequence.current) return;
       setRoles(roleRows);
@@ -196,6 +200,9 @@ export function TenantAdmin({
       setSettings(settingRows);
       setFiles(fileRows);
       setPermissions(permissionRows);
+      setSubscriptionEntitlements(
+        entitlements && !Array.isArray(entitlements) ? entitlements : null,
+      );
       const find = (key: string) => settingRows.find((x: any) => x.key === key);
       if (find("invoice.prefix"))
         setInvoicePrefix(find("invoice.prefix").value);
@@ -304,6 +311,32 @@ export function TenantAdmin({
     e.preventDefault();
     const form = e.currentTarget;
     const fd = new FormData(form);
+    const name = String(fd.get("name") || "").trim();
+    const branchId = String(fd.get("branchId") || "");
+    const normalKey = (value: any) =>
+      String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
+    const matchingDepartments = departments.filter(
+      (row: any) =>
+        row.is_active !== false && normalKey(row.name) === normalKey(name),
+    );
+    const conflict = matchingDepartments.find(
+      (row: any) =>
+        String(row.branch_id || "") === branchId ||
+        !row.branch_id ||
+        !branchId,
+    );
+    if (conflict) {
+      setMessage(
+        branchId
+          ? "This medical department already exists for all branches or this branch. Edit the existing row instead."
+          : "This medical department already exists in one or more branches. Remove branch-specific mappings before creating an all-branches department.",
+      );
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -486,9 +519,9 @@ export function TenantAdmin({
         {
           method: "POST",
           body: JSON.stringify({
-            name: fd.get("name"),
+            name,
             description: fd.get("description") || null,
-            branch_id: fd.get("branchId") || null,
+            branch_id: branchId || null,
           }),
         },
       );
@@ -1188,7 +1221,6 @@ export function TenantAdmin({
           columns={[
             "Name",
             "Email",
-            "Type",
             "Roles",
             "Branch",
             "Status",
@@ -1333,6 +1365,7 @@ export function TenantAdmin({
       {section === "departments" && view === "create" && (
         <DepartmentForm
           title="Create Medical Department"
+          departments={departments}
           branches={branches}
           busy={busy}
           onSubmit={createDepartment}
@@ -1343,6 +1376,7 @@ export function TenantAdmin({
         <DepartmentForm
           title="Edit Medical Department"
           department={selectedDepartment}
+          departments={departments}
           branches={branches}
           busy={busy}
           onSubmit={updateDepartment}
@@ -1380,7 +1414,8 @@ export function TenantAdmin({
       {section === "branches" && view === "create" && (
         <BranchForm
           title="Create Branch"
-          branchCount={branches.length}
+          branchCount={branches.filter((branch: any) => branch.is_active !== false).length}
+          branchLimit={subscriptionEntitlements?.included_branches}
           busy={busy}
           onSubmit={createBranch}
           back={() => open("branches")}

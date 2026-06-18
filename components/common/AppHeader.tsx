@@ -1,9 +1,9 @@
 import React from "react";
-import { BrandBlock } from "./BrandBlock";
 import CompactControl from "./CompactControl";
 import { Bell, LogOut, KeyRound } from "lucide-react";
 import ProfileRow from "../ProfileRow";
 import { userInitials } from "@/utils/helper";
+import { GlobalSearch } from "./GlobalSearch";
 
 interface AppHeaderProps {
   isSuperAdmin: boolean;
@@ -15,20 +15,13 @@ interface AppHeaderProps {
   setBranchId: any;
   clinic: any;
 
-  departmentId: string;
-  setDepartmentId: any;
-  departmentOptions: any[];
-
   canChangeBranch: boolean;
-  canChangeDepartment: boolean;
 
   branchName: string;
   departmentName: string;
   displayClinicName: string;
 
-  activePage: string;
-  visibleNav: any[];
-  navigatePage: any;
+  searchItems: any[];
 
   profileOpen: boolean;
   setProfileOpen: any;
@@ -48,17 +41,11 @@ const AppHeader = ({
   branchId,
   setBranchId,
   clinic,
-  departmentId,
-  setDepartmentId,
-  departmentOptions,
   canChangeBranch,
-  canChangeDepartment,
   branchName,
   departmentName,
   displayClinicName,
-  activePage,
-  visibleNav,
-  navigatePage,
+  searchItems,
   profileOpen,
   setProfileOpen,
   profileOpenRef,
@@ -68,8 +55,8 @@ const AppHeader = ({
   setReportsOpen,
 }: AppHeaderProps) => {
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur lg:px-5">
-      <div className="grid min-w-0 gap-2 grid-cols-[minmax(200px,1.25fr)_minmax(150px,.9fr)_minmax(150px,.9fr)_auto] lg:grid-cols-[minmax(260px,1.25fr)_minmax(180px,.9fr)_minmax(180px,.9fr)_auto] lg:items-center">
+    <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
+      <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(200px,1.15fr)_minmax(150px,.8fr)_minmax(220px,1fr)_auto] lg:grid-cols-[minmax(260px,1.15fr)_minmax(180px,.8fr)_minmax(280px,1fr)_auto] lg:items-center">
         <div className="min-w-0">
           {/* {!isSuperAdmin && (
             <div className="lg:hidden">
@@ -91,7 +78,7 @@ const AppHeader = ({
               </select>
             </CompactControl>
           ) : (
-            <div className="grid h-12 content-center">
+            <div className="grid h-11 content-center">
               <span className="text-[10px] font-bold uppercase leading-none text-slate-500">
                 Tenant
               </span>
@@ -102,7 +89,7 @@ const AppHeader = ({
           )}
         </div>
 
-        <CompactControl label="Branch">
+        <CompactControl label="Branch" hideLabel>
           {canChangeBranch ? (
             <select
               value={branchId}
@@ -120,28 +107,12 @@ const AppHeader = ({
           )}
         </CompactControl>
 
-        <CompactControl label="Medical Department">
-          {canChangeDepartment ? (
-            <select
-              value={departmentId}
-              onChange={(e: any) => setDepartmentId(e.target.value)}
-              className="w-full bg-transparent text-xs lg:text-sm font-semibold outline-none"
-            >
-              {departmentOptions.map((d: any) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="truncate">{departmentName}</span>
-          )}
-        </CompactControl>
+        <GlobalSearch items={searchItems} />
 
-        <div className="flex shrink-0 items-start lg:items-center mt-2 lg:mt-0  lg:mt-0   gap-2">
+        <div className="flex shrink-0 items-start lg:items-center mt-2 lg:mt-0  gap-2">
           <button
             type="button"
-            className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-slate-500"
+            className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 text-slate-500"
             title="Notifications"
           >
             <Bell size={18} />
@@ -150,7 +121,7 @@ const AppHeader = ({
             <button
               type="button"
               onClick={() => setProfileOpen(!profileOpen)}
-              className="grid h-10 w-10 place-items-center rounded-xl bg-slate-900 text-sm font-black text-white"
+              className="grid h-10 w-10 place-items-center rounded-full bg-slate-900 text-sm font-black text-white"
               title="Profile"
             >
               {userInitials(apiSession?.user, apiSession?.email)}

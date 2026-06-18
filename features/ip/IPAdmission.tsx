@@ -163,31 +163,42 @@ export function IPAdmission({
   );
   const opCandidates = appointments.filter(
     (a: any) =>
-      [
-        "consultation_completed",
-        "checked_in",
-        "waiting",
-        "called",
-        "in_consultation",
-      ].includes(a.status) || a.consultationStatus === "signed",
+      (!departmentId ||
+        a.departmentId === departmentId ||
+        a.department_id === departmentId) &&
+      ([
+          "consultation_completed",
+          "checked_in",
+          "waiting",
+          "called",
+          "in_consultation",
+        ].includes(a.status) ||
+        a.consultationStatus === "signed"),
+  );
+  const departmentAdmissions = ipAdmissions.filter(
+    (row: any) =>
+      !departmentId ||
+      row.department_id === departmentId ||
+      row.departmentId === departmentId,
   );
   const pageSize = 10;
-  const activeAdmissions = ipAdmissions.filter(
+  const activeAdmissions = departmentAdmissions.filter(
     (row: any) => !isClosedAdmission(row),
   );
-  const completedAdmissions = ipAdmissions.filter((row: any) =>
+  const completedAdmissions = departmentAdmissions.filter((row: any) =>
     isClosedAdmission(row),
   );
   const visibleAdmissions =
     admissionFilter === "completed"
       ? completedAdmissions
       : admissionFilter === "all"
-        ? ipAdmissions
+        ? departmentAdmissions
         : activeAdmissions;
   const selectedAdmission =
-    ipAdmissions.find((row: any) => row.id === selectedId) ||
+    departmentAdmissions.find((row: any) => row.id === selectedId) ||
     visibleAdmissions[0] ||
     activeAdmissions[0] ||
+    departmentAdmissions[0] ||
     ipAdmissions[0];
   const selectedRoom = ipRooms.find(
     (room: any) => room.id === selectedAdmission?.room_id,

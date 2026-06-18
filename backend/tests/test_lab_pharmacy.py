@@ -2,7 +2,60 @@ from datetime import date
 
 from sqlmodel import Session, select
 
+from app.modules.settings.models import SettingKey, SettingScope
+from app.modules.settings.service import upsert_setting
 from app.modules.lab.models import LabOrder, LabOrderItem, LabOrderSource
+
+
+def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
+    from app.api.v1.lab import _package_read
+    from app.modules.lab.models import LabTestPackage
+
+    with Session(test_engine) as session:
+        package = LabTestPackage(
+            tenant_id="tenant_pkg_price",
+            code="BP",
+            name="BP Test",
+            mrp_price=120,
+            package_price=80,
+            purchase_price=10,
+        )
+        session.add(package)
+        session.commit()
+        session.refresh(package)
+
+        read = _package_read(session, package)
+
+    assert read.mrp_price == 120
+    assert read.package_price == 80
+    assert read.purchase_price == 10
+
+
+def test_local_lab_catalog_setting_disables_external_lookup(test_engine, monkeypatch):
+    from app.api.v1 import lab as lab_api
+
+    monkeypatch.setattr(lab_api.get_settings(), "maha_clinic_url", "https://erpnext.example.test")
+    monkeypatch.setattr(lab_api.get_settings(), "maha_clinic_token", "token")
+    monkeypatch.setattr(lab_api.get_settings(), "external_lab_items_enabled", True)
+
+    with Session(test_engine) as session:
+        assert lab_api._external_lab_items_enabled(session, "tenant_local_catalog") is False
+
+        upsert_setting(
+            session,
+            tenant_id="tenant_local_catalog",
+            scope=SettingScope.TENANT,
+            scope_id="tenant_local_catalog",
+            module="integrations",
+            key=SettingKey.CATALOG_INTEGRATIONS,
+            value={
+                "lab_items": {"enabled": False, "provider": "local"},
+                "medicine_items": {"enabled": False, "provider": "local"},
+            },
+        )
+        session.commit()
+
+        assert lab_api._external_lab_items_enabled(session, "tenant_local_catalog") is False
 
 
 def setup_lab_pharmacy_tenant(client):

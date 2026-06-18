@@ -275,11 +275,48 @@ export function UserForm({
 export function DepartmentForm({
   title,
   department,
+  departments = [],
   branches,
   busy,
   onSubmit,
   back,
 }: any) {
+  const [departmentName, setDepartmentName] = useState(department?.name || "");
+  const [selectedBranchId, setSelectedBranchId] = useState(
+    department?.branch_id || "",
+  );
+  const normalKey = (value: any) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+  const matchingDepartments = departments.filter(
+    (row: any) =>
+      row.id !== department?.id &&
+      row.is_active !== false &&
+      normalKey(row.name) === normalKey(departmentName),
+  );
+  const hasAllBranchDuplicate = matchingDepartments.some(
+    (row: any) => !row.branch_id,
+  );
+  const hasBranchDuplicate = matchingDepartments.some(
+    (row: any) => row.branch_id,
+  );
+  const hasSameBranchDuplicate = matchingDepartments.some(
+    (row: any) => String(row.branch_id || "") === String(selectedBranchId || ""),
+  );
+  const scopeConflict =
+    Boolean(normalKey(departmentName)) &&
+    (hasSameBranchDuplicate ||
+      (selectedBranchId && hasAllBranchDuplicate) ||
+      (!selectedBranchId && hasBranchDuplicate));
+  const conflictMessage = hasSameBranchDuplicate
+    ? "This medical department already exists for the selected branch."
+    : selectedBranchId && hasAllBranchDuplicate
+      ? "This medical department already exists for all branches. Edit that row instead of creating a branch-specific duplicate."
+      : "This medical department already exists in one or more branches. Remove those branch mappings before creating an all-branches department.";
+
   return (
     <Card>
       <Header
@@ -299,6 +336,7 @@ export function DepartmentForm({
           <SuggestionInput
             name="name"
             defaultValue={department?.name || ""}
+            onChange={(event: any) => setDepartmentName(event.target.value)}
             placeholder="General Medicine"
             suggestions={basicMedicalDepartmentSuggestions}
             required
@@ -308,7 +346,8 @@ export function DepartmentForm({
         <FormField label="Branch">
           <Select
             name="branchId"
-            defaultValue={department?.branch_id || ""}
+            value={selectedBranchId}
+            onChange={(event: any) => setSelectedBranchId(event.target.value)}
             disabled={isLocked(department)}
           >
             <option value="">All branches</option>
@@ -319,6 +358,11 @@ export function DepartmentForm({
             ))}
           </Select>
         </FormField>
+        {scopeConflict && (
+          <div className="md:col-span-2 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
+            {conflictMessage}
+          </div>
+        )}
         {department && (
           <FormField label="Status">
             <Select
@@ -344,7 +388,7 @@ export function DepartmentForm({
         <Actions
           busy={busy}
           back={back}
-          disabled={isLocked(department)}
+          disabled={isLocked(department) || scopeConflict}
           label={
             department ? "Save Medical Department" : "Create Medical Department"
           }
@@ -358,10 +402,14 @@ export function BranchForm({
   title,
   branch,
   branchCount,
+  branchLimit,
   busy,
   onSubmit,
   back,
 }: any) {
+  const activeBranchCount = Number(branchCount || 0);
+  const planLimitReached =
+    !branch && Number.isFinite(Number(branchLimit)) && activeBranchCount >= Number(branchLimit);
   return (
     <Card>
       <Header
@@ -373,11 +421,11 @@ export function BranchForm({
         }
         back={back}
       />
-      {!branch && branchCount >= 1 && (
+      {planLimitReached && (
         <div className="mb-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
-          Single-clinic plans usually allow one branch. If this tenant is on a
-          single-branch plan, the API will ask for a subscription upgrade before
-          creating another branch.
+          Current plan allows {branchLimit} active branch
+          {Number(branchLimit) === 1 ? "" : "es"}. Upgrade the subscription to
+          create another branch.
         </div>
       )}
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
@@ -448,7 +496,7 @@ export function BranchForm({
         <Actions
           busy={busy}
           back={back}
-          disabled={isLocked(branch)}
+          disabled={isLocked(branch) || planLimitReached}
           label={branch ? "Save Branch" : "Create Branch"}
         />
       </form>

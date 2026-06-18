@@ -11,8 +11,7 @@ import {
   RefreshButton,
   Select,
 } from "@/components/common/ui";
-import { formatDate, formatTitle } from "../../../utils/superAdmin/superAdmin";
-import { userTypes } from "../../../utils/superAdmin/constants";
+import { formatDate } from "../../../utils/superAdmin/superAdmin";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/components/admin/Empty";
 import { Pagination } from "@/components/admin/Pagination";
@@ -176,9 +175,9 @@ export function TenantUsers({
           />
         </Field>
       </div>
-      <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200">
-        <div className="min-w-[1420px]">
-          <div className="hidden md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+        <div className="min-w-[1320px]">
+          <div className="hidden md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
             <SortButton
               label="User"
               field="name"
@@ -188,12 +187,6 @@ export function TenantUsers({
             <SortButton
               label="Email"
               field="email"
-              sort={sort}
-              onSort={changeSort}
-            />
-            <SortButton
-              label="Type"
-              field="user_type"
               sort={sort}
               onSort={changeSort}
             />
@@ -222,11 +215,6 @@ export function TenantUsers({
           <div className="divide-y divide-slate-200">
             {rows.length === 0 && <Empty text="No users match your search." />}
             {rows.map((user: any) => {
-              const typeLabel =
-                userTypes.find(([value]) => value === user.user_type)?.[1] ||
-                formatTitle(
-                  String(user.user_type || "Staff").replaceAll("_", " "),
-                );
               const open = () => {
                 setSelectedUserId(user.id);
                 setSection("userEdit");
@@ -247,7 +235,7 @@ export function TenantUsers({
                       open();
                     }
                   }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_.72fr_1.15fr_.65fr_.70fr_.65fr_.65fr_1.45fr] md:items-center"
+                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.70fr_.65fr_.65fr_1.45fr] md:items-center"
                 >
                   <div>
                     <b className="text-xs lg:text-sm">{user.name}</b>
@@ -258,7 +246,6 @@ export function TenantUsers({
                   <span className="break-all text-xs lg:text-sm">
                     {user.email}
                   </span>
-                  <span className="text-xs lg:text-sm">{typeLabel}</span>
                   <UserRoleList user={user} />
                   <span className="text-xs lg:text-sm">
                     {user.mobile || "-"}

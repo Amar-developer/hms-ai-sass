@@ -45,10 +45,10 @@ function TemplateGroup({
   keyField,
 }: any) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <h5 className="font-bold text-slate-950">{title}</h5>
-        <Badge tone="blue" className="rounded-full px-2 py-1 text-[10px]">
+        <Badge tone="blue" className="rounded-md px-2 py-1 text-[10px]">
           {assignedIds.size} assigned
         </Badge>
       </div>
@@ -63,7 +63,7 @@ function TemplateGroup({
           return (
             <label
               key={template.id}
-              className={`flex items-start gap-3 rounded-xl border p-3 text-sm ${
+              className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
                 assigned
                   ? "border-emerald-200 bg-emerald-50/70"
                   : "border-slate-200 bg-slate-50"
@@ -227,52 +227,73 @@ export function EditTenant({
   }
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-slate-50/60 p-0">
-      <div className="border-b border-slate-200 bg-gradient-to-r from-slate-950 via-slate-900 to-blue-950 px-5 py-6 text-white lg:px-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <Card className="overflow-hidden border-slate-200 bg-white p-0 shadow-sm">
+      <div className="border-b border-slate-200 bg-white px-5 py-4 lg:px-6">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
+            <div className="flex flex-wrap items-center gap-2">
             <Badge
               tone="blue"
-              className="mb-3 inline-flex rounded-full bg-white/10 px-3 py-1 text-[10px] uppercase tracking-wider text-blue-100"
+              className="rounded-md px-2 py-1 text-[10px] uppercase"
             >
               Tenant Configuration
             </Badge>
-            <h3 className="text-xl font-bold lg:text-2xl">
+            <span className="text-xs font-semibold text-slate-500">
+              Billing workspace setup
+            </span>
+            </div>
+            <h3 className="mt-2 text-lg font-black text-slate-950 lg:text-xl">
               Edit {selected.name}
             </h3>
-            <p className="mt-1 text-xs text-slate-300 lg:text-sm">
-              Review and update the same six areas used during onboarding.
+            <p className="mt-1 text-xs text-slate-500 lg:text-sm">
+              Review plan, branches, templates, and tenant admin settings.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={back}
-            className="rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-xs font-bold text-white hover:bg-white/15"
-          >
-            Back to Tenants
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="grid min-w-[360px] gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase text-slate-500">Plan</p>
+                <p className="mt-1 truncate text-sm font-black text-slate-950">{selectedPlan?.name || "Not assigned"}</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase text-slate-500">Branches</p>
+                <p className="mt-1 text-sm font-black text-slate-950">{branchRows.length} configured</p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <p className="text-[10px] font-bold uppercase text-slate-500">Modules</p>
+                <p className="mt-1 text-sm font-black text-slate-950">{moduleNames.length} included</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={back}
+              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              Back to Tenants
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-[250px_minmax(0,1fr)]">
-        <aside className="border-b border-slate-200 bg-white p-4 lg:border-b-0 lg:border-r lg:p-5">
+      <div className="grid lg:grid-cols-[245px_minmax(0,1fr)]">
+        <aside className="border-b border-slate-200 bg-slate-50 p-3 lg:border-b-0 lg:border-r lg:p-4">
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-1">
             {sections.map(({ label, short, icon: Icon }, index) => (
               <button
                 key={label}
                 type="button"
                 onClick={() => setSection(index)}
-                className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-3 text-left transition ${
+                className={`flex min-w-0 items-center gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
                   section === index
-                    ? "border-blue-200 bg-blue-50 text-blue-950 shadow-sm"
-                    : "border-transparent bg-white text-slate-600 hover:border-slate-200 hover:bg-slate-50"
+                    ? "border-blue-300 bg-white text-blue-950 shadow-sm"
+                    : "border-transparent bg-slate-50 text-slate-600 hover:border-slate-200 hover:bg-white"
                 }`}
               >
                 <span
                   className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
                     section === index
                       ? "bg-blue-600 text-white"
-                      : "bg-slate-100 text-slate-500"
+                      : "bg-white text-slate-500"
                   }`}
                 >
                   <Icon size={16} />
@@ -320,23 +341,23 @@ export function EditTenant({
             value={tenantAdmin?.id || ""}
           />
 
-          <div className="border-b border-slate-100 px-5 py-5 lg:px-7">
+          <div className="border-b border-slate-200 bg-slate-50/70 px-5 py-4 lg:px-6">
             <div className="flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-700">
+              <span className="grid h-9 w-9 place-items-center rounded-lg border border-blue-100 bg-white text-blue-700">
                 <SectionIcon size={20} />
               </span>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
                   Section {section + 1} of 6
                 </p>
-                <h4 className="text-lg font-bold text-slate-950">
+                <h4 className="text-lg font-black text-slate-950">
                   {sections[section].label}
                 </h4>
               </div>
             </div>
           </div>
 
-          <div className="min-h-[470px] px-5 py-6 lg:px-7">
+          <div className="min-h-[470px] px-5 py-5 lg:px-6">
             <div
               className={
                 section === 0 ? "grid gap-4 md:grid-cols-3" : "hidden"
@@ -475,7 +496,7 @@ export function EditTenant({
                 <button
                   type="button"
                   onClick={addBranch}
-                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold"
+                  className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold hover:bg-slate-50"
                 >
                   Add Branch
                 </button>
@@ -493,7 +514,7 @@ export function EditTenant({
                   return (
                     <div
                       key={branch._key}
-                      className="rounded-2xl border border-slate-200 p-4"
+                      className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"
                     >
                       <input
                         type="hidden"
@@ -506,7 +527,7 @@ export function EditTenant({
                           {locked && (
                             <Badge
                               tone="purple"
-                              className="rounded-full px-2 py-1 text-[10px]"
+                              className="rounded-md px-2 py-1 text-[10px]"
                             >
                               Template
                             </Badge>
@@ -614,7 +635,7 @@ export function EditTenant({
                       value={limitLabel(selectedPlan.included_branches)}
                     />
                   </div>
-                  <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-center justify-between">
                       <h5 className="font-bold">Included Modules</h5>
                       <Badge
@@ -628,7 +649,7 @@ export function EditTenant({
                       {moduleNames.map((name: string) => (
                         <span
                           key={name}
-                          className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
+                          className="rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700"
                         >
                           {name}
                         </span>
@@ -731,13 +752,13 @@ export function EditTenant({
                       />
                     </Field>
                   </div>
-                  <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
+                  <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-xs text-blue-800">
                     Passwords cannot be displayed. Enter a new temporary
                     password only when a reset is required.
                   </div>
                 </>
               ) : (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-5">
                   <h5 className="font-bold text-amber-900">
                     No tenant admin found
                   </h5>
@@ -782,7 +803,7 @@ export function EditTenant({
                   value={tenantAdmin?.email || "Not created"}
                 />
               </div>
-              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
                 Saving applies changes from all six sections. Selecting a
                 different plan creates a new active subscription and refreshes
                 tenant entitlements.
@@ -790,13 +811,13 @@ export function EditTenant({
             </div>
           </div>
 
-          <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-4 backdrop-blur lg:px-7">
+          <div className="sticky bottom-0 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white/95 px-5 py-3 backdrop-blur lg:px-6">
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setSection((current) => Math.max(0, current - 1))}
                 disabled={section === 0}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-bold disabled:text-slate-300"
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2.5 text-xs font-bold disabled:text-slate-300"
               >
                 <ChevronLeft size={15} />
                 Previous
@@ -809,7 +830,7 @@ export function EditTenant({
                   )
                 }
                 disabled={section === sections.length - 1}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-xs font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                className="inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2.5 text-xs font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
               >
                 Next
                 <ChevronRight size={15} />
@@ -820,13 +841,13 @@ export function EditTenant({
                 type="button"
                 onClick={() => suspendTenant(selected)}
                 disabled={busy || selected.is_primary}
-                className="rounded-xl border border-red-200 px-4 py-2.5 text-xs font-bold text-red-600 disabled:text-slate-300"
+                className="rounded-lg border border-red-200 px-4 py-2.5 text-xs font-bold text-red-600 disabled:text-slate-300"
               >
                 Deactivate
               </button>
               <Button
                 disabled={busy}
-                className="rounded-xl px-5 py-2.5 text-xs lg:text-sm"
+                className="rounded-lg px-5 py-2.5 text-xs lg:text-sm"
               >
                 {busy ? "Saving..." : "Save All Changes"}
               </Button>

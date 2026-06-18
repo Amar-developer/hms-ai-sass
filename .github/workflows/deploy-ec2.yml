@@ -1,4 +1,4 @@
-name: Deploy to EC2
+name: Deploy to Production
 
 on:
   workflow_dispatch:
@@ -16,10 +16,13 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy
+    name: Deploy to Production
     runs-on: ubuntu-latest
     environment: production
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_branch == 'main')
 
     steps:
       - name: Deploy over SSH
@@ -33,7 +36,7 @@ jobs:
           script: |
             cd "${{ secrets.EC2_APP_DIR }}"
 
-            # Pull latest code
+            # Pull latest code from main
             git fetch origin
             git checkout main
             git pull --ff-only origin main
@@ -41,18 +44,18 @@ jobs:
             # Check disk before deploy
             docker system df
 
-            # Clean only dangling/stopped (keeps build cache for speed)
+            # Clean dangling images and stopped containers
             docker builder prune -af
             docker image prune -f
             docker container prune -f
 
-            # Build and deploy
-            docker compose build --pull
-            docker compose up -d --remove-orphans
+            # Build and deploy using production compose
+            docker compose -f docker-compose.yml build --pull
+            docker compose -f docker-compose.yml up -d --remove-orphans
 
             # Check disk after deploy
             docker system df
-            docker compose ps
+            docker compose -f docker-compose.yml ps
 
             # Wait for backend to start
             sleep 15

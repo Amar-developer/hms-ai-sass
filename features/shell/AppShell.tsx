@@ -30,6 +30,7 @@ import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSu
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/components/common/Sidebar";
 import AppHeader from "@/components/common/AppHeader";
+import { DepartmentFilterCard } from "@/components/common/DepartmentFilterCard";
 
 export function AppShell(props: any) {
   const {
@@ -153,6 +154,51 @@ export function AppShell(props: any) {
 
   const canGoBack = historyIndex > 0;
   const canGoForward = historyIndex < pageHistory.length - 1;
+  const searchItems = [
+    ...visibleNav.map(([id, label]: any) => ({
+      id: `module-${id}`,
+      label,
+      description: "Module",
+      keywords: `${label} page form list`,
+      action: () => navigatePage(id),
+    })),
+    ...tenantAdminSections
+      .filter(([sectionId]: any) =>
+        visibleTenantAdminSections.some(([id]: any) => id === sectionId),
+      )
+      .map(([id, label]: any) => ({
+        id: `admin-${id}`,
+        label: `${label}`,
+        description: "Tenant Admin",
+        keywords: `settings admin ${label}`,
+        action: () => navigatePage({ id: "admin", section: id }),
+      })),
+    ...(visibleNav.some(([id]: any) => id === "reports")
+      ? reportSections.map(([id, label]: any) => ({
+          id: `reports-${id}`,
+          label: `${label}`,
+          description: "Reports",
+          keywords: `report analytics ${label}`,
+          action: () => navigatePage({ id: "reports", section: id }),
+        }))
+      : []),
+    ...(isSuperAdmin
+      ? superAdminSections.map(([id, label]: any) => ({
+          id: `superadmin-${id}`,
+          label: `${label}`,
+          description: "Super Admin",
+          keywords: `platform super admin ${label}`,
+          action: () => navigatePage({ id: "superadmin", section: id }),
+        }))
+      : []),
+  ];
+  const pageNeedsDepartmentFilter = [
+    "queue",
+    "doctor",
+    "consultation",
+    "ip",
+    "physiotherapy",
+  ].includes(activePage);
 
   function navigatePage(target: string | { id: string; section?: string }) {
     const id = typeof target === "string" ? target : target.id;
@@ -408,17 +454,11 @@ export function AppShell(props: any) {
             branchId={branchId}
             setBranchId={setBranchId}
             clinic={clinic}
-            departmentId={departmentId}
-            setDepartmentId={setDepartmentId}
-            departmentOptions={departmentOptions}
             canChangeBranch={canChangeBranch}
-            canChangeDepartment={canChangeDepartment}
             branchName={branchName}
             departmentName={departmentName}
             displayClinicName={displayClinicName}
-            activePage={activePage}
-            visibleNav={visibleNav}
-            navigatePage={navigatePage}
+            searchItems={searchItems}
             profileOpen={profileOpen}
             setProfileOpen={setProfileOpen}
             profileOpenRef={profileOpenRef}
@@ -522,7 +562,17 @@ export function AppShell(props: any) {
             </div>
           </div>
 
-          <section className="py-4 px-6">{renderPage()}</section>
+          <section className="space-y-4 py-4 px-6">
+            {pageNeedsDepartmentFilter && (
+              <DepartmentFilterCard
+                departmentId={departmentId}
+                setDepartmentId={setDepartmentId}
+                departmentOptions={departmentOptions}
+                disabled={!canChangeDepartment}
+              />
+            )}
+            {renderPage()}
+          </section>
         </main>
       </div>
     </div>
