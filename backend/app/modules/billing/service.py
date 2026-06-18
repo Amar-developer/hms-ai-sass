@@ -20,7 +20,10 @@ from app.modules.billing.models import (
 from app.modules.settings.models import SettingKey
 from app.modules.settings.numbering import next_document_number
 from app.modules.settings.service import resolve_setting
-from app.modules.patient_subscriptions.service import active_patient_enrollment, benefit_preview
+from app.modules.patient_subscriptions.service import (
+    active_patient_enrollment,
+    benefit_preview,
+)
 
 
 @dataclass(frozen=True)
@@ -31,18 +34,35 @@ class FeeCalculation:
     clinic_share_amount: int
 
 
-def next_invoice_number(session: Session, tenant_id: str, prefix: str | None = None, branch_id: str | None = None) -> str:
-    return next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="invoice", prefix_override=prefix)
+def next_invoice_number(
+    session: Session,
+    tenant_id: str,
+    prefix: str | None = None,
+    branch_id: str | None = None,
+) -> str:
+    return next_document_number(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        entity="invoice",
+        prefix_override=prefix,
+    )
 
 
 def next_credit_note_number(session: Session, tenant_id: str) -> str:
     from app.modules.billing.models import CreditNote
 
-    count = session.exec(select(func.count()).select_from(CreditNote).where(CreditNote.tenant_id == tenant_id)).one()
+    count = session.exec(
+        select(func.count())
+        .select_from(CreditNote)
+        .where(CreditNote.tenant_id == tenant_id)
+    ).one()
     return f"CN-{count + 1:06d}"
 
 
-def find_fee_rule(session: Session, appointment: Appointment, treatment_type: str | None = None) -> DoctorFeeRule:
+def find_fee_rule(
+    session: Session, appointment: Appointment, treatment_type: str | None = None
+) -> DoctorFeeRule:
     def _rules_for(appointment_type: AppointmentType) -> list[DoctorFeeRule]:
         return list(
             session.exec(
@@ -95,12 +115,18 @@ def find_fee_rule(session: Session, appointment: Appointment, treatment_type: st
     return sorted(eligible, key=score, reverse=True)[0]
 
 
-def calculate_fee_split(fee_rule: DoctorFeeRule, amount: int | None = None) -> FeeCalculation:
+def calculate_fee_split(
+    fee_rule: DoctorFeeRule, amount: int | None = None
+) -> FeeCalculation:
     fee = fee_rule.fee_amount if amount is None else amount
     if fee_rule.share_type == FeeShareType.FIXED:
         doctor_share = min(fee_rule.doctor_fixed_amount or 0, fee)
     else:
-        percentage = fee_rule.doctor_share_percentage if fee_rule.doctor_share_percentage is not None else 0
+        percentage = (
+            fee_rule.doctor_share_percentage
+            if fee_rule.doctor_share_percentage is not None
+            else 0
+        )
         doctor_share = round(fee * percentage / 100)
     clinic_share = fee - doctor_share
     return FeeCalculation(
@@ -144,7 +170,8 @@ def find_tax_rule(
     matching_rules = [
         rule
         for rule in rules
-        if rule.branch_id in {None, branch_id} and _service_matches(rule.service_scope, service_scope)
+        if rule.branch_id in {None, branch_id}
+        and _service_matches(rule.service_scope, service_scope)
     ]
     if not matching_rules:
         return None
@@ -164,8 +191,16 @@ def _offer_discount_value(offer: DiscountOffer, subtotal: int) -> int:
     from datetime import datetime, timezone
 
     now = datetime.now(timezone.utc)
-    valid_from = offer.valid_from.replace(tzinfo=timezone.utc) if offer.valid_from and offer.valid_from.tzinfo is None else offer.valid_from
-    valid_until = offer.valid_until.replace(tzinfo=timezone.utc) if offer.valid_until and offer.valid_until.tzinfo is None else offer.valid_until
+    valid_from = (
+        offer.valid_from.replace(tzinfo=timezone.utc)
+        if offer.valid_from and offer.valid_from.tzinfo is None
+        else offer.valid_from
+    )
+    valid_until = (
+        offer.valid_until.replace(tzinfo=timezone.utc)
+        if offer.valid_until and offer.valid_until.tzinfo is None
+        else offer.valid_until
+    )
     if valid_from and valid_from > now:
         return 0
     if valid_until and valid_until < now:
@@ -245,7 +280,10 @@ def create_consultation_invoice(
         # subtotal and still derive the doctor share from a matching fee rule's
         # share config when one exists; otherwise the clinic keeps the full fee.
         custom_amount = getattr(appointment, "custom_fee_amount", None)
-        use_custom = custom_amount is not None and appointment.appointment_type != AppointmentType.OP
+        use_custom = (
+            custom_amount is not None
+            and appointment.appointment_type != AppointmentType.OP
+        )
         if use_custom:
             try:
                 fee_rule = find_fee_rule(session, appointment, treatment_type)
@@ -255,7 +293,9 @@ def create_consultation_invoice(
             calculation = calculate_fee_split(fee_rule, subtotal) if fee_rule else None
             fee_rule_id = fee_rule.id if fee_rule else None
         else:
-            calculation = calculate_fee_split(find_fee_rule(session, appointment, treatment_type))
+            calculation = calculate_fee_split(
+                find_fee_rule(session, appointment, treatment_type)
+            )
             subtotal = calculation.consultation_amount
             fee_rule_id = calculation.fee_rule.id
     else:
@@ -327,7 +367,12 @@ def create_consultation_invoice(
         patient_id=appointment.patient_id,
         appointment_id=appointment.id,
         consultation_id=consultation_id,
-        invoice_number=next_invoice_number(session, appointment.tenant_id, str(invoice_prefix or "INV"), appointment.branch_id),
+        invoice_number=next_invoice_number(
+            session,
+            appointment.tenant_id,
+            str(invoice_prefix or "INV"),
+            appointment.branch_id,
+        ),
         subtotal_amount=subtotal,
         discount_amount=discount,
         membership_discount_amount=membership_discount,
@@ -349,7 +394,9 @@ def create_consultation_invoice(
     session.commit()
     session.refresh(invoice)
 
-    treatment_label = (treatment_type or appointment.visit_purpose or "consultation").replace("_", " ")
+    treatment_label = (
+        treatment_type or appointment.visit_purpose or "consultation"
+    ).replace("_", " ")
     billable_label = "" if appointment.is_billable else " Free"
     item = InvoiceItem(
         tenant_id=appointment.tenant_id,

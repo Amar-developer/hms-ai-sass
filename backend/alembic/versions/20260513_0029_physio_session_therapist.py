@@ -26,7 +26,10 @@ def _indexes(table: str) -> set[str]:
 def upgrade() -> None:
     index_name = op.f("ix_physiotherapysession_physiotherapist_id")
     if "physiotherapist_id" not in _columns("physiotherapysession"):
-        op.add_column("physiotherapysession", sa.Column("physiotherapist_id", sa.String(), nullable=True))
+        op.add_column(
+            "physiotherapysession",
+            sa.Column("physiotherapist_id", sa.String(), nullable=True),
+        )
     if index_name not in _indexes("physiotherapysession"):
         op.create_index(
             index_name,
@@ -34,6 +37,7 @@ def upgrade() -> None:
             ["physiotherapist_id"],
             unique=False,
         )
+
 
 def downgrade() -> None:
     index_name = op.f("ix_physiotherapysession_physiotherapist_id")

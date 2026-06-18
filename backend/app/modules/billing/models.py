@@ -92,15 +92,33 @@ class Invoice(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
-    appointment_id: str | None = Field(default=None, index=True, foreign_key="appointment.id")
-    consultation_id: str | None = Field(default=None, index=True, foreign_key="consultation.id")
-    lab_order_id: str | None = Field(default=None, index=True, foreign_key="laborder.id")
-    pharmacy_issue_id: str | None = Field(default=None, index=True, foreign_key="pharmacyissue.id")
-    ip_admission_id: str | None = Field(default=None, index=True, foreign_key="ipadmission.id")
-    physiotherapy_case_id: str | None = Field(default=None, index=True, foreign_key="physiotherapycase.id")
-    home_care_booking_id: str | None = Field(default=None, index=True, foreign_key="homecarebooking.id")
-    patient_subscription_enrollment_id: str | None = Field(default=None, index=True, foreign_key="patientsubscriptionenrollment.id")
-    patient_subscription_plan_id: str | None = Field(default=None, index=True, foreign_key="patientsubscriptionplan.id")
+    appointment_id: str | None = Field(
+        default=None, index=True, foreign_key="appointment.id"
+    )
+    consultation_id: str | None = Field(
+        default=None, index=True, foreign_key="consultation.id"
+    )
+    lab_order_id: str | None = Field(
+        default=None, index=True, foreign_key="laborder.id"
+    )
+    pharmacy_issue_id: str | None = Field(
+        default=None, index=True, foreign_key="pharmacyissue.id"
+    )
+    ip_admission_id: str | None = Field(
+        default=None, index=True, foreign_key="ipadmission.id"
+    )
+    physiotherapy_case_id: str | None = Field(
+        default=None, index=True, foreign_key="physiotherapycase.id"
+    )
+    home_care_booking_id: str | None = Field(
+        default=None, index=True, foreign_key="homecarebooking.id"
+    )
+    patient_subscription_enrollment_id: str | None = Field(
+        default=None, index=True, foreign_key="patientsubscriptionenrollment.id"
+    )
+    patient_subscription_plan_id: str | None = Field(
+        default=None, index=True, foreign_key="patientsubscriptionplan.id"
+    )
     invoice_number: str = Field(index=True, min_length=3, max_length=60)
     status: InvoiceStatus = Field(default=InvoiceStatus.ISSUED, index=True)
     subtotal_amount: int = Field(default=0, ge=0)
@@ -114,7 +132,9 @@ class Invoice(SQLModel, table=True):
     balance_amount: int = Field(default=0, ge=0)
     doctor_share_amount: int = Field(default=0, ge=0)
     clinic_share_amount: int = Field(default=0, ge=0)
-    fee_rule_id: str | None = Field(default=None, index=True, foreign_key="doctorfeerule.id")
+    fee_rule_id: str | None = Field(
+        default=None, index=True, foreign_key="doctorfeerule.id"
+    )
     discount_approval_id: str | None = Field(default=None, index=True)
     discount_offer_id: str | None = Field(default=None, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)

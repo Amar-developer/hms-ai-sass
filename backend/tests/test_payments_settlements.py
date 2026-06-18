@@ -1,10 +1,14 @@
 from test_billing import create_fee_rule, setup_signed_consultation
 
 
-def create_invoice(client, appointment_type: str = "op", fee: int = 1000, doctor_pct: int = 60):
+def create_invoice(
+    client, appointment_type: str = "op", fee: int = 1000, doctor_pct: int = 60
+):
     data = setup_signed_consultation(client, appointment_type)
     tenant_id = data["tenant"]["id"]
-    create_fee_rule(client, tenant_id, appointment_type, fee, doctor_share_percentage=doctor_pct)
+    create_fee_rule(
+        client, tenant_id, appointment_type, fee, doctor_share_percentage=doctor_pct
+    )
     invoice = client.post(
         "/api/v1/billing/invoices/from-consultation",
         headers={"X-Tenant-ID": tenant_id},
@@ -95,7 +99,10 @@ def test_paid_invoice_cannot_be_cancelled_until_refunded(client):
     )
 
     assert cancel_paid.status_code == 409
-    assert cancel_paid.json()["detail"] == "Paid invoices cannot be cancelled; refund payments first"
+    assert (
+        cancel_paid.json()["detail"]
+        == "Paid invoices cannot be cancelled; refund payments first"
+    )
     assert refund.status_code == 200
     assert refund.json()["invoice"]["status"] == "refunded"
     assert refund.json()["invoice"]["paid_amount"] == 0
@@ -109,7 +116,11 @@ def test_credit_note_can_be_issued_for_invoice(client):
     credit = client.post(
         f"/api/v1/billing/invoices/{invoice['id']}/credit-notes",
         headers={"X-Tenant-ID": tenant_id},
-        json={"amount": 100, "reason": "Billing correction", "created_by_user_id": "cashier"},
+        json={
+            "amount": 100,
+            "reason": "Billing correction",
+            "created_by_user_id": "cashier",
+        },
     )
 
     assert credit.status_code == 201
@@ -163,8 +174,13 @@ def test_doctor_settlement_finalization_and_reports(client):
         json={"method": "cash", "amount": 700},
     )
 
-    due = client.get("/api/v1/billing/reports/due-collection", headers={"X-Tenant-ID": tenant_id})
-    revenue = client.get("/api/v1/billing/reports/revenue?group_by=doctor", headers={"X-Tenant-ID": tenant_id})
+    due = client.get(
+        "/api/v1/billing/reports/due-collection", headers={"X-Tenant-ID": tenant_id}
+    )
+    revenue = client.get(
+        "/api/v1/billing/reports/revenue?group_by=doctor",
+        headers={"X-Tenant-ID": tenant_id},
+    )
     finalized = client.post(
         "/api/v1/billing/doctor-settlements/finalize",
         headers={"X-Tenant-ID": tenant_id},
@@ -229,7 +245,9 @@ def test_payment_and_refund_write_audit_events(client):
         headers={"X-Tenant-ID": tenant_id},
         json={"reason": "Refund requested"},
     )
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant_id}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant_id}
+    ).json()
     actions = [event["action"] for event in audit]
 
     assert "payment.recorded" in actions

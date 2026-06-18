@@ -20,11 +20,15 @@ def _tables() -> set[str]:
 
 
 def _columns(table_name: str) -> set[str]:
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def _indexes(table_name: str) -> set[str]:
-    return {index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)}
+    return {
+        index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)
+    }
 
 
 def _add(table_name: str, column_name: str, column: sa.Column) -> None:
@@ -49,11 +53,24 @@ def _drop_column(table_name: str, column_name: str) -> None:
 
 def upgrade() -> None:
     if "taxrule" in _tables():
-        _add("taxrule", "service_scope", sa.Column("service_scope", sa.String(length=40), nullable=False, server_default="all"))
+        _add(
+            "taxrule",
+            "service_scope",
+            sa.Column(
+                "service_scope",
+                sa.String(length=40),
+                nullable=False,
+                server_default="all",
+            ),
+        )
         _index("ix_taxrule_service_scope", "taxrule", ["service_scope"])
 
     if "invoice" in _tables():
-        _add("invoice", "discount_offer_id", sa.Column("discount_offer_id", sa.String(), nullable=True))
+        _add(
+            "invoice",
+            "discount_offer_id",
+            sa.Column("discount_offer_id", sa.String(), nullable=True),
+        )
         _index("ix_invoice_discount_offer_id", "invoice", ["discount_offer_id"])
 
     if "discountoffer" not in _tables():
@@ -64,14 +81,28 @@ def upgrade() -> None:
             sa.Column("branch_id", sa.String(), nullable=True),
             sa.Column("name", sa.String(length=120), nullable=False),
             sa.Column("code", sa.String(length=40), nullable=True),
-            sa.Column("service_scope", sa.String(length=40), nullable=False, server_default="all"),
-            sa.Column("discount_type", sa.String(length=10), nullable=False, server_default="percentage"),
+            sa.Column(
+                "service_scope",
+                sa.String(length=40),
+                nullable=False,
+                server_default="all",
+            ),
+            sa.Column(
+                "discount_type",
+                sa.String(length=10),
+                nullable=False,
+                server_default="percentage",
+            ),
             sa.Column("value", sa.Integer(), nullable=False),
-            sa.Column("minimum_bill_amount", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "minimum_bill_amount", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column("max_discount_amount", sa.Integer(), nullable=True),
             sa.Column("valid_from", sa.DateTime(), nullable=True),
             sa.Column("valid_until", sa.DateTime(), nullable=True),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.ForeignKeyConstraint(["branch_id"], ["branch.id"]),

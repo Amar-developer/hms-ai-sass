@@ -8,7 +8,9 @@ from app.modules.tenants.models import new_id, now_utc
 
 class TenantIntegrationPlugin(SQLModel, table=True):
     __table_args__ = (
-        UniqueConstraint("tenant_id", "plugin_key", name="uq_tenant_integration_plugin"),
+        UniqueConstraint(
+            "tenant_id", "plugin_key", name="uq_tenant_integration_plugin"
+        ),
     )
 
     id: str = Field(default_factory=lambda: new_id("plugin"), primary_key=True)

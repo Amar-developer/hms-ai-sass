@@ -29,12 +29,19 @@ def upgrade() -> None:
     if "used_free_lab_json" not in columns:
         op.add_column(
             "patientsubscriptionenrollment",
-            sa.Column("used_free_lab_json", sa.String(), nullable=False, server_default="{}"),
+            sa.Column(
+                "used_free_lab_json", sa.String(), nullable=False, server_default="{}"
+            ),
         )
     if "used_free_medicine_json" not in columns:
         op.add_column(
             "patientsubscriptionenrollment",
-            sa.Column("used_free_medicine_json", sa.String(), nullable=False, server_default="{}"),
+            sa.Column(
+                "used_free_medicine_json",
+                sa.String(),
+                nullable=False,
+                server_default="{}",
+            ),
         )
 
 

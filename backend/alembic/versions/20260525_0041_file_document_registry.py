@@ -15,7 +15,9 @@ def _tables() -> set[str]:
 
 
 def _create_index(table_name: str, index_name: str, columns: list[str]) -> None:
-    indexes = {index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)}
+    indexes = {
+        index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)
+    }
     if index_name not in indexes:
         op.create_index(index_name, table_name, columns)
 
@@ -32,9 +34,21 @@ def upgrade() -> None:
             sa.Column("file_url", sa.String(length=500), nullable=False),
             sa.Column("content_type", sa.String(length=160), nullable=True),
             sa.Column("file_size", sa.Integer(), nullable=True),
-            sa.Column("storage_backend", sa.String(length=40), nullable=False, server_default="local"),
-            sa.Column("is_private", sa.Boolean(), nullable=False, server_default=sa.false()),
-            sa.Column("category", sa.String(length=80), nullable=False, server_default="general"),
+            sa.Column(
+                "storage_backend",
+                sa.String(length=40),
+                nullable=False,
+                server_default="local",
+            ),
+            sa.Column(
+                "is_private", sa.Boolean(), nullable=False, server_default=sa.false()
+            ),
+            sa.Column(
+                "category",
+                sa.String(length=80),
+                nullable=False,
+                server_default="general",
+            ),
             sa.Column("source_module", sa.String(length=80), nullable=True),
             sa.Column("attached_to_doctype", sa.String(length=120), nullable=True),
             sa.Column("attached_to_name", sa.String(length=160), nullable=True),
@@ -43,7 +57,9 @@ def upgrade() -> None:
             sa.Column("folder", sa.String(length=180), nullable=True),
             sa.Column("notes", sa.String(length=1000), nullable=True),
             sa.Column("uploaded_by_user_id", sa.String(), nullable=True),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),

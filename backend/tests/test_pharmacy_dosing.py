@@ -1,4 +1,8 @@
-from app.modules.pharmacy.dosing import daily_administration_quantity, duration_days, prescription_quantity
+from app.modules.pharmacy.dosing import (
+    daily_administration_quantity,
+    duration_days,
+    prescription_quantity,
+)
 
 
 def test_prescription_quantity_uses_countable_dose_frequency_and_duration():

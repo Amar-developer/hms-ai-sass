@@ -35,7 +35,9 @@ def setup_booking(client: TestClient) -> dict:
     }
 
 
-def create_consultation(client: TestClient, tenant_id: str, appointment_id: str) -> dict:
+def create_consultation(
+    client: TestClient, tenant_id: str, appointment_id: str
+) -> dict:
     response = client.post(
         "/api/v1/consultations",
         headers={"X-Tenant-ID": tenant_id},
@@ -74,7 +76,9 @@ def test_create_and_update_draft_consultation(client: TestClient):
     assert updated.json()["diagnosis"] == "Viral fever"
 
 
-def test_structured_consultation_rows_templates_and_signed_immutability(client: TestClient):
+def test_structured_consultation_rows_templates_and_signed_immutability(
+    client: TestClient,
+):
     data = setup_booking(client)
     tenant_id = data["tenant"]["id"]
     appointment_id = data["booking"]["appointment"]["id"]
@@ -84,10 +88,21 @@ def test_structured_consultation_rows_templates_and_signed_immutability(client: 
         json={
             "appointment_id": appointment_id,
             "vitals": [{"name": "BP", "value": "120/80", "unit": "mmHg"}],
-            "complaints": [{"complaint": "Fever", "duration": "2 days", "severity": "medium"}],
+            "complaints": [
+                {"complaint": "Fever", "duration": "2 days", "severity": "medium"}
+            ],
             "diagnoses": [{"diagnosis": "Viral fever", "diagnosis_type": "primary"}],
-            "medicines": [{"medicine_name": "Paracetamol", "dosage": "500mg", "frequency": "1-0-1", "duration": "3 days"}],
-            "referrals": [{"referral_type": "lab", "item_name": "CBC", "priority": "routine"}],
+            "medicines": [
+                {
+                    "medicine_name": "Paracetamol",
+                    "dosage": "500mg",
+                    "frequency": "1-0-1",
+                    "duration": "3 days",
+                }
+            ],
+            "referrals": [
+                {"referral_type": "lab", "item_name": "CBC", "priority": "routine"}
+            ],
         },
     )
     template = client.post(
@@ -154,9 +169,13 @@ def test_sign_locks_consultation_and_marks_queue_completed(client: TestClient):
     assert signed.json()["status"] == "signed"
     assert signed.json()["signed_at"] is not None
     assert edit_after_sign.status_code == 409
-    assert edit_after_sign.json()["detail"] == "Signed consultation records are immutable"
+    assert (
+        edit_after_sign.json()["detail"] == "Signed consultation records are immutable"
+    )
     assert appointment["status"] == "consultation_completed"
-    assert [row for row in queue if row["id"] == entry_id][0]["status"] == "consultation_completed"
+    assert [row for row in queue if row["id"] == entry_id][0][
+        "status"
+    ] == "consultation_completed"
 
 
 def test_addendum_allowed_only_after_signing(client: TestClient):
@@ -178,7 +197,10 @@ def test_addendum_allowed_only_after_signing(client: TestClient):
     addendum = client.post(
         f"/api/v1/consultations/{consultation['id']}/addendums",
         headers={"X-Tenant-ID": tenant_id},
-        json={"note": "Patient later reported nausea", "created_by_user_id": "doctor_demo"},
+        json={
+            "note": "Patient later reported nausea",
+            "created_by_user_id": "doctor_demo",
+        },
     )
     detail = client.get(
         f"/api/v1/consultations/{consultation['id']}",
@@ -186,7 +208,10 @@ def test_addendum_allowed_only_after_signing(client: TestClient):
     )
 
     assert too_early.status_code == 409
-    assert too_early.json()["detail"] == "Addendums are only allowed after consultation is signed"
+    assert (
+        too_early.json()["detail"]
+        == "Addendums are only allowed after consultation is signed"
+    )
     assert addendum.status_code == 201
     assert detail.status_code == 200
     assert detail.json()["addendums"][0]["note"] == "Patient later reported nausea"
@@ -205,7 +230,9 @@ def test_duplicate_consultation_for_appointment_is_rejected(client: TestClient):
     )
 
     assert duplicate.status_code == 409
-    assert duplicate.json()["detail"] == "Consultation already exists for this appointment"
+    assert (
+        duplicate.json()["detail"] == "Consultation already exists for this appointment"
+    )
 
 
 def test_consultation_access_is_tenant_isolated(client: TestClient):
@@ -246,7 +273,9 @@ def test_consultation_workflow_writes_audit_events(client: TestClient):
         json={"note": "Follow-up note", "created_by_user_id": "doctor_demo"},
     )
 
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant_id}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant_id}
+    ).json()
     actions = [event["action"] for event in audit]
 
     assert "consultation.created" in actions

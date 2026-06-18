@@ -11,18 +11,28 @@ depends_on = None
 
 
 def _has_column(inspector, table_name: str, column_name: str) -> bool:
-    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+    return column_name in {
+        column["name"] for column in inspector.get_columns(table_name)
+    }
 
 
 def _add_column_if_missing(inspector, table_name: str, column: sa.Column) -> None:
-    if table_name in inspector.get_table_names() and not _has_column(inspector, table_name, column.name):
+    if table_name in inspector.get_table_names() and not _has_column(
+        inspector, table_name, column.name
+    ):
         op.add_column(table_name, column)
         op.create_index(f"ix_{table_name}_{column.name}", table_name, [column.name])
 
 
-def _backfill_number(table_name: str, column_name: str, entity_code: str, branch_scoped: bool = False) -> None:
+def _backfill_number(
+    table_name: str, column_name: str, entity_code: str, branch_scoped: bool = False
+) -> None:
     partition = "row.tenant_id, row.branch_id" if branch_scoped else "row.tenant_id"
-    prefix_source = "coalesce(nullif(b.code, ''), nullif(t.name, ''), 'HLC')" if branch_scoped else "coalesce(nullif(t.name, ''), 'HLC')"
+    prefix_source = (
+        "coalesce(nullif(b.code, ''), nullif(t.name, ''), 'HLC')"
+        if branch_scoped
+        else "coalesce(nullif(t.name, ''), 'HLC')"
+    )
     branch_join = "left join branch b on b.id = row.branch_id" if branch_scoped else ""
     op.execute(
         sa.text(
@@ -61,26 +71,59 @@ def upgrade() -> None:
             sa.Column("prefix", sa.String(length=40), nullable=False),
             sa.Column("entity_code", sa.String(length=40), nullable=False),
             sa.Column("digits", sa.Integer(), nullable=False, server_default="5"),
-            sa.Column("current_value", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "current_value", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
             sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
             sa.PrimaryKeyConstraint("id"),
-            sa.UniqueConstraint("tenant_id", "branch_id", "entity", name="uq_document_sequence_scope_entity"),
+            sa.UniqueConstraint(
+                "tenant_id",
+                "branch_id",
+                "entity",
+                name="uq_document_sequence_scope_entity",
+            ),
         )
-        op.create_index("ix_documentsequence_tenant_id", "documentsequence", ["tenant_id"])
-        op.create_index("ix_documentsequence_branch_id", "documentsequence", ["branch_id"])
+        op.create_index(
+            "ix_documentsequence_tenant_id", "documentsequence", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_documentsequence_branch_id", "documentsequence", ["branch_id"]
+        )
         op.create_index("ix_documentsequence_entity", "documentsequence", ["entity"])
         op.create_index("ix_documentsequence_prefix", "documentsequence", ["prefix"])
-        op.create_index("ix_documentsequence_entity_code", "documentsequence", ["entity_code"])
-        op.create_index("ix_documentsequence_created_at", "documentsequence", ["created_at"])
+        op.create_index(
+            "ix_documentsequence_entity_code", "documentsequence", ["entity_code"]
+        )
+        op.create_index(
+            "ix_documentsequence_created_at", "documentsequence", ["created_at"]
+        )
 
     inspector = sa.inspect(bind)
-    _add_column_if_missing(inspector, "user", sa.Column("user_number", sa.String(length=60), nullable=True))
-    _add_column_if_missing(inspector, "practitioner", sa.Column("practitioner_number", sa.String(length=60), nullable=True))
-    _add_column_if_missing(inspector, "laborder", sa.Column("lab_order_number", sa.String(length=60), nullable=True))
-    _add_column_if_missing(inspector, "pharmacysupplier", sa.Column("supplier_number", sa.String(length=60), nullable=True))
-    _add_column_if_missing(inspector, "pharmacyissue", sa.Column("issue_number", sa.String(length=60), nullable=True))
+    _add_column_if_missing(
+        inspector, "user", sa.Column("user_number", sa.String(length=60), nullable=True)
+    )
+    _add_column_if_missing(
+        inspector,
+        "practitioner",
+        sa.Column("practitioner_number", sa.String(length=60), nullable=True),
+    )
+    _add_column_if_missing(
+        inspector,
+        "laborder",
+        sa.Column("lab_order_number", sa.String(length=60), nullable=True),
+    )
+    _add_column_if_missing(
+        inspector,
+        "pharmacysupplier",
+        sa.Column("supplier_number", sa.String(length=60), nullable=True),
+    )
+    _add_column_if_missing(
+        inspector,
+        "pharmacyissue",
+        sa.Column("issue_number", sa.String(length=60), nullable=True),
+    )
 
     if bind.dialect.name == "postgresql":
         _backfill_number("user", "user_number", "USR", True)

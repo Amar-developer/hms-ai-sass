@@ -22,13 +22,17 @@ def _tables() -> set[str]:
 def _columns(table_name: str) -> set[str]:
     if table_name not in _tables():
         return set()
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def _indexes(table_name: str) -> set[str]:
     if table_name not in _tables():
         return set()
-    return {index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)}
+    return {
+        index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)
+    }
 
 
 def _add_column_if_missing(table_name: str, column: sa.Column) -> None:
@@ -38,7 +42,11 @@ def _add_column_if_missing(table_name: str, column: sa.Column) -> None:
 
 def _create_index_if_missing(table_name: str, column_name: str) -> None:
     index_name = op.f(f"ix_{table_name}_{column_name}")
-    if table_name in _tables() and column_name in _columns(table_name) and index_name not in _indexes(table_name):
+    if (
+        table_name in _tables()
+        and column_name in _columns(table_name)
+        and index_name not in _indexes(table_name)
+    ):
         op.create_index(index_name, table_name, [column_name])
 
 
@@ -52,8 +60,15 @@ def upgrade() -> None:
             sa.Column("code", sa.String(length=60), nullable=False),
             sa.Column("name", sa.String(length=160), nullable=False),
             sa.Column("description", sa.String(length=500), nullable=True),
-            sa.Column("default_price", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
+            sa.Column(
+                "default_price", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "is_active",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.text("true"),
+            ),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("updated_by_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
@@ -71,10 +86,20 @@ def upgrade() -> None:
             sa.Column("assigned_staff_name", sa.String(length=160), nullable=True),
             sa.Column("staff_type", sa.String(length=80), nullable=True),
             sa.Column("booking_number", sa.String(length=60), nullable=False),
-            sa.Column("recurrence", sa.String(length=40), nullable=False, server_default="daily"),
+            sa.Column(
+                "recurrence",
+                sa.String(length=40),
+                nullable=False,
+                server_default="daily",
+            ),
             sa.Column("start_date", sa.Date(), nullable=False),
             sa.Column("end_date", sa.Date(), nullable=True),
-            sa.Column("status", sa.String(length=40), nullable=False, server_default="requested"),
+            sa.Column(
+                "status",
+                sa.String(length=40),
+                nullable=False,
+                server_default="requested",
+            ),
             sa.Column("complaints", sa.String(length=2000), nullable=True),
             sa.Column("notes", sa.String(length=2000), nullable=True),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
@@ -97,10 +122,22 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         )
 
-    _add_column_if_missing("homecarebooking", sa.Column("assigned_staff_name", sa.String(length=160), nullable=True))
-    _add_column_if_missing("homecarebooking", sa.Column("staff_type", sa.String(length=80), nullable=True))
-    _add_column_if_missing("homecarebooking", sa.Column("recurrence", sa.String(length=40), nullable=False, server_default="daily"))
-    _add_column_if_missing("invoice", sa.Column("home_care_booking_id", sa.String(), nullable=True))
+    _add_column_if_missing(
+        "homecarebooking",
+        sa.Column("assigned_staff_name", sa.String(length=160), nullable=True),
+    )
+    _add_column_if_missing(
+        "homecarebooking", sa.Column("staff_type", sa.String(length=80), nullable=True)
+    )
+    _add_column_if_missing(
+        "homecarebooking",
+        sa.Column(
+            "recurrence", sa.String(length=40), nullable=False, server_default="daily"
+        ),
+    )
+    _add_column_if_missing(
+        "invoice", sa.Column("home_care_booking_id", sa.String(), nullable=True)
+    )
 
     for table_name, column_names in {
         "homecareservice": [

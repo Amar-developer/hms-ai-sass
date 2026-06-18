@@ -1,2 +1,1 @@
 """Communication notification queue module."""
-

@@ -6,7 +6,11 @@ from sqlmodel import Session, select
 
 from app.core.database import engine
 from app.modules.reports.models import ReportJob, ReportJobStatus
-from app.modules.reports.queue import dequeue_monthly_report_job, enqueue_monthly_report_job, scheduler_lock
+from app.modules.reports.queue import (
+    dequeue_monthly_report_job,
+    enqueue_monthly_report_job,
+    scheduler_lock,
+)
 from app.modules.reports.service import (
     load_monthly_report_config,
     mark_report_period_sent,
@@ -23,7 +27,9 @@ def enqueue_due_monthly_reports(session: Session) -> None:
     today = date.today()
     start, end = previous_month_range(today)
     period_key = report_period_key(start, end)
-    tenants = session.exec(select(Tenant).where(Tenant.status != TenantStatus.SUSPENDED)).all()
+    tenants = session.exec(
+        select(Tenant).where(Tenant.status != TenantStatus.SUSPENDED)
+    ).all()
     for tenant in tenants:
         config = load_monthly_report_config(session, tenant.id)
         if not config["enabled"] or not config["recipients"]:
@@ -67,7 +73,10 @@ def run_once() -> None:
             mark_report_period_sent(
                 session,
                 tenant_id=job.tenant_id,
-                period_key=report_period_key(date.fromisoformat(job.period_start), date.fromisoformat(job.period_end)),
+                period_key=report_period_key(
+                    date.fromisoformat(job.period_start),
+                    date.fromisoformat(job.period_end),
+                ),
                 actor_user_id=job.queued_by_user_id,
             )
         job.updated_at = now_utc()

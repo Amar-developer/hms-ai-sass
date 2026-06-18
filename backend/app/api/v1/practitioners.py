@@ -10,8 +10,16 @@ from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.practitioners.models import Practitioner, PractitionerBranch, PractitionerDepartment
-from app.modules.practitioners.models import PractitionerLeave, PractitionerRoomAssignment, PractitionerSchedule
+from app.modules.practitioners.models import (
+    Practitioner,
+    PractitionerBranch,
+    PractitionerDepartment,
+)
+from app.modules.practitioners.models import (
+    PractitionerLeave,
+    PractitionerRoomAssignment,
+    PractitionerSchedule,
+)
 from app.modules.practitioners.schemas import (
     PractitionerAvailabilityRead,
     PractitionerCalendarRead,
@@ -42,31 +50,46 @@ router = APIRouter(prefix="/practitioners")
 
 
 def _read(session: Session, practitioner: Practitioner) -> PractitionerRead:
-    data = PractitionerRead.model_validate(practitioner, from_attributes=True).model_dump()
-    data["branch_ids"] = practitioner_branch_ids(session, practitioner.tenant_id, practitioner.id)
-    data["department_ids"] = practitioner_department_ids(session, practitioner.tenant_id, practitioner.id)
+    data = PractitionerRead.model_validate(
+        practitioner, from_attributes=True
+    ).model_dump()
+    data["branch_ids"] = practitioner_branch_ids(
+        session, practitioner.tenant_id, practitioner.id
+    )
+    data["department_ids"] = practitioner_department_ids(
+        session, practitioner.tenant_id, practitioner.id
+    )
     return PractitionerRead(**data)
 
 
-def _validate_links(session: Session, tenant_id: str, branch_ids: list[str], department_ids: list[str]) -> None:
+def _validate_links(
+    session: Session, tenant_id: str, branch_ids: list[str], department_ids: list[str]
+) -> None:
     for branch_id in branch_ids:
         branch = session.get(Branch, branch_id)
         if not branch or branch.tenant_id != tenant_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid branch: {branch_id}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid branch: {branch_id}",
+            )
 
 
 def _normalize_department_lookup(value: str | None) -> str:
     return "".join(char for char in str(value or "").lower() if char.isalnum())
 
 
-def _resolve_department(session: Session, tenant_id: str, department_id: str | None) -> Department | None:
+def _resolve_department(
+    session: Session, tenant_id: str, department_id: str | None
+) -> Department | None:
     if not department_id:
         return None
     department = session.get(Department, department_id)
     if department and department.tenant_id == tenant_id:
         return department
     requested = _normalize_department_lookup(department_id)
-    departments = session.exec(select(Department).where(Department.tenant_id == tenant_id)).all()
+    departments = session.exec(
+        select(Department).where(Department.tenant_id == tenant_id)
+    ).all()
     for department in departments:
         department_keys = {
             _normalize_department_lookup(department.id),
@@ -75,20 +98,32 @@ def _resolve_department(session: Session, tenant_id: str, department_id: str | N
         }
         if requested in department_keys:
             return department
-        if requested == "general" and _normalize_department_lookup(department.name).startswith("general"):
+        if requested == "general" and _normalize_department_lookup(
+            department.name
+        ).startswith("general"):
             return department
     return None
 
 
-def _department_filter_ids(session: Session, tenant_id: str, department_id: str | None) -> set[str]:
+def _department_filter_ids(
+    session: Session, tenant_id: str, department_id: str | None
+) -> set[str]:
     department = _resolve_department(session, tenant_id, department_id)
-    return {department_id, department.id, department.code} if department and department_id else ({department_id} if department_id else set())
+    return (
+        {department_id, department.id, department.code}
+        if department and department_id
+        else ({department_id} if department_id else set())
+    )
 
 
-def _get_practitioner(session: Session, tenant_id: str, practitioner_id: str) -> Practitioner:
+def _get_practitioner(
+    session: Session, tenant_id: str, practitioner_id: str
+) -> Practitioner:
     practitioner = session.get(Practitioner, practitioner_id)
     if not practitioner or practitioner.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Practitioner not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Practitioner not found"
+        )
     return practitioner
 
 
@@ -102,9 +137,14 @@ def _validate_doctor_login_user(
         return
     user = session.get(User, user_id)
     if not user or user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid doctor login user")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid doctor login user"
+        )
     if user.user_type != "doctor":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Linked login user must have Doctor user type")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Linked login user must have Doctor user type",
+        )
     existing = session.exec(
         select(Practitioner).where(
             Practitioner.tenant_id == tenant_id,
@@ -112,19 +152,30 @@ def _validate_doctor_login_user(
         )
     ).first()
     if existing and existing.id != practitioner_id:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Doctor login user is already linked to another doctor")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Doctor login user is already linked to another doctor",
+        )
 
 
-def _get_schedule(session: Session, tenant_id: str, schedule_id: str) -> PractitionerSchedule:
+def _get_schedule(
+    session: Session, tenant_id: str, schedule_id: str
+) -> PractitionerSchedule:
     schedule = session.get(PractitionerSchedule, schedule_id)
     if not schedule or schedule.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Practitioner schedule not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Practitioner schedule not found",
+        )
     return schedule
 
 
 def _validate_time_window(start_time, end_time) -> None:
     if start_time >= end_time:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start time must be before end time")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start time must be before end time",
+        )
 
 
 def _replace_links(
@@ -145,7 +196,13 @@ def _replace_links(
         for row in existing:
             session.delete(row)
         for branch_id in sorted(set(branch_ids)):
-            session.add(PractitionerBranch(tenant_id=tenant_id, practitioner_id=practitioner_id, branch_id=branch_id))
+            session.add(
+                PractitionerBranch(
+                    tenant_id=tenant_id,
+                    practitioner_id=practitioner_id,
+                    branch_id=branch_id,
+                )
+            )
     if department_ids is not None:
         existing = session.exec(
             select(PractitionerDepartment).where(
@@ -185,7 +242,9 @@ def create_practitioner(
         payload,
         update={
             "tenant_id": tenant_id,
-            "practitioner_number": next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="doctor"),
+            "practitioner_number": next_document_number(
+                session, tenant_id=tenant_id, branch_id=branch_id, entity="doctor"
+            ),
         },
     )
     session.add(practitioner)
@@ -232,8 +291,14 @@ def list_practitioners(
         )
     ),
 ) -> list[PractitionerRead]:
-    statement = select(Practitioner).where(Practitioner.tenant_id == tenant_id).order_by(Practitioner.full_name)
-    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+    statement = (
+        select(Practitioner)
+        .where(Practitioner.tenant_id == tenant_id)
+        .order_by(Practitioner.full_name)
+    )
+    doctor_practitioner_id = current_doctor_practitioner_id(
+        session, tenant_id, current_user
+    )
     if doctor_practitioner_id:
         statement = statement.where(Practitioner.id == doctor_practitioner_id)
     practitioners = list(session.exec(statement).all())
@@ -248,7 +313,9 @@ def list_practitioners(
         practitioners = [
             practitioner
             for practitioner in practitioners
-            if department_ids.intersection(practitioner_department_ids(session, tenant_id, practitioner.id))
+            if department_ids.intersection(
+                practitioner_department_ids(session, tenant_id, practitioner.id)
+            )
         ]
     return [_read(session, practitioner) for practitioner in practitioners]
 
@@ -261,19 +328,36 @@ def list_all_practitioner_schedules(
     department_id: str | None = None,
     is_active: bool | None = None,
     session: Session = Depends(get_session),
-    _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ
+        )
+    ),
 ) -> list[PractitionerSchedule]:
-    statement = select(PractitionerSchedule).where(PractitionerSchedule.tenant_id == tenant_id)
+    statement = select(PractitionerSchedule).where(
+        PractitionerSchedule.tenant_id == tenant_id
+    )
     if practitioner_id:
-        statement = statement.where(PractitionerSchedule.practitioner_id == practitioner_id)
+        statement = statement.where(
+            PractitionerSchedule.practitioner_id == practitioner_id
+        )
     if branch_id:
         statement = statement.where(PractitionerSchedule.branch_id == branch_id)
     if department_id:
         department_ids = _department_filter_ids(session, tenant_id, department_id)
-        statement = statement.where(PractitionerSchedule.department_id.in_(department_ids))
+        statement = statement.where(
+            PractitionerSchedule.department_id.in_(department_ids)
+        )
     if is_active is not None:
         statement = statement.where(PractitionerSchedule.is_active == is_active)
-    return list(session.exec(statement.order_by(PractitionerSchedule.updated_at.desc(), PractitionerSchedule.created_at.desc())).all())
+    return list(
+        session.exec(
+            statement.order_by(
+                PractitionerSchedule.updated_at.desc(),
+                PractitionerSchedule.created_at.desc(),
+            )
+        ).all()
+    )
 
 
 @router.patch("/schedules/{schedule_id}", response_model=PractitionerScheduleRead)
@@ -282,7 +366,11 @@ def update_practitioner_schedule(
     payload: PractitionerScheduleUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_EDIT)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_EDIT
+        )
+    ),
 ) -> PractitionerSchedule:
     schedule = _get_schedule(session, tenant_id, schedule_id)
     updates = payload.model_dump(exclude_unset=True, exclude={"actor_user_id"})
@@ -334,7 +422,11 @@ def delete_practitioner_schedule(
     schedule_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_DELETE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_DELETE
+        )
+    ),
 ) -> dict[str, bool | str]:
     schedule = _get_schedule(session, tenant_id, schedule_id)
     branch_id = schedule.branch_id
@@ -360,7 +452,11 @@ def get_practitioner(
     practitioner_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_any_permission(permissions.PRACTITIONERS_MANAGE, permissions.PRACTITIONERS_READ)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE, permissions.PRACTITIONERS_READ
+        )
+    ),
 ) -> PractitionerRead:
     return _read(session, _get_practitioner(session, tenant_id, practitioner_id))
 
@@ -371,15 +467,23 @@ def update_practitioner(
     payload: PractitionerUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_CREATE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_CREATE
+        )
+    ),
 ) -> PractitionerRead:
     practitioner = _get_practitioner(session, tenant_id, practitioner_id)
     if "user_id" in payload.model_fields_set:
-        _validate_doctor_login_user(session, tenant_id, payload.user_id, practitioner_id)
+        _validate_doctor_login_user(
+            session, tenant_id, payload.user_id, practitioner_id
+        )
     branch_ids = payload.branch_ids
     department_ids = payload.department_ids
     _validate_links(session, tenant_id, branch_ids or [], department_ids or [])
-    for key, value in payload.model_dump(exclude_unset=True, exclude={"branch_ids", "department_ids", "actor_user_id"}).items():
+    for key, value in payload.model_dump(
+        exclude_unset=True, exclude={"branch_ids", "department_ids", "actor_user_id"}
+    ).items():
         setattr(practitioner, key, value)
     practitioner.updated_at = datetime.now(timezone.utc)
     session.add(practitioner)
@@ -428,7 +532,11 @@ def delete_practitioner(
     return {"deleted": True, "mode": "deactivated", "practitioner_id": practitioner.id}
 
 
-@router.post("/{practitioner_id}/schedules", response_model=PractitionerScheduleRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{practitioner_id}/schedules",
+    response_model=PractitionerScheduleRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_practitioner_schedule(
     practitioner_id: str,
     payload: PractitionerScheduleCreate,
@@ -460,7 +568,9 @@ def create_practitioner_schedule(
             detail="Practitioner is not assigned to this branch and department",
         )
     _validate_time_window(payload.start_time, payload.end_time)
-    schedule = PractitionerSchedule.model_validate(payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id})
+    schedule = PractitionerSchedule.model_validate(
+        payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id}
+    )
     session.add(schedule)
     session.commit()
     session.refresh(schedule)
@@ -477,12 +587,18 @@ def create_practitioner_schedule(
     return schedule
 
 
-@router.get("/{practitioner_id}/schedules", response_model=list[PractitionerScheduleRead])
+@router.get(
+    "/{practitioner_id}/schedules", response_model=list[PractitionerScheduleRead]
+)
 def list_practitioner_schedules(
     practitioner_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_any_permission(permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ
+        )
+    ),
 ) -> list[PractitionerSchedule]:
     _get_practitioner(session, tenant_id, practitioner_id)
     return list(
@@ -495,7 +611,11 @@ def list_practitioner_schedules(
     )
 
 
-@router.post("/{practitioner_id}/leaves", response_model=PractitionerLeaveRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{practitioner_id}/leaves",
+    response_model=PractitionerLeaveRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_practitioner_leave(
     practitioner_id: str,
     payload: PractitionerLeaveCreate,
@@ -507,12 +627,20 @@ def create_practitioner_leave(
     if payload.branch_id:
         _validate_links(session, tenant_id, [payload.branch_id], [])
     if payload.start_date > payload.end_date:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start date must be on or before end date")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start date must be on or before end date",
+        )
     if (payload.start_time is None) != (payload.end_time is None):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Leave start and end time must be provided together")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Leave start and end time must be provided together",
+        )
     if payload.start_time and payload.end_time:
         _validate_time_window(payload.start_time, payload.end_time)
-    leave = PractitionerLeave.model_validate(payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id})
+    leave = PractitionerLeave.model_validate(
+        payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id}
+    )
     session.add(leave)
     session.commit()
     session.refresh(leave)
@@ -563,7 +691,10 @@ def create_practitioner_room_assignment(
     _validate_links(session, tenant_id, [payload.branch_id], [])
     _validate_time_window(payload.start_time, payload.end_time)
     if payload.assignment_date is None and payload.weekday is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Room assignment date or weekday is required")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Room assignment date or weekday is required",
+        )
     if room_assignment_conflicts(
         session,
         tenant_id=tenant_id,
@@ -574,7 +705,10 @@ def create_practitioner_room_assignment(
         start_time=payload.start_time,
         end_time=payload.end_time,
     ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Room is already assigned during this time")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Room is already assigned during this time",
+        )
     assignment = PractitionerRoomAssignment.model_validate(
         payload,
         update={"tenant_id": tenant_id, "practitioner_id": practitioner_id},
@@ -595,7 +729,10 @@ def create_practitioner_room_assignment(
     return assignment
 
 
-@router.get("/{practitioner_id}/room-assignments", response_model=list[PractitionerRoomAssignmentRead])
+@router.get(
+    "/{practitioner_id}/room-assignments",
+    response_model=list[PractitionerRoomAssignmentRead],
+)
 def list_practitioner_room_assignments(
     practitioner_id: str,
     tenant_id: str = Depends(require_tenant_id),
@@ -613,7 +750,9 @@ def list_practitioner_room_assignments(
     )
 
 
-@router.get("/{practitioner_id}/eligibility", response_model=PractitionerEligibilityRead)
+@router.get(
+    "/{practitioner_id}/eligibility", response_model=PractitionerEligibilityRead
+)
 def check_practitioner_eligibility(
     practitioner_id: str,
     branch_id: str,
@@ -630,7 +769,11 @@ def check_practitioner_eligibility(
         )
     ),
 ) -> PractitionerEligibilityRead:
-    resolved_department_id = _resolve_department(session, tenant_id, department_id).id if department_id and _resolve_department(session, tenant_id, department_id) else department_id
+    resolved_department_id = (
+        _resolve_department(session, tenant_id, department_id).id
+        if department_id and _resolve_department(session, tenant_id, department_id)
+        else department_id
+    )
     return PractitionerEligibilityRead(
         practitioner_id=practitioner_id,
         tenant_id=tenant_id,
@@ -646,7 +789,9 @@ def check_practitioner_eligibility(
     )
 
 
-@router.get("/{practitioner_id}/availability", response_model=PractitionerAvailabilityRead)
+@router.get(
+    "/{practitioner_id}/availability", response_model=PractitionerAvailabilityRead
+)
 def check_practitioner_schedule_availability(
     practitioner_id: str,
     branch_id: str,
@@ -665,7 +810,11 @@ def check_practitioner_schedule_availability(
         )
     ),
 ) -> PractitionerAvailabilityRead:
-    resolved_department_id = _resolve_department(session, tenant_id, department_id).id if department_id and _resolve_department(session, tenant_id, department_id) else department_id
+    resolved_department_id = (
+        _resolve_department(session, tenant_id, department_id).id
+        if department_id and _resolve_department(session, tenant_id, department_id)
+        else department_id
+    )
     availability = check_practitioner_availability(
         session,
         tenant_id=tenant_id,
@@ -710,11 +859,21 @@ def get_practitioner_calendar(
 ) -> PractitionerCalendarRead:
     _get_practitioner(session, tenant_id, practitioner_id)
     _validate_links(session, tenant_id, [branch_id], [])
-    resolved_department_id = _resolve_department(session, tenant_id, department_id).id if department_id and _resolve_department(session, tenant_id, department_id) else department_id
+    resolved_department_id = (
+        _resolve_department(session, tenant_id, department_id).id
+        if department_id and _resolve_department(session, tenant_id, department_id)
+        else department_id
+    )
     if start_date > end_date:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Start date must be on or before end date")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Start date must be on or before end date",
+        )
     if (end_date - start_date).days > 62:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Calendar range cannot exceed 62 days")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Calendar range cannot exceed 62 days",
+        )
     calendar = generate_practitioner_calendar(
         session,
         tenant_id=tenant_id,

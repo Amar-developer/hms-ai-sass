@@ -34,7 +34,9 @@ def enable_interval_slots(client, tenant_id: str, branch_id: str) -> None:
 
 
 def test_create_practitioner_with_multiple_departments_and_filter(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
 
     created = client.post(
         "/api/v1/practitioners",
@@ -59,7 +61,9 @@ def test_create_practitioner_with_multiple_departments_and_filter(client):
 
 
 def test_appointment_create_permission_can_read_doctors_and_calendar(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -103,9 +107,16 @@ def test_appointment_create_permission_can_read_doctors_and_calendar(client):
     ).json()
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user["email"], "password": "NurseBook123", "tenant_id": tenant["id"]},
+        json={
+            "email": user["email"],
+            "password": "NurseBook123",
+            "tenant_id": tenant["id"],
+        },
     ).json()
-    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    headers = {
+        "Authorization": f"Bearer {login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     doctors = client.get(
         f"/api/v1/practitioners?branch_id={branch['id']}&department_id=general",
@@ -124,7 +135,9 @@ def test_appointment_create_permission_can_read_doctors_and_calendar(client):
 
 
 def test_appointment_creator_can_read_doctor_when_department_code_is_sent(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     department = client.post(
         f"/api/v1/tenants/{tenant['id']}/departments",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -173,9 +186,16 @@ def test_appointment_creator_can_read_doctor_when_department_code_is_sent(client
     ).json()
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user["email"], "password": "NurseCode123", "tenant_id": tenant["id"]},
+        json={
+            "email": user["email"],
+            "password": "NurseCode123",
+            "tenant_id": tenant["id"],
+        },
     ).json()
-    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    headers = {
+        "Authorization": f"Bearer {login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     doctors = client.get(
         f"/api/v1/practitioners?branch_id={branch['id']}&department_id=GENERAL",
@@ -194,8 +214,12 @@ def test_appointment_creator_can_read_doctor_when_department_code_is_sent(client
     assert calendar.json()["days"][0]["slots"]
 
 
-def test_appointment_create_permission_can_read_tenant_reference_data_for_booking(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+def test_appointment_create_permission_can_read_tenant_reference_data_for_booking(
+    client,
+):
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     for name, code in [
         ("General Medicine", "general"),
         ("Pediatrics", "ped"),
@@ -228,23 +252,36 @@ def test_appointment_create_permission_can_read_tenant_reference_data_for_bookin
     ).json()
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user["email"], "password": "NurseRefs123", "tenant_id": tenant["id"]},
+        json={
+            "email": user["email"],
+            "password": "NurseRefs123",
+            "tenant_id": tenant["id"],
+        },
     ).json()
-    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    headers = {
+        "Authorization": f"Bearer {login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     branches = client.get(f"/api/v1/tenants/{tenant['id']}/branches", headers=headers)
-    departments = client.get(f"/api/v1/tenants/{tenant['id']}/departments", headers=headers)
+    departments = client.get(
+        f"/api/v1/tenants/{tenant['id']}/departments", headers=headers
+    )
     cross_tenant = client.get("/api/v1/tenants/other-tenant/branches", headers=headers)
 
     assert branches.status_code == 200
     assert branch["id"] in [row["id"] for row in branches.json()]
     assert departments.status_code == 200
-    assert {"general", "ped", "diab"}.issubset({row["code"] for row in departments.json()})
+    assert {"general", "ped", "diab"}.issubset(
+        {row["code"] for row in departments.json()}
+    )
     assert cross_tenant.status_code == 403
 
 
 def test_scheduling_crud_permissions_can_manage_doctor_time_slots(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -281,9 +318,16 @@ def test_scheduling_crud_permissions_can_manage_doctor_time_slots(client):
     ).json()
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user["email"], "password": "Schedule123", "tenant_id": tenant["id"]},
+        json={
+            "email": user["email"],
+            "password": "Schedule123",
+            "tenant_id": tenant["id"],
+        },
     ).json()
-    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    headers = {
+        "Authorization": f"Bearer {login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     doctors = client.get("/api/v1/practitioners", headers=headers)
     created = client.post(
@@ -311,7 +355,9 @@ def test_scheduling_crud_permissions_can_manage_doctor_time_slots(client):
             "slot_minutes": 15,
         },
     )
-    deleted = client.delete(f"/api/v1/practitioners/schedules/{created.json()['id']}", headers=headers)
+    deleted = client.delete(
+        f"/api/v1/practitioners/schedules/{created.json()['id']}", headers=headers
+    )
 
     assert doctors.status_code == 200
     assert doctors.json()[0]["id"] == practitioner["id"]
@@ -324,7 +370,9 @@ def test_scheduling_crud_permissions_can_manage_doctor_time_slots(client):
 
 
 def test_scheduling_read_permission_cannot_create_doctor_time_slots(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -356,9 +404,16 @@ def test_scheduling_read_permission_cannot_create_doctor_time_slots(client):
     ).json()
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user["email"], "password": "Schedule123", "tenant_id": tenant["id"]},
+        json={
+            "email": user["email"],
+            "password": "Schedule123",
+            "tenant_id": tenant["id"],
+        },
     ).json()
-    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    headers = {
+        "Authorization": f"Bearer {login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     listed_doctors = client.get("/api/v1/practitioners", headers=headers)
     listed_schedules = client.get("/api/v1/practitioners/schedules", headers=headers)
@@ -381,7 +436,9 @@ def test_scheduling_read_permission_cannot_create_doctor_time_slots(client):
 
 
 def test_update_and_delete_practitioner_management(client):
-    tenant, branch, other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -422,7 +479,9 @@ def test_update_and_delete_practitioner_management(client):
 
 
 def test_schedule_management_list_update_and_delete(client):
-    tenant, branch, other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -446,7 +505,9 @@ def test_schedule_management_list_update_and_delete(client):
         },
     ).json()
 
-    listed = client.get("/api/v1/practitioners/schedules", headers={"X-Tenant-ID": tenant["id"]})
+    listed = client.get(
+        "/api/v1/practitioners/schedules", headers={"X-Tenant-ID": tenant["id"]}
+    )
     updated = client.patch(
         f"/api/v1/practitioners/schedules/{schedule['id']}",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -480,7 +541,9 @@ def test_schedule_management_list_update_and_delete(client):
 
 
 def test_schedule_rejects_department_not_mapped_to_practitioner(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -505,11 +568,16 @@ def test_schedule_rejects_department_not_mapped_to_practitioner(client):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Practitioner is not assigned to this branch and department"
+    assert (
+        response.json()["detail"]
+        == "Practitioner is not assigned to this branch and department"
+    )
 
 
 def test_schedule_allows_same_timing_as_separate_department_records(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -549,7 +617,9 @@ def test_schedule_allows_same_timing_as_separate_department_records(client):
 
 
 def test_appointment_rejects_practitioner_not_assigned_to_department(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -574,11 +644,16 @@ def test_appointment_rejects_practitioner_not_assigned_to_department(client):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Practitioner is not assigned to this branch and department"
+    assert (
+        response.json()["detail"]
+        == "Practitioner is not assigned to this branch and department"
+    )
 
 
 def test_appointment_accepts_practitioner_assigned_to_branch_and_department(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -620,7 +695,9 @@ def test_appointment_accepts_practitioner_assigned_to_branch_and_department(clie
 
 
 def test_date_only_appointment_requires_practitioner_scheduled_weekday(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -661,11 +738,17 @@ def test_date_only_appointment_requires_practitioner_scheduled_weekday(client):
 
 
 def test_backend_auto_assigns_next_available_exact_slots(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     second_patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"branch_id": branch["id"], "full_name": "Early Token Patient", "mobile": "9000000022"},
+        json={
+            "branch_id": branch["id"],
+            "full_name": "Early Token Patient",
+            "mobile": "9000000022",
+        },
     ).json()
     practitioner = client.post(
         "/api/v1/practitioners",
@@ -723,7 +806,9 @@ def test_backend_auto_assigns_next_available_exact_slots(client):
 
 
 def test_timed_appointment_requires_active_practitioner_schedule(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     enable_interval_slots(client, tenant["id"], branch["id"])
     practitioner = client.post(
         "/api/v1/practitioners",
@@ -754,7 +839,9 @@ def test_timed_appointment_requires_active_practitioner_schedule(client):
 
 
 def test_schedule_availability_allows_booking_and_prevents_double_booking(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -821,11 +908,16 @@ def test_schedule_availability_allows_booking_and_prevents_double_booking(client
     assert availability.json()["room_name"] == "Room 1"
     assert booked.status_code == 201
     assert duplicate.status_code == 409
-    assert duplicate.json()["detail"] == "Patient already has an active appointment at this time"
+    assert (
+        duplicate.json()["detail"]
+        == "Patient already has an active appointment at this time"
+    )
 
 
 def test_same_patient_cannot_book_same_doctor_twice_in_same_timing_session(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -890,18 +982,27 @@ def test_same_patient_cannot_book_same_doctor_twice_in_same_timing_session(clien
 
     assert first.status_code == 201
     assert same_session.status_code == 409
-    assert same_session.json()["detail"] == "Patient already has an active appointment with this doctor in the selected timing session"
+    assert (
+        same_session.json()["detail"]
+        == "Patient already has an active appointment with this doctor in the selected timing session"
+    )
     assert evening_session.status_code == 201
 
 
 def test_same_patient_cannot_book_two_doctors_at_same_exact_time(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     doctors = []
     for name in ["Dr. First Time", "Dr. Second Time"]:
         doctor = client.post(
             "/api/v1/practitioners",
             headers={"X-Tenant-ID": tenant["id"]},
-            json={"full_name": name, "branch_ids": [branch["id"]], "department_ids": ["general"]},
+            json={
+                "full_name": name,
+                "branch_ids": [branch["id"]],
+                "department_ids": ["general"],
+            },
         ).json()
         doctors.append(doctor)
         client.post(
@@ -945,11 +1046,16 @@ def test_same_patient_cannot_book_two_doctors_at_same_exact_time(client):
 
     assert first.status_code == 201
     assert second.status_code == 409
-    assert second.json()["detail"] == "Patient already has an active appointment at this time"
+    assert (
+        second.json()["detail"]
+        == "Patient already has an active appointment at this time"
+    )
 
 
 def test_same_doctor_cannot_book_two_patients_across_departments_at_same_time(client):
-    tenant, branch, _other_branch, first_patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, first_patient = (
+        setup_tenant_branch_departments_patient(client)
+    )
     second_patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -1026,11 +1132,16 @@ def test_same_doctor_cannot_book_two_patients_across_departments_at_same_time(cl
     assert blocked_slot["available"] is False
     assert blocked_slot["status"] == "booked"
     assert second.status_code == 409
-    assert second.json()["detail"] == "Doctor already has an active appointment at this time"
+    assert (
+        second.json()["detail"]
+        == "Doctor already has an active appointment at this time"
+    )
 
 
 def test_practitioner_leave_blocks_timed_appointment(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     enable_interval_slots(client, tenant["id"], branch["id"])
     practitioner = client.post(
         "/api/v1/practitioners",
@@ -1084,16 +1195,26 @@ def test_practitioner_leave_blocks_timed_appointment(client):
 
 
 def test_room_assignment_rejects_overlapping_room_use(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     first = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Dr. Room One", "branch_ids": [branch["id"]], "department_ids": ["general"]},
+        json={
+            "full_name": "Dr. Room One",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
     ).json()
     second = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Dr. Room Two", "branch_ids": [branch["id"]], "department_ids": ["general"]},
+        json={
+            "full_name": "Dr. Room Two",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
     ).json()
 
     first_assignment = client.post(
@@ -1125,7 +1246,9 @@ def test_room_assignment_rejects_overlapping_room_use(client):
 
 
 def test_practitioner_calendar_generates_available_booked_and_leave_slots(client):
-    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -1193,11 +1316,17 @@ def test_practitioner_calendar_generates_available_booked_and_leave_slots(client
 
 
 def test_practitioner_calendar_rejects_large_date_range(client):
-    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(client)
+    tenant, branch, _other_branch, _patient = setup_tenant_branch_departments_patient(
+        client
+    )
     practitioner = client.post(
         "/api/v1/practitioners",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Dr. Range", "branch_ids": [branch["id"]], "department_ids": ["general"]},
+        json={
+            "full_name": "Dr. Range",
+            "branch_ids": [branch["id"]],
+            "department_ids": ["general"],
+        },
     ).json()
 
     response = client.get(

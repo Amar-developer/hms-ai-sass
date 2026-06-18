@@ -25,7 +25,9 @@ class Practitioner(SQLModel, table=True):
     user_id: str | None = Field(default=None, index=True, foreign_key="user.id")
     practitioner_number: str | None = Field(default=None, index=True, max_length=60)
     full_name: str = Field(index=True, min_length=2, max_length=180)
-    practitioner_type: PractitionerType = Field(default=PractitionerType.DOCTOR, index=True)
+    practitioner_type: PractitionerType = Field(
+        default=PractitionerType.DOCTOR, index=True
+    )
     primary_specialty: str | None = Field(default=None, index=True, max_length=160)
     registration_number: str | None = Field(default=None, index=True, max_length=120)
     mobile: str | None = Field(default=None, max_length=20)

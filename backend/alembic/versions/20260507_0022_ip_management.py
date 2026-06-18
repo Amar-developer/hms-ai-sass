@@ -22,7 +22,9 @@ def _tables() -> set[str]:
 def _columns(table_name: str) -> set[str]:
     if table_name not in _tables():
         return set()
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def _create_if_missing(table_name: str, *columns: sa.Column) -> None:
@@ -171,14 +173,31 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    _add("invoice", "ip_admission_id", sa.Column("ip_admission_id", sa.String(), nullable=True))
-    if "invoice" in _tables() and "appointment_id" in _columns("invoice") and op.get_bind().dialect.name != "sqlite":
-        op.alter_column("invoice", "appointment_id", existing_type=sa.String(), nullable=True)
+    _add(
+        "invoice",
+        "ip_admission_id",
+        sa.Column("ip_admission_id", sa.String(), nullable=True),
+    )
+    if (
+        "invoice" in _tables()
+        and "appointment_id" in _columns("invoice")
+        and op.get_bind().dialect.name != "sqlite"
+    ):
+        op.alter_column(
+            "invoice", "appointment_id", existing_type=sa.String(), nullable=True
+        )
 
 
 def downgrade() -> None:
     if "invoice" in _tables() and "ip_admission_id" in _columns("invoice"):
         op.drop_column("invoice", "ip_admission_id")
-    for table_name in ["ipcharge", "ipdischargesummary", "ipconsentform", "ipconsultation", "iptreatment", "ipadmission"]:
+    for table_name in [
+        "ipcharge",
+        "ipdischargesummary",
+        "ipconsentform",
+        "ipconsultation",
+        "iptreatment",
+        "ipadmission",
+    ]:
         if table_name in _tables():
             op.drop_table(table_name)

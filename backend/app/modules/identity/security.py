@@ -61,7 +61,9 @@ def create_access_session(session: Session, user: User) -> tuple[str, AuthSessio
     return token, auth_session
 
 
-def find_user_by_login(session: Session, email: str, tenant_id: str | None = None) -> User | None:
+def find_user_by_login(
+    session: Session, email: str, tenant_id: str | None = None
+) -> User | None:
     statement = select(User).where(User.email == email.lower(), User.is_active == True)  # noqa: E712
     if tenant_id:
         statement = statement.where(User.tenant_id == tenant_id)

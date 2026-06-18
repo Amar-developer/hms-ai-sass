@@ -26,11 +26,15 @@ def test_seed_demo_creates_complete_workflow_data(client, test_engine):
         assert session.get(QueueEntry, first["queue_entry_id"])
         assert session.get(Consultation, first["consultation_id"])
         assert session.get(Invoice, first["invoice_id"])
-        super_admin = session.exec(select(User).where(User.email == "super.admin@demo.medizinhub.local")).first()
+        super_admin = session.exec(
+            select(User).where(User.email == "super.admin@demo.medizinhub.local")
+        ).first()
         super_role = session.exec(select(Role).where(Role.key == "super_admin")).first()
         assert super_admin is not None
         primary_tenant_admin_role = session.exec(
-            select(Role).where(Role.tenant_id == super_admin.tenant_id, Role.key == "tenant_admin")
+            select(Role).where(
+                Role.tenant_id == super_admin.tenant_id, Role.key == "tenant_admin"
+            )
         ).first()
         assert super_role is not None
         assert super_role.tenant_id == super_admin.tenant_id
@@ -39,12 +43,19 @@ def test_seed_demo_creates_complete_workflow_data(client, test_engine):
         assert primary_tenant_admin_role.name == "Tenant Admin"
         assert primary_tenant_admin_role.is_global_template is True
         assert session.exec(
-            select(UserRole).where(UserRole.user_id == super_admin.id, UserRole.role_id == super_role.id)
+            select(UserRole).where(
+                UserRole.user_id == super_admin.id, UserRole.role_id == super_role.id
+            )
         ).first()
 
         notification_events = session.exec(
-            select(NotificationEvent.event_type).where(NotificationEvent.tenant_id == first["tenant_id"])
+            select(NotificationEvent.event_type).where(
+                NotificationEvent.tenant_id == first["tenant_id"]
+            )
         ).all()
-        assert {"appointment_reminder", "queue_token_call", "payment_reminder", "follow_up_reminder"}.issubset(
-            {event.value for event in notification_events}
-        )
+        assert {
+            "appointment_reminder",
+            "queue_token_call",
+            "payment_reminder",
+            "follow_up_reminder",
+        }.issubset({event.value for event in notification_events})

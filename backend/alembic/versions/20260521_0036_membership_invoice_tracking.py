@@ -14,11 +14,15 @@ def _tables() -> set[str]:
 
 
 def _columns(table_name: str) -> set[str]:
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def _indexes(table_name: str) -> set[str]:
-    return {index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)}
+    return {
+        index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)
+    }
 
 
 def _add(table_name: str, column_name: str, column: sa.Column) -> None:
@@ -42,17 +46,53 @@ def _drop_column(table_name: str, column_name: str) -> None:
 
 
 def upgrade() -> None:
-    _add("invoice", "patient_subscription_enrollment_id", sa.Column("patient_subscription_enrollment_id", sa.String(), nullable=True))
-    _add("invoice", "patient_subscription_plan_id", sa.Column("patient_subscription_plan_id", sa.String(), nullable=True))
-    _add("invoice", "membership_discount_amount", sa.Column("membership_discount_amount", sa.Integer(), nullable=False, server_default="0"))
-    _index("ix_invoice_patient_subscription_enrollment_id", "invoice", ["patient_subscription_enrollment_id"])
-    _index("ix_invoice_patient_subscription_plan_id", "invoice", ["patient_subscription_plan_id"])
-    _add("patientsubscriptionenrollment", "purchase_invoice_id", sa.Column("purchase_invoice_id", sa.String(), nullable=True))
-    _index("ix_patientsubscriptionenrollment_purchase_invoice_id", "patientsubscriptionenrollment", ["purchase_invoice_id"])
+    _add(
+        "invoice",
+        "patient_subscription_enrollment_id",
+        sa.Column("patient_subscription_enrollment_id", sa.String(), nullable=True),
+    )
+    _add(
+        "invoice",
+        "patient_subscription_plan_id",
+        sa.Column("patient_subscription_plan_id", sa.String(), nullable=True),
+    )
+    _add(
+        "invoice",
+        "membership_discount_amount",
+        sa.Column(
+            "membership_discount_amount",
+            sa.Integer(),
+            nullable=False,
+            server_default="0",
+        ),
+    )
+    _index(
+        "ix_invoice_patient_subscription_enrollment_id",
+        "invoice",
+        ["patient_subscription_enrollment_id"],
+    )
+    _index(
+        "ix_invoice_patient_subscription_plan_id",
+        "invoice",
+        ["patient_subscription_plan_id"],
+    )
+    _add(
+        "patientsubscriptionenrollment",
+        "purchase_invoice_id",
+        sa.Column("purchase_invoice_id", sa.String(), nullable=True),
+    )
+    _index(
+        "ix_patientsubscriptionenrollment_purchase_invoice_id",
+        "patientsubscriptionenrollment",
+        ["purchase_invoice_id"],
+    )
 
 
 def downgrade() -> None:
-    _drop_index("ix_patientsubscriptionenrollment_purchase_invoice_id", "patientsubscriptionenrollment")
+    _drop_index(
+        "ix_patientsubscriptionenrollment_purchase_invoice_id",
+        "patientsubscriptionenrollment",
+    )
     _drop_column("patientsubscriptionenrollment", "purchase_invoice_id")
     _drop_index("ix_invoice_patient_subscription_plan_id", "invoice")
     _drop_index("ix_invoice_patient_subscription_enrollment_id", "invoice")

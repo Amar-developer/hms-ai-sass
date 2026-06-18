@@ -41,4 +41,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     columns = _columns("patientsubscriptionplan")
     if "free_consultation_department_ids_json" in columns:
-        op.drop_column("patientsubscriptionplan", "free_consultation_department_ids_json")
+        op.drop_column(
+            "patientsubscriptionplan", "free_consultation_department_ids_json"
+        )

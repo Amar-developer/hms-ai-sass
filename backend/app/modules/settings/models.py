@@ -50,7 +50,9 @@ class AdminSetting(SQLModel, table=True):
 
 class DocumentSequence(SQLModel, table=True):
     __table_args__ = (
-        UniqueConstraint("tenant_id", "branch_id", "entity", name="uq_document_sequence_scope_entity"),
+        UniqueConstraint(
+            "tenant_id", "branch_id", "entity", name="uq_document_sequence_scope_entity"
+        ),
     )
 
     id: str = Field(default_factory=lambda: new_id("seq"), primary_key=True)

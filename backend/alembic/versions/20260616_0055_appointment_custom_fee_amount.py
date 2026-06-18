@@ -28,8 +28,12 @@ def _columns(table_name: str) -> set[str]:
 
 
 def upgrade() -> None:
-    if "appointment" in _tables() and "custom_fee_amount" not in _columns("appointment"):
-        op.add_column("appointment", sa.Column("custom_fee_amount", sa.Integer(), nullable=True))
+    if "appointment" in _tables() and "custom_fee_amount" not in _columns(
+        "appointment"
+    ):
+        op.add_column(
+            "appointment", sa.Column("custom_fee_amount", sa.Integer(), nullable=True)
+        )
 
 
 def downgrade() -> None:

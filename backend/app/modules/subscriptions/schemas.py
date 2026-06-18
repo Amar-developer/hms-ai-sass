@@ -3,7 +3,11 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
-from app.modules.subscriptions.models import CreditStatus, SubscriptionInvoiceStatus, SubscriptionStatus
+from app.modules.subscriptions.models import (
+    CreditStatus,
+    SubscriptionInvoiceStatus,
+    SubscriptionStatus,
+)
 
 
 class SubscriptionPlanCreate(BaseModel):

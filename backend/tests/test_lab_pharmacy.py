@@ -34,12 +34,17 @@ def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
 def test_local_lab_catalog_setting_disables_external_lookup(test_engine, monkeypatch):
     from app.api.v1 import lab as lab_api
 
-    monkeypatch.setattr(lab_api.get_settings(), "maha_clinic_url", "https://erpnext.example.test")
+    monkeypatch.setattr(
+        lab_api.get_settings(), "maha_clinic_url", "https://erpnext.example.test"
+    )
     monkeypatch.setattr(lab_api.get_settings(), "maha_clinic_token", "token")
     monkeypatch.setattr(lab_api.get_settings(), "external_lab_items_enabled", True)
 
     with Session(test_engine) as session:
-        assert lab_api._external_lab_items_enabled(session, "tenant_local_catalog") is False
+        assert (
+            lab_api._external_lab_items_enabled(session, "tenant_local_catalog")
+            is False
+        )
 
         upsert_setting(
             session,
@@ -55,11 +60,16 @@ def test_local_lab_catalog_setting_disables_external_lookup(test_engine, monkeyp
         )
         session.commit()
 
-        assert lab_api._external_lab_items_enabled(session, "tenant_local_catalog") is False
+        assert (
+            lab_api._external_lab_items_enabled(session, "tenant_local_catalog")
+            is False
+        )
 
 
 def setup_lab_pharmacy_tenant(client):
-    tenant = client.post("/api/v1/tenants", json={"name": "Diagnostics Pharmacy Clinic"}).json()
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Diagnostics Pharmacy Clinic"}
+    ).json()
     branch = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
         json={"name": "Main Branch", "code": "MAIN"},
@@ -95,7 +105,11 @@ def setup_lab_pharmacy_tenant(client):
     client.post(
         "/api/v1/subscription-plans/tenant-subscriptions",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"plan_id": plan["id"], "starts_on": date.today().isoformat(), "is_trial": False},
+        json={
+            "plan_id": plan["id"],
+            "starts_on": date.today().isoformat(),
+            "is_trial": False,
+        },
     )
     return tenant, branch, patient
 
@@ -151,15 +165,26 @@ def setup_signed_consultation(client):
 
 
 def test_trial_plan_blocks_lab_and_pharmacy_modules(client):
-    tenant = client.post("/api/v1/tenants", json={"name": "Trial Lab Pharmacy Clinic"}).json()
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Trial Lab Pharmacy Clinic"}
+    ).json()
 
-    lab_response = client.get("/api/v1/lab/orders", headers={"X-Tenant-ID": tenant["id"]})
-    pharmacy_response = client.get("/api/v1/pharmacy/issues", headers={"X-Tenant-ID": tenant["id"]})
+    lab_response = client.get(
+        "/api/v1/lab/orders", headers={"X-Tenant-ID": tenant["id"]}
+    )
+    pharmacy_response = client.get(
+        "/api/v1/pharmacy/issues", headers={"X-Tenant-ID": tenant["id"]}
+    )
 
     assert lab_response.status_code == 403
-    assert lab_response.json()["detail"] == "Module lab is not enabled for plan Free Trial"
+    assert (
+        lab_response.json()["detail"] == "Module lab is not enabled for plan Free Trial"
+    )
     assert pharmacy_response.status_code == 403
-    assert pharmacy_response.json()["detail"] == "Module pharmacy is not enabled for plan Free Trial"
+    assert (
+        pharmacy_response.json()["detail"]
+        == "Module pharmacy is not enabled for plan Free Trial"
+    )
 
 
 def test_create_lab_order_from_consultation_and_release_result(client):
@@ -179,7 +204,9 @@ def test_create_lab_order_from_consultation_and_release_result(client):
             "released_by_user_id": "lab_user",
         },
     )
-    listed = client.get("/api/v1/lab/orders", headers={"X-Tenant-ID": tenant["id"]}).json()
+    listed = client.get(
+        "/api/v1/lab/orders", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert order.status_code == 201
     assert order.json()["source"] == "consultation"
@@ -206,10 +233,18 @@ def test_zero_amount_lab_order_reprices_from_external_catalog(test_engine, monke
                 "mrp_price": 100,
                 "selling_price": 75,
                 "buying_price": 20,
-                "suppliers": [{"supplier": "Neuberg", "supplier_name": "Neuberg", "buying_price": 20}],
+                "suppliers": [
+                    {
+                        "supplier": "Neuberg",
+                        "supplier_name": "Neuberg",
+                        "buying_price": 20,
+                    }
+                ],
             }
 
-    monkeypatch.setattr(lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True)
+    monkeypatch.setattr(
+        lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True
+    )
     monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
 
     with Session(test_engine) as session:
@@ -256,10 +291,18 @@ def test_text_only_lab_order_creates_priced_external_items(test_engine, monkeypa
                 "mrp_price": 100,
                 "selling_price": 75,
                 "buying_price": 20,
-                "suppliers": [{"supplier": "Neuberg", "supplier_name": "Neuberg", "buying_price": 20}],
+                "suppliers": [
+                    {
+                        "supplier": "Neuberg",
+                        "supplier_name": "Neuberg",
+                        "buying_price": 20,
+                    }
+                ],
             }
 
-    monkeypatch.setattr(lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True)
+    monkeypatch.setattr(
+        lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True
+    )
     monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
 
     with Session(test_engine) as session:
@@ -276,7 +319,9 @@ def test_text_only_lab_order_creates_priced_external_items(test_engine, monkeypa
         session.refresh(order)
 
         changed = lab_api._reprice_zero_order_items(session, order)
-        items = session.exec(select(LabOrderItem).where(LabOrderItem.lab_order_id == order.id)).all()
+        items = session.exec(
+            select(LabOrderItem).where(LabOrderItem.lab_order_id == order.id)
+        ).all()
 
     assert changed is True
     assert order.amount == 75
@@ -315,7 +360,13 @@ def test_selected_external_lab_item_uses_exact_item_code(test_engine, monkeypatc
                     "mrp_price": 100,
                     "selling_price": 30,
                     "buying_price": 0,
-                    "suppliers": [{"supplier": "Sri Maha Clinic", "supplier_name": "Sri Maha Clinic", "buying_price": 0}],
+                    "suppliers": [
+                        {
+                            "supplier": "Sri Maha Clinic",
+                            "supplier_name": "Sri Maha Clinic",
+                            "buying_price": 0,
+                        }
+                    ],
                 }
             return {
                 "slug": "hemoglobin",
@@ -327,7 +378,9 @@ def test_selected_external_lab_item_uses_exact_item_code(test_engine, monkeypatc
                 "suppliers": [],
             }
 
-    monkeypatch.setattr(lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True)
+    monkeypatch.setattr(
+        lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True
+    )
     monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
 
     with Session(test_engine) as session:
@@ -346,9 +399,17 @@ def test_selected_external_lab_item_uses_exact_item_code(test_engine, monkeypatc
         total = lab_api._add_priced_order_items_from_names(
             session,
             order=order,
-            item_names=[{"item_name": "BP Test", "external_item_code": "BP", "external_slug": "bp-test"}],
+            item_names=[
+                {
+                    "item_name": "BP Test",
+                    "external_item_code": "BP",
+                    "external_slug": "bp-test",
+                }
+            ],
         )
-        items = session.exec(select(LabOrderItem).where(LabOrderItem.lab_order_id == order.id)).all()
+        items = session.exec(
+            select(LabOrderItem).where(LabOrderItem.lab_order_id == order.id)
+        ).all()
 
     assert total == 30
     assert len(items) == 1
@@ -395,7 +456,9 @@ def test_create_direct_op_and_external_lab_orders(client):
     assert status_update.json()["status"] == "sample_collected"
 
 
-def test_lab_catalog_package_order_items_sample_template_report_and_consultation_visibility(client):
+def test_lab_catalog_package_order_items_sample_template_report_and_consultation_visibility(
+    client,
+):
     tenant, branch, patient, consultation = setup_signed_consultation(client)
     enable_lab_report_notifications(client, tenant["id"], branch["id"])
 
@@ -413,17 +476,31 @@ def test_lab_catalog_package_order_items_sample_template_report_and_consultation
     fbs = client.post(
         "/api/v1/lab/catalog/tests",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"code": "FBS", "name": "Fasting Blood Sugar", "sample_type": "Blood", "default_price": 120},
+        json={
+            "code": "FBS",
+            "name": "Fasting Blood Sugar",
+            "sample_type": "Blood",
+            "default_price": 120,
+        },
     ).json()
     package = client.post(
         "/api/v1/lab/catalog/packages",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"code": "FEVER", "name": "Fever Panel", "package_price": 400, "test_ids": [cbc["id"], fbs["id"]]},
+        json={
+            "code": "FEVER",
+            "name": "Fever Panel",
+            "package_price": 400,
+            "test_ids": [cbc["id"], fbs["id"]],
+        },
     )
     template = client.post(
         "/api/v1/lab/result-templates",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"test_id": cbc["id"], "name": "CBC Template", "content": {"fields": ["Hb", "WBC"]}},
+        json={
+            "test_id": cbc["id"],
+            "name": "CBC Template",
+            "content": {"fields": ["Hb", "WBC"]},
+        },
     )
     order = client.post(
         "/api/v1/lab/orders",
@@ -440,7 +517,11 @@ def test_lab_catalog_package_order_items_sample_template_report_and_consultation
     detail = client.post(
         f"/api/v1/lab/orders/{order.json()['id']}/samples",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"barcode": "LAB-001", "sample_type": "Blood", "collected_by_user_id": "lab_user"},
+        json={
+            "barcode": "LAB-001",
+            "sample_type": "Blood",
+            "collected_by_user_id": "lab_user",
+        },
     )
     result = client.post(
         f"/api/v1/lab/orders/{order.json()['id']}/results",
@@ -457,7 +538,9 @@ def test_lab_catalog_package_order_items_sample_template_report_and_consultation
         f"/api/v1/lab/orders/{order.json()['id']}/report.pdf",
         headers={"X-Tenant-ID": tenant["id"]},
     )
-    notifications = client.get("/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}).json()
+    notifications = client.get(
+        "/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     referral_order = client.post(
         f"/api/v1/lab/orders/from-consultation/{consultation['id']}",
@@ -480,11 +563,17 @@ def test_lab_catalog_package_order_items_sample_template_report_and_consultation
     assert result.json()["results"][0]["report_file_name"] == "lab-001.pdf"
     assert report.status_code == 200
     assert report.headers["content-type"] == "application/pdf"
-    assert {row["provider"] for row in notifications if row["event_type"] == "lab_report_ready"} == {
+    assert {
+        row["provider"]
+        for row in notifications
+        if row["event_type"] == "lab_report_ready"
+    } == {
         "sms",
         "whatsapp",
     }
-    assert any(row["id"] == referral_order["id"] for row in consultation_detail["lab_orders"])
+    assert any(
+        row["id"] == referral_order["id"] for row in consultation_detail["lab_orders"]
+    )
 
 
 def test_create_pharmacy_issue_from_consultation_and_dispense(client):
@@ -640,7 +729,9 @@ def test_create_external_pharmacy_issue(client):
     assert issue.json()["external_prescriber"] == "Outside Diabetology Clinic"
 
 
-def test_pharmacy_catalog_purchase_stock_dispense_substitute_low_stock_and_billing_link(client):
+def test_pharmacy_catalog_purchase_stock_dispense_substitute_low_stock_and_billing_link(
+    client,
+):
     tenant, branch, patient = setup_lab_pharmacy_tenant(client)
 
     paracetamol = client.post(
@@ -659,7 +750,12 @@ def test_pharmacy_catalog_purchase_stock_dispense_substitute_low_stock_and_billi
     substitute = client.post(
         "/api/v1/pharmacy/medicines",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"code": "ACET500", "name": "Acetaminophen 500mg", "generic_name": "Paracetamol", "default_sale_price": 6},
+        json={
+            "code": "ACET500",
+            "name": "Acetaminophen 500mg",
+            "generic_name": "Paracetamol",
+            "default_sale_price": 6,
+        },
     ).json()
     supplier = client.post(
         "/api/v1/pharmacy/suppliers",
@@ -692,7 +788,7 @@ def test_pharmacy_catalog_purchase_stock_dispense_substitute_low_stock_and_billi
                     "quantity": 2,
                     "cost_price": 3,
                     "sale_price": 6,
-                }
+                },
             ],
             "purchased_by_user_id": "pharmacy_user",
         },
@@ -743,11 +839,20 @@ def test_pharmacy_catalog_purchase_stock_dispense_substitute_low_stock_and_billi
             "supplier_id": supplier["id"],
             "purchase_id": purchase.json()["id"],
             "reason": "Expired medicine returned to supplier",
-            "items": [{"medicine_id": paracetamol["id"], "batch_id": batch_id, "quantity": 1, "amount": 2}],
+            "items": [
+                {
+                    "medicine_id": paracetamol["id"],
+                    "batch_id": batch_id,
+                    "quantity": 1,
+                    "amount": 2,
+                }
+            ],
             "returned_by_user_id": "pharmacy_user",
         },
     )
-    ledger = client.get("/api/v1/pharmacy/stock-ledger", headers={"X-Tenant-ID": tenant["id"]}).json()
+    ledger = client.get(
+        "/api/v1/pharmacy/stock-ledger", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
     low_stock = client.get(
         f"/api/v1/pharmacy/low-stock?branch_id={branch['id']}",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -771,6 +876,14 @@ def test_pharmacy_catalog_purchase_stock_dispense_substitute_low_stock_and_billi
     assert returned.json()["total_amount"] == 2
     assert any(row["movement_type"] == "purchase" for row in ledger)
     assert any(row["movement_type"] == "dispense" for row in ledger)
-    assert any(row["movement_type"] == "return" for row in client.get("/api/v1/pharmacy/stock-ledger", headers={"X-Tenant-ID": tenant["id"]}).json())
-    assert any(row["medicine_id"] == paracetamol["id"] and row["quantity_on_hand"] == 7 for row in low_stock)
+    assert any(
+        row["movement_type"] == "return"
+        for row in client.get(
+            "/api/v1/pharmacy/stock-ledger", headers={"X-Tenant-ID": tenant["id"]}
+        ).json()
+    )
+    assert any(
+        row["medicine_id"] == paracetamol["id"] and row["quantity_on_hand"] == 7
+        for row in low_stock
+    )
     assert detail["items"][1]["substitute_for_medicine_id"] == paracetamol["id"]

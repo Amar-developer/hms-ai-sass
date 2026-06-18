@@ -28,7 +28,9 @@ class User(SQLModel, table=True):
 class Role(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("role"), primary_key=True)
     tenant_id: str | None = Field(default=None, index=True, foreign_key="tenant.id")
-    source_template_role_id: str | None = Field(default=None, index=True, foreign_key="role.id")
+    source_template_role_id: str | None = Field(
+        default=None, index=True, foreign_key="role.id"
+    )
     name: str = Field(index=True, min_length=2, max_length=120)
     key: str = Field(index=True, min_length=2, max_length=80)
     is_active: bool = Field(default=True, index=True)

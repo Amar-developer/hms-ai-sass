@@ -26,7 +26,9 @@ class HomeCareBooking(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
-    assigned_staff_user_id: str | None = Field(default=None, index=True, foreign_key="user.id")
+    assigned_staff_user_id: str | None = Field(
+        default=None, index=True, foreign_key="user.id"
+    )
     assigned_staff_name: str | None = Field(default=None, index=True, max_length=160)
     staff_type: str | None = Field(default=None, index=True, max_length=80)
     booking_number: str = Field(index=True, min_length=3, max_length=60)
@@ -46,7 +48,9 @@ class HomeCareBookingItem(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("hcitem"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     booking_id: str = Field(index=True, foreign_key="homecarebooking.id")
-    service_id: str | None = Field(default=None, index=True, foreign_key="homecareservice.id")
+    service_id: str | None = Field(
+        default=None, index=True, foreign_key="homecareservice.id"
+    )
     description: str = Field(max_length=260)
     quantity: int = Field(default=1, ge=1)
     unit_amount: int = Field(default=0, ge=0)

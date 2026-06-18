@@ -3,7 +3,15 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.modules.appointments.models import AppointmentType
-from app.modules.billing.models import ApprovalStatus, CreditNoteStatus, DiscountType, FeeShareType, InvoiceStatus, PaymentMethod, PaymentStatus
+from app.modules.billing.models import (
+    ApprovalStatus,
+    CreditNoteStatus,
+    DiscountType,
+    FeeShareType,
+    InvoiceStatus,
+    PaymentMethod,
+    PaymentStatus,
+)
 from app.modules.billing.models import SettlementStatus
 
 

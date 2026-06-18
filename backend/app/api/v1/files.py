@@ -1,6 +1,15 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
@@ -119,7 +128,7 @@ def _match_upload_to_entity(session: Session, tenant_id: str, filename: str):
         prefix = rule["prefix"]
         if not filename.startswith(prefix):
             continue
-        remainder = filename[len(prefix):]
+        remainder = filename[len(prefix) :]
         # Filename pattern: {prefix}{id_part}_{uuid_hex}{ext}. The id_part is the
         # first 12 chars of the entity id (or the full tenant id for tenant_logo).
         underscore = remainder.find("_")
@@ -142,7 +151,9 @@ def _match_upload_to_entity(session: Session, tenant_id: str, filename: str):
 def _get_file(session: Session, tenant_id: str, file_id: str) -> FileDocument:
     row = session.get(FileDocument, file_id)
     if not row or row.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+        )
     return row
 
 
@@ -173,7 +184,10 @@ def list_files(
     ),
 ) -> list[FileDocument]:
     branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(FileDocument).where(FileDocument.tenant_id == tenant_id, FileDocument.is_active == True)  # noqa: E712
+    statement = select(FileDocument).where(
+        FileDocument.tenant_id == tenant_id,
+        FileDocument.is_active == True,  # noqa: E712
+    )  # noqa: E712
     if branch_id:
         statement = statement.where(FileDocument.branch_id == branch_id)
     if patient_id:
@@ -181,7 +195,9 @@ def list_files(
     if category:
         statement = statement.where(FileDocument.category == category)
     if attached_to_doctype:
-        statement = statement.where(FileDocument.attached_to_doctype == attached_to_doctype)
+        statement = statement.where(
+            FileDocument.attached_to_doctype == attached_to_doctype
+        )
     if attached_to_name:
         statement = statement.where(FileDocument.attached_to_name == attached_to_name)
     if q:
@@ -197,7 +213,11 @@ def list_files(
                 FileDocument.notes.ilike(pattern),
             )
         )
-    rows = list(session.exec(statement.order_by(FileDocument.created_at.desc()).limit(limit)).all())
+    rows = list(
+        session.exec(
+            statement.order_by(FileDocument.created_at.desc()).limit(limit)
+        ).all()
+    )
     return rows
 
 
@@ -294,8 +314,16 @@ def sync_uploads_folder(
         rule, entity = _match_upload_to_entity(session, tenant_id, path.name)
         if not rule or not entity:
             continue
-        patient_id = getattr(entity, rule["patient_attr"], None) if rule.get("patient_attr") else None
-        branch_id = getattr(entity, rule["branch_attr"], None) if rule.get("branch_attr") else None
+        patient_id = (
+            getattr(entity, rule["patient_attr"], None)
+            if rule.get("patient_attr")
+            else None
+        )
+        branch_id = (
+            getattr(entity, rule["branch_attr"], None)
+            if rule.get("branch_attr")
+            else None
+        )
         try:
             file_size = path.stat().st_size
         except OSError:
@@ -348,7 +376,13 @@ def update_file(
     payload: FileDocumentUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.FILES_MANAGE, permissions.FILES_EDIT, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_EDIT,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
 ) -> FileDocument:
     row = _get_file(session, tenant_id, file_id)
     require_user_branch_access(current_user, row.branch_id)
@@ -376,7 +410,13 @@ def delete_file(
     file_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.FILES_MANAGE, permissions.FILES_DELETE, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_DELETE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
 ) -> FileDocument:
     row = _get_file(session, tenant_id, file_id)
     require_user_branch_access(current_user, row.branch_id)

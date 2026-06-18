@@ -31,7 +31,7 @@ def get_database_url():
 def run_migrations_online():
     db_url = get_database_url()
 
-    #FORCE OVERRIDE EVERY TIME (important)
+    # FORCE OVERRIDE EVERY TIME (important)
     config.set_main_option("sqlalchemy.url", db_url)
 
     connectable = engine_from_config(

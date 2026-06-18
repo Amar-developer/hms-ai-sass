@@ -936,8 +936,3 @@ export function Pharmacy({
     </div>
   );
 }
-
-
-
-
-

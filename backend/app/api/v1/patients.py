@@ -8,7 +8,11 @@ from app.core.access_control import (
     require_branch_in_tenant,
 )
 from app.core.uploads import save_upload
-from app.core.auth import require_any_permission, require_permission, user_permission_keys
+from app.core.auth import (
+    require_any_permission,
+    require_permission,
+    user_permission_keys,
+)
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
@@ -16,7 +20,13 @@ from app.modules.identity.models import User
 from app.modules.audit.service import record_audit_event
 from app.modules.appointments.models import Appointment
 from app.modules.files.service import record_file_document
-from app.modules.patients.models import AlertSeverity, AlertType, Patient, PatientAlert, PatientStatus
+from app.modules.patients.models import (
+    AlertSeverity,
+    AlertType,
+    Patient,
+    PatientAlert,
+    PatientStatus,
+)
 from app.modules.patients.schemas import (
     PatientAlertCreate,
     PatientAlertRead,
@@ -34,18 +44,26 @@ from app.modules.tenants.models import Tenant, now_utc
 router = APIRouter(prefix="/patients")
 
 
-def _next_patient_number(session: Session, tenant_id: str, branch_id: str | None = None) -> str:
-    return next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="patient")
+def _next_patient_number(
+    session: Session, tenant_id: str, branch_id: str | None = None
+) -> str:
+    return next_document_number(
+        session, tenant_id=tenant_id, branch_id=branch_id, entity="patient"
+    )
 
 
 def _get_patient_or_404(session: Session, tenant_id: str, patient_id: str) -> Patient:
     patient = session.get(Patient, patient_id)
     if not patient or patient.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
+        )
     return patient
 
 
-def _active_alerts(session: Session, tenant_id: str, patient_id: str) -> list[PatientAlert]:
+def _active_alerts(
+    session: Session, tenant_id: str, patient_id: str
+) -> list[PatientAlert]:
     return list(
         session.exec(
             select(PatientAlert)
@@ -63,7 +81,11 @@ def _normalize_mobile(value: str | None) -> str:
     return "".join(character for character in (value or "") if character.isdigit())
 
 
-def _patient_search_result(patient: Patient, alert_counts: dict[str, int] | None = None, critical_counts: dict[str, int] | None = None) -> PatientSearchResult:
+def _patient_search_result(
+    patient: Patient,
+    alert_counts: dict[str, int] | None = None,
+    critical_counts: dict[str, int] | None = None,
+) -> PatientSearchResult:
     return PatientSearchResult(
         id=patient.id,
         tenant_id=patient.tenant_id,
@@ -84,27 +106,45 @@ def _patient_search_result(patient: Patient, alert_counts: dict[str, int] | None
     )
 
 
-def _duplicate_candidates(session: Session, tenant_id: str, payload: PatientCreate) -> list[PatientDuplicateCandidate]:
+def _duplicate_candidates(
+    session: Session, tenant_id: str, payload: PatientCreate
+) -> list[PatientDuplicateCandidate]:
     normalized_mobile = _normalize_mobile(payload.mobile)
     normalized_guardian_mobile = _normalize_mobile(payload.guardian_mobile)
     normalized_name = payload.full_name.strip().lower()
     statement = select(Patient).where(Patient.tenant_id == tenant_id)
     conditions = [func.lower(Patient.full_name) == normalized_name]
     if normalized_mobile:
-        conditions.extend([Patient.mobile == payload.mobile, Patient.guardian_mobile == payload.mobile])
+        conditions.extend(
+            [
+                Patient.mobile == payload.mobile,
+                Patient.guardian_mobile == payload.mobile,
+            ]
+        )
     if normalized_guardian_mobile:
-        conditions.extend([Patient.mobile == payload.guardian_mobile, Patient.guardian_mobile == payload.guardian_mobile])
+        conditions.extend(
+            [
+                Patient.mobile == payload.guardian_mobile,
+                Patient.guardian_mobile == payload.guardian_mobile,
+            ]
+        )
     rows = list(session.exec(statement.where(or_(*conditions)).limit(10)).all())
     candidates: list[PatientDuplicateCandidate] = []
     for patient in rows:
         patient_mobile = _normalize_mobile(patient.mobile)
         patient_guardian_mobile = _normalize_mobile(patient.guardian_mobile)
         same_name = patient.full_name.strip().lower() == normalized_name
-        same_mobile = bool(normalized_mobile and normalized_mobile in {patient_mobile, patient_guardian_mobile})
-        same_guardian_mobile = bool(
-            normalized_guardian_mobile and normalized_guardian_mobile in {patient_mobile, patient_guardian_mobile}
+        same_mobile = bool(
+            normalized_mobile
+            and normalized_mobile in {patient_mobile, patient_guardian_mobile}
         )
-        same_date_of_birth = bool(payload.date_of_birth and patient.date_of_birth == payload.date_of_birth)
+        same_guardian_mobile = bool(
+            normalized_guardian_mobile
+            and normalized_guardian_mobile in {patient_mobile, patient_guardian_mobile}
+        )
+        same_date_of_birth = bool(
+            payload.date_of_birth and patient.date_of_birth == payload.date_of_birth
+        )
         if same_name and same_date_of_birth and (same_mobile or same_guardian_mobile):
             reason = "Same patient name, date of birth, and mobile"
             confidence = "high"
@@ -130,7 +170,11 @@ def _duplicate_candidates(session: Session, tenant_id: str, payload: PatientCrea
             reason = "Similar patient name"
             confidence = "low"
         base = _patient_search_result(patient)
-        candidates.append(PatientDuplicateCandidate(**base.model_dump(), match_reason=reason, confidence=confidence))
+        candidates.append(
+            PatientDuplicateCandidate(
+                **base.model_dump(), match_reason=reason, confidence=confidence
+            )
+        )
     return candidates
 
 
@@ -161,7 +205,9 @@ def create_patient(
     enforce_entitlement(session, tenant_id, "patients")
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     enforce_patient_limit(session, tenant_id)
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     duplicates = _duplicate_candidates(session, tenant_id, payload)
@@ -182,7 +228,9 @@ def create_patient(
             detail="Possible duplicate patient found. Search and select existing patient instead.",
         )
 
-    patient_number = payload.patient_number or _next_patient_number(session, tenant_id, payload.branch_id)
+    patient_number = payload.patient_number or _next_patient_number(
+        session, tenant_id, payload.branch_id
+    )
     patient = Patient.model_validate(
         payload,
         update={
@@ -234,7 +282,11 @@ def detect_duplicate_patients(
     return candidates
 
 
-@router.get("", response_model=list[PatientSearchResult], dependencies=[Depends(require_permission(permissions.PATIENTS_READ))])
+@router.get(
+    "",
+    response_model=list[PatientSearchResult],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
 def search_patients(
     tenant_id: str = Depends(require_tenant_id),
     q: str | None = Query(default=None, max_length=120),
@@ -262,7 +314,9 @@ def search_patients(
                 func.lower(Patient.address).like(pattern),
             )
         )
-    patients = list(session.exec(statement.order_by(Patient.created_at).limit(limit)).all())
+    patients = list(
+        session.exec(statement.order_by(Patient.created_at).limit(limit)).all()
+    )
     patient_ids = [patient.id for patient in patients]
     alerts = []
     if patient_ids:
@@ -280,7 +334,9 @@ def search_patients(
     for alert in alerts:
         alert_counts[alert.patient_id] = alert_counts.get(alert.patient_id, 0) + 1
         if alert.severity == AlertSeverity.CRITICAL:
-            critical_counts[alert.patient_id] = critical_counts.get(alert.patient_id, 0) + 1
+            critical_counts[alert.patient_id] = (
+                critical_counts.get(alert.patient_id, 0) + 1
+            )
 
     record_audit_event(
         session,
@@ -292,7 +348,10 @@ def search_patients(
         metadata_json=f'{{"query_present": {str(bool(q)).lower()}, "result_count": {len(patients)}}}',
     )
 
-    return [_patient_search_result(patient, alert_counts, critical_counts) for patient in patients]
+    return [
+        _patient_search_result(patient, alert_counts, critical_counts)
+        for patient in patients
+    ]
 
 
 @router.get(
@@ -315,11 +374,17 @@ def get_patient(
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
     user_permissions = set(user_permission_keys(session, current_user))
-    has_patient_read = current_user.is_super_admin or permissions.PATIENTS_READ in user_permissions
+    has_patient_read = (
+        current_user.is_super_admin or permissions.PATIENTS_READ in user_permissions
+    )
     if not has_patient_read:
-        doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+        doctor_practitioner_id = current_doctor_practitioner_id(
+            session, tenant_id, current_user
+        )
         if not doctor_practitioner_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
+            )
         appointment = session.exec(
             select(Appointment).where(
                 Appointment.tenant_id == tenant_id,
@@ -328,7 +393,10 @@ def get_patient(
             )
         ).first()
         if not appointment:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Doctor patient access denied")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Doctor patient access denied",
+            )
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -474,7 +542,9 @@ def get_patient_summary(
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
     alerts = _active_alerts(session, tenant_id, patient_id)
-    alert_reads = [PatientAlertRead.model_validate(alert, from_attributes=True) for alert in alerts]
+    alert_reads = [
+        PatientAlertRead.model_validate(alert, from_attributes=True) for alert in alerts
+    ]
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -487,9 +557,13 @@ def get_patient_summary(
 
     return PatientSummary(
         patient=PatientRead.model_validate(patient, from_attributes=True),
-        critical_alerts=[a for a in alert_reads if a.severity == AlertSeverity.CRITICAL],
+        critical_alerts=[
+            a for a in alert_reads if a.severity == AlertSeverity.CRITICAL
+        ],
         allergies=[a for a in alert_reads if a.alert_type == AlertType.ALLERGY],
-        chronic_conditions=[a for a in alert_reads if a.alert_type == AlertType.CHRONIC_CONDITION],
+        chronic_conditions=[
+            a for a in alert_reads if a.alert_type == AlertType.CHRONIC_CONDITION
+        ],
         risk_alerts=[a for a in alert_reads if a.alert_type == AlertType.RISK],
         notes=[a for a in alert_reads if a.alert_type == AlertType.NOTE],
         timeline=[

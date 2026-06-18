@@ -17,7 +17,9 @@ depends_on = None
 def upgrade() -> None:
     # Add the new SettingKey enum value used to store per-role sidebar module access.
     with op.get_context().autocommit_block():
-        op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'SIDEBAR_ROLE_MODULES'")
+        op.execute(
+            "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'SIDEBAR_ROLE_MODULES'"
+        )
 
 
 def downgrade() -> None:

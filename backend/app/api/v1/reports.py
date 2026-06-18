@@ -5,7 +5,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
-from app.core.auth import is_tenant_admin_user, require_any_permission, require_permission
+from app.core.auth import (
+    is_tenant_admin_user,
+    require_any_permission,
+    require_permission,
+)
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
@@ -178,15 +182,28 @@ def send_monthly_report_now(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     current_user: User = Depends(
-        require_any_permission(permissions.REPORTS_READ, permissions.SETTINGS_MANAGE, permissions.BILLING_MANAGE)
+        require_any_permission(
+            permissions.REPORTS_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.BILLING_MANAGE,
+        )
     ),
 ) -> ReportJobRead:
     config = load_monthly_report_config(session, tenant_id)
     start, end = previous_month_range()
-    recipients = [str(email) for email in payload.recipients] if payload.recipients is not None else config["recipients"]
-    cc = [str(email) for email in payload.cc] if payload.cc is not None else config["cc"]
+    recipients = (
+        [str(email) for email in payload.recipients]
+        if payload.recipients is not None
+        else config["recipients"]
+    )
+    cc = (
+        [str(email) for email in payload.cc] if payload.cc is not None else config["cc"]
+    )
     if not recipients:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one recipient email is required.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one recipient email is required.",
+        )
     if payload.from_date:
         start = payload.from_date
     if payload.to_date:
@@ -225,16 +242,34 @@ def send_profit_report_now(
     current_user: User = Depends(require_permission(permissions.REPORTS_READ)),
 ) -> ProfitReportEmailRead:
     if current_user.is_super_admin or not is_tenant_admin_user(session, current_user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant admin access required")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Tenant admin access required"
+        )
     if payload.to_date < payload.from_date:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="To date must be after from date.")
-    recipients = [email.strip() for email in (payload.recipients or [current_user.email]) if email.strip()]
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="To date must be after from date.",
+        )
+    recipients = [
+        email.strip()
+        for email in (payload.recipients or [current_user.email])
+        if email.strip()
+    ]
     cc = [email.strip() for email in payload.cc if email.strip()]
     if not recipients:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="At least one recipient email is required.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one recipient email is required.",
+        )
     doctor_id = None if payload.doctor_id in (None, "", "all") else payload.doctor_id
-    invoice_type = payload.invoice_type if payload.invoice_type in {"overall", "consultation", "lab", "pharmacy"} else "overall"
-    supplier_id = None if payload.supplier_id in (None, "", "all") else payload.supplier_id
+    invoice_type = (
+        payload.invoice_type
+        if payload.invoice_type in {"overall", "consultation", "lab", "pharmacy"}
+        else "overall"
+    )
+    supplier_id = (
+        None if payload.supplier_id in (None, "", "all") else payload.supplier_id
+    )
     branch_id = None if payload.branch_id in (None, "", "all") else payload.branch_id
     attachments = build_profit_report_email_attachments(
         session,
@@ -271,7 +306,11 @@ def list_monthly_report_jobs(
     limit: int = Query(default=10, ge=1, le=50),
     session: Session = Depends(get_session),
     _current_user: User = Depends(
-        require_any_permission(permissions.REPORTS_READ, permissions.SETTINGS_MANAGE, permissions.BILLING_MANAGE)
+        require_any_permission(
+            permissions.REPORTS_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.BILLING_MANAGE,
+        )
     ),
 ) -> list[ReportJobRead]:
     jobs = list(
@@ -291,12 +330,18 @@ def download_monthly_report_job(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     _current_user: User = Depends(
-        require_any_permission(permissions.REPORTS_READ, permissions.SETTINGS_MANAGE, permissions.BILLING_MANAGE)
+        require_any_permission(
+            permissions.REPORTS_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.BILLING_MANAGE,
+        )
     ),
 ) -> Response:
     job = session.get(ReportJob, job_id)
     if not job or job.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report job not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Report job not found"
+        )
     filename, content = build_monthly_revenue_report(
         session,
         tenant_id=tenant_id,

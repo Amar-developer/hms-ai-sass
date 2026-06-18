@@ -29,7 +29,9 @@ def ids_from_json(value: str | None) -> list[str]:
     return [str(item) for item in raw]
 
 
-def free_items_to_json(ids: list[str] | None, quantities: dict[str, int] | None = None) -> str:
+def free_items_to_json(
+    ids: list[str] | None, quantities: dict[str, int] | None = None
+) -> str:
     """Store free items as a {item_id: free_quantity} map (quantity >= 1)."""
     quantities = quantities or {}
     result: dict[str, int] = {}
@@ -132,7 +134,12 @@ def sync_free_item_usage_from_invoices(
                 )
             ).all():
                 price = int(item.price or 0)
-                if not item.test_id or item.test_id not in free_lab or price <= 0 or remaining_discount < price:
+                if (
+                    not item.test_id
+                    or item.test_id not in free_lab
+                    or price <= 0
+                    or remaining_discount < price
+                ):
                     continue
                 lab_usage[item.test_id] = lab_usage.get(item.test_id, 0) + 1
                 remaining_discount -= price
@@ -146,9 +153,16 @@ def sync_free_item_usage_from_invoices(
                 )
             ).all():
                 amount = int(item.quantity * item.unit_price)
-                if not item.medicine_id or item.medicine_id not in free_medicine or amount <= 0 or remaining_discount < amount:
+                if (
+                    not item.medicine_id
+                    or item.medicine_id not in free_medicine
+                    or amount <= 0
+                    or remaining_discount < amount
+                ):
                     continue
-                medicine_usage[item.medicine_id] = medicine_usage.get(item.medicine_id, 0) + max(int(item.quantity or 1), 1)
+                medicine_usage[item.medicine_id] = medicine_usage.get(
+                    item.medicine_id, 0
+                ) + max(int(item.quantity or 1), 1)
                 remaining_discount -= amount
 
     enrollment.used_free_lab_json = usage_to_json(lab_usage)
@@ -166,7 +180,9 @@ def slabs_to_json(values: list[dict[str, int | None]] | None) -> str:
         normalized.append(
             {
                 "min_amount": max(min_amount, 0),
-                "max_amount": max(int(max_amount), 0) if max_amount is not None else None,
+                "max_amount": max(int(max_amount), 0)
+                if max_amount is not None
+                else None,
                 "discount_percentage": min(discount_percentage, 100),
             }
         )
@@ -194,7 +210,9 @@ def slabs_from_json(value: str | None) -> list[dict[str, int | None]]:
         rows.append(
             {
                 "min_amount": max(int(item.get("min_amount") or 0), 0),
-                "max_amount": max(int(max_amount), 0) if max_amount is not None else None,
+                "max_amount": max(int(max_amount), 0)
+                if max_amount is not None
+                else None,
                 "discount_percentage": min(discount_percentage, 100),
             }
         )
@@ -221,7 +239,9 @@ def plan_to_read_dict(plan: PatientSubscriptionPlan) -> dict:
         "created_at": plan.created_at,
         "updated_at": plan.updated_at,
     }
-    data["free_consultation_department_ids"] = ids_from_json(plan.free_consultation_department_ids_json)
+    data["free_consultation_department_ids"] = ids_from_json(
+        plan.free_consultation_department_ids_json
+    )
     free_lab = free_items_from_json(plan.free_lab_test_ids_json)
     free_medicine = free_items_from_json(plan.free_medicine_ids_json)
     data["free_lab_test_ids"] = sorted(free_lab.keys())
@@ -253,7 +273,8 @@ def active_patient_enrollment(
         .where(
             PatientSubscriptionEnrollment.tenant_id == tenant_id,
             PatientSubscriptionEnrollment.patient_id == patient_id,
-            PatientSubscriptionEnrollment.status == PatientSubscriptionEnrollmentStatus.ACTIVE,
+            PatientSubscriptionEnrollment.status
+            == PatientSubscriptionEnrollmentStatus.ACTIVE,
             PatientSubscriptionEnrollment.starts_on <= today,
             PatientSubscriptionEnrollment.ends_on >= today,
         )
@@ -263,7 +284,9 @@ def active_patient_enrollment(
         plan = session.get(PatientSubscriptionPlan, enrollment.plan_id)
         if not plan or plan.tenant_id != tenant_id or not plan.is_active:
             continue
-        activation_date = enrollment.starts_on + timedelta(days=max(plan.activation_after_days, 0))
+        activation_date = enrollment.starts_on + timedelta(
+            days=max(plan.activation_after_days, 0)
+        )
         if today < activation_date:
             continue
         if plan.price_amount > 0:
@@ -327,8 +350,12 @@ def benefit_preview(
     discounted_item_ids: list[str] = []
     reason = None
     if service_type == "consultation":
-        allowed_departments = set(ids_from_json(plan.free_consultation_department_ids_json))
-        if allowed_departments and (department_id is None or department_id not in allowed_departments):
+        allowed_departments = set(
+            ids_from_json(plan.free_consultation_department_ids_json)
+        )
+        if allowed_departments and (
+            department_id is None or department_id not in allowed_departments
+        ):
             reason = "Free consultation applies only to the plan's selected medical department"
         else:
             remaining = max(plan.free_consultations - enrollment.used_consultations, 0)
@@ -348,13 +375,19 @@ def benefit_preview(
         )
         discounted_item_ids = sorted(item_set.intersection(discounted_ids))
         if free_item_ids:
-            discount_amount = sum(int(item_amounts.get(item_id, 0) or 0) for item_id in free_item_ids)
+            discount_amount = sum(
+                int(item_amounts.get(item_id, 0) or 0) for item_id in free_item_ids
+            )
             if discount_amount <= 0:
                 discount_amount = subtotal_amount
             reason = "Selected lab test is fully free in this plan"
-        elif plan.lab_discount_percentage > 0 and (not discounted_ids or discounted_item_ids):
+        elif plan.lab_discount_percentage > 0 and (
+            not discounted_ids or discounted_item_ids
+        ):
             if subtotal_amount > plan.min_discount_amount:
-                discount_amount = round(subtotal_amount * plan.lab_discount_percentage / 100)
+                discount_amount = round(
+                    subtotal_amount * plan.lab_discount_percentage / 100
+                )
                 reason = f"{plan.lab_discount_percentage}% lab discount"
             else:
                 reason = (
@@ -372,7 +405,9 @@ def benefit_preview(
         )
         discounted_item_ids = sorted(item_set.intersection(discounted_ids))
         if free_item_ids:
-            discount_amount = sum(int(item_amounts.get(item_id, 0) or 0) for item_id in free_item_ids)
+            discount_amount = sum(
+                int(item_amounts.get(item_id, 0) or 0) for item_id in free_item_ids
+            )
             if discount_amount <= 0:
                 discount_amount = subtotal_amount
             reason = "Selected medicine is fully free in this plan"
@@ -381,16 +416,32 @@ def benefit_preview(
                 slab
                 for slab in slabs_from_json(plan.pharmacy_discount_slabs_json)
                 if subtotal_amount >= int(slab["min_amount"] or 0)
-                and (slab["max_amount"] is None or subtotal_amount <= int(slab["max_amount"] or 0))
+                and (
+                    slab["max_amount"] is None
+                    or subtotal_amount <= int(slab["max_amount"] or 0)
+                )
             ]
             if matching_slabs:
-                slab = sorted(matching_slabs, key=lambda item: int(item["discount_percentage"] or 0), reverse=True)[0]
+                slab = sorted(
+                    matching_slabs,
+                    key=lambda item: int(item["discount_percentage"] or 0),
+                    reverse=True,
+                )[0]
                 percentage = int(slab["discount_percentage"] or 0)
                 discount_amount = round(subtotal_amount * percentage / 100)
-                max_label = f"₹{slab['max_amount']}" if slab["max_amount"] is not None else "above"
+                max_label = (
+                    f"₹{slab['max_amount']}"
+                    if slab["max_amount"] is not None
+                    else "above"
+                )
                 reason = f"{percentage}% pharmacy discount for ₹{slab['min_amount']} - {max_label} bill"
-            elif plan.pharmacy_discount_percentage > 0 and subtotal_amount >= plan.min_discount_amount:
-                discount_amount = round(subtotal_amount * plan.pharmacy_discount_percentage / 100)
+            elif (
+                plan.pharmacy_discount_percentage > 0
+                and subtotal_amount >= plan.min_discount_amount
+            ):
+                discount_amount = round(
+                    subtotal_amount * plan.pharmacy_discount_percentage / 100
+                )
                 reason = f"{plan.pharmacy_discount_percentage}% pharmacy discount"
             else:
                 reason = (

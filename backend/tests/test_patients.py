@@ -32,7 +32,9 @@ def test_create_patient_generates_patient_number_and_audit(client: TestClient):
     tenant = create_tenant(client)
 
     patient = create_patient(client, tenant["id"])
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert patient["tenant_id"] == tenant["id"]
     assert patient["patient_number"] == "PAT-000001"
@@ -161,7 +163,9 @@ def test_update_and_delete_patient_management(client: TestClient):
         f"/api/v1/patients/{patient['id']}",
         headers={"X-Tenant-ID": tenant["id"]},
     )
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
     actions = [event["action"] for event in audit]
 
     assert updated.status_code == 200
@@ -217,10 +221,17 @@ def test_patient_view_and_summary_write_audit_events(client: TestClient):
     tenant = create_tenant(client)
     patient = create_patient(client, tenant["id"])
 
-    client.get(f"/api/v1/patients/{patient['id']}", headers={"X-Tenant-ID": tenant["id"]})
-    client.get(f"/api/v1/patients/{patient['id']}/summary", headers={"X-Tenant-ID": tenant["id"]})
+    client.get(
+        f"/api/v1/patients/{patient['id']}", headers={"X-Tenant-ID": tenant["id"]}
+    )
+    client.get(
+        f"/api/v1/patients/{patient['id']}/summary",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
 
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
     actions = [event["action"] for event in audit]
 
     assert "patient.record.viewed" in actions

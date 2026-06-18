@@ -19,7 +19,9 @@ def upgrade() -> None:
         return
     with op.get_context().autocommit_block():
         op.execute("ALTER TYPE appointmenttype ADD VALUE IF NOT EXISTS 'DOCTOR_REVIEW'")
-        op.execute("ALTER TYPE appointmenttype ADD VALUE IF NOT EXISTS 'FITNESS_CERTIFICATE'")
+        op.execute(
+            "ALTER TYPE appointmenttype ADD VALUE IF NOT EXISTS 'FITNESS_CERTIFICATE'"
+        )
 
 
 def downgrade() -> None:

@@ -33,16 +33,27 @@ def upgrade() -> None:
     if "share_tax_with_doctor" not in _columns("doctorfeerule"):
         op.add_column(
             "doctorfeerule",
-            sa.Column("share_tax_with_doctor", sa.Boolean(), nullable=False, server_default=sa.false()),
+            sa.Column(
+                "share_tax_with_doctor",
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.false(),
+            ),
         )
     if "ix_doctorfeerule_share_tax_with_doctor" not in _indexes("doctorfeerule"):
-        op.create_index("ix_doctorfeerule_share_tax_with_doctor", "doctorfeerule", ["share_tax_with_doctor"])
+        op.create_index(
+            "ix_doctorfeerule_share_tax_with_doctor",
+            "doctorfeerule",
+            ["share_tax_with_doctor"],
+        )
 
 
 def downgrade() -> None:
     if "doctorfeerule" not in _tables():
         return
     if "ix_doctorfeerule_share_tax_with_doctor" in _indexes("doctorfeerule"):
-        op.drop_index("ix_doctorfeerule_share_tax_with_doctor", table_name="doctorfeerule")
+        op.drop_index(
+            "ix_doctorfeerule_share_tax_with_doctor", table_name="doctorfeerule"
+        )
     if "share_tax_with_doctor" in _columns("doctorfeerule"):
         op.drop_column("doctorfeerule", "share_tax_with_doctor")

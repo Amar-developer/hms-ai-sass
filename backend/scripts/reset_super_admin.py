@@ -14,7 +14,9 @@ from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
 SUPER_ADMIN_NAME = os.getenv("MEDIZINHUB_SUPER_ADMIN_NAME", "Platform Super Admin")
-SUPER_ADMIN_EMAIL = os.getenv("MEDIZINHUB_SUPER_ADMIN_EMAIL", "amarnath.manivel@teanso.com").lower()
+SUPER_ADMIN_EMAIL = os.getenv(
+    "MEDIZINHUB_SUPER_ADMIN_EMAIL", "amarnath.manivel@teanso.com"
+).lower()
 SUPER_ADMIN_PASSWORD = os.getenv("MEDIZINHUB_SUPER_ADMIN_PASSWORD", "Admin@123")
 
 
@@ -84,7 +86,9 @@ def ensure_super_admin(session: Session, tenant: Tenant) -> User:
 
 def ensure_super_admin_role(session: Session, tenant: Tenant, user: User) -> None:
     ensure_permissions(session)
-    role = session.exec(select(Role).where(Role.tenant_id == tenant.id, Role.key == "super_admin")).first()
+    role = session.exec(
+        select(Role).where(Role.tenant_id == tenant.id, Role.key == "super_admin")
+    ).first()
     if not role:
         role = Role(
             tenant_id=tenant.id,
@@ -104,19 +108,28 @@ def ensure_super_admin_role(session: Session, tenant: Tenant, user: User) -> Non
     session.add(role)
     permissions = session.exec(select(Permission)).all()
     existing_permission_ids = {
-        row.permission_id for row in session.exec(select(RolePermission).where(RolePermission.role_id == role.id)).all()
+        row.permission_id
+        for row in session.exec(
+            select(RolePermission).where(RolePermission.role_id == role.id)
+        ).all()
     }
     for permission in permissions:
         if permission.id not in existing_permission_ids:
             session.add(RolePermission(role_id=role.id, permission_id=permission.id))
-    if not session.exec(select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id)).first():
+    if not session.exec(
+        select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id)
+    ).first():
         session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=tenant.id))
     session.commit()
 
 
-def ensure_tenant_admin_template_role(session: Session, tenant: Tenant, user: User) -> None:
+def ensure_tenant_admin_template_role(
+    session: Session, tenant: Tenant, user: User
+) -> None:
     ensure_permissions(session)
-    role = session.exec(select(Role).where(Role.tenant_id == tenant.id, Role.key == "tenant_admin")).first()
+    role = session.exec(
+        select(Role).where(Role.tenant_id == tenant.id, Role.key == "tenant_admin")
+    ).first()
     if not role:
         role = Role(
             tenant_id=tenant.id,
@@ -138,10 +151,17 @@ def ensure_tenant_admin_template_role(session: Session, tenant: Tenant, user: Us
     session.add(role)
 
     existing_permission_ids = {
-        row.permission_id for row in session.exec(select(RolePermission).where(RolePermission.role_id == role.id)).all()
+        row.permission_id
+        for row in session.exec(
+            select(RolePermission).where(RolePermission.role_id == role.id)
+        ).all()
     }
-    tenant_permission_keys = [key for key in PERMISSION_CATALOG if not key.startswith("platform.")]
-    permissions_by_key = {row.key: row for row in session.exec(select(Permission)).all()}
+    tenant_permission_keys = [
+        key for key in PERMISSION_CATALOG if not key.startswith("platform.")
+    ]
+    permissions_by_key = {
+        row.key: row for row in session.exec(select(Permission)).all()
+    }
     for permission_key in tenant_permission_keys:
         permission = permissions_by_key[permission_key]
         if permission.id not in existing_permission_ids:

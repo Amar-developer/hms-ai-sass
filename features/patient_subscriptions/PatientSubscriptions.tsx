@@ -1300,7 +1300,7 @@ function PlanForm({
             onClick={back}
             className="close-button font-bold"
           >
-            Cancel 
+            Cancel
           </button>
         </div>
       </form>
