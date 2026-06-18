@@ -38,10 +38,12 @@ from app.modules.patient_subscriptions.service import (
     active_patient_enrollment,
     benefit_preview,
     enrollment_end_date,
+    free_items_from_json,
     free_items_to_json,
     ids_to_json,
     plan_to_read_dict,
     slabs_to_json,
+    usage_from_json,
 )
 from app.modules.patients.models import Patient
 from app.modules.tenants.models import Branch
@@ -57,8 +59,26 @@ def _read_enrollment(
     session: Session, enrollment: PatientSubscriptionEnrollment
 ) -> PatientSubscriptionEnrollmentRead:
     plan = session.get(PatientSubscriptionPlan, enrollment.plan_id)
+    free_lab = free_items_from_json(plan.free_lab_test_ids_json) if plan else {}
+    used_lab = usage_from_json(enrollment.used_free_lab_json)
+    free_medicine = free_items_from_json(plan.free_medicine_ids_json) if plan else {}
+    used_medicine = usage_from_json(enrollment.used_free_medicine_json)
+    free_consultations = int(plan.free_consultations or 0) if plan else 0
     return PatientSubscriptionEnrollmentRead(
         **enrollment.model_dump(),
+        remaining_free_consultations=max(
+            free_consultations - int(enrollment.used_consultations or 0), 0
+        ),
+        used_free_lab_count=sum(used_lab.values()),
+        remaining_free_lab_count=sum(
+            max(int(limit or 0) - int(used_lab.get(item_id, 0) or 0), 0)
+            for item_id, limit in free_lab.items()
+        ),
+        used_free_medicine_count=sum(used_medicine.values()),
+        remaining_free_medicine_count=sum(
+            max(int(limit or 0) - int(used_medicine.get(item_id, 0) or 0), 0)
+            for item_id, limit in free_medicine.items()
+        ),
         plan=_read_plan(plan) if plan else None,
     )
 

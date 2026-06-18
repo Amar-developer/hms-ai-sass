@@ -3,6 +3,7 @@ import { Badge,ActionGroup,ActionButton } from "../common/ui";
 
 export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
   const branch = branches.find((item: any) => item.id === row.branch_id);
+  const subscriptionStatus = row.subscription_status;
   const stop = (handler: () => void) => (event: any) => {
     event.stopPropagation();
     handler();
@@ -20,7 +21,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
       }}
       className="w-full cursor-pointer text-left transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
     >
-      <div className="grid gap-4 px-5 py-4 text-sm md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.7fr_.65fr_1.35fr] xl:items-center">
+      <div className="grid gap-4 px-5 py-4 text-sm md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] xl:items-center">
         <div className="min-w-0">
           <b className="block table-data truncate text-slate-950">{row.full_name}</b>
           <p className="mt-0.5 text-[10px] lg:text-xs font-medium text-slate-500">
@@ -51,16 +52,27 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
             {row.gender || "-"} / {row.age_years ?? "-"}
           </span>
         </div>
-        <div>
-          {/* <p className="text-[11px] font-bold uppercase text-slate-400 xl:hidden">
-            Alerts
-          </p> */}
-          {row.critical_alert_count > 0 ? (
-            <Badge tone="red">{row.critical_alert_count} critical</Badge>
-          ) : row.active_alert_count > 0 ? (
-            <Badge tone="amber">{row.active_alert_count} alerts</Badge>
+        <div className="min-w-0">
+          {row.subscription_plan_name ? (
+            <>
+              <span className="block truncate table-data text-slate-700">
+                {row.subscription_plan_name}
+              </span>
+              <Badge
+                tone={
+                  subscriptionStatus === "active"
+                    ? "green"
+                    : subscriptionStatus === "expired"
+                      ? "amber"
+                      : "red"
+                }
+                className="mt-1 table-status"
+              >
+                {subscriptionStatus || "-"}
+              </Badge>
+            </>
           ) : (
-            <span className=" table-data text-slate-400">-</span>
+            <span className="table-data text-slate-400">-</span>
           )}
         </div>
         <div>

@@ -103,13 +103,14 @@ export function TokenQueue({
   >("english");
   const [displayRows, setDisplayRows] = useState<any[]>([]);
   const today = todayKey();
+  const [selectedDate, setSelectedDate] = useState(today);
   const queue = sortByTokenNumber(
     sortQueue(
       scopedAppointments.filter((appointment: any) => {
         if (
           dateKey(
             appointment.appointmentDate || appointment.appointment_date,
-          ) !== today
+          ) !== selectedDate
         )
           return false;
         if (!isActiveQueueAppointment(appointment)) return false;
@@ -270,7 +271,7 @@ export function TokenQueue({
       return;
     }
     const confirmed = window.confirm(
-      `Cancel ${remaining.length} remaining token(s) for today? This will remove unattended tokens from the active queue.`,
+      `Cancel ${remaining.length} remaining token(s) for ${selectedDate}? This will remove unattended tokens from the active queue.`,
     );
     if (!confirmed) return;
     setBusyId("end-of-day");
@@ -336,7 +337,15 @@ export function TokenQueue({
             ) : null}
           </div>
         </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-4">
+          <FormField label="Appointment Date">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event: any) => setSelectedDate(event.target.value || today)}
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-500"
+            />
+          </FormField>
           <FormField label="Display Mode">
             <Select
               value={displayMode}

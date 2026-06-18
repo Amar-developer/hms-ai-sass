@@ -37,6 +37,16 @@ export function InvoiceDetailPage({
   const membershipBenefit=detail.membership_benefit;
   const membershipEffectiveSaving=invoiceTaxAdjustedDiscount(invoice,discountParts.membershipDiscount);
   const membershipTaxSaving=Math.max(membershipEffectiveSaving-discountParts.membershipDiscount,0);
+  const membershipBenefitNote=
+    discountParts.membershipDiscount>0&&invoice.lab_order_id
+      ? `${membershipLabel} · ${money(discountParts.membershipDiscount)} free lab membership benefit`
+      : discountParts.membershipDiscount>0
+        ? `${membershipLabel} · ${
+            membershipTaxSaving > 0
+              ? `${claimedDetail(membershipEffectiveSaving, invoice.subtotal_amount)} effective saving (${money(discountParts.membershipDiscount)} benefit + ${money(membershipTaxSaving)} tax saved)`
+              : claimedDetail(discountParts.membershipDiscount, invoice.subtotal_amount)
+          }`
+        : membershipBenefit?.reason || "No membership benefit applied";
   const taxableAmount=numberValue(invoice.taxable_amount);
   const taxAmount=numberValue(invoice.tax_amount);
   const canRefresh=invoice.consultation_id&&!invoice.lab_order_id&&!invoice.pharmacy_issue_id&&!invoice.ip_admission_id&&!invoice.physiotherapy_case_id;
@@ -295,14 +305,7 @@ export function InvoiceDetailPage({
                     muted={discountParts.membershipDiscount <= 0}
                     savings={discountParts.membershipDiscount > 0}
                     note={
-                      discountParts.membershipDiscount > 0
-                        ? `${membershipLabel} · ${
-                            membershipTaxSaving > 0
-                              ? `${claimedDetail(membershipEffectiveSaving, invoice.subtotal_amount)} effective saving (${money(discountParts.membershipDiscount)} benefit + ${money(membershipTaxSaving)} tax saved)`
-                              : claimedDetail(discountParts.membershipDiscount, invoice.subtotal_amount)
-                          }`
-                        : membershipBenefit?.reason ||
-                          "No membership benefit applied"
+                      membershipBenefitNote
                     }
                     action={
                       membershipBenefit?.is_applied ? (

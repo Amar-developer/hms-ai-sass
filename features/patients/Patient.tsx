@@ -610,13 +610,13 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
         </div>
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <div className="min-w-[1080px]">
-          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.7fr_.65fr_1.35fr]  lg:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.7fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
+        <div className="min-w-[1120px]">
+          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr]  lg:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span>Patient</span>
             <span>Mobile</span>
             <span>Branch</span>
             <span>Gender / Age</span>
-            <span>Alerts</span>
+            <span>Subscription Plan</span>
             <span className="text-center">Status</span>
             <span className="text-right">Actions</span>
           </div>
