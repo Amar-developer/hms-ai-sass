@@ -44,23 +44,54 @@ def _drop_index_if_exists(table: str, name: str) -> None:
 
 
 def upgrade() -> None:
-    _add_column_if_missing("tenant", "created_by_user_id", sa.Column("created_by_user_id", sa.String(), nullable=True))
-    _add_column_if_missing("tenant", "updated_by_user_id", sa.Column("updated_by_user_id", sa.String(), nullable=True))
-    _create_index_if_missing("tenant", "ix_tenant_created_by_user_id", ["created_by_user_id"])
-    _create_index_if_missing("tenant", "ix_tenant_updated_by_user_id", ["updated_by_user_id"])
+    _add_column_if_missing(
+        "tenant",
+        "created_by_user_id",
+        sa.Column("created_by_user_id", sa.String(), nullable=True),
+    )
+    _add_column_if_missing(
+        "tenant",
+        "updated_by_user_id",
+        sa.Column("updated_by_user_id", sa.String(), nullable=True),
+    )
+    _create_index_if_missing(
+        "tenant", "ix_tenant_created_by_user_id", ["created_by_user_id"]
+    )
+    _create_index_if_missing(
+        "tenant", "ix_tenant_updated_by_user_id", ["updated_by_user_id"]
+    )
 
-    _add_column_if_missing("branch", "created_by_user_id", sa.Column("created_by_user_id", sa.String(), nullable=True))
-    _add_column_if_missing("branch", "updated_by_user_id", sa.Column("updated_by_user_id", sa.String(), nullable=True))
+    _add_column_if_missing(
+        "branch",
+        "created_by_user_id",
+        sa.Column("created_by_user_id", sa.String(), nullable=True),
+    )
+    _add_column_if_missing(
+        "branch",
+        "updated_by_user_id",
+        sa.Column("updated_by_user_id", sa.String(), nullable=True),
+    )
     _add_column_if_missing(
         "branch",
         "updated_at",
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+        ),
     )
-    _create_index_if_missing("branch", "ix_branch_created_by_user_id", ["created_by_user_id"])
-    _create_index_if_missing("branch", "ix_branch_updated_by_user_id", ["updated_by_user_id"])
+    _create_index_if_missing(
+        "branch", "ix_branch_created_by_user_id", ["created_by_user_id"]
+    )
+    _create_index_if_missing(
+        "branch", "ix_branch_updated_by_user_id", ["updated_by_user_id"]
+    )
 
     if op.get_bind().dialect.name != "sqlite":
-        op.alter_column("tenant", "tenant_type", type_=sa.String(length=40), existing_nullable=False)
+        op.alter_column(
+            "tenant", "tenant_type", type_=sa.String(length=40), existing_nullable=False
+        )
 
 
 def downgrade() -> None:
@@ -76,4 +107,6 @@ def downgrade() -> None:
     _drop_column_if_exists("tenant", "created_by_user_id")
 
     if op.get_bind().dialect.name != "sqlite":
-        op.alter_column("tenant", "tenant_type", type_=sa.String(length=22), existing_nullable=False)
+        op.alter_column(
+            "tenant", "tenant_type", type_=sa.String(length=22), existing_nullable=False
+        )

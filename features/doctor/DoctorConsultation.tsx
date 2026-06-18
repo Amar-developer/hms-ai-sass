@@ -1479,7 +1479,7 @@ export function DoctorConsultation({
               </p>
             </div>
             <Badge tone="blue" className="normal-badge text-center">
-              {branch.name} 
+              {branch.name}
             </Badge>
           </div>
           <StatusToast message={message} onClose={() => setMessage("")} />

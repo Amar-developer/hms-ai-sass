@@ -22,7 +22,8 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'develop')
+       github.event.workflow_run.head_branch == 'develop' &&
+       github.event.workflow_run.event == 'push')
 
     steps:
       - name: Deploy over SSH
@@ -35,6 +36,9 @@ jobs:
           script_stop: true
           script: |
             cd "${{ secrets.DEV_EC2_APP_DIR }}"
+
+            # Reset any local changes on server
+            git checkout -- .
 
             # Pull latest code from develop
             git fetch origin
@@ -56,7 +60,7 @@ jobs:
             # Check disk after deploy
             docker system df
             docker compose -f docker-compose.dev.yml ps
-            
+
             # Wait for backend to start
             sleep 15
 

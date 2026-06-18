@@ -32,8 +32,14 @@ def upgrade() -> None:
             sa.Column("unit", sa.String(length=40), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_consultationvital_consultation_id", "consultationvital", ["consultation_id"])
-        op.create_index("ix_consultationvital_tenant_id", "consultationvital", ["tenant_id"])
+        op.create_index(
+            "ix_consultationvital_consultation_id",
+            "consultationvital",
+            ["consultation_id"],
+        )
+        op.create_index(
+            "ix_consultationvital_tenant_id", "consultationvital", ["tenant_id"]
+        )
     if "consultationcomplaint" not in existing:
         op.create_table(
             "consultationcomplaint",
@@ -45,8 +51,14 @@ def upgrade() -> None:
             sa.Column("severity", sa.String(length=80), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_consultationcomplaint_consultation_id", "consultationcomplaint", ["consultation_id"])
-        op.create_index("ix_consultationcomplaint_tenant_id", "consultationcomplaint", ["tenant_id"])
+        op.create_index(
+            "ix_consultationcomplaint_consultation_id",
+            "consultationcomplaint",
+            ["consultation_id"],
+        )
+        op.create_index(
+            "ix_consultationcomplaint_tenant_id", "consultationcomplaint", ["tenant_id"]
+        )
     if "consultationdiagnosis" not in existing:
         op.create_table(
             "consultationdiagnosis",
@@ -58,8 +70,14 @@ def upgrade() -> None:
             sa.Column("notes", sa.String(length=500), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_consultationdiagnosis_consultation_id", "consultationdiagnosis", ["consultation_id"])
-        op.create_index("ix_consultationdiagnosis_tenant_id", "consultationdiagnosis", ["tenant_id"])
+        op.create_index(
+            "ix_consultationdiagnosis_consultation_id",
+            "consultationdiagnosis",
+            ["consultation_id"],
+        )
+        op.create_index(
+            "ix_consultationdiagnosis_tenant_id", "consultationdiagnosis", ["tenant_id"]
+        )
     if "consultationmedicine" not in existing:
         op.create_table(
             "consultationmedicine",
@@ -73,8 +91,14 @@ def upgrade() -> None:
             sa.Column("instructions", sa.String(length=500), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_consultationmedicine_consultation_id", "consultationmedicine", ["consultation_id"])
-        op.create_index("ix_consultationmedicine_tenant_id", "consultationmedicine", ["tenant_id"])
+        op.create_index(
+            "ix_consultationmedicine_consultation_id",
+            "consultationmedicine",
+            ["consultation_id"],
+        )
+        op.create_index(
+            "ix_consultationmedicine_tenant_id", "consultationmedicine", ["tenant_id"]
+        )
     if "consultationreferral" not in existing:
         op.create_table(
             "consultationreferral",
@@ -87,9 +111,19 @@ def upgrade() -> None:
             sa.Column("instructions", sa.String(length=500), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_consultationreferral_consultation_id", "consultationreferral", ["consultation_id"])
-        op.create_index("ix_consultationreferral_tenant_id", "consultationreferral", ["tenant_id"])
-        op.create_index("ix_consultationreferral_referral_type", "consultationreferral", ["referral_type"])
+        op.create_index(
+            "ix_consultationreferral_consultation_id",
+            "consultationreferral",
+            ["consultation_id"],
+        )
+        op.create_index(
+            "ix_consultationreferral_tenant_id", "consultationreferral", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_consultationreferral_referral_type",
+            "consultationreferral",
+            ["referral_type"],
+        )
     if "clinicaltemplate" not in existing:
         op.create_table(
             "clinicaltemplate",
@@ -104,10 +138,18 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_clinicaltemplate_tenant_id", "clinicaltemplate", ["tenant_id"])
-        op.create_index("ix_clinicaltemplate_department_id", "clinicaltemplate", ["department_id"])
-        op.create_index("ix_clinicaltemplate_template_type", "clinicaltemplate", ["template_type"])
-        op.create_index("ix_clinicaltemplate_is_active", "clinicaltemplate", ["is_active"])
+        op.create_index(
+            "ix_clinicaltemplate_tenant_id", "clinicaltemplate", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_clinicaltemplate_department_id", "clinicaltemplate", ["department_id"]
+        )
+        op.create_index(
+            "ix_clinicaltemplate_template_type", "clinicaltemplate", ["template_type"]
+        )
+        op.create_index(
+            "ix_clinicaltemplate_is_active", "clinicaltemplate", ["is_active"]
+        )
 
 
 def downgrade() -> None:

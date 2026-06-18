@@ -135,7 +135,7 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
                 <div className="flex flex-wrap items-center gap-2">
                   <b>{selectedRoleLabel}</b>
                   <Badge tone={selectedRoleOverridden ? "amber" : "slate"} className="table-status">
-                    {selectedRoleOverridden ? "Custom" : "Default"} 
+                    {selectedRoleOverridden ? "Custom" : "Default"}
                   </Badge>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">

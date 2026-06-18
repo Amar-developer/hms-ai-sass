@@ -64,11 +64,17 @@ def _create_tenant_with_all_modules(client, name="Matrix Clinic"):
     return tenant, branch
 
 
-def _create_role_user_and_login(client, tenant_id, role_key, permission_keys, branch_id=None):
+def _create_role_user_and_login(
+    client, tenant_id, role_key, permission_keys, branch_id=None
+):
     client.post(
         "/api/v1/identity/roles",
         headers={"X-Tenant-ID": tenant_id},
-        json={"name": role_key.replace("_", " ").title(), "key": role_key, "permission_keys": permission_keys},
+        json={
+            "name": role_key.replace("_", " ").title(),
+            "key": role_key,
+            "permission_keys": permission_keys,
+        },
     )
     email = f"{role_key}@matrix.test.local"
     password = "MatrixPass123"
@@ -89,11 +95,18 @@ def _create_role_user_and_login(client, tenant_id, role_key, permission_keys, br
         json={"email": email, "password": password, "tenant_id": tenant_id},
     )
     assert login.status_code == 200
-    return {"Authorization": f"Bearer {login.json()['access_token']}", "X-Tenant-ID": tenant_id}
+    return {
+        "Authorization": f"Bearer {login.json()['access_token']}",
+        "X-Tenant-ID": tenant_id,
+    }
 
 
 def _permissions_for_modules(modules):
-    return [permission for module, (_path, permission) in READ_ENDPOINTS.items() if module in modules]
+    return [
+        permission
+        for module, (_path, permission) in READ_ENDPOINTS.items()
+        if module in modules
+    ]
 
 
 def test_role_permission_matrix_allows_only_assigned_module_reads(client):
@@ -109,15 +122,23 @@ def test_role_permission_matrix_allows_only_assigned_module_reads(client):
         for module, (path, _permission) in READ_ENDPOINTS.items():
             response = client.get(path, headers=headers)
             if module in allowed_modules:
-                assert response.status_code == 200, f"{role_key} should read {module}: {response.text}"
+                assert (
+                    response.status_code == 200
+                ), f"{role_key} should read {module}: {response.text}"
             else:
-                assert response.status_code == 403, f"{role_key} should not read {module}: {response.text}"
+                assert (
+                    response.status_code == 403
+                ), f"{role_key} should not read {module}: {response.text}"
 
 
 def test_module_entitlement_matrix_blocks_disabled_modules_even_with_permission(client):
-    tenant = client.post("/api/v1/tenants", json={"name": "Disabled Module Clinic"}).json()
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Disabled Module Clinic"}
+    ).json()
     permissions = ["lab.manage", "pharmacy.manage", "billing.manage"]
-    headers = _create_role_user_and_login(client, tenant["id"], "disabled_module_operator", permissions)
+    headers = _create_role_user_and_login(
+        client, tenant["id"], "disabled_module_operator", permissions
+    )
 
     lab = client.get("/api/v1/lab/catalog/tests", headers=headers)
     pharmacy = client.get("/api/v1/pharmacy/medicines", headers=headers)
@@ -126,12 +147,17 @@ def test_module_entitlement_matrix_blocks_disabled_modules_even_with_permission(
     assert lab.status_code == 403
     assert lab.json()["detail"] == "Module lab is not enabled for plan Free Trial"
     assert pharmacy.status_code == 403
-    assert pharmacy.json()["detail"] == "Module pharmacy is not enabled for plan Free Trial"
+    assert (
+        pharmacy.json()["detail"]
+        == "Module pharmacy is not enabled for plan Free Trial"
+    )
     assert billing_basic.status_code == 200
 
 
 def test_branch_scope_matrix_blocks_cross_branch_records_and_queries(client):
-    tenant, main_branch = _create_tenant_with_all_modules(client, name="Branch Matrix Clinic")
+    tenant, main_branch = _create_tenant_with_all_modules(
+        client, name="Branch Matrix Clinic"
+    )
     other_branch = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
         json={"name": "Other Branch", "code": "OTHER"},
@@ -156,10 +182,16 @@ def test_branch_scope_matrix_blocks_cross_branch_records_and_queries(client):
     )
 
     patient = client.get(f"/api/v1/patients/{other_patient['id']}", headers=headers)
-    appointments = client.get(f"/api/v1/appointments?branch_id={other_branch['id']}", headers=headers)
+    appointments = client.get(
+        f"/api/v1/appointments?branch_id={other_branch['id']}", headers=headers
+    )
     queue = client.get(f"/api/v1/queue?branch_id={other_branch['id']}", headers=headers)
-    lab = client.get(f"/api/v1/lab/catalog/tests?branch_id={other_branch['id']}", headers=headers)
-    pharmacy = client.get(f"/api/v1/pharmacy/medicines?branch_id={other_branch['id']}", headers=headers)
+    lab = client.get(
+        f"/api/v1/lab/catalog/tests?branch_id={other_branch['id']}", headers=headers
+    )
+    pharmacy = client.get(
+        f"/api/v1/pharmacy/medicines?branch_id={other_branch['id']}", headers=headers
+    )
 
     assert patient.status_code == 200
     assert patient.json()["id"] == other_patient["id"]
@@ -189,15 +221,25 @@ def test_sensitive_action_audit_matrix_records_core_module_events(client):
     settings = client.put(
         "/api/v1/settings",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"module": "queue", "key": "token.language", "value": "english", "scope": "tenant"},
+        json={
+            "module": "queue",
+            "key": "token.language",
+            "value": "english",
+            "scope": "tenant",
+        },
     )
     assert patient.status_code == 201
     assert lab.status_code == 201
     assert pharmacy.status_code == 201
     assert settings.status_code == 200
 
-    client.get(f"/api/v1/patients/{patient.json()['id']}", headers={"X-Tenant-ID": tenant["id"]})
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    client.get(
+        f"/api/v1/patients/{patient.json()['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
     actions = {event["action"] for event in audit}
 
     assert {

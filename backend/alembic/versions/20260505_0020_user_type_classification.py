@@ -21,7 +21,15 @@ def upgrade() -> None:
     columns = {column["name"] for column in inspector.get_columns("user")}
     indexes = {index["name"] for index in inspector.get_indexes("user")}
     if "user_type" not in columns:
-        op.add_column("user", sa.Column("user_type", sa.String(length=60), nullable=False, server_default="staff"))
+        op.add_column(
+            "user",
+            sa.Column(
+                "user_type",
+                sa.String(length=60),
+                nullable=False,
+                server_default="staff",
+            ),
+        )
     if op.f("ix_user_user_type") not in indexes:
         op.create_index(op.f("ix_user_user_type"), "user", ["user_type"], unique=False)
 

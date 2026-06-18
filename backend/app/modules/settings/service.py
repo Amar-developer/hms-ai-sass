@@ -11,7 +11,14 @@ from app.modules.tenants.models import Branch, now_utc
 DEFAULT_SETTING_VALUES: dict[SettingKey, Any] = {
     SettingKey.QUEUE_REQUEUE_AFTER_PATIENTS: 3,
     SettingKey.QUEUE_AUTO_NO_SHOW_AFTER_MISSED_CALLS: 3,
-    SettingKey.PAYMENT_METHODS_ENABLED: ["cash", "credit_card", "debit_card", "upi", "gpay", "paytm"],
+    SettingKey.PAYMENT_METHODS_ENABLED: [
+        "cash",
+        "credit_card",
+        "debit_card",
+        "upi",
+        "gpay",
+        "paytm",
+    ],
     SettingKey.INVOICE_PREFIX: "INV",
     SettingKey.INVOICE_LOGO_URL: "",
     SettingKey.NUMBERING_RULES: {
@@ -54,14 +61,21 @@ def decode_value(value_json: str) -> Any:
         return None
 
 
-def validate_scope(session: Session, tenant_id: str, scope: SettingScope, scope_id: str | None) -> str:
+def validate_scope(
+    session: Session, tenant_id: str, scope: SettingScope, scope_id: str | None
+) -> str:
     if scope == SettingScope.TENANT:
         return tenant_id
     if not scope_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="scope_id is required for branch settings")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="scope_id is required for branch settings",
+        )
     branch = session.get(Branch, scope_id)
     if not branch or branch.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid branch scope")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid branch scope"
+        )
     return scope_id
 
 
@@ -129,7 +143,11 @@ def resolve_setting(
             )
         ).first()
         if branch_setting:
-            return decode_value(branch_setting.value_json), branch_setting.scope, branch_setting.scope_id
+            return (
+                decode_value(branch_setting.value_json),
+                branch_setting.scope,
+                branch_setting.scope_id,
+            )
 
     tenant_setting = session.exec(
         select(AdminSetting).where(
@@ -141,6 +159,10 @@ def resolve_setting(
         )
     ).first()
     if tenant_setting:
-        return decode_value(tenant_setting.value_json), tenant_setting.scope, tenant_setting.scope_id
+        return (
+            decode_value(tenant_setting.value_json),
+            tenant_setting.scope,
+            tenant_setting.scope_id,
+        )
 
     return DEFAULT_SETTING_VALUES.get(key), None, None

@@ -12,13 +12,22 @@ from app.core.auth import require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.appointments.models import Appointment, AppointmentStatus
-from app.modules.appointments.schemas import QueueDisplayRead, QueueEntryRead, QueueTransitionRequest, RequeueRequest
+from app.modules.appointments.schemas import (
+    QueueDisplayRead,
+    QueueEntryRead,
+    QueueTransitionRequest,
+    RequeueRequest,
+)
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.queue.models import QueueEntry
-from app.modules.queue.service import enforce_no_show_threshold, requeue_entry, sync_transition
+from app.modules.queue.service import (
+    enforce_no_show_threshold,
+    requeue_entry,
+    sync_transition,
+)
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
 
@@ -57,21 +66,31 @@ def _display_row(entry: QueueEntry, language: str) -> QueueDisplayRead:
     )
 
 
-def _get_queue_entry_or_404(session: Session, tenant_id: str, entry_id: str) -> QueueEntry:
+def _get_queue_entry_or_404(
+    session: Session, tenant_id: str, entry_id: str
+) -> QueueEntry:
     entry = session.get(QueueEntry, entry_id)
     if not entry or entry.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Queue entry not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Queue entry not found"
+        )
     return entry
 
 
 def _get_appointment_for_entry(session: Session, entry: QueueEntry) -> Appointment:
     appointment = session.get(Appointment, entry.appointment_id)
     if not appointment or appointment.tenant_id != entry.tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
+        )
     return appointment
 
 
-@router.get("", response_model=list[QueueEntryRead], dependencies=[Depends(require_permission(permissions.QUEUE_MANAGE))])
+@router.get(
+    "",
+    response_model=list[QueueEntryRead],
+    dependencies=[Depends(require_permission(permissions.QUEUE_MANAGE))],
+)
 def list_queue(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
@@ -81,12 +100,14 @@ def list_queue(
 ) -> list[QueueEntry]:
     enforce_entitlement(session, tenant_id, "queue")
     branch_id = scoped_branch_id(current_user, branch_id)
-    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+    doctor_practitioner_id = current_doctor_practitioner_id(
+        session, tenant_id, current_user
+    )
     statement = select(QueueEntry).where(QueueEntry.tenant_id == tenant_id)
     if doctor_practitioner_id:
-        statement = statement.join(Appointment, Appointment.id == QueueEntry.appointment_id).where(
-            Appointment.practitioner_id == doctor_practitioner_id
-        )
+        statement = statement.join(
+            Appointment, Appointment.id == QueueEntry.appointment_id
+        ).where(Appointment.practitioner_id == doctor_practitioner_id)
     if branch_id:
         statement = statement.where(QueueEntry.branch_id == branch_id)
     if not include_completed:
@@ -107,7 +128,11 @@ def list_queue(
     )
 
 
-@router.get("/display", response_model=list[QueueDisplayRead], dependencies=[Depends(require_permission(permissions.QUEUE_MANAGE))])
+@router.get(
+    "/display",
+    response_model=list[QueueDisplayRead],
+    dependencies=[Depends(require_permission(permissions.QUEUE_MANAGE))],
+)
 def queue_display(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
@@ -117,12 +142,14 @@ def queue_display(
 ) -> list[QueueDisplayRead]:
     enforce_entitlement(session, tenant_id, "queue")
     branch_id = scoped_branch_id(current_user, branch_id)
-    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+    doctor_practitioner_id = current_doctor_practitioner_id(
+        session, tenant_id, current_user
+    )
     statement = select(QueueEntry).where(QueueEntry.tenant_id == tenant_id)
     if doctor_practitioner_id:
-        statement = statement.join(Appointment, Appointment.id == QueueEntry.appointment_id).where(
-            Appointment.practitioner_id == doctor_practitioner_id
-        )
+        statement = statement.join(
+            Appointment, Appointment.id == QueueEntry.appointment_id
+        ).where(Appointment.practitioner_id == doctor_practitioner_id)
     if branch_id:
         statement = statement.where(QueueEntry.branch_id == branch_id)
     statement = statement.where(
@@ -135,10 +162,18 @@ def queue_display(
             ]
         )
     )
-    rows = list(session.exec(statement.order_by(QueueEntry.token_number, QueueEntry.created_at)).all())
+    rows = list(
+        session.exec(
+            statement.order_by(QueueEntry.token_number, QueueEntry.created_at)
+        ).all()
+    )
     if display_mode == "called_only":
         rows = [row for row in rows if row.status == AppointmentStatus.CALLED]
-    language = _token_language(session, tenant_id, branch_id or rows[0].branch_id) if rows or branch_id else "english"
+    language = (
+        _token_language(session, tenant_id, branch_id or rows[0].branch_id)
+        if rows or branch_id
+        else "english"
+    )
     return [_display_row(entry, language) for entry in rows]
 
 
@@ -158,7 +193,9 @@ def call_token(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
-    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, appointment.practitioner_id
+    )
     updated = sync_transition(
         session,
         entry=entry,
@@ -201,7 +238,9 @@ def mark_not_available(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
-    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, appointment.practitioner_id
+    )
     return sync_transition(
         session,
         entry=entry,
@@ -229,7 +268,9 @@ def requeue(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
-    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, appointment.practitioner_id
+    )
     return requeue_entry(
         session,
         entry=entry,
@@ -256,7 +297,9 @@ def cancel(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
-    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, appointment.practitioner_id
+    )
     return sync_transition(
         session,
         entry=entry,
@@ -284,7 +327,9 @@ def mark_no_show(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
-    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, appointment.practitioner_id
+    )
     enforce_no_show_threshold(session, entry)
     return sync_transition(
         session,
@@ -313,7 +358,9 @@ def start_consultation(
     entry = _get_queue_entry_or_404(session, tenant_id, entry_id)
     require_user_branch_access(current_user, entry.branch_id)
     appointment = _get_appointment_for_entry(session, entry)
-    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, appointment.practitioner_id
+    )
     return sync_transition(
         session,
         entry=entry,

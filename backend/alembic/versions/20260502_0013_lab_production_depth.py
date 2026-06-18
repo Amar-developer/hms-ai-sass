@@ -40,10 +40,14 @@ def upgrade() -> None:
             sa.Column("name", sa.String(length=220), nullable=False),
             sa.Column("department", sa.String(length=120), nullable=True),
             sa.Column("sample_type", sa.String(length=120), nullable=True),
-            sa.Column("default_price", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "default_price", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column("turnaround_minutes", sa.Integer(), nullable=True),
             sa.Column("instructions", sa.String(length=1000), nullable=True),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("updated_by_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
@@ -62,8 +66,12 @@ def upgrade() -> None:
             sa.Column("code", sa.String(length=40), nullable=False),
             sa.Column("name", sa.String(length=220), nullable=False),
             sa.Column("description", sa.String(length=1000), nullable=True),
-            sa.Column("package_price", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "package_price", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("updated_by_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
@@ -82,9 +90,15 @@ def upgrade() -> None:
             sa.Column("test_id", sa.String(), nullable=False),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_labtestpackageitem_tenant_id", "labtestpackageitem", ["tenant_id"])
-        op.create_index("ix_labtestpackageitem_package_id", "labtestpackageitem", ["package_id"])
-        op.create_index("ix_labtestpackageitem_test_id", "labtestpackageitem", ["test_id"])
+        op.create_index(
+            "ix_labtestpackageitem_tenant_id", "labtestpackageitem", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_labtestpackageitem_package_id", "labtestpackageitem", ["package_id"]
+        )
+        op.create_index(
+            "ix_labtestpackageitem_test_id", "labtestpackageitem", ["test_id"]
+        )
     if "labresulttemplate" not in existing:
         op.create_table(
             "labresulttemplate",
@@ -93,13 +107,19 @@ def upgrade() -> None:
             sa.Column("test_id", sa.String(), nullable=True),
             sa.Column("name", sa.String(length=220), nullable=False),
             sa.Column("content_json", sa.String(), nullable=False),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_labresulttemplate_tenant_id", "labresulttemplate", ["tenant_id"])
-        op.create_index("ix_labresulttemplate_test_id", "labresulttemplate", ["test_id"])
+        op.create_index(
+            "ix_labresulttemplate_tenant_id", "labresulttemplate", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_labresulttemplate_test_id", "labresulttemplate", ["test_id"]
+        )
         op.create_index("ix_labresulttemplate_name", "labresulttemplate", ["name"])
     if "laborderitem" not in existing:
         op.create_table(
@@ -119,7 +139,9 @@ def upgrade() -> None:
         )
         op.create_index("ix_laborderitem_tenant_id", "laborderitem", ["tenant_id"])
         op.create_index("ix_laborderitem_branch_id", "laborderitem", ["branch_id"])
-        op.create_index("ix_laborderitem_lab_order_id", "laborderitem", ["lab_order_id"])
+        op.create_index(
+            "ix_laborderitem_lab_order_id", "laborderitem", ["lab_order_id"]
+        )
     if "labsample" not in existing:
         op.create_table(
             "labsample",
@@ -137,8 +159,14 @@ def upgrade() -> None:
         op.create_index("ix_labsample_branch_id", "labsample", ["branch_id"])
         op.create_index("ix_labsample_lab_order_id", "labsample", ["lab_order_id"])
         op.create_index("ix_labsample_barcode", "labsample", ["barcode"])
-    _add("labresult", "template_id", sa.Column("template_id", sa.String(), nullable=True))
-    _add("labresult", "report_file_name", sa.Column("report_file_name", sa.String(length=220), nullable=True))
+    _add(
+        "labresult", "template_id", sa.Column("template_id", sa.String(), nullable=True)
+    )
+    _add(
+        "labresult",
+        "report_file_name",
+        sa.Column("report_file_name", sa.String(length=220), nullable=True),
+    )
 
 
 def downgrade() -> None:

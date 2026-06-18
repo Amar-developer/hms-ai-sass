@@ -506,5 +506,3 @@ export function Doctors({ apiSession, clinic }: any) {
     </Card>
   );
 }
-
-

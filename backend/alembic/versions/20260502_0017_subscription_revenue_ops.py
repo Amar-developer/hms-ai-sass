@@ -22,21 +22,73 @@ def _add(table_name: str, column_name: str, column: sa.Column) -> None:
 
 
 def upgrade() -> None:
-    _add("subscriptioninvoice", "taxable_amount", sa.Column("taxable_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("subscriptioninvoice", "tax_amount", sa.Column("tax_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("subscriptioninvoice", "total_amount", sa.Column("total_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("subscriptioninvoice", "paid_amount", sa.Column("paid_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("subscriptioninvoice", "balance_amount", sa.Column("balance_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("subscriptioninvoice", "payment_method", sa.Column("payment_method", sa.String(length=80), nullable=True))
-    _add("subscriptioninvoice", "payment_reference", sa.Column("payment_reference", sa.String(length=160), nullable=True))
-    _add("subscriptioninvoice", "gateway_transaction_id", sa.Column("gateway_transaction_id", sa.String(length=160), nullable=True))
-    _add("subscriptioninvoice", "gateway_status", sa.Column("gateway_status", sa.String(length=80), nullable=True))
-    _add("subscriptioninvoice", "failed_reason", sa.Column("failed_reason", sa.String(length=500), nullable=True))
-    _add("subscriptioninvoice", "last_payment_attempt_at", sa.Column("last_payment_attempt_at", sa.DateTime(), nullable=True))
-    op.execute("UPDATE subscriptioninvoice SET taxable_amount = amount WHERE taxable_amount = 0")
-    op.execute("UPDATE subscriptioninvoice SET total_amount = amount WHERE total_amount = 0")
-    op.execute("UPDATE subscriptioninvoice SET balance_amount = amount WHERE balance_amount = 0 AND status != 'PAID'")
-    op.execute("UPDATE subscriptioninvoice SET paid_amount = amount, balance_amount = 0 WHERE status = 'PAID'")
+    _add(
+        "subscriptioninvoice",
+        "taxable_amount",
+        sa.Column("taxable_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "subscriptioninvoice",
+        "tax_amount",
+        sa.Column("tax_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "subscriptioninvoice",
+        "total_amount",
+        sa.Column("total_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "subscriptioninvoice",
+        "paid_amount",
+        sa.Column("paid_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "subscriptioninvoice",
+        "balance_amount",
+        sa.Column("balance_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "subscriptioninvoice",
+        "payment_method",
+        sa.Column("payment_method", sa.String(length=80), nullable=True),
+    )
+    _add(
+        "subscriptioninvoice",
+        "payment_reference",
+        sa.Column("payment_reference", sa.String(length=160), nullable=True),
+    )
+    _add(
+        "subscriptioninvoice",
+        "gateway_transaction_id",
+        sa.Column("gateway_transaction_id", sa.String(length=160), nullable=True),
+    )
+    _add(
+        "subscriptioninvoice",
+        "gateway_status",
+        sa.Column("gateway_status", sa.String(length=80), nullable=True),
+    )
+    _add(
+        "subscriptioninvoice",
+        "failed_reason",
+        sa.Column("failed_reason", sa.String(length=500), nullable=True),
+    )
+    _add(
+        "subscriptioninvoice",
+        "last_payment_attempt_at",
+        sa.Column("last_payment_attempt_at", sa.DateTime(), nullable=True),
+    )
+    op.execute(
+        "UPDATE subscriptioninvoice SET taxable_amount = amount WHERE taxable_amount = 0"
+    )
+    op.execute(
+        "UPDATE subscriptioninvoice SET total_amount = amount WHERE total_amount = 0"
+    )
+    op.execute(
+        "UPDATE subscriptioninvoice SET balance_amount = amount WHERE balance_amount = 0 AND status != 'PAID'"
+    )
+    op.execute(
+        "UPDATE subscriptioninvoice SET paid_amount = amount, balance_amount = 0 WHERE status = 'PAID'"
+    )
 
 
 def downgrade() -> None:

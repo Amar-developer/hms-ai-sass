@@ -20,7 +20,9 @@ class Consultation(SQLModel, table=True):
     patient_id: str = Field(index=True, foreign_key="patient.id")
     practitioner_id: str | None = Field(default=None, index=True)
     status: ConsultationStatus = Field(default=ConsultationStatus.DRAFT, index=True)
-    treatment_type: str | None = Field(default="general_consultation", index=True, max_length=80)
+    treatment_type: str | None = Field(
+        default="general_consultation", index=True, max_length=80
+    )
     chief_complaint: str | None = Field(default=None, max_length=1000)
     diagnosis: str | None = Field(default=None, max_length=1000)
     clinical_notes: str | None = Field(default=None, max_length=5000)

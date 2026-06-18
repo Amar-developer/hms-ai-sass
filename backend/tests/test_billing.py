@@ -107,7 +107,9 @@ def create_fee_rule(
     return response.json()
 
 
-def test_create_fee_rule_and_generate_op_invoice_with_percentage_split(client: TestClient):
+def test_create_fee_rule_and_generate_op_invoice_with_percentage_split(
+    client: TestClient,
+):
     data = setup_signed_consultation(client, "op")
     tenant_id = data["tenant"]["id"]
     create_fee_rule(
@@ -122,7 +124,10 @@ def test_create_fee_rule_and_generate_op_invoice_with_percentage_split(client: T
     invoice_response = client.post(
         "/api/v1/billing/invoices/from-consultation",
         headers={"X-Tenant-ID": tenant_id},
-        json={"consultation_id": data["consultation"]["id"], "created_by_user_id": "billing_user"},
+        json={
+            "consultation_id": data["consultation"]["id"],
+            "created_by_user_id": "billing_user",
+        },
     )
 
     assert invoice_response.status_code == 201
@@ -134,7 +139,9 @@ def test_create_fee_rule_and_generate_op_invoice_with_percentage_split(client: T
     assert detail["items"][0]["description"] == "Op general consultation"
 
 
-def test_doctor_fee_rules_allow_different_departments_but_reject_identical_context(client: TestClient):
+def test_doctor_fee_rules_allow_different_departments_but_reject_identical_context(
+    client: TestClient,
+):
     data = setup_signed_consultation(client, "op")
     tenant_id = data["tenant"]["id"]
     common = {
@@ -164,7 +171,10 @@ def test_doctor_fee_rules_allow_different_departments_but_reject_identical_conte
     assert general.status_code == 201
     assert orthopaedics.status_code == 201
     assert duplicate.status_code == 409
-    assert duplicate.json()["detail"] == "An identical active doctor fee rule already exists"
+    assert (
+        duplicate.json()["detail"]
+        == "An identical active doctor fee rule already exists"
+    )
 
 
 def test_invoice_number_uses_configured_branch_prefix(client: TestClient):
@@ -271,7 +281,10 @@ def test_discount_requires_approved_request(client: TestClient):
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"] == "Approved discount approval is required for invoice discount"
+    assert (
+        response.json()["detail"]
+        == "Approved discount approval is required for invoice discount"
+    )
 
 
 def test_tax_rule_applies_gst_to_invoice_and_receipt_pdf(client: TestClient):
@@ -287,7 +300,10 @@ def test_tax_rule_applies_gst_to_invoice_and_receipt_pdf(client: TestClient):
     response = client.post(
         "/api/v1/billing/invoices/from-consultation",
         headers={"X-Tenant-ID": tenant_id},
-        json={"consultation_id": data["consultation"]["id"], "tax_rule_id": tax_rule["id"]},
+        json={
+            "consultation_id": data["consultation"]["id"],
+            "tax_rule_id": tax_rule["id"],
+        },
     )
     receipt = client.get(
         f"/api/v1/billing/invoices/{response.json()['invoice']['id']}/receipt.pdf",
@@ -310,12 +326,22 @@ def test_consultation_invoice_uses_service_scoped_tax_rule(client: TestClient):
     client.post(
         "/api/v1/billing/tax-rules",
         headers={"X-Tenant-ID": tenant_id},
-        json={"name": "Default GST 5", "tax_percentage": 5, "tax_label": "GST", "service_scope": "all"},
+        json={
+            "name": "Default GST 5",
+            "tax_percentage": 5,
+            "tax_label": "GST",
+            "service_scope": "all",
+        },
     )
     consultation_tax = client.post(
         "/api/v1/billing/tax-rules",
         headers={"X-Tenant-ID": tenant_id},
-        json={"name": "Consultation GST 12", "tax_percentage": 12, "tax_label": "GST", "service_scope": "consultation"},
+        json={
+            "name": "Consultation GST 12",
+            "tax_percentage": 12,
+            "tax_label": "GST",
+            "service_scope": "consultation",
+        },
     )
 
     response = client.post(
@@ -338,18 +364,33 @@ def test_discount_offer_applies_to_consultation_invoice_before_tax(client: TestC
     tax_rule = client.post(
         "/api/v1/billing/tax-rules",
         headers={"X-Tenant-ID": tenant_id},
-        json={"name": "GST 10", "tax_percentage": 10, "tax_label": "GST", "service_scope": "consultation"},
+        json={
+            "name": "GST 10",
+            "tax_percentage": 10,
+            "tax_label": "GST",
+            "service_scope": "consultation",
+        },
     ).json()
     offer = client.post(
         "/api/v1/billing/discount-offers",
         headers={"X-Tenant-ID": tenant_id},
-        json={"name": "Health camp 10", "code": "HEALTH10", "service_scope": "consultation", "discount_type": "percentage", "value": 10},
+        json={
+            "name": "Health camp 10",
+            "code": "HEALTH10",
+            "service_scope": "consultation",
+            "discount_type": "percentage",
+            "value": 10,
+        },
     ).json()
 
     response = client.post(
         "/api/v1/billing/invoices/from-consultation",
         headers={"X-Tenant-ID": tenant_id},
-        json={"consultation_id": data["consultation"]["id"], "discount_offer_id": offer["id"], "tax_rule_id": tax_rule["id"]},
+        json={
+            "consultation_id": data["consultation"]["id"],
+            "discount_offer_id": offer["id"],
+            "tax_rule_id": tax_rule["id"],
+        },
     )
 
     assert response.status_code == 201
@@ -380,7 +421,10 @@ def test_discount_offer_requires_minimum_bill_amount(client: TestClient):
     response = client.post(
         "/api/v1/billing/invoices/from-consultation",
         headers={"X-Tenant-ID": tenant_id},
-        json={"consultation_id": data["consultation"]["id"], "discount_offer_id": offer["id"]},
+        json={
+            "consultation_id": data["consultation"]["id"],
+            "discount_offer_id": offer["id"],
+        },
     )
 
     assert response.status_code == 201
@@ -392,7 +436,14 @@ def test_discount_offer_requires_minimum_bill_amount(client: TestClient):
 def test_tax_can_be_shared_with_doctor_when_fee_rule_allows_it(client: TestClient):
     data = setup_signed_consultation(client, "op")
     tenant_id = data["tenant"]["id"]
-    create_fee_rule(client, tenant_id, "op", 1000, doctor_share_percentage=60, share_tax_with_doctor=True)
+    create_fee_rule(
+        client,
+        tenant_id,
+        "op",
+        1000,
+        doctor_share_percentage=60,
+        share_tax_with_doctor=True,
+    )
     tax_rule = client.post(
         "/api/v1/billing/tax-rules",
         headers={"X-Tenant-ID": tenant_id},
@@ -402,7 +453,10 @@ def test_tax_can_be_shared_with_doctor_when_fee_rule_allows_it(client: TestClien
     response = client.post(
         "/api/v1/billing/invoices/from-consultation",
         headers={"X-Tenant-ID": tenant_id},
-        json={"consultation_id": data["consultation"]["id"], "tax_rule_id": tax_rule["id"]},
+        json={
+            "consultation_id": data["consultation"]["id"],
+            "tax_rule_id": tax_rule["id"],
+        },
     )
 
     assert response.status_code == 201
@@ -412,8 +466,14 @@ def test_tax_can_be_shared_with_doctor_when_fee_rule_allows_it(client: TestClien
 
 
 def test_invoice_requires_signed_consultation(client: TestClient):
-    tenant = client.post("/api/v1/tenants", json={"name": "Draft Billing Clinic"}).json()
-    starter = next(plan for plan in client.get("/api/v1/subscription-plans").json() if plan["key"] == "starter")
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Draft Billing Clinic"}
+    ).json()
+    starter = next(
+        plan
+        for plan in client.get("/api/v1/subscription-plans").json()
+        if plan["key"] == "starter"
+    )
     client.post(
         "/api/v1/subscription-plans/tenant-subscriptions",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -456,7 +516,10 @@ def test_invoice_requires_signed_consultation(client: TestClient):
     )
 
     assert response.status_code == 409
-    assert response.json()["detail"] == "Invoice can be generated only after consultation is signed"
+    assert (
+        response.json()["detail"]
+        == "Invoice can be generated only after consultation is signed"
+    )
 
 
 def test_existing_consultation_invoice_is_returned_for_refresh(client: TestClient):
@@ -550,10 +613,14 @@ def test_free_doctor_review_generates_zero_invoice_without_fee_rule(client: Test
     assert invoice.status_code == 201
     assert invoice.json()["invoice"]["total_amount"] == 0
     assert invoice.json()["invoice"]["fee_rule_id"] is None
-    assert invoice.json()["items"][0]["description"] == "Doctor Review doctor review Free"
+    assert (
+        invoice.json()["items"][0]["description"] == "Doctor Review doctor review Free"
+    )
 
 
-def test_fitness_certificate_uses_its_own_fee_rule_for_revenue_tracking(client: TestClient):
+def test_fitness_certificate_uses_its_own_fee_rule_for_revenue_tracking(
+    client: TestClient,
+):
     data = setup_signed_consultation(
         client,
         "fitness_certificate",
@@ -576,7 +643,10 @@ def test_fitness_certificate_uses_its_own_fee_rule_for_revenue_tracking(client: 
 
     assert invoice.status_code == 201
     assert invoice.json()["invoice"]["total_amount"] == 900
-    assert invoice.json()["items"][0]["description"] == "Fitness Certificate fitness certificate"
+    assert (
+        invoice.json()["items"][0]["description"]
+        == "Fitness Certificate fitness certificate"
+    )
 
     report = client.get(
         "/api/v1/billing/reports/revenue?group_by=visit_purpose",
@@ -616,9 +686,14 @@ def test_invoice_generation_writes_audit_event(client: TestClient):
     client.post(
         "/api/v1/billing/invoices/from-consultation",
         headers={"X-Tenant-ID": tenant_id},
-        json={"consultation_id": data["consultation"]["id"], "created_by_user_id": "billing_user"},
+        json={
+            "consultation_id": data["consultation"]["id"],
+            "created_by_user_id": "billing_user",
+        },
     )
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant_id}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant_id}
+    ).json()
     actions = [event["action"] for event in audit]
 
     assert "doctor_fee_rule.created" in actions

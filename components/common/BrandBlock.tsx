@@ -4,7 +4,7 @@ type BrandBlockProps = {
   tabletCollapsed: boolean;
   setTabletCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   setSidebarOpen: React.Dispatch<React.SetStateAction<boolean>>;
-  sideBarOpen:boolean 
+  sideBarOpen:boolean
 };
 
 export function BrandBlock({

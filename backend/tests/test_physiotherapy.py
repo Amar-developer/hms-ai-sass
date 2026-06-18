@@ -30,7 +30,9 @@ def seed_physio_tenant(test_engine):
         plan = SubscriptionPlan(
             key="physio_demo_plan",
             name="Physio Demo Plan",
-            enabled_modules_json=json.dumps(["patients", "appointments", "billing_basic", "physiotherapy"]),
+            enabled_modules_json=json.dumps(
+                ["patients", "appointments", "billing_basic", "physiotherapy"]
+            ),
         )
         session.add(branch)
         session.add(patient)
@@ -39,9 +41,23 @@ def seed_physio_tenant(test_engine):
         session.refresh(branch)
         session.refresh(patient)
         session.refresh(plan)
-        session.add(TaxRule(tenant_id=tenant.id, branch_id=branch.id, name="Physio GST", tax_percentage=5))
+        session.add(
+            TaxRule(
+                tenant_id=tenant.id,
+                branch_id=branch.id,
+                name="Physio GST",
+                tax_percentage=5,
+            )
+        )
         session.commit()
-        session.add(TenantSubscription(tenant_id=tenant.id, plan_id=plan.id, starts_on=date.today(), is_active=True))
+        session.add(
+            TenantSubscription(
+                tenant_id=tenant.id,
+                plan_id=plan.id,
+                starts_on=date.today(),
+                is_active=True,
+            )
+        )
         session.commit()
         return tenant.id, branch.id, patient.id
 
@@ -53,7 +69,13 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
     equipment = client.post(
         "/api/v1/physiotherapy/equipment",
         headers=headers,
-        json={"branch_id": branch_id, "name": "HMS DIGISTIM 202", "modality_type": "muscle_stimulator", "manufacturer": "HMS", "is_portable": True},
+        json={
+            "branch_id": branch_id,
+            "name": "HMS DIGISTIM 202",
+            "modality_type": "muscle_stimulator",
+            "manufacturer": "HMS",
+            "is_portable": True,
+        },
     )
     assert equipment.status_code == 201
 
@@ -80,14 +102,20 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
         headers=headers,
         data={"notes": "Signed intake and treatment risk consent"},
         files=[
-            ("files", ("physio-consent.pdf", BytesIO(b"%PDF-1.4 consent"), "application/pdf")),
+            (
+                "files",
+                ("physio-consent.pdf", BytesIO(b"%PDF-1.4 consent"), "application/pdf"),
+            ),
             ("files", ("guardian-consent.png", BytesIO(b"fake-png"), "image/png")),
         ],
     )
     assert consent.status_code == 200
     consent_body = consent.json()
     consent_files = json.loads(consent_body["consent_files_json"])
-    assert [row["name"] for row in consent_files] == ["physio-consent.pdf", "guardian-consent.png"]
+    assert [row["name"] for row in consent_files] == [
+        "physio-consent.pdf",
+        "guardian-consent.png",
+    ]
     assert consent_body["consent_form_name"] == "guardian-consent.png"
     assert consent_body["consent_notes"] == "Signed intake and treatment risk consent"
 
@@ -131,7 +159,10 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
         },
     )
     assert blocked_session.status_code == 409
-    assert blocked_session.json()["detail"] == "Cannot add sessions after physiotherapy invoice is generated"
+    assert (
+        blocked_session.json()["detail"]
+        == "Cannot add sessions after physiotherapy invoice is generated"
+    )
 
     with Session(test_engine) as db:
         invoiced_case = db.get(PhysiotherapyCase, case_body["id"])
@@ -144,7 +175,9 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
     )
     assert payment.status_code == 201
 
-    fetched_invoice = client.get(f"/api/v1/physiotherapy/cases/{case_body['id']}/invoice", headers=headers)
+    fetched_invoice = client.get(
+        f"/api/v1/physiotherapy/cases/{case_body['id']}/invoice", headers=headers
+    )
     assert fetched_invoice.status_code == 200
     assert fetched_invoice.json()["invoice"]["balance_amount"] == 0
     assert fetched_invoice.json()["payments"][0]["amount"] == 735
@@ -153,6 +186,11 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
         case_row = db.get(PhysiotherapyCase, case_body["id"])
         assert case_row.body_region == "Knee"
         assert case_row.status == "paid"
-        actions = {row.action for row in db.exec(select(AuditEvent).where(AuditEvent.tenant_id == tenant_id)).all()}
+        actions = {
+            row.action
+            for row in db.exec(
+                select(AuditEvent).where(AuditEvent.tenant_id == tenant_id)
+            ).all()
+        }
         assert "physiotherapy_case.created" in actions
         assert "physiotherapy_invoice.generated" in actions

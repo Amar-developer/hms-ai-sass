@@ -29,10 +29,22 @@ def _add(table: str, name: str, column) -> None:
 
 
 def upgrade() -> None:
-    _add("invoice", "taxable_amount", sa.Column("taxable_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("invoice", "tax_amount", sa.Column("tax_amount", sa.Integer(), nullable=False, server_default="0"))
+    _add(
+        "invoice",
+        "taxable_amount",
+        sa.Column("taxable_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "invoice",
+        "tax_amount",
+        sa.Column("tax_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
     _add("invoice", "tax_rule_id", sa.Column("tax_rule_id", sa.String(), nullable=True))
-    _add("invoice", "discount_approval_id", sa.Column("discount_approval_id", sa.String(), nullable=True))
+    _add(
+        "invoice",
+        "discount_approval_id",
+        sa.Column("discount_approval_id", sa.String(), nullable=True),
+    )
 
     existing = _tables()
     if "taxrule" not in existing:
@@ -67,8 +79,12 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("decided_at", sa.DateTime(), nullable=True),
         )
-        op.create_index("ix_discountapproval_tenant_id", "discountapproval", ["tenant_id"])
-        op.create_index("ix_discountapproval_branch_id", "discountapproval", ["branch_id"])
+        op.create_index(
+            "ix_discountapproval_tenant_id", "discountapproval", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_discountapproval_branch_id", "discountapproval", ["branch_id"]
+        )
         op.create_index("ix_discountapproval_status", "discountapproval", ["status"])
     if "creditnote" not in existing:
         op.create_table(
@@ -103,9 +119,17 @@ def upgrade() -> None:
             sa.Column("finalized_by_user_id", sa.String(), nullable=True),
             sa.Column("finalized_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_doctorsettlement_tenant_id", "doctorsettlement", ["tenant_id"])
-        op.create_index("ix_doctorsettlement_branch_id", "doctorsettlement", ["branch_id"])
-        op.create_index("ix_doctorsettlement_practitioner_id", "doctorsettlement", ["practitioner_id"])
+        op.create_index(
+            "ix_doctorsettlement_tenant_id", "doctorsettlement", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_doctorsettlement_branch_id", "doctorsettlement", ["branch_id"]
+        )
+        op.create_index(
+            "ix_doctorsettlement_practitioner_id",
+            "doctorsettlement",
+            ["practitioner_id"],
+        )
 
 
 def downgrade() -> None:

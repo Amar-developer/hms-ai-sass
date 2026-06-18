@@ -68,7 +68,7 @@ export function DepartmentsManagement({
           onChange={(e: any) => setQuery(e.target.value)}
           placeholder="Search medical department name, code, status"
           className='rounded-lg px-2 py-2 lg:px-4 lg:py-1 text-xs lg:text-sm w-2/3 mt-5'
-        />      
+        />
         <TenantPicker
           tenants={tenants}
           selectedId={selectedId}

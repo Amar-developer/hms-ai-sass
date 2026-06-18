@@ -79,7 +79,10 @@ def test_free_trial_blocks_whatsapp_notification_by_module_entitlement(client):
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Module whatsapp is not enabled for plan Free Trial"
+    assert (
+        response.json()["detail"]
+        == "Module whatsapp is not enabled for plan Free Trial"
+    )
 
 
 def test_enabled_module_still_requires_provider_setting(client):
@@ -100,7 +103,10 @@ def test_enabled_module_still_requires_provider_setting(client):
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Communication provider whatsapp is not enabled in settings"
+    assert (
+        response.json()["detail"]
+        == "Communication provider whatsapp is not enabled in settings"
+    )
 
 
 def test_queue_whatsapp_notification_when_module_and_provider_enabled(client):
@@ -124,7 +130,9 @@ def test_queue_whatsapp_notification_when_module_and_provider_enabled(client):
         },
     )
     listed = client.get("/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]})
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert response.status_code == 201
     assert response.json()["status"] == "queued"

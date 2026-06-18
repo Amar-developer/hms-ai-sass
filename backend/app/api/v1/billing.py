@@ -7,7 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.core.access_control import enforce_entitlement, require_branch_in_tenant, require_user_branch_access, scoped_branch_id
+from app.core.access_control import (
+    enforce_entitlement,
+    require_branch_in_tenant,
+    require_user_branch_access,
+    scoped_branch_id,
+)
 from app.core.auth import require_any_permission, require_permission
 from app.core.config import get_settings
 from app.core.database import get_session
@@ -101,7 +106,11 @@ def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
     case = session.get(PhysiotherapyCase, invoice.physiotherapy_case_id)
     if not case or case.tenant_id != invoice.tenant_id:
         return
-    target_status = "paid" if invoice.balance_amount <= 0 and invoice.total_amount > 0 else "completed"
+    target_status = (
+        "paid"
+        if invoice.balance_amount <= 0 and invoice.total_amount > 0
+        else "completed"
+    )
     if case.status == target_status:
         return
     case.status = target_status
@@ -119,7 +128,11 @@ def _sync_home_care_booking_status(session: Session, invoice: Invoice) -> None:
     booking = session.get(HomeCareBooking, invoice.home_care_booking_id)
     if not booking or booking.tenant_id != invoice.tenant_id:
         return
-    target_status = "paid" if invoice.balance_amount <= 0 and invoice.total_amount > 0 else "invoiced"
+    target_status = (
+        "paid"
+        if invoice.balance_amount <= 0 and invoice.total_amount > 0
+        else "invoiced"
+    )
     if booking.status == target_status:
         return
     booking.status = target_status
@@ -131,7 +144,9 @@ def _sync_home_care_booking_status(session: Session, invoice: Invoice) -> None:
 def _sync_patient_membership_payment(session: Session, invoice: Invoice) -> None:
     if not invoice.patient_subscription_enrollment_id:
         return
-    enrollment = session.get(PatientSubscriptionEnrollment, invoice.patient_subscription_enrollment_id)
+    enrollment = session.get(
+        PatientSubscriptionEnrollment, invoice.patient_subscription_enrollment_id
+    )
     if not enrollment or enrollment.tenant_id != invoice.tenant_id:
         return
     # Only the plan-purchase invoice drives the membership's paid amount.
@@ -152,7 +167,9 @@ def _sync_patient_membership_payment(session: Session, invoice: Invoice) -> None
     )
     if not is_purchase_invoice:
         return
-    paid_amount = max(0, min(int(invoice.paid_amount or 0), int(invoice.total_amount or 0)))
+    paid_amount = max(
+        0, min(int(invoice.paid_amount or 0), int(invoice.total_amount or 0))
+    )
     if enrollment.paid_amount == paid_amount:
         return
     enrollment.paid_amount = paid_amount
@@ -164,7 +181,10 @@ def _sync_patient_membership_payment(session: Session, invoice: Invoice) -> None
 def _frappe_catalog_client() -> FrappeCatalogClient:
     settings = get_settings()
     if not settings.maha_clinic_url or not settings.maha_clinic_token:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="ERPNext catalog plugin is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ERPNext catalog plugin is not configured",
+        )
     return FrappeCatalogClient(
         base_url=settings.maha_clinic_url,
         token=settings.maha_clinic_token,
@@ -175,7 +195,11 @@ def _frappe_catalog_client() -> FrappeCatalogClient:
 def _invoice_item_external_slug(item: InvoiceItem) -> str:
     if item.external_slug:
         return item.external_slug
-    return re.sub(r"[^a-z0-9]+", "-", str(item.external_item_code or item.description or "").strip().lower()).strip("-")
+    return re.sub(
+        r"[^a-z0-9]+",
+        "-",
+        str(item.external_item_code or item.description or "").strip().lower(),
+    ).strip("-")
 
 
 def _catalog_key(value: str | None) -> str:
@@ -195,7 +219,9 @@ def _external_supplier_options(item: InvoiceItem) -> list[dict[str, int | str]]:
             candidate = client.get_lab_item_details(lookup)
         except HTTPException:
             continue
-        if item.external_item_code and _catalog_key(str(candidate.get("item_code") or "")) != _catalog_key(item.external_item_code):
+        if item.external_item_code and _catalog_key(
+            str(candidate.get("item_code") or "")
+        ) != _catalog_key(item.external_item_code):
             continue
         detail = candidate
         break
@@ -206,12 +232,17 @@ def _external_supplier_options(item: InvoiceItem) -> list[dict[str, int | str]]:
         return []
     return [
         {
-            "supplier": str(supplier.get("supplier") or supplier.get("supplier_name") or ""),
-            "supplier_name": str(supplier.get("supplier_name") or supplier.get("supplier") or ""),
+            "supplier": str(
+                supplier.get("supplier") or supplier.get("supplier_name") or ""
+            ),
+            "supplier_name": str(
+                supplier.get("supplier_name") or supplier.get("supplier") or ""
+            ),
             "buying_price": max(round(float(supplier.get("buying_price") or 0)), 0),
         }
         for supplier in suppliers
-        if isinstance(supplier, dict) and (supplier.get("supplier") or supplier.get("supplier_name"))
+        if isinstance(supplier, dict)
+        and (supplier.get("supplier") or supplier.get("supplier_name"))
     ]
 
 
@@ -220,12 +251,19 @@ def _invoice_membership_service(invoice: Invoice) -> str | None:
         return "lab"
     if invoice.pharmacy_issue_id:
         return "pharmacy"
-    if invoice.consultation_id and not invoice.ip_admission_id and not invoice.physiotherapy_case_id and not invoice.home_care_booking_id:
+    if (
+        invoice.consultation_id
+        and not invoice.ip_admission_id
+        and not invoice.physiotherapy_case_id
+        and not invoice.home_care_booking_id
+    ):
         return "consultation"
     return None
 
 
-def _invoice_membership_item_ids(session: Session, invoice: Invoice, service_type: str) -> list[str]:
+def _invoice_membership_item_ids(
+    session: Session, invoice: Invoice, service_type: str
+) -> list[str]:
     if service_type == "lab" and invoice.lab_order_id:
         from app.modules.lab.models import LabOrderItem
 
@@ -255,7 +293,9 @@ def _invoice_membership_item_ids(session: Session, invoice: Invoice, service_typ
     return []
 
 
-def _invoice_membership_item_amounts(session: Session, invoice: Invoice, service_type: str) -> dict[str, int]:
+def _invoice_membership_item_amounts(
+    session: Session, invoice: Invoice, service_type: str
+) -> dict[str, int]:
     if service_type == "lab" and invoice.lab_order_id:
         from app.modules.lab.models import LabOrderItem
 
@@ -267,7 +307,9 @@ def _invoice_membership_item_amounts(session: Session, invoice: Invoice, service
             )
         ).all():
             if item.test_id:
-                amounts[item.test_id] = amounts.get(item.test_id, 0) + int(item.price or 0)
+                amounts[item.test_id] = amounts.get(item.test_id, 0) + int(
+                    item.price or 0
+                )
         return amounts
     if service_type == "pharmacy" and invoice.pharmacy_issue_id:
         from app.modules.pharmacy.models import PharmacyIssueItem
@@ -280,12 +322,16 @@ def _invoice_membership_item_amounts(session: Session, invoice: Invoice, service
             )
         ).all():
             if item.medicine_id:
-                amounts[item.medicine_id] = amounts.get(item.medicine_id, 0) + int(item.quantity * item.unit_price)
+                amounts[item.medicine_id] = amounts.get(item.medicine_id, 0) + int(
+                    item.quantity * item.unit_price
+                )
         return amounts
     return {}
 
 
-def _invoice_membership_benefit(session: Session, invoice: Invoice) -> InvoiceMembershipBenefitRead | None:
+def _invoice_membership_benefit(
+    session: Session, invoice: Invoice
+) -> InvoiceMembershipBenefitRead | None:
     service_type = _invoice_membership_service(invoice)
     if not service_type:
         return None
@@ -336,8 +382,12 @@ def _invoice_membership_benefit(session: Session, invoice: Invoice) -> InvoiceMe
         item_amounts=_invoice_membership_item_amounts(session, invoice, service_type),
         subtotal_amount=int(invoice.subtotal_amount or 0),
         department_id=consultation_department_id(
-            session, appointment_id=invoice.appointment_id, consultation_id=invoice.consultation_id
-        ) if service_type == "consultation" else None,
+            session,
+            appointment_id=invoice.appointment_id,
+            consultation_id=invoice.consultation_id,
+        )
+        if service_type == "consultation"
+        else None,
     )
     discount_amount = int(preview["discount_amount"] or 0)
     return InvoiceMembershipBenefitRead(
@@ -357,10 +407,16 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
     if int(invoice.membership_discount_amount or 0) > 0:
         return update_invoice_payment_status(session, invoice)
     if int(invoice.paid_amount or 0) > 0:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot apply membership benefit after payment is recorded")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot apply membership benefit after payment is recorded",
+        )
     service_type = _invoice_membership_service(invoice)
     if not service_type:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Membership benefit is not available for this invoice type")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Membership benefit is not available for this invoice type",
+        )
     from app.modules.patient_subscriptions.service import (
         active_patient_enrollment,
         benefit_preview,
@@ -376,7 +432,10 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
         patient_id=invoice.patient_id,
     )
     if not membership:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active patient membership found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active patient membership found",
+        )
     enrollment, plan = membership
     sync_free_item_usage_from_invoices(session, enrollment, plan)
     preview = benefit_preview(
@@ -387,14 +446,27 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
         item_amounts=_invoice_membership_item_amounts(session, invoice, service_type),
         subtotal_amount=int(invoice.subtotal_amount or 0),
         department_id=consultation_department_id(
-            session, appointment_id=invoice.appointment_id, consultation_id=invoice.consultation_id
-        ) if service_type == "consultation" else None,
+            session,
+            appointment_id=invoice.appointment_id,
+            consultation_id=invoice.consultation_id,
+        )
+        if service_type == "consultation"
+        else None,
     )
     membership_discount = int(preview["discount_amount"] or 0)
     if membership_discount <= 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=preview.get("reason") or "No membership benefit available")
-    offer_discount = max(int(invoice.discount_amount or 0) - int(invoice.membership_discount_amount or 0), 0)
-    discount = min(offer_discount + membership_discount, int(invoice.subtotal_amount or 0))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=preview.get("reason") or "No membership benefit available",
+        )
+    offer_discount = max(
+        int(invoice.discount_amount or 0)
+        - int(invoice.membership_discount_amount or 0),
+        0,
+    )
+    discount = min(
+        offer_discount + membership_discount, int(invoice.subtotal_amount or 0)
+    )
     taxable = max(int(invoice.subtotal_amount or 0) - discount, 0)
     tax_rule = find_tax_rule(
         session,
@@ -418,7 +490,11 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
         enrollment.used_consultations += 1
         session.add(enrollment)
     elif service_type in ("lab", "pharmacy") and preview.get("free_item_ids"):
-        consume_free_items(enrollment, service_type=service_type, free_item_ids=preview["free_item_ids"])
+        consume_free_items(
+            enrollment,
+            service_type=service_type,
+            free_item_ids=preview["free_item_ids"],
+        )
         session.add(enrollment)
     session.add(invoice)
     session.commit()
@@ -486,7 +562,13 @@ def _png_logo_image(data: bytes) -> dict[str, object] | None:
             compressed.extend(chunk_data)
         elif chunk_type == b"IEND":
             break
-    if not width or not height or bit_depth != 8 or color_type not in {2, 6} or interlace != 0:
+    if (
+        not width
+        or not height
+        or bit_depth != 8
+        or color_type not in {2, 6}
+        or interlace != 0
+    ):
         return None
     channels = 4 if color_type == 6 else 3
     stride = width * channels
@@ -517,7 +599,9 @@ def _png_logo_image(data: bytes) -> dict[str, object] | None:
             elif filter_type == 4:
                 p = left + up - up_left
                 pa, pb, pc = abs(p - left), abs(p - up), abs(p - up_left)
-                predictor = left if pa <= pb and pa <= pc else up if pb <= pc else up_left
+                predictor = (
+                    left if pa <= pb and pa <= pc else up if pb <= pc else up_left
+                )
                 scan[i] = (value + predictor) & 0xFF
             elif filter_type != 0:
                 return None
@@ -532,7 +616,12 @@ def _png_logo_image(data: bytes) -> dict[str, object] | None:
         else:
             rows.append(bytes(scan))
     image_data = zlib.compress(b"".join(rows))
-    return {"data": image_data, "width": width, "height": height, "filter": "FlateDecode"}
+    return {
+        "data": image_data,
+        "width": width,
+        "height": height,
+        "filter": "FlateDecode",
+    }
 
 
 def _local_logo_image(logo_url: str | None) -> dict[str, object] | None:
@@ -550,7 +639,12 @@ def _local_logo_image(logo_url: str | None) -> dict[str, object] | None:
         size = _jpeg_size(data)
         if not size:
             return None
-        return {"data": data, "width": size[0], "height": size[1], "filter": "DCTDecode"}
+        return {
+            "data": data,
+            "width": size[0],
+            "height": size[1],
+            "filter": "DCTDecode",
+        }
     if path.suffix.lower() == ".png":
         return _png_logo_image(data)
     return None
@@ -577,7 +671,9 @@ def _build_receipt_pdf(
     def rect(x: int, y: int, w: int, h: int, fill: bool = False) -> None:
         ops.append(f"{x} {y} {w} {h} re {'B' if fill else 'S'}")
 
-    def line(x1: int, y1: int, x2: int, y2: int, stroke: str = "0.20 0.20 0.20") -> None:
+    def line(
+        x1: int, y1: int, x2: int, y2: int, stroke: str = "0.20 0.20 0.20"
+    ) -> None:
         ops.append(f"{stroke} RG {x1} {y1} m {x2} {y2} l S")
 
     def text(
@@ -611,7 +707,11 @@ def _build_receipt_pdf(
         return lines or [""]
 
     tenant_name = tenant.name if tenant else "MedizinHub"
-    patient_name = getattr(patient, "full_name", None) or getattr(patient, "name", None) or "Patient"
+    patient_name = (
+        getattr(patient, "full_name", None)
+        or getattr(patient, "name", None)
+        or "Patient"
+    )
     color(stroke="1 1 1", fill="1 1 1")
     rect(0, 0, width, height, True)
     if logo:
@@ -628,9 +728,23 @@ def _build_receipt_pdf(
     text(535, 611, invoice.created_at.strftime("%B %d %Y"), 11, False, "right")
 
     y = 535
-    headers = [("Product Name", 45), ("SKU", 255), ("Price", 352), ("Qty Invoiced", 430), ("Subtotal", 535)]
+    headers = [
+        ("Product Name", 45),
+        ("SKU", 255),
+        ("Price", 352),
+        ("Qty Invoiced", 430),
+        ("Subtotal", 535),
+    ]
     for label, x in headers:
-        text(x, y, label, 10, False, "right" if label == "Subtotal" else "left", fill="0.32 0.32 0.36")
+        text(
+            x,
+            y,
+            label,
+            10,
+            False,
+            "right" if label == "Subtotal" else "left",
+            fill="0.32 0.32 0.36",
+        )
     line(45, y - 16, 535, y - 16)
 
     y -= 42
@@ -654,9 +768,21 @@ def _build_receipt_pdf(
     tax = int(invoice.tax_amount or 0)
     summary_rows = [("Subtotal", _money_pdf(subtotal), False)]
     if offer > 0:
-        summary_rows.append((f"Offer Discount ({_percent_pdf(offer, subtotal)})", f"-{_money_pdf(offer)}", False))
+        summary_rows.append(
+            (
+                f"Offer Discount ({_percent_pdf(offer, subtotal)})",
+                f"-{_money_pdf(offer)}",
+                False,
+            )
+        )
     if membership > 0:
-        summary_rows.append((f"Membership Benefit ({_percent_pdf(membership, subtotal)})", f"-{_money_pdf(membership)}", False))
+        summary_rows.append(
+            (
+                f"Membership Benefit ({_percent_pdf(membership, subtotal)})",
+                f"-{_money_pdf(membership)}",
+                False,
+            )
+        )
     summary_rows.extend(
         [
             ("Tax", _money_pdf(tax), False),
@@ -704,7 +830,9 @@ def _build_receipt_pdf(
             + logo_data
             + b"\nendstream"
         )
-    objects.append(f"<< /Length {len(content)} >>\nstream\n".encode() + content + b"\nendstream")
+    objects.append(
+        f"<< /Length {len(content)} >>\nstream\n".encode() + content + b"\nendstream"
+    )
 
     pdf = bytearray(b"%PDF-1.4\n")
     offsets = [0]
@@ -717,7 +845,9 @@ def _build_receipt_pdf(
     pdf.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode())
     for offset in offsets[1:]:
         pdf.extend(f"{offset:010d} 00000 n \n".encode())
-    pdf.extend(f"trailer << /Root 1 0 R /Size {len(objects) + 1} >>\nstartxref\n{startxref}\n%%EOF".encode())
+    pdf.extend(
+        f"trailer << /Root 1 0 R /Size {len(objects) + 1} >>\nstartxref\n{startxref}\n%%EOF".encode()
+    )
     return bytes(pdf)
 
 
@@ -726,14 +856,19 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
     items = list(
         session.exec(
             select(InvoiceItem)
-            .where(InvoiceItem.tenant_id == invoice.tenant_id, InvoiceItem.invoice_id == invoice.id)
+            .where(
+                InvoiceItem.tenant_id == invoice.tenant_id,
+                InvoiceItem.invoice_id == invoice.id,
+            )
             .order_by(InvoiceItem.created_at)
         ).all()
     )
     payments = list(
         session.exec(
             select(Payment)
-            .where(Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id)
+            .where(
+                Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id
+            )
             .order_by(Payment.collected_at)
         ).all()
     )
@@ -744,8 +879,13 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
             invoice_read.appointment_type = appointment.appointment_type
     return InvoiceDetailRead(
         invoice=invoice_read,
-        items=[InvoiceItemRead.model_validate(item, from_attributes=True) for item in items],
-        payments=[PaymentRead.model_validate(payment, from_attributes=True) for payment in payments],
+        items=[
+            InvoiceItemRead.model_validate(item, from_attributes=True) for item in items
+        ],
+        payments=[
+            PaymentRead.model_validate(payment, from_attributes=True)
+            for payment in payments
+        ],
         membership_benefit=_invoice_membership_benefit(session, invoice),
     )
 
@@ -825,8 +965,12 @@ def _create_service_invoice(
                 item_amounts=benefit_item_amounts or {},
                 subtotal_amount=amount,
                 department_id=consultation_department_id(
-                    session, appointment_id=appointment_id, consultation_id=consultation_id
-                ) if service_scope == "consultation" else None,
+                    session,
+                    appointment_id=appointment_id,
+                    consultation_id=consultation_id,
+                )
+                if service_scope == "consultation"
+                else None,
             )
             membership_discount = int(preview["discount_amount"] or 0)
             if membership_discount > 0:
@@ -835,16 +979,26 @@ def _create_service_invoice(
                 if service_scope == "consultation":
                     enrollment.used_consultations += 1
                     session.add(enrollment)
-                elif service_scope in ("lab", "pharmacy") and preview.get("free_item_ids"):
-                    consume_free_items(enrollment, service_type=service_scope, free_item_ids=preview["free_item_ids"])
+                elif service_scope in ("lab", "pharmacy") and preview.get(
+                    "free_item_ids"
+                ):
+                    consume_free_items(
+                        enrollment,
+                        service_type=service_scope,
+                        free_item_ids=preview["free_item_ids"],
+                    )
                     session.add(enrollment)
             discount_amount = min(discount_amount + membership_discount, amount)
             taxable_amount = amount - discount_amount
-            tax_amount = round(taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+            tax_amount = round(
+                taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100
+            )
             total_amount = taxable_amount + tax_amount
     except Exception:
         membership = None
-    tax_amount = round(taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    tax_amount = round(
+        taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100
+    )
     total_amount = taxable_amount + tax_amount
     invoice = Invoice(
         tenant_id=tenant_id,
@@ -893,7 +1047,9 @@ def _create_service_invoice(
                 unit_amount=int(row.get("unit_amount") or 0),
                 total_amount=int(row.get("total_amount") or 0),
                 mrp_amount=int(row.get("mrp_amount") or 0),
-                selling_amount=int(row.get("selling_amount") or row.get("unit_amount") or 0),
+                selling_amount=int(
+                    row.get("selling_amount") or row.get("unit_amount") or 0
+                ),
                 buying_amount=int(row.get("buying_amount") or 0),
                 supplier_id=str(row.get("supplier_id") or "") or None,
                 external_source=str(row.get("external_source") or "") or None,
@@ -947,7 +1103,10 @@ def create_doctor_fee_rule(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Practitioner is not assigned to this department",
                 )
-    if payload.share_type.value == "percentage" and payload.doctor_share_percentage is None:
+    if (
+        payload.share_type.value == "percentage"
+        and payload.doctor_share_percentage is None
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="doctor_share_percentage is required for percentage share",
@@ -971,8 +1130,7 @@ def create_doctor_fee_rule(
     if any(
         existing.fee_amount == payload.fee_amount
         and existing.share_type == payload.share_type
-        and existing.doctor_share_percentage
-        == payload.doctor_share_percentage
+        and existing.doctor_share_percentage == payload.doctor_share_percentage
         and existing.doctor_fixed_amount == payload.doctor_fixed_amount
         and existing.share_tax_with_doctor == payload.share_tax_with_doctor
         for existing in existing_rules
@@ -1022,19 +1180,21 @@ def list_doctor_fee_rules(
     statement = select(DoctorFeeRule).where(DoctorFeeRule.tenant_id == tenant_id)
     if branch_id:
         statement = statement.where(DoctorFeeRule.branch_id == branch_id)
-    return list(
-        session.exec(
-            statement.order_by(DoctorFeeRule.created_at)
-        ).all()
-    )
+    return list(session.exec(statement.order_by(DoctorFeeRule.created_at)).all())
 
 
-@router.post("/tax-rules", response_model=TaxRuleRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/tax-rules", response_model=TaxRuleRead, status_code=status.HTTP_201_CREATED
+)
 def create_tax_rule(
     payload: TaxRuleCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.TAX_MANAGE, permissions.TAX_CREATE, permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.TAX_MANAGE, permissions.TAX_CREATE, permissions.BILLING_MANAGE
+        )
+    ),
 ) -> TaxRule:
     enforce_entitlement(session, tenant_id, "billing_basic")
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
@@ -1061,7 +1221,11 @@ def list_tax_rules(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.TAX_MANAGE, permissions.TAX_READ, permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.TAX_MANAGE, permissions.TAX_READ, permissions.BILLING_MANAGE
+        )
+    ),
 ) -> list[TaxRule]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
@@ -1077,12 +1241,18 @@ def update_tax_rule(
     payload: TaxRuleUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.TAX_MANAGE, permissions.TAX_EDIT, permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.TAX_MANAGE, permissions.TAX_EDIT, permissions.BILLING_MANAGE
+        )
+    ),
 ) -> TaxRule:
     enforce_entitlement(session, tenant_id, "billing_basic")
     rule = session.get(TaxRule, rule_id)
     if not rule or rule.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tax rule not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tax rule not found"
+        )
     if payload.branch_id:
         require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id or rule.branch_id)
@@ -1104,12 +1274,22 @@ def update_tax_rule(
     return rule
 
 
-@router.post("/discount-offers", response_model=DiscountOfferRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/discount-offers",
+    response_model=DiscountOfferRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_discount_offer(
     payload: DiscountOfferCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.DISCOUNTS_MANAGE, permissions.DISCOUNTS_CREATE, permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.DISCOUNTS_MANAGE,
+            permissions.DISCOUNTS_CREATE,
+            permissions.BILLING_MANAGE,
+        )
+    ),
 ) -> DiscountOffer:
     enforce_entitlement(session, tenant_id, "billing_basic")
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
@@ -1136,13 +1316,21 @@ def list_discount_offers(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.DISCOUNTS_MANAGE, permissions.DISCOUNTS_READ, permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.DISCOUNTS_MANAGE,
+            permissions.DISCOUNTS_READ,
+            permissions.BILLING_MANAGE,
+        )
+    ),
 ) -> list[DiscountOffer]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(DiscountOffer).where(DiscountOffer.tenant_id == tenant_id)
     if branch_id:
-        statement = statement.where((DiscountOffer.branch_id == branch_id) | (DiscountOffer.branch_id.is_(None)))
+        statement = statement.where(
+            (DiscountOffer.branch_id == branch_id) | (DiscountOffer.branch_id.is_(None))
+        )
     return list(session.exec(statement.order_by(DiscountOffer.created_at.desc())).all())
 
 
@@ -1152,12 +1340,20 @@ def update_discount_offer(
     payload: DiscountOfferUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.DISCOUNTS_MANAGE, permissions.DISCOUNTS_EDIT, permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.DISCOUNTS_MANAGE,
+            permissions.DISCOUNTS_EDIT,
+            permissions.BILLING_MANAGE,
+        )
+    ),
 ) -> DiscountOffer:
     enforce_entitlement(session, tenant_id, "billing_basic")
     offer = session.get(DiscountOffer, offer_id)
     if not offer or offer.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discount offer not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Discount offer not found"
+        )
     if payload.branch_id:
         require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id or offer.branch_id)
@@ -1179,7 +1375,11 @@ def update_discount_offer(
     return offer
 
 
-@router.post("/discount-approvals", response_model=DiscountApprovalRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/discount-approvals",
+    response_model=DiscountApprovalRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def request_discount_approval(
     payload: DiscountApprovalCreate,
     tenant_id: str = Depends(require_tenant_id),
@@ -1206,7 +1406,9 @@ def request_discount_approval(
     return approval
 
 
-@router.post("/discount-approvals/{approval_id}/decision", response_model=DiscountApprovalRead)
+@router.post(
+    "/discount-approvals/{approval_id}/decision", response_model=DiscountApprovalRead
+)
 def decide_discount_approval(
     approval_id: str,
     payload: DiscountApprovalDecision,
@@ -1216,7 +1418,9 @@ def decide_discount_approval(
 ) -> DiscountApproval:
     approval = session.get(DiscountApproval, approval_id)
     if not approval or approval.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discount approval not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Discount approval not found"
+        )
     require_user_branch_access(current_user, approval.branch_id)
     approval.status = payload.status
     approval.approved_by_user_id = payload.approved_by_user_id
@@ -1251,7 +1455,9 @@ def create_invoice_from_consultation(
     enforce_module_enabled(session, tenant_id, "billing_advanced")
     consultation = session.get(Consultation, payload.consultation_id)
     if not consultation or consultation.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid consultation")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid consultation"
+        )
     if consultation.status != ConsultationStatus.SIGNED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -1269,9 +1475,15 @@ def create_invoice_from_consultation(
         )
     ).first()
     if existing:
-        return _read_invoice_detail(session, refresh_consultation_invoice(session, existing))
+        return _read_invoice_detail(
+            session, refresh_consultation_invoice(session, existing)
+        )
     if payload.discount_amount > 0:
-        approval = session.get(DiscountApproval, payload.discount_approval_id) if payload.discount_approval_id else None
+        approval = (
+            session.get(DiscountApproval, payload.discount_approval_id)
+            if payload.discount_approval_id
+            else None
+        )
         if (
             not approval
             or approval.tenant_id != tenant_id
@@ -1286,7 +1498,9 @@ def create_invoice_from_consultation(
 
     appointment = session.get(Appointment, consultation.appointment_id)
     if not appointment or appointment.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid appointment")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid appointment"
+        )
 
     invoice, _item = create_consultation_invoice(
         session,
@@ -1329,7 +1543,9 @@ def create_invoice_from_consultation(
     return _read_invoice_detail(session, invoice)
 
 
-def _reprice_zero_lab_items(session: Session, tenant_id: str, order, items: list) -> None:
+def _reprice_zero_lab_items(
+    session: Session, tenant_id: str, order, items: list
+) -> None:
     """Backfill prices for zero-priced lab items from the external catalog.
 
     Orders captured while the external catalog was misconfigured can persist a
@@ -1365,8 +1581,12 @@ def _reprice_zero_lab_items(session: Session, tenant_id: str, order, items: list
         item.buying_price = int(pricing.get("buying_price") or item.buying_price or 0)
         if pricing.get("external_source"):
             item.external_source = str(pricing.get("external_source"))
-            item.external_slug = str(pricing.get("external_slug") or item.external_slug or "")
-            item.external_item_code = str(pricing.get("external_item_code") or item.external_item_code or "")
+            item.external_slug = str(
+                pricing.get("external_slug") or item.external_slug or ""
+            )
+            item.external_item_code = str(
+                pricing.get("external_item_code") or item.external_item_code or ""
+            )
         session.add(item)
         changed = True
     if changed:
@@ -1378,7 +1598,11 @@ def _reprice_zero_lab_items(session: Session, tenant_id: str, order, items: list
             session.refresh(item)
 
 
-@router.post("/invoices/from-lab-order", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/invoices/from-lab-order",
+    response_model=InvoiceDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_invoice_from_lab_order(
     payload: InvoiceCreateFromLabOrder,
     tenant_id: str = Depends(require_tenant_id),
@@ -1390,15 +1614,24 @@ def create_invoice_from_lab_order(
 
     order = session.get(LabOrder, payload.lab_order_id)
     if not order or order.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid lab order")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid lab order"
+        )
     if order.status == LabOrderStatus.CANCELLED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cancelled lab order cannot be invoiced")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cancelled lab order cannot be invoiced",
+        )
     require_user_branch_access(current_user, order.branch_id)
     existing = session.exec(
-        select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.lab_order_id == order.id)
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id, Invoice.lab_order_id == order.id
+        )
     ).first()
     if existing:
-        return _read_invoice_detail(session, update_invoice_payment_status(session, existing))
+        return _read_invoice_detail(
+            session, update_invoice_payment_status(session, existing)
+        )
 
     appointment_id = None
     if order.consultation_id:
@@ -1407,13 +1640,18 @@ def create_invoice_from_lab_order(
             appointment_id = consultation.appointment_id
     items = list(
         session.exec(
-            select(LabOrderItem).where(LabOrderItem.tenant_id == tenant_id, LabOrderItem.lab_order_id == order.id)
+            select(LabOrderItem).where(
+                LabOrderItem.tenant_id == tenant_id,
+                LabOrderItem.lab_order_id == order.id,
+            )
         ).all()
     )
     _reprice_zero_lab_items(session, tenant_id, order, items)
     amount = int(order.amount or sum(item.price for item in items) or 0)
     if amount <= 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Lab order amount is zero")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Lab order amount is zero"
+        )
 
     def lab_line_item(item: LabOrderItem) -> dict[str, int | str | None]:
         supplier_id = item.supplier_id
@@ -1457,7 +1695,9 @@ def create_invoice_from_lab_order(
     lab_benefit_amounts: dict[str, int] = {}
     for item in items:
         if item.test_id:
-            lab_benefit_amounts[item.test_id] = lab_benefit_amounts.get(item.test_id, 0) + int(item.price or 0)
+            lab_benefit_amounts[item.test_id] = lab_benefit_amounts.get(
+                item.test_id, 0
+            ) + int(item.price or 0)
     invoice = _create_service_invoice(
         session,
         tenant_id=tenant_id,
@@ -1490,7 +1730,11 @@ def create_invoice_from_lab_order(
     return _read_invoice_detail(session, invoice)
 
 
-@router.post("/invoices/from-pharmacy-issue", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/invoices/from-pharmacy-issue",
+    response_model=InvoiceDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_invoice_from_pharmacy_issue(
     payload: InvoiceCreateFromPharmacyIssue,
     tenant_id: str = Depends(require_tenant_id),
@@ -1498,22 +1742,35 @@ def create_invoice_from_pharmacy_issue(
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
     enforce_module_enabled(session, tenant_id, "billing_basic")
-    from app.modules.pharmacy.models import PharmacyIssue, PharmacyIssueItem, PharmacyIssueStatus
+    from app.modules.pharmacy.models import (
+        PharmacyIssue,
+        PharmacyIssueItem,
+        PharmacyIssueStatus,
+    )
 
     issue = session.get(PharmacyIssue, payload.pharmacy_issue_id)
     if not issue or issue.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid pharmacy issue")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid pharmacy issue"
+        )
     if issue.status == PharmacyIssueStatus.CANCELLED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cancelled pharmacy issue cannot be invoiced")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cancelled pharmacy issue cannot be invoiced",
+        )
     require_user_branch_access(current_user, issue.branch_id)
     existing = session.exec(
-        select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.pharmacy_issue_id == issue.id)
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id, Invoice.pharmacy_issue_id == issue.id
+        )
     ).first()
     if existing:
         issue.billing_invoice_id = existing.id
         session.add(issue)
         session.commit()
-        return _read_invoice_detail(session, update_invoice_payment_status(session, existing))
+        return _read_invoice_detail(
+            session, update_invoice_payment_status(session, existing)
+        )
 
     appointment_id = None
     if issue.consultation_id:
@@ -1528,15 +1785,20 @@ def create_invoice_from_pharmacy_issue(
             )
         ).all()
     )
-    amount = int(issue.amount or sum(item.quantity * item.unit_price for item in items) or 0)
+    amount = int(
+        issue.amount or sum(item.quantity * item.unit_price for item in items) or 0
+    )
     if amount <= 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Pharmacy issue amount is zero")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pharmacy issue amount is zero",
+        )
     pharmacy_benefit_amounts: dict[str, int] = {}
     for item in items:
         if item.medicine_id:
-            pharmacy_benefit_amounts[item.medicine_id] = pharmacy_benefit_amounts.get(item.medicine_id, 0) + int(
-                item.quantity * item.unit_price
-            )
+            pharmacy_benefit_amounts[item.medicine_id] = pharmacy_benefit_amounts.get(
+                item.medicine_id, 0
+            ) + int(item.quantity * item.unit_price)
     invoice = _create_service_invoice(
         session,
         tenant_id=tenant_id,
@@ -1562,7 +1824,8 @@ def create_invoice_from_pharmacy_issue(
                 "total_amount": item.quantity * item.unit_price,
             }
             for item in items
-        ] or None,
+        ]
+        or None,
         created_by_user_id=payload.created_by_user_id,
     )
     issue.billing_invoice_id = invoice.id
@@ -1587,7 +1850,14 @@ def list_invoices(
     branch_id: str | None = None,
     patient_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.BILLING_MANAGE, permissions.INVOICES_READ, permissions.PATIENT_SUBSCRIPTIONS_READ, permissions.PATIENT_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.INVOICES_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+        )
+    ),
 ) -> list[Invoice]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
@@ -1610,7 +1880,9 @@ def get_invoice(
     enforce_entitlement(session, tenant_id, "billing_basic")
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     require_user_branch_access(current_user, invoice.branch_id)
     return _read_invoice_detail(session, invoice)
 
@@ -1631,12 +1903,20 @@ def update_invoice_amount(
     enforce_entitlement(session, tenant_id, "billing_basic")
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     require_user_branch_access(current_user, invoice.branch_id)
     if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Cannot edit {invoice.status.value} invoice")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot edit {invoice.status.value} invoice",
+        )
     if int(invoice.paid_amount or 0) > 0:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot edit amount after a payment is recorded")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cannot edit amount after a payment is recorded",
+        )
     if (
         not invoice.consultation_id
         or invoice.lab_order_id
@@ -1645,15 +1925,31 @@ def update_invoice_amount(
         or invoice.physiotherapy_case_id
         or invoice.home_care_booking_id
     ):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Amount can be edited only for consultation invoices")
-    appointment = session.get(Appointment, invoice.appointment_id) if invoice.appointment_id else None
-    if not appointment or appointment.tenant_id != tenant_id or appointment.appointment_type == AppointmentType.OP:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Amount can be edited only for non-OP consultation visits")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Amount can be edited only for consultation invoices",
+        )
+    appointment = (
+        session.get(Appointment, invoice.appointment_id)
+        if invoice.appointment_id
+        else None
+    )
+    if (
+        not appointment
+        or appointment.tenant_id != tenant_id
+        or appointment.appointment_type == AppointmentType.OP
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Amount can be edited only for non-OP consultation visits",
+        )
 
     new_subtotal = int(payload.amount)
     # Keep the already-consumed membership benefit; re-evaluate the offer for the
     # new subtotal so percentage offers stay correct.
-    membership_discount = min(int(invoice.membership_discount_amount or 0), new_subtotal)
+    membership_discount = min(
+        int(invoice.membership_discount_amount or 0), new_subtotal
+    )
     offer_discount, offer = calculate_offer_discount(
         session,
         tenant_id=tenant_id,
@@ -1674,7 +1970,9 @@ def update_invoice_amount(
     tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
     total = taxable + tax_amount
     doctor_share = 0
-    fee_rule = session.get(DoctorFeeRule, invoice.fee_rule_id) if invoice.fee_rule_id else None
+    fee_rule = (
+        session.get(DoctorFeeRule, invoice.fee_rule_id) if invoice.fee_rule_id else None
+    )
     if fee_rule and new_subtotal > 0:
         split = calculate_fee_split(fee_rule, new_subtotal)
         share_basis = total if fee_rule.share_tax_with_doctor else taxable
@@ -1719,7 +2017,9 @@ def update_invoice_amount(
     return _read_invoice_detail(session, invoice)
 
 
-@router.patch("/invoices/{invoice_id}/items/{item_id}/supplier", response_model=InvoiceDetailRead)
+@router.patch(
+    "/invoices/{invoice_id}/items/{item_id}/supplier", response_model=InvoiceDetailRead
+)
 def update_invoice_item_supplier(
     invoice_id: str,
     item_id: str,
@@ -1730,18 +2030,34 @@ def update_invoice_item_supplier(
 ) -> InvoiceDetailRead:
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     if not invoice.lab_order_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Supplier can be set only for lab invoices")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Supplier can be set only for lab invoices",
+        )
     require_user_branch_access(current_user, invoice.branch_id)
     item = session.get(InvoiceItem, item_id)
     if not item or item.tenant_id != tenant_id or item.invoice_id != invoice.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice item not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice item not found"
+        )
     options = _external_supplier_options(item)
     if payload.supplier_id:
-        selected = next((supplier for supplier in options if supplier["supplier"] == payload.supplier_id), None)
+        selected = next(
+            (
+                supplier
+                for supplier in options
+                if supplier["supplier"] == payload.supplier_id
+            ),
+            None,
+        )
         if not selected:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid supplier")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid supplier"
+            )
         item.buying_amount = int(selected["buying_price"] or 0)
     else:
         item.buying_amount = 0
@@ -1761,7 +2077,10 @@ def update_invoice_item_supplier(
     return _read_invoice_detail(session, invoice)
 
 
-@router.get("/invoices/{invoice_id}/items/{item_id}/supplier-options", response_model=list[InvoiceItemSupplierOptionRead])
+@router.get(
+    "/invoices/{invoice_id}/items/{item_id}/supplier-options",
+    response_model=list[InvoiceItemSupplierOptionRead],
+)
 def list_invoice_item_supplier_options(
     invoice_id: str,
     item_id: str,
@@ -1771,17 +2090,26 @@ def list_invoice_item_supplier_options(
 ) -> list[InvoiceItemSupplierOptionRead]:
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     if not invoice.lab_order_id:
         return []
     require_user_branch_access(current_user, invoice.branch_id)
     item = session.get(InvoiceItem, item_id)
     if not item or item.tenant_id != tenant_id or item.invoice_id != invoice.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice item not found")
-    return [InvoiceItemSupplierOptionRead(**supplier) for supplier in _external_supplier_options(item)]
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice item not found"
+        )
+    return [
+        InvoiceItemSupplierOptionRead(**supplier)
+        for supplier in _external_supplier_options(item)
+    ]
 
 
-@router.post("/invoices/{invoice_id}/membership-benefit/apply", response_model=InvoiceDetailRead)
+@router.post(
+    "/invoices/{invoice_id}/membership-benefit/apply", response_model=InvoiceDetailRead
+)
 def apply_invoice_membership_benefit(
     invoice_id: str,
     tenant_id: str = Depends(require_tenant_id),
@@ -1791,7 +2119,9 @@ def apply_invoice_membership_benefit(
     enforce_entitlement(session, tenant_id, "billing_basic")
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     require_user_branch_access(current_user, invoice.branch_id)
     invoice = _apply_invoice_membership_benefit(session, invoice)
     record_audit_event(
@@ -1816,21 +2146,28 @@ def invoice_receipt_pdf(
 ) -> Response:
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     require_user_branch_access(current_user, invoice.branch_id)
     tenant = session.get(Tenant, tenant_id)
     patient = session.get(Patient, invoice.patient_id)
     items = list(
         session.exec(
             select(InvoiceItem)
-            .where(InvoiceItem.tenant_id == invoice.tenant_id, InvoiceItem.invoice_id == invoice.id)
+            .where(
+                InvoiceItem.tenant_id == invoice.tenant_id,
+                InvoiceItem.invoice_id == invoice.id,
+            )
             .order_by(InvoiceItem.created_at)
         ).all()
     )
     payments = list(
         session.exec(
             select(Payment)
-            .where(Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id)
+            .where(
+                Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id
+            )
             .order_by(Payment.collected_at)
         ).all()
     )
@@ -1852,11 +2189,17 @@ def invoice_receipt_pdf(
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="{invoice.invoice_number}-receipt.pdf"'},
+        headers={
+            "Content-Disposition": f'inline; filename="{invoice.invoice_number}-receipt.pdf"'
+        },
     )
 
 
-@router.post("/invoices/{invoice_id}/credit-notes", response_model=CreditNoteRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/invoices/{invoice_id}/credit-notes",
+    response_model=CreditNoteRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_credit_note(
     invoice_id: str,
     payload: CreditNoteCreate,
@@ -1866,10 +2209,15 @@ def create_credit_note(
 ) -> CreditNote:
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     require_user_branch_access(current_user, invoice.branch_id)
     if payload.amount > invoice.total_amount:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Credit note amount cannot exceed invoice total")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Credit note amount cannot exceed invoice total",
+        )
     credit = CreditNote(
         tenant_id=tenant_id,
         branch_id=invoice.branch_id,
@@ -1910,7 +2258,9 @@ def record_payment(
     enforce_entitlement(session, tenant_id, "billing_basic")
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     require_user_branch_access(current_user, invoice.branch_id)
     if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
         raise HTTPException(
@@ -1979,12 +2329,18 @@ def refund_payment(
     enforce_entitlement(session, tenant_id, "billing_basic")
     payment = session.get(Payment, payment_id)
     if not payment or payment.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
+        )
     if payment.status == PaymentStatus.REFUNDED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Payment already refunded")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Payment already refunded"
+        )
     invoice = session.get(Invoice, payment.invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     require_user_branch_access(current_user, invoice.branch_id)
 
     payment.status = PaymentStatus.REFUNDED
@@ -2048,7 +2404,9 @@ def cancel_invoice(
     enforce_entitlement(session, tenant_id, "billing_basic")
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
     require_user_branch_access(current_user, invoice.branch_id)
     if invoice.paid_amount > 0:
         raise HTTPException(
@@ -2056,7 +2414,9 @@ def cancel_invoice(
             detail="Paid invoices cannot be cancelled; refund payments first",
         )
     if invoice.status == InvoiceStatus.CANCELLED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Invoice already cancelled")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Invoice already cancelled"
+        )
     invoice.status = InvoiceStatus.CANCELLED
     invoice.updated_at = datetime.now(timezone.utc)
     session.add(invoice)
@@ -2099,23 +2459,35 @@ def doctor_settlement_summary(
     invoice_count = len(rows)
     total_invoice_amount = sum(invoice.total_amount for invoice, _appointment in rows)
     total_paid_amount = sum(invoice.paid_amount for invoice, _appointment in rows)
-    total_doctor_share = sum(invoice.doctor_share_amount for invoice, _appointment in rows)
+    total_doctor_share = sum(
+        invoice.doctor_share_amount for invoice, _appointment in rows
+    )
     doctor_share_paid_basis = 0
     for invoice, _appointment in rows:
         if invoice.total_amount:
-            doctor_share_paid_basis += round(invoice.doctor_share_amount * invoice.paid_amount / invoice.total_amount)
+            doctor_share_paid_basis += round(
+                invoice.doctor_share_amount * invoice.paid_amount / invoice.total_amount
+            )
     settlement_statement = select(DoctorSettlement).where(
         DoctorSettlement.tenant_id == tenant_id,
         DoctorSettlement.status == SettlementStatus.FINALIZED,
     )
     if branch_id:
-        settlement_statement = settlement_statement.where(DoctorSettlement.branch_id == branch_id)
+        settlement_statement = settlement_statement.where(
+            DoctorSettlement.branch_id == branch_id
+        )
     else:
-        settlement_statement = settlement_statement.where(DoctorSettlement.branch_id.is_(None))
+        settlement_statement = settlement_statement.where(
+            DoctorSettlement.branch_id.is_(None)
+        )
     if practitioner_id:
-        settlement_statement = settlement_statement.where(DoctorSettlement.practitioner_id == practitioner_id)
+        settlement_statement = settlement_statement.where(
+            DoctorSettlement.practitioner_id == practitioner_id
+        )
     else:
-        settlement_statement = settlement_statement.where(DoctorSettlement.practitioner_id.is_(None))
+        settlement_statement = settlement_statement.where(
+            DoctorSettlement.practitioner_id.is_(None)
+        )
     settlements = list(session.exec(settlement_statement).all())
     finalized_amount = sum(row.settlement_amount for row in settlements)
     payable_amount = max(doctor_share_paid_basis - finalized_amount, 0)
@@ -2152,7 +2524,10 @@ def finalize_doctor_settlement(
         current_user=current_user,
     )
     if summary.payable_settlement_amount <= 0:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Doctor settlement is already finalized.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Doctor settlement is already finalized.",
+        )
     settlement = DoctorSettlement(
         tenant_id=tenant_id,
         branch_id=summary.branch_id,
@@ -2204,7 +2579,9 @@ def due_collection_report(
 ) -> DueCollectionReport:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.balance_amount > 0)
+    statement = select(Invoice).where(
+        Invoice.tenant_id == tenant_id, Invoice.balance_amount > 0
+    )
     if branch_id:
         statement = statement.where(Invoice.branch_id == branch_id)
     invoices = list(session.exec(statement.order_by(Invoice.created_at)).all())
@@ -2231,7 +2608,9 @@ def due_collection_report(
 @router.get("/reports/revenue", response_model=RevenueReport)
 def revenue_report(
     tenant_id: str = Depends(require_tenant_id),
-    group_by: str = Query(default="branch", pattern="^(branch|doctor|department|visit_purpose)$"),
+    group_by: str = Query(
+        default="branch", pattern="^(branch|doctor|department|visit_purpose)$"
+    ),
     branch_id: str | None = None,
     from_date: date | None = None,
     to_date: date | None = None,
@@ -2266,7 +2645,14 @@ def revenue_report(
         key = key or "unassigned"
         bucket = grouped.setdefault(
             key,
-            {"key": key, "invoice_count": 0, "invoice_amount": 0, "paid_amount": 0, "tax_amount": 0, "doctor_share": 0},
+            {
+                "key": key,
+                "invoice_count": 0,
+                "invoice_amount": 0,
+                "paid_amount": 0,
+                "tax_amount": 0,
+                "doctor_share": 0,
+            },
         )
         bucket["invoice_count"] += 1
         bucket["invoice_amount"] += invoice.total_amount

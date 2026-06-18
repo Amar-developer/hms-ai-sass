@@ -1,2 +1,1 @@
 """MedizinHub HMS backend package."""
-

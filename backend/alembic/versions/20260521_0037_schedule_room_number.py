@@ -4,6 +4,7 @@ Revision ID: 20260521_0037
 Revises: 20260521_0036
 Create Date: 2026-05-21
 """
+
 from alembic import op
 import sqlalchemy as sa
 
@@ -18,11 +19,15 @@ def _tables() -> set[str]:
 
 
 def _columns(table_name: str) -> set[str]:
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def upgrade() -> None:
-    if "practitionerschedule" in _tables() and "room_number" not in _columns("practitionerschedule"):
+    if "practitionerschedule" in _tables() and "room_number" not in _columns(
+        "practitionerschedule"
+    ):
         op.add_column(
             "practitionerschedule",
             sa.Column("room_number", sa.String(length=10), nullable=True),
@@ -30,5 +35,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if "practitionerschedule" in _tables() and "room_number" in _columns("practitionerschedule"):
+    if "practitionerschedule" in _tables() and "room_number" in _columns(
+        "practitionerschedule"
+    ):
         op.drop_column("practitionerschedule", "room_number")

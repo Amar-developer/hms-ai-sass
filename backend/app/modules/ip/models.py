@@ -27,8 +27,12 @@ class IPAdmission(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
-    source_appointment_id: str | None = Field(default=None, index=True, foreign_key="appointment.id")
-    department_id: str | None = Field(default=None, index=True, foreign_key="department.id")
+    source_appointment_id: str | None = Field(
+        default=None, index=True, foreign_key="appointment.id"
+    )
+    department_id: str | None = Field(
+        default=None, index=True, foreign_key="department.id"
+    )
     admitting_practitioner_id: str | None = Field(default=None, index=True)
     room_id: str | None = Field(default=None, index=True, foreign_key="iproom.id")
     admission_number: str = Field(index=True, min_length=3, max_length=60)

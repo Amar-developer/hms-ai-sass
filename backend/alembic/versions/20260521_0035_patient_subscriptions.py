@@ -20,7 +20,9 @@ def _tables() -> set[str]:
 
 
 def _indexes(table_name: str) -> set[str]:
-    return {index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)}
+    return {
+        index["name"] for index in sa.inspect(op.get_bind()).get_indexes(table_name)
+    }
 
 
 def _index(name: str, table_name: str, columns: list[str]) -> None:
@@ -39,14 +41,48 @@ def upgrade() -> None:
             sa.Column("code", sa.String(length=60), nullable=True),
             sa.Column("price_amount", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("duration_days", sa.Integer(), nullable=False),
-            sa.Column("free_consultations", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("lab_discount_percentage", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("pharmacy_discount_percentage", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("free_lab_test_ids_json", sa.String(), nullable=False, server_default="[]"),
-            sa.Column("discounted_lab_test_ids_json", sa.String(), nullable=False, server_default="[]"),
-            sa.Column("free_medicine_ids_json", sa.String(), nullable=False, server_default="[]"),
-            sa.Column("discounted_medicine_ids_json", sa.String(), nullable=False, server_default="[]"),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "free_consultations", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "lab_discount_percentage",
+                sa.Integer(),
+                nullable=False,
+                server_default="0",
+            ),
+            sa.Column(
+                "pharmacy_discount_percentage",
+                sa.Integer(),
+                nullable=False,
+                server_default="0",
+            ),
+            sa.Column(
+                "free_lab_test_ids_json",
+                sa.String(),
+                nullable=False,
+                server_default="[]",
+            ),
+            sa.Column(
+                "discounted_lab_test_ids_json",
+                sa.String(),
+                nullable=False,
+                server_default="[]",
+            ),
+            sa.Column(
+                "free_medicine_ids_json",
+                sa.String(),
+                nullable=False,
+                server_default="[]",
+            ),
+            sa.Column(
+                "discounted_medicine_ids_json",
+                sa.String(),
+                nullable=False,
+                server_default="[]",
+            ),
+            sa.Column(
+                "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("updated_by_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
@@ -55,8 +91,20 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
             sa.PrimaryKeyConstraint("id"),
         )
-        for column in ("tenant_id", "branch_id", "code", "is_active", "created_by_user_id", "updated_by_user_id", "created_at"):
-            _index(f"ix_patientsubscriptionplan_{column}", "patientsubscriptionplan", [column])
+        for column in (
+            "tenant_id",
+            "branch_id",
+            "code",
+            "is_active",
+            "created_by_user_id",
+            "updated_by_user_id",
+            "created_at",
+        ):
+            _index(
+                f"ix_patientsubscriptionplan_{column}",
+                "patientsubscriptionplan",
+                [column],
+            )
 
     if "patientsubscriptionenrollment" not in _tables():
         op.create_table(
@@ -68,8 +116,12 @@ def upgrade() -> None:
             sa.Column("plan_id", sa.String(), nullable=False),
             sa.Column("starts_on", sa.Date(), nullable=False),
             sa.Column("ends_on", sa.Date(), nullable=False),
-            sa.Column("status", sa.String(length=20), nullable=False, server_default="active"),
-            sa.Column("used_consultations", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "status", sa.String(length=20), nullable=False, server_default="active"
+            ),
+            sa.Column(
+                "used_consultations", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column("paid_amount", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("cancelled_by_user_id", sa.String(), nullable=True),
@@ -81,8 +133,21 @@ def upgrade() -> None:
             sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
             sa.PrimaryKeyConstraint("id"),
         )
-        for column in ("tenant_id", "branch_id", "patient_id", "plan_id", "status", "created_by_user_id", "cancelled_by_user_id", "created_at"):
-            _index(f"ix_patientsubscriptionenrollment_{column}", "patientsubscriptionenrollment", [column])
+        for column in (
+            "tenant_id",
+            "branch_id",
+            "patient_id",
+            "plan_id",
+            "status",
+            "created_by_user_id",
+            "cancelled_by_user_id",
+            "created_at",
+        ):
+            _index(
+                f"ix_patientsubscriptionenrollment_{column}",
+                "patientsubscriptionenrollment",
+                [column],
+            )
 
 
 def downgrade() -> None:

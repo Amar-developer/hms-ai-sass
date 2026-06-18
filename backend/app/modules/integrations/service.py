@@ -28,7 +28,14 @@ def integration_plugin_registry() -> list[dict[str, Any]]:
 
 
 def get_plugin_definition(plugin_key: str) -> dict[str, Any] | None:
-    return next((plugin for plugin in integration_plugin_registry() if plugin["key"] == plugin_key), None)
+    return next(
+        (
+            plugin
+            for plugin in integration_plugin_registry()
+            if plugin["key"] == plugin_key
+        ),
+        None,
+    )
 
 
 def decode_config(value_json: str) -> dict[str, Any]:
@@ -43,7 +50,9 @@ def encode_config(value: dict[str, Any] | None) -> str:
     return json.dumps(value or {})
 
 
-def get_tenant_plugin(session: Session, tenant_id: str, plugin_key: str) -> TenantIntegrationPlugin | None:
+def get_tenant_plugin(
+    session: Session, tenant_id: str, plugin_key: str
+) -> TenantIntegrationPlugin | None:
     return session.exec(
         select(TenantIntegrationPlugin).where(
             TenantIntegrationPlugin.tenant_id == tenant_id,

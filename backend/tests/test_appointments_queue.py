@@ -18,7 +18,9 @@ def create_branch(client: TestClient, tenant_id: str) -> dict:
     return response.json()
 
 
-def create_patient(client: TestClient, tenant_id: str, name: str = "Ravi Kumar") -> dict:
+def create_patient(
+    client: TestClient, tenant_id: str, name: str = "Ravi Kumar"
+) -> dict:
     response = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant_id},
@@ -44,7 +46,9 @@ def book(
             "appointment_type": appointment_type,
             "appointment_date": date.today().isoformat(),
             "reason": "Fever",
-            "emergency_reason": "Severe pain" if appointment_type == "emergency" else None,
+            "emergency_reason": "Severe pain"
+            if appointment_type == "emergency"
+            else None,
         },
     )
     assert response.status_code == 201
@@ -76,7 +80,9 @@ def test_tokens_are_generated_per_selected_appointment_date(client: TestClient):
     assert future.json()["queue_entry"]["token_number"] == "N-001"
 
 
-def test_repeated_appointment_create_with_idempotency_key_replays_first_response(client: TestClient):
+def test_repeated_appointment_create_with_idempotency_key_replays_first_response(
+    client: TestClient,
+):
     tenant = create_tenant(client)
     branch = create_branch(client, tenant["id"])
     patient = create_patient(client, tenant["id"], "Idempotent Patient")
@@ -96,14 +102,19 @@ def test_repeated_appointment_create_with_idempotency_key_replays_first_response
     assert second.status_code == 201
     assert second.headers["x-idempotency-replayed"] == "true"
     assert second.json()["appointment"]["id"] == first.json()["appointment"]["id"]
-    assert second.json()["queue_entry"]["token_number"] == first.json()["queue_entry"]["token_number"]
+    assert (
+        second.json()["queue_entry"]["token_number"]
+        == first.json()["queue_entry"]["token_number"]
+    )
 
     listed = client.get("/api/v1/appointments", headers={"X-Tenant-ID": tenant["id"]})
     assert listed.status_code == 200
     assert [row["id"] for row in listed.json()] == [first.json()["appointment"]["id"]]
 
 
-def test_list_appointments_supports_patient_search_date_and_department_filters(client: TestClient):
+def test_list_appointments_supports_patient_search_date_and_department_filters(
+    client: TestClient,
+):
     tenant = create_tenant(client)
     branch = create_branch(client, tenant["id"])
     patient = create_patient(client, tenant["id"], "Searchable Patient")
@@ -139,14 +150,22 @@ def test_list_appointments_supports_patient_search_date_and_department_filters(c
     assert department.json()[0]["patient_id"] == other_patient["id"]
 
 
-def _create_doctor_login(client: TestClient, tenant_id: str, branch_id: str, name: str, email: str) -> tuple[dict, dict, dict]:
+def _create_doctor_login(
+    client: TestClient, tenant_id: str, branch_id: str, name: str, email: str
+) -> tuple[dict, dict, dict]:
     role = client.post(
         "/api/v1/identity/roles",
         headers={"X-Tenant-ID": tenant_id},
         json={
             "name": f"{name} Role",
             "key": email.split("@")[0].replace(".", "_"),
-            "permission_keys": ["appointments.manage", "queue.manage", "consultations.read", "consultations.write", "consultations.sign"],
+            "permission_keys": [
+                "appointments.manage",
+                "queue.manage",
+                "consultations.read",
+                "consultations.write",
+                "consultations.sign",
+            ],
         },
     ).json()
     user = client.post(
@@ -188,11 +207,16 @@ def _create_doctor_login(client: TestClient, tenant_id: str, branch_id: str, nam
         "/api/v1/auth/login",
         json={"email": email, "password": "DoctorPass123", "tenant_id": tenant_id},
     ).json()
-    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant_id}
+    headers = {
+        "Authorization": f"Bearer {login['access_token']}",
+        "X-Tenant-ID": tenant_id,
+    }
     return user, practitioner, headers
 
 
-def test_doctor_login_sees_and_operates_only_own_appointments_in_same_department(client: TestClient):
+def test_doctor_login_sees_and_operates_only_own_appointments_in_same_department(
+    client: TestClient,
+):
     tenant = create_tenant(client)
     branch = create_branch(client, tenant["id"])
     arun_user, arun, arun_headers = _create_doctor_login(
@@ -237,10 +261,18 @@ def test_doctor_login_sees_and_operates_only_own_appointments_in_same_department
         },
     ).json()
 
-    arun_appointments = client.get("/api/v1/appointments?department_id=ent", headers=arun_headers)
-    guru_appointments = client.get("/api/v1/appointments?department_id=ent", headers=guru_headers)
-    arun_practitioners = client.get("/api/v1/practitioners?department_id=ent", headers=arun_headers)
-    arun_queue = client.get("/api/v1/queue?include_completed=true", headers=arun_headers)
+    arun_appointments = client.get(
+        "/api/v1/appointments?department_id=ent", headers=arun_headers
+    )
+    guru_appointments = client.get(
+        "/api/v1/appointments?department_id=ent", headers=guru_headers
+    )
+    arun_practitioners = client.get(
+        "/api/v1/practitioners?department_id=ent", headers=arun_headers
+    )
+    arun_queue = client.get(
+        "/api/v1/queue?include_completed=true", headers=arun_headers
+    )
     guru_call_by_arun = client.post(
         f"/api/v1/queue/{guru_booking['queue_entry']['id']}/call",
         headers=arun_headers,
@@ -256,37 +288,54 @@ def test_doctor_login_sees_and_operates_only_own_appointments_in_same_department
     )
 
     assert arun_appointments.status_code == 200
-    assert [row["id"] for row in arun_appointments.json()] == [arun_booking["appointment"]["id"]]
+    assert [row["id"] for row in arun_appointments.json()] == [
+        arun_booking["appointment"]["id"]
+    ]
     assert guru_appointments.status_code == 200
-    assert [row["id"] for row in guru_appointments.json()] == [guru_booking["appointment"]["id"]]
+    assert [row["id"] for row in guru_appointments.json()] == [
+        guru_booking["appointment"]["id"]
+    ]
     assert arun_booking["queue_entry"]["token_number"] == "N-001"
     assert guru_booking["queue_entry"]["token_number"] == "N-001"
     assert arun_practitioners.status_code == 200
     assert [row["id"] for row in arun_practitioners.json()] == [arun["id"]]
     assert arun_queue.status_code == 200
-    assert [row["appointment_id"] for row in arun_queue.json()] == [arun_booking["appointment"]["id"]]
+    assert [row["appointment_id"] for row in arun_queue.json()] == [
+        arun_booking["appointment"]["id"]
+    ]
     assert guru_call_by_arun.status_code == 403
     assert guru_call_by_arun.json()["detail"] == "Doctor access denied"
     assert guru_consult_by_arun.status_code == 403
     assert guru_consult_by_arun.json()["detail"] == "Doctor access denied"
 
 
-def test_super_admin_can_view_combined_appointment_grid_across_tenants(client: TestClient):
+def test_super_admin_can_view_combined_appointment_grid_across_tenants(
+    client: TestClient,
+):
     first_tenant = create_tenant(client)
     first_branch = create_branch(client, first_tenant["id"])
     first_patient = create_patient(client, first_tenant["id"], "First Tenant Patient")
-    second_tenant = client.post("/api/v1/tenants", json={"name": "Second Queue Clinic"}).json()
+    second_tenant = client.post(
+        "/api/v1/tenants", json={"name": "Second Queue Clinic"}
+    ).json()
     second_branch = create_branch(client, second_tenant["id"])
-    second_patient = create_patient(client, second_tenant["id"], "Second Tenant Patient")
+    second_patient = create_patient(
+        client, second_tenant["id"], "Second Tenant Patient"
+    )
 
     book(client, first_tenant["id"], first_branch["id"], first_patient["id"])
     book(client, second_tenant["id"], second_branch["id"], second_patient["id"])
 
     combined = client.get("/api/v1/appointments/platform/all?q=Tenant&limit=20")
-    filtered = client.get(f"/api/v1/appointments/platform/all?tenant_id={second_tenant['id']}")
+    filtered = client.get(
+        f"/api/v1/appointments/platform/all?tenant_id={second_tenant['id']}"
+    )
 
     assert combined.status_code == 200
-    assert {row["tenant_name"] for row in combined.json()} == {"Queue Clinic", "Second Queue Clinic"}
+    assert {row["tenant_name"] for row in combined.json()} == {
+        "Queue Clinic",
+        "Second Queue Clinic",
+    }
     assert filtered.status_code == 200
     assert len(filtered.json()) == 1
     assert filtered.json()[0]["patient_name"] == "Second Tenant Patient"
@@ -298,7 +347,9 @@ def test_book_op_appointment_creates_waiting_queue_entry_and_audit(client: TestC
     patient = create_patient(client, tenant["id"])
 
     booking = book(client, tenant["id"], branch["id"], patient["id"])
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert booking["appointment"]["status"] == "waiting"
     assert booking["queue_entry"]["status"] == "waiting"
@@ -542,7 +593,10 @@ def test_duplicate_patient_detection_blocks_exact_registration(client: TestClien
     assert duplicate_check.status_code == 200
     assert duplicate_check.json()[0]["confidence"] == "high"
     assert duplicate_create.status_code == 409
-    assert duplicate_create.json()["detail"] == "Possible duplicate patient found. Search and select existing patient instead."
+    assert (
+        duplicate_create.json()["detail"]
+        == "Possible duplicate patient found. Search and select existing patient instead."
+    )
 
 
 def test_patient_registration_allows_shared_family_mobile_number(client: TestClient):
@@ -550,18 +604,30 @@ def test_patient_registration_allows_shared_family_mobile_number(client: TestCli
     client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Balaji N", "mobile": "9876543210", "date_of_birth": "1985-05-10"},
+        json={
+            "full_name": "Balaji N",
+            "mobile": "9876543210",
+            "date_of_birth": "1985-05-10",
+        },
     )
 
     duplicate_check = client.post(
         "/api/v1/patients/duplicates",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Dakshiin B", "mobile": "9876543210", "date_of_birth": "2018-09-15"},
+        json={
+            "full_name": "Dakshiin B",
+            "mobile": "9876543210",
+            "date_of_birth": "2018-09-15",
+        },
     )
     child_create = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Dakshiin B", "mobile": "9876543210", "date_of_birth": "2018-09-15"},
+        json={
+            "full_name": "Dakshiin B",
+            "mobile": "9876543210",
+            "date_of_birth": "2018-09-15",
+        },
     )
 
     assert duplicate_check.status_code == 200
@@ -570,31 +636,47 @@ def test_patient_registration_allows_shared_family_mobile_number(client: TestCli
     assert child_create.json()["full_name"] == "Dakshiin B"
 
 
-def test_duplicate_patient_detection_uses_date_of_birth_for_high_confidence(client: TestClient):
+def test_duplicate_patient_detection_uses_date_of_birth_for_high_confidence(
+    client: TestClient,
+):
     tenant = create_tenant(client)
     first = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Same Name", "mobile": "9000000001", "date_of_birth": "1990-01-20"},
+        json={
+            "full_name": "Same Name",
+            "mobile": "9000000001",
+            "date_of_birth": "1990-01-20",
+        },
     )
     assert first.status_code == 201
 
     same_dob = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Same Name", "mobile": "9000000001", "date_of_birth": "1990-01-20"},
+        json={
+            "full_name": "Same Name",
+            "mobile": "9000000001",
+            "date_of_birth": "1990-01-20",
+        },
     )
     different_dob = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"full_name": "Same Name", "mobile": "9000000001", "date_of_birth": "2018-01-20"},
+        json={
+            "full_name": "Same Name",
+            "mobile": "9000000001",
+            "date_of_birth": "2018-01-20",
+        },
     )
 
     assert same_dob.status_code == 409
     assert different_dob.status_code == 201
 
 
-def test_duplicate_appointment_prevention_by_patient_doctor_and_slot(client: TestClient):
+def test_duplicate_appointment_prevention_by_patient_doctor_and_slot(
+    client: TestClient,
+):
     tenant = create_tenant(client)
     branch = create_branch(client, tenant["id"])
     patient = create_patient(client, tenant["id"], "Slot Patient")
@@ -607,12 +689,19 @@ def test_duplicate_appointment_prevention_by_patient_doctor_and_slot(client: Tes
         "appointment_time": "10:00:00",
     }
 
-    first = client.post("/api/v1/appointments", headers={"X-Tenant-ID": tenant["id"]}, json=payload)
-    duplicate = client.post("/api/v1/appointments", headers={"X-Tenant-ID": tenant["id"]}, json=payload)
+    first = client.post(
+        "/api/v1/appointments", headers={"X-Tenant-ID": tenant["id"]}, json=payload
+    )
+    duplicate = client.post(
+        "/api/v1/appointments", headers={"X-Tenant-ID": tenant["id"]}, json=payload
+    )
 
     assert first.status_code == 201
     assert duplicate.status_code == 409
-    assert duplicate.json()["detail"] == "Patient already has an active appointment at this time"
+    assert (
+        duplicate.json()["detail"]
+        == "Patient already has an active appointment at this time"
+    )
 
 
 def test_follow_up_booking_creates_follow_up_token(client: TestClient):
@@ -641,14 +730,20 @@ def test_emergency_booking_records_override_audit(client: TestClient):
     branch = create_branch(client, tenant["id"])
     patient = create_patient(client, tenant["id"], "Emergency Audit Patient")
 
-    emergency = book(client, tenant["id"], branch["id"], patient["id"], appointment_type="emergency")
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    emergency = book(
+        client, tenant["id"], branch["id"], patient["id"], appointment_type="emergency"
+    )
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert emergency["queue_entry"]["priority"] == "emergency"
     assert "appointment.emergency_override" in [event["action"] for event in audit]
 
 
-def test_review_and_fitness_visits_capture_purpose_billing_and_audit(client: TestClient):
+def test_review_and_fitness_visits_capture_purpose_billing_and_audit(
+    client: TestClient,
+):
     tenant = create_tenant(client)
     branch = create_branch(client, tenant["id"])
     patient = create_patient(client, tenant["id"], "Review Purpose Patient")
@@ -680,11 +775,16 @@ def test_review_and_fitness_visits_capture_purpose_billing_and_audit(client: Tes
             "is_billable": True,
         },
     )
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert review.status_code == 201
     assert review.json()["appointment"]["is_billable"] is False
-    assert review.json()["appointment"]["source_appointment_id"] == source["appointment"]["id"]
+    assert (
+        review.json()["appointment"]["source_appointment_id"]
+        == source["appointment"]["id"]
+    )
     assert fitness.status_code == 201
     assert fitness.json()["appointment"]["appointment_type"] == "fitness_certificate"
     actions = [event["action"] for event in audit]

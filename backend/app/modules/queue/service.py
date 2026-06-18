@@ -4,7 +4,11 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.modules.appointments.models import Appointment, AppointmentStatus, AppointmentType
+from app.modules.appointments.models import (
+    Appointment,
+    AppointmentStatus,
+    AppointmentType,
+)
 from app.modules.audit.service import record_audit_event
 from app.modules.queue.models import QueueEntry, QueueEvent, QueuePriority
 from app.modules.settings.models import SettingKey
@@ -36,7 +40,10 @@ def next_token_number(
         .join(Appointment, Appointment.id == QueueEntry.appointment_id)
         .where(QueueEntry.tenant_id == tenant_id, QueueEntry.branch_id == branch_id)
         .where(Appointment.appointment_date == appointment_date)
-        .where(QueueEntry.priority == (QueuePriority.EMERGENCY if emergency else QueuePriority.NORMAL))
+        .where(
+            QueueEntry.priority
+            == (QueuePriority.EMERGENCY if emergency else QueuePriority.NORMAL)
+        )
     )
     if practitioner_id:
         statement = statement.where(Appointment.practitioner_id == practitioner_id)
@@ -66,11 +73,15 @@ def queue_position_after_offset(
     current_position: int,
     offset: int,
 ) -> int:
-    max_position = next_queue_position(session, tenant_id=tenant_id, branch_id=branch_id)
+    max_position = next_queue_position(
+        session, tenant_id=tenant_id, branch_id=branch_id
+    )
     return min(current_position + max(offset, 1), max_position)
 
 
-def create_queue_entry_for_appointment(session: Session, appointment: Appointment) -> QueueEntry:
+def create_queue_entry_for_appointment(
+    session: Session, appointment: Appointment
+) -> QueueEntry:
     emergency = appointment.appointment_type == AppointmentType.EMERGENCY
     entry = QueueEntry(
         tenant_id=appointment.tenant_id,

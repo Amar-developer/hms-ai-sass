@@ -7,22 +7,67 @@ from sqlalchemy.exc import ProgrammingError
 from sqlmodel import Session, select
 from app.core.database import engine
 
-from app.modules.appointments.models import Appointment, AppointmentStatus, AppointmentType
+from app.modules.appointments.models import (
+    Appointment,
+    AppointmentStatus,
+    AppointmentType,
+)
 from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import DoctorFeeRule, FeeShareType, Invoice, PaymentMethod
+from app.modules.billing.models import (
+    DoctorFeeRule,
+    FeeShareType,
+    Invoice,
+    PaymentMethod,
+)
 from app.modules.billing.service import create_consultation_invoice
 from app.modules.consultations.models import Consultation, ConsultationStatus
 from app.modules.identity import permissions
 from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole
 from app.modules.identity.security import hash_password, verify_password
-from app.modules.lab.models import LabOrder, LabOrderItem, LabOrderSource, LabOrderStatus, LabResult
-from app.modules.lab.models import LabResultTemplate, LabSample, LabTestCatalog, LabTestPackage, LabTestPackageItem
-from app.modules.notifications.models import NotificationEvent, NotificationEventType, NotificationProvider
+from app.modules.lab.models import (
+    LabOrder,
+    LabOrderItem,
+    LabOrderSource,
+    LabOrderStatus,
+    LabResult,
+)
+from app.modules.lab.models import (
+    LabResultTemplate,
+    LabSample,
+    LabTestCatalog,
+    LabTestPackage,
+    LabTestPackageItem,
+)
+from app.modules.notifications.models import (
+    NotificationEvent,
+    NotificationEventType,
+    NotificationProvider,
+)
 from app.modules.notifications.service import queue_notification_if_allowed
-from app.modules.patients.models import AlertSeverity, AlertType, Gender, Patient, PatientAlert
-from app.modules.pharmacy.models import MedicineBatch, MedicineCatalog, PharmacyIssue, PharmacyIssueItem
-from app.modules.pharmacy.models import PharmacyIssueSource, PharmacyIssueStatus, PharmacyPurchase
-from app.modules.pharmacy.models import PharmacyPurchaseItem, PharmacyStockLedger, PharmacySupplier, StockLedgerMovement
+from app.modules.patients.models import (
+    AlertSeverity,
+    AlertType,
+    Gender,
+    Patient,
+    PatientAlert,
+)
+from app.modules.pharmacy.models import (
+    MedicineBatch,
+    MedicineCatalog,
+    PharmacyIssue,
+    PharmacyIssueItem,
+)
+from app.modules.pharmacy.models import (
+    PharmacyIssueSource,
+    PharmacyIssueStatus,
+    PharmacyPurchase,
+)
+from app.modules.pharmacy.models import (
+    PharmacyPurchaseItem,
+    PharmacyStockLedger,
+    PharmacySupplier,
+    StockLedgerMovement,
+)
 from app.modules.practitioners.models import (
     Practitioner,
     PractitionerBranch,
@@ -35,9 +80,20 @@ from app.modules.queue.models import QueueEntry
 from app.modules.queue.service import create_queue_entry_for_appointment
 from app.modules.settings.models import SettingKey, SettingScope
 from app.modules.settings.service import upsert_setting
-from app.modules.subscriptions.models import SubscriptionInvoice, SubscriptionInvoiceStatus, SubscriptionPlan, TenantSubscription
+from app.modules.subscriptions.models import (
+    SubscriptionInvoice,
+    SubscriptionInvoiceStatus,
+    SubscriptionPlan,
+    TenantSubscription,
+)
 from app.modules.subscriptions.service import ensure_default_plans, modules_to_json
-from app.modules.tenants.models import Branch, Department, Tenant, TenantStatus, TenantType
+from app.modules.tenants.models import (
+    Branch,
+    Department,
+    Tenant,
+    TenantStatus,
+    TenantType,
+)
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
 DEMO_TENANT_NAME = "MedizinHub Demo Clinic"
@@ -87,13 +143,21 @@ DEMO_ROLE_USERS = [
         "lab",
         "Lab Technician",
         "lab@demo.medizinhub.local",
-        [permissions.PATIENTS_READ, permissions.LAB_MANAGE, permissions.NOTIFICATIONS_MANAGE],
+        [
+            permissions.PATIENTS_READ,
+            permissions.LAB_MANAGE,
+            permissions.NOTIFICATIONS_MANAGE,
+        ],
     ),
     (
         "pharmacy",
         "Pharmacy User",
         "pharmacy@demo.medizinhub.local",
-        [permissions.PATIENTS_READ, permissions.PHARMACY_MANAGE, permissions.BILLING_MANAGE],
+        [
+            permissions.PATIENTS_READ,
+            permissions.PHARMACY_MANAGE,
+            permissions.BILLING_MANAGE,
+        ],
     ),
     (
         "billing",
@@ -127,11 +191,16 @@ def _first_or_none(session: Session, statement):
 def ensure_primary_tenant(session: Session) -> Tenant:
     tenant = _first_or_none(session, select(Tenant).where(Tenant.is_primary == True))  # noqa: E712
     if not tenant:
-        tenant = _first_or_none(session, select(Tenant).where(Tenant.name == PRIMARY_TENANT_NAME))
+        tenant = _first_or_none(
+            session, select(Tenant).where(Tenant.name == PRIMARY_TENANT_NAME)
+        )
     if tenant:
         tenant.name = PRIMARY_TENANT_NAME
         tenant.legal_name = tenant.legal_name or "MedizinHub HMS Platform"
-        tenant.description = tenant.description or "Primary SaaS tenant with global tenant-management authority."
+        tenant.description = (
+            tenant.description
+            or "Primary SaaS tenant with global tenant-management authority."
+        )
         tenant.email = tenant.email or "admin@medizinhub.local"
         tenant.phone = tenant.phone or "9000000000"
         tenant.address = tenant.address or "MedizinHub HMS Platform Office"
@@ -170,7 +239,9 @@ def ensure_primary_tenant(session: Session) -> Tenant:
 
 
 def ensure_tenant(session: Session) -> Tenant:
-    tenant = _first_or_none(session, select(Tenant).where(Tenant.name == DEMO_TENANT_NAME))
+    tenant = _first_or_none(
+        session, select(Tenant).where(Tenant.name == DEMO_TENANT_NAME)
+    )
     if tenant:
         return tenant
     tenant = Tenant(
@@ -202,7 +273,9 @@ def ensure_tenant(session: Session) -> Tenant:
 def ensure_branch(session: Session, tenant: Tenant) -> Branch:
     branch = _first_or_none(
         session,
-        select(Branch).where(Branch.tenant_id == tenant.id, Branch.code == DEMO_BRANCH_CODE),
+        select(Branch).where(
+            Branch.tenant_id == tenant.id, Branch.code == DEMO_BRANCH_CODE
+        ),
     )
     if branch:
         return branch
@@ -250,7 +323,9 @@ def ensure_demo_departments(session: Session, tenant: Tenant, branch: Branch) ->
     session.commit()
 
 
-def ensure_plan_and_subscription(session: Session, tenant: Tenant) -> tuple[SubscriptionPlan, TenantSubscription]:
+def ensure_plan_and_subscription(
+    session: Session, tenant: Tenant
+) -> tuple[SubscriptionPlan, TenantSubscription]:
     ensure_default_plans(session)
     modules = [
         "patients",
@@ -268,7 +343,9 @@ def ensure_plan_and_subscription(session: Session, tenant: Tenant) -> tuple[Subs
         "ai",
         "ip",
     ]
-    plan = _first_or_none(session, select(SubscriptionPlan).where(SubscriptionPlan.key == DEMO_PLAN_KEY))
+    plan = _first_or_none(
+        session, select(SubscriptionPlan).where(SubscriptionPlan.key == DEMO_PLAN_KEY)
+    )
     if not plan:
         plan = SubscriptionPlan(
             key=DEMO_PLAN_KEY,
@@ -363,17 +440,25 @@ def ensure_settings(session: Session, tenant: Tenant, branch: Branch) -> None:
 
 
 def ensure_permission(session: Session, permission_key: str) -> Permission:
-    permission = _first_or_none(session, select(Permission).where(Permission.key == permission_key))
+    permission = _first_or_none(
+        session, select(Permission).where(Permission.key == permission_key)
+    )
     if not permission:
-        permission = Permission(key=permission_key, description=permission_key.replace(".", " ").title())
+        permission = Permission(
+            key=permission_key, description=permission_key.replace(".", " ").title()
+        )
         session.add(permission)
         session.commit()
         session.refresh(permission)
     return permission
 
 
-def ensure_role(session: Session, tenant_id: str, key: str, name: str, permission_keys: list[str]) -> Role:
-    role = _first_or_none(session, select(Role).where(Role.tenant_id == tenant_id, Role.key == key))
+def ensure_role(
+    session: Session, tenant_id: str, key: str, name: str, permission_keys: list[str]
+) -> Role:
+    role = _first_or_none(
+        session, select(Role).where(Role.tenant_id == tenant_id, Role.key == key)
+    )
     if not role:
         role = Role(tenant_id=tenant_id, name=name, key=key)
         session.add(role)
@@ -394,7 +479,9 @@ def ensure_role(session: Session, tenant_id: str, key: str, name: str, permissio
     return role
 
 
-def ensure_super_admin_role(session: Session, primary_tenant: Tenant, super_admin: User) -> Role:
+def ensure_super_admin_role(
+    session: Session, primary_tenant: Tenant, super_admin: User
+) -> Role:
     role = ensure_role(
         session,
         primary_tenant.id,
@@ -409,10 +496,16 @@ def ensure_super_admin_role(session: Session, primary_tenant: Tenant, super_admi
     session.add(role)
     exists = _first_or_none(
         session,
-        select(UserRole).where(UserRole.user_id == super_admin.id, UserRole.role_id == role.id),
+        select(UserRole).where(
+            UserRole.user_id == super_admin.id, UserRole.role_id == role.id
+        ),
     )
     if not exists:
-        session.add(UserRole(user_id=super_admin.id, role_id=role.id, tenant_id=primary_tenant.id))
+        session.add(
+            UserRole(
+                user_id=super_admin.id, role_id=role.id, tenant_id=primary_tenant.id
+            )
+        )
     session.commit()
     return role
 
@@ -425,7 +518,9 @@ def tenant_admin_default_permissions() -> list[str]:
     ]
 
 
-def ensure_primary_tenant_admin_role(session: Session, primary_tenant: Tenant, super_admin: User) -> Role:
+def ensure_primary_tenant_admin_role(
+    session: Session, primary_tenant: Tenant, super_admin: User
+) -> Role:
     role = ensure_role(
         session,
         primary_tenant.id,
@@ -454,7 +549,9 @@ def ensure_user(
     mobile: str | None = None,
     user_type: str = "staff",
 ) -> User:
-    user = _first_or_none(session, select(User).where(User.tenant_id == tenant.id, User.email == email))
+    user = _first_or_none(
+        session, select(User).where(User.tenant_id == tenant.id, User.email == email)
+    )
     if not user:
         user = User(
             tenant_id=tenant.id,
@@ -474,7 +571,9 @@ def ensure_user(
         session.commit()
     exists = _first_or_none(
         session,
-        select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id),
+        select(UserRole).where(
+            UserRole.user_id == user.id, UserRole.role_id == role.id
+        ),
     )
     if not exists:
         session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=tenant.id))
@@ -482,8 +581,12 @@ def ensure_user(
     return user
 
 
-def ensure_demo_users(session: Session, tenant: Tenant, branch: Branch, primary_tenant: Tenant) -> User:
-    super_admin = _first_or_none(session, select(User).where(User.email == DEMO_SUPER_ADMIN_EMAIL))
+def ensure_demo_users(
+    session: Session, tenant: Tenant, branch: Branch, primary_tenant: Tenant
+) -> User:
+    super_admin = _first_or_none(
+        session, select(User).where(User.email == DEMO_SUPER_ADMIN_EMAIL)
+    )
     if not super_admin:
         super_admin = User(
             tenant_id=primary_tenant.id,
@@ -549,7 +652,9 @@ def ensure_demo_users(session: Session, tenant: Tenant, branch: Branch, primary_
     return admin_user
 
 
-def ensure_demo_practitioner(session: Session, tenant: Tenant, branch: Branch) -> Practitioner:
+def ensure_demo_practitioner(
+    session: Session, tenant: Tenant, branch: Branch
+) -> Practitioner:
     practitioner = session.get(Practitioner, DEMO_DOCTOR_ID)
     if not practitioner:
         practitioner = Practitioner(
@@ -566,9 +671,15 @@ def ensure_demo_practitioner(session: Session, tenant: Tenant, branch: Branch) -
         session.commit()
     branch_link = session.get(PractitionerBranch, (DEMO_DOCTOR_ID, branch.id))
     if not branch_link:
-        session.add(PractitionerBranch(tenant_id=tenant.id, practitioner_id=DEMO_DOCTOR_ID, branch_id=branch.id))
+        session.add(
+            PractitionerBranch(
+                tenant_id=tenant.id, practitioner_id=DEMO_DOCTOR_ID, branch_id=branch.id
+            )
+        )
     for department_id in ("general", "ped", "diab"):
-        department_link = session.get(PractitionerDepartment, (DEMO_DOCTOR_ID, department_id))
+        department_link = session.get(
+            PractitionerDepartment, (DEMO_DOCTOR_ID, department_id)
+        )
         if not department_link:
             session.add(
                 PractitionerDepartment(
@@ -626,10 +737,15 @@ def ensure_demo_practitioner(session: Session, tenant: Tenant, branch: Branch) -
     return practitioner
 
 
-def ensure_patient(session: Session, tenant: Tenant, branch: Branch, actor_user_id: str) -> Patient:
+def ensure_patient(
+    session: Session, tenant: Tenant, branch: Branch, actor_user_id: str
+) -> Patient:
     patient = _first_or_none(
         session,
-        select(Patient).where(Patient.tenant_id == tenant.id, Patient.patient_number == DEMO_PATIENT_NUMBER),
+        select(Patient).where(
+            Patient.tenant_id == tenant.id,
+            Patient.patient_number == DEMO_PATIENT_NUMBER,
+        ),
     )
     if patient:
         return patient
@@ -672,7 +788,13 @@ def ensure_patient(session: Session, tenant: Tenant, branch: Branch, actor_user_
     return patient
 
 
-def ensure_appointment(session: Session, tenant: Tenant, branch: Branch, patient: Patient, actor_user_id: str) -> Appointment:
+def ensure_appointment(
+    session: Session,
+    tenant: Tenant,
+    branch: Branch,
+    patient: Patient,
+    actor_user_id: str,
+) -> Appointment:
     appointment = _first_or_none(
         session,
         select(Appointment).where(
@@ -721,7 +843,10 @@ def ensure_queue_and_booking_notification(
 ) -> QueueEntry:
     queue_entry = _first_or_none(
         session,
-        select(QueueEntry).where(QueueEntry.tenant_id == tenant.id, QueueEntry.appointment_id == appointment.id),
+        select(QueueEntry).where(
+            QueueEntry.tenant_id == tenant.id,
+            QueueEntry.appointment_id == appointment.id,
+        ),
     )
     if not queue_entry:
         queue_entry = create_queue_entry_for_appointment(session, appointment)
@@ -752,7 +877,10 @@ def ensure_consultation(
 ) -> Consultation:
     consultation = _first_or_none(
         session,
-        select(Consultation).where(Consultation.tenant_id == tenant.id, Consultation.appointment_id == appointment.id),
+        select(Consultation).where(
+            Consultation.tenant_id == tenant.id,
+            Consultation.appointment_id == appointment.id,
+        ),
     )
     if consultation:
         return consultation
@@ -903,7 +1031,9 @@ def ensure_lab_order(
 ) -> LabOrder:
     cbc = _first_or_none(
         session,
-        select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant.id, LabTestCatalog.code == "CBC"),
+        select(LabTestCatalog).where(
+            LabTestCatalog.tenant_id == tenant.id, LabTestCatalog.code == "CBC"
+        ),
     )
     if not cbc:
         cbc = LabTestCatalog(
@@ -922,7 +1052,9 @@ def ensure_lab_order(
         session.refresh(cbc)
     fbs = _first_or_none(
         session,
-        select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant.id, LabTestCatalog.code == "FBS"),
+        select(LabTestCatalog).where(
+            LabTestCatalog.tenant_id == tenant.id, LabTestCatalog.code == "FBS"
+        ),
     )
     if not fbs:
         fbs = LabTestCatalog(
@@ -941,7 +1073,9 @@ def ensure_lab_order(
         session.refresh(fbs)
     package = _first_or_none(
         session,
-        select(LabTestPackage).where(LabTestPackage.tenant_id == tenant.id, LabTestPackage.code == "FEVER"),
+        select(LabTestPackage).where(
+            LabTestPackage.tenant_id == tenant.id, LabTestPackage.code == "FEVER"
+        ),
     )
     if not package:
         package = LabTestPackage(
@@ -957,11 +1091,18 @@ def ensure_lab_order(
         session.commit()
         session.refresh(package)
         for test in [cbc, fbs]:
-            session.add(LabTestPackageItem(tenant_id=tenant.id, package_id=package.id, test_id=test.id))
+            session.add(
+                LabTestPackageItem(
+                    tenant_id=tenant.id, package_id=package.id, test_id=test.id
+                )
+            )
         session.commit()
     template = _first_or_none(
         session,
-        select(LabResultTemplate).where(LabResultTemplate.tenant_id == tenant.id, LabResultTemplate.name == "CBC Template"),
+        select(LabResultTemplate).where(
+            LabResultTemplate.tenant_id == tenant.id,
+            LabResultTemplate.name == "CBC Template",
+        ),
     )
     if not template:
         template = LabResultTemplate(
@@ -976,7 +1117,9 @@ def ensure_lab_order(
         session.refresh(template)
     lab_order = _first_or_none(
         session,
-        select(LabOrder).where(LabOrder.tenant_id == tenant.id, LabOrder.consultation_id == consultation.id),
+        select(LabOrder).where(
+            LabOrder.tenant_id == tenant.id, LabOrder.consultation_id == consultation.id
+        ),
     )
     if not lab_order:
         lab_order = LabOrder(
@@ -1008,7 +1151,10 @@ def ensure_lab_order(
         )
     existing_items = list(
         session.exec(
-            select(LabOrderItem).where(LabOrderItem.tenant_id == tenant.id, LabOrderItem.lab_order_id == lab_order.id)
+            select(LabOrderItem).where(
+                LabOrderItem.tenant_id == tenant.id,
+                LabOrderItem.lab_order_id == lab_order.id,
+            )
         ).all()
     )
     if not existing_items:
@@ -1029,7 +1175,9 @@ def ensure_lab_order(
         session.commit()
     sample = _first_or_none(
         session,
-        select(LabSample).where(LabSample.tenant_id == tenant.id, LabSample.lab_order_id == lab_order.id),
+        select(LabSample).where(
+            LabSample.tenant_id == tenant.id, LabSample.lab_order_id == lab_order.id
+        ),
     )
     if not sample:
         session.add(
@@ -1045,7 +1193,9 @@ def ensure_lab_order(
         session.commit()
     result = _first_or_none(
         session,
-        select(LabResult).where(LabResult.tenant_id == tenant.id, LabResult.lab_order_id == lab_order.id),
+        select(LabResult).where(
+            LabResult.tenant_id == tenant.id, LabResult.lab_order_id == lab_order.id
+        ),
     )
     if not result:
         session.add(
@@ -1075,7 +1225,9 @@ def ensure_pharmacy_issue(
 ) -> PharmacyIssue:
     medicine = _first_or_none(
         session,
-        select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant.id, MedicineCatalog.code == "PCM500"),
+        select(MedicineCatalog).where(
+            MedicineCatalog.tenant_id == tenant.id, MedicineCatalog.code == "PCM500"
+        ),
     )
     if not medicine:
         medicine = MedicineCatalog(
@@ -1094,20 +1246,34 @@ def ensure_pharmacy_issue(
         session.refresh(medicine)
     supplier = _first_or_none(
         session,
-        select(PharmacySupplier).where(PharmacySupplier.tenant_id == tenant.id, PharmacySupplier.name == "Demo Pharma Supplier"),
+        select(PharmacySupplier).where(
+            PharmacySupplier.tenant_id == tenant.id,
+            PharmacySupplier.name == "Demo Pharma Supplier",
+        ),
     )
     if not supplier:
-        supplier = PharmacySupplier(tenant_id=tenant.id, name="Demo Pharma Supplier", phone="9000000000", created_by_user_id=actor_user_id)
+        supplier = PharmacySupplier(
+            tenant_id=tenant.id,
+            name="Demo Pharma Supplier",
+            phone="9000000000",
+            created_by_user_id=actor_user_id,
+        )
         session.add(supplier)
         session.commit()
         session.refresh(supplier)
     purchase = _first_or_none(
         session,
-        select(PharmacyPurchase).where(PharmacyPurchase.tenant_id == tenant.id, PharmacyPurchase.invoice_number == "PINV-DEMO"),
+        select(PharmacyPurchase).where(
+            PharmacyPurchase.tenant_id == tenant.id,
+            PharmacyPurchase.invoice_number == "PINV-DEMO",
+        ),
     )
     batch = _first_or_none(
         session,
-        select(MedicineBatch).where(MedicineBatch.tenant_id == tenant.id, MedicineBatch.medicine_id == medicine.id),
+        select(MedicineBatch).where(
+            MedicineBatch.tenant_id == tenant.id,
+            MedicineBatch.medicine_id == medicine.id,
+        ),
     )
     if not purchase:
         purchase = PharmacyPurchase(
@@ -1164,7 +1330,10 @@ def ensure_pharmacy_issue(
         session.commit()
     issue = _first_or_none(
         session,
-        select(PharmacyIssue).where(PharmacyIssue.tenant_id == tenant.id, PharmacyIssue.consultation_id == consultation.id),
+        select(PharmacyIssue).where(
+            PharmacyIssue.tenant_id == tenant.id,
+            PharmacyIssue.consultation_id == consultation.id,
+        ),
     )
     if issue:
         return issue
@@ -1175,7 +1344,8 @@ def ensure_pharmacy_issue(
         consultation_id=consultation.id,
         source=PharmacyIssueSource.CONSULTATION,
         status=PharmacyIssueStatus.DISPENSED,
-        medicine_text=consultation.prescription_text or "Paracetamol 500mg twice daily for 3 days.",
+        medicine_text=consultation.prescription_text
+        or "Paracetamol 500mg twice daily for 3 days.",
         notes="Demo medicine dispensed from doctor prescription.",
         amount=180,
         issued_by_user_id=actor_user_id,
@@ -1197,7 +1367,10 @@ def ensure_pharmacy_issue(
     )
     item = _first_or_none(
         session,
-        select(PharmacyIssueItem).where(PharmacyIssueItem.tenant_id == tenant.id, PharmacyIssueItem.pharmacy_issue_id == issue.id),
+        select(PharmacyIssueItem).where(
+            PharmacyIssueItem.tenant_id == tenant.id,
+            PharmacyIssueItem.pharmacy_issue_id == issue.id,
+        ),
     )
     if not item:
         session.add(
@@ -1319,16 +1492,58 @@ def ensure_customer_demo_dataset(
 ) -> None:
     today = date.today()
     scenarios = [
-        (DEMO_PATIENTS[0], AppointmentType.DOCTOR_REVIEW, "doctor_review", today, time(10, 0), False, AppointmentStatus.WAITING),
-        (DEMO_PATIENTS[1], AppointmentType.FITNESS_CERTIFICATE, "fitness_certificate", today, time(10, 30), True, AppointmentStatus.SCHEDULED),
-        (DEMO_PATIENTS[2], AppointmentType.OP, "pediatric_consultation", today, time(11, 0), True, AppointmentStatus.WAITING),
-        (DEMO_PATIENTS[3], AppointmentType.EMERGENCY, "emergency_consultation", today, None, True, AppointmentStatus.CALLED),
+        (
+            DEMO_PATIENTS[0],
+            AppointmentType.DOCTOR_REVIEW,
+            "doctor_review",
+            today,
+            time(10, 0),
+            False,
+            AppointmentStatus.WAITING,
+        ),
+        (
+            DEMO_PATIENTS[1],
+            AppointmentType.FITNESS_CERTIFICATE,
+            "fitness_certificate",
+            today,
+            time(10, 30),
+            True,
+            AppointmentStatus.SCHEDULED,
+        ),
+        (
+            DEMO_PATIENTS[2],
+            AppointmentType.OP,
+            "pediatric_consultation",
+            today,
+            time(11, 0),
+            True,
+            AppointmentStatus.WAITING,
+        ),
+        (
+            DEMO_PATIENTS[3],
+            AppointmentType.EMERGENCY,
+            "emergency_consultation",
+            today,
+            None,
+            True,
+            AppointmentStatus.CALLED,
+        ),
     ]
-    for patient_data, appointment_type, visit_purpose, appointment_date, appointment_time, is_billable, status_value in scenarios:
+    for (
+        patient_data,
+        appointment_type,
+        visit_purpose,
+        appointment_date,
+        appointment_time,
+        is_billable,
+        status_value,
+    ) in scenarios:
         patient_number, name, mobile, gender, age, area = patient_data
         patient = _first_or_none(
             session,
-            select(Patient).where(Patient.tenant_id == tenant.id, Patient.patient_number == patient_number),
+            select(Patient).where(
+                Patient.tenant_id == tenant.id, Patient.patient_number == patient_number
+            ),
         )
         if not patient:
             patient = Patient(
@@ -1358,17 +1573,25 @@ def ensure_customer_demo_dataset(
                 tenant_id=tenant.id,
                 branch_id=branch.id,
                 patient_id=patient.id,
-                department_id="ped" if visit_purpose == "pediatric_consultation" else "general",
+                department_id="ped"
+                if visit_purpose == "pediatric_consultation"
+                else "general",
                 practitioner_id=DEMO_DOCTOR_ID,
                 appointment_type=appointment_type,
                 appointment_date=appointment_date,
                 appointment_time=appointment_time,
                 reason=f"Demo {visit_purpose.replace('_', ' ')} visit",
                 visit_purpose=visit_purpose,
-                source_appointment_id=source_appointment.id if appointment_type == AppointmentType.DOCTOR_REVIEW else None,
+                source_appointment_id=source_appointment.id
+                if appointment_type == AppointmentType.DOCTOR_REVIEW
+                else None,
                 is_billable=is_billable,
-                billing_note="Demo free review within validity" if not is_billable else None,
-                emergency_reason="Demo emergency priority patient" if appointment_type == AppointmentType.EMERGENCY else None,
+                billing_note="Demo free review within validity"
+                if not is_billable
+                else None,
+                emergency_reason="Demo emergency priority patient"
+                if appointment_type == AppointmentType.EMERGENCY
+                else None,
                 status=status_value,
                 created_by_user_id=actor_user_id,
             )
@@ -1387,7 +1610,10 @@ def ensure_customer_demo_dataset(
             )
         queue_entry = _first_or_none(
             session,
-            select(QueueEntry).where(QueueEntry.tenant_id == tenant.id, QueueEntry.appointment_id == appointment.id),
+            select(QueueEntry).where(
+                QueueEntry.tenant_id == tenant.id,
+                QueueEntry.appointment_id == appointment.id,
+            ),
         )
         if not queue_entry:
             queue_entry = create_queue_entry_for_appointment(session, appointment)
@@ -1396,13 +1622,55 @@ def ensure_customer_demo_dataset(
         session.commit()
 
 
-def ensure_saas_revenue_demo_data(session: Session, tenant: Tenant, subscription: TenantSubscription) -> None:
+def ensure_saas_revenue_demo_data(
+    session: Session, tenant: Tenant, subscription: TenantSubscription
+) -> None:
     rows = [
-        ("SUBINV-DEMO-PAID", "Demo paid subscription invoice", 4999, 900, SubscriptionInvoiceStatus.PAID, 5899, 5899, 0, "captured"),
-        ("SUBINV-DEMO-PENDING", "Demo upcoming renewal invoice", 4999, 900, SubscriptionInvoiceStatus.ISSUED, 5899, 0, 5899, None),
-        ("SUBINV-DEMO-FAILED", "Demo failed payment recovery invoice", 4999, 900, SubscriptionInvoiceStatus.ISSUED, 5899, 0, 5899, "failed"),
+        (
+            "SUBINV-DEMO-PAID",
+            "Demo paid subscription invoice",
+            4999,
+            900,
+            SubscriptionInvoiceStatus.PAID,
+            5899,
+            5899,
+            0,
+            "captured",
+        ),
+        (
+            "SUBINV-DEMO-PENDING",
+            "Demo upcoming renewal invoice",
+            4999,
+            900,
+            SubscriptionInvoiceStatus.ISSUED,
+            5899,
+            0,
+            5899,
+            None,
+        ),
+        (
+            "SUBINV-DEMO-FAILED",
+            "Demo failed payment recovery invoice",
+            4999,
+            900,
+            SubscriptionInvoiceStatus.ISSUED,
+            5899,
+            0,
+            5899,
+            "failed",
+        ),
     ]
-    for number, description, taxable, tax, status_value, total, paid, balance, gateway_status in rows:
+    for (
+        number,
+        description,
+        taxable,
+        tax,
+        status_value,
+        total,
+        paid,
+        balance,
+        gateway_status,
+    ) in rows:
         invoice = _first_or_none(
             session,
             select(SubscriptionInvoice).where(
@@ -1425,13 +1693,23 @@ def ensure_saas_revenue_demo_data(session: Session, tenant: Tenant, subscription
                 status=status_value,
                 issued_on=date.today(),
                 due_on=date.today(),
-                paid_on=date.today() if status_value == SubscriptionInvoiceStatus.PAID else None,
-                payment_method="upi" if status_value == SubscriptionInvoiceStatus.PAID else None,
-                payment_reference="DEMO-UPI-PAID" if status_value == SubscriptionInvoiceStatus.PAID else None,
+                paid_on=date.today()
+                if status_value == SubscriptionInvoiceStatus.PAID
+                else None,
+                payment_method="upi"
+                if status_value == SubscriptionInvoiceStatus.PAID
+                else None,
+                payment_reference="DEMO-UPI-PAID"
+                if status_value == SubscriptionInvoiceStatus.PAID
+                else None,
                 gateway_transaction_id=f"demo-{number.lower()}",
                 gateway_status=gateway_status,
-                failed_reason="Demo gateway failure for recovery workflow" if gateway_status == "failed" else None,
-                last_payment_attempt_at=datetime.now(timezone.utc) if gateway_status else None,
+                failed_reason="Demo gateway failure for recovery workflow"
+                if gateway_status == "failed"
+                else None,
+                last_payment_attempt_at=datetime.now(timezone.utc)
+                if gateway_status
+                else None,
             )
             session.add(invoice)
         else:
@@ -1442,7 +1720,11 @@ def ensure_saas_revenue_demo_data(session: Session, tenant: Tenant, subscription
             invoice.balance_amount = balance
             invoice.status = status_value
             invoice.gateway_status = gateway_status
-            invoice.failed_reason = "Demo gateway failure for recovery workflow" if gateway_status == "failed" else None
+            invoice.failed_reason = (
+                "Demo gateway failure for recovery workflow"
+                if gateway_status == "failed"
+                else None
+            )
             session.add(invoice)
     session.commit()
 
@@ -1458,18 +1740,37 @@ def seed_demo_data(session: Session) -> dict[str, str | int]:
     ensure_demo_practitioner(session, tenant, branch)
     patient = ensure_patient(session, tenant, branch, admin_user.id)
     appointment = ensure_appointment(session, tenant, branch, patient, admin_user.id)
-    queue_entry = ensure_queue_and_booking_notification(session, tenant, branch, patient, appointment, admin_user.id)
-    consultation = ensure_consultation(session, tenant, branch, patient, appointment, admin_user.id)
+    queue_entry = ensure_queue_and_booking_notification(
+        session, tenant, branch, patient, appointment, admin_user.id
+    )
+    consultation = ensure_consultation(
+        session, tenant, branch, patient, appointment, admin_user.id
+    )
     ensure_fee_rule(session, tenant, branch)
     ensure_demo_fee_rules(session, tenant, branch)
     invoice = ensure_invoice(session, appointment, consultation, admin_user.id)
-    lab_order = ensure_lab_order(session, tenant, branch, patient, consultation, admin_user.id)
-    pharmacy_issue = ensure_pharmacy_issue(session, tenant, branch, patient, consultation, admin_user.id)
-    ensure_notifications(session, tenant, branch, patient, queue_entry, consultation, invoice, admin_user.id)
+    lab_order = ensure_lab_order(
+        session, tenant, branch, patient, consultation, admin_user.id
+    )
+    pharmacy_issue = ensure_pharmacy_issue(
+        session, tenant, branch, patient, consultation, admin_user.id
+    )
+    ensure_notifications(
+        session,
+        tenant,
+        branch,
+        patient,
+        queue_entry,
+        consultation,
+        invoice,
+        admin_user.id,
+    )
     ensure_customer_demo_dataset(session, tenant, branch, appointment, admin_user.id)
     ensure_saas_revenue_demo_data(session, tenant, subscription)
     notification_count = len(
-        session.exec(select(NotificationEvent.id).where(NotificationEvent.tenant_id == tenant.id)).all()
+        session.exec(
+            select(NotificationEvent.id).where(NotificationEvent.tenant_id == tenant.id)
+        ).all()
     )
     return {
         "tenant_id": tenant.id,

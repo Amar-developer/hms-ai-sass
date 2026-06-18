@@ -16,7 +16,12 @@ from app.modules.settings.schemas import (
     AdminSettingUpsert,
     ResolvedSettingRead,
 )
-from app.modules.settings.service import decode_value, resolve_setting, upsert_setting, validate_scope
+from app.modules.settings.service import (
+    decode_value,
+    resolve_setting,
+    upsert_setting,
+    validate_scope,
+)
 
 router = APIRouter(prefix="/settings")
 
@@ -89,7 +94,8 @@ def list_admin_settings(
     statement = select(AdminSetting).where(AdminSetting.tenant_id == tenant_id)
     if current_user.branch_id and not current_user.is_super_admin:
         statement = statement.where(
-            (AdminSetting.scope_id == tenant_id) | (AdminSetting.scope_id == current_user.branch_id)
+            (AdminSetting.scope_id == tenant_id)
+            | (AdminSetting.scope_id == current_user.branch_id)
         )
     if module:
         statement = statement.where(AdminSetting.module == module)

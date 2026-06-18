@@ -34,9 +34,31 @@ def _idx(table: str, name: str, columns: list[str]) -> None:
 
 
 def upgrade() -> None:
-    _add("role", "source_template_role_id", sa.Column("source_template_role_id", sa.String(), nullable=True))
-    _add("role", "is_global_template", sa.Column("is_global_template", sa.Boolean(), nullable=False, server_default=sa.false()))
-    _add("role", "is_template_locked", sa.Column("is_template_locked", sa.Boolean(), nullable=False, server_default=sa.false()))
+    _add(
+        "role",
+        "source_template_role_id",
+        sa.Column("source_template_role_id", sa.String(), nullable=True),
+    )
+    _add(
+        "role",
+        "is_global_template",
+        sa.Column(
+            "is_global_template",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+    )
+    _add(
+        "role",
+        "is_template_locked",
+        sa.Column(
+            "is_template_locked",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
+    )
     _idx("role", "ix_role_source_template_role_id", ["source_template_role_id"])
     _idx("role", "ix_role_is_global_template", ["is_global_template"])
     _idx("role", "ix_role_is_template_locked", ["is_template_locked"])
@@ -46,18 +68,36 @@ def upgrade() -> None:
         "source_template_department_id",
         sa.Column("source_template_department_id", sa.String(), nullable=True),
     )
-    _add("department", "updated_by_user_id", sa.Column("updated_by_user_id", sa.String(), nullable=True))
+    _add(
+        "department",
+        "updated_by_user_id",
+        sa.Column("updated_by_user_id", sa.String(), nullable=True),
+    )
     _add(
         "department",
         "is_global_template",
-        sa.Column("is_global_template", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "is_global_template",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
     )
     _add(
         "department",
         "is_template_locked",
-        sa.Column("is_template_locked", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "is_template_locked",
+            sa.Boolean(),
+            nullable=False,
+            server_default=sa.false(),
+        ),
     )
-    _idx("department", "ix_department_source_template_department_id", ["source_template_department_id"])
+    _idx(
+        "department",
+        "ix_department_source_template_department_id",
+        ["source_template_department_id"],
+    )
     _idx("department", "ix_department_updated_by_user_id", ["updated_by_user_id"])
     _idx("department", "ix_department_is_global_template", ["is_global_template"])
     _idx("department", "ix_department_is_template_locked", ["is_template_locked"])

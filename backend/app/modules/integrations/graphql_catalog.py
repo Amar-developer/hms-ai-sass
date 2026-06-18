@@ -27,7 +27,9 @@ class GraphQLCatalogClient:
         self.graphql_url = graphql_url
         self.timeout_seconds = timeout_seconds
 
-    def get_products(self, search: str | None = None, page_size: int = 10, current_page: int = 1) -> list[dict[str, str]]:
+    def get_products(
+        self, search: str | None = None, page_size: int = 10, current_page: int = 1
+    ) -> list[dict[str, str]]:
         query = """
         query MedizinHubProducts($search: String, $pageSize: Int, $currentPage: Int) {
           products(search: $search, pageSize: $pageSize, currentPage: $currentPage) {
@@ -46,7 +48,9 @@ class GraphQLCatalogClient:
             },
         }
         data = self._call(payload)
-        products = data.get("data", {}).get("products", {}) if isinstance(data, dict) else {}
+        products = (
+            data.get("data", {}).get("products", {}) if isinstance(data, dict) else {}
+        )
         items = products.get("items") or []
         if not isinstance(items, list):
             raise HTTPException(

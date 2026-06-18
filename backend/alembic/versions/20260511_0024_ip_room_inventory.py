@@ -22,7 +22,9 @@ def _tables() -> set[str]:
 def _columns(table_name: str) -> set[str]:
     if table_name not in _tables():
         return set()
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def _add(table_name: str, column_name: str, column: sa.Column) -> None:
@@ -53,7 +55,11 @@ def upgrade() -> None:
             sa.PrimaryKeyConstraint("id"),
         )
     _add("ipadmission", "room_id", sa.Column("room_id", sa.String(), nullable=True))
-    _add("ipadmission", "expected_discharge_date", sa.Column("expected_discharge_date", sa.Date(), nullable=True))
+    _add(
+        "ipadmission",
+        "expected_discharge_date",
+        sa.Column("expected_discharge_date", sa.Date(), nullable=True),
+    )
 
 
 def downgrade() -> None:

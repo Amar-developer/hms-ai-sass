@@ -21,7 +21,9 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine, monkeypa
             period_end="2026-04-30",
             recipients_json=json.dumps(["owner@clinic.test"]),
             cc_json=json.dumps([]),
-            filters_json=json.dumps({"overall": True, "doctor": True, "department": True, "invoice": True}),
+            filters_json=json.dumps(
+                {"overall": True, "doctor": True, "department": True, "invoice": True}
+            ),
         )
         session.add(job)
         session.commit()
@@ -31,14 +33,24 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine, monkeypa
             sent.update(kwargs)
             return "message-1"
 
-        monkeypatch.setattr("app.modules.reports.service.send_report_email", fake_send_report_email)
+        monkeypatch.setattr(
+            "app.modules.reports.service.send_report_email", fake_send_report_email
+        )
 
         processed = process_report_job(session, job.id)
 
     attachment_names = [filename for filename, _content in sent["attachments"]]
     assert processed.status == ReportJobStatus.SENT
-    assert attachment_names[0].startswith("monthly-revenue-report-2026-04-01-2026-04-30")
-    assert any(filename.startswith("doctor-settlement-") for filename in attachment_names)
+    assert attachment_names[0].startswith(
+        "monthly-revenue-report-2026-04-01-2026-04-30"
+    )
+    assert any(
+        filename.startswith("doctor-settlement-") for filename in attachment_names
+    )
     assert any(filename.startswith("lab-settlement-") for filename in attachment_names)
-    assert any(filename.startswith("pharmacy-settlement-") for filename in attachment_names)
-    assert any(filename.startswith("invoice-profit-details-") for filename in attachment_names)
+    assert any(
+        filename.startswith("pharmacy-settlement-") for filename in attachment_names
+    )
+    assert any(
+        filename.startswith("invoice-profit-details-") for filename in attachment_names
+    )

@@ -3,8 +3,14 @@ from datetime import date
 from fastapi.testclient import TestClient
 
 
-def test_super_admin_onboards_tenant_with_branch_subscription_and_admin(client: TestClient):
-    starter = next(plan for plan in client.get("/api/v1/subscription-plans").json() if plan["key"] == "starter")
+def test_super_admin_onboards_tenant_with_branch_subscription_and_admin(
+    client: TestClient,
+):
+    starter = next(
+        plan
+        for plan in client.get("/api/v1/subscription-plans").json()
+        if plan["key"] == "starter"
+    )
 
     response = client.post(
         "/api/v1/tenants/onboard",
@@ -37,18 +43,27 @@ def test_super_admin_onboards_tenant_with_branch_subscription_and_admin(client: 
 
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": "admin@fresh.test", "password": "TenantPass123", "tenant_id": tenant_id},
+        json={
+            "email": "admin@fresh.test",
+            "password": "TenantPass123",
+            "tenant_id": tenant_id,
+        },
     )
 
     assert login.status_code == 200
     assert "tenant_admin" in login.json()["user"]["roles"]
 
 
-def test_tenant_onboarding_rejects_invalid_references_before_creating_tenant(client: TestClient):
+def test_tenant_onboarding_rejects_invalid_references_before_creating_tenant(
+    client: TestClient,
+):
     invalid_plan = client.post(
         "/api/v1/tenants/onboard",
         json={
-            "tenant": {"name": "Invalid Plan Clinic", "email": "invalid-plan@test.local"},
+            "tenant": {
+                "name": "Invalid Plan Clinic",
+                "email": "invalid-plan@test.local",
+            },
             "branches": [{"name": "Main Branch", "code": "MAIN"}],
             "subscription_plan_id": "plan_missing",
             "admin_user": {
@@ -60,12 +75,18 @@ def test_tenant_onboarding_rejects_invalid_references_before_creating_tenant(cli
     )
 
     assert invalid_plan.status_code == 400
-    assert not any(tenant["name"] == "Invalid Plan Clinic" for tenant in client.get("/api/v1/tenants").json())
+    assert not any(
+        tenant["name"] == "Invalid Plan Clinic"
+        for tenant in client.get("/api/v1/tenants").json()
+    )
 
     duplicate_branches = client.post(
         "/api/v1/tenants/onboard",
         json={
-            "tenant": {"name": "Duplicate Branch Clinic", "email": "duplicate-branch@test.local"},
+            "tenant": {
+                "name": "Duplicate Branch Clinic",
+                "email": "duplicate-branch@test.local",
+            },
             "branches": [
                 {"name": "First Main Branch", "code": "MAIN"},
                 {"name": "Second Main Branch", "code": "main"},
@@ -79,16 +100,29 @@ def test_tenant_onboarding_rejects_invalid_references_before_creating_tenant(cli
     )
 
     assert duplicate_branches.status_code == 400
-    assert not any(tenant["name"] == "Duplicate Branch Clinic" for tenant in client.get("/api/v1/tenants").json())
+    assert not any(
+        tenant["name"] == "Duplicate Branch Clinic"
+        for tenant in client.get("/api/v1/tenants").json()
+    )
 
 
 def test_patient_membership_enrollment_resolves_missing_branch(client: TestClient):
-    tenant = client.post("/api/v1/tenants", json={"name": "Membership Branch Fallback Clinic"}).json()
-    starter = next(plan for plan in client.get("/api/v1/subscription-plans").json() if plan["key"] == "starter")
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Membership Branch Fallback Clinic"}
+    ).json()
+    starter = next(
+        plan
+        for plan in client.get("/api/v1/subscription-plans").json()
+        if plan["key"] == "starter"
+    )
     client.post(
         "/api/v1/subscription-plans/tenant-subscriptions",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"plan_id": starter["id"], "starts_on": date.today().isoformat(), "is_trial": False},
+        json={
+            "plan_id": starter["id"],
+            "starts_on": date.today().isoformat(),
+            "is_trial": False,
+        },
     )
     branch = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
@@ -125,7 +159,9 @@ def test_patient_membership_enrollment_resolves_missing_branch(client: TestClien
         f"/api/v1/billing/invoices?patient_id={patient['id']}",
         headers={"X-Tenant-ID": tenant["id"]},
     ).json()
-    purchase_invoice = next(invoice for invoice in invoices if invoice["id"] == body["purchase_invoice_id"])
+    purchase_invoice = next(
+        invoice for invoice in invoices if invoice["id"] == body["purchase_invoice_id"]
+    )
     assert purchase_invoice["total_amount"] == 500
     assert purchase_invoice["paid_amount"] == 0
     assert purchase_invoice["balance_amount"] == 500
@@ -194,7 +230,9 @@ def test_patient_membership_enrollment_resolves_missing_branch(client: TestClien
         headers={"X-Tenant-ID": tenant["id"]},
     ).json()
     paid_purchase_invoice = next(
-        invoice for invoice in paid_invoices if invoice["id"] == paid_body["purchase_invoice_id"]
+        invoice
+        for invoice in paid_invoices
+        if invoice["id"] == paid_body["purchase_invoice_id"]
     )
     assert paid_purchase_invoice["total_amount"] == 500
     assert paid_purchase_invoice["paid_amount"] == 500

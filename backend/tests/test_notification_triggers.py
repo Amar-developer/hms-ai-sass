@@ -79,11 +79,15 @@ def book_appointment(client, tenant_id, branch_id, patient_id):
 
 
 def test_appointment_booked_auto_queues_whatsapp_and_sms(client):
-    tenant, branch = setup_notify_tenant(client, modules=["whatsapp", "sms"], providers=["whatsapp", "sms"])
+    tenant, branch = setup_notify_tenant(
+        client, modules=["whatsapp", "sms"], providers=["whatsapp", "sms"]
+    )
     patient = create_patient(client, tenant["id"])
 
     booking = book_appointment(client, tenant["id"], branch["id"], patient["id"])
-    notifications = client.get("/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}).json()
+    notifications = client.get(
+        "/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert booking["queue_entry"]["token_number"] == "N-001"
     assert [event["event_type"] for event in notifications] == [
@@ -98,7 +102,9 @@ def test_appointment_trigger_skips_when_provider_not_configured(client):
     patient = create_patient(client, tenant["id"])
 
     book_appointment(client, tenant["id"], branch["id"], patient["id"])
-    notifications = client.get("/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}).json()
+    notifications = client.get(
+        "/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert notifications == []
 
@@ -113,7 +119,9 @@ def test_token_called_auto_queues_voice_notification(client):
         headers={"X-Tenant-ID": tenant["id"]},
         json={"reason": "Call token"},
     )
-    notifications = client.get("/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}).json()
+    notifications = client.get(
+        "/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert call.status_code == 200
     assert len(notifications) == 1
@@ -143,7 +151,11 @@ def test_invoice_generation_and_partial_payment_auto_queue_payment_pending(clien
     client.post(
         "/api/v1/billing/doctor-fee-rules",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"appointment_type": "op", "fee_amount": 1000, "doctor_share_percentage": 60},
+        json={
+            "appointment_type": "op",
+            "fee_amount": 1000,
+            "doctor_share_percentage": 60,
+        },
     )
 
     invoice_detail = client.post(
@@ -156,15 +168,21 @@ def test_invoice_generation_and_partial_payment_auto_queue_payment_pending(clien
         headers={"X-Tenant-ID": tenant["id"]},
         json={"method": "cash", "amount": 400},
     )
-    notifications = client.get("/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}).json()
-    payment_events = [event for event in notifications if event["event_type"] == "payment_reminder"]
+    notifications = client.get(
+        "/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
+    payment_events = [
+        event for event in notifications if event["event_type"] == "payment_reminder"
+    ]
 
     assert len(payment_events) == 4
     assert {event["provider"] for event in payment_events} == {"whatsapp", "sms"}
 
 
 def test_sign_consultation_auto_queues_follow_up_due_when_advice_present(client):
-    tenant, branch = setup_notify_tenant(client, modules=["whatsapp"], providers=["whatsapp"])
+    tenant, branch = setup_notify_tenant(
+        client, modules=["whatsapp"], providers=["whatsapp"]
+    )
     patient = create_patient(client, tenant["id"])
     booking = book_appointment(client, tenant["id"], branch["id"], patient["id"])
     consultation = client.post(
@@ -181,8 +199,12 @@ def test_sign_consultation_auto_queues_follow_up_due_when_advice_present(client)
         headers={"X-Tenant-ID": tenant["id"]},
         json={"signed_by_user_id": "doctor_demo"},
     )
-    notifications = client.get("/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}).json()
-    followups = [event for event in notifications if event["event_type"] == "follow_up_reminder"]
+    notifications = client.get(
+        "/api/v1/notifications", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
+    followups = [
+        event for event in notifications if event["event_type"] == "follow_up_reminder"
+    ]
 
     assert len(followups) == 1
     assert followups[0]["provider"] == "whatsapp"

@@ -116,7 +116,7 @@ export function TenantManagement({
           </p>
         </div>
         <div className="flex items-center gap-2 ">
-          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}          
+          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
           <CreateActionButton
             label="Create Tenant"
             onClick={() => setSection("createTenant")}

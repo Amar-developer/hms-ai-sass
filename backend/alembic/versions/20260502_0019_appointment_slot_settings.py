@@ -18,8 +18,12 @@ def upgrade() -> None:
     if bind.dialect.name != "postgresql":
         return
     with op.get_context().autocommit_block():
-        op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'APPOINTMENT_SLOT_INTERVALS_ENABLED'")
-        op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'APPOINTMENT_SLOT_INTERVAL_MINUTES'")
+        op.execute(
+            "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'APPOINTMENT_SLOT_INTERVALS_ENABLED'"
+        )
+        op.execute(
+            "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'APPOINTMENT_SLOT_INTERVAL_MINUTES'"
+        )
 
 
 def downgrade() -> None:

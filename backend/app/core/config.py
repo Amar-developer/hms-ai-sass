@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     database_url: str = Field(default="sqlite:///./medizinhub_hms.db")
     redis_url: str = Field(default="redis://localhost:6379/0")
     report_queue_name: str = Field(default="medizinhub:reports:monthly")
-    report_scheduler_lock_key: str = Field(default="medizinhub:reports:monthly:scheduler")
+    report_scheduler_lock_key: str = Field(
+        default="medizinhub:reports:monthly:scheduler"
+    )
 
     smtp_host: str | None = Field(default=None)
     smtp_port: int = Field(default=587)
@@ -28,7 +30,9 @@ class Settings(BaseSettings):
     maha_clinic_url: str | None = Field(default=None)
     maha_clinic_token: str | None = Field(default=None)
     maha_clinic_timeout_seconds: int = Field(default=10)
-    medicine_graphql_url: str | None = Field(default="https://www.medizinhub.com/graphql")
+    medicine_graphql_url: str | None = Field(
+        default="https://www.medizinhub.com/graphql"
+    )
     medicine_graphql_timeout_seconds: int = Field(default=10)
     external_lab_items_enabled: bool = Field(default=False)
 

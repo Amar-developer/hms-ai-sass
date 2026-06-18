@@ -61,7 +61,9 @@ class Tenant(SQLModel, table=True):
 class Branch(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("branch"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
-    source_template_branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
+    source_template_branch_id: str | None = Field(
+        default=None, index=True, foreign_key="branch.id"
+    )
     name: str = Field(index=True, min_length=2, max_length=160)
     code: str = Field(index=True, min_length=2, max_length=40)
     area: str | None = Field(default=None, max_length=120)
@@ -81,7 +83,9 @@ class Department(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("dept"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
-    source_template_department_id: str | None = Field(default=None, index=True, foreign_key="department.id")
+    source_template_department_id: str | None = Field(
+        default=None, index=True, foreign_key="department.id"
+    )
     name: str = Field(index=True, min_length=2, max_length=160)
     code: str = Field(index=True, min_length=2, max_length=40)
     description: str | None = Field(default=None, max_length=1000)

@@ -123,7 +123,9 @@ def test_expired_trial_blocks_patient_creation(client):
 
     with next(client.app.dependency_overrides[get_session]()) as session:
         subscription = session.exec(
-            select(TenantSubscription).where(TenantSubscription.tenant_id == tenant["id"])
+            select(TenantSubscription).where(
+                TenantSubscription.tenant_id == tenant["id"]
+            )
         ).first()
         subscription.ends_on = date.today() - timedelta(days=1)
         session.add(subscription)
@@ -183,9 +185,15 @@ def test_subscription_plan_can_be_edited_and_deactivated(client):
 
     updated = client.patch(
         f"/api/v1/subscription-plans/{plan['id']}",
-        json={"monthly_patient_limit": 750, "price_inr_monthly": 2999, "enabled_modules": ["patients", "appointments", "lab"]},
+        json={
+            "monthly_patient_limit": 750,
+            "price_inr_monthly": 2999,
+            "enabled_modules": ["patients", "appointments", "lab"],
+        },
     )
-    inactive = client.post(f"/api/v1/subscription-plans/{plan['id']}/status", json={"is_active": False})
+    inactive = client.post(
+        f"/api/v1/subscription-plans/{plan['id']}/status", json={"is_active": False}
+    )
 
     assert updated.status_code == 200
     assert updated.json()["monthly_patient_limit"] == 750
@@ -196,7 +204,11 @@ def test_subscription_plan_can_be_edited_and_deactivated(client):
 
 def test_future_subscription_is_scheduled_then_auto_activates_when_due(client):
     tenant = create_tenant(client)
-    starter = next(plan for plan in client.get("/api/v1/subscription-plans").json() if plan["key"] == "starter")
+    starter = next(
+        plan
+        for plan in client.get("/api/v1/subscription-plans").json()
+        if plan["key"] == "starter"
+    )
 
     scheduled = client.post(
         "/api/v1/subscription-plans/tenant-subscriptions",
@@ -247,7 +259,11 @@ def test_additional_patient_credits_extend_limit_and_create_invoice(client):
     client.post(
         "/api/v1/subscription-plans/tenant-subscriptions",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"plan_id": plan["id"], "starts_on": date.today().isoformat(), "billing_amount": 100},
+        json={
+            "plan_id": plan["id"],
+            "starts_on": date.today().isoformat(),
+            "billing_amount": 100,
+        },
     )
     assert create_patient(client, tenant["id"], "One").status_code == 201
 
@@ -255,30 +271,47 @@ def test_additional_patient_credits_extend_limit_and_create_invoice(client):
     credit = client.post(
         "/api/v1/subscription-plans/credits",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"credit_type": "patients", "quantity": 2, "amount": 50, "reason": "Top-up"},
+        json={
+            "credit_type": "patients",
+            "quantity": 2,
+            "amount": 50,
+            "reason": "Top-up",
+        },
     )
     allowed = create_patient(client, tenant["id"], "Two")
-    usage = client.get("/api/v1/subscription-plans/usage", headers={"X-Tenant-ID": tenant["id"]})
-    invoices = client.get("/api/v1/subscription-plans/invoices", headers={"X-Tenant-ID": tenant["id"]})
+    usage = client.get(
+        "/api/v1/subscription-plans/usage", headers={"X-Tenant-ID": tenant["id"]}
+    )
+    invoices = client.get(
+        "/api/v1/subscription-plans/invoices", headers={"X-Tenant-ID": tenant["id"]}
+    )
 
     assert blocked.status_code == 402
     assert credit.status_code == 201
     assert allowed.status_code == 201
     assert usage.json()["effective_patient_limit"] == 3
-    assert any(invoice["credit_id"] == credit.json()["id"] for invoice in invoices.json())
+    assert any(
+        invoice["credit_id"] == credit.json()["id"] for invoice in invoices.json()
+    )
 
 
 def test_subscription_usage_announcements_and_revenue_summary(client):
     tenant = create_tenant(client)
     with next(client.app.dependency_overrides[get_session]()) as session:
         subscription = session.exec(
-            select(TenantSubscription).where(TenantSubscription.tenant_id == tenant["id"], TenantSubscription.is_active == True)  # noqa: E712
+            select(TenantSubscription).where(
+                TenantSubscription.tenant_id == tenant["id"],
+                TenantSubscription.is_active == True,  # noqa: E712
+            )  # noqa: E712
         ).first()
         subscription.ends_on = date.today() + timedelta(days=2)
         session.add(subscription)
         session.commit()
 
-    announcements = client.get("/api/v1/subscription-plans/announcements", headers={"X-Tenant-ID": tenant["id"]})
+    announcements = client.get(
+        "/api/v1/subscription-plans/announcements",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
     revenue = client.get("/api/v1/subscription-plans/platform/revenue-summary")
 
     assert announcements.status_code == 200
@@ -289,7 +322,11 @@ def test_subscription_usage_announcements_and_revenue_summary(client):
 
 def test_subscription_invoice_settlement_failure_revenue_report_and_exports(client):
     tenant = create_tenant(client)
-    starter = next(plan for plan in client.get("/api/v1/subscription-plans").json() if plan["key"] == "starter")
+    starter = next(
+        plan
+        for plan in client.get("/api/v1/subscription-plans").json()
+        if plan["key"] == "starter"
+    )
     subscription = client.post(
         "/api/v1/subscription-plans/tenant-subscriptions",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -299,8 +336,12 @@ def test_subscription_invoice_settlement_failure_revenue_report_and_exports(clie
             "billing_amount": 1200,
         },
     )
-    invoices = client.get("/api/v1/subscription-plans/invoices", headers={"X-Tenant-ID": tenant["id"]}).json()
-    invoice = next(row for row in invoices if row["subscription_id"] == subscription.json()["id"])
+    invoices = client.get(
+        "/api/v1/subscription-plans/invoices", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
+    invoice = next(
+        row for row in invoices if row["subscription_id"] == subscription.json()["id"]
+    )
 
     failed = client.post(
         f"/api/v1/subscription-plans/invoices/{invoice['id']}/payment-failed",
@@ -310,11 +351,25 @@ def test_subscription_invoice_settlement_failure_revenue_report_and_exports(clie
     settled = client.post(
         f"/api/v1/subscription-plans/invoices/{invoice['id']}/settle",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"amount": 1200, "payment_method": "upi", "payment_reference": "UPI123", "gateway_transaction_id": "gw_002"},
+        json={
+            "amount": 1200,
+            "payment_method": "upi",
+            "payment_reference": "UPI123",
+            "gateway_transaction_id": "gw_002",
+        },
     )
-    report = client.get("/api/v1/subscription-plans/reports/revenue", headers={"X-Tenant-ID": tenant["id"]})
-    csv_export = client.get("/api/v1/subscription-plans/reports/revenue?export=csv", headers={"X-Tenant-ID": tenant["id"]})
-    pdf_export = client.get("/api/v1/subscription-plans/reports/revenue?export=pdf", headers={"X-Tenant-ID": tenant["id"]})
+    report = client.get(
+        "/api/v1/subscription-plans/reports/revenue",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    csv_export = client.get(
+        "/api/v1/subscription-plans/reports/revenue?export=csv",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    pdf_export = client.get(
+        "/api/v1/subscription-plans/reports/revenue?export=pdf",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
 
     assert failed.status_code == 200
     assert failed.json()["gateway_status"] == "failed"

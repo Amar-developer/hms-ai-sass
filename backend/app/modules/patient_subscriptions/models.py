@@ -51,12 +51,16 @@ class PatientSubscriptionEnrollment(SQLModel, table=True):
     plan_id: str = Field(index=True, foreign_key="patientsubscriptionplan.id")
     starts_on: date = Field(default_factory=date.today)
     ends_on: date
-    status: PatientSubscriptionEnrollmentStatus = Field(default=PatientSubscriptionEnrollmentStatus.ACTIVE, index=True)
+    status: PatientSubscriptionEnrollmentStatus = Field(
+        default=PatientSubscriptionEnrollmentStatus.ACTIVE, index=True
+    )
     used_consultations: int = Field(default=0, ge=0)
     used_free_lab_json: str = Field(default="{}")
     used_free_medicine_json: str = Field(default="{}")
     paid_amount: int = Field(default=0, ge=0)
-    purchase_invoice_id: str | None = Field(default=None, index=True, foreign_key="invoice.id")
+    purchase_invoice_id: str | None = Field(
+        default=None, index=True, foreign_key="invoice.id"
+    )
     created_by_user_id: str | None = Field(default=None, index=True)
     cancelled_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)

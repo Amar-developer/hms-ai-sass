@@ -536,4 +536,3 @@ export function Scheduling({ apiSession, branchId }: any) {
     </Card>
   );
 }
-

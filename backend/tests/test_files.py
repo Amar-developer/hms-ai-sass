@@ -43,7 +43,9 @@ def test_file_upload_list_update_delete_and_audit(client, test_engine):
     assert uploaded["category"] == "clinical"
     assert uploaded["is_private"] is True
 
-    listed = client.get("/api/v1/files?category=clinical&q=patient-photo", headers=headers)
+    listed = client.get(
+        "/api/v1/files?category=clinical&q=patient-photo", headers=headers
+    )
     assert listed.status_code == 200
     assert [row["id"] for row in listed.json()] == [uploaded["id"]]
 
@@ -65,13 +67,20 @@ def test_file_upload_list_update_delete_and_audit(client, test_engine):
     assert listed_after_delete.json() == []
 
     with Session(test_engine) as db:
-        actions = {row.action for row in db.exec(select(AuditEvent).where(AuditEvent.tenant_id == tenant["id"])).all()}
+        actions = {
+            row.action
+            for row in db.exec(
+                select(AuditEvent).where(AuditEvent.tenant_id == tenant["id"])
+            ).all()
+        }
         assert {"file.uploaded", "file.updated", "file.deleted"}.issubset(actions)
 
 
 def test_files_are_tenant_isolated(client):
     tenant, branch = create_file_tenant_and_branch(client)
-    other_tenant = client.post("/api/v1/tenants", json={"name": "Other Files Clinic"}).json()
+    other_tenant = client.post(
+        "/api/v1/tenants", json={"name": "Other Files Clinic"}
+    ).json()
     headers = {"X-Tenant-ID": tenant["id"]}
 
     upload = client.post(
@@ -82,7 +91,9 @@ def test_files_are_tenant_isolated(client):
     )
     assert upload.status_code == 201
 
-    cross_tenant_list = client.get("/api/v1/files", headers={"X-Tenant-ID": other_tenant["id"]})
+    cross_tenant_list = client.get(
+        "/api/v1/files", headers={"X-Tenant-ID": other_tenant["id"]}
+    )
     cross_tenant_update = client.patch(
         f"/api/v1/files/{upload.json()['id']}",
         headers={"X-Tenant-ID": other_tenant["id"]},

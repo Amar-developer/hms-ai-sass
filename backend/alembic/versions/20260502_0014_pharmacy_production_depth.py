@@ -42,19 +42,31 @@ def upgrade() -> None:
             sa.Column("form", sa.String(length=80), nullable=True),
             sa.Column("strength", sa.String(length=80), nullable=True),
             sa.Column("manufacturer", sa.String(length=220), nullable=True),
-            sa.Column("default_sale_price", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("reorder_level", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "default_sale_price", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "reorder_level", sa.Integer(), nullable=False, server_default="0"
+            ),
+            sa.Column(
+                "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("updated_by_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_medicinecatalog_tenant_id", "medicinecatalog", ["tenant_id"])
-        op.create_index("ix_medicinecatalog_branch_id", "medicinecatalog", ["branch_id"])
+        op.create_index(
+            "ix_medicinecatalog_tenant_id", "medicinecatalog", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_medicinecatalog_branch_id", "medicinecatalog", ["branch_id"]
+        )
         op.create_index("ix_medicinecatalog_code", "medicinecatalog", ["code"])
         op.create_index("ix_medicinecatalog_name", "medicinecatalog", ["name"])
-        op.create_index("ix_medicinecatalog_generic_name", "medicinecatalog", ["generic_name"])
+        op.create_index(
+            "ix_medicinecatalog_generic_name", "medicinecatalog", ["generic_name"]
+        )
     if "pharmacysupplier" not in existing:
         op.create_table(
             "pharmacysupplier",
@@ -65,12 +77,16 @@ def upgrade() -> None:
             sa.Column("phone", sa.String(length=40), nullable=True),
             sa.Column("email", sa.String(length=160), nullable=True),
             sa.Column("address", sa.String(length=500), nullable=True),
-            sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
+            sa.Column(
+                "is_active", sa.Boolean(), nullable=False, server_default=sa.true()
+            ),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_pharmacysupplier_tenant_id", "pharmacysupplier", ["tenant_id"])
+        op.create_index(
+            "ix_pharmacysupplier_tenant_id", "pharmacysupplier", ["tenant_id"]
+        )
         op.create_index("ix_pharmacysupplier_name", "pharmacysupplier", ["name"])
     if "pharmacypurchase" not in existing:
         op.create_table(
@@ -85,9 +101,15 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_pharmacypurchase_tenant_id", "pharmacypurchase", ["tenant_id"])
-        op.create_index("ix_pharmacypurchase_branch_id", "pharmacypurchase", ["branch_id"])
-        op.create_index("ix_pharmacypurchase_supplier_id", "pharmacypurchase", ["supplier_id"])
+        op.create_index(
+            "ix_pharmacypurchase_tenant_id", "pharmacypurchase", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_pharmacypurchase_branch_id", "pharmacypurchase", ["branch_id"]
+        )
+        op.create_index(
+            "ix_pharmacypurchase_supplier_id", "pharmacypurchase", ["supplier_id"]
+        )
     if "medicinebatch" not in existing:
         op.create_table(
             "medicinebatch",
@@ -98,7 +120,9 @@ def upgrade() -> None:
             sa.Column("purchase_id", sa.String(), nullable=True),
             sa.Column("batch_number", sa.String(length=120), nullable=False),
             sa.Column("expiry_date", sa.DateTime(), nullable=True),
-            sa.Column("quantity_on_hand", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "quantity_on_hand", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column("cost_price", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("sale_price", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("created_at", sa.DateTime(), nullable=False),
@@ -106,9 +130,15 @@ def upgrade() -> None:
         )
         op.create_index("ix_medicinebatch_tenant_id", "medicinebatch", ["tenant_id"])
         op.create_index("ix_medicinebatch_branch_id", "medicinebatch", ["branch_id"])
-        op.create_index("ix_medicinebatch_medicine_id", "medicinebatch", ["medicine_id"])
-        op.create_index("ix_medicinebatch_batch_number", "medicinebatch", ["batch_number"])
-        op.create_index("ix_medicinebatch_expiry_date", "medicinebatch", ["expiry_date"])
+        op.create_index(
+            "ix_medicinebatch_medicine_id", "medicinebatch", ["medicine_id"]
+        )
+        op.create_index(
+            "ix_medicinebatch_batch_number", "medicinebatch", ["batch_number"]
+        )
+        op.create_index(
+            "ix_medicinebatch_expiry_date", "medicinebatch", ["expiry_date"]
+        )
     if "pharmacypurchaseitem" not in existing:
         op.create_table(
             "pharmacypurchaseitem",
@@ -123,8 +153,14 @@ def upgrade() -> None:
             sa.Column("sale_price", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_pharmacypurchaseitem_tenant_id", "pharmacypurchaseitem", ["tenant_id"])
-        op.create_index("ix_pharmacypurchaseitem_purchase_id", "pharmacypurchaseitem", ["purchase_id"])
+        op.create_index(
+            "ix_pharmacypurchaseitem_tenant_id", "pharmacypurchaseitem", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_pharmacypurchaseitem_purchase_id",
+            "pharmacypurchaseitem",
+            ["purchase_id"],
+        )
     if "pharmacystockledger" not in existing:
         op.create_table(
             "pharmacystockledger",
@@ -141,9 +177,15 @@ def upgrade() -> None:
             sa.Column("actor_user_id", sa.String(), nullable=True),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_pharmacystockledger_tenant_id", "pharmacystockledger", ["tenant_id"])
-        op.create_index("ix_pharmacystockledger_branch_id", "pharmacystockledger", ["branch_id"])
-        op.create_index("ix_pharmacystockledger_medicine_id", "pharmacystockledger", ["medicine_id"])
+        op.create_index(
+            "ix_pharmacystockledger_tenant_id", "pharmacystockledger", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_pharmacystockledger_branch_id", "pharmacystockledger", ["branch_id"]
+        )
+        op.create_index(
+            "ix_pharmacystockledger_medicine_id", "pharmacystockledger", ["medicine_id"]
+        )
     if "pharmacyissueitem" not in existing:
         op.create_table(
             "pharmacyissueitem",
@@ -157,13 +199,25 @@ def upgrade() -> None:
             sa.Column("medicine_name", sa.String(length=220), nullable=False),
             sa.Column("quantity", sa.Integer(), nullable=False),
             sa.Column("unit_price", sa.Integer(), nullable=False, server_default="0"),
-            sa.Column("dispensed_quantity", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "dispensed_quantity", sa.Integer(), nullable=False, server_default="0"
+            ),
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_pharmacyissueitem_tenant_id", "pharmacyissueitem", ["tenant_id"])
-        op.create_index("ix_pharmacyissueitem_pharmacy_issue_id", "pharmacyissueitem", ["pharmacy_issue_id"])
-    _add("pharmacyissue", "billing_invoice_id", sa.Column("billing_invoice_id", sa.String(), nullable=True))
+        op.create_index(
+            "ix_pharmacyissueitem_tenant_id", "pharmacyissueitem", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_pharmacyissueitem_pharmacy_issue_id",
+            "pharmacyissueitem",
+            ["pharmacy_issue_id"],
+        )
+    _add(
+        "pharmacyissue",
+        "billing_invoice_id",
+        sa.Column("billing_invoice_id", sa.String(), nullable=True),
+    )
 
 
 def downgrade() -> None:

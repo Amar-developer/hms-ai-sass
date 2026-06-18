@@ -57,11 +57,15 @@ def _get_consultation_or_404(
 ) -> Consultation:
     consultation = session.get(Consultation, consultation_id)
     if not consultation or consultation.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consultation not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Consultation not found"
+        )
     return consultation
 
 
-def _read_detail(session: Session, consultation: Consultation) -> ConsultationDetailRead:
+def _read_detail(
+    session: Session, consultation: Consultation
+) -> ConsultationDetailRead:
     addendums = list(
         session.exec(
             select(ConsultationAddendum)
@@ -72,27 +76,78 @@ def _read_detail(session: Session, consultation: Consultation) -> ConsultationDe
             .order_by(ConsultationAddendum.created_at)
         ).all()
     )
-    vitals = list(session.exec(select(ConsultationVital).where(ConsultationVital.consultation_id == consultation.id).order_by(ConsultationVital.created_at)).all())
-    complaints = list(session.exec(select(ConsultationComplaint).where(ConsultationComplaint.consultation_id == consultation.id).order_by(ConsultationComplaint.created_at)).all())
-    diagnoses = list(session.exec(select(ConsultationDiagnosis).where(ConsultationDiagnosis.consultation_id == consultation.id).order_by(ConsultationDiagnosis.created_at)).all())
-    medicines = list(session.exec(select(ConsultationMedicine).where(ConsultationMedicine.consultation_id == consultation.id).order_by(ConsultationMedicine.created_at)).all())
-    referrals = list(session.exec(select(ConsultationReferral).where(ConsultationReferral.consultation_id == consultation.id).order_by(ConsultationReferral.created_at)).all())
+    vitals = list(
+        session.exec(
+            select(ConsultationVital)
+            .where(ConsultationVital.consultation_id == consultation.id)
+            .order_by(ConsultationVital.created_at)
+        ).all()
+    )
+    complaints = list(
+        session.exec(
+            select(ConsultationComplaint)
+            .where(ConsultationComplaint.consultation_id == consultation.id)
+            .order_by(ConsultationComplaint.created_at)
+        ).all()
+    )
+    diagnoses = list(
+        session.exec(
+            select(ConsultationDiagnosis)
+            .where(ConsultationDiagnosis.consultation_id == consultation.id)
+            .order_by(ConsultationDiagnosis.created_at)
+        ).all()
+    )
+    medicines = list(
+        session.exec(
+            select(ConsultationMedicine)
+            .where(ConsultationMedicine.consultation_id == consultation.id)
+            .order_by(ConsultationMedicine.created_at)
+        ).all()
+    )
+    referrals = list(
+        session.exec(
+            select(ConsultationReferral)
+            .where(ConsultationReferral.consultation_id == consultation.id)
+            .order_by(ConsultationReferral.created_at)
+        ).all()
+    )
     lab_orders = list(
         session.exec(
             select(LabOrder)
-            .where(LabOrder.tenant_id == consultation.tenant_id, LabOrder.consultation_id == consultation.id)
+            .where(
+                LabOrder.tenant_id == consultation.tenant_id,
+                LabOrder.consultation_id == consultation.id,
+            )
             .order_by(LabOrder.created_at.desc())
         ).all()
     )
     return ConsultationDetailRead(
-        consultation=ConsultationRead.model_validate(consultation, from_attributes=True),
+        consultation=ConsultationRead.model_validate(
+            consultation, from_attributes=True
+        ),
         addendums=[
             ConsultationAddendumRead.model_validate(addendum, from_attributes=True)
             for addendum in addendums
         ],
-        vitals=[{"name": row.name, "value": row.value, "unit": row.unit} for row in vitals],
-        complaints=[{"complaint": row.complaint, "duration": row.duration, "severity": row.severity} for row in complaints],
-        diagnoses=[{"diagnosis": row.diagnosis, "diagnosis_type": row.diagnosis_type, "notes": row.notes} for row in diagnoses],
+        vitals=[
+            {"name": row.name, "value": row.value, "unit": row.unit} for row in vitals
+        ],
+        complaints=[
+            {
+                "complaint": row.complaint,
+                "duration": row.duration,
+                "severity": row.severity,
+            }
+            for row in complaints
+        ],
+        diagnoses=[
+            {
+                "diagnosis": row.diagnosis,
+                "diagnosis_type": row.diagnosis_type,
+                "notes": row.notes,
+            }
+            for row in diagnoses
+        ],
         medicines=[
             {
                 "medicine_name": row.medicine_name,
@@ -127,7 +182,11 @@ def _read_detail(session: Session, consultation: Consultation) -> ConsultationDe
     )
 
 
-def _replace_structured_rows(session: Session, consultation: Consultation, payload: ConsultationCreate | ConsultationUpdate) -> None:
+def _replace_structured_rows(
+    session: Session,
+    consultation: Consultation,
+    payload: ConsultationCreate | ConsultationUpdate,
+) -> None:
     mapping = [
         ("vitals", ConsultationVital),
         ("complaints", ConsultationComplaint),
@@ -141,7 +200,11 @@ def _replace_structured_rows(session: Session, consultation: Consultation, paylo
         rows = getattr(payload, field_name)
         if rows is None:
             continue
-        existing = list(session.exec(select(model).where(model.consultation_id == consultation.id)).all())
+        existing = list(
+            session.exec(
+                select(model).where(model.consultation_id == consultation.id)
+            ).all()
+        )
         for row in existing:
             session.delete(row)
         for row in rows:
@@ -188,12 +251,18 @@ def create_consultation(
     enforce_entitlement(session, tenant_id, "consultations")
     appointment = session.get(Appointment, payload.appointment_id)
     if not appointment or appointment.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid appointment")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid appointment"
+        )
     require_user_branch_access(current_user, appointment.branch_id)
-    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, appointment.practitioner_id
+    )
     patient = session.get(Patient, appointment.patient_id)
     if not patient or patient.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient"
+        )
 
     consultation = Consultation.model_validate(
         payload,
@@ -248,12 +317,16 @@ def list_consultations(
 ) -> list[Consultation]:
     enforce_entitlement(session, tenant_id, "consultations")
     branch_id = scoped_branch_id(current_user, branch_id)
-    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+    doctor_practitioner_id = current_doctor_practitioner_id(
+        session, tenant_id, current_user
+    )
     statement = select(Consultation).where(Consultation.tenant_id == tenant_id)
     if branch_id:
         statement = statement.where(Consultation.branch_id == branch_id)
     if doctor_practitioner_id:
-        statement = statement.where(Consultation.practitioner_id == doctor_practitioner_id)
+        statement = statement.where(
+            Consultation.practitioner_id == doctor_practitioner_id
+        )
     if patient_id:
         statement = statement.where(Consultation.patient_id == patient_id)
     if appointment_id:
@@ -274,11 +347,13 @@ def list_department_clinical_templates(
     enforce_entitlement(session, tenant_id, "consultations")
     rows = list(
         session.exec(
-            select(ClinicalTemplate).where(
+            select(ClinicalTemplate)
+            .where(
                 ClinicalTemplate.tenant_id == tenant_id,
                 ClinicalTemplate.department_id == department_id,
                 ClinicalTemplate.is_active == True,  # noqa: E712
-            ).order_by(ClinicalTemplate.name)
+            )
+            .order_by(ClinicalTemplate.name)
         ).all()
     )
     return [_template_read(row) for row in rows]
@@ -298,7 +373,9 @@ def get_consultation(
     enforce_entitlement(session, tenant_id, "consultations")
     consultation = _get_consultation_or_404(session, tenant_id, consultation_id)
     require_user_branch_access(current_user, consultation.branch_id)
-    require_doctor_practitioner_access(session, tenant_id, current_user, consultation.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, consultation.practitioner_id
+    )
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -326,7 +403,9 @@ def update_consultation(
     enforce_entitlement(session, tenant_id, "consultations")
     consultation = _get_consultation_or_404(session, tenant_id, consultation_id)
     require_user_branch_access(current_user, consultation.branch_id)
-    require_doctor_practitioner_access(session, tenant_id, current_user, consultation.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, consultation.practitioner_id
+    )
     if consultation.status == ConsultationStatus.SIGNED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -370,9 +449,13 @@ def sign_consultation(
     enforce_entitlement(session, tenant_id, "consultations")
     consultation = _get_consultation_or_404(session, tenant_id, consultation_id)
     require_user_branch_access(current_user, consultation.branch_id)
-    require_doctor_practitioner_access(session, tenant_id, current_user, consultation.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, consultation.practitioner_id
+    )
     if consultation.status == ConsultationStatus.SIGNED:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Consultation already signed")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Consultation already signed"
+        )
 
     now = datetime.now(timezone.utc)
     consultation.status = ConsultationStatus.SIGNED
@@ -446,7 +529,9 @@ def create_addendum(
     enforce_entitlement(session, tenant_id, "consultations")
     consultation = _get_consultation_or_404(session, tenant_id, consultation_id)
     require_user_branch_access(current_user, consultation.branch_id)
-    require_doctor_practitioner_access(session, tenant_id, current_user, consultation.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, consultation.practitioner_id
+    )
     if consultation.status != ConsultationStatus.SIGNED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -522,7 +607,10 @@ def list_clinical_templates(
     session: Session = Depends(get_session),
 ) -> list[ConsultationTemplateRead]:
     enforce_entitlement(session, tenant_id, "consultations")
-    statement = select(ClinicalTemplate).where(ClinicalTemplate.tenant_id == tenant_id, ClinicalTemplate.is_active == True)  # noqa: E712
+    statement = select(ClinicalTemplate).where(
+        ClinicalTemplate.tenant_id == tenant_id,
+        ClinicalTemplate.is_active == True,  # noqa: E712
+    )  # noqa: E712
     if department_id:
         statement = statement.where(ClinicalTemplate.department_id == department_id)
     rows = list(session.exec(statement.order_by(ClinicalTemplate.name)).all())

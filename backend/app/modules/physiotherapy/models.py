@@ -14,7 +14,9 @@ class PhysiotherapyEquipment(SQLModel, table=True):
     manufacturer: str | None = Field(default=None, max_length=120)
     model_number: str | None = Field(default=None, max_length=120)
     serial_number: str | None = Field(default=None, max_length=120)
-    supplier_id: str | None = Field(default=None, index=True, foreign_key="pharmacysupplier.id")
+    supplier_id: str | None = Field(
+        default=None, index=True, foreign_key="pharmacysupplier.id"
+    )
     mrp_price: int = Field(default=0, ge=0)
     purchase_price: int = Field(default=0, ge=0)
     is_portable: bool = Field(default=False, index=True)
@@ -30,10 +32,16 @@ class PhysiotherapyCase(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
-    source_appointment_id: str | None = Field(default=None, index=True, foreign_key="appointment.id")
-    ip_admission_id: str | None = Field(default=None, index=True, foreign_key="ipadmission.id")
+    source_appointment_id: str | None = Field(
+        default=None, index=True, foreign_key="appointment.id"
+    )
+    ip_admission_id: str | None = Field(
+        default=None, index=True, foreign_key="ipadmission.id"
+    )
     physiotherapist_id: str | None = Field(default=None, index=True)
-    department_id: str | None = Field(default=None, index=True, foreign_key="department.id")
+    department_id: str | None = Field(
+        default=None, index=True, foreign_key="department.id"
+    )
     care_context: str = Field(default="op", index=True, max_length=20)
     case_number: str = Field(index=True, min_length=3, max_length=60)
     assessment_date: date = Field(default_factory=date.today, index=True)
@@ -65,7 +73,9 @@ class PhysiotherapySession(SQLModel, table=True):
     physiotherapist_id: str | None = Field(default=None, index=True)
     session_date: date = Field(default_factory=date.today, index=True)
     session_number: int = Field(default=1, ge=1)
-    equipment_id: str | None = Field(default=None, index=True, foreign_key="physiotherapyequipment.id")
+    equipment_id: str | None = Field(
+        default=None, index=True, foreign_key="physiotherapyequipment.id"
+    )
     modality_type: str = Field(index=True, max_length=80)
     treatment_area: str | None = Field(default=None, max_length=160)
     intensity: str | None = Field(default=None, max_length=120)

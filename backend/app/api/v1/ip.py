@@ -1,10 +1,23 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlmodel import Session, delete, select
 
-from app.core.access_control import require_branch_in_tenant, require_user_branch_access, scoped_branch_id
+from app.core.access_control import (
+    require_branch_in_tenant,
+    require_user_branch_access,
+    scoped_branch_id,
+)
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
@@ -84,21 +97,32 @@ def _assert_ip_enabled(session: Session, tenant_id: str) -> None:
     enforce_module_enabled(session, tenant_id, "ip")
 
 
-def _next_admission_number(session: Session, tenant_id: str, branch_id: str | None = None) -> str:
-    return next_document_number(session, tenant_id=tenant_id, branch_id=branch_id, entity="ip_admission")
+def _next_admission_number(
+    session: Session, tenant_id: str, branch_id: str | None = None
+) -> str:
+    return next_document_number(
+        session, tenant_id=tenant_id, branch_id=branch_id, entity="ip_admission"
+    )
 
 
-def _get_admission(session: Session, tenant_id: str, admission_id: str, current_user: User) -> IPAdmission:
+def _get_admission(
+    session: Session, tenant_id: str, admission_id: str, current_user: User
+) -> IPAdmission:
     admission = session.get(IPAdmission, admission_id)
     if not admission or admission.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IP admission not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="IP admission not found"
+        )
     require_user_branch_access(current_user, admission.branch_id)
     return admission
 
 
 def _ensure_admission_open(admission: IPAdmission) -> None:
     if admission.status in {"discharged", "cancelled"}:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="IP admission is closed; no more clinical or billing changes are allowed")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="IP admission is closed; no more clinical or billing changes are allowed",
+        )
 
 
 def _active_admission_statuses() -> set[str]:
@@ -107,21 +131,33 @@ def _active_admission_statuses() -> set[str]:
 
 def _chargeable_days(start_date: date, end_date: date) -> int:
     if end_date < start_date:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Discharge date cannot be before admission date")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Discharge date cannot be before admission date",
+        )
     return max((end_date - start_date).days + 1, 1)
 
 
 def _latest_discharge_date(session: Session, admission: IPAdmission) -> date | None:
     summary = session.exec(
         select(IPDischargeSummary)
-        .where(IPDischargeSummary.tenant_id == admission.tenant_id, IPDischargeSummary.admission_id == admission.id)
-        .order_by(IPDischargeSummary.updated_at.desc(), IPDischargeSummary.created_at.desc())
+        .where(
+            IPDischargeSummary.tenant_id == admission.tenant_id,
+            IPDischargeSummary.admission_id == admission.id,
+        )
+        .order_by(
+            IPDischargeSummary.updated_at.desc(), IPDischargeSummary.created_at.desc()
+        )
     ).first()
     return summary.discharge_date if summary else None
 
 
 def _admission_end_date(session: Session, admission: IPAdmission) -> date:
-    return _latest_discharge_date(session, admission) or admission.expected_discharge_date or date.today()
+    return (
+        _latest_discharge_date(session, admission)
+        or admission.expected_discharge_date
+        or date.today()
+    )
 
 
 def _ranges_overlap(start: date, end: date, other_start: date, other_end: date) -> bool:
@@ -188,8 +224,16 @@ def _resolve_room_for_admission(
     if not payload.room_id:
         return None, {}
     room = session.get(IPRoom, payload.room_id)
-    if not room or room.tenant_id != tenant_id or room.branch_id != branch_id or not room.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or inactive IP room")
+    if (
+        not room
+        or room.tenant_id != tenant_id
+        or room.branch_id != branch_id
+        or not room.is_active
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or inactive IP room",
+        )
     end_date = expected_discharge_date or admission_date
     occupant = _room_occupant(
         session,
@@ -200,21 +244,33 @@ def _resolve_room_for_admission(
         exclude_admission_id=exclude_admission_id,
     )
     if occupant:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Selected room/bed is not available for this date range")
-    return room, {"ward": room.ward_name, "room": room.room_number, "bed": room.bed_number}
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Selected room/bed is not available for this date range",
+        )
+    return room, {
+        "ward": room.ward_name,
+        "room": room.room_number,
+        "bed": room.bed_number,
+    }
 
 
 def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
     items = list(
         session.exec(
             select(InvoiceItem)
-            .where(InvoiceItem.tenant_id == invoice.tenant_id, InvoiceItem.invoice_id == invoice.id)
+            .where(
+                InvoiceItem.tenant_id == invoice.tenant_id,
+                InvoiceItem.invoice_id == invoice.id,
+            )
             .order_by(InvoiceItem.created_at)
         ).all()
     )
     return InvoiceDetailRead(
         invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
-        items=[InvoiceItemRead.model_validate(item, from_attributes=True) for item in items],
+        items=[
+            InvoiceItemRead.model_validate(item, from_attributes=True) for item in items
+        ],
         payments=[],
     )
 
@@ -261,16 +317,28 @@ def _catalog_key(value: str | None) -> str:
     return "".join(ch for ch in (value or "").lower() if ch.isalnum())
 
 
-def _medicine_catalog_price(session: Session, tenant_id: str, medicine_name: str) -> int:
+def _medicine_catalog_price(
+    session: Session, tenant_id: str, medicine_name: str
+) -> int:
     from app.modules.pharmacy.models import MedicineCatalog
 
     requested = _catalog_key(medicine_name)
     if not requested:
         return 0
-    medicines = list(session.exec(select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id)).all())
+    medicines = list(
+        session.exec(
+            select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id)
+        ).all()
+    )
     for medicine in medicines:
-        keys = [_catalog_key(medicine.name), _catalog_key(medicine.code), _catalog_key(medicine.generic_name)]
-        if requested in keys or any(requested and (requested in key or key in requested) for key in keys):
+        keys = [
+            _catalog_key(medicine.name),
+            _catalog_key(medicine.code),
+            _catalog_key(medicine.generic_name),
+        ]
+        if requested in keys or any(
+            requested and (requested in key or key in requested) for key in keys
+        ):
             return int(medicine.default_sale_price or 0)
     return 0
 
@@ -281,23 +349,36 @@ def _lab_catalog_price(session: Session, tenant_id: str, test_name: str) -> int:
     requested = _catalog_key(test_name)
     if not requested:
         return 0
-    tests = list(session.exec(select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id)).all())
+    tests = list(
+        session.exec(
+            select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id)
+        ).all()
+    )
     for test in tests:
         keys = [_catalog_key(test.name), _catalog_key(test.code)]
-        if requested in keys or any(requested and (requested in key or key in requested) for key in keys):
+        if requested in keys or any(
+            requested and (requested in key or key in requested) for key in keys
+        ):
             return int(test.default_price or 0)
     return 0
 
 
-def _ip_care_invoice_items(session: Session, admission: IPAdmission, billing_items: list[IPBillingItem]) -> list[dict[str, int | str]]:
-    existing_sources = {(item.source_type, item.source_id) for item in billing_items if item.source_id}
+def _ip_care_invoice_items(
+    session: Session, admission: IPAdmission, billing_items: list[IPBillingItem]
+) -> list[dict[str, int | str]]:
+    existing_sources = {
+        (item.source_type, item.source_id) for item in billing_items if item.source_id
+    }
     existing_descriptions = {item.description for item in billing_items}
     rows: list[dict[str, int | str]] = []
 
     administrations = list(
         session.exec(
             select(IPMedicationAdministration, IPMedicationOrder)
-            .join(IPMedicationOrder, IPMedicationAdministration.medication_order_id == IPMedicationOrder.id)
+            .join(
+                IPMedicationOrder,
+                IPMedicationAdministration.medication_order_id == IPMedicationOrder.id,
+            )
             .where(
                 IPMedicationAdministration.tenant_id == admission.tenant_id,
                 IPMedicationAdministration.admission_id == admission.id,
@@ -307,9 +388,14 @@ def _ip_care_invoice_items(session: Session, admission: IPAdmission, billing_ite
         ).all()
     )
     for administration, order in administrations:
-        if administration.billing_item_id or ("medication_administration", administration.id) in existing_sources:
+        if (
+            administration.billing_item_id
+            or ("medication_administration", administration.id) in existing_sources
+        ):
             continue
-        unit_amount = int(order.unit_amount or 0) or _medicine_catalog_price(session, admission.tenant_id, order.medicine_name)
+        unit_amount = int(order.unit_amount or 0) or _medicine_catalog_price(
+            session, admission.tenant_id, order.medicine_name
+        )
         if unit_amount <= 0:
             continue
         description = f"Medicine given - {order.medicine_name}{f' {order.dosage}' if order.dosage else ''}"
@@ -326,7 +412,10 @@ def _ip_care_invoice_items(session: Session, admission: IPAdmission, billing_ite
     treatments = list(
         session.exec(
             select(IPTreatment)
-            .where(IPTreatment.tenant_id == admission.tenant_id, IPTreatment.admission_id == admission.id)
+            .where(
+                IPTreatment.tenant_id == admission.tenant_id,
+                IPTreatment.admission_id == admission.id,
+            )
             .order_by(IPTreatment.treatment_date, IPTreatment.created_at)
         ).all()
     )
@@ -342,13 +431,15 @@ def _ip_care_invoice_items(session: Session, admission: IPAdmission, billing_ite
             amount_text = parts[4] if len(parts) > 4 else ""
             if not item_name:
                 continue
-            normalized_type = "scan_referral" if source_type == "scan" else "lab_referral"
+            normalized_type = (
+                "scan_referral" if source_type == "scan" else "lab_referral"
+            )
             description = f"{source_type.upper()} - {item_name}{f' ({priority})' if priority else ''}{f' - {instructions}' if instructions else ''}"
             if description in existing_descriptions:
                 continue
-            amount = int("".join(ch for ch in amount_text if ch.isdigit()) or 0) or _lab_catalog_price(
-                session, admission.tenant_id, item_name
-            )
+            amount = int(
+                "".join(ch for ch in amount_text if ch.isdigit()) or 0
+            ) or _lab_catalog_price(session, admission.tenant_id, item_name)
             if amount <= 0:
                 continue
             rows.append(
@@ -368,7 +459,10 @@ def _validate_aadhaar_number(value: str | None) -> str | None:
         return None
     normalized = "".join(ch for ch in value if ch.isdigit())
     if len(normalized) != 12:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Aadhaar number must be exactly 12 digits")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aadhaar number must be exactly 12 digits",
+        )
     return normalized
 
 
@@ -391,15 +485,30 @@ def create_room(
         )
     ).first()
     if duplicate:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Room and bed already exists")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Room and bed already exists"
+        )
     room = IPRoom.model_validate(
         payload,
-        update={"tenant_id": tenant_id, "created_by_user_id": current_user.id, "updated_by_user_id": current_user.id},
+        update={
+            "tenant_id": tenant_id,
+            "created_by_user_id": current_user.id,
+            "updated_by_user_id": current_user.id,
+        },
     )
     session.add(room)
     session.commit()
     session.refresh(room)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=room.branch_id, actor_user_id=current_user.id, action="ip_room.created", resource_type="ip_room", resource_id=room.id, purpose="ip_room_master")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=room.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_room.created",
+        resource_type="ip_room",
+        resource_id=room.id,
+        purpose="ip_room_master",
+    )
     return _room_read(session, room)
 
 
@@ -413,7 +522,9 @@ def list_rooms(
     include_occupied: bool = True,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> list[IPRoomRead]:
     _assert_ip_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
@@ -424,8 +535,15 @@ def list_rooms(
         statement = statement.where(IPRoom.ward_type == ward_type)
     if room_type:
         statement = statement.where(IPRoom.room_type == room_type)
-    rows = session.exec(statement.order_by(IPRoom.ward_name, IPRoom.room_number, IPRoom.bed_number)).all()
-    read_rows = [_room_read(session, row, available_from=available_from, available_to=available_to) for row in rows]
+    rows = session.exec(
+        statement.order_by(IPRoom.ward_name, IPRoom.room_number, IPRoom.bed_number)
+    ).all()
+    read_rows = [
+        _room_read(
+            session, row, available_from=available_from, available_to=available_to
+        )
+        for row in rows
+    ]
     if not include_occupied:
         read_rows = [row for row in read_rows if row.available]
     return read_rows
@@ -442,7 +560,9 @@ def update_room(
     _assert_ip_enabled(session, tenant_id)
     room = session.get(IPRoom, room_id)
     if not room or room.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IP room not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="IP room not found"
+        )
     require_user_branch_access(current_user, room.branch_id)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(room, key, value)
@@ -461,7 +581,9 @@ def list_admissions(
     status_filter: str | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> list[IPAdmission]:
     _assert_ip_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
@@ -472,10 +594,18 @@ def list_admissions(
         statement = statement.where(IPAdmission.patient_id == patient_id)
     if status_filter:
         statement = statement.where(IPAdmission.status == status_filter)
-    return list(session.exec(statement.order_by(IPAdmission.updated_at.desc(), IPAdmission.created_at.desc())).all())
+    return list(
+        session.exec(
+            statement.order_by(
+                IPAdmission.updated_at.desc(), IPAdmission.created_at.desc()
+            )
+        ).all()
+    )
 
 
-@router.post("/admissions", response_model=IPAdmissionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions", response_model=IPAdmissionRead, status_code=status.HTTP_201_CREATED
+)
 def create_admission(
     payload: IPAdmissionCreate,
     tenant_id: str = Depends(require_tenant_id),
@@ -487,14 +617,28 @@ def create_admission(
     require_user_branch_access(current_user, payload.branch_id)
     patient = session.get(Patient, payload.patient_id)
     if not patient or patient.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found")
-    appointment = session.get(Appointment, payload.source_appointment_id) if payload.source_appointment_id else None
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
+        )
+    appointment = (
+        session.get(Appointment, payload.source_appointment_id)
+        if payload.source_appointment_id
+        else None
+    )
     if appointment and appointment.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source appointment not found"
+        )
     admission_date = payload.admission_date or date.today()
     aadhaar_number = _validate_aadhaar_number(payload.aadhaar_number)
-    if payload.expected_discharge_date and payload.expected_discharge_date < admission_date:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Expected discharge date cannot be before admission date")
+    if (
+        payload.expected_discharge_date
+        and payload.expected_discharge_date < admission_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expected discharge date cannot be before admission date",
+        )
     room, room_updates = _resolve_room_for_admission(
         session,
         tenant_id,
@@ -507,7 +651,9 @@ def create_admission(
         payload,
         update={
             "tenant_id": tenant_id,
-            "admission_number": _next_admission_number(session, tenant_id, payload.branch_id),
+            "admission_number": _next_admission_number(
+                session, tenant_id, payload.branch_id
+            ),
             "admission_date": admission_date,
             "aadhaar_number": aadhaar_number,
             "room_id": room.id if room else payload.room_id,
@@ -533,7 +679,11 @@ def create_admission(
     return admission
 
 
-@router.post("/admissions/from-appointment/{appointment_id}", response_model=IPAdmissionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/from-appointment/{appointment_id}",
+    response_model=IPAdmissionRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def convert_op_to_ip(
     appointment_id: str,
     payload: IPAdmissionCreate,
@@ -543,13 +693,16 @@ def convert_op_to_ip(
 ) -> IPAdmission:
     appointment = session.get(Appointment, appointment_id)
     if not appointment or appointment.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
+        )
     payload = payload.model_copy(
         update={
             "branch_id": appointment.branch_id,
             "patient_id": appointment.patient_id,
             "department_id": payload.department_id or appointment.department_id,
-            "admitting_practitioner_id": payload.admitting_practitioner_id or appointment.practitioner_id,
+            "admitting_practitioner_id": payload.admitting_practitioner_id
+            or appointment.practitioner_id,
             "source_appointment_id": appointment.id,
         }
     )
@@ -586,9 +739,17 @@ def update_admission(
     if "aadhaar_number" in updates:
         updates["aadhaar_number"] = _validate_aadhaar_number(updates["aadhaar_number"])
     next_admission_date = admission.admission_date
-    next_expected_discharge_date = updates.get("expected_discharge_date", admission.expected_discharge_date)
-    if next_expected_discharge_date and next_expected_discharge_date < next_admission_date:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Expected discharge date cannot be before admission date")
+    next_expected_discharge_date = updates.get(
+        "expected_discharge_date", admission.expected_discharge_date
+    )
+    if (
+        next_expected_discharge_date
+        and next_expected_discharge_date < next_admission_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Expected discharge date cannot be before admission date",
+        )
     if "room_id" in updates and updates["room_id"]:
         room, room_updates = _resolve_room_for_admission(
             session,
@@ -599,7 +760,9 @@ def update_admission(
             expected_discharge_date=next_expected_discharge_date,
             exclude_admission_id=admission.id,
         )
-        updates.update({"room_id": room.id if room else updates["room_id"], **room_updates})
+        updates.update(
+            {"room_id": room.id if room else updates["room_id"], **room_updates}
+        )
     for key, value in updates.items():
         setattr(admission, key, value)
     admission.updated_by_user_id = current_user.id
@@ -630,7 +793,9 @@ async def upload_admission_document(
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     _ensure_admission_open(admission)
-    saved_filename, url_path = await save_upload(file, f"ip_admission_{admission_id[:12]}")
+    saved_filename, url_path = await save_upload(
+        file, f"ip_admission_{admission_id[:12]}"
+    )
     admission.admission_document_url = url_path
     admission.admission_document_name = file.filename or saved_filename
     admission.admission_document_uploaded_at = now_utc()
@@ -673,7 +838,9 @@ def list_admission_documents(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> list[IPDocument]:
     _assert_ip_enabled(session, tenant_id)
     ensure_upload_schema(session)
@@ -682,7 +849,10 @@ def list_admission_documents(
         return list(
             session.exec(
                 select(IPDocument)
-                .where(IPDocument.tenant_id == tenant_id, IPDocument.admission_id == admission.id)
+                .where(
+                    IPDocument.tenant_id == tenant_id,
+                    IPDocument.admission_id == admission.id,
+                )
                 .order_by(IPDocument.created_at.desc())
             ).all()
         )
@@ -692,7 +862,11 @@ def list_admission_documents(
         return []
 
 
-@router.post("/admissions/{admission_id}/documents", response_model=list[IPDocumentRead], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/documents",
+    response_model=list[IPDocumentRead],
+    status_code=status.HTTP_201_CREATED,
+)
 async def upload_admission_documents(
     admission_id: str,
     document_type: str = Form(default="admission"),
@@ -706,13 +880,21 @@ async def upload_admission_documents(
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     _ensure_admission_open(admission)
     normalized_type = (document_type or "admission").strip().lower()[:80]
-    if normalized_type not in {"admission", "aadhaar", "consent", "discharge", "clinical"}:
+    if normalized_type not in {
+        "admission",
+        "aadhaar",
+        "consent",
+        "discharge",
+        "clinical",
+    }:
         normalized_type = "clinical"
     rows: list[IPDocument] = []
     for file in files:
         if not file.filename:
             continue
-        saved_filename, url_path = await save_upload(file, f"ip_{normalized_type}_{admission_id[:12]}")
+        saved_filename, url_path = await save_upload(
+            file, f"ip_{normalized_type}_{admission_id[:12]}"
+        )
         row = IPDocument(
             tenant_id=tenant_id,
             branch_id=admission.branch_id,
@@ -742,7 +924,9 @@ async def upload_admission_documents(
         )
         rows.append(row)
     if not rows:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload at least one file")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Upload at least one file"
+        )
     session.commit()
     for row in rows:
         session.refresh(row)
@@ -759,7 +943,11 @@ async def upload_admission_documents(
     return rows
 
 
-@router.post("/admissions/{admission_id}/treatments", response_model=IPTreatmentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/treatments",
+    response_model=IPTreatmentRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_treatment(
     admission_id: str,
     payload: IPTreatmentCreate,
@@ -785,23 +973,49 @@ def add_treatment(
     session.add(admission)
     session.commit()
     session.refresh(treatment)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_treatment.created", resource_type="ip_treatment", resource_id=treatment.id, purpose="ip_treatment")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_treatment.created",
+        resource_type="ip_treatment",
+        resource_id=treatment.id,
+        purpose="ip_treatment",
+    )
     return treatment
 
 
-@router.get("/admissions/{admission_id}/treatments", response_model=list[IPTreatmentRead])
+@router.get(
+    "/admissions/{admission_id}/treatments", response_model=list[IPTreatmentRead]
+)
 def list_treatments(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> list[IPTreatment]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
-    return list(session.exec(select(IPTreatment).where(IPTreatment.tenant_id == tenant_id, IPTreatment.admission_id == admission.id).order_by(IPTreatment.created_at.desc())).all())
+    return list(
+        session.exec(
+            select(IPTreatment)
+            .where(
+                IPTreatment.tenant_id == tenant_id,
+                IPTreatment.admission_id == admission.id,
+            )
+            .order_by(IPTreatment.created_at.desc())
+        ).all()
+    )
 
 
-@router.post("/admissions/{admission_id}/consultations", response_model=IPConsultationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/consultations",
+    response_model=IPConsultationRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_ip_consultation(
     admission_id: str,
     payload: IPConsultationCreate,
@@ -826,7 +1040,16 @@ def create_ip_consultation(
     session.add(consultation)
     session.commit()
     session.refresh(consultation)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_consultation.created", resource_type="ip_consultation", resource_id=consultation.id, purpose="ip_consultation")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_consultation.created",
+        resource_type="ip_consultation",
+        resource_id=consultation.id,
+        purpose="ip_consultation",
+    )
     return consultation
 
 
@@ -839,8 +1062,12 @@ def sign_ip_consultation(
 ) -> IPConsultation:
     consultation = session.get(IPConsultation, consultation_id)
     if not consultation or consultation.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="IP consultation not found")
-    admission = _get_admission(session, tenant_id, consultation.admission_id, current_user)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="IP consultation not found"
+        )
+    admission = _get_admission(
+        session, tenant_id, consultation.admission_id, current_user
+    )
     _ensure_admission_open(admission)
     consultation.status = "signed"
     signed_at = now_utc()
@@ -863,11 +1090,24 @@ def sign_ip_consultation(
     session.add(consultation)
     session.commit()
     session.refresh(consultation)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=consultation.branch_id, actor_user_id=current_user.id, action="ip_consultation.signed", resource_type="ip_consultation", resource_id=consultation.id, purpose="ip_consultation")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=consultation.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_consultation.signed",
+        resource_type="ip_consultation",
+        resource_id=consultation.id,
+        purpose="ip_consultation",
+    )
     return consultation
 
 
-@router.post("/admissions/{admission_id}/consents", response_model=IPConsentFormRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/consents",
+    response_model=IPConsentFormRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_consent(
     admission_id: str,
     payload: IPConsentFormCreate,
@@ -891,7 +1131,16 @@ def create_consent(
     session.add(consent)
     session.commit()
     session.refresh(consent)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_consent.created", resource_type="ip_consent", resource_id=consent.id, purpose="patient_consent")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_consent.created",
+        resource_type="ip_consent",
+        resource_id=consent.id,
+        purpose="patient_consent",
+    )
     return consent
 
 
@@ -904,7 +1153,9 @@ def sign_consent(
 ) -> IPConsentForm:
     consent = session.get(IPConsentForm, consent_id)
     if not consent or consent.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Consent not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Consent not found"
+        )
     admission = _get_admission(session, tenant_id, consent.admission_id, current_user)
     _ensure_admission_open(admission)
     consent.status = "signed"
@@ -915,11 +1166,24 @@ def sign_consent(
     session.add(consent)
     session.commit()
     session.refresh(consent)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=consent.branch_id, actor_user_id=current_user.id, action="ip_consent.signed", resource_type="ip_consent", resource_id=consent.id, purpose="patient_consent")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=consent.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_consent.signed",
+        resource_type="ip_consent",
+        resource_id=consent.id,
+        purpose="patient_consent",
+    )
     return consent
 
 
-@router.post("/admissions/{admission_id}/discharge-summary", response_model=IPDischargeSummaryRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/discharge-summary",
+    response_model=IPDischargeSummaryRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_discharge_summary(
     admission_id: str,
     payload: IPDischargeSummaryCreate,
@@ -948,11 +1212,22 @@ def create_discharge_summary(
     session.add(admission)
     session.commit()
     session.refresh(summary)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_discharge_summary.created", resource_type="ip_discharge_summary", resource_id=summary.id, purpose="ip_discharge")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_discharge_summary.created",
+        resource_type="ip_discharge_summary",
+        resource_id=summary.id,
+        purpose="ip_discharge",
+    )
     return summary
 
 
-@router.post("/discharge-summaries/{summary_id}/finalize", response_model=IPDischargeSummaryRead)
+@router.post(
+    "/discharge-summaries/{summary_id}/finalize", response_model=IPDischargeSummaryRead
+)
 def finalize_discharge_summary(
     summary_id: str,
     tenant_id: str = Depends(require_tenant_id),
@@ -961,12 +1236,21 @@ def finalize_discharge_summary(
 ) -> IPDischargeSummary:
     summary = session.get(IPDischargeSummary, summary_id)
     if not summary or summary.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discharge summary not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Discharge summary not found"
+        )
     admission = _get_admission(session, tenant_id, summary.admission_id, current_user)
     _ensure_admission_open(admission)
-    invoice = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id)).first()
+    invoice = session.exec(
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id
+        )
+    ).first()
     if not invoice:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Generate IP invoice before finalizing discharge")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Generate IP invoice before finalizing discharge",
+        )
     summary.status = "finalized"
     finalized_at = now_utc()
     summary.finalized_at = finalized_at
@@ -978,11 +1262,24 @@ def finalize_discharge_summary(
     session.add(admission)
     session.commit()
     session.refresh(summary)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=summary.branch_id, actor_user_id=current_user.id, action="ip_discharge_summary.finalized", resource_type="ip_discharge_summary", resource_id=summary.id, purpose="ip_discharge")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=summary.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_discharge_summary.finalized",
+        resource_type="ip_discharge_summary",
+        resource_id=summary.id,
+        purpose="ip_discharge",
+    )
     return summary
 
 
-@router.post("/admissions/{admission_id}/charges", response_model=IPChargeRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/charges",
+    response_model=IPChargeRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_charge(
     admission_id: str,
     payload: IPChargeCreate,
@@ -1006,7 +1303,16 @@ def add_charge(
     session.add(charge)
     session.commit()
     session.refresh(charge)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_charge.created", resource_type="ip_charge", resource_id=charge.id, purpose="ip_billing")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_charge.created",
+        resource_type="ip_charge",
+        resource_id=charge.id,
+        purpose="ip_billing",
+    )
     return charge
 
 
@@ -1015,14 +1321,28 @@ def list_charges(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> list[IPCharge]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
-    return list(session.exec(select(IPCharge).where(IPCharge.tenant_id == tenant_id, IPCharge.admission_id == admission.id).order_by(IPCharge.created_at)).all())
+    return list(
+        session.exec(
+            select(IPCharge)
+            .where(
+                IPCharge.tenant_id == tenant_id, IPCharge.admission_id == admission.id
+            )
+            .order_by(IPCharge.created_at)
+        ).all()
+    )
 
 
-@router.post("/admissions/{admission_id}/billing-items", response_model=IPBillingItemRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/billing-items",
+    response_model=IPBillingItemRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_billing_item(
     admission_id: str,
     payload: IPBillingItemCreate,
@@ -1047,29 +1367,49 @@ def add_billing_item(
     session.add(item)
     session.commit()
     session.refresh(item)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_billing_item.created", resource_type="ip_billing_item", resource_id=item.id, purpose="ip_billing")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_billing_item.created",
+        resource_type="ip_billing_item",
+        resource_id=item.id,
+        purpose="ip_billing",
+    )
     return item
 
 
-@router.get("/admissions/{admission_id}/billing-items", response_model=list[IPBillingItemRead])
+@router.get(
+    "/admissions/{admission_id}/billing-items", response_model=list[IPBillingItemRead]
+)
 def list_billing_items(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> list[IPBillingItem]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     return list(
         session.exec(
             select(IPBillingItem)
-            .where(IPBillingItem.tenant_id == tenant_id, IPBillingItem.admission_id == admission.id)
+            .where(
+                IPBillingItem.tenant_id == tenant_id,
+                IPBillingItem.admission_id == admission.id,
+            )
             .order_by(IPBillingItem.created_at)
         ).all()
     )
 
 
-@router.post("/admissions/{admission_id}/medication-orders", response_model=IPMedicationOrderRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/medication-orders",
+    response_model=IPMedicationOrderRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_medication_order(
     admission_id: str,
     payload: IPMedicationOrderCreate,
@@ -1093,29 +1433,50 @@ def create_medication_order(
     session.add(order)
     session.commit()
     session.refresh(order)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_medication_order.created", resource_type="ip_medication_order", resource_id=order.id, purpose="ip_medication")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_medication_order.created",
+        resource_type="ip_medication_order",
+        resource_id=order.id,
+        purpose="ip_medication",
+    )
     return order
 
 
-@router.get("/admissions/{admission_id}/medication-orders", response_model=list[IPMedicationOrderRead])
+@router.get(
+    "/admissions/{admission_id}/medication-orders",
+    response_model=list[IPMedicationOrderRead],
+)
 def list_medication_orders(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> list[IPMedicationOrder]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     return list(
         session.exec(
             select(IPMedicationOrder)
-            .where(IPMedicationOrder.tenant_id == tenant_id, IPMedicationOrder.admission_id == admission.id)
+            .where(
+                IPMedicationOrder.tenant_id == tenant_id,
+                IPMedicationOrder.admission_id == admission.id,
+            )
             .order_by(IPMedicationOrder.created_at.desc())
         ).all()
     )
 
 
-@router.post("/admissions/{admission_id}/medication-orders/{order_id}/administrations", response_model=IPMedicationAdministrationRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/medication-orders/{order_id}/administrations",
+    response_model=IPMedicationAdministrationRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def administer_medication(
     admission_id: str,
     order_id: str,
@@ -1129,7 +1490,9 @@ def administer_medication(
     _ensure_admission_open(admission)
     order = session.get(IPMedicationOrder, order_id)
     if not order or order.tenant_id != tenant_id or order.admission_id != admission.id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medication order not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Medication order not found"
+        )
     administration = IPMedicationAdministration.model_validate(
         payload,
         update={
@@ -1157,23 +1520,40 @@ def administer_medication(
     session.add(administration)
     session.commit()
     session.refresh(administration)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_medication_administration.created", resource_type="ip_medication_administration", resource_id=administration.id, purpose="ip_medication")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_medication_administration.created",
+        resource_type="ip_medication_administration",
+        resource_id=administration.id,
+        purpose="ip_medication",
+    )
     return administration
 
 
-@router.get("/admissions/{admission_id}/medication-administrations", response_model=list[IPMedicationAdministrationRead])
+@router.get(
+    "/admissions/{admission_id}/medication-administrations",
+    response_model=list[IPMedicationAdministrationRead],
+)
 def list_medication_administrations(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> list[IPMedicationAdministration]:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     return list(
         session.exec(
             select(IPMedicationAdministration)
-            .where(IPMedicationAdministration.tenant_id == tenant_id, IPMedicationAdministration.admission_id == admission.id)
+            .where(
+                IPMedicationAdministration.tenant_id == tenant_id,
+                IPMedicationAdministration.admission_id == admission.id,
+            )
             .order_by(IPMedicationAdministration.administered_at.desc())
         ).all()
     )
@@ -1188,13 +1568,24 @@ def get_ip_invoice(
 ) -> InvoiceDetailRead:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
-    invoice = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id)).first()
+    invoice = session.exec(
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id
+        )
+    ).first()
     if not invoice:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No invoice found for this admission")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No invoice found for this admission",
+        )
     return _invoice_detail(session, invoice)
 
 
-@router.post("/admissions/{admission_id}/invoice", response_model=InvoiceDetailRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admissions/{admission_id}/invoice",
+    response_model=InvoiceDetailRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def generate_ip_invoice(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
@@ -1204,7 +1595,13 @@ def generate_ip_invoice(
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     _ensure_admission_open(admission)
-    charges = list(session.exec(select(IPCharge).where(IPCharge.tenant_id == tenant_id, IPCharge.admission_id == admission.id)).all())
+    charges = list(
+        session.exec(
+            select(IPCharge).where(
+                IPCharge.tenant_id == tenant_id, IPCharge.admission_id == admission.id
+            )
+        ).all()
+    )
     billing_items = list(
         session.exec(
             select(IPBillingItem).where(
@@ -1243,7 +1640,11 @@ def generate_ip_invoice(
                 )
             ).all()
         )
-    existing = session.exec(select(Invoice).where(Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id)).first()
+    existing = session.exec(
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id
+        )
+    ).first()
     room_charge: tuple[str, int, int, int] | None = None
     if admission.room_id:
         room = session.get(IPRoom, admission.room_id)
@@ -1262,7 +1663,10 @@ def generate_ip_invoice(
         + (room_charge[3] if room_charge else 0)
     )
     if subtotal <= 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Add at least one IP charge, billable clinical event, or assign a chargeable room before generating invoice")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Add at least one IP charge, billable clinical event, or assign a chargeable room before generating invoice",
+        )
     if existing:
         invoice = existing
         invoice.subtotal_amount = subtotal
@@ -1277,7 +1681,11 @@ def generate_ip_invoice(
         else:
             invoice.status = InvoiceStatus.ISSUED
         invoice.updated_at = now_utc()
-        session.exec(delete(InvoiceItem).where(InvoiceItem.tenant_id == tenant_id, InvoiceItem.invoice_id == invoice.id))
+        session.exec(
+            delete(InvoiceItem).where(
+                InvoiceItem.tenant_id == tenant_id, InvoiceItem.invoice_id == invoice.id
+            )
+        )
     else:
         invoice_prefix, _scope, _scope_id = resolve_setting(
             session,
@@ -1292,7 +1700,9 @@ def generate_ip_invoice(
             patient_id=admission.patient_id,
             appointment_id=admission.source_appointment_id,
             ip_admission_id=admission.id,
-            invoice_number=next_invoice_number(session, tenant_id, str(invoice_prefix or "INV"), admission.branch_id),
+            invoice_number=next_invoice_number(
+                session, tenant_id, str(invoice_prefix or "INV"), admission.branch_id
+            ),
             subtotal_amount=subtotal,
             taxable_amount=subtotal,
             total_amount=subtotal,
@@ -1342,7 +1752,17 @@ def generate_ip_invoice(
         )
     session.commit()
     session.refresh(invoice)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_invoice.generated" if not existing else "ip_invoice.refreshed", resource_type="invoice", resource_id=invoice.id, purpose="ip_billing", metadata_json=f'{{"ip_admission_id":"{admission.id}","total_amount":{invoice.total_amount}}}')
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_invoice.generated" if not existing else "ip_invoice.refreshed",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        purpose="ip_billing",
+        metadata_json=f'{{"ip_admission_id":"{admission.id}","total_amount":{invoice.total_amount}}}',
+    )
     return _invoice_detail(session, invoice)
 
 
@@ -1351,14 +1771,27 @@ def discharge_summary_pdf(
     summary_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)),
+    current_user: User = Depends(
+        require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
+    ),
 ) -> Response:
     summary = session.get(IPDischargeSummary, summary_id)
     if not summary or summary.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Discharge summary not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Discharge summary not found"
+        )
     admission = _get_admission(session, tenant_id, summary.admission_id, current_user)
     patient = session.get(Patient, admission.patient_id)
-    record_audit_event(session, tenant_id=tenant_id, branch_id=admission.branch_id, actor_user_id=current_user.id, action="ip_discharge_summary.exported", resource_type="ip_discharge_summary", resource_id=summary.id, purpose="discharge_pdf")
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_discharge_summary.exported",
+        resource_type="ip_discharge_summary",
+        resource_id=summary.id,
+        purpose="discharge_pdf",
+    )
     pdf = _simple_pdf(
         [
             "MedizinHub HMS - Discharge Summary",

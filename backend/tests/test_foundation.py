@@ -83,7 +83,9 @@ def test_subscription_plan_creation_and_duplicate_key_guard(client: TestClient):
     assert duplicate.status_code == 409
     assert duplicate.json()["detail"] == "Subscription plan key already exists"
     assert list_response.status_code == 200
-    created = next(plan for plan in list_response.json() if plan["key"] == "custom_starter")
+    created = next(
+        plan for plan in list_response.json() if plan["key"] == "custom_starter"
+    )
     assert created["monthly_patient_limit"] == 300
 
 
@@ -103,8 +105,12 @@ def test_audit_events_are_tenant_isolated(client: TestClient):
     )
     assert response.status_code == 201
 
-    first_events = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": first["id"]})
-    second_events = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": second["id"]})
+    first_events = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": first["id"]}
+    )
+    second_events = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": second["id"]}
+    )
 
     assert len(first_events.json()) == 2
     assert len(second_events.json()) == 1

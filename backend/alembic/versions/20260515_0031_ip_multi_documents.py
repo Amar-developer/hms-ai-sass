@@ -44,7 +44,9 @@ def upgrade() -> None:
         op.create_index("ix_ipdocument_branch_id", "ipdocument", ["branch_id"])
         op.create_index("ix_ipdocument_admission_id", "ipdocument", ["admission_id"])
         op.create_index("ix_ipdocument_document_type", "ipdocument", ["document_type"])
-        op.create_index("ix_ipdocument_uploaded_by_user_id", "ipdocument", ["uploaded_by_user_id"])
+        op.create_index(
+            "ix_ipdocument_uploaded_by_user_id", "ipdocument", ["uploaded_by_user_id"]
+        )
         op.create_index("ix_ipdocument_created_at", "ipdocument", ["created_at"])
 
 

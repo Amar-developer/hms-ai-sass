@@ -6,7 +6,12 @@ from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.modules.patients.models import Patient
-from app.modules.subscriptions.models import CreditStatus, SubscriptionCredit, SubscriptionPlan, SubscriptionStatus
+from app.modules.subscriptions.models import (
+    CreditStatus,
+    SubscriptionCredit,
+    SubscriptionPlan,
+    SubscriptionStatus,
+)
 from app.modules.subscriptions.models import TenantSubscription
 from app.modules.tenants.models import now_utc
 
@@ -166,7 +171,9 @@ def plan_duration_days(plan_key: str | None) -> int | None:
 def ensure_default_plans(session: Session) -> None:
     now = now_utc()
     for payload in DEFAULT_PLANS:
-        exists = session.exec(select(SubscriptionPlan).where(SubscriptionPlan.key == payload["key"])).first()
+        exists = session.exec(
+            select(SubscriptionPlan).where(SubscriptionPlan.key == payload["key"])
+        ).first()
         if not exists:
             session.add(SubscriptionPlan(**payload, created_at=now, updated_at=now))
         elif not modules_from_json(exists.enabled_modules_json):
@@ -177,9 +184,13 @@ def ensure_default_plans(session: Session) -> None:
     session.commit()
 
 
-def create_default_trial_subscription(session: Session, tenant_id: str) -> TenantSubscription:
+def create_default_trial_subscription(
+    session: Session, tenant_id: str
+) -> TenantSubscription:
     ensure_default_plans(session)
-    trial_plan = session.exec(select(SubscriptionPlan).where(SubscriptionPlan.key == "free_trial")).one()
+    trial_plan = session.exec(
+        select(SubscriptionPlan).where(SubscriptionPlan.key == "free_trial")
+    ).one()
     subscription = TenantSubscription(
         tenant_id=tenant_id,
         plan_id=trial_plan.id,
@@ -235,7 +246,9 @@ def activate_due_subscriptions(session: Session, tenant_id: str) -> None:
         session.commit()
 
 
-def get_active_subscription(session: Session, tenant_id: str) -> tuple[TenantSubscription, SubscriptionPlan]:
+def get_active_subscription(
+    session: Session, tenant_id: str
+) -> tuple[TenantSubscription, SubscriptionPlan]:
     activate_due_subscriptions(session, tenant_id)
     subscription = session.exec(
         select(TenantSubscription)
@@ -250,8 +263,13 @@ def get_active_subscription(session: Session, tenant_id: str) -> tuple[TenantSub
     if not subscription:
         expired = session.exec(
             select(TenantSubscription)
-            .where(TenantSubscription.tenant_id == tenant_id, TenantSubscription.status == SubscriptionStatus.EXPIRED)
-            .order_by(TenantSubscription.ends_on.desc(), TenantSubscription.updated_at.desc())
+            .where(
+                TenantSubscription.tenant_id == tenant_id,
+                TenantSubscription.status == SubscriptionStatus.EXPIRED,
+            )
+            .order_by(
+                TenantSubscription.ends_on.desc(), TenantSubscription.updated_at.desc()
+            )
         ).first()
         if expired:
             raise HTTPException(
@@ -277,7 +295,9 @@ def get_active_subscription(session: Session, tenant_id: str) -> tuple[TenantSub
 
 
 def current_patient_count(session: Session, tenant_id: str) -> int:
-    return len(session.exec(select(Patient.id).where(Patient.tenant_id == tenant_id)).all())
+    return len(
+        session.exec(select(Patient.id).where(Patient.tenant_id == tenant_id)).all()
+    )
 
 
 def active_patient_credits(session: Session, tenant_id: str) -> int:
@@ -290,10 +310,16 @@ def active_patient_credits(session: Session, tenant_id: str) -> int:
             SubscriptionCredit.starts_on <= today,
         )
     ).all()
-    return sum(max(row.quantity - row.used_quantity, 0) for row in rows if not row.expires_on or row.expires_on >= today)
+    return sum(
+        max(row.quantity - row.used_quantity, 0)
+        for row in rows
+        if not row.expires_on or row.expires_on >= today
+    )
 
 
-def effective_patient_limit(session: Session, tenant_id: str, plan: SubscriptionPlan) -> int:
+def effective_patient_limit(
+    session: Session, tenant_id: str, plan: SubscriptionPlan
+) -> int:
     return plan.monthly_patient_limit + active_patient_credits(session, tenant_id)
 
 
@@ -321,9 +347,10 @@ def enforce_module_enabled(
     module_key: str,
     current_user=None,
 ) -> None:
-
     # Platform and tenant admins are not blocked by module entitlements.
-    if current_user and (current_user.is_super_admin or current_user.user_type == "tenant_admin"):
+    if current_user and (
+        current_user.is_super_admin or current_user.user_type == "tenant_admin"
+    ):
         return
 
     _subscription, plan = get_active_subscription(session, tenant_id)

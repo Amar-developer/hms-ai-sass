@@ -40,7 +40,14 @@ def seed_home_care_tenant(test_engine):
         session.refresh(patient)
         session.refresh(plan)
 
-        session.add(TenantSubscription(tenant_id=tenant.id, plan_id=plan.id, starts_on=date.today(), is_active=True))
+        session.add(
+            TenantSubscription(
+                tenant_id=tenant.id,
+                plan_id=plan.id,
+                starts_on=date.today(),
+                is_active=True,
+            )
+        )
         session.commit()
         return tenant.id, branch.id, patient.id
 
@@ -71,7 +78,9 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     assert service_update.status_code == 200
     assert service_update.json()["default_price"] == 1500
 
-    services = client.get(f"/api/v1/home-care/services?branch_id={branch_id}", headers=headers)
+    services = client.get(
+        f"/api/v1/home-care/services?branch_id={branch_id}", headers=headers
+    )
     assert services.status_code == 200
     assert [row["id"] for row in services.json()] == [service_body["id"]]
 
@@ -102,7 +111,9 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
         json={
             "status": "Scheduled",
             "notes": "Start tomorrow morning",
-            "services": [{"service_id": service_body["id"], "quantity": 1, "unit_amount": 1400}],
+            "services": [
+                {"service_id": service_body["id"], "quantity": 1, "unit_amount": 1400}
+            ],
         },
     )
     assert booking_update.status_code == 200
@@ -136,7 +147,9 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     )
     assert locked_update.status_code == 409
 
-    fetched_invoice = client.get(f"/api/v1/home-care/bookings/{booking_body['id']}/invoice", headers=headers)
+    fetched_invoice = client.get(
+        f"/api/v1/home-care/bookings/{booking_body['id']}/invoice", headers=headers
+    )
     assert fetched_invoice.status_code == 200
     assert fetched_invoice.json()["invoice"]["id"] == invoice_body["invoice"]["id"]
 
@@ -147,14 +160,21 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     )
     assert payment.status_code == 201
 
-    paid_invoice = client.get(f"/api/v1/home-care/bookings/{booking_body['id']}/invoice", headers=headers)
+    paid_invoice = client.get(
+        f"/api/v1/home-care/bookings/{booking_body['id']}/invoice", headers=headers
+    )
     assert paid_invoice.status_code == 200
     assert paid_invoice.json()["invoice"]["balance_amount"] == 0
 
     with Session(test_engine) as db:
         booking_row = db.get(HomeCareBooking, booking_body["id"])
         invoice_row = db.get(Invoice, invoice_body["invoice"]["id"])
-        actions = {row.action for row in db.exec(select(AuditEvent).where(AuditEvent.tenant_id == tenant_id)).all()}
+        actions = {
+            row.action
+            for row in db.exec(
+                select(AuditEvent).where(AuditEvent.tenant_id == tenant_id)
+            ).all()
+        }
         assert booking_row.status == "paid"
         assert invoice_row.home_care_booking_id == booking_body["id"]
         assert "home_care_service.created" in actions
@@ -172,7 +192,9 @@ def test_home_care_service_soft_delete_hides_from_list(client, test_engine):
         json={"branch_id": branch_id, "name": "Attender Visit", "default_price": 800},
     ).json()
 
-    deleted = client.delete(f"/api/v1/home-care/services/{service['id']}", headers=headers)
+    deleted = client.delete(
+        f"/api/v1/home-care/services/{service['id']}", headers=headers
+    )
     listed = client.get("/api/v1/home-care/services", headers=headers)
 
     assert deleted.status_code == 200

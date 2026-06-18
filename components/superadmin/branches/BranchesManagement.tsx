@@ -93,7 +93,7 @@ export function BranchesManagement({
             return (
               <div
                 key={branch.id}
-                className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr] 
+                className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.1fr_.7fr_1.3fr_.7fr_.8fr_1.2fr]
                 lg:grid-cols-[1.1fr_.8fr_1.2fr_.5fr_.8fr_1.2fr] md:items-center"
               >
                 <div>

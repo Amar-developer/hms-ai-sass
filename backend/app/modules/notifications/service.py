@@ -2,7 +2,11 @@ from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.modules.audit.service import record_audit_event
-from app.modules.notifications.models import NotificationEvent, NotificationEventType, NotificationProvider
+from app.modules.notifications.models import (
+    NotificationEvent,
+    NotificationEventType,
+    NotificationProvider,
+)
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
 from app.modules.subscriptions.service import enforce_module_enabled

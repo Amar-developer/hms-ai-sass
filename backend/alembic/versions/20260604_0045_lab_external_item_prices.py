@@ -55,14 +55,57 @@ def _drop_index(table_name: str, index_name: str) -> None:
 
 def upgrade() -> None:
     for table_name in ("laborderitem", "invoiceitem"):
-        _add(table_name, "mrp_price" if table_name == "laborderitem" else "mrp_amount", sa.Column("mrp_price" if table_name == "laborderitem" else "mrp_amount", sa.Integer(), nullable=False, server_default="0"))
-        _add(table_name, "selling_price" if table_name == "laborderitem" else "selling_amount", sa.Column("selling_price" if table_name == "laborderitem" else "selling_amount", sa.Integer(), nullable=False, server_default="0"))
-        _add(table_name, "buying_price" if table_name == "laborderitem" else "buying_amount", sa.Column("buying_price" if table_name == "laborderitem" else "buying_amount", sa.Integer(), nullable=False, server_default="0"))
-        _add(table_name, "supplier_id", sa.Column("supplier_id", sa.String(), nullable=True))
-        _add(table_name, "external_source", sa.Column("external_source", sa.String(length=80), nullable=True))
-        _add(table_name, "external_item_code", sa.Column("external_item_code", sa.String(length=220), nullable=True))
+        _add(
+            table_name,
+            "mrp_price" if table_name == "laborderitem" else "mrp_amount",
+            sa.Column(
+                "mrp_price" if table_name == "laborderitem" else "mrp_amount",
+                sa.Integer(),
+                nullable=False,
+                server_default="0",
+            ),
+        )
+        _add(
+            table_name,
+            "selling_price" if table_name == "laborderitem" else "selling_amount",
+            sa.Column(
+                "selling_price" if table_name == "laborderitem" else "selling_amount",
+                sa.Integer(),
+                nullable=False,
+                server_default="0",
+            ),
+        )
+        _add(
+            table_name,
+            "buying_price" if table_name == "laborderitem" else "buying_amount",
+            sa.Column(
+                "buying_price" if table_name == "laborderitem" else "buying_amount",
+                sa.Integer(),
+                nullable=False,
+                server_default="0",
+            ),
+        )
+        _add(
+            table_name,
+            "supplier_id",
+            sa.Column("supplier_id", sa.String(), nullable=True),
+        )
+        _add(
+            table_name,
+            "external_source",
+            sa.Column("external_source", sa.String(length=80), nullable=True),
+        )
+        _add(
+            table_name,
+            "external_item_code",
+            sa.Column("external_item_code", sa.String(length=220), nullable=True),
+        )
         _create_index(table_name, f"ix_{table_name}_supplier_id", ["supplier_id"])
-    _add("laborderitem", "external_slug", sa.Column("external_slug", sa.String(length=220), nullable=True))
+    _add(
+        "laborderitem",
+        "external_slug",
+        sa.Column("external_slug", sa.String(length=220), nullable=True),
+    )
 
 
 def downgrade() -> None:
