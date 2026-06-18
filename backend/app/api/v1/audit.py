@@ -29,7 +29,11 @@ def create_audit_event(
     return event
 
 
-@router.get("", response_model=list[AuditEventRead], dependencies=[Depends(require_permission(permissions.AUDIT_READ))])
+@router.get(
+    "",
+    response_model=list[AuditEventRead],
+    dependencies=[Depends(require_permission(permissions.AUDIT_READ))],
+)
 def list_audit_events(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
@@ -55,5 +59,7 @@ def get_audit_event(
 ) -> AuditEvent:
     event = session.get(AuditEvent, event_id)
     if not event or event.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit event not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Audit event not found"
+        )
     return event

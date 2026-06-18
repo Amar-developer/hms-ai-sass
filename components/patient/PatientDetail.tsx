@@ -181,7 +181,7 @@ export function PatientDetail({
             tone={
               activeMembership ? "green" : pendingMembership ? "amber" : "slate"
             }
-            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm rounded-lg w-[15%]  
+            className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm rounded-lg w-[15%]
 "
           >
             {activeMembership
@@ -359,7 +359,7 @@ export function PatientDetail({
               </div>
               {c.chief_complaint && (
                 <Row label="Chief Complaint" value={c.chief_complaint} />
-              )} 
+              )}
               {c.patient_remarks && (
                 <Row label="Symptoms / Remarks" value={c.patient_remarks} />
               )}

@@ -32,14 +32,19 @@ def normalize_frappe_supplier(row: dict) -> dict[str, str | float]:
     }
 
 
-def normalize_frappe_item_detail(row: dict) -> dict[str, int | str | float | list[dict[str, str | float]]]:
-    item_name = str(row.get("item_name") or row.get("item_code") or row.get("name") or "").strip()
+def normalize_frappe_item_detail(
+    row: dict,
+) -> dict[str, int | str | float | list[dict[str, str | float]]]:
+    item_name = str(
+        row.get("item_name") or row.get("item_code") or row.get("name") or ""
+    ).strip()
     item_code = str(row.get("item_code") or row.get("name") or item_name).strip()
     slug = str(row.get("slug") or item_code or item_name).strip()
     suppliers = [
         normalize_frappe_supplier(supplier)
         for supplier in row.get("suppliers") or []
-        if isinstance(supplier, dict) and (supplier.get("supplier") or supplier.get("supplier_name"))
+        if isinstance(supplier, dict)
+        and (supplier.get("supplier") or supplier.get("supplier_name"))
     ]
     buying_price = row.get("buying_price")
     if buying_price in (None, "") and suppliers:
@@ -77,7 +82,9 @@ class FrappeCatalogClient:
             if isinstance(item, dict)
         ]
 
-    def get_lab_item_details(self, slug: str) -> dict[str, int | str | float | list[dict[str, str | float]]]:
+    def get_lab_item_details(
+        self, slug: str
+    ) -> dict[str, int | str | float | list[dict[str, str | float]]]:
         endpoint = urljoin(
             self.base_url,
             "api/method/healthcare.healthcare.api.lab_items.get_lab_item_details",

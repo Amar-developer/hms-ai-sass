@@ -20,7 +20,11 @@ from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.appointments.models import Appointment, AppointmentStatus, AppointmentType
+from app.modules.appointments.models import (
+    Appointment,
+    AppointmentStatus,
+    AppointmentType,
+)
 from app.modules.appointments.schemas import (
     AppointmentBookingRead,
     AppointmentCreate,
@@ -64,13 +68,19 @@ ACTIVE_APPOINTMENT_STATUSES = {
 
 
 def _appointment_payload_hash(payload: AppointmentCreate) -> str:
-    encoded = json.dumps(payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":")).encode()
+    encoded = json.dumps(
+        payload.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
+    ).encode()
     return hashlib.sha256(encoded).hexdigest()
 
 
 def _cleanup_appointment_idempotency_cache() -> None:
     now = monotonic()
-    expired = [key for key, value in _appointment_idempotency_cache.items() if value["expires_at"] <= now]
+    expired = [
+        key
+        for key, value in _appointment_idempotency_cache.items()
+        if value["expires_at"] <= now
+    ]
     for key in expired:
         _appointment_idempotency_cache.pop(key, None)
 
@@ -79,14 +89,18 @@ def _normalize_department_lookup(value: str | None) -> str:
     return "".join(char for char in str(value or "").lower() if char.isalnum())
 
 
-def _resolve_department_id(session: Session, tenant_id: str, department_id: str | None) -> str | None:
+def _resolve_department_id(
+    session: Session, tenant_id: str, department_id: str | None
+) -> str | None:
     if not department_id:
         return None
     department = session.get(Department, department_id)
     if department and department.tenant_id == tenant_id:
         return department.id
     requested = _normalize_department_lookup(department_id)
-    departments = session.exec(select(Department).where(Department.tenant_id == tenant_id)).all()
+    departments = session.exec(
+        select(Department).where(Department.tenant_id == tenant_id)
+    ).all()
     for department in departments:
         department_keys = {
             _normalize_department_lookup(department.id),
@@ -95,13 +109,24 @@ def _resolve_department_id(session: Session, tenant_id: str, department_id: str 
         }
         if requested in department_keys:
             return department.id
-        if requested == "general" and _normalize_department_lookup(department.name).startswith("general"):
+        if requested == "general" and _normalize_department_lookup(
+            department.name
+        ).startswith("general"):
             return department.id
     return department_id
 
 
 def _appointment_grid_row(row) -> AppointmentGridRead:
-    appointment, tenant, branch, patient, department, practitioner, queue_entry, consultation = row
+    (
+        appointment,
+        tenant,
+        branch,
+        patient,
+        department,
+        practitioner,
+        queue_entry,
+        consultation,
+    ) = row
     return AppointmentGridRead(
         id=appointment.id,
         tenant_id=tenant.id,
@@ -113,8 +138,12 @@ def _appointment_grid_row(row) -> AppointmentGridRead:
         patient_mobile=patient.mobile,
         department_id=department.id if department else appointment.department_id,
         department_name=department.name if department else appointment.department_id,
-        practitioner_id=practitioner.id if practitioner else appointment.practitioner_id,
-        practitioner_name=practitioner.full_name if practitioner else appointment.practitioner_id,
+        practitioner_id=practitioner.id
+        if practitioner
+        else appointment.practitioner_id,
+        practitioner_name=practitioner.full_name
+        if practitioner
+        else appointment.practitioner_id,
         token_number=queue_entry.token_number if queue_entry else None,
         appointment_type=appointment.appointment_type,
         visit_purpose=appointment.visit_purpose,
@@ -129,7 +158,16 @@ def _appointment_grid_row(row) -> AppointmentGridRead:
 
 def _appointment_grid_statement():
     return (
-        select(Appointment, Tenant, Branch, Patient, Department, Practitioner, QueueEntry, Consultation)
+        select(
+            Appointment,
+            Tenant,
+            Branch,
+            Patient,
+            Department,
+            Practitioner,
+            QueueEntry,
+            Consultation,
+        )
         .join(Tenant, Tenant.id == Appointment.tenant_id)
         .join(Branch, Branch.id == Appointment.branch_id)
         .join(Patient, Patient.id == Appointment.patient_id)
@@ -150,7 +188,9 @@ def _slot_session(appointment_time: time | None) -> str:
     return "evening"
 
 
-def _enforce_duplicate_booking_rules(session: Session, tenant_id: str, payload: AppointmentCreate) -> None:
+def _enforce_duplicate_booking_rules(
+    session: Session, tenant_id: str, payload: AppointmentCreate
+) -> None:
     if payload.appointment_type == AppointmentType.EMERGENCY:
         return
     existing_rows = session.exec(
@@ -160,19 +200,26 @@ def _enforce_duplicate_booking_rules(session: Session, tenant_id: str, payload: 
             Appointment.appointment_date == payload.appointment_date,
         )
     ).all()
-    active_rows = [row for row in existing_rows if row.status in ACTIVE_APPOINTMENT_STATUSES]
+    active_rows = [
+        row for row in existing_rows if row.status in ACTIVE_APPOINTMENT_STATUSES
+    ]
     if not active_rows:
         return
 
     if payload.practitioner_id and payload.appointment_time:
         for row in active_rows:
-            if row.practitioner_id == payload.practitioner_id and row.appointment_time == payload.appointment_time:
+            if (
+                row.practitioner_id == payload.practitioner_id
+                and row.appointment_time == payload.appointment_time
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Patient already has an active appointment at this time",
                 )
 
-    if payload.appointment_time and any(row.appointment_time == payload.appointment_time for row in active_rows):
+    if payload.appointment_time and any(
+        row.appointment_time == payload.appointment_time for row in active_rows
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Patient already has an active appointment at this time",
@@ -181,7 +228,10 @@ def _enforce_duplicate_booking_rules(session: Session, tenant_id: str, payload: 
     if payload.practitioner_id:
         requested_session = _slot_session(payload.appointment_time)
         for row in active_rows:
-            if row.practitioner_id == payload.practitioner_id and _slot_session(row.appointment_time) == requested_session:
+            if (
+                row.practitioner_id == payload.practitioner_id
+                and _slot_session(row.appointment_time) == requested_session
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Patient already has an active appointment with this doctor in the selected timing session",
@@ -244,7 +294,8 @@ def _first_available_practitioner_slot(
         )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=availability.reason or "No consultation timing available for this doctor/date",
+            detail=availability.reason
+            or "No consultation timing available for this doctor/date",
         )
     first_available_slot = next((slot for slot in day.slots if slot.available), None)
     if not first_available_slot:
@@ -264,7 +315,10 @@ def _review_billing_defaults(
 ) -> tuple[bool, str | None]:
     if payload.is_billable is not None:
         return payload.is_billable, payload.billing_note
-    if payload.appointment_type not in {AppointmentType.FOLLOW_UP, AppointmentType.DOCTOR_REVIEW}:
+    if payload.appointment_type not in {
+        AppointmentType.FOLLOW_UP,
+        AppointmentType.DOCTOR_REVIEW,
+    }:
         return True, payload.billing_note
     if not payload.source_appointment_id:
         return True, payload.billing_note
@@ -282,8 +336,14 @@ def _review_billing_defaults(
         valid_days = int(validity_days or 0)
     except (TypeError, ValueError):
         valid_days = 0
-    if valid_days >= 0 and 0 <= (payload.appointment_date - source.appointment_date).days <= valid_days:
-        return False, payload.billing_note or f"Auto free review within {valid_days} days"
+    if (
+        valid_days >= 0
+        and 0 <= (payload.appointment_date - source.appointment_date).days <= valid_days
+    ):
+        return (
+            False,
+            payload.billing_note or f"Auto free review within {valid_days} days",
+        )
     return True, payload.billing_note
 
 
@@ -319,8 +379,12 @@ def book_appointment(
     enforce_entitlement(session, tenant_id, "appointments")
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    resolved_department_id = _resolve_department_id(session, tenant_id, payload.department_id)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
+    resolved_department_id = _resolve_department_id(
+        session, tenant_id, payload.department_id
+    )
     if resolved_department_id != payload.department_id:
         payload = payload.model_copy(update={"department_id": resolved_department_id})
     request_hash = _appointment_payload_hash(payload)
@@ -338,21 +402,36 @@ def book_appointment(
 
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
-    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+    doctor_practitioner_id = current_doctor_practitioner_id(
+        session, tenant_id, current_user
+    )
     if doctor_practitioner_id and payload.practitioner_id != doctor_practitioner_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Doctor access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Doctor access denied"
+        )
     patient = session.get(Patient, payload.patient_id)
     if not patient or patient.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient"
+        )
     if payload.source_appointment_id:
         source_appointment = session.get(Appointment, payload.source_appointment_id)
-        if not source_appointment or source_appointment.tenant_id != tenant_id or source_appointment.patient_id != patient.id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source appointment")
+        if (
+            not source_appointment
+            or source_appointment.tenant_id != tenant_id
+            or source_appointment.patient_id != patient.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid source appointment",
+            )
     practitioner_requires_schedule = False
     if payload.practitioner_id:
         practitioner = session.get(Practitioner, payload.practitioner_id)
         if practitioner:
-            practitioner_requires_schedule = payload.appointment_type.value != "emergency"
+            practitioner_requires_schedule = (
+                payload.appointment_type.value != "emergency"
+            )
             if not practitioner_is_eligible(
                 session,
                 tenant_id=tenant_id,
@@ -374,7 +453,9 @@ def book_appointment(
                         department_id=payload.department_id,
                         appointment_date=payload.appointment_date,
                     )
-                    payload = payload.model_copy(update={"appointment_time": appointment_time})
+                    payload = payload.model_copy(
+                        update={"appointment_time": appointment_time}
+                    )
     _enforce_duplicate_booking_rules(session, tenant_id, payload)
     _enforce_practitioner_slot_conflict(session, tenant_id, payload)
     if practitioner_requires_schedule and payload.appointment_time:
@@ -390,7 +471,8 @@ def book_appointment(
         if not availability.available:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=availability.reason or "Practitioner is not available at this time",
+                detail=availability.reason
+                or "Practitioner is not available at this time",
             )
 
     is_billable, billing_note = _review_billing_defaults(
@@ -431,7 +513,10 @@ def book_appointment(
             metadata_json=f'{{"emergency_reason": "{appointment.emergency_reason or appointment.reason or "Emergency"}"}}',
             commit=False,
         )
-    if appointment.appointment_type in {AppointmentType.DOCTOR_REVIEW, AppointmentType.FITNESS_CERTIFICATE}:
+    if appointment.appointment_type in {
+        AppointmentType.DOCTOR_REVIEW,
+        AppointmentType.FITNESS_CERTIFICATE,
+    }:
         record_audit_event(
             session,
             tenant_id=tenant_id,
@@ -515,9 +600,13 @@ def book_follow_up_appointment(
     enforce_entitlement(session, tenant_id, "appointments")
     source = session.get(Appointment, appointment_id)
     if not source or source.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
+        )
     require_user_branch_access(current_user, source.branch_id)
-    require_doctor_practitioner_access(session, tenant_id, current_user, source.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, source.practitioner_id
+    )
     follow_up_payload = AppointmentCreate(
         branch_id=source.branch_id,
         patient_id=source.patient_id,
@@ -534,7 +623,9 @@ def book_follow_up_appointment(
         created_by_user_id=payload.created_by_user_id or current_user.id,
     )
     _enforce_duplicate_booking_rules(session, tenant_id, follow_up_payload)
-    appointment = Appointment.model_validate(follow_up_payload, update={"tenant_id": tenant_id})
+    appointment = Appointment.model_validate(
+        follow_up_payload, update={"tenant_id": tenant_id}
+    )
     session.add(appointment)
     session.commit()
     session.refresh(appointment)
@@ -589,14 +680,18 @@ def list_appointments(
     enforce_entitlement(session, tenant_id, "appointments")
     branch_id = scoped_branch_id(current_user, branch_id)
     require_branch_in_tenant(session, tenant_id, branch_id)
-    doctor_practitioner_id = current_doctor_practitioner_id(session, tenant_id, current_user)
+    doctor_practitioner_id = current_doctor_practitioner_id(
+        session, tenant_id, current_user
+    )
     statement = select(Appointment).where(Appointment.tenant_id == tenant_id)
     if branch_id:
         statement = statement.where(Appointment.branch_id == branch_id)
     if department_id:
         statement = statement.where(Appointment.department_id == department_id)
     if doctor_practitioner_id:
-        statement = statement.where(Appointment.practitioner_id == doctor_practitioner_id)
+        statement = statement.where(
+            Appointment.practitioner_id == doctor_practitioner_id
+        )
     elif practitioner_id:
         statement = statement.where(Appointment.practitioner_id == practitioner_id)
     if appointment_date:
@@ -611,7 +706,15 @@ def list_appointments(
                 func.lower(Patient.guardian_mobile).like(pattern),
             )
         )
-    return list(session.exec(statement.order_by(Appointment.appointment_date.desc(), Appointment.created_at.desc()).offset(skip).limit(limit)).all())
+    return list(
+        session.exec(
+            statement.order_by(
+                Appointment.appointment_date.desc(), Appointment.created_at.desc()
+            )
+            .offset(skip)
+            .limit(limit)
+        ).all()
+    )
 
 
 @router.get(
@@ -654,7 +757,11 @@ def list_platform_appointments(
             )
         )
     rows = session.exec(
-        statement.order_by(Appointment.appointment_date.desc(), Appointment.created_at.desc()).offset(skip).limit(limit)
+        statement.order_by(
+            Appointment.appointment_date.desc(), Appointment.created_at.desc()
+        )
+        .offset(skip)
+        .limit(limit)
     ).all()
     return [_appointment_grid_row(row) for row in rows]
 
@@ -685,7 +792,11 @@ def get_appointment(
     enforce_entitlement(session, tenant_id, "appointments")
     appointment = session.get(Appointment, appointment_id)
     if not appointment or appointment.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
+        )
     require_user_branch_access(current_user, appointment.branch_id)
-    require_doctor_practitioner_access(session, tenant_id, current_user, appointment.practitioner_id)
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, appointment.practitioner_id
+    )
     return appointment

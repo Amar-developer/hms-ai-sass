@@ -4,7 +4,12 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile, status
 
 UPLOADS_DIR = Path("uploads")
-ALLOWED_MIME_PREFIXES = ("image/", "application/pdf", "application/msword", "application/vnd.openxmlformats")
+ALLOWED_MIME_PREFIXES = (
+    "image/",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats",
+)
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
 
@@ -22,7 +27,10 @@ async def save_upload(file: UploadFile, prefix: str) -> tuple[str, str]:
         )
     data = await file.read()
     if len(data) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="File too large (max 10 MB)")
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File too large (max 10 MB)",
+        )
     ext = Path(file.filename or "file").suffix or ".bin"
     filename = f"{prefix}_{uuid.uuid4().hex}{ext}"
     _ensure_dir()

@@ -6,7 +6,9 @@ def enqueue_monthly_report_job(job_id: str) -> None:
     try:
         from redis import Redis
     except ImportError as exc:
-        raise RuntimeError("Redis client is not installed. Install backend requirements.") from exc
+        raise RuntimeError(
+            "Redis client is not installed. Install backend requirements."
+        ) from exc
 
     client = Redis.from_url(settings.redis_url, decode_responses=True)
     client.lpush(settings.report_queue_name, job_id)
@@ -29,4 +31,6 @@ def scheduler_lock(seconds: int = 55) -> bool:
     from redis import Redis
 
     client = Redis.from_url(settings.redis_url, decode_responses=True)
-    return bool(client.set(settings.report_scheduler_lock_key, "1", ex=seconds, nx=True))
+    return bool(
+        client.set(settings.report_scheduler_lock_key, "1", ex=seconds, nx=True)
+    )

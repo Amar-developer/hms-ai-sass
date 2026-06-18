@@ -25,12 +25,24 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         with op.get_context().autocommit_block():
-            op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_ENABLED'")
-            op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_RECIPIENTS'")
-            op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_CC'")
-            op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_SEND_DAY'")
-            op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_FILTERS'")
-            op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_LAST_SENT_PERIOD'")
+            op.execute(
+                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_ENABLED'"
+            )
+            op.execute(
+                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_RECIPIENTS'"
+            )
+            op.execute(
+                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_CC'"
+            )
+            op.execute(
+                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_SEND_DAY'"
+            )
+            op.execute(
+                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_FILTERS'"
+            )
+            op.execute(
+                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'REPORT_MONTHLY_EMAIL_LAST_SENT_PERIOD'"
+            )
     if "reportjob" not in _tables():
         op.create_table(
             "reportjob",
@@ -62,7 +74,9 @@ def upgrade() -> None:
         op.create_index("ix_reportjob_report_type", "reportjob", ["report_type"])
         op.create_index("ix_reportjob_period_start", "reportjob", ["period_start"])
         op.create_index("ix_reportjob_period_end", "reportjob", ["period_end"])
-        op.create_index("ix_reportjob_queued_by_user_id", "reportjob", ["queued_by_user_id"])
+        op.create_index(
+            "ix_reportjob_queued_by_user_id", "reportjob", ["queued_by_user_id"]
+        )
         op.create_index("ix_reportjob_created_at", "reportjob", ["created_at"])
         op.create_index("ix_reportjob_started_at", "reportjob", ["started_at"])
         op.create_index("ix_reportjob_sent_at", "reportjob", ["sent_at"])

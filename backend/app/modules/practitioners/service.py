@@ -4,8 +4,17 @@ from datetime import date, datetime, time, timedelta
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment, AppointmentStatus
-from app.modules.practitioners.models import Practitioner, PractitionerBranch, PractitionerDepartment, PractitionerStatus
-from app.modules.practitioners.models import PractitionerLeave, PractitionerRoomAssignment, PractitionerSchedule
+from app.modules.practitioners.models import (
+    Practitioner,
+    PractitionerBranch,
+    PractitionerDepartment,
+    PractitionerStatus,
+)
+from app.modules.practitioners.models import (
+    PractitionerLeave,
+    PractitionerRoomAssignment,
+    PractitionerSchedule,
+)
 
 
 def practitioner_is_eligible(
@@ -17,19 +26,35 @@ def practitioner_is_eligible(
     department_id: str | None,
 ) -> bool:
     practitioner = session.get(Practitioner, practitioner_id)
-    if not practitioner or practitioner.tenant_id != tenant_id or practitioner.status != PractitionerStatus.ACTIVE:
+    if (
+        not practitioner
+        or practitioner.tenant_id != tenant_id
+        or practitioner.status != PractitionerStatus.ACTIVE
+    ):
         return False
     branch_link = session.get(PractitionerBranch, (practitioner_id, branch_id))
-    if not branch_link or branch_link.tenant_id != tenant_id or not branch_link.is_active:
+    if (
+        not branch_link
+        or branch_link.tenant_id != tenant_id
+        or not branch_link.is_active
+    ):
         return False
     if department_id:
-        department_link = session.get(PractitionerDepartment, (practitioner_id, department_id))
-        if not department_link or department_link.tenant_id != tenant_id or not department_link.is_active:
+        department_link = session.get(
+            PractitionerDepartment, (practitioner_id, department_id)
+        )
+        if (
+            not department_link
+            or department_link.tenant_id != tenant_id
+            or not department_link.is_active
+        ):
             return False
     return True
 
 
-def practitioner_branch_ids(session: Session, tenant_id: str, practitioner_id: str) -> list[str]:
+def practitioner_branch_ids(
+    session: Session, tenant_id: str, practitioner_id: str
+) -> list[str]:
     return [
         row.branch_id
         for row in session.exec(
@@ -42,7 +67,9 @@ def practitioner_branch_ids(session: Session, tenant_id: str, practitioner_id: s
     ]
 
 
-def practitioner_department_ids(session: Session, tenant_id: str, practitioner_id: str) -> list[str]:
+def practitioner_department_ids(
+    session: Session, tenant_id: str, practitioner_id: str
+) -> list[str]:
     return [
         row.department_id
         for row in session.exec(
@@ -95,8 +122,13 @@ class PractitionerCalendar:
     days: list[PractitionerCalendarDay]
 
 
-def _department_matches(configured_department_id: str | None, requested_department_id: str | None) -> bool:
-    return configured_department_id is None or configured_department_id == requested_department_id
+def _department_matches(
+    configured_department_id: str | None, requested_department_id: str | None
+) -> bool:
+    return (
+        configured_department_id is None
+        or configured_department_id == requested_department_id
+    )
 
 
 def _time_in_range(value: time, start: time, end: time) -> bool:
@@ -108,11 +140,15 @@ def _minutes_since_midnight(value: time) -> int:
 
 
 def _is_slot_aligned(value: time, start: time, slot_minutes: int) -> bool:
-    return (_minutes_since_midnight(value) - _minutes_since_midnight(start)) % slot_minutes == 0
+    return (
+        _minutes_since_midnight(value) - _minutes_since_midnight(start)
+    ) % slot_minutes == 0
 
 
 def _add_minutes(value_date: date, value_time: time, minutes: int) -> time:
-    return (datetime.combine(value_date, value_time) + timedelta(minutes=minutes)).time()
+    return (
+        datetime.combine(value_date, value_time) + timedelta(minutes=minutes)
+    ).time()
 
 
 def _matching_room_assignment(
@@ -140,10 +176,17 @@ def _matching_room_assignment(
         and _time_in_range(appointment_time, assignment.start_time, assignment.end_time)
         and (
             assignment.assignment_date == appointment_date
-            or (assignment.assignment_date is None and assignment.weekday == appointment_date.weekday())
+            or (
+                assignment.assignment_date is None
+                and assignment.weekday == appointment_date.weekday()
+            )
         )
     ]
-    dated_matches = [assignment for assignment in matches if assignment.assignment_date == appointment_date]
+    dated_matches = [
+        assignment
+        for assignment in matches
+        if assignment.assignment_date == appointment_date
+    ]
     return (dated_matches or matches)[0] if matches else None
 
 
@@ -164,7 +207,9 @@ def check_practitioner_availability(
         branch_id=branch_id,
         department_id=department_id,
     ):
-        return PractitionerAvailability(False, "Practitioner is not assigned to this branch and department")
+        return PractitionerAvailability(
+            False, "Practitioner is not assigned to this branch and department"
+        )
 
     schedules = session.exec(
         select(PractitionerSchedule).where(
@@ -182,11 +227,17 @@ def check_practitioner_availability(
         and _time_in_range(appointment_time, schedule.start_time, schedule.end_time)
     ]
     if not matching_schedules:
-        return PractitionerAvailability(False, "Practitioner is not scheduled at this time")
+        return PractitionerAvailability(
+            False, "Practitioner is not scheduled at this time"
+        )
 
     schedule = matching_schedules[0]
-    if not _is_slot_aligned(appointment_time, schedule.start_time, schedule.slot_minutes):
-        return PractitionerAvailability(False, "Appointment time does not match the practitioner slot interval")
+    if not _is_slot_aligned(
+        appointment_time, schedule.start_time, schedule.slot_minutes
+    ):
+        return PractitionerAvailability(
+            False, "Appointment time does not match the practitioner slot interval"
+        )
 
     leave_rows = session.exec(
         select(PractitionerLeave).where(
@@ -200,12 +251,18 @@ def check_practitioner_availability(
     for leave in leave_rows:
         if leave.branch_id and leave.branch_id != branch_id:
             continue
-        if leave.start_time is None or leave.end_time is None or _time_in_range(
-            appointment_time,
-            leave.start_time,
-            leave.end_time,
+        if (
+            leave.start_time is None
+            or leave.end_time is None
+            or _time_in_range(
+                appointment_time,
+                leave.start_time,
+                leave.end_time,
+            )
         ):
-            return PractitionerAvailability(False, "Practitioner is on leave at this time", schedule_id=schedule.id)
+            return PractitionerAvailability(
+                False, "Practitioner is on leave at this time", schedule_id=schedule.id
+            )
 
     existing_rows = session.exec(
         select(Appointment).where(
@@ -215,8 +272,13 @@ def check_practitioner_availability(
             Appointment.appointment_time == appointment_time,
         )
     ).all()
-    if any(row.status not in {AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW} for row in existing_rows):
-        return PractitionerAvailability(False, "Practitioner already has an appointment at this time")
+    if any(
+        row.status not in {AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW}
+        for row in existing_rows
+    ):
+        return PractitionerAvailability(
+            False, "Practitioner already has an appointment at this time"
+        )
 
     room_assignment = _matching_room_assignment(
         session,
@@ -247,7 +309,9 @@ def check_practitioner_date_availability(
         branch_id=branch_id,
         department_id=department_id,
     ):
-        return PractitionerAvailability(False, "Practitioner is not assigned to this branch and department")
+        return PractitionerAvailability(
+            False, "Practitioner is not assigned to this branch and department"
+        )
 
     schedules = session.exec(
         select(PractitionerSchedule).where(
@@ -264,7 +328,9 @@ def check_practitioner_date_availability(
         if _department_matches(schedule.department_id, department_id)
     ]
     if not matching_schedules:
-        return PractitionerAvailability(False, "Practitioner is not scheduled on this date")
+        return PractitionerAvailability(
+            False, "Practitioner is not scheduled on this date"
+        )
 
     leave_rows = session.exec(
         select(PractitionerLeave).where(
@@ -279,10 +345,14 @@ def check_practitioner_date_availability(
         if leave.branch_id and leave.branch_id != branch_id:
             continue
         if leave.start_time is None or leave.end_time is None:
-            return PractitionerAvailability(False, "Practitioner is on leave on this date")
+            return PractitionerAvailability(
+                False, "Practitioner is on leave on this date"
+            )
 
     schedule = matching_schedules[0]
-    return PractitionerAvailability(True, schedule_id=schedule.id, room_name=schedule.room_name)
+    return PractitionerAvailability(
+        True, schedule_id=schedule.id, room_name=schedule.room_name
+    )
 
 
 def room_assignment_conflicts(
@@ -309,7 +379,10 @@ def room_assignment_conflicts(
                 row.assignment_date is None and row.weekday == assignment_date.weekday()
             )
         else:
-            same_scope = row.weekday == weekday or (row.assignment_date is not None and row.assignment_date.weekday() == weekday)
+            same_scope = row.weekday == weekday or (
+                row.assignment_date is not None
+                and row.assignment_date.weekday() == weekday
+            )
         if not same_scope:
             continue
         if start_time < row.end_time and end_time > row.start_time:
@@ -344,7 +417,10 @@ def generate_practitioner_calendar(
             if not _department_matches(schedule.department_id, department_id):
                 continue
             slot_time = schedule.start_time
-            while _add_minutes(current_date, slot_time, schedule.slot_minutes) <= schedule.end_time:
+            while (
+                _add_minutes(current_date, slot_time, schedule.slot_minutes)
+                <= schedule.end_time
+            ):
                 availability = check_practitioner_availability(
                     session,
                     tenant_id=tenant_id,
@@ -356,7 +432,10 @@ def generate_practitioner_calendar(
                 )
                 if availability.available:
                     status = "available"
-                elif availability.reason == "Practitioner already has an appointment at this time":
+                elif (
+                    availability.reason
+                    == "Practitioner already has an appointment at this time"
+                ):
                     status = "booked"
                 elif availability.reason == "Practitioner is on leave at this time":
                     status = "leave"
@@ -366,7 +445,9 @@ def generate_practitioner_calendar(
                     PractitionerGeneratedSlot(
                         appointment_date=current_date,
                         start_time=slot_time,
-                        end_time=_add_minutes(current_date, slot_time, schedule.slot_minutes),
+                        end_time=_add_minutes(
+                            current_date, slot_time, schedule.slot_minutes
+                        ),
                         status=status,
                         available=availability.available,
                         reason=availability.reason,

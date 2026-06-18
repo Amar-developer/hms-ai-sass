@@ -38,10 +38,14 @@ ENTITY_COLUMNS: dict[str, tuple[str, str, bool]] = {
 }
 
 
-def normalize_numbering_rules(value: Any, fallback_prefix: str | None = None) -> dict[str, Any]:
+def normalize_numbering_rules(
+    value: Any, fallback_prefix: str | None = None
+) -> dict[str, Any]:
     rules = value if isinstance(value, dict) else {}
     entities = rules.get("entities") if isinstance(rules.get("entities"), dict) else {}
-    prefix = str(rules.get("prefix") or fallback_prefix or "INV").strip().upper() or "INV"
+    prefix = (
+        str(rules.get("prefix") or fallback_prefix or "INV").strip().upper() or "INV"
+    )
     try:
         digits = int(rules.get("digits") or 5)
     except (TypeError, ValueError):
@@ -50,7 +54,14 @@ def normalize_numbering_rules(value: Any, fallback_prefix: str | None = None) ->
     return {
         "prefix": prefix,
         "digits": digits,
-        "entities": {**DEFAULT_ENTITY_CODES, **{str(k): str(v).strip().upper() for k, v in entities.items() if str(v).strip()}},
+        "entities": {
+            **DEFAULT_ENTITY_CODES,
+            **{
+                str(k): str(v).strip().upper()
+                for k, v in entities.items()
+                if str(v).strip()
+            },
+        },
     }
 
 
@@ -108,7 +119,9 @@ def _max_existing_number(
     include_entity_code: bool,
 ) -> int:
     if include_entity_code:
-        pattern = re.compile(rf"^{re.escape(prefix)}-{re.escape(entity_code)}-(\d+)$", re.IGNORECASE)
+        pattern = re.compile(
+            rf"^{re.escape(prefix)}-{re.escape(entity_code)}-(\d+)$", re.IGNORECASE
+        )
     else:
         pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)$", re.IGNORECASE)
     sql = f'select "{column_name}" from "{table_name}" where tenant_id = :tenant_id and "{column_name}" is not null'
@@ -137,13 +150,19 @@ def next_document_number(
     if entity not in ENTITY_COLUMNS:
         raise ValueError(f"Unsupported numbered entity: {entity}")
     rules = resolve_numbering_rules(session, tenant_id=tenant_id, branch_id=branch_id)
-    entity_code = str(rules["entities"].get(entity) or DEFAULT_ENTITY_CODES[entity]).strip().upper()
+    entity_code = (
+        str(rules["entities"].get(entity) or DEFAULT_ENTITY_CODES[entity])
+        .strip()
+        .upper()
+    )
     use_configured_format = bool(rules.get("is_configured"))
     if use_configured_format:
         prefix = str(prefix_override or rules["prefix"]).strip().upper()
         digits = int(rules["digits"])
     else:
-        prefix = str(prefix_override or rules["prefix"] if entity == "invoice" else entity_code)
+        prefix = str(
+            prefix_override or rules["prefix"] if entity == "invoice" else entity_code
+        )
         prefix = prefix.strip().upper()
         digits = 6
     table_name, column_name, branch_scoped = ENTITY_COLUMNS[entity]
@@ -182,4 +201,10 @@ def next_document_number(
     sequence.updated_at = now_utc()
     session.add(sequence)
     session.flush()
-    return format_document_number(prefix, entity_code, sequence.current_value, digits, include_entity_code=use_configured_format)
+    return format_document_number(
+        prefix,
+        entity_code,
+        sequence.current_value,
+        digits,
+        include_entity_code=use_configured_format,
+    )

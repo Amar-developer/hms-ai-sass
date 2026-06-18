@@ -6,7 +6,11 @@ from fastapi import APIRouter, Depends, File, Header, HTTPException, UploadFile,
 from sqlmodel import Session, select
 
 from app.core.uploads import save_upload
-from app.core.auth import require_any_permission, require_permission, require_super_admin
+from app.core.auth import (
+    require_any_permission,
+    require_permission,
+    require_super_admin,
+)
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.models import AuditEvent
@@ -15,14 +19,26 @@ from app.modules.identity import permissions
 from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole
 from app.modules.identity.security import hash_password
 from app.modules.settings.numbering import next_document_number
-from app.modules.subscriptions.models import SubscriptionInvoice, SubscriptionPlan, SubscriptionStatus, TenantSubscription
+from app.modules.subscriptions.models import (
+    SubscriptionInvoice,
+    SubscriptionPlan,
+    SubscriptionStatus,
+    TenantSubscription,
+)
 from app.modules.subscriptions.service import (
     create_default_trial_subscription,
     get_active_subscription,
     next_subscription_invoice_number,
     plan_duration_days,
 )
-from app.modules.tenants.models import Branch, Department, Tenant, TenantStatus, TenantType, now_utc
+from app.modules.tenants.models import (
+    Branch,
+    Department,
+    Tenant,
+    TenantStatus,
+    TenantType,
+    now_utc,
+)
 from app.modules.tenants.schemas import (
     BranchCreate,
     BranchRead,
@@ -46,14 +62,21 @@ TENANT_ADMIN_DEFAULT_PERMISSION_KEYS = [
 ]
 
 
-def _assert_tenant_access(user: User, tenant_id: str, request_tenant_id: str | None) -> None:
+def _assert_tenant_access(
+    user: User, tenant_id: str, request_tenant_id: str | None
+) -> None:
     if user.is_super_admin:
         return
     if request_tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cross-tenant access is not allowed")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cross-tenant access is not allowed",
+        )
 
 
-def _assert_department_editable_by_actor(department: Department, current_user: User) -> None:
+def _assert_department_editable_by_actor(
+    department: Department, current_user: User
+) -> None:
     if current_user.is_super_admin:
         return
     if department.is_template_locked or department.source_template_department_id:
@@ -73,13 +96,20 @@ def _assert_branch_editable_by_actor(branch: Branch, current_user: User) -> None
         )
 
 
-def _department_code(session: Session, tenant_id: str, name: str, current_department_id: str | None = None) -> str:
+def _department_code(
+    session: Session,
+    tenant_id: str,
+    name: str,
+    current_department_id: str | None = None,
+) -> str:
     base = re.sub(r"[^A-Z0-9]+", "_", name.upper()).strip("_")[:36] or "DEPT"
     code = base
     suffix = 2
     while True:
         existing = session.exec(
-            select(Department).where(Department.tenant_id == tenant_id, Department.code == code)
+            select(Department).where(
+                Department.tenant_id == tenant_id, Department.code == code
+            )
         ).first()
         if not existing or existing.id == current_department_id:
             return code
@@ -108,24 +138,39 @@ def _assert_unique_tenant_values(
         if tenant.id == current_tenant_id:
             continue
         if enforce_name and _normal_key(tenant.name) == payload_name:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant already exists with this name")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Tenant already exists with this name",
+            )
         if payload_email and _normal_key(tenant.email) == payload_email:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant already exists with this email")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Tenant already exists with this email",
+            )
         if payload_phone and _normal_key(tenant.phone) == payload_phone:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant already exists with this phone")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Tenant already exists with this phone",
+            )
 
 
-def _get_department_or_404(session: Session, tenant_id: str, department_id: str) -> Department:
+def _get_department_or_404(
+    session: Session, tenant_id: str, department_id: str
+) -> Department:
     department = session.get(Department, department_id)
     if not department or department.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medical department not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Medical department not found"
+        )
     return department
 
 
 def _get_branch_or_404(session: Session, tenant_id: str, branch_id: str) -> Branch:
     branch = session.get(Branch, branch_id)
     if not branch or branch.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Branch not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Branch not found"
+        )
     return branch
 
 
@@ -140,8 +185,14 @@ def _ensure_permission(session: Session, key: str) -> Permission:
     return permission
 
 
-def _replace_role_permissions(session: Session, role: Role, permission_keys: list[str]) -> None:
-    for row in list(session.exec(select(RolePermission).where(RolePermission.role_id == role.id)).all()):
+def _replace_role_permissions(
+    session: Session, role: Role, permission_keys: list[str]
+) -> None:
+    for row in list(
+        session.exec(
+            select(RolePermission).where(RolePermission.role_id == role.id)
+        ).all()
+    ):
         session.delete(row)
     for permission_key in permission_keys:
         permission = _ensure_permission(session, permission_key)
@@ -158,8 +209,12 @@ def _role_permission_keys(session: Session, role: Role) -> list[str]:
     )
 
 
-def _ensure_tenant_admin_role(session: Session, tenant_id: str, current_user: User) -> Role:
-    role = session.exec(select(Role).where(Role.tenant_id == tenant_id, Role.key == "tenant_admin")).first()
+def _ensure_tenant_admin_role(
+    session: Session, tenant_id: str, current_user: User
+) -> Role:
+    role = session.exec(
+        select(Role).where(Role.tenant_id == tenant_id, Role.key == "tenant_admin")
+    ).first()
     if role:
         return role
     primary_template = session.exec(
@@ -169,7 +224,9 @@ def _ensure_tenant_admin_role(session: Session, tenant_id: str, current_user: Us
     ).first()
     role = Role(
         tenant_id=tenant_id,
-        source_template_role_id=primary_template.id if primary_template and primary_template.tenant_id != tenant_id else None,
+        source_template_role_id=primary_template.id
+        if primary_template and primary_template.tenant_id != tenant_id
+        else None,
         name=primary_template.name if primary_template else "Tenant Admin",
         key="tenant_admin",
         is_active=True,
@@ -183,23 +240,38 @@ def _ensure_tenant_admin_role(session: Session, tenant_id: str, current_user: Us
     _replace_role_permissions(
         session,
         role,
-        _role_permission_keys(session, primary_template) if primary_template else TENANT_ADMIN_DEFAULT_PERMISSION_KEYS,
+        _role_permission_keys(session, primary_template)
+        if primary_template
+        else TENANT_ADMIN_DEFAULT_PERMISSION_KEYS,
     )
     session.commit()
     return role
 
 
-def _copy_role_template(session: Session, role_id: str, target_tenant_id: str, current_user: User) -> Role:
+def _copy_role_template(
+    session: Session, role_id: str, target_tenant_id: str, current_user: User
+) -> Role:
     source_role = session.get(Role, role_id)
     target_tenant = session.get(Tenant, target_tenant_id)
     if not source_role:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source role not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source role not found"
+        )
     if not target_tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found"
+        )
     if source_role.key == "super_admin" and not target_tenant.is_primary:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Super Admin role can only belong to the primary tenant")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Super Admin role can only belong to the primary tenant",
+        )
     permission_keys = _role_permission_keys(session, source_role)
-    role = session.exec(select(Role).where(Role.tenant_id == target_tenant_id, Role.key == source_role.key)).first()
+    role = session.exec(
+        select(Role).where(
+            Role.tenant_id == target_tenant_id, Role.key == source_role.key
+        )
+    ).first()
     if role:
         role.name = source_role.name
         role.is_active = source_role.is_active
@@ -227,15 +299,24 @@ def _copy_role_template(session: Session, role_id: str, target_tenant_id: str, c
     return role
 
 
-def _copy_department_template(session: Session, department_id: str, target_tenant_id: str, current_user: User) -> Department:
+def _copy_department_template(
+    session: Session, department_id: str, target_tenant_id: str, current_user: User
+) -> Department:
     source_department = session.get(Department, department_id)
     target_tenant = session.get(Tenant, target_tenant_id)
     if not source_department:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source department not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source department not found"
+        )
     if not target_tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found"
+        )
     department = session.exec(
-        select(Department).where(Department.tenant_id == target_tenant_id, Department.code == source_department.code)
+        select(Department).where(
+            Department.tenant_id == target_tenant_id,
+            Department.code == source_department.code,
+        )
     ).first()
     if not department:
         department = Department(
@@ -257,14 +338,24 @@ def _copy_department_template(session: Session, department_id: str, target_tenan
     return department
 
 
-def _copy_branch_template(session: Session, branch_id: str, target_tenant_id: str, current_user: User) -> Branch:
+def _copy_branch_template(
+    session: Session, branch_id: str, target_tenant_id: str, current_user: User
+) -> Branch:
     source_branch = session.get(Branch, branch_id)
     target_tenant = session.get(Tenant, target_tenant_id)
     if not source_branch:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source branch not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source branch not found"
+        )
     if not target_tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
-    branch = session.exec(select(Branch).where(Branch.tenant_id == target_tenant_id, Branch.code == source_branch.code)).first()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found"
+        )
+    branch = session.exec(
+        select(Branch).where(
+            Branch.tenant_id == target_tenant_id, Branch.code == source_branch.code
+        )
+    ).first()
     if not branch:
         branch = Branch(
             tenant_id=target_tenant_id,
@@ -295,17 +386,29 @@ def _copy_branch_template(session: Session, branch_id: str, target_tenant_id: st
 )
 def create_tenant(
     payload: TenantCreate,
-    current_user: User = Depends(require_permission(permissions.PLATFORM_TENANTS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_TENANTS_MANAGE)
+    ),
     session: Session = Depends(get_session),
 ) -> Tenant:
     if payload.is_primary:
-        existing_primary = session.exec(select(Tenant).where(Tenant.is_primary == True)).first()  # noqa: E712
+        existing_primary = session.exec(
+            select(Tenant).where(Tenant.is_primary == True)  # noqa: E712
+        ).first()  # noqa: E712
         if existing_primary:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Primary tenant already exists")
-    _assert_unique_tenant_values(session, name=payload.name, email=payload.email, phone=payload.phone)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Primary tenant already exists",
+            )
+    _assert_unique_tenant_values(
+        session, name=payload.name, email=payload.email, phone=payload.phone
+    )
     tenant = Tenant.model_validate(
         payload,
-        update={"created_by_user_id": current_user.id, "updated_by_user_id": current_user.id},
+        update={
+            "created_by_user_id": current_user.id,
+            "updated_by_user_id": current_user.id,
+        },
     )
     session.add(tenant)
     session.commit()
@@ -341,13 +444,21 @@ def onboard_tenant(
         email=payload.tenant.email,
         phone=payload.tenant.phone,
     )
-    if payload.tenant.is_primary or payload.tenant.tenant_type in (TenantType.PRIMARY, TenantType.PRIMARY.value):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use bootstrap for the primary tenant")
+    if payload.tenant.is_primary or payload.tenant.tenant_type in (
+        TenantType.PRIMARY,
+        TenantType.PRIMARY.value,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use bootstrap for the primary tenant",
+        )
 
     plan_id = payload.subscription_plan_id
     plan = session.get(SubscriptionPlan, plan_id) if plan_id else None
     if plan_id and (not plan or not plan.is_active):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan"
+        )
 
     role_template_ids = list(dict.fromkeys(payload.role_template_ids))
     department_template_ids = list(dict.fromkeys(payload.department_template_ids))
@@ -355,7 +466,9 @@ def onboard_tenant(
     for role_id in role_template_ids:
         source_role = session.get(Role, role_id)
         if not source_role:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source role not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Source role not found"
+            )
         if source_role.key == "super_admin":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -363,16 +476,24 @@ def onboard_tenant(
             )
     for department_id in department_template_ids:
         if not session.get(Department, department_id):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source department not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Source department not found",
+            )
 
     branch_codes = [branch.code.strip().lower() for branch in payload.branches]
     if len(set(branch_codes)) != len(branch_codes):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Branch codes must be unique")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Branch codes must be unique",
+        )
     selected_branch_codes = set(branch_codes)
     for branch_id in branch_template_ids:
         source_branch = session.get(Branch, branch_id)
         if not source_branch:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source branch not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Source branch not found"
+            )
         selected_branch_codes.add(source_branch.code.strip().lower())
     if plan and len(selected_branch_codes) > plan.included_branches:
         raise HTTPException(
@@ -414,7 +535,9 @@ def onboard_tenant(
         if subscription_ends_on is None:
             duration_days = plan_duration_days(plan.key)
             if duration_days:
-                subscription_ends_on = payload.subscription_starts_on + timedelta(days=duration_days)
+                subscription_ends_on = payload.subscription_starts_on + timedelta(
+                    days=duration_days
+                )
         starts_today = payload.subscription_starts_on <= date.today()
         for existing in session.exec(
             select(TenantSubscription).where(
@@ -434,7 +557,9 @@ def onboard_tenant(
             ends_on=subscription_ends_on,
             is_trial=plan.key == "free_trial",
             is_active=starts_today,
-            status=SubscriptionStatus.ACTIVE if starts_today else SubscriptionStatus.SCHEDULED,
+            status=SubscriptionStatus.ACTIVE
+            if starts_today
+            else SubscriptionStatus.SCHEDULED,
             billing_amount=plan.price_inr_monthly,
             created_by_user_id=current_user.id,
             updated_by_user_id=current_user.id,
@@ -471,7 +596,8 @@ def onboard_tenant(
         role_template_ids = [
             role_id
             for role_id in role_template_ids
-            if (source_role := session.get(Role, role_id)) and source_role.key != tenant_admin_role.key
+            if (source_role := session.get(Role, role_id))
+            and source_role.key != tenant_admin_role.key
         ]
     for role_id in role_template_ids:
         _copy_role_template(session, role_id, tenant.id, current_user)
@@ -480,19 +606,29 @@ def onboard_tenant(
     for department_id in department_template_ids:
         _copy_department_template(session, department_id, tenant.id, current_user)
     for branch_id in branch_template_ids:
-        branches.append(_copy_branch_template(session, branch_id, tenant.id, current_user))
+        branches.append(
+            _copy_branch_template(session, branch_id, tenant.id, current_user)
+        )
 
     admin_user_id = None
     if payload.admin_user:
         existing_admin = session.exec(
-            select(User).where(User.tenant_id == tenant.id, User.email == payload.admin_user.email.strip().lower())
+            select(User).where(
+                User.tenant_id == tenant.id,
+                User.email == payload.admin_user.email.strip().lower(),
+            )
         ).first()
         if existing_admin:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tenant admin user already exists")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Tenant admin user already exists",
+            )
         user = User(
             tenant_id=tenant.id,
             branch_id=None,
-            user_number=next_document_number(session, tenant_id=tenant.id, entity="user"),
+            user_number=next_document_number(
+                session, tenant_id=tenant.id, entity="user"
+            ),
             user_type="tenant_admin",
             name=payload.admin_user.name,
             email=payload.admin_user.email.strip().lower(),
@@ -506,8 +642,16 @@ def onboard_tenant(
         session.commit()
         session.refresh(user)
         tenant_admin_role = _ensure_tenant_admin_role(session, tenant.id, current_user)
-        if not session.exec(select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == tenant_admin_role.id)).first():
-            session.add(UserRole(user_id=user.id, role_id=tenant_admin_role.id, tenant_id=tenant.id))
+        if not session.exec(
+            select(UserRole).where(
+                UserRole.user_id == user.id, UserRole.role_id == tenant_admin_role.id
+            )
+        ).first():
+            session.add(
+                UserRole(
+                    user_id=user.id, role_id=tenant_admin_role.id, tenant_id=tenant.id
+                )
+            )
             session.commit()
         admin_user_id = user.id
 
@@ -525,7 +669,10 @@ def onboard_tenant(
     session.refresh(tenant)
     return TenantOnboardingRead(
         tenant=TenantRead.model_validate(tenant, from_attributes=True),
-        branches=[BranchRead.model_validate(branch, from_attributes=True) for branch in branches],
+        branches=[
+            BranchRead.model_validate(branch, from_attributes=True)
+            for branch in branches
+        ],
         role_count=role_count,
         department_count=len(department_template_ids),
         branch_template_count=len(branch_template_ids),
@@ -541,7 +688,11 @@ def onboard_tenant(
     dependencies=[Depends(require_permission(permissions.PLATFORM_TENANTS_MANAGE))],
 )
 def list_tenants(session: Session = Depends(get_session)) -> list[Tenant]:
-    return list(session.exec(select(Tenant).order_by(Tenant.updated_at.desc(), Tenant.created_at.desc())).all())
+    return list(
+        session.exec(
+            select(Tenant).order_by(Tenant.updated_at.desc(), Tenant.created_at.desc())
+        ).all()
+    )
 
 
 @router.get(
@@ -552,7 +703,9 @@ def list_tenants(session: Session = Depends(get_session)) -> list[Tenant]:
 def get_tenant(tenant_id: str, session: Session = Depends(get_session)) -> Tenant:
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     return tenant
 
 
@@ -563,26 +716,58 @@ def get_tenant(tenant_id: str, session: Session = Depends(get_session)) -> Tenan
 def update_tenant(
     tenant_id: str,
     payload: TenantUpdate,
-    current_user: User = Depends(require_permission(permissions.PLATFORM_TENANTS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_TENANTS_MANAGE)
+    ),
     session: Session = Depends(get_session),
 ) -> Tenant:
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     updates = payload.model_dump(exclude_unset=True)
     for required_key in ("name", "tenant_type", "status", "country"):
         if updates.get(required_key) is None:
             updates.pop(required_key, None)
     if tenant.is_primary:
         if updates.get("name") not in (None, PRIMARY_TENANT_NAME):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Primary tenant name is fixed")
-        if updates.get("tenant_type") not in (None, TenantType.PRIMARY, TenantType.PRIMARY.value):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Primary tenant type is fixed")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Primary tenant name is fixed",
+            )
+        if updates.get("tenant_type") not in (
+            None,
+            TenantType.PRIMARY,
+            TenantType.PRIMARY.value,
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Primary tenant type is fixed",
+            )
         if updates.get("status") not in (None, TenantStatus.ACTIVE):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Primary tenant must remain active")
-    changed_name = updates.get("name") if "name" in updates and _normal_key(updates.get("name")) != _normal_key(tenant.name) else None
-    changed_email = updates.get("email") if "email" in updates and _normal_key(updates.get("email")) != _normal_key(tenant.email) else None
-    changed_phone = updates.get("phone") if "phone" in updates and _normal_key(updates.get("phone")) != _normal_key(tenant.phone) else None
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Primary tenant must remain active",
+            )
+    changed_name = (
+        updates.get("name")
+        if "name" in updates
+        and _normal_key(updates.get("name")) != _normal_key(tenant.name)
+        else None
+    )
+    changed_email = (
+        updates.get("email")
+        if "email" in updates
+        and _normal_key(updates.get("email")) != _normal_key(tenant.email)
+        else None
+    )
+    changed_phone = (
+        updates.get("phone")
+        if "phone" in updates
+        and _normal_key(updates.get("phone")) != _normal_key(tenant.phone)
+        else None
+    )
     _assert_unique_tenant_values(
         session,
         name=changed_name,
@@ -619,14 +804,20 @@ def update_tenant(
 async def upload_tenant_logo(
     tenant_id: str,
     file: UploadFile = File(...),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_TENANTS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_TENANTS_MANAGE)
+    ),
     session: Session = Depends(get_session),
 ) -> Tenant:
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     if not (file.content_type or "").startswith("image/"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Upload an image logo")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Upload an image logo"
+        )
     _filename, url_path = await save_upload(file, f"tenant_logo_{tenant.id}")
     tenant.logo_url = url_path
     tenant.updated_by_user_id = current_user.id
@@ -667,14 +858,21 @@ async def upload_tenant_logo(
 )
 def delete_tenant(
     tenant_id: str,
-    current_user: User = Depends(require_permission(permissions.PLATFORM_TENANTS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_TENANTS_MANAGE)
+    ),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     if tenant.is_primary:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Primary tenant cannot be deleted")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Primary tenant cannot be deleted",
+        )
     tenant.status = TenantStatus.SUSPENDED
     tenant.updated_by_user_id = current_user.id
     tenant.updated_at = now_utc()
@@ -690,7 +888,13 @@ def delete_tenant(
         )
     )
     session.commit()
-    return {"deleted": False, "deactivated": True, "mode": "deactivated", "tenant_id": tenant.id}
+    return {
+        "deleted": False,
+        "deactivated": True,
+        "mode": "deactivated",
+        "tenant_id": tenant.id,
+    }
+
 
 @router.post(
     "/{tenant_id}/branches",
@@ -701,18 +905,29 @@ def create_branch(
     tenant_id: str,
     payload: BranchCreate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.BRANCHES_MANAGE, permissions.BRANCHES_CREATE, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BRANCHES_MANAGE,
+            permissions.BRANCHES_CREATE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Branch:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     if not current_user.is_super_admin:
         _subscription, plan = get_active_subscription(session, tenant_id)
         branch_count = len(
             session.exec(
-                select(Branch.id).where(Branch.tenant_id == tenant_id, Branch.is_active == True)  # noqa: E712
+                select(Branch.id).where(
+                    Branch.tenant_id == tenant_id,
+                    Branch.is_active == True,  # noqa: E712
+                )  # noqa: E712
             ).all()
         )
         if branch_count >= plan.included_branches:
@@ -781,7 +996,9 @@ def list_branches(
         )
     return list(
         session.exec(
-            select(Branch).where(Branch.tenant_id == tenant_id).order_by(Branch.created_at.desc(), Branch.name.asc())
+            select(Branch)
+            .where(Branch.tenant_id == tenant_id)
+            .order_by(Branch.created_at.desc(), Branch.name.asc())
         ).all()
     )
 
@@ -792,7 +1009,13 @@ def update_branch(
     branch_id: str,
     payload: BranchUpdate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.BRANCHES_MANAGE, permissions.BRANCHES_EDIT, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BRANCHES_MANAGE,
+            permissions.BRANCHES_EDIT,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Branch:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
@@ -820,7 +1043,9 @@ def update_branch(
     return branch
 
 
-@router.post("/branches/{branch_id}/assign/{target_tenant_id}", response_model=BranchRead)
+@router.post(
+    "/branches/{branch_id}/assign/{target_tenant_id}", response_model=BranchRead
+)
 def assign_branch_to_tenant(
     branch_id: str,
     target_tenant_id: str,
@@ -830,14 +1055,23 @@ def assign_branch_to_tenant(
     source_branch = session.get(Branch, branch_id)
     target_tenant = session.get(Tenant, target_tenant_id)
     if not source_branch:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source branch not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source branch not found"
+        )
     if not target_tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found"
+        )
     if source_branch.tenant_id == target_tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source and target tenant are the same")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source and target tenant are the same",
+        )
 
     branch = session.exec(
-        select(Branch).where(Branch.tenant_id == target_tenant_id, Branch.code == source_branch.code)
+        select(Branch).where(
+            Branch.tenant_id == target_tenant_id, Branch.code == source_branch.code
+        )
     ).first()
     should_be_global = target_tenant.is_primary
     should_be_locked = not target_tenant.is_primary
@@ -890,11 +1124,19 @@ def update_branch_status(
     branch_id: str,
     payload: BranchUpdate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.BRANCHES_MANAGE, permissions.BRANCHES_EDIT, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BRANCHES_MANAGE,
+            permissions.BRANCHES_EDIT,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Branch:
     if payload.is_active is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required"
+        )
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     branch = _get_branch_or_404(session, tenant_id, branch_id)
     _assert_branch_editable_by_actor(branch, current_user)
@@ -923,7 +1165,13 @@ def delete_branch(
     tenant_id: str,
     branch_id: str,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.BRANCHES_MANAGE, permissions.BRANCHES_DELETE, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BRANCHES_MANAGE,
+            permissions.BRANCHES_DELETE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
@@ -957,19 +1205,32 @@ def create_department(
     tenant_id: str,
     payload: DepartmentCreate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_CREATE, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.DEPARTMENTS_CREATE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Department:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     if payload.branch_id:
         branch = session.get(Branch, payload.branch_id)
         if not branch or branch.tenant_id != tenant_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Branch is not part of this tenant")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Branch is not part of this tenant",
+            )
 
-    existing_departments = session.exec(select(Department).where(Department.tenant_id == tenant_id)).all()
+    existing_departments = session.exec(
+        select(Department).where(Department.tenant_id == tenant_id)
+    ).all()
     normalized_name = _normal_key(payload.name)
     conflicting_scope = next(
         (
@@ -996,13 +1257,18 @@ def create_department(
         (
             department
             for department in existing_departments
-            if department.branch_id == payload.branch_id and _normal_key(department.name) == normalized_name
+            if department.branch_id == payload.branch_id
+            and _normal_key(department.name) == normalized_name
         ),
         None,
     )
     if existing:
         _assert_department_editable_by_actor(existing, current_user)
-        existing.description = payload.description if payload.description is not None else existing.description
+        existing.description = (
+            payload.description
+            if payload.description is not None
+            else existing.description
+        )
         existing.is_active = payload.is_active
         existing.updated_by_user_id = current_user.id
         existing.updated_at = now_utc()
@@ -1053,7 +1319,10 @@ def create_department(
     return department
 
 
-@router.post("/departments/{department_id}/assign/{target_tenant_id}", response_model=DepartmentRead)
+@router.post(
+    "/departments/{department_id}/assign/{target_tenant_id}",
+    response_model=DepartmentRead,
+)
 def assign_department_to_tenant(
     department_id: str,
     target_tenant_id: str,
@@ -1063,14 +1332,24 @@ def assign_department_to_tenant(
     source_department = session.get(Department, department_id)
     target_tenant = session.get(Tenant, target_tenant_id)
     if not source_department:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source department not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source department not found"
+        )
     if not target_tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found"
+        )
     if source_department.tenant_id == target_tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source and target tenant are the same")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source and target tenant are the same",
+        )
 
     department = session.exec(
-        select(Department).where(Department.tenant_id == target_tenant_id, Department.code == source_department.code)
+        select(Department).where(
+            Department.tenant_id == target_tenant_id,
+            Department.code == source_department.code,
+        )
     ).first()
     should_be_global = target_tenant.is_primary
     should_be_locked = not target_tenant.is_primary
@@ -1137,7 +1416,9 @@ def list_departments(
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     return list(
         session.exec(
-            select(Department).where(Department.tenant_id == tenant_id).order_by(Department.created_at)
+            select(Department)
+            .where(Department.tenant_id == tenant_id)
+            .order_by(Department.created_at)
         ).all()
     )
 
@@ -1147,7 +1428,13 @@ def get_department(
     tenant_id: str,
     department_id: str,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_READ, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.DEPARTMENTS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Department:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
@@ -1160,7 +1447,13 @@ def update_department(
     department_id: str,
     payload: DepartmentUpdate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_EDIT, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.DEPARTMENTS_EDIT,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Department:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
@@ -1170,9 +1463,14 @@ def update_department(
     if updates.get("branch_id"):
         branch = session.get(Branch, updates["branch_id"])
         if not branch or branch.tenant_id != tenant_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Branch is not part of this tenant")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Branch is not part of this tenant",
+            )
     if "name" in updates and "code" not in updates:
-        department.code = _department_code(session, tenant_id, updates["name"], department.id)
+        department.code = _department_code(
+            session, tenant_id, updates["name"], department.id
+        )
     for key, value in updates.items():
         setattr(department, key, value)
     department.updated_by_user_id = current_user.id
@@ -1194,17 +1492,27 @@ def update_department(
     return department
 
 
-@router.post("/{tenant_id}/departments/{department_id}/status", response_model=DepartmentRead)
+@router.post(
+    "/{tenant_id}/departments/{department_id}/status", response_model=DepartmentRead
+)
 def update_department_status(
     tenant_id: str,
     department_id: str,
     payload: DepartmentUpdate,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_EDIT, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.DEPARTMENTS_EDIT,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Department:
     if payload.is_active is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required"
+        )
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)
     department = _get_department_or_404(session, tenant_id, department_id)
     _assert_department_editable_by_actor(department, current_user)
@@ -1228,12 +1536,20 @@ def update_department_status(
     return department
 
 
-@router.delete("/{tenant_id}/departments/{department_id}", status_code=status.HTTP_200_OK)
+@router.delete(
+    "/{tenant_id}/departments/{department_id}", status_code=status.HTTP_200_OK
+)
 def delete_department(
     tenant_id: str,
     department_id: str,
     x_tenant_id: Annotated[str | None, Header(alias="X-Tenant-ID")] = None,
-    current_user: User = Depends(require_any_permission(permissions.DEPARTMENTS_MANAGE, permissions.DEPARTMENTS_DELETE, permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.DEPARTMENTS_MANAGE,
+            permissions.DEPARTMENTS_DELETE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
     _assert_tenant_access(current_user, tenant_id, x_tenant_id)

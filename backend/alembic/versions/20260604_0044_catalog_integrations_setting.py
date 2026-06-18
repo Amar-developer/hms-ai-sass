@@ -18,7 +18,9 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         with op.get_context().autocommit_block():
-            op.execute("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'CATALOG_INTEGRATIONS'")
+            op.execute(
+                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'CATALOG_INTEGRATIONS'"
+            )
 
 
 def downgrade() -> None:

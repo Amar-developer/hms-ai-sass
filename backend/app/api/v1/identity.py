@@ -14,7 +14,14 @@ from app.core.auth import (
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
-from app.modules.identity.models import AuthSession, Permission, Role, RolePermission, User, UserRole
+from app.modules.identity.models import (
+    AuthSession,
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserRole,
+)
 from app.modules.identity.schemas import (
     AuthUserRead,
     BootstrapSuperAdminRequest,
@@ -30,7 +37,12 @@ from app.modules.identity.schemas import (
     UserRead,
     UserUpdate,
 )
-from app.modules.identity.security import create_access_session, find_user_by_login, hash_password, verify_password
+from app.modules.identity.security import (
+    create_access_session,
+    find_user_by_login,
+    hash_password,
+    verify_password,
+)
 from app.modules.identity import permissions
 from app.modules.settings.numbering import next_document_number
 from app.modules.subscriptions.service import ensure_default_plans
@@ -59,8 +71,12 @@ def _normalize_role_key(value: str) -> str:
 def _assert_tenant_admin(session: Session, current_user: User, tenant_id: str) -> None:
     if current_user.is_super_admin:
         return
-    if current_user.tenant_id != tenant_id or "tenant_admin" not in user_role_keys(session, current_user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant admin access required")
+    if current_user.tenant_id != tenant_id or "tenant_admin" not in user_role_keys(
+        session, current_user
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Tenant admin access required"
+        )
 
 
 def _assert_tenant_permission(
@@ -72,15 +88,23 @@ def _assert_tenant_permission(
     if current_user.is_super_admin:
         return
     if current_user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied"
+        )
     if "tenant_admin" in user_role_keys(session, current_user):
         return
-    if not set(permission_keys).intersection(user_permission_keys(session, current_user)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    if not set(permission_keys).intersection(
+        user_permission_keys(session, current_user)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied"
+        )
 
 
 def _has_tenant_admin_access(session: Session, user: User) -> bool:
-    return user.user_type == "tenant_admin" or "tenant_admin" in user_role_keys(session, user)
+    return user.user_type == "tenant_admin" or "tenant_admin" in user_role_keys(
+        session, user
+    )
 
 
 def _is_primary_tenant(session: Session, tenant_id: str | None) -> bool:
@@ -90,7 +114,9 @@ def _is_primary_tenant(session: Session, tenant_id: str | None) -> bool:
     return bool(tenant and tenant.is_primary)
 
 
-def _assert_role_editable_by_actor(session: Session, role: Role, current_user: User) -> None:
+def _assert_role_editable_by_actor(
+    session: Session, role: Role, current_user: User
+) -> None:
     if current_user.is_super_admin:
         return
     if role.is_template_locked or role.source_template_role_id:
@@ -147,7 +173,9 @@ def _ensure_permission(session: Session, key: str) -> Permission:
     return permission
 
 
-def _ensure_role_permissions(session: Session, role: Role, permission_keys: list[str]) -> None:
+def _ensure_role_permissions(
+    session: Session, role: Role, permission_keys: list[str]
+) -> None:
     for permission_key in permission_keys:
         permission = _ensure_permission(session, permission_key)
         role_permission = session.exec(
@@ -160,9 +188,13 @@ def _ensure_role_permissions(session: Session, role: Role, permission_keys: list
             session.add(RolePermission(role_id=role.id, permission_id=permission.id))
 
 
-def _ensure_super_admin_role(session: Session, primary_tenant: Tenant, user: User) -> Role:
+def _ensure_super_admin_role(
+    session: Session, primary_tenant: Tenant, user: User
+) -> Role:
     role = session.exec(
-        select(Role).where(Role.tenant_id == primary_tenant.id, Role.key == "super_admin")
+        select(Role).where(
+            Role.tenant_id == primary_tenant.id, Role.key == "super_admin"
+        )
     ).first()
     if not role:
         role = Role(
@@ -189,14 +221,20 @@ def _ensure_super_admin_role(session: Session, primary_tenant: Tenant, user: Use
         select(UserRole).where(UserRole.user_id == user.id, UserRole.role_id == role.id)
     ).first()
     if not user_role:
-        session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=primary_tenant.id))
+        session.add(
+            UserRole(user_id=user.id, role_id=role.id, tenant_id=primary_tenant.id)
+        )
     session.commit()
     return role
 
 
-def _ensure_primary_tenant_admin_role(session: Session, primary_tenant: Tenant, user: User) -> Role:
+def _ensure_primary_tenant_admin_role(
+    session: Session, primary_tenant: Tenant, user: User
+) -> Role:
     role = session.exec(
-        select(Role).where(Role.tenant_id == primary_tenant.id, Role.key == "tenant_admin")
+        select(Role).where(
+            Role.tenant_id == primary_tenant.id, Role.key == "tenant_admin"
+        )
     ).first()
     if not role:
         role = Role(
@@ -230,13 +268,20 @@ def _permission_read(key: str) -> PermissionRead:
         action = parts[2]
     else:
         module, _, action = key.partition(".")
-    return PermissionRead(key=key, module=module, action=action or "manage", description=key.replace(".", " ").title())
+    return PermissionRead(
+        key=key,
+        module=module,
+        action=action or "manage",
+        description=key.replace(".", " ").title(),
+    )
 
 
 def _ensure_primary_tenant(session: Session) -> Tenant:
     tenant = session.exec(select(Tenant).where(Tenant.is_primary == True)).first()  # noqa: E712
     if not tenant:
-        tenant = session.exec(select(Tenant).where(Tenant.name == PRIMARY_TENANT_NAME)).first()
+        tenant = session.exec(
+            select(Tenant).where(Tenant.name == PRIMARY_TENANT_NAME)
+        ).first()
     if tenant:
         tenant.name = PRIMARY_TENANT_NAME
         tenant.tenant_type = TenantType.PRIMARY.value
@@ -262,19 +307,27 @@ def _ensure_primary_tenant(session: Session) -> Tenant:
     return tenant
 
 
-@router.post("/auth/bootstrap-super-admin", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/auth/bootstrap-super-admin",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def bootstrap_super_admin(
     payload: BootstrapSuperAdminRequest,
     session: Session = Depends(get_session),
 ) -> User:
     existing = session.exec(select(User).where(User.is_super_admin == True)).first()  # noqa: E712
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Super admin already exists")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Super admin already exists"
+        )
     ensure_default_plans(session)
     primary_tenant = _ensure_primary_tenant(session)
     user = User(
         tenant_id=primary_tenant.id,
-        user_number=next_document_number(session, tenant_id=primary_tenant.id, entity="user"),
+        user_number=next_document_number(
+            session, tenant_id=primary_tenant.id, entity="user"
+        ),
         name=payload.name,
         email=_normalize_email(payload.email),
         password_hash=hash_password(payload.password),
@@ -289,19 +342,27 @@ def bootstrap_super_admin(
 
 
 @router.post("/auth/login", response_model=LoginResponse)
-def login(payload: LoginRequest, session: Session = Depends(get_session)) -> LoginResponse:
+def login(
+    payload: LoginRequest, session: Session = Depends(get_session)
+) -> LoginResponse:
     email = _normalize_email(payload.email)
 
     def tenant_allows_login(candidate: User) -> bool:
-        tenant = session.get(Tenant, candidate.tenant_id) if candidate.tenant_id else None
+        tenant = (
+            session.get(Tenant, candidate.tenant_id) if candidate.tenant_id else None
+        )
         return not tenant or tenant.status != TenantStatus.SUSPENDED
 
     if payload.tenant_id:
         user = find_user_by_login(session, email, payload.tenant_id)
         if not user or not verify_password(payload.password, user.password_hash):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login"
+            )
         if not tenant_allows_login(user):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended"
+            )
     else:
         candidates = session.exec(
             select(User)
@@ -312,12 +373,15 @@ def login(payload: LoginRequest, session: Session = Depends(get_session)) -> Log
             (
                 candidate
                 for candidate in candidates
-                if tenant_allows_login(candidate) and verify_password(payload.password, candidate.password_hash)
+                if tenant_allows_login(candidate)
+                and verify_password(payload.password, candidate.password_hash)
             ),
             None,
         )
         if not user:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login"
+            )
     token, auth_session = create_access_session(session, user)
     if user.tenant_id:
         record_audit_event(
@@ -377,7 +441,10 @@ def change_password(
     session: Session = Depends(get_session),
 ) -> User:
     if not verify_password(payload.current_password, current_user.password_hash):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is invalid")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is invalid",
+        )
     current_user.password_hash = hash_password(payload.new_password)
     current_user.must_change_password = False
     session.add(current_user)
@@ -399,11 +466,17 @@ def change_password(
 
 
 @router.get("/identity/permissions", response_model=list[PermissionRead])
-def list_permission_catalog(_current_user: User = Depends(get_current_user)) -> list[PermissionRead]:
-    return [_permission_read(key) for key in sorted(set(permissions.PERMISSION_CATALOG))]
+def list_permission_catalog(
+    _current_user: User = Depends(get_current_user),
+) -> list[PermissionRead]:
+    return [
+        _permission_read(key) for key in sorted(set(permissions.PERMISSION_CATALOG))
+    ]
 
 
-@router.post("/identity/roles", response_model=RoleRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/identity/roles", response_model=RoleRead, status_code=status.HTTP_201_CREATED
+)
 def create_role(
     payload: RoleCreate,
     tenant_id: str = Depends(require_tenant_id),
@@ -415,7 +488,8 @@ def create_role(
         tenant_id=tenant_id,
         name=payload.name,
         key=_normalize_role_key(payload.key or payload.name),
-        is_global_template=current_user.is_super_admin and _is_primary_tenant(session, tenant_id),
+        is_global_template=current_user.is_super_admin
+        and _is_primary_tenant(session, tenant_id),
         is_template_locked=False,
         created_by_user_id=current_user.id,
         updated_by_user_id=current_user.id,
@@ -440,7 +514,9 @@ def create_role(
     return _role_read(session, role)
 
 
-@router.post("/identity/roles/{role_id}/assign/{target_tenant_id}", response_model=RoleRead)
+@router.post(
+    "/identity/roles/{role_id}/assign/{target_tenant_id}", response_model=RoleRead
+)
 def assign_role_to_tenant(
     role_id: str,
     target_tenant_id: str,
@@ -450,11 +526,18 @@ def assign_role_to_tenant(
     source_role = session.get(Role, role_id)
     target_tenant = session.get(Tenant, target_tenant_id)
     if not source_role:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source role not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Source role not found"
+        )
     if not target_tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Target tenant not found"
+        )
     if source_role.tenant_id == target_tenant_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Source and target tenant are the same")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Source and target tenant are the same",
+        )
     if source_role.key == "super_admin" and not target_tenant.is_primary:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -469,7 +552,9 @@ def assign_role_to_tenant(
         ).all()
     )
     role = session.exec(
-        select(Role).where(Role.tenant_id == target_tenant_id, Role.key == source_role.key)
+        select(Role).where(
+            Role.tenant_id == target_tenant_id, Role.key == source_role.key
+        )
     ).first()
     should_be_global = target_tenant.is_primary
     should_be_locked = not target_tenant.is_primary
@@ -526,7 +611,9 @@ def list_roles(
         permissions.IDENTITY_USERS_READ,
     )
     roles = session.exec(
-        select(Role).where(Role.tenant_id == tenant_id).order_by(Role.updated_at.desc(), Role.created_at.desc())
+        select(Role)
+        .where(Role.tenant_id == tenant_id)
+        .order_by(Role.updated_at.desc(), Role.created_at.desc())
     ).all()
     return [_role_read(session, role) for role in roles]
 
@@ -534,12 +621,20 @@ def list_roles(
 def _get_tenant_role_or_404(session: Session, tenant_id: str, role_id: str) -> Role:
     role = session.get(Role, role_id)
     if not role or role.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Role not found"
+        )
     return role
 
 
-def _replace_role_permissions(session: Session, role: Role, permission_keys: list[str]) -> None:
-    existing = list(session.exec(select(RolePermission).where(RolePermission.role_id == role.id)).all())
+def _replace_role_permissions(
+    session: Session, role: Role, permission_keys: list[str]
+) -> None:
+    existing = list(
+        session.exec(
+            select(RolePermission).where(RolePermission.role_id == role.id)
+        ).all()
+    )
     for row in existing:
         session.delete(row)
     for permission_key in permission_keys:
@@ -563,7 +658,9 @@ def _resolve_role_for_user_assignment(
     role_key: str,
     current_user: User,
 ) -> Role | None:
-    role = session.exec(select(Role).where(Role.tenant_id == tenant_id, Role.key == role_key)).first()
+    role = session.exec(
+        select(Role).where(Role.tenant_id == tenant_id, Role.key == role_key)
+    ).first()
     if role or role_key != "tenant_admin" or not current_user.is_super_admin:
         return role
 
@@ -573,15 +670,23 @@ def _resolve_role_for_user_assignment(
         .join(Tenant, Tenant.id == Role.tenant_id)
         .where(Tenant.is_primary == True, Role.key == "tenant_admin")  # noqa: E712
     ).first()
-    source_permissions = _role_permission_keys(session, source_role) if source_role else TENANT_ADMIN_DEFAULT_PERMISSION_KEYS
+    source_permissions = (
+        _role_permission_keys(session, source_role)
+        if source_role
+        else TENANT_ADMIN_DEFAULT_PERMISSION_KEYS
+    )
     role = Role(
         tenant_id=tenant_id,
-        source_template_role_id=source_role.id if source_role and source_role.tenant_id != tenant_id else None,
+        source_template_role_id=source_role.id
+        if source_role and source_role.tenant_id != tenant_id
+        else None,
         name=source_role.name if source_role else "Tenant Admin",
         key="tenant_admin",
         is_active=True,
         is_global_template=bool(target_tenant and target_tenant.is_primary),
-        is_template_locked=bool(source_role and target_tenant and not target_tenant.is_primary),
+        is_template_locked=bool(
+            source_role and target_tenant and not target_tenant.is_primary
+        ),
         created_by_user_id=current_user.id,
         updated_by_user_id=current_user.id,
     )
@@ -595,7 +700,9 @@ def _resolve_role_for_user_assignment(
 
 def _normalize_user_access(updates: dict) -> dict:
     role_keys = list(updates.get("role_keys") or [])
-    has_tenant_admin_access = updates.get("user_type") == "tenant_admin" or "tenant_admin" in role_keys
+    has_tenant_admin_access = (
+        updates.get("user_type") == "tenant_admin" or "tenant_admin" in role_keys
+    )
     if has_tenant_admin_access:
         updates["user_type"] = "tenant_admin"
         updates["branch_id"] = None
@@ -619,9 +726,15 @@ def update_role(
     updates = payload.model_dump(exclude_unset=True)
     if "key" in updates and updates["key"]:
         next_key = _normalize_role_key(updates["key"])
-        duplicate = session.exec(select(Role).where(Role.tenant_id == tenant_id, Role.key == next_key, Role.id != role_id)).first()
+        duplicate = session.exec(
+            select(Role).where(
+                Role.tenant_id == tenant_id, Role.key == next_key, Role.id != role_id
+            )
+        ).first()
         if duplicate:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Role key already exists")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="Role key already exists"
+            )
         role.key = next_key
     if "name" in updates and updates["name"]:
         role.name = updates["name"]
@@ -657,7 +770,9 @@ def change_role_status(
 ) -> RoleRead:
     _assert_tenant_admin(session, current_user, tenant_id)
     if payload.is_active is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required"
+        )
     role = _get_tenant_role_or_404(session, tenant_id, role_id)
     _assert_role_editable_by_actor(session, role, current_user)
     role.is_active = payload.is_active
@@ -707,27 +822,47 @@ def delete_role(
     return {"deleted": True, "mode": "deactivated", "role_id": role.id}
 
 
-@router.post("/identity/users", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/identity/users", response_model=UserRead, status_code=status.HTTP_201_CREATED
+)
 def create_user(
     payload: UserCreate,
     tenant_id: str = Depends(require_tenant_id),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> UserRead:
-    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_CREATE)
+    _assert_tenant_permission(
+        session,
+        current_user,
+        tenant_id,
+        permissions.IDENTITY_USERS_MANAGE,
+        permissions.IDENTITY_USERS_CREATE,
+    )
     user_payload = _normalize_user_access(payload.model_dump())
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     existing = session.exec(
-        select(User).where(User.tenant_id == tenant_id, User.email == _normalize_email(user_payload["email"]))
+        select(User).where(
+            User.tenant_id == tenant_id,
+            User.email == _normalize_email(user_payload["email"]),
+        )
     ).first()
     if existing:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="User already exists"
+        )
     user = User(
         tenant_id=tenant_id,
         branch_id=user_payload["branch_id"],
-        user_number=next_document_number(session, tenant_id=tenant_id, branch_id=user_payload["branch_id"], entity="user"),
+        user_number=next_document_number(
+            session,
+            tenant_id=tenant_id,
+            branch_id=user_payload["branch_id"],
+            entity="user",
+        ),
         user_type=user_payload["user_type"],
         name=user_payload["name"],
         email=_normalize_email(user_payload["email"]),
@@ -741,9 +876,14 @@ def create_user(
     session.commit()
     session.refresh(user)
     for role_key in user_payload["role_keys"]:
-        role = _resolve_role_for_user_assignment(session, tenant_id, role_key, current_user)
+        role = _resolve_role_for_user_assignment(
+            session, tenant_id, role_key, current_user
+        )
         if not role:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown role: {role_key}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown role: {role_key}",
+            )
         session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=tenant_id))
     session.commit()
     record_audit_event(
@@ -766,9 +906,17 @@ def list_users(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[UserRead]:
-    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_READ)
+    _assert_tenant_permission(
+        session,
+        current_user,
+        tenant_id,
+        permissions.IDENTITY_USERS_MANAGE,
+        permissions.IDENTITY_USERS_READ,
+    )
     users = session.exec(
-        select(User).where(User.tenant_id == tenant_id).order_by(User.updated_at.desc(), User.created_at.desc())
+        select(User)
+        .where(User.tenant_id == tenant_id)
+        .order_by(User.updated_at.desc(), User.created_at.desc())
     ).all()
     return [_user_read(session, user) for user in users]
 
@@ -776,7 +924,9 @@ def list_users(
 def _get_tenant_user_or_404(session: Session, tenant_id: str, user_id: str) -> User:
     user = session.get(User, user_id)
     if not user or user.tenant_id != tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
     return user
 
 
@@ -787,13 +937,20 @@ def _replace_user_roles(
     role_keys: list[str],
     current_user: User,
 ) -> None:
-    existing = list(session.exec(select(UserRole).where(UserRole.user_id == user.id)).all())
+    existing = list(
+        session.exec(select(UserRole).where(UserRole.user_id == user.id)).all()
+    )
     for row in existing:
         session.delete(row)
     for role_key in role_keys:
-        role = _resolve_role_for_user_assignment(session, tenant_id, role_key, current_user)
+        role = _resolve_role_for_user_assignment(
+            session, tenant_id, role_key, current_user
+        )
         if not role:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unknown role: {role_key}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown role: {role_key}",
+            )
         session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=tenant_id))
 
 
@@ -805,22 +962,41 @@ def update_user(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> UserRead:
-    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_EDIT)
+    _assert_tenant_permission(
+        session,
+        current_user,
+        tenant_id,
+        permissions.IDENTITY_USERS_MANAGE,
+        permissions.IDENTITY_USERS_EDIT,
+    )
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
     updates = _normalize_user_access(payload.model_dump(exclude_unset=True))
     if "email" in updates and updates["email"]:
         email = _normalize_email(updates["email"])
         duplicate = session.exec(
-            select(User).where(User.tenant_id == tenant_id, User.email == email, User.id != user_id)
+            select(User).where(
+                User.tenant_id == tenant_id, User.email == email, User.id != user_id
+            )
         ).first()
         if duplicate:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User email already exists")
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="User email already exists"
+            )
         user.email = email
-    for key in ("name", "user_type", "mobile", "branch_id", "is_active", "must_change_password"):
+    for key in (
+        "name",
+        "user_type",
+        "mobile",
+        "branch_id",
+        "is_active",
+        "must_change_password",
+    ):
         if key in updates:
             setattr(user, key, updates[key])
     if "role_keys" in updates and updates["role_keys"] is not None:
-        _replace_user_roles(session, tenant_id, user, updates["role_keys"], current_user)
+        _replace_user_roles(
+            session, tenant_id, user, updates["role_keys"], current_user
+        )
     user.updated_by_user_id = current_user.id
     user.updated_at = now_utc()
     session.add(user)
@@ -857,11 +1033,23 @@ def reset_user_password(
     )
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
     if user.id == current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use change password for your own login")
-    if current_user.is_super_admin and (_is_primary_tenant(session, tenant_id) or not _has_tenant_admin_access(session, user)):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin can reset only tenant admin passwords")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Use change password for your own login",
+        )
+    if current_user.is_super_admin and (
+        _is_primary_tenant(session, tenant_id)
+        or not _has_tenant_admin_access(session, user)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin can reset only tenant admin passwords",
+        )
     if user.is_super_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Super admin password cannot be reset here")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin password cannot be reset here",
+        )
     user.password_hash = hash_password(payload.new_password)
     user.must_change_password = payload.must_change_password
     user.updated_by_user_id = current_user.id
@@ -891,12 +1079,23 @@ def change_user_status(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> UserRead:
-    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_EDIT)
+    _assert_tenant_permission(
+        session,
+        current_user,
+        tenant_id,
+        permissions.IDENTITY_USERS_MANAGE,
+        permissions.IDENTITY_USERS_EDIT,
+    )
     if payload.is_active is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required"
+        )
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
     if user.id == current_user.id and payload.is_active is False:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot deactivate your own user")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot deactivate your own user",
+        )
     user.is_active = payload.is_active
     user.updated_by_user_id = current_user.id
     user.updated_at = now_utc()
@@ -924,10 +1123,19 @@ def delete_user(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
-    _assert_tenant_permission(session, current_user, tenant_id, permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_DELETE)
+    _assert_tenant_permission(
+        session,
+        current_user,
+        tenant_id,
+        permissions.IDENTITY_USERS_MANAGE,
+        permissions.IDENTITY_USERS_DELETE,
+    )
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
     if user.id == current_user.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own user")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You cannot delete your own user",
+        )
     user.is_active = False
     user.email = f"deleted+{user.id}+{user.email}"
     user.updated_by_user_id = current_user.id

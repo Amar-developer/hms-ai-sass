@@ -179,4 +179,3 @@ Recommended when the app becomes more production-critical:
 - add staging deployment before production
 - add database backup before each production deploy
 - add rollback command or image tag based deployment
-

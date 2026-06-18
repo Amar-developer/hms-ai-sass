@@ -269,7 +269,9 @@ def test_setting_upsert_writes_audit_event(client):
             "actor_user_id": "admin_user",
         },
     )
-    audit = client.get("/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}).json()
+    audit = client.get(
+        "/api/v1/audit-events", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
     actions = [event["action"] for event in audit]
 
     assert "setting.upserted" in actions

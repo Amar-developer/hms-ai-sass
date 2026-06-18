@@ -18,6 +18,7 @@ from scripts.reset_super_admin import (
 
 CONFIRM_VALUE = "RESET_MEDIZINHUB_DEV"
 
+
 def reset_all_data() -> None:
     with engine.begin() as connection:
         if engine.url.drivername.startswith("sqlite"):

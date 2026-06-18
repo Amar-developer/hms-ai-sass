@@ -29,14 +29,48 @@ def _add(table: str, name: str, column) -> None:
 
 
 def upgrade() -> None:
-    _add("pharmacypurchase", "purchase_order_id", sa.Column("purchase_order_id", sa.String(length=120), nullable=True))
-    _add("pharmacypurchase", "purchase_date", sa.Column("purchase_date", sa.DateTime(), nullable=True))
-    _add("pharmacypurchase", "discount_percentage", sa.Column("discount_percentage", sa.Integer(), nullable=False, server_default="0"))
-    _add("pharmacypurchase", "discount_amount", sa.Column("discount_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("pharmacypurchase", "taxable_amount", sa.Column("taxable_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("pharmacypurchase", "cgst_amount", sa.Column("cgst_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("pharmacypurchase", "sgst_amount", sa.Column("sgst_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("pharmacypurchase", "gst_amount", sa.Column("gst_amount", sa.Integer(), nullable=False, server_default="0"))
+    _add(
+        "pharmacypurchase",
+        "purchase_order_id",
+        sa.Column("purchase_order_id", sa.String(length=120), nullable=True),
+    )
+    _add(
+        "pharmacypurchase",
+        "purchase_date",
+        sa.Column("purchase_date", sa.DateTime(), nullable=True),
+    )
+    _add(
+        "pharmacypurchase",
+        "discount_percentage",
+        sa.Column(
+            "discount_percentage", sa.Integer(), nullable=False, server_default="0"
+        ),
+    )
+    _add(
+        "pharmacypurchase",
+        "discount_amount",
+        sa.Column("discount_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "pharmacypurchase",
+        "taxable_amount",
+        sa.Column("taxable_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "pharmacypurchase",
+        "cgst_amount",
+        sa.Column("cgst_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "pharmacypurchase",
+        "sgst_amount",
+        sa.Column("sgst_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "pharmacypurchase",
+        "gst_amount",
+        sa.Column("gst_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
     for name in [
         "discount_percentage",
         "discount_amount",
@@ -48,7 +82,11 @@ def upgrade() -> None:
         "gst_amount",
         "line_total",
     ]:
-        _add("pharmacypurchaseitem", name, sa.Column(name, sa.Integer(), nullable=False, server_default="0"))
+        _add(
+            "pharmacypurchaseitem",
+            name,
+            sa.Column(name, sa.Integer(), nullable=False, server_default="0"),
+        )
     existing = _tables()
     if "pharmacyreturn" not in existing:
         op.create_table(
@@ -66,7 +104,9 @@ def upgrade() -> None:
         )
         op.create_index("ix_pharmacyreturn_tenant_id", "pharmacyreturn", ["tenant_id"])
         op.create_index("ix_pharmacyreturn_branch_id", "pharmacyreturn", ["branch_id"])
-        op.create_index("ix_pharmacyreturn_purchase_id", "pharmacyreturn", ["purchase_id"])
+        op.create_index(
+            "ix_pharmacyreturn_purchase_id", "pharmacyreturn", ["purchase_id"]
+        )
     if "pharmacyreturnitem" not in existing:
         op.create_table(
             "pharmacyreturnitem",
@@ -80,8 +120,12 @@ def upgrade() -> None:
             sa.Column("amount", sa.Integer(), nullable=False, server_default="0"),
             sa.Column("created_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_pharmacyreturnitem_tenant_id", "pharmacyreturnitem", ["tenant_id"])
-        op.create_index("ix_pharmacyreturnitem_return_id", "pharmacyreturnitem", ["return_id"])
+        op.create_index(
+            "ix_pharmacyreturnitem_tenant_id", "pharmacyreturnitem", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_pharmacyreturnitem_return_id", "pharmacyreturnitem", ["return_id"]
+        )
 
 
 def downgrade() -> None:

@@ -22,7 +22,9 @@ def _tables() -> set[str]:
 def _columns(table_name: str) -> set[str]:
     if table_name not in _tables():
         return set()
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def _create_if_missing(table_name: str, *columns: sa.Column) -> None:
@@ -46,7 +48,9 @@ def upgrade() -> None:
         sa.Column("manufacturer", sa.String(length=120), nullable=True),
         sa.Column("model_number", sa.String(length=120), nullable=True),
         sa.Column("serial_number", sa.String(length=120), nullable=True),
-        sa.Column("is_portable", sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column(
+            "is_portable", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_by_user_id", sa.String(), nullable=True),
         sa.Column("updated_by_user_id", sa.String(), nullable=True),
@@ -118,12 +122,20 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["tenant_id"], ["tenant.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    _add("invoice", "physiotherapy_case_id", sa.Column("physiotherapy_case_id", sa.String(), nullable=True))
+    _add(
+        "invoice",
+        "physiotherapy_case_id",
+        sa.Column("physiotherapy_case_id", sa.String(), nullable=True),
+    )
 
 
 def downgrade() -> None:
     if "invoice" in _tables() and "physiotherapy_case_id" in _columns("invoice"):
         op.drop_column("invoice", "physiotherapy_case_id")
-    for table_name in ["physiotherapysession", "physiotherapycase", "physiotherapyequipment"]:
+    for table_name in [
+        "physiotherapysession",
+        "physiotherapycase",
+        "physiotherapyequipment",
+    ]:
         if table_name in _tables():
             op.drop_table(table_name)

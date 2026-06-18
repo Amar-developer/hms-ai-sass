@@ -20,7 +20,7 @@ services:
     image: redis:7-alpine
     container_name: medizinhub-redis
     ports:
-      - "6380:6379" 
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -52,14 +52,14 @@ services:
       - "local.healthcare:host-gateway"
     depends_on:
       - postgres
-      - redis 
+      - redis
     env_file:
-    - .env   
+    - .env
     command: >
       bash -c "
       alembic -c alembic/alembic.ini upgrade head &&
       uvicorn app.main:app --host 0.0.0.0 --port 8080
-      " 
+      "
     environment:
       PYTHONPATH: /app
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0

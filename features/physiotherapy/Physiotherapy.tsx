@@ -744,8 +744,3 @@ export function Physiotherapy({
     </div>
   );
 }
-
-
-
-
-

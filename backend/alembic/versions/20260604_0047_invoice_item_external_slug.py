@@ -29,7 +29,10 @@ def _columns(table_name: str) -> set[str]:
 
 def upgrade() -> None:
     if "invoiceitem" in _tables() and "external_slug" not in _columns("invoiceitem"):
-        op.add_column("invoiceitem", sa.Column("external_slug", sa.String(length=220), nullable=True))
+        op.add_column(
+            "invoiceitem",
+            sa.Column("external_slug", sa.String(length=220), nullable=True),
+        )
 
 
 def downgrade() -> None:

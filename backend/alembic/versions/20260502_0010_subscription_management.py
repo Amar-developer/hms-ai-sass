@@ -29,16 +29,52 @@ def _add(table: str, name: str, column) -> None:
 
 
 def upgrade() -> None:
-    _add("subscriptionplan", "created_by_user_id", sa.Column("created_by_user_id", sa.String(), nullable=True))
-    _add("subscriptionplan", "updated_by_user_id", sa.Column("updated_by_user_id", sa.String(), nullable=True))
-    _add("subscriptionplan", "updated_at", sa.Column("updated_at", sa.DateTime(), nullable=True))
+    _add(
+        "subscriptionplan",
+        "created_by_user_id",
+        sa.Column("created_by_user_id", sa.String(), nullable=True),
+    )
+    _add(
+        "subscriptionplan",
+        "updated_by_user_id",
+        sa.Column("updated_by_user_id", sa.String(), nullable=True),
+    )
+    _add(
+        "subscriptionplan",
+        "updated_at",
+        sa.Column("updated_at", sa.DateTime(), nullable=True),
+    )
 
-    _add("tenantsubscription", "status", sa.Column("status", sa.String(), nullable=False, server_default="active"))
-    _add("tenantsubscription", "billing_amount", sa.Column("billing_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("tenantsubscription", "notes", sa.Column("notes", sa.String(length=1000), nullable=True))
-    _add("tenantsubscription", "created_by_user_id", sa.Column("created_by_user_id", sa.String(), nullable=True))
-    _add("tenantsubscription", "updated_by_user_id", sa.Column("updated_by_user_id", sa.String(), nullable=True))
-    _add("tenantsubscription", "updated_at", sa.Column("updated_at", sa.DateTime(), nullable=True))
+    _add(
+        "tenantsubscription",
+        "status",
+        sa.Column("status", sa.String(), nullable=False, server_default="active"),
+    )
+    _add(
+        "tenantsubscription",
+        "billing_amount",
+        sa.Column("billing_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "tenantsubscription",
+        "notes",
+        sa.Column("notes", sa.String(length=1000), nullable=True),
+    )
+    _add(
+        "tenantsubscription",
+        "created_by_user_id",
+        sa.Column("created_by_user_id", sa.String(), nullable=True),
+    )
+    _add(
+        "tenantsubscription",
+        "updated_by_user_id",
+        sa.Column("updated_by_user_id", sa.String(), nullable=True),
+    )
+    _add(
+        "tenantsubscription",
+        "updated_at",
+        sa.Column("updated_at", sa.DateTime(), nullable=True),
+    )
 
     existing_tables = _tables()
     if "subscriptioncredit" not in existing_tables:
@@ -60,9 +96,17 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_subscriptioncredit_tenant_id", "subscriptioncredit", ["tenant_id"])
-        op.create_index("ix_subscriptioncredit_subscription_id", "subscriptioncredit", ["subscription_id"])
-        op.create_index("ix_subscriptioncredit_status", "subscriptioncredit", ["status"])
+        op.create_index(
+            "ix_subscriptioncredit_tenant_id", "subscriptioncredit", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_subscriptioncredit_subscription_id",
+            "subscriptioncredit",
+            ["subscription_id"],
+        )
+        op.create_index(
+            "ix_subscriptioncredit_status", "subscriptioncredit", ["status"]
+        )
 
     if "subscriptioninvoice" not in existing_tables:
         op.create_table(
@@ -83,11 +127,25 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(), nullable=False),
             sa.Column("updated_at", sa.DateTime(), nullable=False),
         )
-        op.create_index("ix_subscriptioninvoice_tenant_id", "subscriptioninvoice", ["tenant_id"])
-        op.create_index("ix_subscriptioninvoice_subscription_id", "subscriptioninvoice", ["subscription_id"])
-        op.create_index("ix_subscriptioninvoice_credit_id", "subscriptioninvoice", ["credit_id"])
-        op.create_index("ix_subscriptioninvoice_invoice_number", "subscriptioninvoice", ["invoice_number"])
-        op.create_index("ix_subscriptioninvoice_status", "subscriptioninvoice", ["status"])
+        op.create_index(
+            "ix_subscriptioninvoice_tenant_id", "subscriptioninvoice", ["tenant_id"]
+        )
+        op.create_index(
+            "ix_subscriptioninvoice_subscription_id",
+            "subscriptioninvoice",
+            ["subscription_id"],
+        )
+        op.create_index(
+            "ix_subscriptioninvoice_credit_id", "subscriptioninvoice", ["credit_id"]
+        )
+        op.create_index(
+            "ix_subscriptioninvoice_invoice_number",
+            "subscriptioninvoice",
+            ["invoice_number"],
+        )
+        op.create_index(
+            "ix_subscriptioninvoice_status", "subscriptioninvoice", ["status"]
+        )
 
 
 def downgrade() -> None:
@@ -97,7 +155,14 @@ def downgrade() -> None:
     if "subscriptioncredit" in existing_tables:
         op.drop_table("subscriptioncredit")
     for table, names in {
-        "tenantsubscription": ["updated_at", "updated_by_user_id", "created_by_user_id", "notes", "billing_amount", "status"],
+        "tenantsubscription": [
+            "updated_at",
+            "updated_by_user_id",
+            "created_by_user_id",
+            "notes",
+            "billing_amount",
+            "status",
+        ],
         "subscriptionplan": ["updated_at", "updated_by_user_id", "created_by_user_id"],
     }.items():
         existing = _columns(table)

@@ -149,7 +149,7 @@ docker compose -f docker-compose.dev.yml up
 docker compose -f docker-compose.dev.yml down
 
 # FOR PRODUCTION
-# 1. Build all images fresh 
+# 1. Build all images fresh
 docker compose build
 
 # 2. Start everything in background (-d = detached)
@@ -196,7 +196,7 @@ docker compose up -d --remove-orphans
 5. wsl --install -d Ubuntu ---> install ubuntu in windows
 
 6. Open Ubuntu
-wsl -d Ubuntu ---> use this command 
+wsl -d Ubuntu ---> use this command
 First time setup:
 create Linux username
 create password

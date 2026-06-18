@@ -32,13 +32,17 @@ def upgrade() -> None:
     if "lab_order_id" not in columns:
         op.add_column("invoice", sa.Column("lab_order_id", sa.String(), nullable=True))
     if "pharmacy_issue_id" not in columns:
-        op.add_column("invoice", sa.Column("pharmacy_issue_id", sa.String(), nullable=True))
+        op.add_column(
+            "invoice", sa.Column("pharmacy_issue_id", sa.String(), nullable=True)
+        )
 
     indexes = _indexes("invoice")
     if "ix_invoice_lab_order_id" not in indexes:
         op.create_index("ix_invoice_lab_order_id", "invoice", ["lab_order_id"])
     if "ix_invoice_pharmacy_issue_id" not in indexes:
-        op.create_index("ix_invoice_pharmacy_issue_id", "invoice", ["pharmacy_issue_id"])
+        op.create_index(
+            "ix_invoice_pharmacy_issue_id", "invoice", ["pharmacy_issue_id"]
+        )
 
 
 def downgrade() -> None:

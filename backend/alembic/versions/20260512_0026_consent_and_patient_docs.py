@@ -22,7 +22,9 @@ def _tables() -> set[str]:
 def _columns(table_name: str) -> set[str]:
     if table_name not in _tables():
         return set()
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def _add(table_name: str, column_name: str, column: sa.Column) -> None:
@@ -32,30 +34,92 @@ def _add(table_name: str, column_name: str, column: sa.Column) -> None:
 
 def upgrade() -> None:
     # Physiotherapy consent form columns
-    _add("physiotherapycase", "consent_form_url", sa.Column("consent_form_url", sa.String(length=500), nullable=True))
-    _add("physiotherapycase", "consent_form_name", sa.Column("consent_form_name", sa.String(length=220), nullable=True))
-    _add("physiotherapycase", "consent_files_json", sa.Column("consent_files_json", sa.String(length=6000), nullable=False, server_default="[]"))
-    _add("physiotherapycase", "consent_notes", sa.Column("consent_notes", sa.String(length=1000), nullable=True))
-    _add("physiotherapycase", "consent_submitted_at", sa.Column("consent_submitted_at", sa.DateTime(timezone=True), nullable=True))
+    _add(
+        "physiotherapycase",
+        "consent_form_url",
+        sa.Column("consent_form_url", sa.String(length=500), nullable=True),
+    )
+    _add(
+        "physiotherapycase",
+        "consent_form_name",
+        sa.Column("consent_form_name", sa.String(length=220), nullable=True),
+    )
+    _add(
+        "physiotherapycase",
+        "consent_files_json",
+        sa.Column(
+            "consent_files_json",
+            sa.String(length=6000),
+            nullable=False,
+            server_default="[]",
+        ),
+    )
+    _add(
+        "physiotherapycase",
+        "consent_notes",
+        sa.Column("consent_notes", sa.String(length=1000), nullable=True),
+    )
+    _add(
+        "physiotherapycase",
+        "consent_submitted_at",
+        sa.Column("consent_submitted_at", sa.DateTime(timezone=True), nullable=True),
+    )
 
     # IP admission Aadhaar and admission document columns
-    _add("ipadmission", "aadhaar_number", sa.Column("aadhaar_number", sa.String(length=12), nullable=True))
-    _add("ipadmission", "admission_document_url", sa.Column("admission_document_url", sa.String(length=500), nullable=True))
-    _add("ipadmission", "admission_document_name", sa.Column("admission_document_name", sa.String(length=220), nullable=True))
-    _add("ipadmission", "admission_document_uploaded_at", sa.Column("admission_document_uploaded_at", sa.DateTime(timezone=True), nullable=True))
+    _add(
+        "ipadmission",
+        "aadhaar_number",
+        sa.Column("aadhaar_number", sa.String(length=12), nullable=True),
+    )
+    _add(
+        "ipadmission",
+        "admission_document_url",
+        sa.Column("admission_document_url", sa.String(length=500), nullable=True),
+    )
+    _add(
+        "ipadmission",
+        "admission_document_name",
+        sa.Column("admission_document_name", sa.String(length=220), nullable=True),
+    )
+    _add(
+        "ipadmission",
+        "admission_document_uploaded_at",
+        sa.Column(
+            "admission_document_uploaded_at", sa.DateTime(timezone=True), nullable=True
+        ),
+    )
 
     # Patient photo / document columns
-    _add("patient", "photo_url", sa.Column("photo_url", sa.String(length=500), nullable=True))
-    _add("patient", "photo_file_name", sa.Column("photo_file_name", sa.String(length=220), nullable=True))
+    _add(
+        "patient",
+        "photo_url",
+        sa.Column("photo_url", sa.String(length=500), nullable=True),
+    )
+    _add(
+        "patient",
+        "photo_file_name",
+        sa.Column("photo_file_name", sa.String(length=220), nullable=True),
+    )
 
 
 def downgrade() -> None:
-    for col in ("consent_form_url", "consent_form_name", "consent_files_json", "consent_notes", "consent_submitted_at"):
+    for col in (
+        "consent_form_url",
+        "consent_form_name",
+        "consent_files_json",
+        "consent_notes",
+        "consent_submitted_at",
+    ):
         try:
             op.drop_column("physiotherapycase", col)
         except Exception:
             pass
-    for col in ("aadhaar_number", "admission_document_url", "admission_document_name", "admission_document_uploaded_at"):
+    for col in (
+        "aadhaar_number",
+        "admission_document_url",
+        "admission_document_name",
+        "admission_document_uploaded_at",
+    ):
         try:
             op.drop_column("ipadmission", col)
         except Exception:

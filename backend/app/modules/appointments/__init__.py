@@ -1,2 +1,1 @@
 """Appointment booking module."""
-

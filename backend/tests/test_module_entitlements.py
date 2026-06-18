@@ -2,7 +2,9 @@ from datetime import date
 
 
 def create_signed_consultation_on_trial(client):
-    tenant = client.post("/api/v1/tenants", json={"name": "Trial Billing Clinic"}).json()
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Trial Billing Clinic"}
+    ).json()
     branch = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
         json={"name": "Main Branch", "code": "MAIN"},
@@ -76,12 +78,19 @@ def test_free_trial_blocks_advanced_billing_invoice_generation(client):
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"] == "Module billing_advanced is not enabled for plan Free Trial"
+    assert (
+        response.json()["detail"]
+        == "Module billing_advanced is not enabled for plan Free Trial"
+    )
 
 
 def test_starter_entitlements_enable_advanced_billing(client):
     tenant, consultation = create_signed_consultation_on_trial(client)
-    starter = next(plan for plan in client.get("/api/v1/subscription-plans").json() if plan["key"] == "starter")
+    starter = next(
+        plan
+        for plan in client.get("/api/v1/subscription-plans").json()
+        if plan["key"] == "starter"
+    )
     client.post(
         "/api/v1/subscription-plans/tenant-subscriptions",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -107,7 +116,9 @@ def test_starter_entitlements_enable_advanced_billing(client):
 
 
 def test_custom_plan_can_enable_growth_modules(client):
-    tenant = client.post("/api/v1/tenants", json={"name": "Growth Module Clinic"}).json()
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Growth Module Clinic"}
+    ).json()
     plan = client.post(
         "/api/v1/subscription-plans",
         json={
@@ -148,6 +159,8 @@ def test_custom_plan_can_enable_growth_modules(client):
     )
 
     modules = set(entitlements.json()["enabled_modules"])
-    assert {"lab", "pharmacy", "whatsapp", "sms", "voice", "billing_advanced"}.issubset(modules)
+    assert {"lab", "pharmacy", "whatsapp", "sms", "voice", "billing_advanced"}.issubset(
+        modules
+    )
     assert "ai" not in modules
     assert "ip" not in modules

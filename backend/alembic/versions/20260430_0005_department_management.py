@@ -20,9 +20,14 @@ def upgrade() -> None:
     columns = {column["name"] for column in inspector.get_columns("department")}
     indexes = {index["name"] for index in inspector.get_indexes("department")}
     if "description" not in columns:
-        op.add_column("department", sa.Column("description", sa.String(length=1000), nullable=True))
+        op.add_column(
+            "department",
+            sa.Column("description", sa.String(length=1000), nullable=True),
+        )
     if "created_by_user_id" not in columns:
-        op.add_column("department", sa.Column("created_by_user_id", sa.String(), nullable=True))
+        op.add_column(
+            "department", sa.Column("created_by_user_id", sa.String(), nullable=True)
+        )
     if "updated_at" not in columns:
         op.add_column(
             "department",
@@ -34,7 +39,9 @@ def upgrade() -> None:
             ),
         )
     if "ix_department_created_by_user_id" not in indexes:
-        op.create_index("ix_department_created_by_user_id", "department", ["created_by_user_id"])
+        op.create_index(
+            "ix_department_created_by_user_id", "department", ["created_by_user_id"]
+        )
 
 
 def downgrade() -> None:

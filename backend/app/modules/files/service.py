@@ -45,7 +45,9 @@ def record_file_document(
         existing.attached_to_label = attached_to_label or existing.attached_to_label
         existing.folder = folder or existing.folder
         existing.notes = notes if notes is not None else existing.notes
-        existing.uploaded_by_user_id = uploaded_by_user_id or existing.uploaded_by_user_id
+        existing.uploaded_by_user_id = (
+            uploaded_by_user_id or existing.uploaded_by_user_id
+        )
         existing.is_private = is_private
         existing.is_active = True
         existing.updated_at = now_utc()

@@ -2,7 +2,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.modules.pharmacy.models import PharmacyIssueSource, PharmacyIssueStatus, StockLedgerMovement
+from app.modules.pharmacy.models import (
+    PharmacyIssueSource,
+    PharmacyIssueStatus,
+    StockLedgerMovement,
+)
 
 
 class MedicineCreate(BaseModel):

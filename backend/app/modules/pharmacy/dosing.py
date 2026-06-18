@@ -105,8 +105,17 @@ def duration_days(duration: str | None) -> int:
     return max(math.ceil(number), 1)
 
 
-def prescription_quantity(dosage: str | None, frequency: str | None, duration: str | None) -> int:
-    return max(math.ceil(dose_units(dosage) * frequency_doses_per_day(frequency) * duration_days(duration)), 1)
+def prescription_quantity(
+    dosage: str | None, frequency: str | None, duration: str | None
+) -> int:
+    return max(
+        math.ceil(
+            dose_units(dosage)
+            * frequency_doses_per_day(frequency)
+            * duration_days(duration)
+        ),
+        1,
+    )
 
 
 def daily_administration_quantity(dosage: str | None, frequency: str | None) -> int:

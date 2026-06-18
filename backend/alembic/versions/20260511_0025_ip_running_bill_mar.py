@@ -22,7 +22,9 @@ def _tables() -> set[str]:
 def _columns(table_name: str) -> set[str]:
     if table_name not in _tables():
         return set()
-    return {column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)}
+    return {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns(table_name)
+    }
 
 
 def _add(table_name: str, column_name: str, column: sa.Column) -> None:
@@ -31,9 +33,26 @@ def _add(table_name: str, column_name: str, column: sa.Column) -> None:
 
 
 def upgrade() -> None:
-    _add("ipconsultation", "consultation_type", sa.Column("consultation_type", sa.String(length=80), nullable=False, server_default="ward_round"))
-    _add("ipconsultation", "fee_amount", sa.Column("fee_amount", sa.Integer(), nullable=False, server_default="0"))
-    _add("ipconsultation", "billing_item_id", sa.Column("billing_item_id", sa.String(), nullable=True))
+    _add(
+        "ipconsultation",
+        "consultation_type",
+        sa.Column(
+            "consultation_type",
+            sa.String(length=80),
+            nullable=False,
+            server_default="ward_round",
+        ),
+    )
+    _add(
+        "ipconsultation",
+        "fee_amount",
+        sa.Column("fee_amount", sa.Integer(), nullable=False, server_default="0"),
+    )
+    _add(
+        "ipconsultation",
+        "billing_item_id",
+        sa.Column("billing_item_id", sa.String(), nullable=True),
+    )
 
     if "ipbillingitem" not in _tables():
         op.create_table(

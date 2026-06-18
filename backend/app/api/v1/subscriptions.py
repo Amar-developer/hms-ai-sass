@@ -75,7 +75,9 @@ def _invoice_read(invoice: SubscriptionInvoice) -> SubscriptionInvoiceRead:
     if invoice.total_amount == 0 and invoice.amount:
         invoice.taxable_amount = invoice.taxable_amount or invoice.amount
         invoice.total_amount = invoice.total_amount or invoice.amount
-        invoice.balance_amount = invoice.balance_amount or max(invoice.total_amount - invoice.paid_amount, 0)
+        invoice.balance_amount = invoice.balance_amount or max(
+            invoice.total_amount - invoice.paid_amount, 0
+        )
     return SubscriptionInvoiceRead.model_validate(invoice, from_attributes=True)
 
 
@@ -106,7 +108,9 @@ def _normalize_enabled_modules(raw_modules: list[str] | None) -> list[str]:
         if module.get("entitlement_key")
     }
     module_by_key = {str(module["key"]): module for module in MODULES}
-    selected = {str(module).strip() for module in (raw_modules or []) if str(module).strip()}
+    selected = {
+        str(module).strip() for module in (raw_modules or []) if str(module).strip()
+    }
     if not selected:
         selected = set(CORE_HMS_MODULES)
 
@@ -119,7 +123,11 @@ def _normalize_enabled_modules(raw_modules: list[str] | None) -> list[str]:
                 continue
             for dependency in module.get("dependencies", []):
                 dependency_module = module_by_key.get(str(dependency))
-                dependency_key = dependency_module.get("entitlement_key") if dependency_module else dependency
+                dependency_key = (
+                    dependency_module.get("entitlement_key")
+                    if dependency_module
+                    else dependency
+                )
                 if dependency_key and dependency_key not in selected:
                     selected.add(str(dependency_key))
                     changed = True
@@ -171,21 +179,33 @@ def _usage_read(session: Session, tenant_id: str) -> SubscriptionUsageRead:
         subscription = session.exec(
             select(TenantSubscription)
             .where(TenantSubscription.tenant_id == tenant_id)
-            .order_by(TenantSubscription.ends_on.desc(), TenantSubscription.updated_at.desc())
+            .order_by(
+                TenantSubscription.ends_on.desc(), TenantSubscription.updated_at.desc()
+            )
         ).first()
-        plan = session.get(SubscriptionPlan, subscription.plan_id) if subscription else None
+        plan = (
+            session.get(SubscriptionPlan, subscription.plan_id)
+            if subscription
+            else None
+        )
         missing_subscription_reason = str(exc.detail or "No active subscription found")
     patient_count = current_patient_count(session, tenant_id)
     credits = active_patient_credits(session, tenant_id)
     limit = (plan.monthly_patient_limit if plan else 0) + credits
     remaining = max(limit - patient_count, 0)
-    days_to_expiry = (subscription.ends_on - date.today()).days if subscription and subscription.ends_on else None
+    days_to_expiry = (
+        (subscription.ends_on - date.today()).days
+        if subscription and subscription.ends_on
+        else None
+    )
     usage_percentage = round((patient_count / limit) * 100, 2) if limit else 100.0
     alerts = []
     if missing_subscription_reason:
         alerts.append(missing_subscription_reason)
     if days_to_expiry is not None and days_to_expiry <= 7:
-        alerts.append("Plan has expired" if days_to_expiry < 0 else "Plan expires within 7 days")
+        alerts.append(
+            "Plan has expired" if days_to_expiry < 0 else "Plan expires within 7 days"
+        )
     if remaining == 0:
         alerts.append("Patient limit reached")
     elif usage_percentage >= 90:
@@ -196,7 +216,9 @@ def _usage_read(session: Session, tenant_id: str) -> SubscriptionUsageRead:
         tenant_id=tenant_id,
         plan_key=plan.key if plan else "no_active_subscription",
         plan_name=plan.name if plan else "No active subscription",
-        subscription_status=subscription.status if subscription else SubscriptionStatus.EXPIRED,
+        subscription_status=subscription.status
+        if subscription
+        else SubscriptionStatus.EXPIRED,
         starts_on=subscription.starts_on if subscription else date.today(),
         ends_on=subscription.ends_on if subscription else None,
         monthly_patient_limit=plan.monthly_patient_limit if plan else 0,
@@ -210,11 +232,15 @@ def _usage_read(session: Session, tenant_id: str) -> SubscriptionUsageRead:
     )
 
 
-@router.post("", response_model=SubscriptionPlanRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=SubscriptionPlanRead, status_code=status.HTTP_201_CREATED
+)
 def create_plan(
     payload: SubscriptionPlanCreate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> SubscriptionPlanRead:
     enabled_modules = _normalize_enabled_modules(payload.enabled_modules)
     plan = SubscriptionPlan.model_validate(
@@ -249,10 +275,16 @@ def create_plan(
 @router.get("", response_model=list[SubscriptionPlanRead])
 def list_plans(
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    _current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> list[SubscriptionPlanRead]:
     ensure_default_plans(session)
-    plans = list(session.exec(select(SubscriptionPlan).order_by(SubscriptionPlan.price_inr_monthly)).all())
+    plans = list(
+        session.exec(
+            select(SubscriptionPlan).order_by(SubscriptionPlan.price_inr_monthly)
+        ).all()
+    )
     return [_plan_read(plan) for plan in plans]
 
 
@@ -261,17 +293,23 @@ def update_plan(
     plan_id: str,
     payload: SubscriptionPlanUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> SubscriptionPlanRead:
     plan = session.get(SubscriptionPlan, plan_id)
     if not plan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription plan not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Subscription plan not found"
+        )
     updates = payload.model_dump(exclude_unset=True)
     enabled_modules = updates.pop("enabled_modules", None)
     for key, value in updates.items():
         setattr(plan, key, value)
     if enabled_modules is not None:
-        plan.enabled_modules_json = modules_to_json(_normalize_enabled_modules(enabled_modules))
+        plan.enabled_modules_json = modules_to_json(
+            _normalize_enabled_modules(enabled_modules)
+        )
     plan.updated_by_user_id = current_user.id
     plan.updated_at = now_utc()
     session.add(plan)
@@ -293,11 +331,15 @@ def change_plan_status(
     plan_id: str,
     payload: SubscriptionPlanStatusUpdate,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> SubscriptionPlanRead:
     plan = session.get(SubscriptionPlan, plan_id)
     if not plan:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription plan not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Subscription plan not found"
+        )
     plan.is_active = payload.is_active
     plan.updated_by_user_id = current_user.id
     plan.updated_at = now_utc()
@@ -315,16 +357,24 @@ def change_plan_status(
     return _plan_read(plan)
 
 
-@router.post("/tenant-subscriptions", response_model=TenantSubscriptionRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/tenant-subscriptions",
+    response_model=TenantSubscriptionRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_tenant_subscription(
     payload: TenantSubscriptionCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> TenantSubscription:
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     if tenant.is_primary:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -332,7 +382,9 @@ def create_tenant_subscription(
         )
     plan = session.get(SubscriptionPlan, payload.plan_id)
     if not plan or not plan.is_active:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid subscription plan"
+        )
     if plan.key == "free_trial":
         existing_trial = session.exec(
             select(TenantSubscription).where(
@@ -373,8 +425,12 @@ def create_tenant_subscription(
             "ends_on": ends_on,
             "is_active": starts_today,
             "is_trial": plan.key == "free_trial",
-            "status": SubscriptionStatus.ACTIVE if starts_today else SubscriptionStatus.SCHEDULED,
-            "billing_amount": payload.billing_amount if payload.billing_amount is not None else plan.price_inr_monthly,
+            "status": SubscriptionStatus.ACTIVE
+            if starts_today
+            else SubscriptionStatus.SCHEDULED,
+            "billing_amount": payload.billing_amount
+            if payload.billing_amount is not None
+            else plan.price_inr_monthly,
             "created_by_user_id": current_user.id,
             "updated_by_user_id": current_user.id,
         },
@@ -414,13 +470,18 @@ def create_tenant_subscription(
 def list_tenant_subscriptions(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    _current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> list[TenantSubscription]:
     return list(
         session.exec(
             select(TenantSubscription)
             .where(TenantSubscription.tenant_id == tenant_id)
-            .order_by(TenantSubscription.starts_on.desc(), TenantSubscription.created_at.desc())
+            .order_by(
+                TenantSubscription.starts_on.desc(),
+                TenantSubscription.created_at.desc(),
+            )
         ).all()
     )
 
@@ -479,19 +540,29 @@ def get_entitlements(
     )
 
 
-@router.post("/credits", response_model=SubscriptionCreditRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/credits",
+    response_model=SubscriptionCreditRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def purchase_subscription_credit(
     payload: SubscriptionCreditCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> SubscriptionCredit:
     target_tenant_id = payload.tenant_id or tenant_id
     if target_tenant_id != tenant_id and not current_user.is_super_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied"
+        )
     tenant = session.get(Tenant, target_tenant_id)
     if not tenant:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
     credit = SubscriptionCredit.model_validate(
         payload,
         update={
@@ -546,12 +617,18 @@ def list_subscription_credits(
     )
 
 
-@router.post("/invoices", response_model=SubscriptionInvoiceRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/invoices",
+    response_model=SubscriptionInvoiceRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_subscription_invoice(
     payload: SubscriptionInvoiceCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> SubscriptionInvoice:
     target_tenant_id = payload.tenant_id or tenant_id
     total_amount = payload.amount + payload.tax_amount
@@ -592,7 +669,10 @@ def list_subscription_invoices(
         session.exec(
             select(SubscriptionInvoice)
             .where(SubscriptionInvoice.tenant_id == tenant_id)
-            .order_by(SubscriptionInvoice.issued_on.desc(), SubscriptionInvoice.created_at.desc())
+            .order_by(
+                SubscriptionInvoice.issued_on.desc(),
+                SubscriptionInvoice.created_at.desc(),
+            )
         ).all()
     )
     return [_invoice_read(invoice) for invoice in invoices]
@@ -604,14 +684,26 @@ def settle_subscription_invoice(
     payload: SubscriptionInvoiceSettlementCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> SubscriptionInvoiceRead:
     invoice = session.get(SubscriptionInvoice, invoice_id)
-    if not invoice or (invoice.tenant_id != tenant_id and not current_user.is_super_admin):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription invoice not found")
-    paid_total = min((invoice.paid_amount or 0) + payload.amount, invoice.total_amount or invoice.amount)
+    if not invoice or (
+        invoice.tenant_id != tenant_id and not current_user.is_super_admin
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subscription invoice not found",
+        )
+    paid_total = min(
+        (invoice.paid_amount or 0) + payload.amount,
+        invoice.total_amount or invoice.amount,
+    )
     invoice.paid_amount = paid_total
-    invoice.balance_amount = max((invoice.total_amount or invoice.amount) - paid_total, 0)
+    invoice.balance_amount = max(
+        (invoice.total_amount or invoice.amount) - paid_total, 0
+    )
     invoice.payment_method = payload.payment_method
     invoice.payment_reference = payload.payment_reference
     invoice.gateway_transaction_id = payload.gateway_transaction_id
@@ -637,17 +729,26 @@ def settle_subscription_invoice(
     return _invoice_read(invoice)
 
 
-@router.post("/invoices/{invoice_id}/payment-failed", response_model=SubscriptionInvoiceRead)
+@router.post(
+    "/invoices/{invoice_id}/payment-failed", response_model=SubscriptionInvoiceRead
+)
 def mark_subscription_payment_failed(
     invoice_id: str,
     payload: SubscriptionInvoiceFailureCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> SubscriptionInvoiceRead:
     invoice = session.get(SubscriptionInvoice, invoice_id)
-    if not invoice or (invoice.tenant_id != tenant_id and not current_user.is_super_admin):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription invoice not found")
+    if not invoice or (
+        invoice.tenant_id != tenant_id and not current_user.is_super_admin
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Subscription invoice not found",
+        )
     invoice.gateway_transaction_id = payload.gateway_transaction_id
     invoice.gateway_status = payload.gateway_status
     invoice.failed_reason = payload.failed_reason
@@ -699,7 +800,9 @@ def get_subscription_announcements(
         messages.append(
             SubscriptionAnnouncementRead(
                 tenant_id=tenant_id,
-                severity="critical" if usage.remaining_patient_count == 0 else "warning",
+                severity="critical"
+                if usage.remaining_patient_count == 0
+                else "warning",
                 message=f"Patient usage is {usage.current_patient_count}/{usage.effective_patient_limit}. Purchase credits or upgrade your plan.",
                 action="upgrade_or_buy_credits",
             )
@@ -719,12 +822,17 @@ def _subscription_report_rows(
 ) -> list[dict]:
     statement = (
         select(SubscriptionInvoice, TenantSubscription, SubscriptionPlan, Tenant)
-        .outerjoin(TenantSubscription, TenantSubscription.id == SubscriptionInvoice.subscription_id)
+        .outerjoin(
+            TenantSubscription,
+            TenantSubscription.id == SubscriptionInvoice.subscription_id,
+        )
         .outerjoin(SubscriptionPlan, SubscriptionPlan.id == TenantSubscription.plan_id)
         .join(Tenant, Tenant.id == SubscriptionInvoice.tenant_id)
     )
     if not current_user.is_super_admin:
-        statement = statement.where(SubscriptionInvoice.tenant_id == current_user.tenant_id)
+        statement = statement.where(
+            SubscriptionInvoice.tenant_id == current_user.tenant_id
+        )
     elif tenant_id:
         statement = statement.where(SubscriptionInvoice.tenant_id == tenant_id)
     if from_date:
@@ -741,7 +849,11 @@ def _subscription_report_rows(
             | (func.lower(Tenant.name).like(like))
             | (func.lower(SubscriptionPlan.name).like(like))
         )
-    rows = session.exec(statement.order_by(SubscriptionInvoice.issued_on.desc(), SubscriptionInvoice.created_at.desc())).all()
+    rows = session.exec(
+        statement.order_by(
+            SubscriptionInvoice.issued_on.desc(), SubscriptionInvoice.created_at.desc()
+        )
+    ).all()
     return [
         {
             "invoice_id": invoice.id,
@@ -759,7 +871,9 @@ def _subscription_report_rows(
             "tax_amount": invoice.tax_amount,
             "total_amount": invoice.total_amount or invoice.amount,
             "paid_amount": invoice.paid_amount,
-            "balance_amount": invoice.balance_amount if invoice.total_amount else max(invoice.amount - invoice.paid_amount, 0),
+            "balance_amount": invoice.balance_amount
+            if invoice.total_amount
+            else max(invoice.amount - invoice.paid_amount, 0),
             "payment_method": invoice.payment_method,
             "payment_reference": invoice.payment_reference,
             "gateway_status": invoice.gateway_status,
@@ -788,18 +902,23 @@ def _export_rows(rows: list[dict], export: str) -> Response:
     ]
     if export == "pdf":
         lines = ["MedizinHub HMS SaaS Revenue Report"] + [
-            f"{row['invoice_number']} {row['tenant_name']} {row['status']} Rs.{row['total_amount']}" for row in rows[:28]
+            f"{row['invoice_number']} {row['tenant_name']} {row['status']} Rs.{row['total_amount']}"
+            for row in rows[:28]
         ]
         return Response(content=_simple_pdf(lines), media_type="application/pdf")
     separator = "\t" if export == "xls" else ","
     content = separator.join(headers) + "\n"
-    content += "\n".join(separator.join(str(row.get(header) or "") for header in headers) for row in rows)
+    content += "\n".join(
+        separator.join(str(row.get(header) or "") for header in headers) for row in rows
+    )
     media_type = "application/vnd.ms-excel" if export == "xls" else "text/csv"
     extension = "xls" if export == "xls" else "csv"
     return Response(
         content=content,
         media_type=media_type,
-        headers={"Content-Disposition": f'attachment; filename="saas-revenue-report.{extension}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="saas-revenue-report.{extension}"'
+        },
     )
 
 
@@ -808,7 +927,9 @@ def subscription_revenue_report(
     tenant_id: str | None = None,
     from_date: date | None = None,
     to_date: date | None = None,
-    status_filter: SubscriptionInvoiceStatus | None = Query(default=None, alias="status"),
+    status_filter: SubscriptionInvoiceStatus | None = Query(
+        default=None, alias="status"
+    ),
     q: str | None = Query(default=None, max_length=120),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
@@ -830,22 +951,39 @@ def subscription_revenue_report(
     start = (page - 1) * page_size
     page_rows = rows[start : start + page_size]
     active_subscriptions = list(
-        session.exec(select(TenantSubscription, SubscriptionPlan).join(SubscriptionPlan).where(TenantSubscription.status == SubscriptionStatus.ACTIVE)).all()
+        session.exec(
+            select(TenantSubscription, SubscriptionPlan)
+            .join(SubscriptionPlan)
+            .where(TenantSubscription.status == SubscriptionStatus.ACTIVE)
+        ).all()
     )
     if not current_user.is_super_admin:
-        active_subscriptions = [row for row in active_subscriptions if row[0].tenant_id == current_user.tenant_id]
+        active_subscriptions = [
+            row
+            for row in active_subscriptions
+            if row[0].tenant_id == current_user.tenant_id
+        ]
     mrr_by_plan: dict[str, dict] = {}
     for subscription, plan in active_subscriptions:
-        bucket = mrr_by_plan.setdefault(plan.id, {"plan_id": plan.id, "plan_name": plan.name, "tenant_count": 0, "mrr": 0})
+        bucket = mrr_by_plan.setdefault(
+            plan.id,
+            {"plan_id": plan.id, "plan_name": plan.name, "tenant_count": 0, "mrr": 0},
+        )
         bucket["tenant_count"] += 1
         bucket["mrr"] += subscription.billing_amount
     return SubscriptionRevenueReport(
         rows=page_rows,
         total_invoice_amount=sum(row["total_amount"] for row in rows),
         total_paid_amount=sum(row["paid_amount"] for row in rows),
-        total_pending_amount=sum(row["balance_amount"] for row in rows if row["status"] != SubscriptionInvoiceStatus.CANCELLED.value),
+        total_pending_amount=sum(
+            row["balance_amount"]
+            for row in rows
+            if row["status"] != SubscriptionInvoiceStatus.CANCELLED.value
+        ),
         total_tax_amount=sum(row["tax_amount"] for row in rows),
-        total_failed_amount=sum(row["total_amount"] for row in rows if row["gateway_status"] == "failed"),
+        total_failed_amount=sum(
+            row["total_amount"] for row in rows if row["gateway_status"] == "failed"
+        ),
         mrr_by_plan=list(mrr_by_plan.values()),
         page=page,
         page_size=page_size,
@@ -856,22 +994,52 @@ def subscription_revenue_report(
 @router.get("/platform/revenue-summary", response_model=SubscriptionRevenueSummary)
 def get_platform_revenue_summary(
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)),
+    _current_user: User = Depends(
+        require_permission(permissions.PLATFORM_SUBSCRIPTIONS_MANAGE)
+    ),
 ) -> SubscriptionRevenueSummary:
     subscriptions = list(session.exec(select(TenantSubscription)).all())
     invoices = list(session.exec(select(SubscriptionInvoice)).all())
-    active_subscriptions = [row for row in subscriptions if row.status == SubscriptionStatus.ACTIVE]
-    scheduled_subscriptions = [row for row in subscriptions if row.status == SubscriptionStatus.SCHEDULED]
+    active_subscriptions = [
+        row for row in subscriptions if row.status == SubscriptionStatus.ACTIVE
+    ]
+    scheduled_subscriptions = [
+        row for row in subscriptions if row.status == SubscriptionStatus.SCHEDULED
+    ]
     today = date.today()
-    expiring = [row for row in active_subscriptions if row.ends_on and 0 <= (row.ends_on - today).days <= 7]
+    expiring = [
+        row
+        for row in active_subscriptions
+        if row.ends_on and 0 <= (row.ends_on - today).days <= 7
+    ]
     return SubscriptionRevenueSummary(
         total_active_subscriptions=len(active_subscriptions),
         scheduled_subscriptions=len(scheduled_subscriptions),
         expiring_in_7_days=len(expiring),
-        estimated_monthly_recurring_revenue=sum(row.billing_amount for row in active_subscriptions),
-        issued_invoice_amount=sum((row.total_amount or row.amount) for row in invoices if row.status != SubscriptionInvoiceStatus.CANCELLED),
-        paid_invoice_amount=sum(row.paid_amount or (row.amount if row.status == SubscriptionInvoiceStatus.PAID else 0) for row in invoices),
-        pending_invoice_amount=sum((row.balance_amount if row.total_amount else row.amount) for row in invoices if row.status == SubscriptionInvoiceStatus.ISSUED),
-        credit_revenue_amount=sum((row.total_amount or row.amount) for row in invoices if row.credit_id),
-        failed_invoice_amount=sum((row.total_amount or row.amount) for row in invoices if row.gateway_status == "failed"),
+        estimated_monthly_recurring_revenue=sum(
+            row.billing_amount for row in active_subscriptions
+        ),
+        issued_invoice_amount=sum(
+            (row.total_amount or row.amount)
+            for row in invoices
+            if row.status != SubscriptionInvoiceStatus.CANCELLED
+        ),
+        paid_invoice_amount=sum(
+            row.paid_amount
+            or (row.amount if row.status == SubscriptionInvoiceStatus.PAID else 0)
+            for row in invoices
+        ),
+        pending_invoice_amount=sum(
+            (row.balance_amount if row.total_amount else row.amount)
+            for row in invoices
+            if row.status == SubscriptionInvoiceStatus.ISSUED
+        ),
+        credit_revenue_amount=sum(
+            (row.total_amount or row.amount) for row in invoices if row.credit_id
+        ),
+        failed_invoice_amount=sum(
+            (row.total_amount or row.amount)
+            for row in invoices
+            if row.gateway_status == "failed"
+        ),
     )

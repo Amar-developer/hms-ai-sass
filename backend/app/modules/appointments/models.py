@@ -35,7 +35,9 @@ class Appointment(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
-    department_id: str | None = Field(default=None, index=True, foreign_key="department.id")
+    department_id: str | None = Field(
+        default=None, index=True, foreign_key="department.id"
+    )
     practitioner_id: str | None = Field(default=None, index=True)
     appointment_type: AppointmentType = Field(default=AppointmentType.OP, index=True)
     status: AppointmentStatus = Field(default=AppointmentStatus.SCHEDULED, index=True)

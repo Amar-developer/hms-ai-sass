@@ -37,7 +37,9 @@ class MedicineCatalog(SQLModel, table=True):
     form: str | None = Field(default=None, max_length=80)
     strength: str | None = Field(default=None, max_length=80)
     manufacturer: str | None = Field(default=None, max_length=220)
-    supplier_id: str | None = Field(default=None, index=True, foreign_key="pharmacysupplier.id")
+    supplier_id: str | None = Field(
+        default=None, index=True, foreign_key="pharmacysupplier.id"
+    )
     mrp_price: int = Field(default=0, ge=0)
     purchase_price: int = Field(default=0, ge=0)
     default_sale_price: int = Field(default=0, ge=0)
@@ -68,7 +70,9 @@ class PharmacyPurchase(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("purchase"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
-    supplier_id: str | None = Field(default=None, index=True, foreign_key="pharmacysupplier.id")
+    supplier_id: str | None = Field(
+        default=None, index=True, foreign_key="pharmacysupplier.id"
+    )
     purchase_order_id: str | None = Field(default=None, max_length=120, index=True)
     invoice_number: str | None = Field(default=None, max_length=120, index=True)
     purchase_date: datetime = Field(default_factory=now_utc, index=True)
@@ -89,7 +93,9 @@ class MedicineBatch(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     medicine_id: str = Field(index=True, foreign_key="medicinecatalog.id")
-    purchase_id: str | None = Field(default=None, index=True, foreign_key="pharmacypurchase.id")
+    purchase_id: str | None = Field(
+        default=None, index=True, foreign_key="pharmacypurchase.id"
+    )
     batch_number: str = Field(min_length=1, max_length=120, index=True)
     expiry_date: datetime | None = Field(default=None, index=True)
     quantity_on_hand: int = Field(default=0, ge=0)
@@ -125,8 +131,12 @@ class PharmacyReturn(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("pharmreturn"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
-    supplier_id: str | None = Field(default=None, index=True, foreign_key="pharmacysupplier.id")
-    purchase_id: str | None = Field(default=None, index=True, foreign_key="pharmacypurchase.id")
+    supplier_id: str | None = Field(
+        default=None, index=True, foreign_key="pharmacysupplier.id"
+    )
+    purchase_id: str | None = Field(
+        default=None, index=True, foreign_key="pharmacypurchase.id"
+    )
     return_date: datetime = Field(default_factory=now_utc, index=True)
     reason: str = Field(min_length=2, max_length=500)
     total_amount: int = Field(default=0, ge=0)
@@ -151,7 +161,9 @@ class PharmacyStockLedger(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     medicine_id: str = Field(index=True, foreign_key="medicinecatalog.id")
-    batch_id: str | None = Field(default=None, index=True, foreign_key="medicinebatch.id")
+    batch_id: str | None = Field(
+        default=None, index=True, foreign_key="medicinebatch.id"
+    )
     movement_type: StockLedgerMovement = Field(index=True)
     quantity_delta: int
     balance_after: int
@@ -166,10 +178,16 @@ class PharmacyIssue(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     patient_id: str = Field(index=True, foreign_key="patient.id")
-    consultation_id: str | None = Field(default=None, index=True, foreign_key="consultation.id")
+    consultation_id: str | None = Field(
+        default=None, index=True, foreign_key="consultation.id"
+    )
     issue_number: str | None = Field(default=None, index=True, max_length=60)
-    source: PharmacyIssueSource = Field(default=PharmacyIssueSource.CONSULTATION, index=True)
-    status: PharmacyIssueStatus = Field(default=PharmacyIssueStatus.REQUESTED, index=True)
+    source: PharmacyIssueSource = Field(
+        default=PharmacyIssueSource.CONSULTATION, index=True
+    )
+    status: PharmacyIssueStatus = Field(
+        default=PharmacyIssueStatus.REQUESTED, index=True
+    )
     medicine_text: str = Field(min_length=2, max_length=5000)
     notes: str | None = Field(default=None, max_length=2000)
     external_prescriber: str | None = Field(default=None, max_length=220)
@@ -188,9 +206,15 @@ class PharmacyIssueItem(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     pharmacy_issue_id: str = Field(index=True, foreign_key="pharmacyissue.id")
-    medicine_id: str | None = Field(default=None, index=True, foreign_key="medicinecatalog.id")
-    substitute_for_medicine_id: str | None = Field(default=None, index=True, foreign_key="medicinecatalog.id")
-    batch_id: str | None = Field(default=None, index=True, foreign_key="medicinebatch.id")
+    medicine_id: str | None = Field(
+        default=None, index=True, foreign_key="medicinecatalog.id"
+    )
+    substitute_for_medicine_id: str | None = Field(
+        default=None, index=True, foreign_key="medicinecatalog.id"
+    )
+    batch_id: str | None = Field(
+        default=None, index=True, foreign_key="medicinebatch.id"
+    )
     medicine_name: str = Field(min_length=2, max_length=220)
     quantity: int = Field(default=1, gt=0)
     unit_price: int = Field(default=0, ge=0)

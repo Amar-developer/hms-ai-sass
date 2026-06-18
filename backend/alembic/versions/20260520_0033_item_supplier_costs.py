@@ -49,14 +49,34 @@ def _drop_index(table_name: str, index_name: str) -> None:
 
 
 def upgrade() -> None:
-    for table_name in ("medicinecatalog", "labtestcatalog", "labtestpackage", "physiotherapyequipment"):
-        _add(table_name, "supplier_id", sa.Column("supplier_id", sa.String(), nullable=True))
-        _add(table_name, "purchase_price", sa.Column("purchase_price", sa.Integer(), nullable=False, server_default="0"))
+    for table_name in (
+        "medicinecatalog",
+        "labtestcatalog",
+        "labtestpackage",
+        "physiotherapyequipment",
+    ):
+        _add(
+            table_name,
+            "supplier_id",
+            sa.Column("supplier_id", sa.String(), nullable=True),
+        )
+        _add(
+            table_name,
+            "purchase_price",
+            sa.Column(
+                "purchase_price", sa.Integer(), nullable=False, server_default="0"
+            ),
+        )
         _create_index(table_name, f"ix_{table_name}_supplier_id", ["supplier_id"])
 
 
 def downgrade() -> None:
-    for table_name in ("medicinecatalog", "labtestcatalog", "labtestpackage", "physiotherapyequipment"):
+    for table_name in (
+        "medicinecatalog",
+        "labtestcatalog",
+        "labtestpackage",
+        "physiotherapyequipment",
+    ):
         _drop_index(table_name, f"ix_{table_name}_supplier_id")
         columns = _columns(table_name) if table_name in _tables() else set()
         if "purchase_price" in columns:

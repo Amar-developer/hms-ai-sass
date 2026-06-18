@@ -36,17 +36,42 @@ def _drop_column_if_exists(table: str, name: str) -> None:
 
 
 def upgrade() -> None:
-    _add_column_if_missing("tenant", "description", sa.Column("description", sa.String(length=1000), nullable=True))
-    _add_column_if_missing("tenant", "logo_url", sa.Column("logo_url", sa.String(length=500), nullable=True))
-    _add_column_if_missing("tenant", "email", sa.Column("email", sa.String(length=220), nullable=True))
-    _add_column_if_missing("tenant", "phone", sa.Column("phone", sa.String(length=30), nullable=True))
-    _add_column_if_missing("tenant", "address", sa.Column("address", sa.String(length=1000), nullable=True))
+    _add_column_if_missing(
+        "tenant",
+        "description",
+        sa.Column("description", sa.String(length=1000), nullable=True),
+    )
+    _add_column_if_missing(
+        "tenant",
+        "logo_url",
+        sa.Column("logo_url", sa.String(length=500), nullable=True),
+    )
+    _add_column_if_missing(
+        "tenant", "email", sa.Column("email", sa.String(length=220), nullable=True)
+    )
+    _add_column_if_missing(
+        "tenant", "phone", sa.Column("phone", sa.String(length=30), nullable=True)
+    )
+    _add_column_if_missing(
+        "tenant", "address", sa.Column("address", sa.String(length=1000), nullable=True)
+    )
     added_tenant_type = _add_column_if_missing(
         "tenant",
         "tenant_type",
-        sa.Column("tenant_type", sa.String(length=22), nullable=False, server_default="single_clinic"),
+        sa.Column(
+            "tenant_type",
+            sa.String(length=22),
+            nullable=False,
+            server_default="single_clinic",
+        ),
     )
-    added_is_primary = _add_column_if_missing("tenant", "is_primary", sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.false()))
+    added_is_primary = _add_column_if_missing(
+        "tenant",
+        "is_primary",
+        sa.Column(
+            "is_primary", sa.Boolean(), nullable=False, server_default=sa.false()
+        ),
+    )
     if "ix_tenant_is_primary" not in _indexes("tenant"):
         op.create_index("ix_tenant_is_primary", "tenant", ["is_primary"])
     if op.get_bind().dialect.name != "sqlite":

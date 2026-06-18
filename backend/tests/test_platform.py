@@ -80,7 +80,11 @@ def test_platform_super_admin_can_manage_tenant_metadata(client: TestClient):
 
     updated = client.patch(
         f"/api/v1/tenants/{tenant['id']}",
-        json={"status": "active", "tenant_type": "multi_specialty_hospital", "phone": "9000022222"},
+        json={
+            "status": "active",
+            "tenant_type": "multi_specialty_hospital",
+            "phone": "9000022222",
+        },
     )
     assert updated.status_code == 200
     assert updated.json()["status"] == "active"
@@ -100,7 +104,9 @@ def test_platform_super_admin_can_manage_tenant_metadata(client: TestClient):
     assert after_delete.json()["status"] == "suspended"
 
 
-def test_primary_tenant_is_protected_from_direct_status_and_type_changes(client: TestClient):
+def test_primary_tenant_is_protected_from_direct_status_and_type_changes(
+    client: TestClient,
+):
     created = client.post(
         "/api/v1/tenants",
         json={
@@ -114,10 +120,14 @@ def test_primary_tenant_is_protected_from_direct_status_and_type_changes(client:
     assert created.status_code == 201
     tenant = created.json()
 
-    rename = client.patch(f"/api/v1/tenants/{tenant['id']}", json={"name": "Other Platform"})
+    rename = client.patch(
+        f"/api/v1/tenants/{tenant['id']}", json={"name": "Other Platform"}
+    )
     assert rename.status_code == 400
 
-    change_type = client.patch(f"/api/v1/tenants/{tenant['id']}", json={"tenant_type": "general_hospital"})
+    change_type = client.patch(
+        f"/api/v1/tenants/{tenant['id']}", json={"tenant_type": "general_hospital"}
+    )
     assert change_type.status_code == 400
 
     suspend = client.delete(f"/api/v1/tenants/{tenant['id']}")
@@ -150,7 +160,10 @@ def test_super_admin_can_manage_tenant_departments(client: TestClient):
     assert department_body["description"] == "OP and primary care"
     assert department_body["created_by_user_id"] is not None
 
-    listing = client.get(f"/api/v1/tenants/{tenant['id']}/departments", headers={"X-Tenant-ID": tenant["id"]})
+    listing = client.get(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
     assert listing.status_code == 200
     assert [row["name"] for row in listing.json()] == ["General Medicine"]
 
@@ -179,7 +192,9 @@ def test_super_admin_can_manage_tenant_departments(client: TestClient):
     assert deleted.json()["mode"] == "deactivated"
 
 
-def test_super_admin_can_assign_primary_department_template_to_customer_tenant(client: TestClient):
+def test_super_admin_can_assign_primary_department_template_to_customer_tenant(
+    client: TestClient,
+):
     primary = client.post(
         "/api/v1/tenants",
         json={
@@ -191,7 +206,11 @@ def test_super_admin_can_assign_primary_department_template_to_customer_tenant(c
     ).json()
     tenant = client.post(
         "/api/v1/tenants",
-        json={"name": "Template Assigned Clinic", "tenant_type": "clinic", "status": "active"},
+        json={
+            "name": "Template Assigned Clinic",
+            "tenant_type": "clinic",
+            "status": "active",
+        },
     ).json()
     template = client.post(
         f"/api/v1/tenants/{primary['id']}/departments",
@@ -199,7 +218,9 @@ def test_super_admin_can_assign_primary_department_template_to_customer_tenant(c
         json={"name": "Cardiology", "description": "Heart care"},
     ).json()
 
-    assigned = client.post(f"/api/v1/tenants/departments/{template['id']}/assign/{tenant['id']}")
+    assigned = client.post(
+        f"/api/v1/tenants/departments/{template['id']}/assign/{tenant['id']}"
+    )
     assert assigned.status_code == 200
     body = assigned.json()
     assert body["tenant_id"] == tenant["id"]
@@ -209,19 +230,28 @@ def test_super_admin_can_assign_primary_department_template_to_customer_tenant(c
     assert body["is_template_locked"] is True
     assert body["is_global_template"] is False
 
-    assigned_again = client.post(f"/api/v1/tenants/departments/{template['id']}/assign/{tenant['id']}")
+    assigned_again = client.post(
+        f"/api/v1/tenants/departments/{template['id']}/assign/{tenant['id']}"
+    )
     assert assigned_again.status_code == 200
-    listing = client.get(f"/api/v1/tenants/{tenant['id']}/departments", headers={"X-Tenant-ID": tenant["id"]})
+    listing = client.get(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
     assert [row["code"] for row in listing.json()] == ["CARDIOLOGY"]
 
 
-def test_tenant_admin_cannot_change_locked_global_department_template(unauthenticated_client):
+def test_tenant_admin_cannot_change_locked_global_department_template(
+    unauthenticated_client,
+):
     from test_identity_auth import bootstrap_super_admin, create_tenant_with_paid_plan
 
     client = unauthenticated_client
     super_token = bootstrap_super_admin(client)
     tenant = create_tenant_with_paid_plan(client, super_token)
-    tenants = client.get("/api/v1/tenants", headers={"Authorization": f"Bearer {super_token}"}).json()
+    tenants = client.get(
+        "/api/v1/tenants", headers={"Authorization": f"Bearer {super_token}"}
+    ).json()
     primary = next(row for row in tenants if row["is_primary"])
     super_headers = {"Authorization": f"Bearer {super_token}"}
     tenant_headers = {**super_headers, "X-Tenant-ID": tenant["id"]}
@@ -229,7 +259,11 @@ def test_tenant_admin_cannot_change_locked_global_department_template(unauthenti
     client.post(
         "/api/v1/identity/roles",
         headers=tenant_headers,
-        json={"name": "Tenant Admin", "key": "tenant_admin", "permission_keys": ["settings.manage"]},
+        json={
+            "name": "Tenant Admin",
+            "key": "tenant_admin",
+            "permission_keys": ["settings.manage"],
+        },
     )
     client.post(
         "/api/v1/identity/users",
@@ -249,7 +283,10 @@ def test_tenant_admin_cannot_change_locked_global_department_template(unauthenti
             "tenant_id": tenant["id"],
         },
     ).json()
-    tenant_admin_headers = {"Authorization": f"Bearer {tenant_login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    tenant_admin_headers = {
+        "Authorization": f"Bearer {tenant_login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     template = client.post(
         f"/api/v1/tenants/{primary['id']}/departments",
@@ -294,19 +331,30 @@ def test_tenant_can_have_multiple_branches_with_audit_metadata(client: TestClien
         headers={"X-Tenant-ID": tenant["id"]},
         json={"name": "North Branch", "code": "NORTH", "city": "Chennai"},
     )
-    listing = client.get(f"/api/v1/tenants/{tenant['id']}/branches", headers={"X-Tenant-ID": tenant["id"]})
+    listing = client.get(
+        f"/api/v1/tenants/{tenant['id']}/branches",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
 
     assert first.status_code == 201
     assert second.status_code == 201
     assert first.json()["created_by_user_id"] is not None
     assert first.json()["updated_at"] is not None
     assert listing.status_code == 200
-    assert [branch["name"] for branch in listing.json()] == ["North Branch", "Main Branch"]
+    assert [branch["name"] for branch in listing.json()] == [
+        "North Branch",
+        "Main Branch",
+    ]
 
     updated = client.patch(
         f"/api/v1/tenants/{tenant['id']}/branches/{first.json()['id']}",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"name": "Main Branch Updated", "code": "MAIN", "city": "Coimbatore", "is_active": False},
+        json={
+            "name": "Main Branch Updated",
+            "code": "MAIN",
+            "city": "Coimbatore",
+            "is_active": False,
+        },
     )
     assert updated.status_code == 200
     assert updated.json()["name"] == "Main Branch Updated"
@@ -314,14 +362,25 @@ def test_tenant_can_have_multiple_branches_with_audit_metadata(client: TestClien
     assert updated.json()["is_active"] is False
 
 
-def test_super_admin_can_assign_primary_branch_template_to_customer_tenant(client: TestClient):
+def test_super_admin_can_assign_primary_branch_template_to_customer_tenant(
+    client: TestClient,
+):
     primary = client.post(
         "/api/v1/tenants",
-        json={"name": "MedizinHub HMS", "tenant_type": "primary", "is_primary": True, "status": "active"},
+        json={
+            "name": "MedizinHub HMS",
+            "tenant_type": "primary",
+            "is_primary": True,
+            "status": "active",
+        },
     ).json()
     tenant = client.post(
         "/api/v1/tenants",
-        json={"name": "Branch Template Clinic", "tenant_type": "clinic", "status": "active"},
+        json={
+            "name": "Branch Template Clinic",
+            "tenant_type": "clinic",
+            "status": "active",
+        },
     ).json()
     template = client.post(
         f"/api/v1/tenants/{primary['id']}/branches",
@@ -329,7 +388,9 @@ def test_super_admin_can_assign_primary_branch_template_to_customer_tenant(clien
         json={"name": "Main Branch", "code": "MAIN", "city": "Chennai"},
     ).json()
 
-    assigned = client.post(f"/api/v1/tenants/branches/{template['id']}/assign/{tenant['id']}")
+    assigned = client.post(
+        f"/api/v1/tenants/branches/{template['id']}/assign/{tenant['id']}"
+    )
     assert assigned.status_code == 200
     body = assigned.json()
     assert body["tenant_id"] == tenant["id"]
@@ -338,18 +399,33 @@ def test_super_admin_can_assign_primary_branch_template_to_customer_tenant(clien
     assert body["is_global_template"] is False
 
 
-def test_super_admin_can_promote_customer_department_and_branch_to_primary_templates(client: TestClient):
+def test_super_admin_can_promote_customer_department_and_branch_to_primary_templates(
+    client: TestClient,
+):
     primary = client.post(
         "/api/v1/tenants",
-        json={"name": "MedizinHub HMS", "tenant_type": "primary", "is_primary": True, "status": "active"},
+        json={
+            "name": "MedizinHub HMS",
+            "tenant_type": "primary",
+            "is_primary": True,
+            "status": "active",
+        },
     ).json()
     source_tenant = client.post(
         "/api/v1/tenants",
-        json={"name": "MedizinHub Demo Clinic", "tenant_type": "clinic", "status": "active"},
+        json={
+            "name": "MedizinHub Demo Clinic",
+            "tenant_type": "clinic",
+            "status": "active",
+        },
     ).json()
     target_tenant = client.post(
         "/api/v1/tenants",
-        json={"name": "Demo Single Clinic", "tenant_type": "clinic", "status": "active"},
+        json={
+            "name": "Demo Single Clinic",
+            "tenant_type": "clinic",
+            "status": "active",
+        },
     ).json()
     source_department = client.post(
         f"/api/v1/tenants/{source_tenant['id']}/departments",
@@ -368,7 +444,10 @@ def test_super_admin_can_promote_customer_department_and_branch_to_primary_templ
     assert promoted_department.status_code == 200
     assert promoted_department.json()["is_global_template"] is True
     assert promoted_department.json()["is_template_locked"] is False
-    assert promoted_department.json()["source_template_department_id"] == source_department["id"]
+    assert (
+        promoted_department.json()["source_template_department_id"]
+        == source_department["id"]
+    )
 
     copied_department = client.post(
         f"/api/v1/tenants/departments/{source_department['id']}/assign/{target_tenant['id']}"
@@ -377,13 +456,17 @@ def test_super_admin_can_promote_customer_department_and_branch_to_primary_templ
     assert copied_department.json()["is_global_template"] is False
     assert copied_department.json()["is_template_locked"] is True
 
-    promoted_branch = client.post(f"/api/v1/tenants/branches/{source_branch['id']}/assign/{primary['id']}")
+    promoted_branch = client.post(
+        f"/api/v1/tenants/branches/{source_branch['id']}/assign/{primary['id']}"
+    )
     assert promoted_branch.status_code == 200
     assert promoted_branch.json()["is_global_template"] is True
     assert promoted_branch.json()["is_template_locked"] is False
     assert promoted_branch.json()["source_template_branch_id"] == source_branch["id"]
 
-    copied_branch = client.post(f"/api/v1/tenants/branches/{source_branch['id']}/assign/{target_tenant['id']}")
+    copied_branch = client.post(
+        f"/api/v1/tenants/branches/{source_branch['id']}/assign/{target_tenant['id']}"
+    )
     assert copied_branch.status_code == 200
     assert copied_branch.json()["is_global_template"] is False
     assert copied_branch.json()["is_template_locked"] is True
@@ -392,7 +475,11 @@ def test_super_admin_can_promote_customer_department_and_branch_to_primary_templ
 def test_branch_status_and_delete_are_soft_actions(client: TestClient):
     tenant = client.post(
         "/api/v1/tenants",
-        json={"name": "Branch CRUD Clinic", "tenant_type": "clinic", "status": "active"},
+        json={
+            "name": "Branch CRUD Clinic",
+            "tenant_type": "clinic",
+            "status": "active",
+        },
     ).json()
     branch = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
@@ -416,10 +503,16 @@ def test_branch_status_and_delete_are_soft_actions(client: TestClient):
     assert deleted.json()["mode"] == "deactivated"
 
 
-def test_settings_manage_permission_can_crud_tenant_branches_and_departments(client: TestClient):
+def test_settings_manage_permission_can_crud_tenant_branches_and_departments(
+    client: TestClient,
+):
     tenant = client.post(
         "/api/v1/tenants",
-        json={"name": "Delegated Settings Clinic", "tenant_type": "clinic", "status": "active"},
+        json={
+            "name": "Delegated Settings Clinic",
+            "tenant_type": "clinic",
+            "status": "active",
+        },
     ).json()
     role = client.post(
         "/api/v1/identity/roles",
@@ -443,9 +536,16 @@ def test_settings_manage_permission_can_crud_tenant_branches_and_departments(cli
     ).json()
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user["email"], "password": "Settings123", "tenant_id": tenant["id"]},
+        json={
+            "email": user["email"],
+            "password": "Settings123",
+            "tenant_id": tenant["id"],
+        },
     ).json()
-    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    headers = {
+        "Authorization": f"Bearer {login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     branch = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
@@ -461,9 +561,15 @@ def test_settings_manage_permission_can_crud_tenant_branches_and_departments(cli
     department = client.post(
         f"/api/v1/tenants/{tenant['id']}/departments",
         headers=headers,
-        json={"name": "General Medicine", "description": "OP care", "branch_id": branch.json()["id"]},
+        json={
+            "name": "General Medicine",
+            "description": "OP care",
+            "branch_id": branch.json()["id"],
+        },
     )
-    departments = client.get(f"/api/v1/tenants/{tenant['id']}/departments", headers=headers)
+    departments = client.get(
+        f"/api/v1/tenants/{tenant['id']}/departments", headers=headers
+    )
     updated_department = client.patch(
         f"/api/v1/tenants/{tenant['id']}/departments/{department.json()['id']}",
         headers=headers,
@@ -488,8 +594,12 @@ def test_settings_manage_permission_can_crud_tenant_branches_and_departments(cli
     assert deleted_department.json()["mode"] == "deactivated"
 
 
-def test_department_scope_conflict_blocks_all_branch_and_branch_specific_mix(client: TestClient):
-    tenant = client.post("/api/v1/tenants", json={"name": "Department Scope Clinic"}).json()
+def test_department_scope_conflict_blocks_all_branch_and_branch_specific_mix(
+    client: TestClient,
+):
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Department Scope Clinic"}
+    ).json()
     branch = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
         json={"name": "Main Branch", "code": "MAIN"},
@@ -526,10 +636,16 @@ def test_department_scope_conflict_blocks_all_branch_and_branch_specific_mix(cli
     assert "one or more branches" in all_branch_duplicate.json()["detail"].lower()
 
 
-def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_permissions(client: TestClient):
+def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_permissions(
+    client: TestClient,
+):
     tenant = client.post(
         "/api/v1/tenants",
-        json={"name": "Legacy Tenant Admin Clinic", "tenant_type": "clinic", "status": "active"},
+        json={
+            "name": "Legacy Tenant Admin Clinic",
+            "tenant_type": "clinic",
+            "status": "active",
+        },
     ).json()
     client.post(
         "/api/v1/identity/roles",
@@ -549,9 +665,16 @@ def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_p
     ).json()
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": user["email"], "password": "TenantPass123", "tenant_id": tenant["id"]},
+        json={
+            "email": user["email"],
+            "password": "TenantPass123",
+            "tenant_id": tenant["id"],
+        },
     ).json()
-    headers = {"Authorization": f"Bearer {login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    headers = {
+        "Authorization": f"Bearer {login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     branch = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
@@ -565,18 +688,32 @@ def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_p
     )
 
     assert branch.status_code == 201
-    assert client.get(f"/api/v1/tenants/{tenant['id']}/branches", headers=headers).status_code == 200
+    assert (
+        client.get(
+            f"/api/v1/tenants/{tenant['id']}/branches", headers=headers
+        ).status_code
+        == 200
+    )
     assert department.status_code == 201
-    assert client.get(f"/api/v1/tenants/{tenant['id']}/departments", headers=headers).status_code == 200
+    assert (
+        client.get(
+            f"/api/v1/tenants/{tenant['id']}/departments", headers=headers
+        ).status_code
+        == 200
+    )
 
 
-def test_tenant_admin_cannot_change_locked_global_branch_template(unauthenticated_client):
+def test_tenant_admin_cannot_change_locked_global_branch_template(
+    unauthenticated_client,
+):
     from test_identity_auth import bootstrap_super_admin, create_tenant_with_paid_plan
 
     client = unauthenticated_client
     super_token = bootstrap_super_admin(client)
     tenant = create_tenant_with_paid_plan(client, super_token)
-    tenants = client.get("/api/v1/tenants", headers={"Authorization": f"Bearer {super_token}"}).json()
+    tenants = client.get(
+        "/api/v1/tenants", headers={"Authorization": f"Bearer {super_token}"}
+    ).json()
     primary = next(row for row in tenants if row["is_primary"])
     super_headers = {"Authorization": f"Bearer {super_token}"}
     tenant_headers = {**super_headers, "X-Tenant-ID": tenant["id"]}
@@ -584,7 +721,11 @@ def test_tenant_admin_cannot_change_locked_global_branch_template(unauthenticate
     client.post(
         "/api/v1/identity/roles",
         headers=tenant_headers,
-        json={"name": "Tenant Admin", "key": "tenant_admin", "permission_keys": ["settings.manage"]},
+        json={
+            "name": "Tenant Admin",
+            "key": "tenant_admin",
+            "permission_keys": ["settings.manage"],
+        },
     )
     client.post(
         "/api/v1/identity/users",
@@ -598,9 +739,16 @@ def test_tenant_admin_cannot_change_locked_global_branch_template(unauthenticate
     )
     tenant_login = client.post(
         "/api/v1/auth/login",
-        json={"email": "branch.lock.admin@test.local", "password": "TenantPass123", "tenant_id": tenant["id"]},
+        json={
+            "email": "branch.lock.admin@test.local",
+            "password": "TenantPass123",
+            "tenant_id": tenant["id"],
+        },
     ).json()
-    tenant_admin_headers = {"Authorization": f"Bearer {tenant_login['access_token']}", "X-Tenant-ID": tenant["id"]}
+    tenant_admin_headers = {
+        "Authorization": f"Bearer {tenant_login['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
 
     template = client.post(
         f"/api/v1/tenants/{primary['id']}/branches",

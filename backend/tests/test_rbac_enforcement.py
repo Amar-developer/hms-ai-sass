@@ -10,7 +10,11 @@ def test_limited_role_can_read_patients_but_cannot_write_or_manage_settings(clie
     role = client.post(
         "/api/v1/identity/roles",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"name": "Patient Viewer", "key": "patient_viewer", "permission_keys": ["patients.read"]},
+        json={
+            "name": "Patient Viewer",
+            "key": "patient_viewer",
+            "permission_keys": ["patients.read"],
+        },
     )
     assert role.status_code == 201
     user = client.post(
@@ -55,7 +59,11 @@ def test_authenticated_user_cannot_cross_tenant_with_permission(client):
     client.post(
         "/api/v1/identity/roles",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"name": "Reception", "key": "reception", "permission_keys": ["appointments.manage"]},
+        json={
+            "name": "Reception",
+            "key": "reception",
+            "permission_keys": ["appointments.manage"],
+        },
     )
     client.post(
         "/api/v1/identity/users",
@@ -93,11 +101,17 @@ def test_missing_bearer_token_is_rejected_on_protected_module(unauthenticated_cl
 
 
 def test_inactive_role_no_longer_grants_permissions(client):
-    tenant = client.post("/api/v1/tenants", json={"name": "Inactive Role Clinic"}).json()
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Inactive Role Clinic"}
+    ).json()
     role = client.post(
         "/api/v1/identity/roles",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"name": "Patient Viewer", "key": "inactive_patient_viewer", "permission_keys": ["patients.read"]},
+        json={
+            "name": "Patient Viewer",
+            "key": "inactive_patient_viewer",
+            "permission_keys": ["patients.read"],
+        },
     ).json()
     client.post(
         "/api/v1/identity/users",
@@ -116,12 +130,19 @@ def test_inactive_role_no_longer_grants_permissions(client):
     )
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": "inactive.role@test.local", "password": "InactivePass123", "tenant_id": tenant["id"]},
+        json={
+            "email": "inactive.role@test.local",
+            "password": "InactivePass123",
+            "tenant_id": tenant["id"],
+        },
     )
 
     response = client.get(
         "/api/v1/patients",
-        headers={"Authorization": f"Bearer {login.json()['access_token']}", "X-Tenant-ID": tenant["id"]},
+        headers={
+            "Authorization": f"Bearer {login.json()['access_token']}",
+            "X-Tenant-ID": tenant["id"],
+        },
     )
 
     assert response.status_code == 403
@@ -129,11 +150,17 @@ def test_inactive_role_no_longer_grants_permissions(client):
 
 
 def test_suspended_tenant_blocks_tenant_user_access(client):
-    tenant = client.post("/api/v1/tenants", json={"name": "Suspended Access Clinic"}).json()
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Suspended Access Clinic"}
+    ).json()
     client.post(
         "/api/v1/identity/roles",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"name": "Patient Viewer", "key": "suspended_patient_viewer", "permission_keys": ["patients.read"]},
+        json={
+            "name": "Patient Viewer",
+            "key": "suspended_patient_viewer",
+            "permission_keys": ["patients.read"],
+        },
     )
     client.post(
         "/api/v1/identity/users",
@@ -147,13 +174,20 @@ def test_suspended_tenant_blocks_tenant_user_access(client):
     )
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": "suspended.user@test.local", "password": "SuspendedPass123", "tenant_id": tenant["id"]},
+        json={
+            "email": "suspended.user@test.local",
+            "password": "SuspendedPass123",
+            "tenant_id": tenant["id"],
+        },
     )
     client.patch(f"/api/v1/tenants/{tenant['id']}", json={"status": "suspended"})
 
     response = client.get(
         "/api/v1/patients",
-        headers={"Authorization": f"Bearer {login.json()['access_token']}", "X-Tenant-ID": tenant["id"]},
+        headers={
+            "Authorization": f"Bearer {login.json()['access_token']}",
+            "X-Tenant-ID": tenant["id"],
+        },
     )
 
     assert response.status_code == 403
@@ -161,7 +195,9 @@ def test_suspended_tenant_blocks_tenant_user_access(client):
 
 
 def test_branch_scoped_user_can_read_tenant_patient_from_other_branch(client):
-    tenant = client.post("/api/v1/tenants", json={"name": "Branch Scoped Clinic"}).json()
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Branch Scoped Clinic"}
+    ).json()
     main = client.post(
         f"/api/v1/tenants/{tenant['id']}/branches",
         json={"name": "Main Branch", "code": "MAIN"},
@@ -178,7 +214,11 @@ def test_branch_scoped_user_can_read_tenant_patient_from_other_branch(client):
     client.post(
         "/api/v1/identity/roles",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"name": "Patient Viewer", "key": "branch_patient_viewer", "permission_keys": ["patients.read"]},
+        json={
+            "name": "Patient Viewer",
+            "key": "branch_patient_viewer",
+            "permission_keys": ["patients.read"],
+        },
     )
     client.post(
         "/api/v1/identity/users",
@@ -193,16 +233,26 @@ def test_branch_scoped_user_can_read_tenant_patient_from_other_branch(client):
     )
     login = client.post(
         "/api/v1/auth/login",
-        json={"email": "main.branch.viewer@test.local", "password": "BranchPass123", "tenant_id": tenant["id"]},
+        json={
+            "email": "main.branch.viewer@test.local",
+            "password": "BranchPass123",
+            "tenant_id": tenant["id"],
+        },
     )
 
     response = client.get(
         f"/api/v1/patients/{patient['id']}",
-        headers={"Authorization": f"Bearer {login.json()['access_token']}", "X-Tenant-ID": tenant["id"]},
+        headers={
+            "Authorization": f"Bearer {login.json()['access_token']}",
+            "X-Tenant-ID": tenant["id"],
+        },
     )
     search = client.get(
         "/api/v1/patients?q=Other",
-        headers={"Authorization": f"Bearer {login.json()['access_token']}", "X-Tenant-ID": tenant["id"]},
+        headers={
+            "Authorization": f"Bearer {login.json()['access_token']}",
+            "X-Tenant-ID": tenant["id"],
+        },
     )
 
     assert response.status_code == 200

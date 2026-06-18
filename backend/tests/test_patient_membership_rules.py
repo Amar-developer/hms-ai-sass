@@ -303,11 +303,15 @@ def test_free_lab_test_quantity_is_consumed_then_falls_back_to_discount():
     first = preview()
     assert first["free_item_ids"] == ["LABBP"]
     assert first["discount_amount"] == 200
-    consume_free_items(enrollment, service_type="lab", free_item_ids=first["free_item_ids"])
+    consume_free_items(
+        enrollment, service_type="lab", free_item_ids=first["free_item_ids"]
+    )
 
     second = preview()
     assert second["free_item_ids"] == ["LABBP"]
-    consume_free_items(enrollment, service_type="lab", free_item_ids=second["free_item_ids"])
+    consume_free_items(
+        enrollment, service_type="lab", free_item_ids=second["free_item_ids"]
+    )
 
     # Third redemption: quota exhausted, falls back to the 5% lab discount.
     third = preview()
@@ -343,7 +347,9 @@ def test_free_lab_test_discount_uses_item_amount_and_quantity_limit():
     assert first["free_item_ids"] == ["LABRBS"]
     assert first["discount_amount"] == 75
 
-    consume_free_items(enrollment, service_type="lab", free_item_ids=first["free_item_ids"])
+    consume_free_items(
+        enrollment, service_type="lab", free_item_ids=first["free_item_ids"]
+    )
     second = benefit_preview(
         plan=plan,
         enrollment=enrollment,

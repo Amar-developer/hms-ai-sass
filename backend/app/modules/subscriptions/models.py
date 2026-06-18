@@ -62,7 +62,9 @@ class TenantSubscription(SQLModel, table=True):
 class SubscriptionCredit(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("credit"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
-    subscription_id: str | None = Field(default=None, index=True, foreign_key="tenantsubscription.id")
+    subscription_id: str | None = Field(
+        default=None, index=True, foreign_key="tenantsubscription.id"
+    )
     credit_type: str = Field(default="patients", index=True, max_length=80)
     quantity: int = Field(default=0, ge=0)
     used_quantity: int = Field(default=0, ge=0)
@@ -80,8 +82,12 @@ class SubscriptionCredit(SQLModel, table=True):
 class SubscriptionInvoice(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("subinv"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
-    subscription_id: str | None = Field(default=None, index=True, foreign_key="tenantsubscription.id")
-    credit_id: str | None = Field(default=None, index=True, foreign_key="subscriptioncredit.id")
+    subscription_id: str | None = Field(
+        default=None, index=True, foreign_key="tenantsubscription.id"
+    )
+    credit_id: str | None = Field(
+        default=None, index=True, foreign_key="subscriptioncredit.id"
+    )
     invoice_number: str = Field(index=True, max_length=80)
     description: str = Field(default="", max_length=500)
     amount: int = Field(default=0, ge=0)
@@ -90,7 +96,9 @@ class SubscriptionInvoice(SQLModel, table=True):
     total_amount: int = Field(default=0, ge=0)
     paid_amount: int = Field(default=0, ge=0)
     balance_amount: int = Field(default=0, ge=0)
-    status: SubscriptionInvoiceStatus = Field(default=SubscriptionInvoiceStatus.ISSUED, index=True)
+    status: SubscriptionInvoiceStatus = Field(
+        default=SubscriptionInvoiceStatus.ISSUED, index=True
+    )
     issued_on: date = Field(default_factory=date.today)
     due_on: date | None = Field(default=None)
     paid_on: date | None = Field(default=None)

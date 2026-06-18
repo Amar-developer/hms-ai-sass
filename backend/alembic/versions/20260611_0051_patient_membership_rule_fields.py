@@ -27,12 +27,22 @@ def upgrade() -> None:
     if "activation_after_days" not in columns:
         op.add_column(
             "patientsubscriptionplan",
-            sa.Column("activation_after_days", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column(
+                "activation_after_days",
+                sa.Integer(),
+                nullable=False,
+                server_default="0",
+            ),
         )
     if "pharmacy_discount_slabs_json" not in columns:
         op.add_column(
             "patientsubscriptionplan",
-            sa.Column("pharmacy_discount_slabs_json", sa.String(), nullable=False, server_default="[]"),
+            sa.Column(
+                "pharmacy_discount_slabs_json",
+                sa.String(),
+                nullable=False,
+                server_default="[]",
+            ),
         )
 
 

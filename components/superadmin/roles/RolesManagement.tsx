@@ -143,7 +143,7 @@ export function RolesManagement({
         <FormField label="Role">
           <Input
             value={filters.query}
-            onChange={(e: any) => updateFilter("query", e.target.value)}  
+            onChange={(e: any) => updateFilter("query", e.target.value)}
             placeholder="Role name"
             className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
