@@ -778,7 +778,7 @@ export function PatientSubscriptions({
                           <th className="px-4 py-3">Price</th>
                           <th className="px-4 py-3">Duration</th>
                           <th className="px-4 py-3">Consults</th>
-                          <th className="px-4 py-3">Scope</th>
+                          {/* <th className="px-4 py-3">Scope</th> */}
                           <th className="px-4 py-3">Status</th>
                           <th className="px-4 py-3 text-right">Actions</th>
                         </tr>
@@ -1437,9 +1437,9 @@ function PlanTableRow({
             className="text-left"
           >
             <b className="block text-sm text-slate-950">{plan.name}</b>
-            <span className="text-xs font-semibold uppercase text-slate-500">
+            {/* <span className="text-xs font-semibold uppercase text-slate-500">
               {plan.code || "-"}
-            </span>
+            </span> */}
           </button>
         </td>
         <td className="px-4 py-3 font-semibold text-slate-950">
@@ -1447,7 +1447,7 @@ function PlanTableRow({
         </td>
         <td className="px-4 py-3 text-slate-700">{plan.duration_days} days</td>
         <td className="px-4 py-3 text-slate-700">{plan.free_consultations}</td>
-        <td className="max-w-[180px] px-4 py-3 text-slate-700">Tenant</td>
+        {/* <td className="max-w-[180px] px-4 py-3 text-slate-700">Tenant</td> */}
         <td className="px-4 py-3">
           <div className="flex flex-col items-start gap-1">
             <Badge
@@ -1956,10 +1956,11 @@ function ActiveEnrollmentsTable({
         <table className="w-full min-w-[860px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
-            <col className="w-[230px]" />
-            <col className="w-[220px]" />
             <col className="w-[140px]" />
-            <col className="w-[120px]" />
+            <col className="w-[180px]" />
+            <col className="w-[140px]" />
+            <col className="w-[110px]" />
+            <col className="w-[80px]" />
             <col className="w-[120px]" />
             {canManage && <col className="w-[150px]" />}
           </colgroup>
@@ -2001,9 +2002,9 @@ function ActiveEnrollmentsTable({
                   </td>
                   <td>
                     <b className="text-xs lg:text-sm">{row.plan?.name || "Membership plan"}</b>
-                    {row.plan?.code && (
+                    {/* {row.plan?.code && (
                       <p className="text-xs text-slate-500">{row.plan.code}</p>
-                    )}
+                    )} */}
                   </td>
                   <td className="text-xs lg:text-sm">
                     {isEditing ? (
@@ -2043,7 +2044,7 @@ function ActiveEnrollmentsTable({
                   <td>
                     <Badge
                       tone="green"
-                      className="text-xs lg:text-sm rounded-full py-2 px-2"
+                      className="table-status w-[60%]"
                     >
                       {row.status}
                     </Badge>

@@ -537,7 +537,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
               setPage(1);
             }}
             placeholder="Name, mobile, area"
-            className="text-xs search-filter"
+            className="text-xs search-filter placeholder:text-xs"
           />
           <SelectField
             label="Branch"

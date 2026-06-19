@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarClock, CheckCircle2, Clock3, UsersRound } from "lucide-react";
+import {
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  UsersRound,
+  X,
+} from "lucide-react";
 import {
   Badge,
   Button,
@@ -1036,11 +1042,32 @@ export function DoctorConsultation({
       requeueMode: mode,
     });
   }
+
+  const resetConsultation = () => {
+  setComplaints("");
+  setDiagnosisRows("");
+  setNotes("");
+  setVitals("");
+  setRemarks("");
+
+  setMedicineItems([]);
+  setReferralItems([]);
+
+  setScanNeeded(false);
+  setScanTests("");
+
+  setReferDoctor(false);
+  setReferDoctorId("");
+
+  setAdmissionNeeded(false);
+};
   async function cancelAppointment() {
     if (!selected) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");
+      resetConsultation()
+      
       try {
         await apiFetch(`/queue/${selected.queueEntryId}/cancel`, apiSession, {
           method: "POST",
@@ -1232,7 +1259,7 @@ export function DoctorConsultation({
                   setSelectedAppointmentId("");
                 }}
                 disabled={isDoctorUser}
-                className='select-filter'
+                className="select-filter"
               >
                 {doctorList.map((d: any) => (
                   <option key={d.id} value={d.id}>
@@ -1240,10 +1267,7 @@ export function DoctorConsultation({
                   </option>
                 ))}
               </Select>
-              <Badge
-                className="normal-badge text-center"
-                tone="blue"
-              >
+              <Badge className="normal-badge text-center" tone="blue">
                 {branch.name}
               </Badge>
             </div>
@@ -1260,18 +1284,29 @@ export function DoctorConsultation({
                   <button
                     key={a.id}
                     onClick={() => openConsultation(a.id)}
-                    className={`w-44 shrink-0 rounded-2xl border p-4 text-left transition ${
+                    className={`w-36 shrink-0 rounded-lg border p-2.5 text-left transition ${
                       selected?.id === a.id
                         ? "border-slate-900 bg-slate-50"
                         : "border-slate-200 bg-white hover:border-slate-400"
                     }`}
                   >
-                    <div className="mb-2 flex flex-wrap gap-1">
+                    <div className="mb-2 flex justify-between  flex-wrap gap-1">
                       <Badge
                         tone={a.tokenType === "Emergency" ? "red" : "amber"}
+                        className="table-status p-1.5 text-xs"
                       >
                         {humanizeOptionLabel(a.tokenType)}
                       </Badge>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          cancelAppointment();
+                        }}
+                        className="border text-[11px] w-5 h-5 flex justify-center items-center hover:font-bold border-black/50 font-bold rounded-full"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
                       {a.consultationStatus && (
                         <Badge
                           // className="w-[500px]"

@@ -55,10 +55,10 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
         <div className="min-w-0">
           {row.subscription_plan_name ? (
             <>
-              <span className="block truncate table-data text-slate-700">
+              <span className="block truncate text-xs text-slate-700">
                 {row.subscription_plan_name}
               </span>
-              <Badge
+              {/* <Badge
                 tone={
                   subscriptionStatus === "active"
                     ? "green"
@@ -69,7 +69,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
                 className="mt-1 table-status"
               >
                 {subscriptionStatus || "-"}
-              </Badge>
+              </Badge> */}
             </>
           ) : (
             <span className=" text-xs text-slate-400">-</span>

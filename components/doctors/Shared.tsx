@@ -202,7 +202,7 @@ export function CheckboxGroup({ title, name, rows, selected, onChange, empty, al
               defaultChecked={onChange ? undefined : selectedSet.has(row.id)}
               onChange={(event: any) => toggle(row.id, event.target.checked)}
             />
-            <span className="table-data">{row.name}</span>
+            <span className="text-xs">{row.name}</span>
           </label>
         ))}
       </div>

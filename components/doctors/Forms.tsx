@@ -216,6 +216,7 @@ export function DoctorForm({
             onChange={(event: any) => setFullName(event.target.value)}
             required
             placeholder="Dr. Priya Raman"
+            className='search-input'
           />
         </Field>
         <Field label="Doctor Type">
@@ -250,6 +251,7 @@ export function DoctorForm({
             name="registrationNumber"
             defaultValue={doctor?.registration_number || ""}
             placeholder="TNMC12345"
+            className='search-input'
           />
         </Field>
         <Field label="Mobile">
@@ -259,6 +261,7 @@ export function DoctorForm({
             mobileNumber
             onChange={(event: any) => setMobile(event.target.value)}
             placeholder='Enter mobile'
+            className='search-input'
           />
         </Field>
         <Field label="Email">
@@ -268,6 +271,7 @@ export function DoctorForm({
             value={email}
             onChange={(event: any) => setEmail(event.target.value)}
             placeholder='Enter email'
+            className='search-input'
           />
         </Field>
         {doctor && (
@@ -379,6 +383,7 @@ export function DoctorForm({
                       min={0}
                       required
                       placeholder="650"
+                      
                     />
                     <NumberField
                       label="Doctor Share %"
@@ -411,7 +416,7 @@ export function DoctorForm({
           </div>
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             {busy ? "Saving..." : doctor ? "Save Doctor" : "Create Doctor"}
           </Button>
           <button

@@ -307,6 +307,7 @@ export function SettingsPanel(props: any) {
               value={reportRecipients}
               onChange={(e: any) => setReportRecipients(e.target.value)}
               placeholder="owner@clinic.com, accounts@clinic.com"
+              className='search-filter'
             />
           </FormField>
           <FormField label="CC Emails">
@@ -314,6 +315,7 @@ export function SettingsPanel(props: any) {
               value={reportCc}
               onChange={(e: any) => setReportCc(e.target.value)}
               placeholder="Optional"
+              className='search-filter'
             />
           </FormField>
           <FormField label="Send Day">
@@ -323,6 +325,7 @@ export function SettingsPanel(props: any) {
               max="28"
               value={reportSendDay}
               onChange={(e: any) => setReportSendDay(Number(e.target.value))}
+              className='search-filter'
             />
           </FormField>
           <FormField label="Auto Send">
@@ -331,6 +334,7 @@ export function SettingsPanel(props: any) {
               onChange={(e: any) =>
                 setReportEnabled(e.target.value === "enabled")
               }
+              className='select-filter'
             >
               <option value="disabled">Manual only</option>
               <option value="enabled">Every month</option>
@@ -346,7 +350,7 @@ export function SettingsPanel(props: any) {
           ].map(([key, label]) => (
             <label
               key={key}
-              className="flex items-center gap-2 text-sm font-bold text-slate-700"
+              className="flex items-center gap-2 text-xs font-bold text-slate-700"
             >
               <input
                 type="checkbox"
@@ -362,6 +366,7 @@ export function SettingsPanel(props: any) {
             type="button"
             onClick={saveReportSettings}
             disabled={reportBusy === "save"}
+            className='save-button'
           >
             {reportBusy === "save" ? "Saving..." : "Save Report Settings"}
           </Button>
@@ -369,7 +374,7 @@ export function SettingsPanel(props: any) {
             type="button"
             onClick={sendMonthlyReportNow}
             disabled={reportBusy === "send"}
-            className="rounded-lg border px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm font-bold text-slate-700 disabled:text-slate-300"
+            className="close-button font-bold text-slate-700 disabled:text-slate-300"
           >
             {reportBusy === "send" ? "Queueing..." : "Send Last Month Now"}
           </button>
@@ -379,7 +384,7 @@ export function SettingsPanel(props: any) {
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Job</th>
-                <th>Status</th>
+                <th className="w-[100px]">Status</th>
                 <th>Period</th>
                 <th>Recipients</th>
                 <th>Result</th>
@@ -396,7 +401,7 @@ export function SettingsPanel(props: any) {
               )}
               {reportJobs.map((job: any, index: number) => (
                 <tr key={job.id}>
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-4 text-sm">
                     <b>Report {index + 1}</b>
                     <p className="text-xs text-slate-500">
                       {displayDateTime(job.created_at)}
@@ -413,19 +418,22 @@ export function SettingsPanel(props: any) {
                               ? "blue"
                               : "amber"
                       }
+                      className="table-status w-[60%] text-xs"
                     >
                       {humanizeOptionLabel(job.status)}
                     </Badge>
                   </td>
-                  <td>
+                  <td className="text-xs">
                     {job.period_start} to {job.period_end}
                   </td>
-                  <td>{(job.recipients || []).join(", ")}</td>
-                  <td className="pr-4 text-slate-500">
-                    {job.failure_reason || job.attachment_filename || "-"}
+                  <td className="text-xs truncate">{(job.recipients || []).join(", ")}</td>
+                  <td className="pr-4 text-xs text-slate-500">
+                    <div className="truncate w-[100px]" title={job.failure_reason || job.attachment_filename}>
+                      {job.failure_reason || job.attachment_filename || "-"}
+                    </div>
                   </td>
-                  <td className="pr-4">
-                    <ActionGroup className="justify-start">
+                  <td className="">
+                    <ActionGroup >
                       <ActionButton
                         onClick={() => resendMonthlyReport(job)}
                         disabled={reportBusy === `resend-${job.id}`}

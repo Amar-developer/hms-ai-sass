@@ -65,7 +65,7 @@ export function ScheduleRow({
       </span>
       <span className="text-xs">{row.slot_minutes} min</span>
       <Badge tone={statusTone as any} className="table-status text-xs">{statusLabel}</Badge>
-      <ActionGroup>
+      <ActionGroup className="justify-end">
         <ActionButton onClick={stop(onEdit)}>Edit</ActionButton>
         <ActionButton tone="danger" onClick={stop(onDelete)}>
           Delete
@@ -116,6 +116,7 @@ export function PractitionerPicker({ doctors, value, onChange }: any) {
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         placeholder="Type doctor or physiotherapist"
         required={!value}
+        className=' placeholder:text-xs search-input'
       />
       {open && (
         <div className="absolute z-40 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-xl">
@@ -134,7 +135,7 @@ export function PractitionerPicker({ doctors, value, onChange }: any) {
                 setQuery("");
                 setOpen(false);
               }}
-              className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+              className={`w-full rounded-xl px-3 py-2 text-left text-xs hover:bg-slate-50 ${
                 doctor.id === value
                   ? "bg-slate-900 text-white hover:bg-slate-900"
                   : ""

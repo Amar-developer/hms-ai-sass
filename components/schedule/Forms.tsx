@@ -121,15 +121,14 @@ export function ScheduleForm({
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="card-title font-bold">{title}</h3>
-          <p className="table-data text-slate-500">
+          <p className="card-desc text-slate-500">
             {schedule ? "Update weekly consultation timing for this doctor." : "Create weekly consultation timing for a doctor."}
           </p>
         </div>
         <button
           type="button"
           onClick={back}
-          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm
- font-bold border"
+          className="close-button font-bold"
         >
           Back to Schedules
         </button>
@@ -162,12 +161,13 @@ export function ScheduleForm({
                   name="branchId"
                   value={selectedBranchId}
                 />
-                <Select value={selectedBranchId} disabled>
+                <Select value={selectedBranchId} disabled >
                   {doctorBranches.map((branch: any) => (
                     <option key={branch.id} value={branch.id}>
                       {branch.name}
                     </option>
                   ))}
+
                 </Select>
               </>
             ) : (
@@ -348,7 +348,7 @@ export function ScheduleForm({
           <input type="hidden" name="roomNumber" value={roomNumber} />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             {busy
               ? "Saving..."
               : schedule

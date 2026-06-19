@@ -422,7 +422,7 @@ export function Doctors({ apiSession, clinic }: any) {
             setPage(1);
           }}
           placeholder="Name, specialty, mobile, email"
-          className="search-filter"
+          className="search-filter text-xs placeholder:text-xs"
         />
         <SelectField
           label="Type"

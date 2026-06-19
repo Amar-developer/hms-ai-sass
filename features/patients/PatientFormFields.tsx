@@ -127,9 +127,7 @@ export function PatientFormFields({
   }
   useEffect(() => {
     setSelectedBranchId(
-      patientField(patient, "branch_id", "branchId") ||
-        defaultBranchId ||
-        "",
+      patientField(patient, "branch_id", "branchId") || defaultBranchId || "",
     );
     setDateOfBirth(
       patientDateInputValue(
@@ -157,6 +155,7 @@ export function PatientFormFields({
           defaultValue={patientField(patient, "full_name", "fullName")}
           required
           placeholder="Enter patient full name"
+          className="search-input"
         />
       </Field>
       <Field label="Mobile">
@@ -166,6 +165,7 @@ export function PatientFormFields({
           value={mobile}
           onChange={(e: any) => setMobile(e.target.value)}
           placeholder="Enter patient mobile number"
+          className="search-input"
         />
       </Field>
       <Field label="Branch">
@@ -173,6 +173,7 @@ export function PatientFormFields({
           name="branchId"
           value={selectedBranchId}
           onChange={(event: any) => setSelectedBranchId(event.target.value)}
+          className="select-input"
         >
           {branchOptions.length === 0 && (
             <option value="">No branches available</option>
@@ -185,7 +186,11 @@ export function PatientFormFields({
         </Select>
       </Field>
       <Field label="Gender">
-        <Select name="gender" defaultValue={patientField(patient, "gender")}>
+        <Select
+          name="gender"
+          defaultValue={patientField(patient, "gender")}
+          className="select-input"
+        >
           {genders.map(([value, label]) => (
             <option key={value} value={value}>
               {label}
@@ -200,6 +205,7 @@ export function PatientFormFields({
           max={today}
           value={dateOfBirth}
           onChange={(event: any) => setDateOfBirth(event.target.value)}
+          className='search-input'
         />
       </Field>
       <Field label="Age Years">
@@ -210,6 +216,8 @@ export function PatientFormFields({
           max="130"
           value={calculatedAge}
           readOnly
+          placeholder='Age'
+          className='search-input'
         />
       </Field>
       <Field label="Guardian Name">
@@ -217,6 +225,7 @@ export function PatientFormFields({
           name="guardianName"
           defaultValue={patientField(patient, "guardian_name", "guardianName")}
           placeholder="Enter guardian name"
+          className='search-input'
         />
       </Field>
       <Field label="Guardian Mobile">
@@ -228,6 +237,7 @@ export function PatientFormFields({
             "guardianMobile",
           )}
           placeholder="Enter guardian mobile"
+          className='search-input'
         />
       </Field>
       <Field label="Alternate Mobile">
@@ -239,6 +249,7 @@ export function PatientFormFields({
             "alternateMobile",
           )}
           placeholder="Enter guardian mobile number"
+          className='search-input'
         />
       </Field>
       <Field label="Email">
@@ -247,6 +258,7 @@ export function PatientFormFields({
           type="email"
           defaultValue={patientField(patient, "email")}
           placeholder="Enter patient email"
+          className='search-input'
         />
       </Field>
       <Field label="Area">
@@ -254,6 +266,7 @@ export function PatientFormFields({
           name="area"
           defaultValue={patientField(patient, "area")}
           placeholder="Enter patient area"
+          className='search-input'
         />
       </Field>
       <Field label="Blood Group">
@@ -287,6 +300,7 @@ export function PatientFormFields({
             name="address"
             defaultValue={patientField(patient, "address")}
             placeholder="Enter patient Address"
+            className='search-input'
           />
         </Field>
       </div>

@@ -607,7 +607,7 @@ export function Lab({
               { value: "external_referral", label: "External Referral" },
             ]}
           />
-          <FormField label="Lab Test">
+          <FormField label="Lab Test / Service">
             <SearchPicker
               value={selectedAvailableTestId}
               inputValue={testSearch}
@@ -640,8 +640,8 @@ export function Lab({
               loading={testLoading}
             />
           </FormField>
-          <div className="flex items-end">
-            <ActionButton type="button" onClick={addOrderTest}>
+          <div className=" flex items-end lg:mb-1">
+            <ActionButton type="button" onClick={addOrderTest} className='close-button  h-[65%] text-white bg-black/90'>
               Add
             </ActionButton>
           </div>

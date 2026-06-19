@@ -408,12 +408,12 @@ export function HomeCare({
 
   return (
     <div className="space-y-6">
-      <Header
+      {/* <Header
         view={view}
         count={bookings.length}
         onList={backToList}
         onCreate={openCreate}
-      />
+      /> */}
       <StatusToast
         message={message}
         tone="success"
@@ -444,7 +444,7 @@ export function HomeCare({
               <h3 className="card-title font-bold">
                 {editing ? "Edit Booking" : "New Booking"}
               </h3>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 Patient-linked home care / visit booking with assigned staff, 
                 complaints, service lines, and schedule.
               </p>

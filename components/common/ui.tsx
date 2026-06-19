@@ -615,7 +615,7 @@ export function SuggestionInput({
 }
 
 export function Select({
-  className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs",
   children,
   ...props
 }: any) {
@@ -782,14 +782,14 @@ export function Button({
 
 export function ActionGroup({
   children,
-  className = "",
+  className = "justify-start",
 }: {
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
-      className={`flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap ${className}`}
+      className={`flex flex-nowrap items-center gap-2 whitespace-nowrap ${className}`}
     >
       {children}
     </div>

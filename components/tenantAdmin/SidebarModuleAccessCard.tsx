@@ -181,7 +181,7 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
           </div>
         </div>
       </div>
-      <Button onClick={save} disabled={busy || !selectedRole} className="mt-4 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+      <Button onClick={save} disabled={busy || !selectedRole} className="mt-4 save-button ">
         {busy ? "Saving..." : "Save Sidebar Access"}
       </Button>
     </Card>

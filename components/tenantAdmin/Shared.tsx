@@ -19,13 +19,13 @@ export function Header({ title, subtitle, back }: any) {
   return (
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div>
-        <h3 className="text-base lg:text-lg font-bold">{title}</h3>
-        <p className="text-xs lg:text-sm text-slate-500">{subtitle}</p>
+        <h3 className="card-title font-bold">{title}</h3>
+        <p className="card-desc text-slate-500">{subtitle}</p>
       </div>
       <button
         type="button"
         onClick={back}
-        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+        className="close-button font-bold"
       >
         Back
       </button>
@@ -36,11 +36,11 @@ export function Header({ title, subtitle, back }: any) {
 export function Actions({ busy, back, disabled, label }: any) {
   return (
     <div className="flex flex-wrap gap-2 md:col-span-2">
-      <Button disabled={busy || disabled}>{busy ? "Saving..." : label}</Button>
+      <Button disabled={busy || disabled} className='save-button'>{busy ? "Saving..." : label}</Button>
       <button
         type="button"
         onClick={back}
-        className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+        className="close-button border font-bold"
       >
         Cancel
       </button>
@@ -247,7 +247,7 @@ export function CheckboxList({
                 event.preventDefault();
                 onRowOpen(row);
               }}
-              className={`flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-sm ${
+              className={`flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-xs ${
                 onRowOpen
                   ? "cursor-pointer transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
                   : ""

@@ -152,6 +152,7 @@ export function UserForm({
             defaultValue={user?.name || ""}
             placeholder="Enter user name"
             required
+            className='search-input'
           />
         </FormField>
         <FormField label="Email">
@@ -161,6 +162,7 @@ export function UserForm({
             placeholder="Enter user email"
             defaultValue={user?.email || ""}
             required
+            className='search-input'
           />
         </FormField>
         <FormField label="User Type">
@@ -183,6 +185,7 @@ export function UserForm({
             value={mobile}
             onChange={(e: any) => setMobile(e.target.value)}
             placeholder="Enter patient mobile number"
+            className='search-input'
           />
         </Field>
         <Field label="Branch Access">
@@ -212,6 +215,7 @@ export function UserForm({
               type="text"
               defaultValue="TempPass123"
               required
+              className='search-input'
             />
           </FormField>
         )}
@@ -258,7 +262,7 @@ export function UserForm({
               className="inline-flex items-center justify-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold shadow-sm transition hover:bg-slate-100"
             >
               <KeyRound size={16} />
-              <span>Reset Password</span>
+              <span className="text-xs">Reset Password</span>
             </button>
           </div>
         )}
@@ -814,13 +818,13 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
     <div>
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
-          <h4 className="text-base lg:text-lg font-bold">Module Permissions</h4>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h4 className="card-title font-bold">Module Permissions</h4>
+          <p className="card-desc text-slate-500">
             Enable permissions by module. Use Manage for full workflow/action
             access, then Create, Read, Edit, and Delete as needed.
           </p>
         </div>
-        <Badge tone="slate" className="w-[20%] lg:w-[15%] py-2 rounded-lg">
+        <Badge tone="slate" className="w-[20%] lg:w-[15%] normal-badge">
           {selectedSet.size} selected
         </Badge>
       </div>
@@ -831,15 +835,15 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
             className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
           >
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
-              <div>
+              <div className="flex justify-between  w-full">
                 <h5 className="font-bold">{permissionModuleTitle(module)}</h5>
                 <p className="text-xs text-slate-500">
                   {grouped[module].length} permissions
                 </p>
               </div>
-              <Badge tone="slate" className="rounded-lg py-2 px-2">
+              {/* <Badge tone="slate" className="rounded-lg py-2 px-2">
                 Module
-              </Badge>
+              </Badge> */}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {buckets.map((bucket: any) => {
@@ -851,17 +855,17 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                 return (
                   <div
                     key={`${module}-${bucket[0]}`}
-                    className="rounded-2xl bg-slate-50 p-3"
+                    className="rounded-2xl "
                   >
-                    <p className="mb-2 text-xs font-bold uppercase text-slate-500">
+                    {/* <p className="text-xs font-bold uppercase text-slate-500">
                       {bucket[1]}
-                    </p>
+                    </p> */}
                     <div className="grid gap-2">
                       {bucketPermissions.length ? (
                         bucketPermissions.map((permission: any) => (
                           <label
                             key={permission.key}
-                            className="flex items-start gap-2 text-sm"
+                            className="flex items-start gap-2 text-[11px]"
                           >
                             <input
                               name="permissionKeys"
@@ -869,15 +873,15 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                               value={permission.key}
                               defaultChecked={selectedSet.has(permission.key)}
                               disabled={disabled}
-                              className="mt-1 h-4 w-4"
+                              className="mt-1 h-3 w-3"
                             />
                             <span>
-                              <span className="font-semibold">
+                              <span className="text-[12px] font-semibold">
                                 {labelFor(permission)}
                               </span>
-                              <span className="block break-all text-xs text-slate-400">
+                              {/* <span className="block break-all text-[11px] text-slate-400">
                                 {permission.key}
-                              </span>
+                              </span> */}
                             </span>
                           </label>
                         ))
@@ -885,7 +889,8 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                         <span className="text-xs text-slate-300">
                           No access
                         </span>
-                      )}
+                      )
+                      }
                     </div>
                   </div>
                 );

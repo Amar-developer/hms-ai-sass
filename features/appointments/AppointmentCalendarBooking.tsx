@@ -794,10 +794,10 @@ export function AppointmentCalendarBooking(props: Props) {
                 {selectedPatient ? (
                   <div className="flex flex-col justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center">
                     <div>
-                      <b className="table-data text-slate-900">
+                      <b className="text-xs text-slate-900">
                         {selectedPatient.full_name}
                       </b>
-                      <p className="table-data text-slate-500">
+                      <p className="text-xs text-slate-500">
                         {selectedPatient.patient_number
                           ? `${selectedPatient.patient_number} · `
                           : ""}
@@ -815,7 +815,7 @@ export function AppointmentCalendarBooking(props: Props) {
                         setBookingStep("appointment");
                         setPatientLookupOpen(true);
                       }}
-                      className="rounded-lg border border-blue-200 bg-white px-3 py-2 table-data font-bold text-blue-700"
+                      className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-xs font-bold text-blue-700"
                     >
                       Change Patient
                     </button>
@@ -843,7 +843,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       }}
                       placeholder="Search patient name, mobile, or patient ID"
                       autoComplete="off"
-                      className="rounded-lg py-3 pl-10 pr-10 text-sm"
+                      className="rounded-lg py-3 pl-10 pr-10 text-xs"
                     />
                     {patientSearch && (
                       <button
@@ -861,7 +861,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     {patientLookupOpen && patientSearch.trim() && (
                       <div className="absolute z-30 mt-1 max-h-80 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white p-1 shadow-xl">
                         {patientSearch.trim().length < 2 && (
-                          <p className="px-3 py-3 table-data text-slate-500">
+                          <p className="px-3 py-3 text-xs text-slate-500">
                             Enter at least 2 characters to search.
                           </p>
                         )}
@@ -880,10 +880,10 @@ export function AppointmentCalendarBooking(props: Props) {
                               className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left hover:bg-slate-50"
                             >
                               <span>
-                                <b className="block table-data text-slate-900">
+                                <b className="block text-xs text-slate-900">
                                   {patient.full_name}
                                 </b>
-                                <span className="table-data text-slate-500">
+                                <span className="text-xs text-slate-500">
                                   {patient.patient_number
                                     ? `${patient.patient_number} · `
                                     : ""}
@@ -909,7 +909,7 @@ export function AppointmentCalendarBooking(props: Props) {
                               setPatientLookupOpen(false);
                               setBookingStep("newPatient");
                             }}
-                            className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-3 text-left table-data font-bold text-blue-700 hover:bg-blue-50"
+                            className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-3 text-left text-xs font-bold text-blue-700 hover:bg-blue-50"
                           >
                             <span className="text-lg leading-none">+</span>
                             Create a new Patient
@@ -946,6 +946,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     <Select
                       value={departmentId}
                       onChange={(e: any) => setDepartmentId(e.target.value)}
+                      className='select-filter'
                     >
 	                      {departmentOptions.map((department: any) => (
 	                        <option key={department.id} value={department.id}>
@@ -959,6 +960,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       value={doctorId}
 	                      onChange={(e: any) => setDoctorId(e.target.value)}
                       disabled={apiSession && doctors.length === 0}
+                      className='select-filter'
                     >
                       {doctors.length === 0 && (
                         <option value="">No doctor available</option>
@@ -982,6 +984,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     <Select
                       value={appointmentType}
                       onChange={(e: any) => setAppointmentType(e.target.value)}
+                      className='select-filter'
                     >
                       <option value="op">OP</option>
                       <option value="follow_up">Follow-up</option>
@@ -997,6 +1000,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       type="date"
                       value={appointmentDate}
                       onChange={(e: any) => setAppointmentDate(e.target.value)}
+                      className='date-filter'
                     />
                   </Field>
 	                <div className="rounded-lg bg-slate-50 p-4">
@@ -1033,7 +1037,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     value={emergencyReason}
                     onChange={setEmergencyReason}
                     placeholder="Severe pain, trauma, breathlessness"
-                    className="search-input"
+                    className="search"
                   />
                   <p className="mt-2 text-xs font-semibold text-red-700">
                     Emergency bookings skip normal slot availability and are
@@ -1075,14 +1079,14 @@ export function AppointmentCalendarBooking(props: Props) {
                 </div>
               )}
               {appointmentType !== "emergency" && (
-                <div className="mt-4 rounded-lg bg-blue-50 p-4 table-data text-blue-800">
+                <div className="mt-4 rounded-lg bg-blue-50 p-4 text-xs text-blue-800">
                   Consultation time will be auto-assigned from the doctor's
                   schedule when you save.
                 </div>
               )}
               <div className="mt-4 rounded-lg bg-slate-50 p-4">
                 <div className="flex items-baseline justify-between">
-                  <h5 className="table-data font-bold uppercase text-slate-700">
+                  <h5 className="text-xs font-bold uppercase text-slate-700">
                     Intake (Optional)
                   </h5>
                   <span className="text-[10px] text-xs text-slate-500">
@@ -1095,7 +1099,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     value={intakeVitals}
                     onChange={setIntakeVitals}
                     placeholder="BP=120/80 mmHg, Pulse=78 bpm"
-                    className="px-2 py-2 lg:px-4 lg:py-3"
+                    className="search-input placeholder:text-xs"
                   />
                   <TextareaField
                     label="Complaint Rows"
@@ -1105,12 +1109,12 @@ export function AppointmentCalendarBooking(props: Props) {
                       "Fever | 2 days | medium\nCough | 1 day | mild"
                     }
                     rows={3}
-                    className="placeholder:table-data px-2 py-2"
+                    className="placeholder:text-xs px-2 py-2"
                   />
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
-	                <Button disabled={busy || !hasAvailableDoctor}>
+	                <Button disabled={busy || !hasAvailableDoctor} className='save-button'>
 	                  {busy ? "Booking..." : "Save & Generate Token"}
 	                </Button>
                 <button

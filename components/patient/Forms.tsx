@@ -28,7 +28,7 @@ export function PatientForm({
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
           <h3 className="card-title font-bold">{title}</h3>
-          <p className="table-data text-slate-500">
+          <p className="card-desc text-slate-500">
             {patient?.patient_number || "Create tenant-scoped patient record."}
           </p>
         </div>
@@ -47,7 +47,7 @@ export function PatientForm({
           includeStatus={Boolean(patient)}
         />
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-          <Button disabled={busy}>
+          <Button disabled={busy} className='save-button'>
             {busy ? "Saving..." : patient ? "Save Patient" : "Create Patient"}
           </Button>
           <button
