@@ -594,7 +594,7 @@ export function Pharmacy({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <Card>
-        <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
+        <h3 className="card-desc font-bold">Create Pharmacy Issue</h3>
         <form
           onSubmit={createDirect}
           className="mt-4 grid gap-3 md:grid-cols-4"
@@ -671,7 +671,7 @@ export function Pharmacy({
             <ActionButton type="button" onClick={addIssueItem} className='close-button'>
               Add
             </ActionButton>
-            <Button disabled={busy === "create"} className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs lg:text-sm'>
+            <Button disabled={busy === "create"} className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs'>
               {busy === "create" ? "Saving..." : "Create Issue"}
             </Button>
           </div>
@@ -715,7 +715,7 @@ export function Pharmacy({
                       <b className="card-title">
                         {a.token} · {a.patient}
                       </b>
-                      <p className="table-data text-slate-500">
+                      <p className="card-desc text-slate-500">
                         Signed prescription ready
                       </p>
                     </div>
@@ -726,7 +726,7 @@ export function Pharmacy({
                       <Button
                         disabled={busy === a.consultationId}
                         onClick={() => createFromConsultation(a)}
-                        className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs lg:text-sm'
+                        className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs'
                       >
                         {busy === a.consultationId
                           ? "Creating..."
@@ -772,7 +772,7 @@ export function Pharmacy({
             <tbody className="divide-y">
               {issues.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="table-data px-4 py-4 text-slate-500">
+                  <td colSpan={7} className="card-desc px-4 py-4 text-slate-500">
                     No pharmacy issues yet.
                   </td>
                 </tr>
@@ -926,7 +926,7 @@ export function Pharmacy({
             </tbody>
           </table>
         </div>
-        <Pagination
+        <Pagination 
           page={safePage}
           totalPages={totalPages}
           total={issues.length}

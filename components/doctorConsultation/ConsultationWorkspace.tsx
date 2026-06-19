@@ -232,7 +232,7 @@ export function ConsultationWorkspace(props: any) {
           <h3 className="card-title font-bold">
             Consultation Workspace
           </h3>
-          <p className="table-data text-slate-500">
+          <p className="card-desc text-slate-500">
             Structured vitals, complaints, diagnosis, prescription, referrals,
             follow-up and addendums.
           </p>
@@ -271,7 +271,7 @@ export function ConsultationWorkspace(props: any) {
         </div>
       </div>
       {!selected ? (
-        <div className="mt-5 rounded-lg bg-amber-50 p-4 table-data text-amber-700">
+        <div className="mt-5 rounded-lg bg-amber-50 p-4 card-desc text-amber-700">
           No appointment selected.
         </div>
       ) : (

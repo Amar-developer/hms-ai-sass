@@ -47,13 +47,13 @@ export function DoctorRow({
       className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_1.45fr] xl:items-center"
     >
       <div>
-        <b className="table-data">{formatPractitionerName(row)}</b>
+        <b className="text-xs">{formatPractitionerName(row)}</b>
       </div>
-      <span className="table-data">{typeLabel}</span>
-      <span className="text-slate-600 table-data">
+      <span className="text-xs">{typeLabel}</span>
+      <span className="text-slate-600 text-xs">
         {branchNames.length ? branchNames.join(", ") : "-"}
       </span>
-      <div className="grid gap-1 text-slate-600 table-data">
+      <div className="grid gap-1 text-slate-600 text-xs">
         {specialties.length
           ? specialties.map((specialty: any) => (
               <span key={specialty.departmentId}>
@@ -62,8 +62,8 @@ export function DoctorRow({
             ))
           : "-"}
       </div>
-      <span className="break-all table-data">{row.mobile || row.email || "-"}</span>
-      <div className="grid gap-1 table-data">
+      <span className="break-all text-xs">{row.mobile || row.email || "-"}</span>
+      <div className="grid gap-1 text-xs">
         {specialties.length
           ? specialties.map((specialty: any) => (
               <span key={specialty.departmentId}>
@@ -76,7 +76,7 @@ export function DoctorRow({
             ))
           : "-"}
       </div>
-      <Badge tone={row.status === "active" ? "green" : "red"} className="table-status">
+      <Badge tone={row.status === "active" ? "green" : "red"} className="table-status text-xs">
         {row.status === "active" ? "Active" : "Inactive"}
       </Badge>
       <ActionGroup className="justify-start xl:justify-end">

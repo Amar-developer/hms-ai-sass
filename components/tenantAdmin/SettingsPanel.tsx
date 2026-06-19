@@ -82,8 +82,8 @@ export function SettingsPanel(props: any) {
   return (
     <div className="space-y-5">
       <Card>
-        <h3 className="text-base lg:text-lg font-bold">Tenant & Branch Settings</h3>
-        <p className="text-xs lg:text-sm text-slate-500">
+        <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
+        <p className="card-desc text-slate-500">
           Configuration affects invoice numbering, queue behavior, appointment
           slots, payments, and communications for this tenant.
         </p>
@@ -267,8 +267,8 @@ export function SettingsPanel(props: any) {
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
-            <h3 className="text-base lg:text-lg font-bold">Monthly Email Reports</h3>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <h3 className="card-title font-bold">Monthly Email Reports</h3>
+            <p className="card-desc text-slate-500">
               Send last month revenue, doctor settlement, medical department revenue,
               and paid invoice profit as an Excel-compatible spreadsheet through
               the Redis report worker.

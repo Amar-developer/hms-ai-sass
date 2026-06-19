@@ -496,7 +496,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0">
           <h3 className="card-title font-bold">EMR / Patient Management</h3>
-          <p className="mt-1 max-w-3xl table-data text-slate-500">
+          <p className="mt-1 max-w-3xl card-desc text-slate-500">
             Tenant-scoped patient registry with history, alerts, treatment
             timeline, and audited record views.
           </p>
@@ -506,7 +506,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
           <button
             type="button"
             onClick={() => open("create")}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 table-data font-bold text-white shadow-sm hover:bg-slate-800"
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
           >
             <Plus size={16} />
             Create Patient
@@ -516,7 +516,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
         <div
-          className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "md:grid-cols-3 lg:grid-cols-[1.35fr_1.05fr_.9fr_.9fr_.85fr_.85fr_auto]"}`}
+          className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "md:grid-cols-4 lg:grid-cols-4"}`}
         >
           {isSuperAdmin && (
             <SelectField
@@ -537,7 +537,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
               setPage(1);
             }}
             placeholder="Name, mobile, area"
-            className="px-2 py-2 lg:px-4 lg:py-3"
+            className="text-xs search-filter"
           />
           <SelectField
             label="Branch"
@@ -550,8 +550,9 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
               { value: "all", label: "All branches" },
               ...branches.map((b: any) => ({ value: b.id, label: b.name })),
             ]}
+            
           />
-          <SelectField
+          {/* <SelectField
             label="Gender"
             value={gender}
             onChange={(v) => {
@@ -562,7 +563,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
               { value: "all", label: "All gender" },
               ...genders.map(([value, label]) => ({ value, label })),
             ]}
-          />
+          /> */}
           <SelectField
             label="Status"
             value={status}
@@ -576,9 +577,10 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
               { value: "inactive", label: "Inactive" },
               { value: "deceased", label: "Deceased" },
             ]}
+            className="text-xs"
           />
-          <DateField label="From" value={fromDate} onChange={setFromDate} />
-          <DateField label="To" value={toDate} onChange={setToDate} />
+          {/* <DateField label="From" value={fromDate} onChange={setFromDate} />
+          <DateField label="To" value={toDate} onChange={setToDate} /> */}
           <div className="flex items-end gap-2">
             <Button
               // className="min-h-[46px] px-5  rounded-lg text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
@@ -587,6 +589,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
                 loadData(tenantId);
               }}
               disabled={busy}
+              className='save-button'
             >
               {busy ? "Searching..." : "Search"}
             </Button>

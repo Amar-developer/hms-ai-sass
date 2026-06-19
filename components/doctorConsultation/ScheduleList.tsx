@@ -18,7 +18,7 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
           <span>Mode</span>
         </div>
         {rows.length === 0 && (
-          <div className="p-5 table-data text-slate-500">
+          <div className="p-5 card-desc text-slate-500">
             No appointment scheduled for the selected doctor.
           </div>
         )}

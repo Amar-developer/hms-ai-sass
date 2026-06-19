@@ -596,6 +596,7 @@ export function Lab({
             options={patients.map((p: any) => ({ value: p.id, label: p.name }))}
             placeholder="Select patient"
             searchPlaceholder="Search patient by name"
+            className="text-xs"
           />
           <SelectField
             label="Source"
@@ -652,7 +653,7 @@ export function Lab({
             className="search-input"
           />
           <div className="flex items-end">
-            <Button disabled={busy === "create"}>
+            <Button disabled={busy === "create"} className='save-button text-xs'>
               {busy === "create" ? "Saving..." : "Create Order"}
             </Button>
           </div>
@@ -682,7 +683,7 @@ export function Lab({
             return (
               <>
                 {visible.length === 0 && (
-                  <div className="rounded-lg  bg-slate-50 p-4 table-data text-slate-500">
+                  <div className="rounded-lg  bg-slate-50 p-4 card-desc text-slate-500">
                     No signed consultation referrals ready.
                   </div>
                 )}
@@ -692,10 +693,10 @@ export function Lab({
                     className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"
                   >
                     <div>
-                      <b className="text-lg lg:text-xl">
+                      <b className="text-base lg:text-lg">
                         {a.token} · {a.patient}
                       </b>
-                      <p className="text-xs lg:text-sm text-slate-500">
+                      <p className="text-xs text-slate-500">
                         Signed consultation referral
                       </p>
                     </div>
@@ -706,7 +707,7 @@ export function Lab({
                       <Button
                         disabled={busy === a.consultationId}
                         onClick={() => createFromConsultation(a)}
-                        className='rounded-lg px-2 py-2 lg:px-4 lg:py-2 table-data'
+                        className='rounded-lg px-2 py-2 lg:px-4 lg:py-2 text-xs'
                       >
                         {busy === a.consultationId
                           ? "Creating..."
@@ -733,7 +734,7 @@ export function Lab({
       </Card>
       <Card>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-lg font-bold">Lab / Service Worklist</h3>
+          <h3 className="card-title font-bold">Lab / Service Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
@@ -753,7 +754,7 @@ export function Lab({
             <tbody className="divide-y">
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-4 text-slate-500">
+                  <td colSpan={8} className="px-4 py-4 card-desc text-slate-500">
                     No lab orders yet.
                   </td>
                 </tr>

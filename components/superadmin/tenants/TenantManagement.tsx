@@ -105,12 +105,12 @@ export function TenantManagement({
             <h3 className="text-lg font-bold mr-2">Tenants</h3>
           <Badge
             tone="blue"
-            className="table-status"
+            className="card-badge"
           >
             {filtered.length} tenants
           </Badge>
           </div>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <p className="card-desc text-slate-500">
             Active and trial tenants appear here. Deactivated tenants are
             suspended and hidden from this workspace.
           </p>
@@ -129,14 +129,14 @@ export function TenantManagement({
             value={filters.tenant}
             onChange={(e: any) => updateFilter("tenant", e.target.value)}
             placeholder="Tenant name or ID"
-            className="py-3 px-2 text-xs lg:text-sm"
+            className="search-filter"
           />
         </Field>
         <Field label="Type">
           <Select
             value={filters.type}
             onChange={(e: any) => updateFilter("type", e.target.value)}
-            className='py-3 px-2 text-xs lg:text-sm rounded-lg'
+            className='select-filter'
           >
             <option value="all">All types</option>
             {tenantTypes.map(([value, label]) => (
@@ -150,7 +150,7 @@ export function TenantManagement({
           <Select
             value={filters.status}
             onChange={(e: any) => updateFilter("status", e.target.value)}
-            className='py-3 px-2 text-xs lg:text-sm rounded-lg'
+            className='select-filter'
           >
             <option value="all">All status</option>
             <option value="trial">Trial</option>
@@ -162,14 +162,14 @@ export function TenantManagement({
             value={filters.contact}
             onChange={(e: any) => updateFilter("contact", e.target.value)}
             placeholder="Email, phone, address"
-            className="py-3 px-2 text-xs lg:text-sm"
+            className="search-filter"
           />
         </Field>
         <Field label="Date field">
           <Select
             value={filters.dateField}
             onChange={(e: any) => updateFilter("dateField", e.target.value)}
-            className='py-3 px-2 text-xs lg:text-sm rounded-lg'
+            className='select-filter'
           >
             <option value="updated_at">Modified date</option>
             <option value="created_at">Created date</option>
@@ -180,7 +180,7 @@ export function TenantManagement({
               type="date"
               value={filters.fromDate}
               onChange={(e: any) => updateFilter("fromDate", e.target.value)}
-              className="py-3 px-2 text-xs lg:text-sm"
+              className="date-filter"
             />
           </Field>
           <Field label="To">
@@ -188,7 +188,7 @@ export function TenantManagement({
               type="date"
               value={filters.toDate}
               onChange={(e: any) => updateFilter("toDate", e.target.value)}
-              className="py-3 px-2 text-xs lg:text-sm"
+              className="date-filter"
             />
           </Field>
       </div>

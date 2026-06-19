@@ -445,7 +445,7 @@ export function HomeCare({
                 {editing ? "Edit Booking" : "New Booking"}
               </h3>
               <p className="table-data text-slate-500">
-                Patient-linked home care / visit booking with assigned staff,
+                Patient-linked home care / visit booking with assigned staff, 
                 complaints, service lines, and schedule.
               </p>
             </div>

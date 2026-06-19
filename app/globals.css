@@ -54,35 +54,62 @@
   }
 }
 @layer components {
+  .card-desc {
+    @apply text-xs;
+  }
+}
+@layer components {
   .card-title {
-    @apply text-base lg:text-lg;
+    @apply text-sm lg:text-base;
   }
 }
 @layer components {
   .close-button {
-    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border;
+    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs  border;
   }
 }
 
 @layer components {
   .save-button {
-    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm
+    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs 
   }
 }
 
 
 @layer components {
   .search-input {
-    @apply px-2 py-2 lg:px-4 lg:py-3;
+    @apply px-2 py-2 lg:px-4 lg:py-3 text-xs;
+  }
+}
+
+@layer components {
+  .search-filter {
+    @apply px-2 py-2.5  text-xs;
+  }
+}
+
+@layer components {
+  .select-filter {
+    @apply py-2 px-2 text-xs rounded-lg placeholder:text-xs;
+  }
+}
+
+@layer components {
+  .date-filter{
+    @apply py-2 px-2 text-xs
+  }
+}
+
+@layer components {
+  .normal-badge {
+    @apply px-2 py-2 lg:px-2 lg:py-2 text-xs  rounded-lg;
   }
 }
 @layer components {
-  .normal-badge {
-    @apply px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm rounded-lg;
+  .card-badge {
+    @apply p-2 text-xs rounded-full;
   }
 }
-
-
 
 body {
   background: #ffffff;

@@ -352,11 +352,11 @@ export function AppShell(props: any) {
     md:w-14
     ${!tabletCollapsed ? "md:w-64" : ""}
 
-    lg:w-72
+    lg:w-50
   `}
       >
         {/* Tablet view Sidebar */}
-        <div className="w-fit lg:w-full scrollbar-hidden h-full overflow-y-auto  ">
+        <div className="w-fit scrollbar-hidden h-full overflow-y-auto  ">
           <Sidebar
             visibleNav={visibleNav}
             activePage={activePage}
@@ -387,11 +387,11 @@ export function AppShell(props: any) {
           />
         </div>
       </div>
-      <div className="h-full lg:flex ">
-        <aside className="scrollbar-hidden hidden h-screen w-64 lg:w-72 shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
+      <div className="h-full lg:flex">
+        <aside className="scrollbar-hidden hidden h-screen w-64 lg:w-50  shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
           Desktop view
           <div
-            className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-72 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+            className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-50 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
               sideBarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >

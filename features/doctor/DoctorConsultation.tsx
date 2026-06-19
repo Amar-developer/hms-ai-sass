@@ -1220,7 +1220,7 @@ export function DoctorConsultation({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="card-title font-bold">Patient Queue</h3>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 Select any waiting patient for consultation.
               </p>
             </div>
@@ -1232,6 +1232,7 @@ export function DoctorConsultation({
                   setSelectedAppointmentId("");
                 }}
                 disabled={isDoctorUser}
+                className='select-filter'
               >
                 {doctorList.map((d: any) => (
                   <option key={d.id} value={d.id}>
@@ -1297,7 +1298,7 @@ export function DoctorConsultation({
                 (a: any) =>
                   !isCompletedAppointment(a) && !isCancelledAppointment(a),
               ).length === 0 && (
-                <p className="py-4 text-xs lg:text-sm text-slate-500">
+                <p className="py-4 card-desc text-slate-500">
                   No waiting patients in the queue.
                 </p>
               )}
@@ -1428,7 +1429,7 @@ export function DoctorConsultation({
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
               <h3 className="card-title font-bold">Upcoming Appointments</h3>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 Doctor schedule, queue status, visit purpose, and consultation
                 mode.
               </p>
@@ -1474,7 +1475,7 @@ export function DoctorConsultation({
               <h3 className="card-title font-bold">
                 Today's Booked Appointments
               </h3>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 {displayDate(selectedDate)} · {appointmentListLabel}
               </p>
             </div>

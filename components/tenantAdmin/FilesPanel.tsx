@@ -235,13 +235,13 @@ export function FilesPanel({
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Files</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               Centralized file storage with automatic module and document type
               mapping.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="blue" className="rounded-lg px-2 py-2 ">
+            <Badge tone="blue" className="normal-badge">
               {files.length} files
             </Badge>
             <ActionButton
@@ -258,7 +258,7 @@ export function FilesPanel({
           className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
         >
           <FormField label="Upload File">
-            <Input name="file" type="file" required />
+            <Input name="file" type="file" required className='search-input file:text-xs'/>
           </FormField>
           <FormField label="Category">
             <SearchableSelect
@@ -375,7 +375,7 @@ export function FilesPanel({
             </FormField>
           </div>
           <div className="flex items-end">
-            <Button disabled={busy}>
+            <Button disabled={busy} className='save-button'>
               {busy ? "Uploading..." : "Upload File"}
             </Button>
           </div>

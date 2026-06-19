@@ -767,7 +767,7 @@ export function AppointmentCalendarBooking(props: Props) {
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
               <h3 className="card-title font-bold">Book OP Appointment</h3>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 Select or register the patient, then complete the appointment
                 details on this page.
               </p>
@@ -1203,8 +1203,8 @@ export function AppointmentCalendarBooking(props: Props) {
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Appointments</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Appointments</h3>
+          <p className="card-desc text-slate-500">
             {isSuperAdmin
               ? "Combined all-tenant appointment grid for MedizinHub HMS primary tenant."
               : "Row based OP appointment view with patient, mobile, medical department, doctor, date, and consultation status."}
@@ -1212,7 +1212,7 @@ export function AppointmentCalendarBooking(props: Props) {
         </div>
         <Button
           onClick={openBooking}
-          className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-48 text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"
+          className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-48 text-xs  px-3 py-2 lg:px-4 lg:py-3"
         >
           <div className="flex justify-between">
             <CalendarPlus size={16} />
@@ -1239,6 +1239,7 @@ export function AppointmentCalendarBooking(props: Props) {
             value={query}
             onChange={(e: any) => setQuery(e.target.value)}
             placeholder="Search patient or mobile"
+            className='search-filter'
           />
         </Field>
         <Field label="Select date">
@@ -1246,6 +1247,7 @@ export function AppointmentCalendarBooking(props: Props) {
             type="date"
             value={filterDate}
             onChange={(e: any) => setFilterDate(e.target.value)}
+            className='date-filter'
           />
         </Field>
         <Field label="
@@ -1254,7 +1256,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <Select
               value={platformDepartment}
               onChange={(e: any) => setPlatformDepartment(e.target.value)}
-              className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm'
+              className='select-filter'
             >
               <option value="all">All Departments</option>
               {platformDepartmentOptions.map((department: string) => (
@@ -1267,7 +1269,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <Select
               value={filterDepartment}
               onChange={(e: any) => setFilterDepartment(e.target.value)}
-              className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm'
+              className='select-filter'
             >
               <option value="all">All Departments</option>
               {departmentOptions.map((department: any) => (
@@ -1283,7 +1285,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <Select
               value={filterStatus}
               onChange={(e: any) => setFilterStatus(e.target.value)}
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-[11px] lg:text-sm"
+              className="select-filter"
             >
               {STATUS_FILTER_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -1296,22 +1298,22 @@ export function AppointmentCalendarBooking(props: Props) {
       </div>
       <div className="mt-4  rounded-lg border border-slate-200">
         <div
-          className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.65fr_.71fr_.9fr_.85fr_.68fr_.62fr_.9fr]"}
-          lg:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.95fr_.6fr_.65fr_.85fr_.68fr_.6fr_1.45fr]"}`
+          className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.65fr_.71fr_.9fr_.85fr_.68fr_.62fr_1fr]"}
+          lg:grid ${isSuperAdmin ? "grid-cols-[1fr_1fr_.8fr_.9fr_1fr_.85fr_.85fr]" : "grid-cols-[.6fr_.6fr_.7fr_.85fr_.68fr_.6fr_1.5fr]"}`
         }
         >
           {isSuperAdmin && <span>Tenant</span>}
-          <span className="text-[10px] lg:text-sm">Patient</span>
-          <span className="text-[10px] lg:text-sm">Mobile</span>
-          <span className="text-[10px] lg:text-sm">Department</span>
-          <span className="text-[10px] lg:text-sm">Doctor</span>
-          <span className="text-[10px] lg:text-sm lg:text-left lg:pl ">Date</span>
-          <span className="text-[10px] lg:text-sm text-center">Status</span>
-          {!isSuperAdmin && <span className="text-[10px] lg:text-sm md:text-center lg:text-right">Links</span>}
+          <span className="text-[10px] lg:text-xs">Patient</span>
+          <span className="text-[10px] lg:text-xs">Mobile</span>
+          <span className="text-[10px] lg:text-xs">Department</span>
+          <span className="text-[10px] lg:text-xs">Doctor</span>
+          <span className="text-[10px] lg:text-xs lg:text-left lg:pl ">Date</span>
+          <span className="text-[10px] lg:text-xs text-center">Status</span>
+          {!isSuperAdmin && <span className="text-[10px] lg:text-xs md:text-center lg:text-right">Links</span>}
         </div>
         <div className="divide-y divide-slate-200">
           {rows.length === 0 && (
-            <div className="p-4 text-xs lg:text-sm text-slate-500">
+            <div className="p-4 text-xs  text-slate-500">
               No appointments found.
             </div>
           )}
@@ -1365,7 +1367,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     openConsultation(appointment);
                   }
                 }}
-                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_.7fr_.75fr_.95fr_.78fr_.72fr_1.55fr] lg:grid-cols-[1fr_.7fr_.75fr_.95fr_.78fr_.72fr_1.55fr] md:items-center"
+                className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[.65fr_.7fr_.75fr_.95fr_.78fr_.72fr_1.55fr] lg:grid-cols-[.7fr_.7fr_.85fr_.95fr_.78fr_.72fr_1.55fr] md:items-center"
               >
                 <div>
                   <p className="text-[10px] lg:text-xs break-all">{appointment.patient}</p>
@@ -1374,17 +1376,17 @@ export function AppointmentCalendarBooking(props: Props) {
                       publicDisplayValue(appointment.id, "-")}
                   </p>
                 </div>
-                <span className="text-[10px] lg:text-sm">{patient?.mobile || "-"}</span>
-                <span className="text-[10px] lg:text-sm ">
+                <span className="text-[10px] lg:text-xs">{patient?.mobile || "-"}</span>
+                <span className="text-[10px] lg:text-xs ">
                   {departmentOptions.find(
                     (d: any) => d.id === appointment.departmentId,
                   )?.name || publicDisplayValue(appointment.departmentId)}
                 </span>
-                <span className="text-[10px] lg:text-sm ">
+                <span className="text-[10px] lg:text-xs ">
                   {appointment.doctor ||
                     publicDisplayValue(appointment.doctorId, "Doctor")}
                 </span>
-                <span className="text-[10px] lg:text-sm ">
+                <span className="text-[10px] lg:text-xs ">
                   {appointment.appointmentDate || "-"}
                   {appointment.appointmentTime || appointment.appointment_time
                     ? ` ${formatDisplayTime(
@@ -1395,7 +1397,7 @@ export function AppointmentCalendarBooking(props: Props) {
                 </span>
                 <Badge
                   tone={appointmentStatusInfo(appointment).tone}
-                  className="table-status text-[10px] lg:text-sm"
+                  className="table-status text-[10px] lg:text-xs"
                 >
                   {appointmentStatusInfo(appointment).label}
                 </Badge>
@@ -1406,14 +1408,14 @@ export function AppointmentCalendarBooking(props: Props) {
                   <button
                     type="button"
                     onClick={() => openConsultation(appointment)}
-                    className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-sm font-bold hover:bg-slate-50"
+                    className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-xs font-bold hover:bg-slate-50"
                   >
                     Consultation
                   </button>
                   <button
                     type="button"
                     onClick={() => openPatient(appointment)}
-                    className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-sm font-bold hover:bg-slate-50"
+                    className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-xs font-bold hover:bg-slate-50"
                   >
                     Patient Details
                   </button>

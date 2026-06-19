@@ -23,7 +23,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
     >
       <div className="grid gap-4 px-5 py-4 text-sm md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] xl:items-center">
         <div className="min-w-0">
-          <b className="block table-data truncate text-slate-950">{row.full_name}</b>
+          <b className="block text-xs truncate text-slate-950">{row.full_name}</b>
           <p className="mt-0.5 text-[10px] lg:text-xs font-medium text-slate-500">
             {row.patient_number}
           </p>
@@ -32,7 +32,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
           {/* <p className="text-[11px] font-bold uppercase text-slate-400 xl:hidden">
             Mobile
           </p> */}
-          <span className="block truncate table-data text-slate-700">
+          <span className="block truncate text-xs text-slate-700">
             {row.mobile || row.guardian_mobile || "-"}
           </span>
         </div>
@@ -40,7 +40,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
           {/* <p className="text-[11px] font-bold uppercase text-slate-400 xl:hidden">
             Branch
           </p> */}
-          <span className="block truncate table-data text-slate-700">
+          <span className="block truncate text-xs text-slate-700">
             {branch?.name || "No branch"}
           </span>
         </div>
@@ -48,7 +48,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
           {/* <p className="text-[11px] font-bold uppercase text-slate-400 xl:hidden">
             Gender / Age
           </p> */}
-          <span className="table-data text-slate-700">
+          <span className="text-xs text-slate-700">
             {row.gender || "-"} / {row.age_years ?? "-"}
           </span>
         </div>
@@ -72,7 +72,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
               </Badge>
             </>
           ) : (
-            <span className="table-data text-slate-400">-</span>
+            <span className=" text-xs text-slate-400">-</span>
           )}
         </div>
         <div>
@@ -87,13 +87,13 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
                   ? "purple"
                   : "red"
             }
-            className="table-status"
+            className="table-status text-xs"
           >
             {row.status}
           </Badge>
         </div>
         <ActionGroup className="justify-start md:justify-end">
-          <ActionButton onClick={stop(onView)}>View</ActionButton>
+          <ActionButton onClick={stop(onView)}d>View</ActionButton>
           <ActionButton onClick={stop(onEdit)}>Edit</ActionButton>
           <ActionButton tone="danger" onClick={stop(onDelete)}>
             Delete

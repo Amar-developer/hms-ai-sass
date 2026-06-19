@@ -747,7 +747,7 @@ export function PatientSubscriptions({
             <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
               <div>
                 <h3 className="text-base lg:text-lg font-bold">Plans</h3>
-                <p className="text-xs lg:text-sm text-slate-500">
+                <p className="card-desc text-slate-500">
                   Create and manage branch-specific patient membership plans.
                 </p>
               </div>
@@ -756,7 +756,7 @@ export function PatientSubscriptions({
                 <Button
                   type="button"
                   onClick={() => setView("create")}
-                  className="w-full rounded-lg px-3 py-2 text-xs sm:w-auto lg:px-4 lg:py-3 lg:text-sm"
+                  className="save-button text-xs"
                 >
                   Create Plan
                 </Button>
@@ -1941,7 +1941,7 @@ function ActiveEnrollmentsTable({
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="text-base lg:text-lg font-bold">Active Enrollments</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <p className="card-desc text-slate-500">
             Paginated table for active patient memberships.
           </p>
         </div>

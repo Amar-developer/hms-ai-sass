@@ -163,17 +163,23 @@ export function SuperAdminDashboard({
     const requestSequence = ++tenantAccessLoadSequence.current;
     try {
       const scoped = { ...apiSession, tenantId };
-      const [roleRows, userRows, departmentRows, branchRows, permissionRows, subscriptionRows] =
-        await Promise.all([
-          apiFetch("/identity/roles", scoped),
-          apiFetch("/identity/users", scoped),
-          apiFetch(`/tenants/${tenantId}/departments`, scoped),
-          apiFetch(`/tenants/${tenantId}/branches`, scoped),
-          apiFetch("/identity/permissions", scoped),
-          apiFetch("/subscription-plans/tenant-subscriptions", scoped).catch(
-            () => [],
-          ),
-        ]);
+      const [
+        roleRows,
+        userRows,
+        departmentRows,
+        branchRows,
+        permissionRows,
+        subscriptionRows,
+      ] = await Promise.all([
+        apiFetch("/identity/roles", scoped),
+        apiFetch("/identity/users", scoped),
+        apiFetch(`/tenants/${tenantId}/departments`, scoped),
+        apiFetch(`/tenants/${tenantId}/branches`, scoped),
+        apiFetch("/identity/permissions", scoped),
+        apiFetch("/subscription-plans/tenant-subscriptions", scoped).catch(
+          () => [],
+        ),
+      ]);
       if (requestSequence !== tenantAccessLoadSequence.current) return;
       setRoles(roleRows);
       setUsers(userRows);
@@ -358,8 +364,7 @@ export function SuperAdminDashboard({
             email: adminEmail,
             password: adminPassword,
             mobile: fd.get("adminMobile") || null,
-            must_change_password:
-              fd.get("adminMustChangePassword") !== "false",
+            must_change_password: fd.get("adminMustChangePassword") !== "false",
           },
         }),
       });
@@ -504,11 +509,7 @@ export function SuperAdminDashboard({
       }
       const selectedPlanId = String(fd.get("planId") || "");
       const currentPlanId = String(fd.get("currentPlanId") || "");
-      if (
-        !isPrimary &&
-        selectedPlanId &&
-        selectedPlanId !== currentPlanId
-      ) {
+      if (!isPrimary && selectedPlanId && selectedPlanId !== currentPlanId) {
         const selectedPlan = plans.find(
           (plan: any) => plan.id === selectedPlanId,
         );
@@ -530,9 +531,7 @@ export function SuperAdminDashboard({
             "medizinhub.entitlements.refresh",
             String(Date.now()),
           );
-          window.dispatchEvent(
-            new Event("medizinhub.entitlements.refresh"),
-          );
+          window.dispatchEvent(new Event("medizinhub.entitlements.refresh"));
         } catch {}
       }
       const assignedRoleTemplateIds = new Set(
@@ -1271,13 +1270,17 @@ export function SuperAdminDashboard({
       <Card className="rounded-lg">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h3 className="text-lg lg:text-xl font-bold">MedizinHub HMS Primary Tenant</h3>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <h3 className="card-title font-bold">
+              MedizinHub HMS Primary Tenant
+            </h3>
+            <p className="card-desc text-slate-500">
               Manage tenants, roles, subscriptions, and platform settings from
               separate pages.
             </p>
           </div>
-          <Badge tone="blue" className="normal-badge text-center" >Global Platform Access</Badge>
+          <Badge tone="blue" className="px-2 py-2 lg:px-4 lg:py-3 text-xs rounded-lg">
+            Global Platform Access
+          </Badge>
         </div>
       </Card>
       <StatusToast message={message} onClose={() => setMessage("")} />

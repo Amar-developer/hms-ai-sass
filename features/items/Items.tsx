@@ -625,7 +625,7 @@ export function Items({ apiSession, branchId }: any) {
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Items</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               ERP-style item master for medicines, lab tests, Service,
               physiotherapy equipment, and home care / visit services.
             </p>
@@ -649,7 +649,7 @@ export function Items({ apiSession, branchId }: any) {
             onChange={() => {}}
             disabled
             placeholder="Auto generated from item type"
-            className="search-input"
+            className="search-input "
           />
           <TextField
             label={type === "home_care_service" ? "Service Name" : "Item Name"}
@@ -829,7 +829,7 @@ export function Items({ apiSession, branchId }: any) {
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Pharmacy Stock</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               Suppliers, purchases, batches, stock ledger, and low-stock alerts.
             </p>
           </div>
@@ -976,7 +976,7 @@ export function Items({ apiSession, branchId }: any) {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h3 className="card-title font-bold">Item List</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               Filter, edit, or delete catalog items used by Lab, Pharmacy,
               Physiotherapy, and Home Care / Visit.
             </p>

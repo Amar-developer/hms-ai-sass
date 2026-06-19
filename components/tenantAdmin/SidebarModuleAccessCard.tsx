@@ -100,7 +100,7 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
         <div>
           <h3 className="card-title font-bold">Sidebar Module Access</h3>
-          <p className="table-data text-slate-500">
+          <p className="card-desc text-slate-500">
             Control which modules each role sees in the sidebar. This is separate from
             permissions. Roles left at default keep the built-in configuration.
           </p>
