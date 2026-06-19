@@ -328,6 +328,7 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `PATCH` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
 | `DELETE` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
 | `GET` | `/api/v1/lab/catalog/available-tests` | `lab.manage` |
+| `GET` | `/api/v1/lab/catalog/popular-tests` | `lab.manage` |
 | `GET` | `/api/v1/lab/external/items` | `lab.manage` |
 | `GET` | `/api/v1/lab/external/items/{slug}/details` | `lab.manage` |
 | `POST` | `/api/v1/lab/result-templates` | `lab.manage` |
@@ -345,6 +346,7 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `PATCH` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
 | `DELETE` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/catalog/available-medicines` | `pharmacy.manage` |
+| `GET` | `/api/v1/pharmacy/catalog/popular-medicines` | `pharmacy.manage` |
 | `POST` | `/api/v1/pharmacy/suppliers` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/suppliers` | `pharmacy.manage` |
 | `PATCH` | `/api/v1/pharmacy/suppliers/{supplier_id}` | `pharmacy.manage` |

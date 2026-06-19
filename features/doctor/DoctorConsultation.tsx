@@ -1460,12 +1460,6 @@ export function DoctorConsultation({
               </button>
             ))}
           </div>
-          <ScheduleList
-            rows={scheduleRows}
-            selectedId={selected?.id}
-            onSelect={setSelectedAppointmentId}
-            onConsult={openConsultation}
-          />
         </Card>
 
         {/* Today's booked appointments */}
@@ -1507,98 +1501,15 @@ export function DoctorConsultation({
               </Button>
             </div>
           </div>
-          <div className="mt-5 space-y-3">
-            {scheduleRows.map((a: any) => (
-              <div
-                key={a.id}
-                className={`rounded-2xl border p-4 ${selected?.id === a.id ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAppointmentId(a.id)}
-                    className="min-w-0 text-left"
-                  >
-                    <b>
-                      {a.token} · {a.patient}
-                    </b>
-                    <p className="text-xs text-slate-500">
-                      {displayTime(a.time || a.appointment_time)} ·{" "}
-                      {humanizeOptionLabel(a.status)} ·{" "}
-                      {humanizeOptionLabel(a.queueStatus)}
-                    </p>
-                  </button>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                    <Badge tone={a.tokenType === "Emergency" ? "red" : "amber"} className="normal-badge">
-                      {humanizeOptionLabel(a.tokenType)}
-                    </Badge>
-                    {a.consultationStatus && (
-                      <Badge
-                        tone={
-                          a.consultationStatus === "signed" ? "green" : "blue"
-                        }
-                        className="normal-badge"
-                      >
-                        {humanizeOptionLabel(a.consultationStatus)}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAppointmentId(a.id)}
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
-                  >
-                    Select
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openConsultation(a.id)}
-                    className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white"
-                  >
-                    Consultation
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </Card>
       </div>
       <Card>
-        <h3 className="text-lg font-bold">Doctor Revenue Tracking Logic</h3>
-        <div className="mt-3 grid gap-3 md:grid-cols-4 lg:grid-cols-5">
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Consultation</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              OP/IP/Online/Home Visit
-            </p>
-          </div>
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Lab Referral</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              Lab tests written
-            </p>
-          </div>
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Scan Referral</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              Diagnostics referred
-            </p>
-          </div>
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Pharmacy</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              Medicine value referred
-            </p>
-          </div>
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Reports</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              Admin revenue analytics
-            </p>
-          </div>
-        </div>
+        <ScheduleList
+          rows={scheduleRows}
+          selectedId={selected?.id}
+          onSelect={setSelectedAppointmentId}
+          onConsult={openConsultation}
+        />
       </Card>
     </div>
   );

@@ -30,6 +30,14 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
             <div>
               <p className="font-bold text-slate-950">{row.patient}</p>
               <p className="text-xs text-slate-500">{row.token || row.id}</p>
+              {(row.queueStatus || row.status) && (
+                <Badge
+                  tone={toneForQueue(row.queueStatus)}
+                  className="normal-badge mt-1"
+                >
+                  {humanizeOptionLabel(row.queueStatus || row.status)}
+                </Badge>
+              )}
             </div>
             <div>
               <p className="font-semibold text-slate-800">

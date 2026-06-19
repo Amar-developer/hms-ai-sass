@@ -1959,7 +1959,6 @@ function ActiveEnrollmentsTable({
             <col className="w-[230px]" />
             <col className="w-[220px]" />
             <col className="w-[140px]" />
-            <col className="w-[110px]" />
             <col className="w-[120px]" />
             <col className="w-[120px]" />
             {canManage && <col className="w-[150px]" />}
@@ -1970,7 +1969,6 @@ function ActiveEnrollmentsTable({
               <th>Patient</th>
               <th>Plan</th>
               <th>Validity</th>
-              <th>Benefits Used</th>
               <th className="text-left">Paid</th>
               <th>Status</th>
               {canManage && <th className="text-right pr-4">Actions</th>}
@@ -1979,7 +1977,7 @@ function ActiveEnrollmentsTable({
           <tbody className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={canManage ? 8 : 7} className="px-4 py-4 text-slate-500 text-xs lg:text-sm" >
+                <td colSpan={canManage ? 7 : 6} className="px-4 py-4 text-slate-500 text-xs lg:text-sm" >
                   No active enrollments yet.
                 </td>
               </tr>
@@ -2027,28 +2025,6 @@ function ActiveEnrollmentsTable({
                       <>
                         {displayDate(row.starts_on)} to {displayDate(row.ends_on)}
                       </>
-                    )}
-                  </td>
-                  <td className="text-left font-semibold tabular-nums text-xs lg:text-sm">
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        min="0"
-                        value={editing.used_consultations}
-                        onChange={(event: any) => editValue("used_consultations", event.target.value)}
-                        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
-                      />
-                    ) : (
-                      <div className="space-y-1">
-                        <div>
-                          Consults {row.used_consultations || 0}/
-                          {row.plan?.free_consultations ?? 0}
-                        </div>
-                        <div className="font-medium text-slate-500">
-                          Lab {row.used_free_lab_count || 0} used ·{" "}
-                          {row.remaining_free_lab_count || 0} left
-                        </div>
-                      </div>
                     )}
                   </td>
                   <td className="text-left font-semibold tabular-nums text-xs lg:text-sm">

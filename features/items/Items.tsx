@@ -746,31 +746,6 @@ export function Items({ apiSession, branchId }: any) {
               />
             </>
           )}
-          {type === "lab_package" && (
-            <div className="md:col-span-4 rounded-2xl bg-slate-50 p-4">
-              <p className="mb-3 text-xs font-bold uppercase text-slate-500">
-                Service Tests
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {tests.map((test: any) => (
-                  <button
-                    key={test.id}
-                    type="button"
-                    onClick={() =>
-                      setPackageTestIds((ids) =>
-                        ids.includes(test.id)
-                          ? ids.filter((id) => id !== test.id)
-                          : [...ids, test.id],
-                      )
-                    }
-                    className={`rounded-xl border px-3 py-2 text-xs font-bold ${packageTestIds.includes(test.id) ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}
-                  >
-                    {test.name} · ₹{test.default_price}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
           {type === "physio_equipment" && (
             <>
               <SelectField

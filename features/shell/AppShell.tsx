@@ -30,7 +30,6 @@ import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSu
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/components/common/Sidebar";
 import AppHeader from "@/components/common/AppHeader";
-import { DepartmentFilterCard } from "@/components/common/DepartmentFilterCard";
 
 export function AppShell(props: any) {
   const {
@@ -559,18 +558,30 @@ export function AppShell(props: any) {
                     </select>
                   </div>
                 )}
+
+              {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
+                    Department
+                  </span>
+                  <select
+                    value={departmentId}
+                    onChange={(event) => setDepartmentId(event.target.value)}
+                    disabled={!canChangeDepartment}
+                    className="h-9 min-w-[190px] rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    {departmentOptions.map((department: any) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 
           <section className="space-y-4 py-4 px-6">
-            {pageNeedsDepartmentFilter && (
-              <DepartmentFilterCard
-                departmentId={departmentId}
-                setDepartmentId={setDepartmentId}
-                departmentOptions={departmentOptions}
-                disabled={!canChangeDepartment}
-              />
-            )}
             {renderPage()}
           </section>
         </main>

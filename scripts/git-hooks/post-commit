@@ -1,6 +1,0 @@
-#!/bin/sh
-set -eu
-
-echo "Commit created. Before pushing, run:"
-echo "  npm run quality"
-echo "Then push your feature branch and open a pull request."

@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
@@ -602,6 +603,55 @@ def list_available_lab_tests(
     return [
         _normalize_local_lab_test(row)
         for row in session.exec(statement.order_by(LabTestCatalog.name)).all()
+    ]
+
+
+@router.get("/catalog/popular-tests")
+def list_popular_lab_tests(
+    tenant_id: str = Depends(require_tenant_id),
+    limit: int = 8,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_READ,
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_SIGN,
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> list[dict[str, object]]:
+    """Most frequently referred lab tests for this tenant.
+
+    Counts come from referral history (ConsultationReferral with type "lab"),
+    so the ranking covers both external (ERPNext) and local catalog items.
+    """
+    enforce_module_enabled(session, tenant_id, "lab")
+    limit = max(1, min(limit, 20))
+    rows = session.exec(
+        select(
+            ConsultationReferral.item_name,
+            func.count().label("usage_count"),
+        )
+        .where(
+            ConsultationReferral.tenant_id == tenant_id,
+            ConsultationReferral.referral_type == "lab",
+        )
+        .group_by(ConsultationReferral.item_name)
+        .order_by(func.count().desc(), ConsultationReferral.item_name)
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "id": name,
+            "name": name,
+            "item_name": name,
+            "usage_count": int(count),
+            "source": "history",
+        }
+        for name, count in rows
     ]
 
 
