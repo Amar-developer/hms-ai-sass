@@ -94,7 +94,7 @@ const AppHeader = ({
             <select
               value={branchId}
               onChange={(e: any) => setBranchId(e.target.value)}
-              className="w-full bg-transparent text-xs lg:text-sm font-semibold outline-none"
+              className="w-full bg-transparent text-xs  font-semibold outline-none"
             >
               {clinic.branches.map((b: any) => (
                 <option key={b.id} value={b.id}>
@@ -109,7 +109,7 @@ const AppHeader = ({
 
         <GlobalSearch items={searchItems} />
 
-        <div className="flex shrink-0 items-start lg:items-center mt-2 lg:mt-0  gap-2">
+        <div className="flex shrink-0 items-start lg:items-center mt-3  gap-2">
           <button
             type="button"
             className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 text-slate-500"

@@ -38,6 +38,7 @@ interface SidebarProps {
 }
 
 export function Sidebar(props: SidebarProps) {
+  console.log(props.activePage, "id");
   return (
     <aside
       className={`
@@ -45,7 +46,7 @@ export function Sidebar(props: SidebarProps) {
     hidden md:block
     transition-all duration-300 scrollbar-hidden
     ${props.tabletCollapsed ? "md:w-18" : "md:w-64"}
-    lg:w-72
+    lg:w-50 
   `}
     >
       <BrandBlock
@@ -54,7 +55,7 @@ export function Sidebar(props: SidebarProps) {
         setSidebarOpen={props.setSidebarOpen}
         sideBarOpen={props.sideBarOpen}
       />
-      <nav className="mt-8 space-y-2">
+      <nav className="mt-4 space-y-2">
         {props.visibleNav.map(([id, label, Icon]: any) => {
           const isActive = props.activePage === id;
           if (id === "superadmin" && props.isSuperAdmin) {
@@ -73,7 +74,7 @@ export function Sidebar(props: SidebarProps) {
                 >
                   <Icon size={18} />
                   {!props.tabletCollapsed && (
-                    <span className="truncate text-xs lg:text-sm">{label}</span>
+                    <span className="truncate text-xs">{label}</span>
                   )}
                   {!props.tabletCollapsed && (
                     <ChevronDown
@@ -111,7 +112,7 @@ export function Sidebar(props: SidebarProps) {
                           >
                             <SectionIcon size={15} />
                             {!props.tabletCollapsed && (
-                              <span className="truncate text-xs lg:text-sm">
+                              <span className="truncate text-xs">
                                 {sectionLabel}
                               </span>
                             )}
@@ -134,12 +135,12 @@ export function Sidebar(props: SidebarProps) {
                       !props.tenantAdminSettingsOpen,
                     );
                   }}
-                  className={`flex w-full items-center rounded-2xl ${props.tenantAdminSettingsOpen ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
+                  className={`flex w-full items-center rounded-2xl ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
                   <Icon size={18} />
                   {!props.tabletCollapsed && (
-                    <span className="truncate text-xs lg:text-sm">{label}</span>
+                    <span className="truncate text-xs">{label}</span>
                   )}
                   {!props.tabletCollapsed && (
                     <ChevronDown
@@ -177,7 +178,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                           >
                             <SectionIcon size={15} />
                             {!props.tabletCollapsed && (
-                              <span className="truncate text-xs lg:text-sm">
+                              <span className="truncate text-xs">
                                 {sectionLabel}
                               </span>
                             )}
@@ -207,7 +208,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
                   <Icon size={18} />
                   {!props.tabletCollapsed && (
-                    <span className="min-w-0 flex truncate text-xs lg:text-sm">
+                    <span className="min-w-0 flex truncate text-xs">
                       {label}
                     </span>
                   )}
@@ -221,11 +222,6 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
 
                 {!props.tabletCollapsed && isActive && props.reportsOpen && (
                   <div className="mt-2 grid gap-1 pl-5">
-                    <div className="mb-1 flex items-center gap-2 px-3 text-xs font-bold uppercase text-slate-400">
-                      <Settings size={13} />
-                      Reports
-                    </div>
-
                     {props.reportSections.map(
                       ([sectionId, sectionLabel, SectionIcon]: any) => (
                         <button
@@ -245,7 +241,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                         >
                           <SectionIcon size={15} />
                           {!props.tabletCollapsed && (
-                            <span className="truncate text-xs lg:text-sm">
+                            <span className="truncate text-xs">
                               {sectionLabel}
                             </span>
                           )}
@@ -263,15 +259,15 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
               type="button"
               onClick={() => {
                 props.navigatePage(id);
-                props.setTenantAdminSettingsOpen(false)
+                props.setTenantAdminSettingsOpen(false);
               }}
-              className={`flex w-full items-center rounded-2xl ${isActive ? "py-1" : "py-3"}
+              className={`flex w-full items-center rounded-2xl py-2.5 
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : ""}`}
             >
-              <Icon size={18} title={label}/>
+              <Icon size={18} title={label} />
               {!props.tabletCollapsed && (
                 <span
-                  className={`truncate text-xs lg:text-sm ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : ""}`}
+                  className={`truncate text-xs ${isActive ? "font-bold bg-slate-900 text-white w-full text-left  rounded-full" : ""}`}
                 >
                   {label}
                 </span>

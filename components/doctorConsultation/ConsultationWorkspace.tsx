@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import { Card, Select, Input, Field, Button, Badge} from "../common/ui";
-import { PatientHistoryPanel } from "./PatientHistoryPanel";
 import { FormField } from "../FormElements";
 import {
   SearchPicker,
@@ -15,7 +14,6 @@ export function ConsultationWorkspace(props: any) {
   const {
     selected,
     patient,
-    selectedPatientHistory,
     templates,
     setComplaints,
     complaints,
@@ -101,6 +99,8 @@ export function ConsultationWorkspace(props: any) {
   const [externalLabCatalog, setExternalLabCatalog] = useState<any[]>([]);
   const [externalLabLoading, setExternalLabLoading] = useState(false);
   const [externalLabError, setExternalLabError] = useState("");
+  const [popularMedicines, setPopularMedicines] = useState<any[]>([]);
+  const [popularLabTests, setPopularLabTests] = useState<any[]>([]);
   // A signed consultation is a locked clinical record — only the addendum may
   // change. This flag locks every editable field below.
   const signed = selected?.consultationStatus === "signed";
@@ -203,6 +203,43 @@ export function ConsultationWorkspace(props: any) {
       window.clearTimeout(timer);
     };
   }, [apiSession?.token, apiSession?.tenantId, labDraftName]);
+  useEffect(() => {
+    if (!apiSession?.token) {
+      setPopularMedicines([]);
+      setPopularLabTests([]);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        const [meds, labs] = await Promise.all([
+          apiFetch("/pharmacy/catalog/popular-medicines", apiSession).catch(
+            () => [],
+          ),
+          apiFetch("/lab/catalog/popular-tests", apiSession).catch(() => []),
+        ]);
+        if (!alive) return;
+        setPopularMedicines(Array.isArray(meds) ? meds : []);
+        setPopularLabTests(Array.isArray(labs) ? labs : []);
+      } catch {
+        if (alive) {
+          setPopularMedicines([]);
+          setPopularLabTests([]);
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [apiSession?.token, apiSession?.tenantId]);
+  // Suggestion tags prefer the most-used items from prescription/referral
+  // history; fall back to the catalog when there is no history yet.
+  const medicineSuggestions = popularMedicines.length
+    ? popularMedicines
+    : activeMedicineCatalog.slice(0, 8);
+  const labSuggestions = popularLabTests.length
+    ? popularLabTests
+    : activeLabCatalog.slice(0, 8);
   function addDraftMedicine() {
     const name =
       selectedMedicine?.item_name ||
@@ -232,12 +269,12 @@ export function ConsultationWorkspace(props: any) {
           <h3 className="card-title font-bold">
             Consultation Workspace
           </h3>
-          <p className="table-data text-slate-500">
-            Structured vitals, complaints, diagnosis, prescription, referrals,
+          <p className="card-desc text-slate-500">
+            Structured vitals, complaints, diagnosis, prescription,
             follow-up and addendums.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 md:flex-nowrap">
           <button
             onClick={() => setActive?.("doctor")}
             className="close-button font-bold"
@@ -271,7 +308,7 @@ export function ConsultationWorkspace(props: any) {
         </div>
       </div>
       {!selected ? (
-        <div className="mt-5 rounded-lg bg-amber-50 p-4 table-data text-amber-700">
+        <div className="mt-5 rounded-lg bg-amber-50 p-4 card-desc text-amber-700">
           No appointment selected.
         </div>
       ) : (
@@ -307,15 +344,17 @@ export function ConsultationWorkspace(props: any) {
                     : "As per fee rule"}
               </p>
             </div>
-            <div className="rounded-lg bg-slate-50 p-4">
-              <p className="text-xs text-slate-500">Allergies</p>
-              <p className="font-bold">{patient?.allergies || "None"}</p>
-            </div>
+            <button
+              type="button"
+              onClick={() => openPatientDetails?.()}
+              className="rounded-lg bg-slate-50 p-4 text-left transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+            >
+              <p className="text-xs text-slate-500">More</p>
+              <p className="font-bold text-slate-900 underline underline-offset-2">
+                Patient Details →
+              </p>
+            </button>
           </div>
-          <PatientHistoryPanel
-            history={selectedPatientHistory}
-            onOpenPatient={openPatientDetails}
-          />
           <fieldset
             disabled={signed}
             className={`m-0 min-w-0 space-y-5 border-0 p-0 ${signed ? "opacity-75" : ""}`}
@@ -344,7 +383,7 @@ export function ConsultationWorkspace(props: any) {
               ))}
             </div>
           )}
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-3 md:grid-cols-3">
             <FormField label="Treatment Type">
               <Select
                 value={treatmentType}
@@ -372,14 +411,14 @@ export function ConsultationWorkspace(props: any) {
                 placeholder="Review after 3 days"
               />
             </FormField>
+            <FormField label="Vitals">
+              <Input
+                value={vitals}
+                onChange={(e: any) => setVitals(e.target.value)}
+                placeholder="BP=120/80 mmHg, Pulse=78 bpm"
+              />
+            </FormField>
           </div>
-          <FormField label="Vitals">
-            <Input
-              value={vitals}
-              onChange={(e: any) => setVitals(e.target.value)}
-              placeholder="BP=120/80 mmHg, Pulse=78 bpm"
-            />
-          </FormField>
           <div className="grid gap-3 md:grid-cols-2">
             <FormField label="Complaints Rows">
               <textarea
@@ -389,23 +428,15 @@ export function ConsultationWorkspace(props: any) {
                 placeholder="Fever | 2 days | medium"
               />
             </FormField>
-            <FormField label="Diagnosis Rows">
+            <FormField label="Doctor Notes">
               <textarea
-                value={diagnosisRows}
-                onChange={(e: any) => setDiagnosisRows(e.target.value)}
+                value={notes}
+                onChange={(e: any) => setNotes(e.target.value)}
                 className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
-                placeholder="Viral fever | primary | notes"
+                placeholder="Clinical notes, advice..."
               />
             </FormField>
           </div>
-          <FormField label="Doctor Notes">
-            <textarea
-              value={notes}
-              onChange={(e: any) => setNotes(e.target.value)}
-              className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
-              placeholder="Clinical notes, advice..."
-            />
-          </FormField>
           <FormField label="Prescription Medicine Rows">
             <TagEntryBox
               tags={medicineItems}
@@ -529,7 +560,7 @@ export function ConsultationWorkspace(props: any) {
               </Button>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {activeMedicineCatalog.slice(0, 8).map((medicine: any) => (
+              {medicineSuggestions.map((medicine: any) => (
                 <button
                   key={medicine.id || medicine.slug || medicine.name}
                   type="button"
@@ -573,7 +604,7 @@ export function ConsultationWorkspace(props: any) {
                   }
                 />
               </Field>
-              <div className="mt-3 grid gap-2">
+              <div className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.5fr_auto] md:items-end">
                 <FormField label="Available Lab Test">
                   <SearchPicker
                     value={selectedLabTestId}
@@ -612,27 +643,25 @@ export function ConsultationWorkspace(props: any) {
                     </p>
                   )}
                 </FormField>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Select
-                    value={labPriority}
-                    onChange={(e: any) => setLabPriority(e.target.value)}
-                  >
-                    <option value="routine">Routine</option>
-                    <option value="urgent">Urgent</option>
-                    <option value="stat">STAT</option>
-                  </Select>
-                  <Input
-                    value={labInstructions}
-                    onChange={(e: any) => setLabInstructions(e.target.value)}
-                    placeholder="Instructions"
-                  />
-                  <Button type="button" onClick={addDraftLabTest}>
-                    Add Lab Test
-                  </Button>
-                </div>
+                <Select
+                  value={labPriority}
+                  onChange={(e: any) => setLabPriority(e.target.value)}
+                >
+                  <option value="routine">Routine</option>
+                  <option value="urgent">Urgent</option>
+                  <option value="stat">STAT</option>
+                </Select>
+                <Input
+                  value={labInstructions}
+                  onChange={(e: any) => setLabInstructions(e.target.value)}
+                  placeholder="Instructions"
+                />
+                <Button type="button" onClick={addDraftLabTest}>
+                  Add Lab Test
+                </Button>
               </div>
               <div className="mt-2 flex flex-wrap gap-1">
-                {activeLabCatalog.slice(0, 8).map((l: any) => (
+                {labSuggestions.map((l: any) => (
                   <button
                     key={l.id || l.slug || l.name}
                     type="button"
@@ -646,7 +675,7 @@ export function ConsultationWorkspace(props: any) {
                 ))}
               </div>
             </div>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-3">
               <div className="rounded-lg bg-slate-50 p-4">
                 <label className="flex items-center gap-3 font-bold">
                   <input

@@ -380,6 +380,7 @@ def create_consultation_invoice(
         tax_amount=tax_amount,
         tax_rule_id=tax_rule.id if tax_rule else None,
         total_amount=total,
+        status=InvoiceStatus.PAID if total <= 0 else InvoiceStatus.ISSUED,
         balance_amount=total,
         doctor_share_amount=doctor_share,
         clinic_share_amount=clinic_share,

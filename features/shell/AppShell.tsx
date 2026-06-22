@@ -30,7 +30,6 @@ import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSu
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/components/common/Sidebar";
 import AppHeader from "@/components/common/AppHeader";
-import { DepartmentFilterCard } from "@/components/common/DepartmentFilterCard";
 
 export function AppShell(props: any) {
   const {
@@ -117,7 +116,7 @@ export function AppShell(props: any) {
   const [superAdminSection, setSuperAdminSection] = useState("overview");
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
   const [tenantAdminSection, setTenantAdminSection] = useState("users");
-  const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(true);
+  const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
   const visibleTenantAdminSections = tenantAdminSections.filter(
     ([sectionId]: any) => canUseTenantAdminSection(sectionId, apiSession?.user),
   );
@@ -352,11 +351,11 @@ export function AppShell(props: any) {
     md:w-14
     ${!tabletCollapsed ? "md:w-64" : ""}
 
-    lg:w-72
+    lg:w-50
   `}
       >
         {/* Tablet view Sidebar */}
-        <div className="w-fit lg:w-full scrollbar-hidden h-full overflow-y-auto  ">
+        <div className="w-fit scrollbar-hidden h-full overflow-y-auto  ">
           <Sidebar
             visibleNav={visibleNav}
             activePage={activePage}
@@ -387,11 +386,11 @@ export function AppShell(props: any) {
           />
         </div>
       </div>
-      <div className="h-full lg:flex ">
-        <aside className="scrollbar-hidden hidden h-screen w-64 lg:w-72 shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
+      <div className="h-full lg:flex">
+        <aside className="scrollbar-hidden hidden h-screen w-64 lg:w-50  shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
           Desktop view
           <div
-            className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-72 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+            className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-50 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
               sideBarOpen ? "translate-x-0" : "-translate-x-full"
             }`}
           >
@@ -559,18 +558,30 @@ export function AppShell(props: any) {
                     </select>
                   </div>
                 )}
+
+              {pageNeedsDepartmentFilter && departmentOptions.length > 0 && (
+                <div className="flex shrink-0 items-center justify-end gap-2">
+                  <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
+                    Department
+                  </span>
+                  <select
+                    value={departmentId}
+                    onChange={(event) => setDepartmentId(event.target.value)}
+                    disabled={!canChangeDepartment}
+                    className="h-9 min-w-[190px] rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                  >
+                    {departmentOptions.map((department: any) => (
+                      <option key={department.id} value={department.id}>
+                        {department.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 
           <section className="space-y-4 py-4 px-6">
-            {pageNeedsDepartmentFilter && (
-              <DepartmentFilterCard
-                departmentId={departmentId}
-                setDepartmentId={setDepartmentId}
-                departmentOptions={departmentOptions}
-                disabled={!canChangeDepartment}
-              />
-            )}
             {renderPage()}
           </section>
         </main>

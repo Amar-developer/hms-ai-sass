@@ -208,7 +208,15 @@ export function PatientDetail({
             k="Free Consult Used"
             v={
               activeMembership
-                ? `${activeMembership.used_consultations}/${activeMembership.plan?.free_consultations ?? 0}`
+                ? `${activeMembership.used_consultations || 0}/${activeMembership.plan?.free_consultations ?? 0}`
+                : "Payment required"
+            }
+          />
+          <Info
+            k="Free Lab Remaining"
+            v={
+              activeMembership
+                ? String(activeMembership.remaining_free_lab_count || 0)
                 : "Payment required"
             }
           />
@@ -222,9 +230,9 @@ export function PatientDetail({
           onSubmit={onEnrollMembership}
         />
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border p-4">
+          <div className="flex h-[360px] flex-col rounded-2xl border p-4">
             <h5 className="card-title font-bold">Membership History</h5>
-            <div className="mt-3 space-y-2">
+            <div className="scrollbar-thin mt-3 flex-1 space-y-2 overflow-y-auto pr-2">
               {membershipEnrollments.length === 0 && (
                 <SectionEmpty text="No membership history." />
               )}
@@ -266,9 +274,9 @@ export function PatientDetail({
               })}
             </div>
           </div>
-          <div className="rounded-lg border p-4">
+          <div className="flex h-[360px] flex-col rounded-lg border p-4">
             <h5 className="card-title font-bold">Benefit Usage Invoices</h5>
-            <div className="mt-3 table-data space-y-2">
+            <div className="scrollbar-thin mt-3 table-data flex-1 space-y-2 overflow-y-auto pr-2">
               {membershipUsageInvoices.length === 0 && (
                 <SectionEmpty text="No membership benefits used yet." />
               )}

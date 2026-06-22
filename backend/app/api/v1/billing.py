@@ -92,7 +92,7 @@ from app.modules.patients.models import Patient
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
 from app.modules.subscriptions.service import enforce_module_enabled
-from app.modules.tenants.models import Tenant
+from app.modules.tenants.models import Branch, Tenant
 
 router = APIRouter(prefix="/billing")
 
@@ -653,6 +653,7 @@ def _local_logo_image(logo_url: str | None) -> dict[str, object] | None:
 def _build_receipt_pdf(
     *,
     tenant: Tenant | None,
+    branch: Branch | None,
     patient: Patient | None,
     invoice: Invoice,
     items: list[InvoiceItem],
@@ -662,6 +663,10 @@ def _build_receipt_pdf(
     width, height = 595, 842
     ops: list[str] = []
     logo = _local_logo_image((tenant.logo_url if tenant else "") or logo_url)
+    green = "0.10 0.95 0.22"
+    blue = "0.00 0.55 0.82"
+    brand_green = "0.00 0.75 0.00"
+    red = "0.78 0.00 0.00"
 
     def color(stroke="0.86 0.90 0.95", fill: str | None = None) -> None:
         ops.append(f"{stroke} RG")
@@ -688,6 +693,8 @@ def _build_receipt_pdf(
         value = _pdf_text(value)
         if align == "right":
             x -= int(len(value) * size * 0.48)
+        elif align == "center":
+            x -= int(len(value) * size * 0.24)
         font = "F2" if bold else "F1"
         ops.append(f"{fill} rg BT /{font} {size} Tf 1 0 0 1 {x} {y} Tm ({value}) Tj ET")
 
@@ -706,106 +713,239 @@ def _build_receipt_pdf(
             lines.append(current)
         return lines or [""]
 
-    tenant_name = tenant.name if tenant else "MedizinHub"
+    def center(x1: int, x2: int, y: int, value: object, size=8, bold=False) -> None:
+        text((x1 + x2) // 2, y, value, size, bold, "center")
+
+    def field_label(x: int, y: int, label: str, value: object = "") -> None:
+        text(x, y, label, 8, True)
+        text(x + 58, y, ":", 8, True)
+        if value not in (None, ""):
+            for offset, line_value in enumerate(wrap_text(value, 33)[:3]):
+                text(x + 70, y - offset * 10, line_value, 8)
+
+    def amount_words(value: int) -> str:
+        ones = [
+            "zero",
+            "one",
+            "two",
+            "three",
+            "four",
+            "five",
+            "six",
+            "seven",
+            "eight",
+            "nine",
+            "ten",
+            "eleven",
+            "twelve",
+            "thirteen",
+            "fourteen",
+            "fifteen",
+            "sixteen",
+            "seventeen",
+            "eighteen",
+            "nineteen",
+        ]
+        tens = [
+            "",
+            "",
+            "twenty",
+            "thirty",
+            "forty",
+            "fifty",
+            "sixty",
+            "seventy",
+            "eighty",
+            "ninety",
+        ]
+
+        def small(number: int) -> str:
+            parts: list[str] = []
+            if number >= 100:
+                parts.append(f"{ones[number // 100]} hundred")
+                number %= 100
+            if number >= 20:
+                parts.append(tens[number // 10])
+                number %= 10
+            if number:
+                parts.append(ones[number])
+            return " ".join(parts)
+
+        value = max(int(value or 0), 0)
+        if value == 0:
+            return "Rupees Zero Only"
+        parts: list[str] = []
+        for scale, label in ((10000000, "crore"), (100000, "lakh"), (1000, "thousand")):
+            if value >= scale:
+                parts.append(f"{small(value // scale)} {label}")
+                value %= scale
+        if value:
+            parts.append(small(value))
+        return f"Rupees {' '.join(parts)} Only".title()
+
+    legal_name = (
+        tenant.legal_name
+        if tenant and tenant.legal_name
+        else "MedizinHub Healthcare Service Pvt.Ltd"
+    )
+    header_address = (
+        branch.address
+        if branch and branch.address
+        else tenant.address
+        if tenant and tenant.address
+        else "#112A, Radha Nagar Main Road, Chromepet, Chennai - 44"
+    )
+    header_phone = (tenant.phone if tenant and tenant.phone else "") or "90476 60909"
     patient_name = (
         getattr(patient, "full_name", None)
         or getattr(patient, "name", None)
         or "Patient"
     )
+    patient_phone = (
+        getattr(patient, "mobile", None)
+        or getattr(patient, "guardian_mobile", None)
+        or ""
+    )
+    patient_address = (
+        getattr(patient, "address", None) or getattr(patient, "area", None) or ""
+    )
     color(stroke="1 1 1", fill="1 1 1")
     rect(0, 0, width, height, True)
+
     if logo:
-        image_w = 92
+        image_w = 72
         image_h = max(34, int(image_w * int(logo["height"]) / int(logo["width"])))
-        ops.append(f"q {image_w} 0 0 {image_h} 45 704 cm /Logo Do Q")
+        ops.append(f"q {image_w} 0 0 {image_h} 31 765 cm /Logo Do Q")
     else:
-        text(45, 742, tenant_name, 22, True, fill="0.00 0.48 0.62")
-    text(535, 742, "Invoice", 21, True, "right", fill="0.80 0.00 0.00")
-    text(45, 665, "Order Status:", 11)
-    text(122, 665, "Completed", 11, True, fill="0.00 0.50 0.00")
-    text(535, 665, f"INVOICE #{invoice.invoice_number}", 11, False, "right")
-    text(535, 638, f"ORDER #{invoice.invoice_number}", 11, False, "right")
-    text(535, 611, invoice.created_at.strftime("%B %d %Y"), 11, False, "right")
-
-    y = 535
-    headers = [
-        ("Product Name", 45),
-        ("SKU", 255),
-        ("Price", 352),
-        ("Qty Invoiced", 430),
-        ("Subtotal", 535),
-    ]
-    for label, x in headers:
-        text(
-            x,
-            y,
-            label,
-            10,
-            False,
-            "right" if label == "Subtotal" else "left",
-            fill="0.32 0.32 0.36",
-        )
-    line(45, y - 16, 535, y - 16)
-
-    y -= 42
-    for item in items[:8]:
-        for offset, line_value in enumerate(wrap_text(item.description, 28)[:2]):
-            text(45, y - offset * 13, line_value, 11)
-        text(255, y, item.item_type.replace("_", " ").title(), 9)
-        text(352, y, _money_pdf(item.unit_amount), 10)
-        text(430, y, item.quantity, 10)
-        text(535, y, _money_pdf(item.total_amount), 10, False, "right")
-        y -= 30
-
-    if len(items) > 8:
-        text(45, y, f"+ {len(items) - 8} more item(s)", 10, True)
-        y -= 26
-
-    line(45, y + 8, 535, y + 8)
-    subtotal = int(invoice.subtotal_amount or 0)
-    membership = int(invoice.membership_discount_amount or 0)
-    offer = max(int(invoice.discount_amount or 0) - membership, 0)
-    tax = int(invoice.tax_amount or 0)
-    summary_rows = [("Subtotal", _money_pdf(subtotal), False)]
-    if offer > 0:
-        summary_rows.append(
-            (
-                f"Offer Discount ({_percent_pdf(offer, subtotal)})",
-                f"-{_money_pdf(offer)}",
-                False,
-            )
-        )
-    if membership > 0:
-        summary_rows.append(
-            (
-                f"Membership Benefit ({_percent_pdf(membership, subtotal)})",
-                f"-{_money_pdf(membership)}",
-                False,
-            )
-        )
-    summary_rows.extend(
-        [
-            ("Tax", _money_pdf(tax), False),
-            ("Grand Total (Incl.Tax)", _money_pdf(invoice.total_amount), True),
-            ("Paid Amount", _money_pdf(invoice.paid_amount), False),
-            ("Balance Due", _money_pdf(invoice.balance_amount), True),
-        ]
+        text(30, 790, "MEDIZIN", 13, True, fill=blue)
+        text(88, 790, "HUB", 13, True, fill="0.00 0.64 0.40")
+    text(120, 790, "MedizinHub", 20, True, fill=blue)
+    text(236, 790, "Healthcare Service Pvt.Ltd", 20, True, fill=brand_green)
+    line(118, 781, 496, 781, green)
+    text(
+        120,
+        764,
+        f"# {header_address} | Phone {header_phone}",
+        10,
+        True,
+        fill="0.00 0.58 0.00",
     )
-    y -= 18
-    for label, value, note in summary_rows:
-        text(455, y, label, 10, bool(note), "right")
-        text(535, y, value, 10, bool(note), "right")
-        y -= 28
+    text(575, 776, "INVOICE", 13, True, "right", fill=red)
+    line(16, 742, 579, 742, green)
+    text(
+        297,
+        727,
+        "A Single Stop for All Your HealthCare Needs !",
+        9,
+        True,
+        "center",
+        fill="0.00 0.70 0.30",
+    )
 
-    method = payments[-1].method.value.replace("_", " ").title() if payments else "-"
-    detail_y = max(155, y - 44)
-    text(45, detail_y, "Billing Details :", 13, True)
-    text(45, detail_y - 28, patient_name, 11)
-    if patient and patient.mobile:
-        text(45, detail_y - 56, f"Phone : {patient.mobile}", 10)
-    text(340, detail_y, "Payment Method:", 13, True)
-    text(340, detail_y - 28, method, 11)
-    text(45, 55, "Have a nice day...", 10)
+    color(stroke=green)
+    rect(16, 592, 563, 126)
+    line(16, 700, 579, 700, green)
+    line(291, 592, 291, 718, green)
+    text(130, 706, "Customer Details", 9, True, "center")
+    text(405, 706, "MedizinHub GSTIN", 9, True, "center")
+    text(432, 706, ":", 9, True)
+    field_label(25, 682, "Name", patient_name)
+    field_label(25, 666, "Phone No.", patient_phone)
+    field_label(25, 650, "WhatsApp No.", patient_phone)
+    field_label(25, 634, "GSTIN No.", "")
+    field_label(25, 618, "Address", patient_address)
+    field_label(306, 679, "Invoice No.", invoice.invoice_number)
+    field_label(306, 662, "Invoice Date", invoice.created_at.strftime("%d/%m/%Y"))
+
+    table_top = 578
+    table_bottom = 244
+    x_cols = [16, 38, 226, 274, 371, 419, 467, 515, 579]
+    rect(16, table_bottom, 563, table_top - table_bottom)
+    line(16, 552, 579, 552, green)
+    for x in x_cols[1:-1]:
+        line(x, table_bottom, x, table_top, green)
+    center(16, 38, 563, "Sr.\nNo", 7, True)
+    center(38, 226, 563, "Name of Product / Service", 8, True)
+    center(226, 274, 563, "Exp. Date", 8, True)
+    center(274, 371, 563, "HSN / SAC", 8, True)
+    center(371, 419, 563, "Qty", 8, True)
+    center(419, 467, 563, "MRP", 8, True)
+    center(467, 515, 563, "Disc. %", 8, True)
+    center(515, 579, 563, "Rate", 8, True)
+
+    row_y = 532
+    for index, item in enumerate(items[:10], start=1):
+        text(25, row_y, index, 8)
+        for offset, line_value in enumerate(wrap_text(item.description, 36)[:2]):
+            text(45, row_y - offset * 10, line_value, 8)
+        text(396, row_y, item.quantity, 8, align="right")
+        text(459, row_y, _money_pdf(item.unit_amount), 8, align="right")
+        text(505, row_y, "-", 8, align="right")
+        text(570, row_y, _money_pdf(item.total_amount), 8, align="right")
+        row_y -= 18
+    if len(items) > 10:
+        text(45, row_y, f"+ {len(items) - 10} more item(s)", 8, True)
+
+    line(16, 228, 579, 228, green)
+    for x in [371, 419, 467, 515]:
+        line(x, 228, x, 244, green)
+    text(350, 233, "Total", 9, True, "right")
+    text(570, 233, _money_pdf(invoice.total_amount), 9, True, "right")
+
+    rect(16, 205, 563, 23)
+    text(25, 214, f"Total in words: {amount_words(int(invoice.total_amount or 0))}", 8)
+
+    tax_top, tax_bottom = 205, 142
+    rect(16, tax_bottom, 563, tax_top - tax_bottom)
+    for x in [238, 315, 406, 497]:
+        line(x, tax_bottom, x, tax_top, green)
+    line(315, 190, 497, 190, green)
+    line(406, tax_bottom, 406, 190, green)
+    line(16, 175, 579, 175, green)
+    line(16, 158, 579, 158, green)
+    center(16, 238, 188, "HSN / SAC", 8, True)
+    center(238, 315, 188, "Taxable Value", 8, True)
+    center(315, 497, 198, "IGST", 8, True)
+    center(315, 406, 181, "%", 8, True)
+    center(406, 497, 181, "Amount", 8, True)
+    center(497, 579, 188, "Total", 8, True)
+    taxable = int(invoice.taxable_amount or 0)
+    tax = int(invoice.tax_amount or 0)
+    text(305, 164, _money_pdf(taxable), 8, align="right")
+    text(395, 164, _percent_pdf(tax, taxable), 8, align="right")
+    text(487, 164, _money_pdf(tax), 8, align="right")
+    text(570, 164, _money_pdf(invoice.total_amount), 8, align="right")
+    text(235, 148, "Total", 8, True, "right")
+
+    rect(16, 119, 563, 23)
+    text(25, 128, f"Total in words: {amount_words(int(invoice.total_amount or 0))}", 8)
+
+    left_x, mid_x, right_x = 16, 272, 579
+    rect(left_x, 52, mid_x - left_x, 67)
+    line(left_x, 103, mid_x, 103, green)
+    center(left_x, mid_x, 108, "Bank Details", 8, True)
+    field_label(25, 88, "Name", "")
+    field_label(25, 74, "Branch", "")
+    field_label(25, 60, "Acc. Number", "")
+    rect(197, 64, 48, 38)
+    text(200, 55, "Pay using UPI", 8, True)
+
+    rect(left_x, 16, mid_x - left_x, 36)
+    line(left_x, 42, mid_x, 42, green)
+    center(left_x, mid_x, 46, "Terms and Conditions", 8, True)
+    text(25, 34, "Subject to Tamil Nadu Junction.", 7)
+    text(25, 25, "Goods Once sold will not taken back. Delivery Ex-Premises.", 7)
+
+    rect(left_x, 0, mid_x - left_x, 16)
+    text(25, 6, "Customer Signature", 8, True)
+
+    rect(mid_x, 0, right_x - mid_x, 119)
+    text(330, 109, "Certified that the particulars give above are true and correct.", 7)
+    text(330, 94, f"For {legal_name}", 8, True)
+    text(330, 78, f"Subtotal: {_money_pdf(invoice.subtotal_amount)}", 7)
+    text(330, 66, f"Discount: {_money_pdf(invoice.discount_amount)}", 7)
+    text(330, 54, f"Paid: {_money_pdf(invoice.paid_amount)}", 7)
+    text(470, 8, "Authorized Signature", 8, True, "center")
 
     content = "\n".join(ops).encode("latin-1", "replace")
     objects: list[bytes] = [
@@ -1016,6 +1156,7 @@ def _create_service_invoice(
         tax_amount=tax_amount,
         tax_rule_id=tax_rule.id if tax_rule else None,
         total_amount=total_amount,
+        status=InvoiceStatus.PAID if total_amount <= 0 else InvoiceStatus.ISSUED,
         balance_amount=total_amount,
         doctor_share_amount=0,
         clinic_share_amount=total_amount,
@@ -1607,7 +1748,13 @@ def create_invoice_from_lab_order(
     payload: InvoiceCreateFromLabOrder,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.LAB_MANAGE,
+            permissions.LAB_EDIT,
+        )
+    ),
 ) -> InvoiceDetailRead:
     enforce_module_enabled(session, tenant_id, "billing_basic")
     from app.modules.lab.models import LabOrder, LabOrderItem, LabOrderStatus
@@ -2151,6 +2298,7 @@ def invoice_receipt_pdf(
         )
     require_user_branch_access(current_user, invoice.branch_id)
     tenant = session.get(Tenant, tenant_id)
+    branch = session.get(Branch, invoice.branch_id)
     patient = session.get(Patient, invoice.patient_id)
     items = list(
         session.exec(
@@ -2180,6 +2328,7 @@ def invoice_receipt_pdf(
     )
     pdf = _build_receipt_pdf(
         tenant=tenant,
+        branch=branch,
         patient=patient,
         invoice=invoice,
         items=items,

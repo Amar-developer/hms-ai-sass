@@ -9,6 +9,7 @@ import {
   ActionGroup,
 } from "../common/ui";
 import { useState } from "react";
+import { Camera } from "lucide-react";
 import { FormField } from "../FormElements";
 import {
   assetUrl,
@@ -82,8 +83,8 @@ export function SettingsPanel(props: any) {
   return (
     <div className="space-y-5">
       <Card>
-        <h3 className="text-base lg:text-lg font-bold">Tenant & Branch Settings</h3>
-        <p className="text-xs lg:text-sm text-slate-500">
+        <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
+        <p className="card-desc text-slate-500">
           Configuration affects invoice numbering, queue behavior, appointment
           slots, payments, and communications for this tenant.
         </p>
@@ -109,67 +110,89 @@ export function SettingsPanel(props: any) {
               }
             />
           </FormField>
-          <div className="md:col-span-2 xl:col-span-4">
+          <div className="md:col-span-2">
             <Field label="Invoice Logo">
-              <div className="grid gap-4 rounded-lg border border-slate-200 bg-slate-50/60 p-4 lg:grid-cols-[160px_minmax(0,1fr)]">
-                <div className="grid h-32 place-items-center overflow-hidden rounded-lg border border-slate-200 bg-white p-3">
-                  {effectiveInvoiceLogoUrl ? (
+              <div className="flex items-center gap-3">
+                <label
+                  title="Click to change logo"
+                  className="group relative grid h-20 w-20 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 transition hover:border-slate-300 hover:bg-slate-100"
+                >
+                  {invoiceLogoFile ? (
+                    <img
+                      src={URL.createObjectURL(invoiceLogoFile)}
+                      alt="Selected logo"
+                      className="h-full w-full object-contain p-1.5"
+                    />
+                  ) : effectiveInvoiceLogoUrl ? (
                     <img
                       src={assetUrl(effectiveInvoiceLogoUrl)}
                       alt="Invoice logo"
-                      className="max-h-full max-w-full object-contain"
+                      className="h-full w-full object-contain p-1.5"
                     />
                   ) : (
-                    <span className="text-center text-xs font-semibold text-slate-400">
-                      No logo selected
+                    <span className="text-center text-[10px] font-semibold text-slate-400">
+                      No logo
                     </span>
                   )}
-                </div>
-                <div className="grid content-start gap-3">
-                  <Input
-                    value={invoiceLogoUrl}
-                    onChange={(e: any) => setInvoiceLogoUrl(e.target.value)}
-                    placeholder={tenantLogoUrl || "/uploads/logo.jpg"}
+                  <span className="absolute inset-0 hidden place-items-center bg-slate-900/40 group-hover:grid">
+                    <Camera className="h-5 w-5 text-white" />
+                  </span>
+                  <span className="absolute bottom-1 right-1 grid h-6 w-6 place-items-center rounded-full bg-slate-900 text-white shadow ring-2 ring-white">
+                    <Camera className="h-3.5 w-3.5" />
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(event: any) =>
+                      setInvoiceLogoFile(event.target.files?.[0] || null)
+                    }
                   />
-                  <div className="flex flex-wrap gap-2">
-                    {tenantLogoUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setInvoiceLogoUrl(tenantLogoUrl)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50"
-                      >
-                        Use Tenant Logo
-                      </button>
-                    )}
-                    <label className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50">
-                      Choose Logo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="sr-only"
-                        onChange={(event: any) =>
-                          setInvoiceLogoFile(event.target.files?.[0] || null)
-                        }
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!invoiceLogoFile) return;
-                        await uploadInvoiceLogo(invoiceLogoFile);
-                        setInvoiceLogoFile(null);
-                      }}
-                      disabled={!invoiceLogoFile || busy}
-                      className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
-                    >
-                      {busy ? "Uploading..." : "Upload Logo"}
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500">
-                    {invoiceLogoFile
-                      ? invoiceLogoFile.name
-                      : "Shown on invoice print and PDF output."}
-                  </p>
+                </label>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  {invoiceLogoFile ? (
+                    <>
+                      <span className="truncate text-xs font-medium text-slate-700">
+                        {invoiceLogoFile.name}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!invoiceLogoFile) return;
+                            await uploadInvoiceLogo(invoiceLogoFile);
+                            setInvoiceLogoFile(null);
+                          }}
+                          disabled={busy}
+                          className="rounded-md bg-slate-900 px-3 py-1.5 text-xs font-bold text-white disabled:bg-slate-200 disabled:text-slate-400"
+                        >
+                          {busy ? "Uploading..." : "Upload"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceLogoFile(null)}
+                          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold hover:bg-slate-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {tenantLogoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceLogoUrl(tenantLogoUrl)}
+                          className="self-start rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold hover:bg-slate-50"
+                        >
+                          Use Tenant Logo
+                        </button>
+                      )}
+                      <span className="text-[11px] text-slate-500">
+                        Shown on invoice print &amp; PDF.
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
             </Field>
@@ -267,8 +290,8 @@ export function SettingsPanel(props: any) {
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
-            <h3 className="text-base lg:text-lg font-bold">Monthly Email Reports</h3>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <h3 className="card-title font-bold">Monthly Email Reports</h3>
+            <p className="card-desc text-slate-500">
               Send last month revenue, doctor settlement, medical department revenue,
               and paid invoice profit as an Excel-compatible spreadsheet through
               the Redis report worker.
@@ -284,6 +307,7 @@ export function SettingsPanel(props: any) {
               value={reportRecipients}
               onChange={(e: any) => setReportRecipients(e.target.value)}
               placeholder="owner@clinic.com, accounts@clinic.com"
+              className='search-filter'
             />
           </FormField>
           <FormField label="CC Emails">
@@ -291,6 +315,7 @@ export function SettingsPanel(props: any) {
               value={reportCc}
               onChange={(e: any) => setReportCc(e.target.value)}
               placeholder="Optional"
+              className='search-filter'
             />
           </FormField>
           <FormField label="Send Day">
@@ -300,6 +325,7 @@ export function SettingsPanel(props: any) {
               max="28"
               value={reportSendDay}
               onChange={(e: any) => setReportSendDay(Number(e.target.value))}
+              className='search-filter'
             />
           </FormField>
           <FormField label="Auto Send">
@@ -308,6 +334,7 @@ export function SettingsPanel(props: any) {
               onChange={(e: any) =>
                 setReportEnabled(e.target.value === "enabled")
               }
+              className='select-filter'
             >
               <option value="disabled">Manual only</option>
               <option value="enabled">Every month</option>
@@ -323,7 +350,7 @@ export function SettingsPanel(props: any) {
           ].map(([key, label]) => (
             <label
               key={key}
-              className="flex items-center gap-2 text-sm font-bold text-slate-700"
+              className="flex items-center gap-2 text-xs font-bold text-slate-700"
             >
               <input
                 type="checkbox"
@@ -339,6 +366,7 @@ export function SettingsPanel(props: any) {
             type="button"
             onClick={saveReportSettings}
             disabled={reportBusy === "save"}
+            className='save-button'
           >
             {reportBusy === "save" ? "Saving..." : "Save Report Settings"}
           </Button>
@@ -346,7 +374,7 @@ export function SettingsPanel(props: any) {
             type="button"
             onClick={sendMonthlyReportNow}
             disabled={reportBusy === "send"}
-            className="rounded-lg border px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm font-bold text-slate-700 disabled:text-slate-300"
+            className="close-button font-bold text-slate-700 disabled:text-slate-300"
           >
             {reportBusy === "send" ? "Queueing..." : "Send Last Month Now"}
           </button>
@@ -356,7 +384,7 @@ export function SettingsPanel(props: any) {
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Job</th>
-                <th>Status</th>
+                <th className="w-[100px]">Status</th>
                 <th>Period</th>
                 <th>Recipients</th>
                 <th>Result</th>
@@ -373,7 +401,7 @@ export function SettingsPanel(props: any) {
               )}
               {reportJobs.map((job: any, index: number) => (
                 <tr key={job.id}>
-                  <td className="px-4 py-4">
+                  <td className="px-4 py-4 text-sm">
                     <b>Report {index + 1}</b>
                     <p className="text-xs text-slate-500">
                       {displayDateTime(job.created_at)}
@@ -390,19 +418,22 @@ export function SettingsPanel(props: any) {
                               ? "blue"
                               : "amber"
                       }
+                      className="table-status w-[60%] text-xs"
                     >
                       {humanizeOptionLabel(job.status)}
                     </Badge>
                   </td>
-                  <td>
+                  <td className="text-xs">
                     {job.period_start} to {job.period_end}
                   </td>
-                  <td>{(job.recipients || []).join(", ")}</td>
-                  <td className="pr-4 text-slate-500">
-                    {job.failure_reason || job.attachment_filename || "-"}
+                  <td className="text-xs truncate">{(job.recipients || []).join(", ")}</td>
+                  <td className="pr-4 text-xs text-slate-500">
+                    <div className="truncate w-[100px]" title={job.failure_reason || job.attachment_filename}>
+                      {job.failure_reason || job.attachment_filename || "-"}
+                    </div>
                   </td>
-                  <td className="pr-4">
-                    <ActionGroup className="justify-start">
+                  <td className="">
+                    <ActionGroup >
                       <ActionButton
                         onClick={() => resendMonthlyReport(job)}
                         disabled={reportBusy === `resend-${job.id}`}

@@ -97,10 +97,10 @@ const Header = ({
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">
+          <h3 className="card-title font-bold">
             Healthcare Gross Profit Report
           </h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <p className="card-desc text-slate-500">
             Consultation revenue, doctor settlement, clinic fee, gross profit,
             final profit, and paid-basis settlement.
           </p>
@@ -110,7 +110,13 @@ const Header = ({
         </Badge>
       </div>
       <div className="mt-4 flex flex-wrap gap-2">
-        {onRefresh ? <RefreshButton onRefresh={onRefresh} label="Refresh" className="rounded-2xl" /> : null}
+        {onRefresh ? (
+          <RefreshButton
+            onRefresh={onRefresh}
+            label="Refresh"
+            className="rounded-2xl"
+          />
+        ) : null}
         <button
           type="button"
           onClick={exportCsv}
@@ -211,6 +217,7 @@ const Header = ({
           <Select
             value={period}
             onChange={(event: any) => changePeriod(event.target.value)}
+            className="select-filter"
           >
             <option value="daily">Daily</option>
             <option value="weekly">Weekly</option>
@@ -226,6 +233,7 @@ const Header = ({
               setPeriod("custom");
               setFromDate(event.target.value);
             }}
+            className="date-filter"
           />
         </Field>
         <Field label="To Date">
@@ -236,12 +244,14 @@ const Header = ({
               setPeriod("custom");
               setToDate(event.target.value);
             }}
+            className="date-filter"
           />
         </Field>
         <Field label="Doctor">
           <Select
             value={doctorId}
             onChange={(event: any) => setDoctorId(event.target.value)}
+            className="select-filter"
           >
             <option value="all">All doctors</option>
             {doctorOptions.map(([id, label]: any) => (
@@ -255,6 +265,7 @@ const Header = ({
           <Select
             value={typeFilter}
             onChange={(event: any) => setTypeFilter(event.target.value)}
+            className="select-filter"
           >
             <option value="overall">Overall</option>
             <option value="consultation">Consultation</option>
@@ -266,6 +277,7 @@ const Header = ({
           <Select
             value={supplierFilter}
             onChange={(event: any) => setSupplierFilter(event.target.value)}
+            className="select-filter"
           >
             <option value="all">All suppliers</option>
             <option value="none">No supplier</option>

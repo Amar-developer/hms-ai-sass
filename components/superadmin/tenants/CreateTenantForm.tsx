@@ -237,7 +237,7 @@ function TemplateChecklist({
       <h4 className="text-sm font-black text-slate-950">{title}</h4>
       <div className="mt-3 grid gap-2">
         {items.length === 0 && (
-          <p className="text-xs lg:text-sm text-slate-500">{empty}</p>
+          <p className="text-xs  text-slate-500">{empty}</p>
         )}
         {items.map((item: any) => (
           <label
@@ -249,10 +249,10 @@ function TemplateChecklist({
               name={name}
               value={item.id}
               defaultChecked={defaultSelected(item)}
-              className="mt-1 h-4 w-4"
+              className="mt-1 h-3 w-3"
             />
             <span>
-              <span className="font-semibold">{item.name}</span>
+              <span className="text-xs font-semibold">{item.name}</span>
               <span className="block break-all text-xs text-slate-500">
                 {item.key || item.code}
               </span>
@@ -534,7 +534,7 @@ export function CreateTenantForm({
               <h4 className="mt-1 text-lg font-black text-slate-950">
                 {currentStep.label}
               </h4>
-              <p className="mt-1 text-xs text-slate-500 lg:text-sm">
+              <p className="mt-1 text-xs text-slate-500 ">
                 {stepHelp[step]}
               </p>
               {!currentStepValid && step < 5 && (

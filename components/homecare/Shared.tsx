@@ -1,7 +1,21 @@
 import { statuses } from "@/utils/homecare/constants";
-import { Card,Badge,Button,RefreshButton,ActionButton,ActionGroup } from "../common/ui";
-import { TextField,SelectField, NumberField } from "../FormElements";
-import { bookingTotal, isBookingLocked, money, patientCode, patientName, userName } from "@/utils/homecare/helpers";
+import {
+  Card,
+  Badge,
+  Button,
+  RefreshButton,
+  ActionButton,
+  ActionGroup,
+} from "../common/ui";
+import { TextField, SelectField, NumberField } from "../FormElements";
+import {
+  bookingTotal,
+  isBookingLocked,
+  money,
+  patientCode,
+  patientName,
+  userName,
+} from "@/utils/homecare/helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
 
@@ -11,30 +25,46 @@ export function Header({ view, count, onList, onCreate }: any) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h3 className="text-2xl font-bold">Home Care / Visit Booking</h3>
-        <p className="text-sm text-slate-500">
-          Create patient-linked home care and visit bookings, assign staff, add
-          complaints, service lines, and billing. {count} total bookings.
+        <h3 className="card-title font-bold">Home Care / Visit Booking</h3>
+        <p className="card-desc text-slate-500">
+          Create patient-linked home care and visit bookings. {count} total
+          bookings.
         </p>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <Tab active={listActive} onClick={onList}>
+      <div className="grid gap-1 sm:grid-cols-1">
+        {/* <Tab active={listActive} onClick={onList} className="save-button">
           Booked List
         </Tab>
-        <Tab active={view === "create"} onClick={onCreate}>
+        <Tab
+          active={view === "create"}
+          onClick={onCreate}
+          className="close-button"
+        >
           New Booking
-        </Tab>
+        </Tab> */}
+        <Button
+          type="button"
+          onClick={onCreate}
+          className="save-button text-xs"
+        >
+          New Booking
+        </Button>
       </div>
     </div>
   );
 }
 
-export function Tab({ active, onClick, children }: any) {
+export function Tab({
+  active,
+  onClick,
+  children,
+  className = "rounded-lg px-4 py-3 text-sm",
+}: any) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg px-4 py-3 text-sm font-bold ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+      className={`${className} font-bold ${active ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
     >
       {children}
     </button>
@@ -56,15 +86,28 @@ export function BookingsList({
 }: any) {
   return (
     <Card>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <h3 className="text-lg font-bold">Booked List</h3>
-          <p className="text-sm text-slate-500">
-            Track home care and visit requests, schedule ranges, assigned staff,
-            and invoice state.
-          </p>
+      <div className="flex flex-col gap-3  lg:items-end lg:justify-between">
+        <div className=" w-full flex justify-between">
+          <div>
+            {" "}
+            <h3 className="card-title font-bold">Home Care / Visit Booking</h3>
+            <p className="card-desc text-slate-500">
+              Create patient-linked home care and visit bookings. bookings.
+            </p>
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <RefreshButton onRefresh={onRefresh} />
+            <Button
+              type="button"
+              onClick={onCreate}
+              className="save-button text-xs"
+            >
+              New Booking
+            </Button>
+          </div>
         </div>
-        <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto] md:items-end lg:min-w-[640px]">
+
+        <div className="grid gap-3 md:grid-cols-3 md:items-end justify-start w-full">
           <TextField
             label="Search"
             value={filters.query}
@@ -72,7 +115,7 @@ export function BookingsList({
               setFilters({ ...filters, query: value })
             }
             placeholder="Booking, patient, staff, status"
-            className="search-input"
+            className="search-filter text-xs placeholder:text-xs"
           />
           <SelectField
             label="Status"
@@ -85,18 +128,9 @@ export function BookingsList({
               ...statuses.map(([value, label]) => ({ value, label })),
             ]}
           />
-          <div className="flex items-end">
-            <Button type="button" onClick={onCreate}>
-              New Booking
-            </Button>
-          </div>
         </div>
       </div>
-      <div className="mt-2 flex items-center gap-2">
-        <RefreshButton onRefresh={onRefresh} />
-        <Badge tone="blue" className="normal-badge">{bookings.length} shown</Badge>
-        <span className="text-xs text-slate-400">of {total} bookings</span>
-      </div>
+
       <div className="mt-4 overflow-auto rounded-2xl border">
         <table className="w-full min-w-[980px] text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase text-slate-500">
@@ -123,13 +157,13 @@ export function BookingsList({
               return (
                 <tr key={booking.id}>
                   <td className="px-4 py-3">
-                    <b>{booking.booking_number}</b>
+                    <b className="card-desc">{booking.booking_number}</b>
                     <p className="text-xs text-slate-500">
                       {booking.services?.length || 0} services
                     </p>
                   </td>
-                  <td>{patientName(patient)}</td>
-                  <td>
+                  <td className="card-desc">{patientName(patient)}</td>
+                  <td className="card-desc">
                     {booking.assigned_staff_name ||
                       userName(staffMap.get(booking.assigned_staff_user_id))}
                     {booking.staff_type && (
@@ -138,19 +172,21 @@ export function BookingsList({
                       </p>
                     )}
                   </td>
-                  <td>
+                  <td className="card-desc">
                     {displayDate(booking.start_date)} to{" "}
                     {displayDate(booking.end_date)}
                     <p className="text-xs text-slate-500">
                       {humanizeOptionLabel(booking.recurrence || "daily")}
                     </p>
                   </td>
-                  <td>
-                    <Badge>{humanizeOptionLabel(booking.status)}</Badge>
+                  <td className="card-desc">
+                    <Badge className="normal-badge">
+                      {humanizeOptionLabel(booking.status)}
+                    </Badge>
                   </td>
-                  <td>{money(bookingTotal(booking))}</td>
+                  <td className="card-desc">{money(bookingTotal(booking))}</td>
                   <td className="pr-4">
-                    <ActionGroup>
+                    <ActionGroup className="justify-end">
                       <ActionButton onClick={() => onView(booking)}>
                         View
                       </ActionButton>
@@ -363,7 +399,9 @@ export function InvoiceCard({
             Bill the selected booking from its service lines.
           </p>
         </div>
-        <Badge className="normal-badge">{humanizeOptionLabel(booking.status)}</Badge>
+        <Badge className="normal-badge">
+          {humanizeOptionLabel(booking.status)}
+        </Badge>
       </div>
       <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
         <b>{booking.booking_number}</b>
@@ -380,7 +418,9 @@ export function InvoiceCard({
         <div className="mt-4 rounded-2xl border p-4 text-sm">
           <div className="flex items-center justify-between gap-3">
             <b>{invoiceDetail.invoice.invoice_number}</b>
-            <Badge className="normal-badge">{humanizeOptionLabel(invoiceDetail.invoice.status)}</Badge>
+            <Badge className="normal-badge">
+              {humanizeOptionLabel(invoiceDetail.invoice.status)}
+            </Badge>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-3 text-slate-600">
             <span>Subtotal</span>

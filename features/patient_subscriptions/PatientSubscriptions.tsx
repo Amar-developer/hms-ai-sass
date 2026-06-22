@@ -747,7 +747,7 @@ export function PatientSubscriptions({
             <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
               <div>
                 <h3 className="text-base lg:text-lg font-bold">Plans</h3>
-                <p className="text-xs lg:text-sm text-slate-500">
+                <p className="card-desc text-slate-500">
                   Create and manage branch-specific patient membership plans.
                 </p>
               </div>
@@ -756,7 +756,7 @@ export function PatientSubscriptions({
                 <Button
                   type="button"
                   onClick={() => setView("create")}
-                  className="w-full rounded-lg px-3 py-2 text-xs sm:w-auto lg:px-4 lg:py-3 lg:text-sm"
+                  className="save-button text-xs"
                 >
                   Create Plan
                 </Button>
@@ -778,7 +778,7 @@ export function PatientSubscriptions({
                           <th className="px-4 py-3">Price</th>
                           <th className="px-4 py-3">Duration</th>
                           <th className="px-4 py-3">Consults</th>
-                          <th className="px-4 py-3">Scope</th>
+                          {/* <th className="px-4 py-3">Scope</th> */}
                           <th className="px-4 py-3">Status</th>
                           <th className="px-4 py-3 text-right">Actions</th>
                         </tr>
@@ -1437,9 +1437,9 @@ function PlanTableRow({
             className="text-left"
           >
             <b className="block text-sm text-slate-950">{plan.name}</b>
-            <span className="text-xs font-semibold uppercase text-slate-500">
+            {/* <span className="text-xs font-semibold uppercase text-slate-500">
               {plan.code || "-"}
-            </span>
+            </span> */}
           </button>
         </td>
         <td className="px-4 py-3 font-semibold text-slate-950">
@@ -1447,7 +1447,7 @@ function PlanTableRow({
         </td>
         <td className="px-4 py-3 text-slate-700">{plan.duration_days} days</td>
         <td className="px-4 py-3 text-slate-700">{plan.free_consultations}</td>
-        <td className="max-w-[180px] px-4 py-3 text-slate-700">Tenant</td>
+        {/* <td className="max-w-[180px] px-4 py-3 text-slate-700">Tenant</td> */}
         <td className="px-4 py-3">
           <div className="flex flex-col items-start gap-1">
             <Badge
@@ -1941,7 +1941,7 @@ function ActiveEnrollmentsTable({
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="text-base lg:text-lg font-bold">Active Enrollments</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <p className="card-desc text-slate-500">
             Paginated table for active patient memberships.
           </p>
         </div>
@@ -1956,11 +1956,11 @@ function ActiveEnrollmentsTable({
         <table className="w-full min-w-[860px] table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[80px]" />
-            <col className="w-[230px]" />
-            <col className="w-[220px]" />
+            <col className="w-[140px]" />
+            <col className="w-[180px]" />
             <col className="w-[140px]" />
             <col className="w-[110px]" />
-            <col className="w-[120px]" />
+            <col className="w-[80px]" />
             <col className="w-[120px]" />
             {canManage && <col className="w-[150px]" />}
           </colgroup>
@@ -1970,7 +1970,6 @@ function ActiveEnrollmentsTable({
               <th>Patient</th>
               <th>Plan</th>
               <th>Validity</th>
-              <th>Used</th>
               <th className="text-left">Paid</th>
               <th>Status</th>
               {canManage && <th className="text-right pr-4">Actions</th>}
@@ -1979,7 +1978,7 @@ function ActiveEnrollmentsTable({
           <tbody className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={canManage ? 8 : 7} className="px-4 py-4 text-slate-500 text-xs lg:text-sm" >
+                <td colSpan={canManage ? 7 : 6} className="px-4 py-4 text-slate-500 text-xs lg:text-sm" >
                   No active enrollments yet.
                 </td>
               </tr>
@@ -2003,9 +2002,9 @@ function ActiveEnrollmentsTable({
                   </td>
                   <td>
                     <b className="text-xs lg:text-sm">{row.plan?.name || "Membership plan"}</b>
-                    {row.plan?.code && (
+                    {/* {row.plan?.code && (
                       <p className="text-xs text-slate-500">{row.plan.code}</p>
-                    )}
+                    )} */}
                   </td>
                   <td className="text-xs lg:text-sm">
                     {isEditing ? (
@@ -2034,19 +2033,6 @@ function ActiveEnrollmentsTable({
                       <input
                         type="number"
                         min="0"
-                        value={editing.used_consultations}
-                        onChange={(event: any) => editValue("used_consultations", event.target.value)}
-                        className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
-                      />
-                    ) : (
-                      `${row.used_consultations || 0}/${row.plan?.free_consultations ?? 0}`
-                    )}
-                  </td>
-                  <td className="text-left font-semibold tabular-nums text-xs lg:text-sm">
-                    {isEditing ? (
-                      <input
-                        type="number"
-                        min="0"
                         value={editing.paid_amount}
                         onChange={(event: any) => editValue("paid_amount", event.target.value)}
                         className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
@@ -2058,7 +2044,7 @@ function ActiveEnrollmentsTable({
                   <td>
                     <Badge
                       tone="green"
-                      className="text-xs lg:text-sm rounded-full py-2 px-2"
+                      className="table-status w-[60%]"
                     >
                       {row.status}
                     </Badge>

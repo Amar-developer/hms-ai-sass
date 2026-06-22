@@ -235,13 +235,13 @@ export function FilesPanel({
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Files</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               Centralized file storage with automatic module and document type
               mapping.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge tone="blue" className="rounded-lg px-2 py-2 ">
+            <Badge tone="blue" className="normal-badge">
               {files.length} files
             </Badge>
             <ActionButton
@@ -258,7 +258,12 @@ export function FilesPanel({
           className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
         >
           <FormField label="Upload File">
-            <Input name="file" type="file" required />
+            <Input
+              name="file"
+              type="file"
+              required
+              className="search-input file:text-xs"
+            />
           </FormField>
           <FormField label="Category">
             <SearchableSelect
@@ -267,6 +272,7 @@ export function FilesPanel({
               onChange={setCategory}
               options={fileCategoryOptions}
               searchPlaceholder="Search categories..."
+              className="select-input"
             />
           </FormField>
           <FormField label="Branch">
@@ -375,7 +381,7 @@ export function FilesPanel({
             </FormField>
           </div>
           <div className="flex items-end">
-            <Button disabled={busy}>
+            <Button disabled={busy} className="save-button">
               {busy ? "Uploading..." : "Upload File"}
             </Button>
           </div>
@@ -384,8 +390,8 @@ export function FilesPanel({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">File Registry</h4>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <h4 className="card-title font-bold">File Registry</h4>
+            <p className="card-desc text-slate-500">
               Uploaded files appear automatically. Sync existing server files
               when needed.
             </p>
@@ -422,42 +428,47 @@ export function FilesPanel({
                 <tr key={file.id} className="align-top">
                   <td className="px-4 py-4">
                     <div className="max-w-[200px]">
-                      <p className="font-bold truncate" title={file?.file_name}>{file.file_name}</p>
+                      <p
+                        className="font-bold truncate text-xs"
+                        title={file?.file_name}
+                      >
+                        {file.file_name}
+                      </p>
                     </div>
-                    <div className="max-w-[200px]">
+                    {/* <div className="max-w-[200px]">
                       <p
                         className="truncate text-xs text-slate-500"
                         title={file.file_url}
                       >
                         {file.file_url}
                       </p>
-                    </div>
+                    </div> */}
                   </td>
                   <td>
                     <Badge
                       tone="blue"
-                      className="rounded-full px-2 py-2 text-xs lg:text-sm w-[50%]"
+                      className="rounded-full px-2 py-2 text-xs w-[50%]"
                     >
                       {humanizeOptionLabel(file.category)}
                     </Badge>
-                    <p className="mt-1 text-xs pl-2 lg:text-sm text-slate-500">
+                    {/* <p className="mt-1 text-xs pl-2 lg:text-sm text-slate-500">
                       {file.source_module || "-"}
-                    </p>
+                    </p> */}
                   </td>
                   <td>
-                    <b className="text-xs lg:text-sm">
+                    <b className="text-xs ">
                       {file.attached_to_doctype || "-"}
                     </b>
-                    <p className="break-all text-xs text-slate-500">
+                    {/* <p className="break-all text-xs text-slate-500">
                       {[file.attached_to_name, file.attached_to_field]
                         .filter(Boolean)
                         .join(" / ") || "-"}
-                    </p>
+                    </p> */}
                   </td>
-                  <td className="text-xs lg:text-sm">
+                  <td className="text-xs">
                     {patientLabel(patients, file.patient_id)}
                   </td>
-                  <td className="text-xs lg:text-sm">
+                  <td className="text-xs">
                     {file.created_at ? displayDateTime(file.created_at) : "-"}
                   </td>
                   <td className="pr-4">
@@ -469,7 +480,7 @@ export function FilesPanel({
                       }
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-bold text-blue-700 underline"
+                      className="font-semibold text-xs text-blue-700 underline"
                     >
                       Open
                     </a>

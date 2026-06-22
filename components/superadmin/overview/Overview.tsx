@@ -1,6 +1,12 @@
 "use client";
 
-import { Activity, Building2, CreditCard, ShieldCheck, Users } from "lucide-react";
+import {
+  Activity,
+  Building2,
+  CreditCard,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 import { Metric } from "../shared/Metric";
 
 export function Overview({

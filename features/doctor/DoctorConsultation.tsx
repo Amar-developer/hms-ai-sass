@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarClock, CheckCircle2, Clock3, UsersRound } from "lucide-react";
+import {
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  UsersRound,
+  X,
+} from "lucide-react";
 import {
   Badge,
   Button,
@@ -1036,11 +1042,32 @@ export function DoctorConsultation({
       requeueMode: mode,
     });
   }
+
+  const resetConsultation = () => {
+  setComplaints("");
+  setDiagnosisRows("");
+  setNotes("");
+  setVitals("");
+  setRemarks("");
+
+  setMedicineItems([]);
+  setReferralItems([]);
+
+  setScanNeeded(false);
+  setScanTests("");
+
+  setReferDoctor(false);
+  setReferDoctorId("");
+
+  setAdmissionNeeded(false);
+};
   async function cancelAppointment() {
     if (!selected) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");
+      resetConsultation()
+      
       try {
         await apiFetch(`/queue/${selected.queueEntryId}/cancel`, apiSession, {
           method: "POST",
@@ -1220,7 +1247,7 @@ export function DoctorConsultation({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="card-title font-bold">Patient Queue</h3>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 Select any waiting patient for consultation.
               </p>
             </div>
@@ -1232,6 +1259,7 @@ export function DoctorConsultation({
                   setSelectedAppointmentId("");
                 }}
                 disabled={isDoctorUser}
+                className="select-filter"
               >
                 {doctorList.map((d: any) => (
                   <option key={d.id} value={d.id}>
@@ -1239,10 +1267,7 @@ export function DoctorConsultation({
                   </option>
                 ))}
               </Select>
-              <Badge
-                className="normal-badge text-center"
-                tone="blue"
-              >
+              <Badge className="normal-badge text-center" tone="blue">
                 {branch.name}
               </Badge>
             </div>
@@ -1259,18 +1284,29 @@ export function DoctorConsultation({
                   <button
                     key={a.id}
                     onClick={() => openConsultation(a.id)}
-                    className={`w-44 shrink-0 rounded-2xl border p-4 text-left transition ${
+                    className={`w-36 shrink-0 rounded-lg border p-2.5 text-left transition ${
                       selected?.id === a.id
                         ? "border-slate-900 bg-slate-50"
                         : "border-slate-200 bg-white hover:border-slate-400"
                     }`}
                   >
-                    <div className="mb-2 flex flex-wrap gap-1">
+                    <div className="mb-2 flex justify-between  flex-wrap gap-1">
                       <Badge
                         tone={a.tokenType === "Emergency" ? "red" : "amber"}
+                        className="table-status p-1.5 text-xs"
                       >
                         {humanizeOptionLabel(a.tokenType)}
                       </Badge>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          cancelAppointment();
+                        }}
+                        className="border text-[11px] w-5 h-5 flex justify-center items-center hover:font-bold border-black/50 font-bold rounded-full"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
                       {a.consultationStatus && (
                         <Badge
                           // className="w-[500px]"
@@ -1297,7 +1333,7 @@ export function DoctorConsultation({
                 (a: any) =>
                   !isCompletedAppointment(a) && !isCancelledAppointment(a),
               ).length === 0 && (
-                <p className="py-4 text-xs lg:text-sm text-slate-500">
+                <p className="py-4 card-desc text-slate-500">
                   No waiting patients in the queue.
                 </p>
               )}
@@ -1428,7 +1464,7 @@ export function DoctorConsultation({
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
             <div>
               <h3 className="card-title font-bold">Upcoming Appointments</h3>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 Doctor schedule, queue status, visit purpose, and consultation
                 mode.
               </p>
@@ -1459,12 +1495,6 @@ export function DoctorConsultation({
               </button>
             ))}
           </div>
-          <ScheduleList
-            rows={scheduleRows}
-            selectedId={selected?.id}
-            onSelect={setSelectedAppointmentId}
-            onConsult={openConsultation}
-          />
         </Card>
 
         {/* Today's booked appointments */}
@@ -1474,7 +1504,7 @@ export function DoctorConsultation({
               <h3 className="card-title font-bold">
                 Today's Booked Appointments
               </h3>
-              <p className="table-data text-slate-500">
+              <p className="card-desc text-slate-500">
                 {displayDate(selectedDate)} · {appointmentListLabel}
               </p>
             </div>
@@ -1506,98 +1536,15 @@ export function DoctorConsultation({
               </Button>
             </div>
           </div>
-          <div className="mt-5 space-y-3">
-            {scheduleRows.map((a: any) => (
-              <div
-                key={a.id}
-                className={`rounded-2xl border p-4 ${selected?.id === a.id ? "border-slate-900 bg-slate-50" : "border-slate-200 bg-white"}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAppointmentId(a.id)}
-                    className="min-w-0 text-left"
-                  >
-                    <b>
-                      {a.token} · {a.patient}
-                    </b>
-                    <p className="text-xs text-slate-500">
-                      {displayTime(a.time || a.appointment_time)} ·{" "}
-                      {humanizeOptionLabel(a.status)} ·{" "}
-                      {humanizeOptionLabel(a.queueStatus)}
-                    </p>
-                  </button>
-                  <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                    <Badge tone={a.tokenType === "Emergency" ? "red" : "amber"} className="normal-badge">
-                      {humanizeOptionLabel(a.tokenType)}
-                    </Badge>
-                    {a.consultationStatus && (
-                      <Badge
-                        tone={
-                          a.consultationStatus === "signed" ? "green" : "blue"
-                        }
-                        className="normal-badge"
-                      >
-                        {humanizeOptionLabel(a.consultationStatus)}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAppointmentId(a.id)}
-                    className="rounded-xl border px-3 py-2 text-xs font-bold"
-                  >
-                    Select
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openConsultation(a.id)}
-                    className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold text-white"
-                  >
-                    Consultation
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
         </Card>
       </div>
       <Card>
-        <h3 className="text-lg font-bold">Doctor Revenue Tracking Logic</h3>
-        <div className="mt-3 grid gap-3 md:grid-cols-4 lg:grid-cols-5">
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Consultation</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              OP/IP/Online/Home Visit
-            </p>
-          </div>
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Lab Referral</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              Lab tests written
-            </p>
-          </div>
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Scan Referral</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              Diagnostics referred
-            </p>
-          </div>
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Pharmacy</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              Medicine value referred
-            </p>
-          </div>
-          <div className="text-base lg:text-xl rounded-lg bg-slate-50 p-4">
-            <b>Reports</b>
-            <p className="text-[11px] lg:text-sm text-slate-500">
-              Admin revenue analytics
-            </p>
-          </div>
-        </div>
+        <ScheduleList
+          rows={scheduleRows}
+          selectedId={selected?.id}
+          onSelect={setSelectedAppointmentId}
+          onConsult={openConsultation}
+        />
       </Card>
     </div>
   );

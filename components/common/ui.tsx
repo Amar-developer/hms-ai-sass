@@ -29,7 +29,7 @@ export function Card({
 export function Badge({
   children,
   tone = "slate",
-  className = "px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm flex justify-center items-center",
+  className = "px-2 py-2  text-xs lg:text-sm flex justify-center items-center",
 }: {
   children: React.ReactNode;
   tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple";
@@ -615,7 +615,7 @@ export function SuggestionInput({
 }
 
 export function Select({
-  className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs",
   children,
   ...props
 }: any) {
@@ -782,14 +782,14 @@ export function Button({
 
 export function ActionGroup({
   children,
-  className = "",
+  className = "justify-start",
 }: {
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div
-      className={`flex flex-nowrap items-center justify-end gap-2 whitespace-nowrap ${className}`}
+      className={`flex flex-nowrap items-center gap-2 whitespace-nowrap ${className}`}
     >
       {children}
     </div>
@@ -849,9 +849,9 @@ export function RefreshButton({
       disabled={busy}
       title={title}
       aria-label={title}
-      className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className}`}
+      className={`inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-[10px] lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className}`}
     >
-      <RefreshCw className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+      <RefreshCw className={`h3.5 w-3.5  ${busy ? "animate-spin" : ""}`} />
       {label ? <span>{label}</span> : null}
     </button>
   );

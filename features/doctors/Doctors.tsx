@@ -386,8 +386,8 @@ export function Doctors({ apiSession, clinic }: any) {
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Doctor Management</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Doctor Management</h3>
+          <p className="card-desc text-slate-500">
             Create, update, deactivate, and map doctors to tenants, branches,
             and medical departments.
           </p>
@@ -397,7 +397,7 @@ export function Doctors({ apiSession, clinic }: any) {
           <button
             type="button"
             onClick={() => open("create")}
-            className="inline-flex items-center justify-center gap-2 rounded-lg lg:w-full bg-slate-900 px-4 py-3 text-xs lg:text-sm font-bold text-white"
+            className="inline-flex items-center justify-center gap-2 rounded-lg lg:w-full bg-slate-900 px-4 py-3 text-xs  font-bold text-white"
           >
             <Plus size={16} />
             Create Doctor
@@ -422,7 +422,7 @@ export function Doctors({ apiSession, clinic }: any) {
             setPage(1);
           }}
           placeholder="Name, specialty, mobile, email"
-          className="search-input"
+          className="search-filter text-xs placeholder:text-xs"
         />
         <SelectField
           label="Type"

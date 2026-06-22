@@ -106,7 +106,7 @@ export function ConsultReferralModal({
           </div>
         )}
         {detail && referrals.length === 0 && (
-          <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+          <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-slate-500">
             No referrals in this consultation.
           </p>
         )}

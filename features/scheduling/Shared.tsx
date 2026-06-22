@@ -51,21 +51,21 @@ export function ScheduleRow({
       className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] md:items-center"
     >
       <div>
-        <b className="table-data">{doctor?.full_name || publicDisplayValue(row.practitioner_id, "Doctor")}</b>
+        <b className="text-xs">{doctor?.full_name || publicDisplayValue(row.practitioner_id, "Doctor")}</b>
         <p className="break-all text-xs text-slate-500">
           {scheduleRows.length} schedule{" "}
           {scheduleRows.length === 1 ? "slot" : "slots"}
         </p>
       </div>
-      <span className="table-data">{branch?.name || publicDisplayValue(row.branch_id, "Assigned branch")}</span>
-      <span className="table-data">{department?.name || "All Departments"}</span>
-      <span className="table-data">{row.room_number ? row.room_number.padStart(3, "0") : "-"}</span>
-      <span className="table-data">
+      <span className="text-xs">{branch?.name || publicDisplayValue(row.branch_id, "Assigned branch")}</span>
+      <span className="text-xs">{department?.name || "All Departments"}</span>
+      <span className="text-xs">{row.room_number ? row.room_number.padStart(3, "0") : "-"}</span>
+      <span className="text-xs">
         {formatDisplayRange(firstSchedule.start_time, firstSchedule.end_time)}
       </span>
-      <span className="table-data">{row.slot_minutes} min</span>
-      <Badge tone={statusTone as any} className="table-status">{statusLabel}</Badge>
-      <ActionGroup>
+      <span className="text-xs">{row.slot_minutes} min</span>
+      <Badge tone={statusTone as any} className="table-status text-xs">{statusLabel}</Badge>
+      <ActionGroup className="justify-end">
         <ActionButton onClick={stop(onEdit)}>Edit</ActionButton>
         <ActionButton tone="danger" onClick={stop(onDelete)}>
           Delete
@@ -116,6 +116,7 @@ export function PractitionerPicker({ doctors, value, onChange }: any) {
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         placeholder="Type doctor or physiotherapist"
         required={!value}
+        className=' placeholder:text-xs search-input'
       />
       {open && (
         <div className="absolute z-40 mt-2 max-h-72 w-full overflow-auto rounded-2xl border border-slate-200 bg-white p-1 shadow-xl">
@@ -134,7 +135,7 @@ export function PractitionerPicker({ doctors, value, onChange }: any) {
                 setQuery("");
                 setOpen(false);
               }}
-              className={`w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-slate-50 ${
+              className={`w-full rounded-xl px-3 py-2 text-left text-xs hover:bg-slate-50 ${
                 doctor.id === value
                   ? "bg-slate-900 text-white hover:bg-slate-900"
                   : ""

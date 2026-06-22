@@ -27,6 +27,11 @@ from app.modules.patients.models import (
     PatientAlert,
     PatientStatus,
 )
+from app.modules.patient_subscriptions.models import (
+    PatientSubscriptionEnrollment,
+    PatientSubscriptionEnrollmentStatus,
+    PatientSubscriptionPlan,
+)
 from app.modules.patients.schemas import (
     PatientAlertCreate,
     PatientAlertRead,
@@ -85,7 +90,9 @@ def _patient_search_result(
     patient: Patient,
     alert_counts: dict[str, int] | None = None,
     critical_counts: dict[str, int] | None = None,
+    subscription_details: dict[str, dict[str, str]] | None = None,
 ) -> PatientSearchResult:
+    subscription = (subscription_details or {}).get(patient.id, {})
     return PatientSearchResult(
         id=patient.id,
         tenant_id=patient.tenant_id,
@@ -103,6 +110,8 @@ def _patient_search_result(
         updated_at=patient.updated_at,
         active_alert_count=(alert_counts or {}).get(patient.id, 0),
         critical_alert_count=(critical_counts or {}).get(patient.id, 0),
+        subscription_plan_name=subscription.get("plan_name"),
+        subscription_status=subscription.get("status"),
     )
 
 
@@ -337,6 +346,37 @@ def search_patients(
             critical_counts[alert.patient_id] = (
                 critical_counts.get(alert.patient_id, 0) + 1
             )
+    subscription_details: dict[str, dict[str, str]] = {}
+    if patient_ids:
+        enrollments = session.exec(
+            select(PatientSubscriptionEnrollment, PatientSubscriptionPlan)
+            .join(
+                PatientSubscriptionPlan,
+                PatientSubscriptionPlan.id == PatientSubscriptionEnrollment.plan_id,
+            )
+            .where(
+                PatientSubscriptionEnrollment.tenant_id == tenant_id,
+                PatientSubscriptionEnrollment.patient_id.in_(patient_ids),
+            )
+            .order_by(PatientSubscriptionEnrollment.created_at.desc())
+        ).all()
+        for enrollment, plan in enrollments:
+            existing = subscription_details.get(enrollment.patient_id)
+            if (
+                existing
+                and existing.get("status")
+                == PatientSubscriptionEnrollmentStatus.ACTIVE.value
+            ):
+                continue
+            if (
+                existing
+                and enrollment.status != PatientSubscriptionEnrollmentStatus.ACTIVE
+            ):
+                continue
+            subscription_details[enrollment.patient_id] = {
+                "plan_name": plan.name,
+                "status": enrollment.status.value,
+            }
 
     record_audit_event(
         session,
@@ -349,7 +389,9 @@ def search_patients(
     )
 
     return [
-        _patient_search_result(patient, alert_counts, critical_counts)
+        _patient_search_result(
+            patient, alert_counts, critical_counts, subscription_details
+        )
         for patient in patients
     ]
 

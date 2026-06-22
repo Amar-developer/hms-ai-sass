@@ -625,7 +625,7 @@ export function Items({ apiSession, branchId }: any) {
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Items</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               ERP-style item master for medicines, lab tests, Service,
               physiotherapy equipment, and home care / visit services.
             </p>
@@ -642,6 +642,7 @@ export function Items({ apiSession, branchId }: any) {
             value={type}
             onChange={changeItemType}
             options={itemTypes.map(([value, label]) => ({ value, label }))}
+          
           />
           <TextField
             label="Code / Serial"
@@ -649,20 +650,22 @@ export function Items({ apiSession, branchId }: any) {
             onChange={() => {}}
             disabled
             placeholder="Auto generated from item type"
-            className="search-input"
+            className="search-input "
           />
           <TextField
-            label={type === "home_care_service" ? "Service Name" : "Item Name"}
+            label={type === "home_care_service" || type=='lab_package'? "Service Name" : "Item Name"}
             value={form.name}
             onChange={(v) => setField("name", v)}
             required
-            className="search-input"
+            placeholder={`please enter ${type === "home_care_service" || type=='lab_package'? "Service Name" : "Item Name"}`}
+            className="search-input placeholder:text-xs"
           />
           {type !== "home_care_service" && (
             <NumberField
               label="MRP Price"
               value={form.mrp_price}
               onChange={(v) => setField("mrp_price", v)}
+              placeholder="Enter the MRP price"
               min={0}
             />
           )}
@@ -679,6 +682,7 @@ export function Items({ apiSession, branchId }: any) {
               onChange={(v) => setField("price", v)}
               min={0}
               required={type === "home_care_service"}
+              placeholder="Enter the price"
             />
           )}
           {type !== "home_care_service" && (
@@ -700,6 +704,7 @@ export function Items({ apiSession, branchId }: any) {
                 value={form.purchase_price}
                 onChange={(v) => setField("purchase_price", v)}
                 min={0}
+                placeholder="Enter the purchase price"
               />
             </>
           )}
@@ -710,12 +715,14 @@ export function Items({ apiSession, branchId }: any) {
                 value={form.generic_name}
                 onChange={(v) => setField("generic_name", v)}
                 className="search-input"
+                placeholder="Enter the generic name"
               />
               <NumberField
                 label="Reorder Level"
                 value={form.reorder_level}
                 onChange={(v) => setField("reorder_level", v)}
                 min={0}
+                placeholder="Enter the recorder level"
               />
             </>
           )}
@@ -724,7 +731,8 @@ export function Items({ apiSession, branchId }: any) {
               label="Sample Type"
               value={form.sample_type}
               onChange={(v) => setField("sample_type", v)}
-              className="search-input"
+              className="search-input placeholder:text-xs"
+              placeholder="Enter the sample type "
             />
           )}
           {type === "home_care_service" && (
@@ -734,6 +742,7 @@ export function Items({ apiSession, branchId }: any) {
                 value={form.description}
                 onChange={(v) => setField("description", v)}
                 className="search-input"
+                placeholder="Enter the description placeholder:text-xs"
               />
               <SelectField
                 label="Scope"
@@ -745,31 +754,6 @@ export function Items({ apiSession, branchId }: any) {
                 ]}
               />
             </>
-          )}
-          {type === "lab_package" && (
-            <div className="md:col-span-4 rounded-2xl bg-slate-50 p-4">
-              <p className="mb-3 text-xs font-bold uppercase text-slate-500">
-                Service Tests
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {tests.map((test: any) => (
-                  <button
-                    key={test.id}
-                    type="button"
-                    onClick={() =>
-                      setPackageTestIds((ids) =>
-                        ids.includes(test.id)
-                          ? ids.filter((id) => id !== test.id)
-                          : [...ids, test.id],
-                      )
-                    }
-                    className={`rounded-xl border px-3 py-2 text-xs font-bold ${packageTestIds.includes(test.id) ? "bg-slate-900 text-white" : "bg-white text-slate-700"}`}
-                  >
-                    {test.name} · ₹{test.default_price}
-                  </button>
-                ))}
-              </div>
-            </div>
           )}
           {type === "physio_equipment" && (
             <>
@@ -783,13 +767,15 @@ export function Items({ apiSession, branchId }: any) {
                 label="Manufacturer"
                 value={form.manufacturer}
                 onChange={(v) => setField("manufacturer", v)}
-                className="search-input"
+                className="search-input placeholder:text-xs"
+                placeholder="Enter the manufacturer name"
               />
               <TextField
                 label="Model"
                 value={form.model_number}
                 onChange={(v) => setField("model_number", v)}
-                className="search-input"
+                className="search-input  placeholder:text-xs"
+                placeholder="Enter the model name"
               />
               <SelectField
                 label="Portable"
@@ -812,7 +798,7 @@ export function Items({ apiSession, branchId }: any) {
             </>
           )}
           <div className="flex items-end gap-2">
-            <Button disabled={busy === "save"}>
+            <Button disabled={busy === "save"} className='save-button'>
               {busy === "save"
                 ? "Saving..."
                 : editing
@@ -829,7 +815,7 @@ export function Items({ apiSession, branchId }: any) {
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
             <h3 className="card-title font-bold">Pharmacy Stock</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               Suppliers, purchases, batches, stock ledger, and low-stock alerts.
             </p>
           </div>
@@ -976,9 +962,8 @@ export function Items({ apiSession, branchId }: any) {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h3 className="card-title font-bold">Item List</h3>
-            <p className="table-data text-slate-500">
-              Filter, edit, or delete catalog items used by Lab, Pharmacy,
-              Physiotherapy, and Home Care / Visit.
+            <p className="card-desc text-slate-500">
+            Configure items used across healthcare services
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3 lg:min-w-[720px]">
@@ -987,7 +972,7 @@ export function Items({ apiSession, branchId }: any) {
               value={filters.query}
               onChange={(v) => setFiltersAndReset({ ...filters, query: v })}
               placeholder="Name, code, type"
-              className="search-input"
+              className="search-filter placeholder:text-xs"
             />
             <SelectField
               label="Type"
@@ -998,7 +983,7 @@ export function Items({ apiSession, branchId }: any) {
                 ...itemTypes.map(([value, label]) => ({ value, label })),
               ]}
             />
-            <SelectField
+            {/* <SelectField
               label="Lab Items"
               value={filters.labOnly}
               onChange={(v) => setFiltersAndReset({ ...filters, labOnly: v })}
@@ -1006,14 +991,14 @@ export function Items({ apiSession, branchId }: any) {
                 { value: "all", label: "All items" },
                 { value: "lab", label: "Lab tests & packages" },
               ]}
-            />
+            /> */}
           </div>
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
           <table className="w-full min-w-[1240px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
-                <th className="px-4 py-3 text-center">Type</th>
+                <th className="px-4 py-3 ">Type</th>
                 <th>Item</th>
                 <th>Code</th>
                 <th>Details</th>
@@ -1035,23 +1020,23 @@ export function Items({ apiSession, branchId }: any) {
               {pagedRows.map((row: any) => (
                 <tr key={`${row.kind}-${row.id}`}>
                   <td className="px-4 py-3">
-                    <Badge className="table-status">{humanizeOptionLabel(row.kind)}</Badge>
+                    <p className="text-xs font-bold">{humanizeOptionLabel(row.kind)}</p>
                   </td>
-                  <td className="table-data">
+                  <td className="text-xs">
                     <b>{row.name}</b>
                   </td>
-                  <td className="table-data">{row.code || "-"}</td>
-                  <td className="table-data">{row.meta}</td>
-                  <td className="table-data">{row.supplier}</td>
-                  <td className="table-data">
+                  <td className="text-xs">{row.code || "-"}</td>
+                  <td className="text-xs">{row.meta}</td>
+                  <td className="text-xs">{row.supplier}</td>
+                  <td className="text-xs">
                     {row.purchase_price === null
                       ? "-"
                       : `₹${row.purchase_price || 0}`}
                   </td>
-                  <td className="table-data">
+                  <td className="text-xs">
                     {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
                   </td>
-                  <td className="table-data"  >
+                  <td className="text-xs"  >
                     {row.price === null
                       ? "-"
                       : row.type === "home_care_service"
@@ -1059,7 +1044,7 @@ export function Items({ apiSession, branchId }: any) {
                         : `₹${row.price}`}
                   </td>
                   <td className="pr-4">
-                    <ActionGroup>
+                    <ActionGroup className="justify-end">
                       <ActionButton onClick={() => startEdit(row)}>
                         Edit
                       </ActionButton>

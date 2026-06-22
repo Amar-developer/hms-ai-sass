@@ -2370,8 +2370,8 @@ function IPHeader({ view, setView }: any) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div>
-        <h3 className="text-xl lg:text-2xl font-bold">IP Management</h3>
-        <p className="text-sm text-slate-500">
+        <h3 className="card-title font-bold">IP Management</h3>
+        <p className="card-desc text-slate-500">
           OP to IP conversion, direct admission, treatments, consent, discharge
           summary, and IP billing.
         </p>
@@ -2380,7 +2380,7 @@ function IPHeader({ view, setView }: any) {
         <button
           type="button"
           onClick={() => setView("list")}
-          className={`rounded-lg px-4 py-3 text-sm font-bold ${view === "list" || view === "detail" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
+          className={`rounded-lg px-2 py-2 text-sm font-bold ${view === "list" || view === "detail" ? "bg-slate-900 text-white" : "border border-slate-200 bg-white text-slate-700"}`}
         >
           Admissions
         </button>

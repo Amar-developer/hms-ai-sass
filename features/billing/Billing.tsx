@@ -606,10 +606,10 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       </div>
 
       <Card>
-        <h3 className="text-base lg:text-lg font-bold">
+        <h3 className="card-title font-bold">
           Pending Consultation Invoices
         </h3>
-        <p className="table-data text-slate-500">
+        <p className="card-desc text-slate-500">
           Reception can generate the consultation-fee invoice after the doctor
           signs the consultation. Lab, pharmacy, IP, and physiotherapy each have
           their own invoices created by those modules.
@@ -617,7 +617,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         <StatusToast message={message} onClose={() => setMessage("")} />
         <div className="mt-4 grid gap-3">
           {signedReady.length === 0 && (
-            <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
+            <div className="rounded-lg bg-slate-50 p-4 card-desc text-slate-500">
               All signed consultations already have invoices.
             </div>
           )}
@@ -648,10 +648,10 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       <Card>
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
           <div>
-            <h3 className="text-base lg:text-lg font-bold">
+            <h3 className="card-title font-bold">
               Invoices & Payments
             </h3>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <p className="card-desc text-slate-500">
               Track invoice source, patient dues, settlement share, and payment
               collection in one list.
             </p>
@@ -669,7 +669,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
             value={filters.query}
             onChange={(v) => updateFilter("query", v)}
             placeholder="Invoice, patient, source"
-            className="search-input"
+            className="search-filter"
           />
           <SelectField
             label="Source"
@@ -695,20 +695,20 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
               { value: "unpaid", label: "Unpaid" },
             ]}
           />
-          <DateField
-            label="From Date"
-            value={filters.fromDate}
-            onChange={(v) => updateFilter("fromDate", v)}
-          />
-          <DateField
-            label="To Date"
-            value={filters.toDate}
-            onChange={(v) => updateFilter("toDate", v)}
-          />
+            {/* <DateField
+              label="From Date"
+              value={filters.fromDate}
+              onChange={(v) => updateFilter("fromDate", v)}
+            />
+            <DateField
+              label="To Date"
+              value={filters.toDate}
+              onChange={(v) => updateFilter("toDate", v)}
+            /> */}
           <button
             type="button"
             onClick={clearFilters}
-            className="rounded-lg border border-slate-200 py-1 px-1 h-8 lg:h-12 text-xs lg:px-4 lg:py-3 lg:text-sm font-bold text-slate-700 hover:bg-slate-50"
+            className="rounded-lg border border-slate-200 close-button font-bold text-slate-700 hover:bg-slate-50"
           >
             Clear
           </button>
@@ -760,21 +760,21 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                     <td className="px-4 py-4 font-semibold text-slate-500">
                       {rowNumber}
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-sm">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs">
                       <b>{invoice.invoice_number}</b>
                       <p className="mt-1 text-[10px] lg:text-xs font-semibold text-slate-400">
                         {formatInvoiceDate(invoice)}
                       </p>
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-sm">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs">
                       <div className="flex flex-col items-start gap-1">
-                        <Badge tone={source.tone as any} className="rounded-full text-xs lg:text-sm p-2">{source.label}</Badge>
+                        <Badge tone={source.tone as any} className="table-status text-xs">{source.label}</Badge>
                       </div>
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-sm font-medium">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs font-medium">
                       {p?.name || p?.full_name || "Patient"}
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-sm">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs">
                       <Badge
                         tone={
                           invoice.status === "paid"
@@ -783,19 +783,19 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                               ? "amber"
                               : "slate"
                         }
-                        className="table-status"
+                        className="table-status text-xs"
                       >
                         {invoice.status}
                       </Badge>
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4 text-[10px] lg:text-sm text-start font-semibold tabular-nums">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4 text-[10px] lg:text-xs text-start font-semibold tabular-nums">
                       {money(invoice.total_amount)}
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-sm text-start tabular-nums">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs text-start tabular-nums">
                       {money(invoice.paid_amount)}
                     </td>
                     <td
-                      className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-sm text-start"
+                      className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs text-start"
                       onClick={(event) => event.stopPropagation()}
                     >
                       <ActionButton

@@ -3,6 +3,7 @@ import re
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
@@ -11,7 +12,7 @@ from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
-from app.modules.consultations.models import Consultation
+from app.modules.consultations.models import Consultation, ConsultationMedicine
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.integrations.graphql_catalog import GraphQLCatalogClient
@@ -466,6 +467,53 @@ def list_available_medicines(
     return [
         _normalize_local_medicine(row)
         for row in session.exec(statement.order_by(MedicineCatalog.name)).all()
+    ]
+
+
+@router.get("/catalog/popular-medicines")
+def list_popular_medicines(
+    tenant_id: str = Depends(require_tenant_id),
+    limit: int = 8,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_READ,
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_SIGN,
+            permissions.PHARMACY_MANAGE,
+            permissions.PHARMACY_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> list[dict[str, object]]:
+    """Most frequently prescribed medicines for this tenant.
+
+    Counts are derived from prescription history (ConsultationMedicine), so the
+    ranking works regardless of whether the tenant uses the external or local
+    medicine catalog — both record the prescribed name here.
+    """
+    enforce_module_enabled(session, tenant_id, "pharmacy")
+    limit = max(1, min(limit, 20))
+    rows = session.exec(
+        select(
+            ConsultationMedicine.medicine_name,
+            func.count().label("usage_count"),
+        )
+        .where(ConsultationMedicine.tenant_id == tenant_id)
+        .group_by(ConsultationMedicine.medicine_name)
+        .order_by(func.count().desc(), ConsultationMedicine.medicine_name)
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "id": name,
+            "name": name,
+            "item_name": name,
+            "usage_count": int(count),
+            "source": "history",
+        }
+        for name, count in rows
     ]
 
 

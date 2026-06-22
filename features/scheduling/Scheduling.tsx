@@ -377,7 +377,7 @@ export function Scheduling({ apiSession, branchId }: any) {
           <h3 className="card-title font-bold">
             Doctor Scheduling & Availability
           </h3>
-          <p className="table-data text-slate-500">
+          <p className="card-desc text-slate-500">
             Tenant-scoped weekly consultation timings mapped to doctor, branch,
             medical department, room, and slot duration.
           </p>
@@ -387,7 +387,7 @@ export function Scheduling({ apiSession, branchId }: any) {
           <button
             type="button"
             onClick={() => open("create")}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 table-data font-bold text-white"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-xs font-bold text-white"
           >
             <Plus size={16} />
             Create Schedule
@@ -395,12 +395,13 @@ export function Scheduling({ apiSession, branchId }: any) {
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-4 grid gap-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7">
+      <div className="mt-4 grid gap-3 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5">
         {isSuperAdmin && (
           <Field label="Tenant">
             <Select
               value={tenantId}
               onChange={(e: any) => setTenantId(e.target.value)}
+              
             >
               {tenants.map((tenant: any) => (
                 <option key={tenant.id} value={tenant.id}>
@@ -418,6 +419,7 @@ export function Scheduling({ apiSession, branchId }: any) {
               setPage(1);
             }}
             placeholder="Doctor, room, medical department"
+            className='search-filter'
           />
         </Field>
         <Field label="Branch">
@@ -427,6 +429,7 @@ export function Scheduling({ apiSession, branchId }: any) {
               setFilterBranch(e.target.value);
               setPage(1);
             }}
+            className='select-filter'
           >
             <option value="all">All branches</option>
             {branches.map((branch: any) => (
@@ -443,7 +446,7 @@ export function Scheduling({ apiSession, branchId }: any) {
               setFilterDepartment(e.target.value);
               setPage(1);
             }}
-            className='rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-[11px] lg:text-sm'
+            className='select-filter'
           >
             <option value="all">All Departments</option>
             {departments.map((department: any) => (
@@ -460,6 +463,7 @@ export function Scheduling({ apiSession, branchId }: any) {
               setFilterWeekday(e.target.value);
               setPage(1);
             }}
+            className='select-filter'
           >
             <option value="all">All days</option>
             {weekdays.map(([value, label]) => (
@@ -476,6 +480,7 @@ export function Scheduling({ apiSession, branchId }: any) {
               setFilterStatus(e.target.value);
               setPage(1);
             }}
+            className='select-filter'
           >
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>

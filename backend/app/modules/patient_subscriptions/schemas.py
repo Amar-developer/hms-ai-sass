@@ -90,6 +90,11 @@ class PatientSubscriptionEnrollmentRead(BaseModel):
     ends_on: date
     status: PatientSubscriptionEnrollmentStatus
     used_consultations: int
+    remaining_free_consultations: int = 0
+    used_free_lab_count: int = 0
+    remaining_free_lab_count: int = 0
+    used_free_medicine_count: int = 0
+    remaining_free_medicine_count: int = 0
     paid_amount: int
     purchase_invoice_id: str | None = None
     created_by_user_id: str | None

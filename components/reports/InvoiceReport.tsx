@@ -108,6 +108,7 @@ const InvoiceReport = ({
               ? "amber"
               : "slate"
         }
+        className="normal-badge"
       >
         {humanizeOptionLabel(row.status)}
       </Badge>
@@ -166,7 +167,7 @@ const InvoiceReport = ({
       <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">
         <div>
           <h3 className="card-title font-bold">Invoice Profit Details</h3>
-          <p className="table-data text-slate-500">
+          <p className="card-desc text-slate-500">
             Only paid invoices are shown in profit details.
           </p>
         </div>

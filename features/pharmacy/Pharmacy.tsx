@@ -594,7 +594,7 @@ export function Pharmacy({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <Card>
-        <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
+        <h3 className="card-desc font-bold">Create Pharmacy Issue</h3>
         <form
           onSubmit={createDirect}
           className="mt-4 grid gap-3 md:grid-cols-4"
@@ -658,7 +658,7 @@ export function Pharmacy({
             onChange={setQuantity}
             min={1}
           />
-          <div className="md:col-span-2">
+          <div className="md:col-span-1">
             <TextField
               label="External Prescriber"
               value={externalPrescriber}
@@ -668,10 +668,10 @@ export function Pharmacy({
             />
           </div>
           <div className="flex items-end gap-2">
-            <ActionButton type="button" onClick={addIssueItem} className='close-button'>
+            <button type="button" onClick={addIssueItem} className='close-button font-bold'>
               Add
-            </ActionButton>
-            <Button disabled={busy === "create"} className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs lg:text-sm'>
+            </button>
+            <Button disabled={busy === "create"} className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-3.5 text-xs'>
               {busy === "create" ? "Saving..." : "Create Issue"}
             </Button>
           </div>
@@ -702,7 +702,7 @@ export function Pharmacy({
             return (
               <>
                 {visible.length === 0 && (
-                  <div className="rounded-lg bg-slate-50 p-4 text-sm text-slate-500">
+                  <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
                     No signed prescriptions ready.
                   </div>
                 )}
@@ -715,7 +715,7 @@ export function Pharmacy({
                       <b className="card-title">
                         {a.token} · {a.patient}
                       </b>
-                      <p className="table-data text-slate-500">
+                      <p className="card-desc text-slate-500">
                         Signed prescription ready
                       </p>
                     </div>
@@ -726,7 +726,7 @@ export function Pharmacy({
                       <Button
                         disabled={busy === a.consultationId}
                         onClick={() => createFromConsultation(a)}
-                        className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs lg:text-sm'
+                        className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs'
                       >
                         {busy === a.consultationId
                           ? "Creating..."
@@ -761,9 +761,9 @@ export function Pharmacy({
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="w-[80px] px-4 py-3">#</th>
-                <th className="w-[170px]">Date & Time</th>
-                <th className="w-[190px]">Patient</th>
-                <th className="w-[150px]">Source</th>
+                <th className="w-[150px]">Date & Time</th>
+                <th className="w-[150px]">Patient</th>
+                <th className="w-[140px]">Source</th>
                 <th className="w-[150px]">Status</th>
                 <th className="w-[180px]">Amount</th>
                 <th className="w-[210px] pr-4 text-right">Action</th>
@@ -772,7 +772,7 @@ export function Pharmacy({
             <tbody className="divide-y">
               {issues.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="table-data px-4 py-4 text-slate-500">
+                  <td colSpan={7} className="card-desc px-4 py-4 text-slate-500">
                     No pharmacy issues yet.
                   </td>
                 </tr>
@@ -807,7 +807,7 @@ export function Pharmacy({
                       <b>{(safePage - 1) * pageSize + index + 1}</b>
                     </td>
                     <td>
-                      <b>{displayDate(issue.created_at)}</b>
+                      <b className="text-xs">{displayDate(issue.created_at)}</b>
                       <p className="text-xs text-slate-500">
                         {new Date(issue.created_at).toLocaleTimeString([], {
                           hour: "2-digit",
@@ -815,15 +815,15 @@ export function Pharmacy({
                         })}
                       </p>
                     </td>
-                    <td>
+                    <td className="text-xs">
                       {p?.name ||
                         publicDisplayValue(issue.patient_id, "Patient")}
                     </td>
                     <td>
-                      <Badge className="table-status">{humanizeOptionLabel(issue.source)}</Badge>
+                      <Badge className="table-status w-[70%] text-xs px-2">{humanizeOptionLabel(issue.source)}</Badge>
                     </td>
                     <td>
-                      <Badge tone={statusTone as any} className="table-status">{statusLabel}</Badge>
+                      <Badge tone={statusTone as any} className="table-status w-[60%] text-xs">{statusLabel}</Badge>
                     </td>
                     <td onClick={(event) => event.stopPropagation()}>
                       {editingAmountId === issue.id ? (
@@ -926,7 +926,7 @@ export function Pharmacy({
             </tbody>
           </table>
         </div>
-        <Pagination
+        <Pagination 
           page={safePage}
           totalPages={totalPages}
           total={issues.length}

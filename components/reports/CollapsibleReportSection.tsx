@@ -20,7 +20,7 @@ function CollapsibleReportSection({
       >
         <div>
           <h3 className="card-title font-bold">{title}</h3>
-          <p className="table-data text-wrap text-slate-500">{subtitle}</p>
+          <p className="card-desc text-wrap text-slate-500">{subtitle}</p>
         </div>
         {/* <div className="flex items-center gap-2"> */}
           <Badge tone="blue" className="normal-badge w-[15%]">{badge}</Badge>

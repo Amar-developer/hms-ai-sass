@@ -289,8 +289,8 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
           <div>
-            <h3 className="text-base lg:text-lg font-bold">Tenant & Branch Settings</h3>
-            <p className="text-xs lg:text-sm text-slate-500">
+            <h3 className="card-title font-bold">Tenant & Branch Settings</h3>
+            <p className="card-desc text-slate-500">
               Configuration page for tenant type, enabled modules, branch
               settings, queue rules, invoice prefix, and communication
               providers.

@@ -103,13 +103,14 @@ export function TokenQueue({
   >("english");
   const [displayRows, setDisplayRows] = useState<any[]>([]);
   const today = todayKey();
+  const [selectedDate, setSelectedDate] = useState(today);
   const queue = sortByTokenNumber(
     sortQueue(
       scopedAppointments.filter((appointment: any) => {
         if (
           dateKey(
             appointment.appointmentDate || appointment.appointment_date,
-          ) !== today
+          ) !== selectedDate
         )
           return false;
         if (!isActiveQueueAppointment(appointment)) return false;
@@ -270,7 +271,7 @@ export function TokenQueue({
       return;
     }
     const confirmed = window.confirm(
-      `Cancel ${remaining.length} remaining token(s) for today? This will remove unattended tokens from the active queue.`,
+      `Cancel ${remaining.length} remaining token(s) for ${selectedDate}? This will remove unattended tokens from the active queue.`,
     );
     if (!confirmed) return;
     setBusyId("end-of-day");
@@ -319,12 +320,12 @@ export function TokenQueue({
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
-        <div className="flex items-end  gap-2">
+        <div className="flex items-end lg:items-center gap-2">
           <div>
             <h3 className="card-title font-bold">
               Patient Queue & Token Priority
             </h3>
-            <p className="table-data text-slate-500">
+            <p className="text-xs text-slate-500">
               {apiSession
                 ? "Reception can manually call, skip, requeue, or close remaining tokens at end of day."
                 : "Emergency tokens appear first. Skipped patients can be requeued."}
@@ -336,11 +337,22 @@ export function TokenQueue({
             ) : null}
           </div>
         </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-[1fr_1.5fr_1.5fr_2fr]">
+          <FormField label="Appointment Date">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(event: any) =>
+                setSelectedDate(event.target.value || today)
+              }
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-slate-500"
+            />
+          </FormField>
           <FormField label="Display Mode">
             <Select
               value={displayMode}
               onChange={(e: any) => setDisplayMode(e.target.value)}
+              className="select-filter"
             >
               <option value="reception">Reception Queue</option>
               <option value="called_only">Called Tokens</option>
@@ -350,6 +362,7 @@ export function TokenQueue({
             <Select
               value={tokenLanguage}
               onChange={(e: any) => setTokenLanguage(e.target.value)}
+              className="select-filter"
             >
               <option value="english">English</option>
               <option value="tamil">Tamil</option>
@@ -369,7 +382,7 @@ export function TokenQueue({
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="mt-4 grid gap-3 sm:grid-cols-4 lg:grid-cols-5">
         {(visibleDisplayRows.length ? visibleDisplayRows : visibleQueue).map(
           (item: any) => {
             const appointment = item.appointment || item;
@@ -378,29 +391,30 @@ export function TokenQueue({
                 key={item.id}
                 type="button"
                 onClick={() => openConsultation(appointment)}
-                className="rounded-lg bg-slate-900 p-4 text-left text-white transition hover:bg-slate-800"
+                className="rounded-lg bg-slate-900 p-3 text-left text-white transition hover:bg-slate-800"
               >
-                <p className="text-xs font-bold uppercase text-slate-300">
+                {/* <p className="text-xs font-bold uppercase text-slate-300">
                   {humanizeOptionLabel(
                     item.priority || item.tokenType || "normal",
                   )}
+                </p> */}
+                <p className="text-xl font-black flex items-center">
+                  {item.token_number || item.token}{" "} -
+                  <span className="mt-1 text-sm font-semibold text-white mb-1">
+                    {appointment.patient ||
+                      publicDisplayValue(item.patient_id, "Patient")}
+                  </span>
                 </p>
-                <p className="mt-1 text-3xl font-black">
-                  {item.token_number || item.token}
-                </p>
-                <p className="mt-1 text-sm font-semibold text-white">
-                  {appointment.patient ||
-                    publicDisplayValue(item.patient_id, "Patient")}
-                </p>
+
                 <p className="mt-1 truncate text-xs text-slate-300">
                   {appointment.doctor || "Doctor"} ·{" "}
                   {humanizeOptionLabel(appointment.queueStatus || item.status)}
                 </p>
-                {appointment.roomNumber && (
+                {/* {appointment.roomNumber && (
                   <p className="mt-1 text-xs font-bold text-slate-400">
                     Room {Number(appointment.roomNumber)}
                   </p>
-                )}
+                )} */}
               </button>
             );
           },
@@ -413,8 +427,8 @@ export function TokenQueue({
               <th className="p-3">Token</th>
               <th>Patient</th>
               <th>Doctor</th>
-              <th>Status</th>
-              <th>Queue</th>
+              <th className="text-center">Status</th>
+              <th className="text-center">Queue</th>
               <th className="text-right">Actions</th>
             </tr>
           </thead>
@@ -429,7 +443,7 @@ export function TokenQueue({
                   <button
                     type="button"
                     onClick={() => openConsultation(appointment)}
-                    className="rounded-xl border px-3 py-2 font-bold hover:bg-slate-50"
+                    className="rounded-lg border px-3 py-2 text-xs font-bold hover:bg-slate-50"
                   >
                     {appointment.token}
                   </button>
@@ -438,13 +452,13 @@ export function TokenQueue({
                   <button
                     type="button"
                     onClick={() => openConsultation(appointment)}
-                    className="text-left font-semibold hover:underline"
+                    className="text-left font-semibold text-xs hover:underline"
                   >
                     {appointment.patient}
                   </button>
                 </td>
-                <td>{appointment.doctor}</td>
-                <td>
+                <td className="text-xs">{appointment.doctor}</td>
+                <td className="border px-2">
                   <Badge className="normal-badge">
                     {humanizeOptionLabel(appointment.status)}
                   </Badge>
@@ -460,10 +474,10 @@ export function TokenQueue({
                   </Badge>
                 </td>
                 <td
-                  className="px-3 py-3"
+                  className="px-3 py-3 w-48"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <ActionGroup>
+                  <ActionGroup className="justify-end">
                     <ActionButton onClick={() => openConsultation(appointment)}>
                       Details
                     </ActionButton>
