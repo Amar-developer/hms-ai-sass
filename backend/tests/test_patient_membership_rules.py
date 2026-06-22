@@ -5,6 +5,7 @@ from sqlmodel import Session
 from app.modules.billing.models import Invoice, InvoiceStatus
 from app.modules.billing.service import update_invoice_payment_status
 from app.api.v1.billing import _normalize_invoice_status
+from app.api.v1.patient_subscriptions import _read_enrollment
 from app.modules.lab.models import LabOrder, LabOrderItem
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
@@ -19,6 +20,7 @@ from app.modules.patient_subscriptions.service import (
     slabs_to_json,
     sync_free_item_usage_from_invoices,
 )
+from app.modules.tenants.models import Department, Tenant
 
 
 def test_patient_membership_respects_activation_delay(test_engine):
@@ -171,6 +173,156 @@ def test_free_consultation_restricted_to_selected_department():
 
     # Unknown department (e.g. walk-in without department) -> no free consultation.
     assert preview(None)["discount_amount"] == 0
+
+
+def test_free_consultation_matches_equivalent_branch_department(test_engine):
+    tenant_id = "tenant_basic_department_scope"
+    with Session(test_engine) as session:
+        session.add(Tenant(id=tenant_id, name="Basic Plan Clinic"))
+        selected_department = Department(
+            id="dept_basic_all",
+            tenant_id=tenant_id,
+            name="General Medicine",
+            code="GEN",
+        )
+        branch_department = Department(
+            id="dept_basic_branch",
+            tenant_id=tenant_id,
+            name="General Medicine",
+            code="GEN-BRANCH",
+            source_template_department_id=selected_department.id,
+        )
+        other_department = Department(
+            id="dept_basic_cardio",
+            tenant_id=tenant_id,
+            name="Cardiology",
+            code="CARDIO",
+        )
+        plan = PatientSubscriptionPlan(
+            tenant_id=tenant_id,
+            name="Basic Plan",
+            duration_days=30,
+            free_consultations=2,
+            free_consultation_department_ids_json='["dept_basic_all"]',
+        )
+        enrollment = PatientSubscriptionEnrollment(
+            tenant_id=tenant_id,
+            branch_id="branch_basic",
+            patient_id="patient_basic",
+            plan_id=plan.id,
+            starts_on=date.today(),
+            ends_on=date.today() + timedelta(days=29),
+        )
+        session.add(selected_department)
+        session.add(branch_department)
+        session.add(other_department)
+        session.add(plan)
+        session.add(enrollment)
+        session.commit()
+
+        equivalent = benefit_preview(
+            plan=plan,
+            enrollment=enrollment,
+            service_type="consultation",
+            item_ids=[],
+            subtotal_amount=600,
+            department_id=branch_department.id,
+            session=session,
+        )
+        unrelated = benefit_preview(
+            plan=plan,
+            enrollment=enrollment,
+            service_type="consultation",
+            item_ids=[],
+            subtotal_amount=600,
+            department_id=other_department.id,
+            session=session,
+        )
+
+    assert equivalent["discount_amount"] == 600
+    assert unrelated["discount_amount"] == 0
+
+
+def test_consultation_usage_reconciles_from_invoice_and_restores_on_cancel(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        plan = PatientSubscriptionPlan(
+            id="ptplan_consult_usage",
+            tenant_id="tenant_membership",
+            name="Basic Usage Plan",
+            duration_days=30,
+            free_consultations=2,
+        )
+        enrollment = PatientSubscriptionEnrollment(
+            id="ptsub_consult_usage",
+            tenant_id="tenant_membership",
+            branch_id="branch_main",
+            patient_id="patient_consult_usage",
+            plan_id=plan.id,
+            starts_on=date.today(),
+            ends_on=date.today() + timedelta(days=29),
+        )
+        invoice = Invoice(
+            tenant_id=enrollment.tenant_id,
+            branch_id=enrollment.branch_id,
+            patient_id=enrollment.patient_id,
+            consultation_id="consult_usage_1",
+            patient_subscription_enrollment_id=enrollment.id,
+            patient_subscription_plan_id=plan.id,
+            invoice_number="MHB-INV-CONSULT-USAGE",
+            subtotal_amount=600,
+            discount_amount=600,
+            membership_discount_amount=600,
+            taxable_amount=0,
+            total_amount=0,
+            balance_amount=0,
+            status=InvoiceStatus.PAID,
+        )
+        duplicate_invoice = Invoice(
+            tenant_id=enrollment.tenant_id,
+            branch_id=enrollment.branch_id,
+            patient_id=enrollment.patient_id,
+            consultation_id="consult_usage_1",
+            patient_subscription_enrollment_id=enrollment.id,
+            patient_subscription_plan_id=plan.id,
+            invoice_number="MHB-INV-CONSULT-USAGE-DUP",
+            subtotal_amount=600,
+            discount_amount=600,
+            membership_discount_amount=600,
+            taxable_amount=0,
+            total_amount=0,
+            balance_amount=0,
+            status=InvoiceStatus.PAID,
+        )
+        session.add(plan)
+        session.add(enrollment)
+        session.add(invoice)
+        session.add(duplicate_invoice)
+        session.commit()
+
+        sync_free_item_usage_from_invoices(session, enrollment, plan)
+        assert enrollment.used_consultations == 1
+
+        invoice.status = InvoiceStatus.CANCELLED
+        duplicate_invoice.status = InvoiceStatus.CANCELLED
+        session.add(invoice)
+        session.add(duplicate_invoice)
+        session.commit()
+        sync_free_item_usage_from_invoices(session, enrollment, plan)
+
+        assert enrollment.used_consultations == 0
+        read = _read_enrollment(session, enrollment)
+        assert read.allocated_free_consultations == 2
+        assert read.remaining_free_consultations == 2
+
+        plan.free_consultations = 4
+        session.add(plan)
+        session.commit()
+        updated_read = _read_enrollment(session, enrollment)
+
+    assert updated_read.allocated_free_consultations == 4
+    assert updated_read.remaining_free_consultations == 4
 
 
 def test_free_consultation_unrestricted_when_no_department_selected():

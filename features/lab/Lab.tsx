@@ -36,6 +36,7 @@ export function Lab({
   liveInvoices = [],
 }: any) {
   const [orders, setOrders] = useState<any[]>([]);
+  const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [tests, setTests] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -88,13 +89,21 @@ export function Lab({
   );
   const labReady = useMemo(
     () =>
-      appointments.filter(
-        (a: any) =>
-          a.consultationId &&
-          a.consultationStatus === "signed" &&
-          !orderedConsultationIds.has(a.consultationId),
-      ),
-    [appointments, orderedConsultationIds],
+      // Wait until existing orders have loaded; otherwise already-ordered
+      // referrals briefly pass the filter and flash before being hidden.
+      !ordersLoaded
+        ? []
+        : appointments.filter(
+            (a: any) =>
+              a.consultationId &&
+              a.consultationStatus === "signed" &&
+              // Only surface consultations that actually carry a lab/service
+              // referral — order creation requires lab_referral_text, so an
+              // empty referral would be non-actionable.
+              String(a.labReferralText || "").trim() &&
+              !orderedConsultationIds.has(a.consultationId),
+          ),
+    [appointments, orderedConsultationIds, ordersLoaded],
   );
   const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -194,6 +203,8 @@ export function Lab({
       setTemplates(templateRows);
     } catch (err: any) {
       setMessage(err.message || "Could not load lab workspace.");
+    } finally {
+      setOrdersLoaded(true);
     }
   }
 
@@ -845,26 +856,17 @@ export function Lab({
                               : "Select action"}
                           </option>
                           <option
-                            value="sample"
-                            disabled={released || cancelled || invoiced}
+                            value="invoice"
+                            disabled={cancelled || invoiced}
                           >
-                            Sample collected
+                            Generate invoice
                           </option>
-                          <option
-                            value="release"
-                            disabled={released || cancelled || invoiced}
-                          >
-                            Release result
-                          </option>
-                          {released && !invoiced && (
-                            <option value="invoice">Generate invoice</option>
-                          )}
-                          <option value="pdf" disabled={!released}>
+                          <option value="pdf" disabled={cancelled}>
                             Download PDF
                           </option>
                           <option
                             value="cancel"
-                            disabled={released || cancelled || invoiced}
+                            disabled={cancelled || invoiced}
                           >
                             Cancel order
                           </option>

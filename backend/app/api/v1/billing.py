@@ -354,7 +354,7 @@ def _invoice_membership_benefit(
             consultation_department_id,
             sync_free_item_usage_from_invoices,
         )
-    except Exception:
+    except ImportError:
         return None
     membership = active_patient_enrollment(
         session,
@@ -388,6 +388,7 @@ def _invoice_membership_benefit(
         )
         if service_type == "consultation"
         else None,
+        session=session,
     )
     discount_amount = int(preview["discount_amount"] or 0)
     return InvoiceMembershipBenefitRead(
@@ -452,6 +453,7 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
         )
         if service_type == "consultation"
         else None,
+        session=session,
     )
     membership_discount = int(preview["discount_amount"] or 0)
     if membership_discount <= 0:
@@ -1111,6 +1113,7 @@ def _create_service_invoice(
                 )
                 if service_scope == "consultation"
                 else None,
+                session=session,
             )
             membership_discount = int(preview["discount_amount"] or 0)
             if membership_discount > 0:
@@ -1134,7 +1137,11 @@ def _create_service_invoice(
                 taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100
             )
             total_amount = taxable_amount + tax_amount
-    except Exception:
+    except HTTPException:
+        # Subscription entitlement failures may legitimately mean that this
+        # invoice has no membership benefit. Programming/data errors must not
+        # be swallowed, otherwise a free consultation becomes a paid invoice
+        # without updating usage.
         membership = None
     tax_amount = round(
         taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100

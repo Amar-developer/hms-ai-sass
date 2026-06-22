@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -46,6 +47,8 @@ from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient
 from app.modules.queue.models import QueueEntry
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/consultations")
 
@@ -434,6 +437,80 @@ def update_consultation(
     return consultation
 
 
+def _auto_invoice_membership_consultation(
+    session: Session,
+    *,
+    tenant_id: str,
+    consultation: Consultation,
+    appointment: Appointment | None,
+    actor_user_id: str | None,
+) -> None:
+    """Generate the ₹0 consultation invoice for membership-covered visits.
+
+    A free (membership) consultation otherwise never gets an invoice, because
+    reception only generates one when collecting payment. Without it the
+    membership benefit is never recorded (``used_consultations`` stays put) and
+    there is no billing entry. When a signed consultation is fully covered by an
+    active membership's free-consultation benefit, create that invoice here so
+    the benefit usage and billing trail are captured. Paid / partially-covered
+    visits are left to the existing manual reception flow.
+    """
+    # Local imports avoid any module-load import cycle with the billing service.
+    from app.modules.billing.models import Invoice
+    from app.modules.billing.service import create_consultation_invoice
+    from app.modules.patient_subscriptions.service import (
+        active_patient_enrollment,
+        benefit_preview,
+        sync_free_item_usage_from_invoices,
+    )
+
+    if not appointment or appointment.tenant_id != tenant_id:
+        return
+    existing = session.exec(
+        select(Invoice).where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.consultation_id == consultation.id,
+            Invoice.lab_order_id.is_(None),
+            Invoice.pharmacy_issue_id.is_(None),
+            Invoice.ip_admission_id.is_(None),
+            Invoice.physiotherapy_case_id.is_(None),
+        )
+    ).first()
+    if existing:
+        return
+    membership = active_patient_enrollment(
+        session,
+        tenant_id=tenant_id,
+        branch_id=consultation.branch_id,
+        patient_id=consultation.patient_id,
+    )
+    if not membership:
+        return
+    enrollment, plan = membership
+    sync_free_item_usage_from_invoices(session, enrollment, plan)
+    # A probe subtotal tells us whether a free-consultation benefit applies for
+    # this department right now (the consultation branch returns the full
+    # subtotal as the discount when a free slot remains).
+    preview = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="consultation",
+        item_ids=[],
+        subtotal_amount=100,
+        department_id=appointment.department_id,
+        session=session,
+    )
+    if int(preview.get("discount_amount") or 0) <= 0:
+        return
+    create_consultation_invoice(
+        session,
+        appointment=appointment,
+        consultation_id=consultation.id,
+        discount_amount=0,
+        created_by_user_id=actor_user_id,
+    )
+
+
 @router.post(
     "/{consultation_id}/sign",
     response_model=ConsultationRead,
@@ -494,6 +571,24 @@ def sign_consultation(
         resource_id=consultation.id,
         purpose="treatment",
     )
+    # Free (membership-covered) consultations otherwise never get a billing
+    # entry. Signing is already committed above, so never let an invoicing
+    # error fail the sign — log and continue.
+    try:
+        _auto_invoice_membership_consultation(
+            session,
+            tenant_id=tenant_id,
+            consultation=consultation,
+            appointment=appointment,
+            actor_user_id=payload.signed_by_user_id,
+        )
+    except Exception:
+        logger.warning(
+            "Auto-invoice for membership consultation %s failed",
+            consultation.id,
+            exc_info=True,
+        )
+        session.rollback()
     patient = session.get(Patient, consultation.patient_id)
     if consultation.follow_up_advice and patient:
         for provider in (NotificationProvider.WHATSAPP, NotificationProvider.SMS):

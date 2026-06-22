@@ -90,6 +90,7 @@ class PatientSubscriptionEnrollmentRead(BaseModel):
     ends_on: date
     status: PatientSubscriptionEnrollmentStatus
     used_consultations: int
+    allocated_free_consultations: int = 0
     remaining_free_consultations: int = 0
     used_free_lab_count: int = 0
     remaining_free_lab_count: int = 0

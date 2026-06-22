@@ -720,11 +720,16 @@ export function DoctorConsultation({
     async function loadCatalogs() {
       if (!apiSession) return;
       try {
+        const labParams = new URLSearchParams();
+        if (branchId) labParams.set("branch_id", branchId);
         const [medicines, tests] = await Promise.all([
           apiFetch("/pharmacy/catalog/available-medicines", apiSession).catch(
             () => [],
           ),
-          apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
+          apiFetch(
+            `/lab/catalog/available-tests${labParams.toString() ? `?${labParams}` : ""}`,
+            apiSession,
+          ).catch(() => []),
         ]);
         if (alive) {
           setMedicineCatalog(medicines);
@@ -1067,7 +1072,7 @@ export function DoctorConsultation({
       setBusy(true);
       setMessage("");
       resetConsultation()
-      
+
       try {
         await apiFetch(`/queue/${selected.queueEntryId}/cancel`, apiSession, {
           method: "POST",
@@ -1383,6 +1388,7 @@ export function DoctorConsultation({
           labTests={labTests}
           setLabTests={setLabTests}
           labCatalog={labCatalog}
+          branchId={branchId}
           selectedLabTestId={selectedLabTestId}
           setSelectedLabTestId={setSelectedLabTestId}
           labPriority={labPriority}

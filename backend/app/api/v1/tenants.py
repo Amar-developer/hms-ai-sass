@@ -1467,6 +1467,33 @@ def update_department(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Branch is not part of this tenant",
             )
+    next_name = updates.get("name", department.name)
+    next_branch_id = updates.get("branch_id", department.branch_id)
+    conflict = session.exec(
+        select(Department).where(
+            Department.tenant_id == tenant_id,
+            Department.id != department.id,
+            Department.is_active.is_(True),
+        )
+    ).all()
+    conflict = next(
+        (
+            row
+            for row in conflict
+            if _normal_key(row.name) == _normal_key(next_name)
+            and (
+                row.branch_id == next_branch_id
+                or row.branch_id is None
+                or next_branch_id is None
+            )
+        ),
+        None,
+    )
+    if conflict:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An active department with this name already exists for the selected branch scope.",
+        )
     if "name" in updates and "code" not in updates:
         department.code = _department_code(
             session, tenant_id, updates["name"], department.id

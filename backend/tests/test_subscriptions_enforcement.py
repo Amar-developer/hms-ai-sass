@@ -1,10 +1,11 @@
 from datetime import date, timedelta
 
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from app.core.database import get_session
 from app.api.v1.subscriptions import _plan_read
 from app.modules.subscriptions.models import SubscriptionPlan, TenantSubscription
+from app.modules.subscriptions.service import ensure_default_plans, modules_from_json
 
 
 def create_tenant(client, name: str = "Trial Clinic"):
@@ -27,6 +28,21 @@ def test_default_plans_are_seeded(client):
     assert response.status_code == 200
     keys = {plan["key"] for plan in response.json()}
     assert {"free_trial", "starter"}.issubset(keys)
+
+
+def test_existing_yearly_plan_recovers_home_care_entitlement(test_engine):
+    with Session(test_engine) as session:
+        yearly = session.exec(
+            select(SubscriptionPlan).where(SubscriptionPlan.key == "yearly_clinic")
+        ).one()
+        yearly.enabled_modules_json = '["patients", "billing_basic"]'
+        session.add(yearly)
+        session.commit()
+
+        ensure_default_plans(session)
+        session.refresh(yearly)
+
+        assert "home_care" in modules_from_json(yearly.enabled_modules_json)
 
 
 def test_subscription_plan_read_tolerates_legacy_null_updated_at():

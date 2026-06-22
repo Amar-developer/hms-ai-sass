@@ -3,12 +3,13 @@ from datetime import date, timedelta
 
 from sqlmodel import Session, select
 
-from app.modules.billing.models import Invoice
+from app.modules.billing.models import Invoice, InvoiceStatus
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionEnrollmentStatus,
     PatientSubscriptionPlan,
 )
+from app.modules.tenants.models import Department
 
 
 def ids_to_json(values: list[str] | None) -> str:
@@ -101,25 +102,48 @@ def sync_free_item_usage_from_invoices(
     enrollment: PatientSubscriptionEnrollment,
     plan: PatientSubscriptionPlan,
 ) -> None:
-    """Rebuild consumed free lab/medicine counts from already-applied invoices.
+    """Rebuild membership usage from non-cancelled benefit invoices.
 
-    This protects older invoices created before usage counters were consumed at
-    invoice creation time.
+    Consultation usage is counted by distinct clinical visit so duplicate
+    invoices cannot consume a second benefit. If legacy usage has no linked
+    invoices, preserve its counter; once invoice history exists it becomes the
+    source of truth, including restoring benefits after cancellation/refund.
     """
     free_lab = free_items_from_json(plan.free_lab_test_ids_json)
     free_medicine = free_items_from_json(plan.free_medicine_ids_json)
-    if not free_lab and not free_medicine:
-        return
-
     lab_usage: dict[str, int] = {}
     medicine_usage: dict[str, int] = {}
-    invoices = session.exec(
+    all_benefit_invoices = session.exec(
         select(Invoice).where(
             Invoice.tenant_id == enrollment.tenant_id,
             Invoice.patient_subscription_enrollment_id == enrollment.id,
             Invoice.membership_discount_amount > 0,
         )
     ).all()
+    invoices = [
+        invoice
+        for invoice in all_benefit_invoices
+        if invoice.status not in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}
+    ]
+
+    def is_consultation_invoice(invoice: Invoice) -> bool:
+        return bool(invoice.consultation_id or invoice.appointment_id) and not any(
+            (
+                invoice.lab_order_id,
+                invoice.pharmacy_issue_id,
+                invoice.ip_admission_id,
+                invoice.physiotherapy_case_id,
+                invoice.home_care_booking_id,
+            )
+        )
+
+    consultation_visits = {
+        invoice.consultation_id or invoice.appointment_id or invoice.id
+        for invoice in invoices
+        if is_consultation_invoice(invoice)
+    }
+    if any(is_consultation_invoice(invoice) for invoice in all_benefit_invoices):
+        enrollment.used_consultations = len(consultation_visits)
     for invoice in invoices:
         remaining_discount = int(invoice.membership_discount_amount or 0)
         if remaining_discount <= 0:
@@ -167,6 +191,51 @@ def sync_free_item_usage_from_invoices(
 
     enrollment.used_free_lab_json = usage_to_json(lab_usage)
     enrollment.used_free_medicine_json = usage_to_json(medicine_usage)
+
+
+def _department_key(value: str | None) -> str:
+    return " ".join(
+        "".join(
+            character.lower() if character.isalnum() else " "
+            for character in str(value or "")
+        ).split()
+    )
+
+
+def consultation_department_is_eligible(
+    session: Session | None,
+    *,
+    plan: PatientSubscriptionPlan,
+    department_id: str | None,
+) -> bool:
+    """Match selected plan departments across equivalent branch mappings."""
+    allowed_ids = set(ids_from_json(plan.free_consultation_department_ids_json))
+    if not allowed_ids:
+        return True
+    if not department_id:
+        return False
+    if department_id in allowed_ids:
+        return True
+    if session is None:
+        return False
+
+    actual = session.get(Department, department_id)
+    if not actual or actual.tenant_id != plan.tenant_id:
+        return False
+    actual_template_ids = {actual.id, actual.source_template_department_id}
+    actual_template_ids.discard(None)
+    actual_name = _department_key(actual.name)
+    for allowed_id in allowed_ids:
+        allowed = session.get(Department, allowed_id)
+        if not allowed or allowed.tenant_id != plan.tenant_id:
+            continue
+        allowed_template_ids = {allowed.id, allowed.source_template_department_id}
+        allowed_template_ids.discard(None)
+        if actual_template_ids.intersection(allowed_template_ids):
+            return True
+        if actual_name and actual_name == _department_key(allowed.name):
+            return True
+    return False
 
 
 def slabs_to_json(values: list[dict[str, int | None]] | None) -> str:
@@ -340,6 +409,7 @@ def benefit_preview(
     subtotal_amount: int,
     item_amounts: dict[str, int] | None = None,
     department_id: str | None = None,
+    session: Session | None = None,
 ) -> dict:
     item_set = set(item_ids or [])
     item_amounts = item_amounts or {}
@@ -350,11 +420,8 @@ def benefit_preview(
     discounted_item_ids: list[str] = []
     reason = None
     if service_type == "consultation":
-        allowed_departments = set(
-            ids_from_json(plan.free_consultation_department_ids_json)
-        )
-        if allowed_departments and (
-            department_id is None or department_id not in allowed_departments
+        if not consultation_department_is_eligible(
+            session, plan=plan, department_id=department_id
         ):
             reason = "Free consultation applies only to the plan's selected medical department"
         else:
