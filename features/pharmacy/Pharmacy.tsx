@@ -937,7 +937,7 @@ export function Pharmacy({
             </tbody>
           </table>
         </div>
-        <Pagination
+        <Pagination 
           page={safePage}
           totalPages={totalPages}
           total={issues.length}
