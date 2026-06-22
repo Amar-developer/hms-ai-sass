@@ -23,6 +23,7 @@ from app.modules.settings.service import resolve_setting
 from app.modules.patient_subscriptions.service import (
     active_patient_enrollment,
     benefit_preview,
+    sync_free_item_usage_from_invoices,
 )
 
 
@@ -320,6 +321,7 @@ def create_consultation_invoice(
     )
     if membership:
         enrollment, plan = membership
+        sync_free_item_usage_from_invoices(session, enrollment, plan)
         preview = benefit_preview(
             plan=plan,
             enrollment=enrollment,
@@ -327,6 +329,7 @@ def create_consultation_invoice(
             item_ids=[],
             subtotal_amount=subtotal,
             department_id=appointment.department_id,
+            session=session,
         )
         membership_discount = int(preview["discount_amount"] or 0)
         if membership_discount > 0:

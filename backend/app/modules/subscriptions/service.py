@@ -141,6 +141,18 @@ DEFAULT_PLANS = [
     },
 ]
 
+# Home Care was introduced after these built-in plans already existed in some
+# installations. Preserve that contractual entitlement without replacing any
+# other modules an administrator may have configured.
+HOME_CARE_DEFAULT_PLAN_KEYS = {
+    "growth",
+    "pro",
+    "hospital",
+    "monthly_clinic",
+    "half_yearly_clinic",
+    "yearly_clinic",
+}
+
 
 def modules_to_json(modules: list[str]) -> str:
     return json.dumps(sorted(set(modules)))
@@ -181,6 +193,14 @@ def ensure_default_plans(session: Session) -> None:
             exists.created_at = exists.created_at or now
             exists.updated_at = now
             session.add(exists)
+        elif exists.key in HOME_CARE_DEFAULT_PLAN_KEYS:
+            enabled_modules = modules_from_json(exists.enabled_modules_json)
+            if "home_care" not in enabled_modules:
+                exists.enabled_modules_json = modules_to_json(
+                    [*enabled_modules, "home_care"]
+                )
+                exists.updated_at = now
+                session.add(exists)
     session.commit()
 
 

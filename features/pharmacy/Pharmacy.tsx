@@ -37,6 +37,7 @@ export function Pharmacy({
   liveInvoices = [],
 }: any) {
   const [issues, setIssues] = useState<any[]>([]);
+  const [issuesLoaded, setIssuesLoaded] = useState(false);
   const [medicines, setMedicines] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
@@ -103,13 +104,21 @@ export function Pharmacy({
   );
   const prescriptionReady = useMemo(
     () =>
-      appointments.filter(
-        (a: any) =>
-          a.consultationId &&
-          a.consultationStatus === "signed" &&
-          !issuedConsultationIds.has(a.consultationId),
-      ),
-    [appointments, issuedConsultationIds],
+      // Wait until existing issues have loaded; otherwise already-issued
+      // prescriptions briefly pass the filter and flash before being hidden.
+      !issuesLoaded
+        ? []
+        : appointments.filter(
+            (a: any) =>
+              a.consultationId &&
+              a.consultationStatus === "signed" &&
+              // Only surface consultations that actually carry a prescription —
+              // issue creation requires prescription_text, so an empty one
+              // would be non-actionable.
+              String(a.prescriptionText || "").trim() &&
+              !issuedConsultationIds.has(a.consultationId),
+          ),
+    [appointments, issuedConsultationIds, issuesLoaded],
   );
   const invoicedIssueIds = useMemo(
     () =>
@@ -218,6 +227,8 @@ export function Pharmacy({
       setLowStock(lowRows);
     } catch (err: any) {
       setMessage(err.message || "Could not load pharmacy workspace.");
+    } finally {
+      setIssuesLoaded(true);
     }
   }
 
@@ -926,7 +937,7 @@ export function Pharmacy({
             </tbody>
           </table>
         </div>
-        <Pagination 
+        <Pagination
           page={safePage}
           totalPages={totalPages}
           total={issues.length}

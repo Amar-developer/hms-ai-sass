@@ -978,6 +978,11 @@ export function SuperAdminDashboard({
     if (!apiSession || !selectedId) return;
     const form = e.currentTarget;
     const fd = new FormData(form);
+    const name = String(fd.get("name") || "").trim();
+    if (name.length < 2) {
+      setMessage("Medical department name must contain at least 2 characters.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -987,7 +992,7 @@ export function SuperAdminDashboard({
         {
           method: "POST",
           body: JSON.stringify({
-            name: fd.get("name"),
+            name,
             description: fd.get("description") || null,
             created_by_user_id: apiSession.user?.id || null,
           }),
@@ -1013,6 +1018,11 @@ export function SuperAdminDashboard({
     e.preventDefault();
     if (!apiSession || !selectedId || !selectedDepartmentId) return;
     const fd = new FormData(e.currentTarget);
+    const name = String(fd.get("name") || "").trim();
+    if (name.length < 2) {
+      setMessage("Medical department name must contain at least 2 characters.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -1022,7 +1032,7 @@ export function SuperAdminDashboard({
         {
           method: "PATCH",
           body: JSON.stringify({
-            name: fd.get("name"),
+            name,
             description: fd.get("description") || null,
             is_active: fd.get("isActive") === "true",
           }),

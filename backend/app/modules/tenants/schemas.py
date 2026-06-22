@@ -1,7 +1,7 @@
 from datetime import datetime
 from datetime import date
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.modules.tenants.models import TenantStatus, TenantType
 
@@ -83,6 +83,11 @@ class DepartmentCreate(BaseModel):
     is_active: bool = True
     created_by_user_id: str | None = None
 
+    @field_validator("name", "code", mode="before")
+    @classmethod
+    def strip_required_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
 
 class DepartmentUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
@@ -90,6 +95,11 @@ class DepartmentUpdate(BaseModel):
     code: str | None = Field(default=None, min_length=2, max_length=40)
     branch_id: str | None = None
     is_active: bool | None = None
+
+    @field_validator("name", "code", mode="before")
+    @classmethod
+    def strip_required_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
 
 
 class DepartmentRead(BaseModel):

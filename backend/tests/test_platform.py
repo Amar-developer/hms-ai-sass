@@ -636,6 +636,40 @@ def test_department_scope_conflict_blocks_all_branch_and_branch_specific_mix(
     assert "one or more branches" in all_branch_duplicate.json()["detail"].lower()
 
 
+def test_department_names_are_trimmed_and_update_cannot_create_scope_duplicate(
+    client: TestClient,
+):
+    tenant = client.post(
+        "/api/v1/tenants", json={"name": "Department Validation Clinic"}
+    ).json()
+    branch = client.post(
+        f"/api/v1/tenants/{tenant['id']}/branches",
+        json={"name": "Main Branch", "code": "MAIN"},
+    ).json()
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    general = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers=headers,
+        json={"name": "  General Medicine  "},
+    )
+    cardiology = client.post(
+        f"/api/v1/tenants/{tenant['id']}/departments",
+        headers=headers,
+        json={"name": "Cardiology", "branch_id": branch["id"]},
+    )
+    duplicate_update = client.patch(
+        f"/api/v1/tenants/{tenant['id']}/departments/{cardiology.json()['id']}",
+        headers=headers,
+        json={"name": " General Medicine "},
+    )
+
+    assert general.status_code == 201
+    assert general.json()["name"] == "General Medicine"
+    assert cardiology.status_code == 201
+    assert duplicate_update.status_code == 409
+
+
 def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_permissions(
     client: TestClient,
 ):

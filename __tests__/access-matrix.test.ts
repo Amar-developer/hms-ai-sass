@@ -7,7 +7,7 @@ import {
   resolveSidebarModules,
 } from '../lib/sidebarAccess';
 
-const fullClinic={id:'clinic_full',modules:['appointments','patients','practitioners','scheduling','ip','doctor','lab','pharmacy','billing','subscriptions']};
+const fullClinic={id:'clinic_full',modules:['appointments','patients','practitioners','scheduling','ip','doctor','lab','pharmacy','home_care','billing','subscriptions']};
 const starterClinic={id:'clinic_starter',modules:['appointments','patients','practitioners','scheduling','doctor','billing']};
 
 describe('frontend module access matrix',()=>{
@@ -30,6 +30,7 @@ describe('frontend module access matrix',()=>{
     expect(canOpenModule('pharmacy',roleModules.lab,fullClinic)).toBe(false);
     expect(canOpenModule('billing',roleModules.billing,fullClinic)).toBe(true);
     expect(canOpenModule('lab',roleModules.billing,fullClinic)).toBe(false);
+    expect(canOpenModule('home_care',roleModules.tenant_admin,fullClinic)).toBe(true);
   });
 
   it('applies reception sidebar overrides to receptionist aliases',()=>{

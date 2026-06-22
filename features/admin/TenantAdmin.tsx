@@ -510,6 +510,12 @@ export function TenantAdmin({
     e.preventDefault();
     const form = e.currentTarget;
     const fd = new FormData(form);
+    const name = String(fd.get("name") || "").trim();
+    const branchId = String(fd.get("branchId") || "");
+    if (name.length < 2) {
+      setMessage("Medical department name must contain at least 2 characters.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -544,6 +550,11 @@ export function TenantAdmin({
     e.preventDefault();
     if (!selectedDepartment) return;
     const fd = new FormData(e.currentTarget);
+    const name = String(fd.get("name") || "").trim();
+    if (name.length < 2) {
+      setMessage("Medical department name must contain at least 2 characters.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -553,7 +564,7 @@ export function TenantAdmin({
         {
           method: "PATCH",
           body: JSON.stringify({
-            name: fd.get("name"),
+            name,
             description: fd.get("description") || null,
             branch_id: fd.get("branchId") || null,
             is_active: fd.get("isActive") === "true",

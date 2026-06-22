@@ -84,14 +84,30 @@ export function PatientDetail({
       Number(enrollment.plan?.price_amount || 0)
     );
   };
-  const activeMembership = membershipEnrollments.find(
+  const resolvedMembershipEnrollments = membershipEnrollments.map(
+    (enrollment: any) => ({
+      ...enrollment,
+      // The plans endpoint is the canonical configuration source and includes
+      // inactive plans used by historical enrollments. Prefer it over an
+      // absent/stale nested plan snapshot in the enrollment response.
+      plan:
+        membershipPlans.find((plan: any) => plan.id === enrollment.plan_id) ||
+        enrollment.plan ||
+        null,
+    }),
+  );
+  const activeMembership = resolvedMembershipEnrollments.find(
     (row: any) => row.status === "active" && isEnrollmentPaid(row),
   );
-  const pendingMembership = membershipEnrollments.find(
+  const pendingMembership = resolvedMembershipEnrollments.find(
     (row: any) => row.status === "active" && !isEnrollmentPaid(row),
   );
   const membershipUsageInvoices = patientInvoices.filter(
-    (invoice: any) => Number(invoice.membership_discount_amount || 0) > 0,
+    (invoice: any) =>
+      Number(invoice.membership_discount_amount || 0) > 0 &&
+      !["cancelled", "refunded"].includes(
+        String(invoice.status || "").toLowerCase(),
+      ),
   );
   const membershipSavings = membershipUsageInvoices.reduce(
     (sum: number, invoice: any) =>
@@ -205,10 +221,14 @@ export function PatientDetail({
             v={fmtDate(activeMembership?.ends_on || pendingMembership?.ends_on)}
           />
           <Info
-            k="Free Consult Used"
+            k="Free Consultations Used / Allocated"
             v={
               activeMembership
-                ? `${activeMembership.used_consultations || 0}/${activeMembership.plan?.free_consultations ?? 0}`
+                ? `${Number(activeMembership.used_consultations || 0)}/${Number(
+                    activeMembership.allocated_free_consultations ??
+                      activeMembership.plan?.free_consultations ??
+                      0,
+                  )}`
                 : "Payment required"
             }
           />
@@ -233,10 +253,10 @@ export function PatientDetail({
           <div className="flex h-[360px] flex-col rounded-2xl border p-4">
             <h5 className="card-title font-bold">Membership History</h5>
             <div className="scrollbar-thin mt-3 flex-1 space-y-2 overflow-y-auto pr-2">
-              {membershipEnrollments.length === 0 && (
+              {resolvedMembershipEnrollments.length === 0 && (
                 <SectionEmpty text="No membership history." />
               )}
-              {membershipEnrollments.map((row: any) => {
+              {resolvedMembershipEnrollments.map((row: any) => {
                 const invoice = purchaseInvoiceFor(row);
                 const due = Number(
                   invoice?.balance_amount ??

@@ -44,6 +44,7 @@ from app.modules.patient_subscriptions.service import (
     plan_to_read_dict,
     slabs_to_json,
     usage_from_json,
+    sync_free_item_usage_from_invoices,
 )
 from app.modules.patients.models import Patient
 from app.modules.tenants.models import Branch
@@ -59,6 +60,8 @@ def _read_enrollment(
     session: Session, enrollment: PatientSubscriptionEnrollment
 ) -> PatientSubscriptionEnrollmentRead:
     plan = session.get(PatientSubscriptionPlan, enrollment.plan_id)
+    if plan:
+        sync_free_item_usage_from_invoices(session, enrollment, plan)
     free_lab = free_items_from_json(plan.free_lab_test_ids_json) if plan else {}
     used_lab = usage_from_json(enrollment.used_free_lab_json)
     free_medicine = free_items_from_json(plan.free_medicine_ids_json) if plan else {}
@@ -66,6 +69,7 @@ def _read_enrollment(
     free_consultations = int(plan.free_consultations or 0) if plan else 0
     return PatientSubscriptionEnrollmentRead(
         **enrollment.model_dump(),
+        allocated_free_consultations=free_consultations,
         remaining_free_consultations=max(
             free_consultations - int(enrollment.used_consultations or 0), 0
         ),
@@ -665,6 +669,7 @@ def preview_benefits(
             reason="No active patient subscription",
         )
     enrollment, plan = active
+    sync_free_item_usage_from_invoices(session, enrollment, plan)
     return PatientBenefitPreviewRead(
         has_active_subscription=True,
         **benefit_preview(
@@ -674,5 +679,6 @@ def preview_benefits(
             item_ids=payload.item_ids,
             subtotal_amount=payload.subtotal_amount,
             department_id=payload.department_id,
+            session=session,
         ),
     )

@@ -53,6 +53,7 @@ export function ConsultationWorkspace(props: any) {
     labTests,
     setLabTests,
     labCatalog,
+    branchId,
     selectedLabTestId,
     setSelectedLabTestId,
     labPriority,
@@ -96,7 +97,9 @@ export function ConsultationWorkspace(props: any) {
     useState<any[]>(medicineCatalog);
   const [medicineCatalogLoading, setMedicineCatalogLoading] = useState(false);
   const [medicineCatalogError, setMedicineCatalogError] = useState("");
-  const [externalLabCatalog, setExternalLabCatalog] = useState<any[]>([]);
+  const [availableLabCatalog, setAvailableLabCatalog] = useState<any[]>(
+    Array.isArray(labCatalog) ? labCatalog : [],
+  );
   const [externalLabLoading, setExternalLabLoading] = useState(false);
   const [externalLabError, setExternalLabError] = useState("");
   const [popularMedicines, setPopularMedicines] = useState<any[]>([]);
@@ -114,7 +117,7 @@ export function ConsultationWorkspace(props: any) {
     (medicine: any) =>
       (medicine.id || medicine.slug || medicine.name) === selectedMedicineId,
   );
-  const activeLabCatalog = externalLabCatalog;
+  const activeLabCatalog = availableLabCatalog;
   const labOptions = activeLabCatalog.map((test: any) => ({
     value: test.id || test.slug || test.name,
     label: test.item_name || test.name,
@@ -128,6 +131,9 @@ export function ConsultationWorkspace(props: any) {
       Array.isArray(medicineCatalog) ? medicineCatalog : [],
     );
   }, [medicineCatalog]);
+  useEffect(() => {
+    setAvailableLabCatalog(Array.isArray(labCatalog) ? labCatalog : []);
+  }, [labCatalog]);
   useEffect(() => {
     if (!apiSession?.token) {
       setAvailableMedicineCatalog([]);
@@ -168,7 +174,7 @@ export function ConsultationWorkspace(props: any) {
   }, [apiSession?.token, apiSession?.tenantId, medicineDraftName]);
   useEffect(() => {
     if (!apiSession?.token) {
-      setExternalLabCatalog([]);
+      setAvailableLabCatalog([]);
       return;
     }
     let alive = true;
@@ -179,17 +185,18 @@ export function ConsultationWorkspace(props: any) {
         setExternalLabError("");
         try {
           const params = new URLSearchParams();
+          if (branchId) params.set("branch_id", branchId);
           if (search) params.set("search", search);
           const rows = await apiFetch(
             `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
             apiSession,
           );
-          if (alive) setExternalLabCatalog(Array.isArray(rows) ? rows : []);
+          if (alive) setAvailableLabCatalog(Array.isArray(rows) ? rows : []);
         } catch (err: any) {
           if (alive) {
-            setExternalLabCatalog([]);
+            setAvailableLabCatalog([]);
             setExternalLabError(
-              err?.message || "Could not load ERPNext lab tests.",
+              err?.message || "Could not load the available lab tests.",
             );
           }
         } finally {
@@ -202,7 +209,7 @@ export function ConsultationWorkspace(props: any) {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, labDraftName]);
+  }, [apiSession?.token, apiSession?.tenantId, branchId, labDraftName]);
   useEffect(() => {
     if (!apiSession?.token) {
       setPopularMedicines([]);
