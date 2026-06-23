@@ -30,7 +30,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 
 COPY --from=builder --chown=nextjs:nextjs /app/.next-build/standalone ./
-COPY --from=builder --chown=nextjs:nextjs /app/.next-build/static ./.next/static
+COPY --from=builder --chown=nextjs:nextjs /app/.next-build/static ./.next-build/static
 
 USER nextjs
 
