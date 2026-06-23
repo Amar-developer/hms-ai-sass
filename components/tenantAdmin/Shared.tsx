@@ -333,7 +333,7 @@ export function ListCard({
           : columns.length === 5
             ? "grid-cols-[.9fr_.9fr_.9fr_.9fr_1fr]"
             : "grid-cols-[1fr_1fr_1fr_1fr_1fr]";
-  
+
   const gridClassTab =
     columns.length === 8
       ? "grid-cols-[1fr_1.15fr_.72fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
@@ -355,7 +355,6 @@ export function ListCard({
           : columns.length === 5
             ? "min-w-[740px]"
             : "min-w-[740px]"
-    console.log(columns.length,'length')
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">

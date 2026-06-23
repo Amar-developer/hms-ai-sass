@@ -1,4 +1,5 @@
 const nextConfig = {
+  distDir: ".next-build",
   output: "standalone",
 };
 

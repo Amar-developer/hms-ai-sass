@@ -66,6 +66,7 @@ Current enforced guardrails:
 | `GET` | `/api/v1/auth/me` | Authenticated | Current user, roles, permissions |
 | `POST` | `/api/v1/auth/logout` | Authenticated | Revokes current session |
 | `POST` | `/api/v1/auth/change-password` | Authenticated | Changes current user's password |
+| `POST` | `/api/v1/client-logs` | Public | Accepts frontend client log events |
 
 ## Tenant and Platform
 

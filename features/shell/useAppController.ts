@@ -5,6 +5,7 @@ import {API_BASE,AUTH_SESSION_EXPIRED_EVENT,apiFetch,type ApiSession} from '@/li
 import {demoUsers,loginPresets} from '@/lib/authPresets';
 import {type LiveSummary,mapAppointment,mapPatient} from '@/lib/liveData';
 import {canOpenModule} from '@/lib/moduleAccess';
+import {reportClientError,storedClientLogSession} from '@/lib/clientLogging';
 import {nav,roleModules} from '@/lib/navigation';
 import {uniqueDepartmentRows} from '@/lib/options';
 import {normalizeSidebarModuleMap,resolveSidebarModules} from '@/lib/sidebarAccess';
@@ -289,13 +290,24 @@ export function useAppController() {
     function handleUnhandled(event: PromiseRejectionEvent) {
       event.preventDefault();
       const reason = event.reason;
+      reportClientError(reason, {
+        event: 'frontend.unhandled_rejection',
+        module: 'shell',
+      }, storedClientLogSession());
       setLiveStatus(reason?.message || 'A backend request failed, but the app is still running.');
+    }
+    function handleWindowError(event: ErrorEvent) {
+      reportClientError(event.error || event.message, {
+        event: 'frontend.window_error',
+        module: 'shell',
+      }, storedClientLogSession());
     }
     function handleSessionExpired() {
       clearLocalSession('Session expired. Please sign in again.');
     }
 
     window.addEventListener('unhandledrejection', handleUnhandled);
+    window.addEventListener('error', handleWindowError);
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
     const raw = localStorage.getItem('medizinhub.session');
     if (raw) {
@@ -328,6 +340,7 @@ export function useAppController() {
 
     return () => {
       window.removeEventListener('unhandledrejection', handleUnhandled);
+      window.removeEventListener('error', handleWindowError);
       window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
     };
   }, []);

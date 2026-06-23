@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import date, timedelta
 
 from sqlmodel import Session, select
@@ -10,6 +11,9 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionPlan,
 )
 from app.modules.tenants.models import Department
+
+
+benefit_logger = logging.getLogger("medizinhub.membership")
 
 
 def ids_to_json(values: list[str] | None) -> str:
@@ -518,6 +522,22 @@ def benefit_preview(
                     f"to unlock the {plan.pharmacy_discount_percentage}% pharmacy discount"
                 )
     discount_amount = min(discount_amount, subtotal_amount)
+    if service_type == "consultation":
+        log = benefit_logger.info if discount_amount > 0 else benefit_logger.warning
+        log(
+            "membership.consultation_benefit_evaluated",
+            extra={
+                "tenant_id": plan.tenant_id,
+                "plan_id": plan.id,
+                "enrollment_id": enrollment.id,
+                "department_id": department_id,
+                "allocated": int(plan.free_consultations or 0),
+                "used": int(enrollment.used_consultations or 0),
+                "discount_amount": discount_amount,
+                "eligible": discount_amount > 0,
+                "reason": reason,
+            },
+        )
     return {
         "plan_id": plan.id,
         "plan_name": plan.name,

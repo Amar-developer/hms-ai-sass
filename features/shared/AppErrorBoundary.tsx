@@ -2,6 +2,7 @@
 
 import {Component,type ReactNode} from 'react';
 import {Button,Card} from '@/components/common/ui';
+import {reportClientError,storedClientLogSession} from '@/lib/clientLogging';
 
 type Props = {
   children: ReactNode;
@@ -16,6 +17,13 @@ export class AppErrorBoundary extends Component<Props,State> {
 
   static getDerivedStateFromError(error: Error) {
     return {error};
+  }
+
+  componentDidCatch(error: Error) {
+    reportClientError(error, {
+      event: 'frontend.react_error_boundary',
+      module: 'react',
+    }, storedClientLogSession());
   }
 
   resetSession = () => {

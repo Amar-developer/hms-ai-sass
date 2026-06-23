@@ -666,8 +666,8 @@ def _build_receipt_pdf(
     ops: list[str] = []
     logo = _local_logo_image((tenant.logo_url if tenant else "") or logo_url)
     green = "0.10 0.95 0.22"
-    blue = "0.00 0.55 0.82"
-    brand_green = "0.00 0.75 0.00"
+    blue = "0.08 0.60 0.85"
+    brand_green = "0.09 0.78 0.06"
     red = "0.78 0.00 0.00"
 
     def color(stroke="0.86 0.90 0.95", fill: str | None = None) -> None:
@@ -682,6 +682,65 @@ def _build_receipt_pdf(
         x1: int, y1: int, x2: int, y2: int, stroke: str = "0.20 0.20 0.20"
     ) -> None:
         ops.append(f"{stroke} RG {x1} {y1} m {x2} {y2} l S")
+
+    def location_icon(x: int, y: int, fill: str = "0.00 0.68 0.00") -> None:
+        scale = 0.58
+        ops.append(
+            f"q {scale} 0 0 {-scale} {x} {y + int(25 * scale)} cm {fill} rg "
+            "12.3153 11.803 m "
+            "11.6349 11.803 10.9824 11.5327 10.5013 11.0516 c "
+            "10.0202 10.5705 9.74994 9.91801 9.74994 9.23764 c "
+            "9.74994 8.55727 10.0202 7.90477 10.5013 7.42367 c "
+            "10.9824 6.94258 11.6349 6.6723 12.3153 6.6723 c "
+            "12.9956 6.6723 13.6482 6.94258 14.1292 7.42367 c "
+            "14.6103 7.90477 14.8806 8.55727 14.8806 9.23764 c "
+            "14.8806 9.57453 14.8143 9.90811 14.6853 10.2194 c "
+            "14.5564 10.5306 14.3675 10.8134 14.1292 11.0516 c "
+            "13.891 11.2898 13.6082 11.4788 13.297 11.6077 c "
+            "12.9858 11.7366 12.6522 11.803 12.3153 11.803 c "
+            "12.3153 2.05469 m "
+            "10.4102 2.05469 8.58323 2.81146 7.23616 4.15853 c "
+            "5.8891 5.50559 5.13232 7.3326 5.13232 9.23764 c "
+            "5.13232 14.6249 12.3153 22.5774 12.3153 22.5774 c "
+            "12.3153 22.5774 19.4982 14.6249 19.4982 9.23764 c "
+            "19.4982 7.3326 18.7415 5.50559 17.3944 4.15853 c "
+            "16.0473 2.81146 14.2203 2.05469 12.3153 2.05469 c f Q"
+        )
+
+    def phone_icon(x: int, y: int, fill: str = "0.00 0.68 0.00") -> None:
+        scale = 0.56
+        ops.append(
+            f"q {scale} 0 0 {-scale} {x} {y + int(20 * scale)} cm {fill} rg "
+            "15.1834 18.4213 m "
+            "14.4253 18.4213 13.3604 18.1502 11.7658 17.2694 c "
+            "9.82673 16.1942 8.32689 15.2016 6.39831 13.2996 c "
+            "4.53885 11.4622 3.63398 10.2726 2.36754 7.99398 c "
+            "0.936831 5.42121 1.18072 4.07262 1.45335 3.49625 c "
+            "1.77801 2.80736 2.25725 2.39534 2.87668 1.98638 c "
+            "3.22851 1.75846 3.60084 1.56307 3.98894 1.40271 c "
+            "4.02777 1.3862 4.06389 1.37046 4.09612 1.35625 c "
+            "4.28836 1.27062 4.57963 1.14121 4.94857 1.27945 c "
+            "5.19479 1.37084 5.4146 1.55784 5.75868 1.89384 c "
+            "6.46433 2.58196 7.42862 4.11448 7.78436 4.86711 c "
+            "8.0232 5.37437 8.18126 5.70921 8.18165 6.08475 c "
+            "8.18165 6.52443 7.95796 6.8635 7.68649 7.22944 c "
+            "7.63562 7.29818 7.58513 7.36384 7.5362 7.42758 c "
+            "7.24066 7.81158 7.1758 7.92255 7.21852 8.12069 c "
+            "7.30513 8.5189 7.95096 9.70429 9.01235 10.7514 c "
+            "10.0737 11.7986 11.238 12.3969 11.6423 12.4821 c "
+            "11.8512 12.5263 11.9658 12.4594 12.3666 12.1569 c "
+            "12.4241 12.1135 12.4831 12.0685 12.5449 12.0236 c "
+            "12.9588 11.7191 13.2858 11.5037 13.72 11.5037 c "
+            "13.7224 11.5037 l "
+            "14.1002 11.5037 14.4237 11.6657 14.9597 11.933 c "
+            "15.6587 12.2817 17.2552 13.2228 17.9555 13.9213 c "
+            "18.296 14.2608 18.486 14.4773 18.5788 14.7204 c "
+            "18.7186 15.0864 18.5869 15.3732 18.5011 15.5652 c "
+            "18.4867 15.5971 18.4708 15.632 18.4541 15.6708 c "
+            "18.2906 16.0538 18.0919 16.4212 17.8603 16.7682 c "
+            "17.4475 17.3788 17.0292 17.8515 16.331 18.1729 c "
+            "15.9724 18.3406 15.58 18.4255 15.1834 18.4213 c f Q"
+        )
 
     def text(
         x: int,
@@ -785,19 +844,25 @@ def _build_receipt_pdf(
             parts.append(small(value))
         return f"Rupees {' '.join(parts)} Only".title()
 
+    tenant_name = (tenant.name if tenant and tenant.name else "").strip()
     legal_name = (
-        tenant.legal_name
-        if tenant and tenant.legal_name
-        else "MedizinHub Healthcare Service Pvt.Ltd"
+        (tenant.legal_name if tenant and tenant.legal_name else "")
+        or tenant_name
+        or "Hospital"
+    ).strip()
+    header_address_parts = [
+        part
+        for part in [
+            branch.address if branch and branch.address else "",
+            branch.city if branch and branch.city else "",
+            branch.state if branch and branch.state else "",
+        ]
+        if part
+    ]
+    header_address = " | ".join(header_address_parts) or (
+        tenant.address if tenant and tenant.address else ""
     )
-    header_address = (
-        branch.address
-        if branch and branch.address
-        else tenant.address
-        if tenant and tenant.address
-        else "#112A, Radha Nagar Main Road, Chromepet, Chennai - 44"
-    )
-    header_phone = (tenant.phone if tenant and tenant.phone else "") or "90476 60909"
+    header_phone = (tenant.phone if tenant and tenant.phone else "").strip()
     patient_name = (
         getattr(patient, "full_name", None)
         or getattr(patient, "name", None)
@@ -818,20 +883,32 @@ def _build_receipt_pdf(
         image_w = 72
         image_h = max(34, int(image_w * int(logo["height"]) / int(logo["width"])))
         ops.append(f"q {image_w} 0 0 {image_h} 31 765 cm /Logo Do Q")
-    else:
-        text(30, 790, "MEDIZIN", 13, True, fill=blue)
-        text(88, 790, "HUB", 13, True, fill="0.00 0.64 0.40")
-    text(120, 790, "MedizinHub", 20, True, fill=blue)
-    text(236, 790, "Healthcare Service Pvt.Ltd", 20, True, fill=brand_green)
-    line(118, 781, 496, 781, green)
-    text(
-        120,
-        764,
-        f"# {header_address} | Phone {header_phone}",
-        10,
-        True,
-        fill="0.00 0.58 0.00",
-    )
+    title_size = 20 if len(legal_name) <= 36 else 17 if len(legal_name) <= 52 else 14
+    title_parts = legal_name.split(maxsplit=1)
+    title_x = 120 if logo else 20
+    text(title_x, 790, title_parts[0], title_size, True, fill=blue)
+    if len(title_parts) > 1:
+        text(
+            title_x + int(len(title_parts[0]) * title_size * 0.52) + 8,
+            790,
+            title_parts[1],
+            title_size,
+            True,
+            fill=brand_green,
+        )
+    line(title_x, 781, 496, 781, green)
+    address_line = wrap_text(header_address, 74)[0] if header_address else ""
+    if header_address:
+        location_icon(title_x, 763)
+        text(title_x + 18, 764, address_line, 10, True, fill=brand_green)
+    if header_phone:
+        phone_x = (
+            title_x + 18 + int(len(address_line) * 10 * 0.48) + 18
+            if address_line
+            else title_x
+        )
+        phone_icon(phone_x, 764)
+        text(phone_x + 18, 764, header_phone, 10, True, fill=brand_green)
     text(575, 776, "INVOICE", 13, True, "right", fill=red)
     line(16, 742, 579, 742, green)
     text(
@@ -849,8 +926,9 @@ def _build_receipt_pdf(
     line(16, 700, 579, 700, green)
     line(291, 592, 291, 718, green)
     text(130, 706, "Customer Details", 9, True, "center")
-    text(405, 706, "MedizinHub GSTIN", 9, True, "center")
-    text(432, 706, ":", 9, True)
+    gst_label = f"{tenant_name or legal_name} GSTIN"
+    text(415, 706, gst_label, 8 if len(gst_label) <= 28 else 7, True, "center")
+    text(485, 706, ":", 9, True)
     field_label(25, 682, "Name", patient_name)
     field_label(25, 666, "Phone No.", patient_phone)
     field_label(25, 650, "WhatsApp No.", patient_phone)
@@ -860,7 +938,7 @@ def _build_receipt_pdf(
     field_label(306, 662, "Invoice Date", invoice.created_at.strftime("%d/%m/%Y"))
 
     table_top = 578
-    table_bottom = 244
+    table_bottom = 280
     x_cols = [16, 38, 226, 274, 371, 419, 467, 515, 579]
     rect(16, table_bottom, 563, table_top - table_bottom)
     line(16, 552, 579, 552, green)
@@ -888,66 +966,53 @@ def _build_receipt_pdf(
     if len(items) > 10:
         text(45, row_y, f"+ {len(items) - 10} more item(s)", 8, True)
 
-    line(16, 228, 579, 228, green)
+    line(16, 264, 579, 264, green)
     for x in [371, 419, 467, 515]:
-        line(x, 228, x, 244, green)
-    text(350, 233, "Total", 9, True, "right")
-    text(570, 233, _money_pdf(invoice.total_amount), 9, True, "right")
+        line(x, 264, x, 280, green)
+    text(25, 269, f"Date: {invoice.created_at.strftime('%d/%m/%Y')}", 8, True)
+    text(350, 269, "Total", 9, True, "right")
+    text(570, 269, _money_pdf(invoice.total_amount), 9, True, "right")
 
-    rect(16, 205, 563, 23)
-    text(25, 214, f"Total in words: {amount_words(int(invoice.total_amount or 0))}", 8)
-
-    tax_top, tax_bottom = 205, 142
-    rect(16, tax_bottom, 563, tax_top - tax_bottom)
-    for x in [238, 315, 406, 497]:
-        line(x, tax_bottom, x, tax_top, green)
-    line(315, 190, 497, 190, green)
-    line(406, tax_bottom, 406, 190, green)
-    line(16, 175, 579, 175, green)
-    line(16, 158, 579, 158, green)
-    center(16, 238, 188, "HSN / SAC", 8, True)
-    center(238, 315, 188, "Taxable Value", 8, True)
-    center(315, 497, 198, "IGST", 8, True)
-    center(315, 406, 181, "%", 8, True)
-    center(406, 497, 181, "Amount", 8, True)
-    center(497, 579, 188, "Total", 8, True)
-    taxable = int(invoice.taxable_amount or 0)
-    tax = int(invoice.tax_amount or 0)
-    text(305, 164, _money_pdf(taxable), 8, align="right")
-    text(395, 164, _percent_pdf(tax, taxable), 8, align="right")
-    text(487, 164, _money_pdf(tax), 8, align="right")
-    text(570, 164, _money_pdf(invoice.total_amount), 8, align="right")
-    text(235, 148, "Total", 8, True, "right")
-
-    rect(16, 119, 563, 23)
-    text(25, 128, f"Total in words: {amount_words(int(invoice.total_amount or 0))}", 8)
+    rect(16, 241, 563, 23)
+    text(25, 250, f"Total in words: {amount_words(int(invoice.total_amount or 0))}", 8)
 
     left_x, mid_x, right_x = 16, 272, 579
-    rect(left_x, 52, mid_x - left_x, 67)
-    line(left_x, 103, mid_x, 103, green)
-    center(left_x, mid_x, 108, "Bank Details", 8, True)
-    field_label(25, 88, "Name", "")
-    field_label(25, 74, "Branch", "")
-    field_label(25, 60, "Acc. Number", "")
-    rect(197, 64, 48, 38)
-    text(200, 55, "Pay using UPI", 8, True)
+    footer_bottom = 24
+    rect(left_x, 137, mid_x - left_x, 104)
+    line(left_x, 224, mid_x, 224, green)
+    center(left_x, mid_x, 229, "Bank Details", 8, True)
+    field_label(25, 209, "Name", "")
+    field_label(25, 193, "Branch", "")
+    field_label(25, 177, "Acc. Number", "")
+    field_label(25, 161, "IFSC", "")
+    field_label(25, 145, "UPI ID", "")
+    rect(197, 173, 48, 48)
+    text(200, 151, "Pay using UPI", 8, True)
 
-    rect(left_x, 16, mid_x - left_x, 36)
-    line(left_x, 42, mid_x, 42, green)
-    center(left_x, mid_x, 46, "Terms and Conditions", 8, True)
-    text(25, 34, "Subject to Tamil Nadu Junction.", 7)
-    text(25, 25, "Goods Once sold will not taken back. Delivery Ex-Premises.", 7)
+    rect(left_x, 62, mid_x - left_x, 75)
+    line(left_x, 120, mid_x, 120, green)
+    center(left_x, mid_x, 125, "Terms and Conditions", 8, True)
+    text(25, 101, "Subject to Tamil Nadu Junction.", 7)
+    text(25, 90, "Our Responsibility Ceases as soon as goods leaves our Premises.", 7)
+    text(25, 79, "Goods Once sold will not taken back.", 7)
+    text(25, 68, "Delivery Ex-Premises.", 7)
 
-    rect(left_x, 0, mid_x - left_x, 16)
-    text(25, 6, "Customer Signature", 8, True)
+    rect(left_x, footer_bottom, mid_x - left_x, 38)
+    text(25, 42, "Customer Signature", 8, True)
 
-    rect(mid_x, 0, right_x - mid_x, 119)
-    text(330, 109, "Certified that the particulars give above are true and correct.", 7)
-    text(330, 94, f"For {legal_name}", 8, True)
-    text(330, 78, f"Subtotal: {_money_pdf(invoice.subtotal_amount)}", 7)
-    text(330, 66, f"Discount: {_money_pdf(invoice.discount_amount)}", 7)
-    text(330, 54, f"Paid: {_money_pdf(invoice.paid_amount)}", 7)
-    text(470, 8, "Authorized Signature", 8, True, "center")
+    rect(mid_x, footer_bottom, right_x - mid_x, 217)
+    line(mid_x, 205, right_x, 205, green)
+    line(mid_x, 62, right_x, 62, green)
+    text(290, 224, "Certified that the particulars give above are true and correct.", 7)
+    text(290, 210, f"For {legal_name}", 8, True)
+    text(470, 39, "Authorized Signature", 8, True, "center")
+
+    text(
+        25,
+        8,
+        "Thanks for your order! We look forward to working with you again soon.",
+        7,
+    )
 
     content = "\n".join(ops).encode("latin-1", "replace")
     objects: list[bytes] = [

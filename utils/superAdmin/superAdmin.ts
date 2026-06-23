@@ -65,13 +65,19 @@ export function roleKeyFromName(value: string) {
 }
 
 export function permissionModuleTitle(module: string) {
-  return module === "departments"
-    ? "Medical Departments"
-    : formatTitle(
-        String(module || "")
-          .replaceAll("_", " ")
-          .replaceAll(".", " "),
-      );
+  const labels: Record<string, string> = {
+    departments: "Medical Departments",
+    "identity.users": "Users",
+    "identity.roles": "Roles",
+    "platform.tenants": "Tenant Management",
+    "platform.subscriptions": "Subscription Management",
+    patient_subscriptions: "Patient Membership",
+    home_care: "Home Care",
+    ip: "IP Admission",
+  };
+  return labels[module] || formatTitle(
+    String(module || "").replaceAll("_", " ").replaceAll(".", " "),
+  );
 }
 
 export function tenantSelectOptions(tenants: any[]) {

@@ -38,7 +38,6 @@ interface SidebarProps {
 }
 
 export function Sidebar(props: SidebarProps) {
-  console.log(props.activePage, "id");
   return (
     <aside
       className={`
@@ -46,7 +45,7 @@ export function Sidebar(props: SidebarProps) {
     hidden md:block
     transition-all duration-300 scrollbar-hidden
     ${props.tabletCollapsed ? "md:w-18" : "md:w-64"}
-    lg:w-50 
+    lg:w-50
   `}
     >
       <BrandBlock
@@ -261,7 +260,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 props.navigatePage(id);
                 props.setTenantAdminSettingsOpen(false);
               }}
-              className={`flex w-full items-center rounded-2xl py-2.5 
+              className={`flex w-full items-center rounded-2xl py-2.5
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : ""}`}
             >
               <Icon size={18} title={label} />

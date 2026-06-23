@@ -8,7 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from app.api.router import api_router
 from app.api.v1.health import HealthResponse, ReadinessResponse, health, readiness
 from app.core.config import get_settings
-from app.core.middleware import TenantContextMiddleware
+from app.core.logging import configure_logging
+from app.core.middleware import ObservabilityMiddleware, TenantContextMiddleware
 
 
 @asynccontextmanager
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    configure_logging()
 
     app = FastAPI(
         title=settings.app_name,
@@ -30,12 +32,14 @@ def create_app() -> FastAPI:
     )
 
     app.add_middleware(TenantContextMiddleware)
+    app.add_middleware(ObservabilityMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Request-ID", "X-Tenant-ID"],
     )
 
     @app.get("/", tags=["platform"])

@@ -1,31 +1,16 @@
 "use client";
 
 import { Badge } from "@/components/common/ui";
-import { requiredRolePermissions } from "../../../utils/superAdmin/constants";
 import { formatTitle, permissionModuleTitle } from "../../../utils/superAdmin/superAdmin";
 
 export function PermissionCheckboxes({ permissions, selected }: any) {
-  const catalog = [...permissions];
-  for (const permission of requiredRolePermissions) {
-    if (!catalog.some((item: any) => item.key === permission.key))
-      catalog.push(permission);
-  }
+  const catalog = [...(permissions || [])];
   const grouped = catalog.reduce((acc: any, permission: any) => {
     acc[permission.module] = [...(acc[permission.module] || []), permission];
     return acc;
   }, {});
-  const buckets = [
-    ["manage", "Manage", ["manage", "sign", "approve", "export"]],
-    ["create", "Create", ["create"]],
-    ["read", "Read", ["read", "view"]],
-    ["edit", "Edit", ["edit", "write"]],
-    ["delete", "Delete", ["delete", "cancel"]],
-  ];
   const modules = Object.keys(grouped).sort();
   const selectedSet = new Set(selected || []);
-  const bucketFor = (permission: any) =>
-    buckets.find((bucket: any) => bucket[2].includes(permission.action)) ||
-    buckets[0];
   const labelFor = (permission: any) =>
     formatTitle(String(permission.action || "manage").replaceAll("_", " "));
 
@@ -35,8 +20,8 @@ export function PermissionCheckboxes({ permissions, selected }: any) {
         <div>
           <h4 className="text-base lg:text-lg font-bold">Module Permissions</h4>
           <p className="text-xs lg:text-sm text-slate-500">
-            Enable permissions by module. Use Manage for full workflow/action
-            access, then Create, Read, Edit, and Delete as needed.
+            Enable the exact workflow actions this role may use. Manage grants
+            the module's administrative workflows where supported.
           </p>
         </div>
         <Badge tone="slate" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm w-[15%] lg:w-[8%]">{selectedSet.size} selected</Badge>
@@ -57,54 +42,31 @@ export function PermissionCheckboxes({ permissions, selected }: any) {
               <Badge tone="slate" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">Module</Badge>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {buckets.map((bucket: any) => {
-                const bucketPermissions = grouped[module]
-                  .filter(
-                    (permission: any) =>
-                      bucketFor(permission)[0] === bucket[0],
-                  )
-                  .sort((a: any, b: any) => a.key.localeCompare(b.key));
-                return (
-                  <div
-                    key={`${module}-${bucket[0]}`}
-                    className="rounded-2xl bg-slate-50 p-3"
+              {grouped[module]
+                .sort((a: any, b: any) => a.key.localeCompare(b.key))
+                .map((permission: any) => (
+                  <label
+                    key={permission.key}
+                    className="flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-sm"
+                    title={permission.description || permission.key}
                   >
-                    <p className="mb-2 text-xs font-bold uppercase text-slate-500">
-                      {bucket[1]}
-                    </p>
-                    <div className="grid gap-2">
-                      {bucketPermissions.length ? (
-                        bucketPermissions.map((permission: any) => (
-                          <label
-                            key={permission.key}
-                            className="flex items-start gap-2 text-sm"
-                          >
-                            <input
-                              type="checkbox"
-                              name="permissionKeys"
-                              value={permission.key}
-                              defaultChecked={selectedSet.has(permission.key)}
-                              className="mt-1 h-4 w-4"
-                            />
-                            <span>
-                              <span className="font-semibold">
-                                {labelFor(permission)}
-                              </span>
-                              <span className="block break-all text-xs text-slate-400">
-                                {permission.key}
-                              </span>
-                            </span>
-                          </label>
-                        ))
-                      ) : (
-                        <span className="text-xs text-slate-300">
-                          No access
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                    <input
+                      type="checkbox"
+                      name="permissionKeys"
+                      value={permission.key}
+                      defaultChecked={selectedSet.has(permission.key)}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <span>
+                      <span className="font-semibold">
+                        {labelFor(permission)}
+                      </span>
+                      <span className="block break-all text-xs text-slate-400">
+                        {permission.key}
+                      </span>
+                    </span>
+                  </label>
+                ))}
             </div>
           </div>
         ))}
