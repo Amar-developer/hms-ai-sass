@@ -21,7 +21,6 @@ import { canResetTenantUserPassword } from "@/utils/tenantAdmin/permissions";
 import {
   userTypes,
   serviceScopes,
-  requiredRolePermissions,
 } from "@/utils/tenantAdmin/constants";
 import { KeyRound } from "lucide-react";
 import { basicMedicalDepartmentSuggestions } from "@/lib/options";
@@ -122,16 +121,35 @@ export function UserForm({
     hasTenantAdminAccess ? "" : user?.branch_id || "",
   );
   const [mobile, setMobile] = useState(user?.mobile || "");
-  useEffect(() => {
-    if (!hasTenantAdminAccess) return;
-    setSelectedBranch("");
-    setUserType("tenant_admin");
-    setSelectedRoleKeys((previous) =>
-      previous.includes("tenant_admin")
-        ? previous
-        : [...previous, "tenant_admin"],
-    );
-  }, [hasTenantAdminAccess]);
+  const changeUserType = (nextType: string) => {
+    setUserType(nextType);
+    if (nextType === "tenant_admin") {
+      setSelectedBranch("");
+      setSelectedRoleKeys((previous) =>
+        previous.includes("tenant_admin")
+          ? previous
+          : [...previous, "tenant_admin"],
+      );
+    } else {
+      setSelectedRoleKeys((previous) =>
+        previous.filter((roleKey) => roleKey !== "tenant_admin"),
+      );
+    }
+  };
+  const changeRoleSelection = (nextRoleKeys: string[]) => {
+    const hasTenantAdmin = nextRoleKeys.includes("tenant_admin");
+    if (hasTenantAdmin) {
+      setSelectedRoleKeys(nextRoleKeys);
+      setUserType("tenant_admin");
+      setSelectedBranch("");
+    } else if (userType === "tenant_admin") {
+      setSelectedRoleKeys(
+        Array.from(new Set([...nextRoleKeys, "tenant_admin"])),
+      );
+    } else {
+      setSelectedRoleKeys(nextRoleKeys);
+    }
+  };
   const roleOptions = useMemo(
     () =>
       filterRolesForBranch(roles, branches, selectedBranch, selectedRoleKeys),
@@ -169,7 +187,7 @@ export function UserForm({
           <Select
             name="userType"
             value={userType}
-            onChange={(event: any) => setUserType(event.target.value)}
+            onChange={(event: any) => changeUserType(event.target.value)}
           >
             {userTypes.map(([value, label]) => (
               <option key={value} value={value}>
@@ -245,7 +263,7 @@ export function UserForm({
             valueKey="key"
             labelKey="name"
             onRowOpen={onRoleOpen}
-            onSelectionChange={setSelectedRoleKeys}
+            onSelectionChange={changeRoleSelection}
           />
         </div>
         {canResetPassword && (
@@ -782,32 +800,13 @@ export function DiscountOfferForm({
 }
 
 export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
-  const catalog = [...permissions];
-  for (const permission of requiredRolePermissions) {
-    if (!catalog.some((item: any) => item.key === permission.key))
-      catalog.push(permission);
-  }
+  const catalog = [...(permissions || [])];
   const grouped = catalog.reduce((acc: any, permission: any) => {
     acc[permission.module] = [...(acc[permission.module] || []), permission];
     return acc;
   }, {});
-  const buckets = [
-    ["manage", "Manage", ["manage", "sign", "approve", "export"]],
-    ["create", "Create", ["create"]],
-    ["read", "Read", ["read", "view"]],
-    ["edit", "Edit", ["edit", "write"]],
-    ["delete", "Delete", ["delete", "cancel"]],
-  ];
   const modules = Object.keys(grouped).sort();
   const selectedSet = new Set(selected || []);
-  const normalizedAction = (permission: any) =>
-    String(permission.action || "manage")
-      .split(".")
-      .pop() || "manage";
-  const bucketFor = (permission: any) =>
-    buckets.find((bucket: any) =>
-      bucket[2].includes(normalizedAction(permission)),
-    ) || buckets[0];
   const labelFor = (permission: any) =>
     title(
       String(permission.action || "manage")
@@ -820,8 +819,8 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
         <div>
           <h4 className="card-title font-bold">Module Permissions</h4>
           <p className="card-desc text-slate-500">
-            Enable permissions by module. Use Manage for full workflow/action
-            access, then Create, Read, Edit, and Delete as needed.
+            Enable the exact workflow actions this role may use. Manage grants
+            the module's administrative workflows where supported.
           </p>
         </div>
         <Badge tone="slate" className="w-[20%] lg:w-[15%] normal-badge">
@@ -846,55 +845,32 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
               </Badge> */}
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {buckets.map((bucket: any) => {
-                const bucketPermissions = grouped[module]
-                  .filter(
-                    (permission: any) => bucketFor(permission)[0] === bucket[0],
-                  )
-                  .sort((a: any, b: any) => a.key.localeCompare(b.key));
-                return (
-                  <div
-                    key={`${module}-${bucket[0]}`}
-                    className="rounded-2xl "
+              {grouped[module]
+                .sort((a: any, b: any) => a.key.localeCompare(b.key))
+                .map((permission: any) => (
+                  <label
+                    key={permission.key}
+                    className="flex items-start gap-2 text-[11px]"
+                    title={permission.description || permission.key}
                   >
-                    {/* <p className="text-xs font-bold uppercase text-slate-500">
-                      {bucket[1]}
-                    </p> */}
-                    <div className="grid gap-2">
-                      {bucketPermissions.length ? (
-                        bucketPermissions.map((permission: any) => (
-                          <label
-                            key={permission.key}
-                            className="flex items-start gap-2 text-[11px]"
-                          >
-                            <input
-                              name="permissionKeys"
-                              type="checkbox"
-                              value={permission.key}
-                              defaultChecked={selectedSet.has(permission.key)}
-                              disabled={disabled}
-                              className="mt-1 h-3 w-3"
-                            />
-                            <span>
-                              <span className="text-[12px] font-semibold">
-                                {labelFor(permission)}
-                              </span>
-                              {/* <span className="block break-all text-[11px] text-slate-400">
+                    <input
+                      name="permissionKeys"
+                      type="checkbox"
+                      value={permission.key}
+                      defaultChecked={selectedSet.has(permission.key)}
+                      disabled={disabled}
+                      className="mt-1 h-3 w-3"
+                    />
+                    <span>
+                      <span className="text-[12px] font-semibold">
+                        {labelFor(permission)}
+                      </span>
+                      {/* <span className="block break-all text-[11px] text-slate-400">
                                 {permission.key}
                               </span> */}
-                            </span>
-                          </label>
-                        ))
-                      ) : (
-                        <span className="text-xs text-slate-300">
-                          No access
-                        </span>
-                      )
-                      }
-                    </div>
-                  </div>
-                );
-              })}
+                    </span>
+                  </label>
+                ))}
             </div>
           </div>
         ))}

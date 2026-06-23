@@ -1,6 +1,21 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+
+def _validate_email(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    local, separator, domain = normalized.partition("@")
+    if (
+        not separator
+        or not local
+        or not domain
+        or any(character.isspace() for character in normalized)
+    ):
+        raise ValueError("Enter a valid email address")
+    return normalized
 
 
 class LoginRequest(BaseModel):
@@ -35,6 +50,11 @@ class UserCreate(BaseModel):
     role_keys: list[str] = Field(default_factory=list)
     must_change_password: bool = True
 
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return str(_validate_email(value))
+
 
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
@@ -45,6 +65,11 @@ class UserUpdate(BaseModel):
     role_keys: list[str] | None = None
     is_active: bool | None = None
     must_change_password: bool | None = None
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, value: str | None) -> str | None:
+        return _validate_email(value)
 
 
 class UserRead(BaseModel):

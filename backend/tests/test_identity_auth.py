@@ -1,5 +1,7 @@
 from datetime import date
 
+from app.api.v1.identity import _normalize_user_access
+
 
 def bootstrap_super_admin(client):
     response = client.post(
@@ -414,7 +416,39 @@ def test_tenant_user_update_status_and_delete_are_supported(unauthenticated_clie
     users = client.get("/api/v1/identity/users", headers=headers).json()
     saved_user = next(row for row in users if row["id"] == user["id"])
     assert saved_user["is_active"] is False
-    assert saved_user["email"].startswith(f"deleted+{user['id']}+")
+    assert saved_user["email"] == user["email"]
+
+    restored = client.post(
+        f"/api/v1/identity/users/{user['id']}/status",
+        headers=headers,
+        json={"is_active": True},
+    )
+    login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": user["email"],
+            "password": "StaffPass123",
+            "tenant_id": tenant["id"],
+        },
+    )
+
+    assert restored.status_code == 200
+    assert restored.json()["email"] == user["email"]
+    assert login.status_code == 200
+
+
+def test_tenant_admin_user_type_enforces_tenant_admin_role():
+    normalized = _normalize_user_access(
+        {
+            "user_type": "tenant_admin",
+            "role_keys": ["doctor"],
+            "branch_id": "branch_main",
+        }
+    )
+
+    assert normalized["user_type"] == "tenant_admin"
+    assert normalized["role_keys"] == ["doctor", "tenant_admin"]
+    assert normalized["branch_id"] is None
 
 
 def test_role_crud_metadata_and_latest_first_ordering(unauthenticated_client):
@@ -501,7 +535,7 @@ def test_super_admin_can_assign_primary_role_template_to_customer_tenant(
         {row["action"] for row in catalog.json() if row["module"] == "appointments"}
     )
     assert {"manage", "create", "read", "edit", "delete"}.issubset(
-        {row["action"] for row in catalog.json() if row["module"] == "users"}
+        {row["action"] for row in catalog.json() if row["module"] == "identity.users"}
     )
     assert {"manage", "create", "read", "edit", "delete"}.issubset(
         {row["action"] for row in catalog.json() if row["module"] == "branches"}

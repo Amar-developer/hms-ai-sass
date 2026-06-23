@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     app_name: str = Field(default="MedizinHub HMS API")
     app_version: str = Field(default="0.1.0")
     environment: str = Field(default="local")
+    log_level: str = Field(default="INFO")
+    slow_request_ms: int = Field(default=1000, ge=1)
 
     api_prefix: str = Field(default="/api/v1")
 

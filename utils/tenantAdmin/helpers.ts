@@ -212,7 +212,17 @@ export function roleKeyFromName(value: string) {
 }
 
 export function permissionModuleTitle(module: string) {
-  if (module === "departments") return "Medical Departments";
+  const labels: Record<string, string> = {
+    departments: "Medical Departments",
+    "identity.users": "Users",
+    "identity.roles": "Roles",
+    "platform.tenants": "Tenant Management",
+    "platform.subscriptions": "Subscription Management",
+    patient_subscriptions: "Patient Membership",
+    home_care: "Home Care",
+    ip: "IP Admission",
+  };
+  if (labels[module]) return labels[module];
   return title(module.replaceAll("_", " "));
 }
 

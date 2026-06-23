@@ -178,7 +178,7 @@ export function TenantAdmin({
         safeFetch("/billing/discount-offers", canOffers),
         safeFetch("/settings", canSettings),
         safeFetch("/files?limit=200", canFiles),
-        apiFetch("/identity/permissions", scoped).catch(() => []),
+        apiFetch("/identity/permissions", scoped),
         canSettings
           ? apiFetch("/reports/monthly-email/config", scoped).catch(() => null)
           : Promise.resolve(null),

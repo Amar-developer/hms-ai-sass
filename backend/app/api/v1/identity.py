@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import json
+import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -51,6 +53,7 @@ from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
 
 router = APIRouter()
+security_logger = logging.getLogger("medizinhub.security")
 
 TENANT_ADMIN_DEFAULT_PERMISSION_KEYS = [
     permission_key
@@ -61,6 +64,15 @@ TENANT_ADMIN_DEFAULT_PERMISSION_KEYS = [
 
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
+
+
+def _original_user_email(user: User) -> str:
+    """Hide the internal soft-delete prefix from user-facing responses."""
+    email = str(user.email or "")
+    prefix = f"deleted+{user.id}+"
+    while email.startswith(prefix):
+        email = email[len(prefix) :]
+    return email
 
 
 def _normalize_role_key(value: str) -> str:
@@ -155,6 +167,7 @@ def _role_read(session: Session, role: Role) -> RoleRead:
 
 def _user_read(session: Session, user: User) -> UserRead:
     data = UserRead.model_validate(user, from_attributes=True).model_dump()
+    data["email"] = _original_user_email(user)
     if user.tenant_id:
         tenant = session.get(Tenant, user.tenant_id)
         data["tenant_name"] = tenant.name if tenant else None
@@ -263,15 +276,12 @@ def _ensure_primary_tenant_admin_role(
 
 def _permission_read(key: str) -> PermissionRead:
     parts = key.split(".")
-    if len(parts) >= 3 and parts[0] == "identity":
-        module = parts[1]
-        action = parts[2]
-    else:
-        module, _, action = key.partition(".")
+    module = ".".join(parts[:-1]) if len(parts) > 1 else parts[0]
+    action = parts[-1] if len(parts) > 1 else "manage"
     return PermissionRead(
         key=key,
         module=module,
-        action=action or "manage",
+        action=action,
         description=key.replace(".", " ").title(),
     )
 
@@ -356,10 +366,18 @@ def login(
     if payload.tenant_id:
         user = find_user_by_login(session, email, payload.tenant_id)
         if not user or not verify_password(payload.password, user.password_hash):
+            security_logger.warning(
+                "auth.login_failed",
+                extra={"tenant_id": payload.tenant_id, "reason": "invalid_login"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login"
             )
         if not tenant_allows_login(user):
+            security_logger.warning(
+                "auth.login_blocked",
+                extra={"tenant_id": payload.tenant_id, "reason": "tenant_suspended"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended"
             )
@@ -379,6 +397,10 @@ def login(
             None,
         )
         if not user:
+            security_logger.warning(
+                "auth.login_failed",
+                extra={"tenant_id": None, "reason": "invalid_login"},
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login"
             )
@@ -896,6 +918,12 @@ def create_user(
         resource_type="user",
         resource_id=user.id,
         purpose="access_control",
+        metadata_json=json.dumps(
+            {
+                "role_keys": user_payload.get("role_keys"),
+                "user_type": user_payload.get("user_type"),
+            }
+        ),
     )
     return _user_read(session, user)
 
@@ -1012,6 +1040,13 @@ def update_user(
         resource_type="user",
         resource_id=user.id,
         purpose="access_control",
+        metadata_json=json.dumps(
+            {
+                "changed_fields": sorted(updates.keys()),
+                "role_keys": updates.get("role_keys"),
+                "user_type": updates.get("user_type"),
+            }
+        ),
     )
     return _user_read(session, user)
 
@@ -1097,6 +1132,22 @@ def change_user_status(
             detail="You cannot deactivate your own user",
         )
     user.is_active = payload.is_active
+    if payload.is_active:
+        original_email = _original_user_email(user)
+        if original_email != user.email:
+            duplicate = session.exec(
+                select(User).where(
+                    User.tenant_id == tenant_id,
+                    User.email == original_email,
+                    User.id != user.id,
+                )
+            ).first()
+            if duplicate:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Restore or change the user email before activation; the original email is already in use",
+                )
+            user.email = original_email
     user.updated_by_user_id = current_user.id
     user.updated_at = now_utc()
     session.add(user)
@@ -1137,7 +1188,8 @@ def delete_user(
             detail="You cannot delete your own user",
         )
     user.is_active = False
-    user.email = f"deleted+{user.id}+{user.email}"
+    if not user.email.startswith(f"deleted+{user.id}+"):
+        user.email = f"deleted+{user.id}+{user.email}"
     user.updated_by_user_id = current_user.id
     user.updated_at = now_utc()
     session.add(user)

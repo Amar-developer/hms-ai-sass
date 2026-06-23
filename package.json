@@ -1,7 +1,8 @@
 {
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "prebuild": "if [ ! -e .next-build ]; then exit 0; fi; mv .next-build .next-build-stale-$(date +%s)-$$",
+    "build": "NEXT_PRIVATE_BUILD_WORKER=0 next build",
     "start": "next start",
     "test": "vitest run --cache=false",
     "typecheck": "tsc --noEmit",
