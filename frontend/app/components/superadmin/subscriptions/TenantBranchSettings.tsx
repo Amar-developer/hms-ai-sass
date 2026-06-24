@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import {
   defaultNumberingEntities,
   numberEntityLabel,
+  parseBankDetails,
   parseCatalogIntegrations,
   parseNumberingRules,
 } from "@/utils/superAdmin/constants";
@@ -89,7 +90,9 @@ export function TenantBranchSettings({
   const [catalogIntegrations, setCatalogIntegrations] = useState<any>(
     parseCatalogIntegrations(null),
   );
+  const [bankDetails, setBankDetails] = useState<any>(parseBankDetails(null));
   const [settingsMessage, setSettingsMessage] = useState("");
+  const [accountsMessage, setAccountsMessage] = useState("");
   const [pluginMessage, setPluginMessage] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
@@ -154,6 +157,7 @@ export function TenantBranchSettings({
       setSettings([]);
       setNumberingRules(parseNumberingRules(null, "SUN"));
       setCatalogIntegrations(parseCatalogIntegrations(null));
+      setBankDetails(parseBankDetails(null));
       return;
     }
     setSettingsLoading(true);
@@ -175,10 +179,12 @@ export function TenantBranchSettings({
       setCatalogIntegrations(
         parseCatalogIntegrations(find("catalog.integrations")?.value),
       );
+      setBankDetails(parseBankDetails(find("accounts.bank_details")?.value));
     } catch (err: any) {
       setSettings([]);
       setNumberingRules(parseNumberingRules(null, "SUN"));
       setCatalogIntegrations(parseCatalogIntegrations(null));
+      setBankDetails(parseBankDetails(null));
       setSettingsMessage(err.message || "Could not load numbering settings.");
     } finally {
       setSettingsLoading(false);
@@ -209,17 +215,20 @@ export function TenantBranchSettings({
       },
     });
   }
+  function setBankDetail(key: string, value: string) {
+    setBankDetails({ ...bankDetails, [key]: value });
+  }
 
   async function saveNumberingSettings(e: any) {
     e.preventDefault();
-    if (!apiSession || !selected) return;
+    if (!apiSession || !visibleSelected) return;
     setSettingsLoading(true);
     setSettingsMessage("");
     try {
       await Promise.all([
         apiFetch(
           "/settings",
-          { ...apiSession, tenantId: selected.id },
+          { ...apiSession, tenantId: visibleSelected.id },
           {
             method: "PUT",
             body: JSON.stringify({
@@ -233,7 +242,7 @@ export function TenantBranchSettings({
         ),
         apiFetch(
           "/settings",
-          { ...apiSession, tenantId: selected.id },
+          { ...apiSession, tenantId: visibleSelected.id },
           {
             method: "PUT",
             body: JSON.stringify({
@@ -266,13 +275,13 @@ export function TenantBranchSettings({
 
   async function saveCatalogIntegrations(e: any) {
     e.preventDefault();
-    if (!apiSession || !selected) return;
+    if (!apiSession || !visibleSelected) return;
     setPluginLoading(true);
     setPluginMessage("");
     try {
       await apiFetch(
         "/settings",
-        { ...apiSession, tenantId: selected.id },
+        { ...apiSession, tenantId: visibleSelected.id },
         {
           method: "PUT",
           body: JSON.stringify({
@@ -292,6 +301,35 @@ export function TenantBranchSettings({
       );
     } finally {
       setPluginLoading(false);
+    }
+  }
+
+  async function saveBankDetails(e: any) {
+    e.preventDefault();
+    if (!apiSession || !visibleSelected) return;
+    setSettingsLoading(true);
+    setAccountsMessage("");
+    try {
+      await apiFetch(
+        "/settings",
+        { ...apiSession, tenantId: visibleSelected.id },
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            scope: "tenant",
+            module: "accounts",
+            key: "accounts.bank_details",
+            value: bankDetails,
+            actor_user_id: apiSession.user?.id,
+          }),
+        },
+      );
+      await loadTenantSettings();
+      setAccountsMessage("Tenant account details saved.");
+    } catch (err: any) {
+      setAccountsMessage(err.message || "Could not save account details.");
+    } finally {
+      setSettingsLoading(false);
     }
   }
 
@@ -328,6 +366,89 @@ export function TenantBranchSettings({
             <Info label="Timezone" value={visibleSelected.timezone || "-"} />
           </div>
         )}
+      </Card>
+      <Card>
+        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+          <div>
+            <h4 className="text-base font-bold lg:text-lg">
+              Accounts & Bank Details
+            </h4>
+            <p className="text-xs text-slate-500 lg:text-sm">
+              Tenant bank account details shown in invoice receipt PDFs.
+            </p>
+          </div>
+          <Badge tone="blue" className="rounded-lg px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm">
+            Tenant scoped
+          </Badge>
+        </div>
+        <StatusToast
+          message={accountsMessage}
+          onClose={() => setAccountsMessage("")}
+        />
+        <form onSubmit={saveBankDetails} className="mt-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <Field label="Account Name">
+              <Input
+                value={bankDetails.account_name || ""}
+                onChange={(e: any) =>
+                  setBankDetail("account_name", e.target.value)
+                }
+                placeholder="Tenant legal account name"
+              />
+            </Field>
+            <Field label="Bank Branch">
+              <Input
+                value={bankDetails.branch_name || ""}
+                onChange={(e: any) =>
+                  setBankDetail("branch_name", e.target.value)
+                }
+                placeholder="Branch"
+              />
+            </Field>
+            <Field label="Account Number">
+              <Input
+                value={bankDetails.account_number || ""}
+                onChange={(e: any) =>
+                  setBankDetail("account_number", e.target.value)
+                }
+                placeholder="Account number"
+              />
+            </Field>
+            <Field label="IFSC">
+              <Input
+                value={bankDetails.ifsc || ""}
+                onChange={(e: any) =>
+                  setBankDetail("ifsc", e.target.value.toUpperCase())
+                }
+                placeholder="IFSC"
+              />
+            </Field>
+            <Field label="UPI ID">
+              <Input
+                value={bankDetails.upi_id || ""}
+                onChange={(e: any) => setBankDetail("upi_id", e.target.value)}
+                placeholder="name@bank"
+              />
+            </Field>
+            <Field label="GSTIN">
+              <Input
+                value={bankDetails.gstin || ""}
+                onChange={(e: any) =>
+                  setBankDetail("gstin", e.target.value.toUpperCase())
+                }
+                placeholder="Tenant GSTIN"
+              />
+            </Field>
+          </div>
+          <div className="mt-5 flex justify-end">
+            <Button
+              disabled={settingsLoading || !visibleSelected}
+              className="px-4 py-2 text-xs lg:px-5 lg:py-2.5 lg:text-sm"
+            >
+              {settingsLoading ? "Saving..." : "Save Accounts"}
+            </Button>
+          </div>
+        </form>
       </Card>
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -386,7 +507,7 @@ export function TenantBranchSettings({
             ))}
           </div>
           <div className="mt-5 flex flex-wrap items-center gap-3">
-            <Button disabled={settingsLoading || !selected}>
+            <Button disabled={settingsLoading || !visibleSelected}>
               {settingsLoading ? "Saving..." : "Save Numbering"}
             </Button>
             <span className="text-xs text-slate-500">
@@ -427,7 +548,7 @@ export function TenantBranchSettings({
             }
           />
           <div className="flex flex-wrap items-center gap-3 md:col-span-2">
-            <Button disabled={pluginLoading || !selected}>
+            <Button disabled={pluginLoading || !visibleSelected}>
               {pluginLoading ? "Saving..." : "Save Plugin Controls"}
             </Button>
             <span className="text-xs text-slate-500">

@@ -33,6 +33,11 @@ def ensure_settingkey_enum_values(session: Session) -> None:
         connection.execute(
             text("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'SIDEBAR_ROLE_MODULES'")
         )
+        connection.execute(
+            text(
+                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'ACCOUNTS_BANK_DETAILS'"
+            )
+        )
 
 
 def ensure_upload_schema(session: Session) -> None:
@@ -95,6 +100,7 @@ def ensure_upload_schema(session: Session) -> None:
             start_date DATE NOT NULL,
             end_date DATE,
             status VARCHAR(40) NOT NULL DEFAULT 'requested',
+            location VARCHAR(500),
             complaints VARCHAR(2000),
             notes VARCHAR(2000),
             created_by_user_id VARCHAR,
@@ -113,11 +119,39 @@ def ensure_upload_schema(session: Session) -> None:
             tenant_id VARCHAR NOT NULL,
             booking_id VARCHAR NOT NULL,
             service_id VARCHAR,
+            service_category VARCHAR(80) NOT NULL DEFAULT 'home_care_service',
             description VARCHAR(260) NOT NULL,
             quantity INTEGER NOT NULL DEFAULT 1,
             unit_amount INTEGER NOT NULL DEFAULT 0,
             total_amount INTEGER NOT NULL DEFAULT 0,
             created_at TIMESTAMP WITH TIME ZONE NOT NULL
+        )
+        """,
+    )
+    _ensure_table(
+        session,
+        "homecarevisitlog",
+        """
+        CREATE TABLE homecarevisitlog (
+            id VARCHAR PRIMARY KEY,
+            tenant_id VARCHAR NOT NULL,
+            booking_id VARCHAR NOT NULL,
+            visit_date DATE NOT NULL,
+            assigned_staff_user_id VARCHAR,
+            assigned_staff_name VARCHAR(160),
+            staff_type VARCHAR(80),
+            service_id VARCHAR,
+            service_category VARCHAR(80) NOT NULL DEFAULT 'home_care_service',
+            description VARCHAR(260) NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            unit_amount INTEGER NOT NULL DEFAULT 0,
+            total_amount INTEGER NOT NULL DEFAULT 0,
+            status VARCHAR(40) NOT NULL DEFAULT 'completed',
+            notes VARCHAR(1000),
+            created_by_user_id VARCHAR,
+            updated_by_user_id VARCHAR,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL
         )
         """,
     )
@@ -127,6 +161,13 @@ def ensure_upload_schema(session: Session) -> None:
     )
     _add_column(session, "homecarebooking", "assigned_staff_name", "VARCHAR(160)")
     _add_column(session, "homecarebooking", "staff_type", "VARCHAR(80)")
+    _add_column(session, "homecarebooking", "location", "VARCHAR(500)")
+    _add_column(
+        session,
+        "homecarebookingitem",
+        "service_category",
+        "VARCHAR(80) NOT NULL DEFAULT 'home_care_service'",
+    )
     _add_column(session, "ipadmission", "admission_document_url", "VARCHAR(500)")
     _add_column(session, "ipadmission", "admission_document_name", "VARCHAR(220)")
     _add_column(

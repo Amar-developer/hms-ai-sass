@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { sections, parseNumberingRules } from "@/utils/tenantAdmin/constants";
+import {
+  sections,
+  parseBankDetails,
+  parseNumberingRules,
+} from "@/utils/tenantAdmin/constants";
 import { canUseTenantAdminSection } from "@/utils/tenantAdmin/permissions";
 import { Card, StatusToast } from "@/app/components/common/ui";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
@@ -65,6 +69,7 @@ export function TenantAdmin({
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [invoicePrefix, setInvoicePrefix] = useState("MHD");
   const [invoiceLogoUrl, setInvoiceLogoUrl] = useState("");
+  const [bankDetails, setBankDetails] = useState<any>(parseBankDetails(null));
   const [numberingRules, setNumberingRules] = useState<any>(
     parseNumberingRules(null, "MHD"),
   );
@@ -209,6 +214,7 @@ export function TenantAdmin({
       setInvoiceLogoUrl(
         String(find("invoice.logo_url")?.value || clinic?.logo_url || ""),
       );
+      setBankDetails(parseBankDetails(find("accounts.bank_details")?.value));
       if (find("numbering.rules"))
         setNumberingRules(
           parseNumberingRules(
@@ -1042,6 +1048,17 @@ export function TenantAdmin({
         apiFetch("/settings", apiSession, {
           method: "PUT",
           body: JSON.stringify({
+            scope: "branch",
+            scope_id: branchId,
+            module: "accounts",
+            key: "accounts.bank_details",
+            value: bankDetails,
+            actor_user_id: apiSession.user?.id,
+          }),
+        }),
+        apiFetch("/settings", apiSession, {
+          method: "PUT",
+          body: JSON.stringify({
             scope: "tenant",
             module: "communication",
             key: "communication.providers_enabled",
@@ -1623,6 +1640,8 @@ export function TenantAdmin({
           setNumberingRules={setNumberingRules}
           invoiceLogoUrl={invoiceLogoUrl}
           setInvoiceLogoUrl={setInvoiceLogoUrl}
+          bankDetails={bankDetails}
+          setBankDetails={setBankDetails}
           tenantLogoUrl={clinic?.logo_url || ""}
           uploadInvoiceLogo={uploadInvoiceLogo}
           requeueAfter={requeueAfter}

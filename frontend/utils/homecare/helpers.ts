@@ -57,6 +57,7 @@ export function userTypeKey(user: any) {
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
+  if (value.includes("lab")) return "lab_technician";
   if (value.includes("physio")) return "physiotherapist";
   if (value.includes("doctor")) return "doctor";
   if (value.includes("nurse")) return "nurse";
@@ -71,6 +72,20 @@ export function patientSearchLabel(patient: any) {
 }
 
 export function bookingTotal(booking: any) {
+  if (Array.isArray(booking?.visit_logs)) {
+    return booking.visit_logs
+      .filter((row: any) => row.status === "completed")
+      .reduce((sum: number, row: any) => sum + Number(row.total_amount || 0), 0);
+  }
+  const completedVisits = (booking?.visit_logs || []).filter(
+    (row: any) => row.status === "completed",
+  );
+  if (completedVisits.length) {
+    return completedVisits.reduce(
+      (sum: number, row: any) => sum + Number(row.total_amount || 0),
+      0,
+    );
+  }
   return (booking?.services || []).reduce(
     (sum: number, row: any) => sum + Number(row.total_amount || 0),
     0,

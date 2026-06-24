@@ -33,6 +33,8 @@ export function SettingsPanel(props: any) {
     setNumberingRules,
     invoiceLogoUrl,
     setInvoiceLogoUrl,
+    bankDetails,
+    setBankDetails,
     tenantLogoUrl,
     uploadInvoiceLogo,
     requeueAfter,
@@ -80,6 +82,8 @@ export function SettingsPanel(props: any) {
         [key]: value.toUpperCase(),
       },
     });
+  const setBankDetail = (key: string, value: string) =>
+    setBankDetails({ ...bankDetails, [key]: value });
   return (
     <div className="space-y-5">
       <Card>
@@ -284,6 +288,75 @@ export function SettingsPanel(props: any) {
               </p>
             </div>
           ))}
+        </div>
+      </Card>
+      <Card>
+        <h3 className="card-title font-bold">Accounts & Bank Details</h3>
+        <p className="card-desc text-slate-500">
+          Maintain tenant bank account details shown on invoice receipts.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <FormField label="Account Name">
+            <Input
+              value={bankDetails.account_name || ""}
+              onChange={(e: any) =>
+                setBankDetail("account_name", e.target.value)
+              }
+              placeholder="Tenant legal account name"
+            />
+          </FormField>
+          <FormField label="Bank Branch">
+            <Input
+              value={bankDetails.branch_name || ""}
+              onChange={(e: any) =>
+                setBankDetail("branch_name", e.target.value)
+              }
+              placeholder="Branch"
+            />
+          </FormField>
+          <FormField label="Account Number">
+            <Input
+              value={bankDetails.account_number || ""}
+              onChange={(e: any) =>
+                setBankDetail("account_number", e.target.value)
+              }
+              placeholder="Account number"
+            />
+          </FormField>
+          <FormField label="IFSC">
+            <Input
+              value={bankDetails.ifsc || ""}
+              onChange={(e: any) =>
+                setBankDetail("ifsc", e.target.value.toUpperCase())
+              }
+              placeholder="IFSC"
+            />
+          </FormField>
+          <FormField label="UPI ID">
+            <Input
+              value={bankDetails.upi_id || ""}
+              onChange={(e: any) => setBankDetail("upi_id", e.target.value)}
+              placeholder="name@bank"
+            />
+          </FormField>
+          <FormField label="GSTIN">
+            <Input
+              value={bankDetails.gstin || ""}
+              onChange={(e: any) =>
+                setBankDetail("gstin", e.target.value.toUpperCase())
+              }
+              placeholder="Tenant GSTIN"
+            />
+          </FormField>
+        </div>
+        <div className="mt-5 flex justify-end">
+          <Button
+            onClick={saveSettings}
+            disabled={busy}
+            className="px-4 py-2 text-xs lg:px-5 lg:py-2.5 lg:text-sm"
+          >
+            {busy ? "Saving..." : "Save Accounts"}
+          </Button>
         </div>
       </Card>
       <SidebarModuleAccessCard apiSession={apiSession} />

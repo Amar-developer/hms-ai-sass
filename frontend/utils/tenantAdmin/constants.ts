@@ -328,3 +328,12 @@ export const parseNumberingRules = (value: any, fallbackPrefix = "SUN") => ({
   digits: Number(value?.digits || 5),
   entities: { ...defaultNumberingEntities, ...(value?.entities || {}) },
 });
+
+export const parseBankDetails = (value: any) => ({
+  account_name: String(value?.account_name || value?.name || ""),
+  branch_name: String(value?.branch_name || value?.branch || ""),
+  account_number: String(value?.account_number || value?.acc_number || ""),
+  ifsc: String(value?.ifsc || "").toUpperCase(),
+  upi_id: String(value?.upi_id || value?.upi || ""),
+  gstin: String(value?.gstin || "").toUpperCase(),
+});

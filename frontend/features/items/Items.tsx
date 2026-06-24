@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { ActionButton, ActionGroup, Badge, Button, Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import {
-  DateField,
   NumberField,
   SelectField,
   TextField,
@@ -21,6 +20,7 @@ const itemTypes = [
 ];
 
 const homeServiceTypes = ["home_care_service", "home_visit_service"];
+const serviceItemTypes = ["lab_package", ...homeServiceTypes];
 
 const modalities = [
   ["ift", "IFT / Interferential Therapy"],
@@ -72,7 +72,7 @@ function createEmptyForm(type: string) {
     generic_name: "",
     mrp_price: "",
     price: "",
-    purchase_price: homeServiceTypes.includes(type) ? "" : "0",
+    purchase_price: serviceItemTypes.includes(type) ? "" : "0",
     supplier_id: "",
     reorder_level: "",
     sample_type: "",
@@ -101,6 +101,8 @@ export function Items({ apiSession, branchId }: any) {
     type: "all",
     query: "",
     labOnly: "all",
+    priceBand: "all",
+    sortBy: "name",
   });
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
@@ -108,22 +110,7 @@ export function Items({ apiSession, branchId }: any) {
     setFilters(f);
     setPage(1);
   }
-  const [stockBatches, setStockBatches] = useState<any[]>([]);
   const [stockSuppliers, setStockSuppliers] = useState<any[]>([]);
-  const [stockLow, setStockLow] = useState<any[]>([]);
-  const [stockMedId, setStockMedId] = useState("");
-  const [stockBatchId, setStockBatchId] = useState("");
-  const [suppNameInput, setSuppNameInput] = useState("Demo Pharma Supplier");
-  const [poId, setPoId] = useState("PO-001");
-  const [poDate, setPoDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
-  const [poQty, setPoQty] = useState("50");
-  const [poHdrDisc, setPoHdrDisc] = useState("0");
-  const [poLineDisc, setPoLineDisc] = useState("0");
-  const [poCgst, setPoCgst] = useState("6");
-  const [poSgst, setPoSgst] = useState("6");
-  const [retQty, setRetQty] = useState("1");
   const [form, setForm] = useState<any>(() => createEmptyForm("medicine"));
   const autoCode = editing
     ? type === "physio_equipment"
@@ -145,6 +132,7 @@ export function Items({ apiSession, branchId }: any) {
         purchase_price: row.purchase_price || 0,
         supplier: supplierName(row.supplier_id),
         meta: row.generic_name || row.form || "-",
+        created_at: row.created_at || row.updated_at || "",
         id: row.id,
         raw: row,
       })),
@@ -158,6 +146,7 @@ export function Items({ apiSession, branchId }: any) {
         purchase_price: row.purchase_price || 0,
         supplier: supplierName(row.supplier_id),
         meta: row.sample_type || "-",
+        created_at: row.created_at || row.updated_at || "",
         id: row.id,
         raw: row,
       })),
@@ -168,9 +157,10 @@ export function Items({ apiSession, branchId }: any) {
         code: row.code,
         mrp_price: row.mrp_price || 0,
         price: row.package_price,
-        purchase_price: row.purchase_price || 0,
-        supplier: supplierName(row.supplier_id),
-        meta: `${row.test_ids?.length || 0} tests`,
+        purchase_price: null,
+        supplier: "-",
+        meta: row.description || `${row.test_ids?.length || 0} tests`,
+        created_at: row.created_at || row.updated_at || "",
         id: row.id,
         raw: row,
       })),
@@ -184,6 +174,7 @@ export function Items({ apiSession, branchId }: any) {
         purchase_price: row.purchase_price || 0,
         supplier: supplierName(row.supplier_id),
         meta: `${row.modality_type} · ${row.is_portable ? "Portable" : "Fixed"}`,
+        created_at: row.created_at || row.updated_at || "",
         id: row.id,
         raw: row,
       })),
@@ -200,6 +191,7 @@ export function Items({ apiSession, branchId }: any) {
           purchase_price: null,
           supplier: "-",
           meta: row.description || (isHomeVisit ? "Home visit" : "Home care"),
+          created_at: row.created_at || row.updated_at || "",
           id: row.id,
           raw: row,
         };
@@ -216,6 +208,10 @@ export function Items({ apiSession, branchId }: any) {
           !["lab_test", "lab_package"].includes(row.type)
         )
           return false;
+        if (filters.priceBand === "priced" && Number(row.price || 0) <= 0)
+          return false;
+        if (filters.priceBand === "free" && Number(row.price || 0) > 0)
+          return false;
         const query = filters.query.trim().toLowerCase();
         if (
           query &&
@@ -228,17 +224,29 @@ export function Items({ apiSession, branchId }: any) {
       }),
     [rows, filters],
   );
+  const sortedRows = useMemo(() => {
+    const valueFor = (row: any) => {
+      if (filters.sortBy === "latest") return row.created_at || row.id || "";
+      if (filters.sortBy === "type") return row.kind || "";
+      if (filters.sortBy === "code") return row.code || "";
+      if (filters.sortBy === "price") return Number(row.price ?? -1);
+      if (filters.sortBy === "mrp") return Number(row.mrp_price ?? -1);
+      return row.name || "";
+    };
+    return [...filteredRows].sort((a: any, b: any) => {
+      const left = valueFor(a);
+      const right = valueFor(b);
+      if (typeof left === "number" && typeof right === "number") {
+        return left - right;
+      }
+      const result = String(left).localeCompare(String(right));
+      return filters.sortBy === "latest" ? -result : result;
+    });
+  }, [filteredRows, filters.sortBy]);
 
   useEffect(() => {
     load();
   }, [apiSession?.token, apiSession?.tenantId, branchId]);
-  useEffect(() => {
-    if (!stockMedId && medicines[0]?.id) setStockMedId(medicines[0].id);
-  }, [medicines, stockMedId]);
-  useEffect(() => {
-    const b = stockBatches.find((b: any) => b.medicine_id === stockMedId);
-    setStockBatchId(b?.id || "");
-  }, [stockMedId, stockBatches]);
 
   function setField(key: string, value: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
@@ -272,29 +280,21 @@ export function Items({ apiSession, branchId }: any) {
         packageRows,
         equipmentRows,
         homeCareServiceRows,
-        batchRows,
         supplierRows,
-        lowRows,
       ] = await Promise.all([
         apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
         apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
         apiFetch("/lab/catalog/packages", apiSession).catch(() => []),
         apiFetch("/physiotherapy/equipment", apiSession).catch(() => []),
         apiFetch("/home-care/services", apiSession).catch(() => []),
-        apiFetch("/pharmacy/batches", apiSession).catch(() => []),
         apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
-        apiFetch(`/pharmacy/low-stock?branch_id=${branchId}`, apiSession).catch(
-          () => [],
-        ),
       ]);
       setMedicines(medicineRows);
       setTests(testRows);
       setPackages(packageRows);
       setEquipment(equipmentRows);
       setHomeCareServices(homeCareServiceRows);
-      setStockBatches(batchRows);
       setStockSuppliers(supplierRows);
-      setStockLow(lowRows);
     } catch (err: any) {
       setMessage(err.message || "Could not load items.");
     }
@@ -368,9 +368,11 @@ export function Items({ apiSession, branchId }: any) {
             body: JSON.stringify({
               code: itemCode,
               name: form.name,
-              supplier_id: supplierId,
+              branch_id: form.branch_scope === "branch" ? branchId : null,
+              description: form.description || null,
+              supplier_id: null,
               mrp_price: Number(form.mrp_price || 0),
-              purchase_price: purchasePrice,
+              purchase_price: 0,
               package_price: Number(form.price || 0),
               test_ids: packageTestIds,
               created_by_user_id: apiSession.user?.id,
@@ -476,8 +478,10 @@ export function Items({ apiSession, branchId }: any) {
         name: raw.name,
         mrp_price: String(raw.mrp_price || 0),
         price: String(raw.package_price || 0),
-        purchase_price: String(raw.purchase_price || 0),
-        supplier_id: raw.supplier_id || "",
+        purchase_price: "",
+        supplier_id: "",
+        description: raw.description || "",
+        branch_scope: raw.branch_id ? "branch" : "tenant",
       });
       setPackageTestIds(raw.test_ids || []);
     } else if (homeServiceTypes.includes(row.type))
@@ -514,99 +518,6 @@ export function Items({ apiSession, branchId }: any) {
     resetItemForm(type);
   }
 
-  async function createSupplier() {
-    if (!apiSession) return;
-    setBusy("supplier");
-    setMessage("");
-    try {
-      await apiFetch("/pharmacy/suppliers", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          name: suppNameInput,
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Supplier created.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create supplier.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function createPurchase() {
-    if (!apiSession || !stockMedId) return;
-    setBusy("purchase");
-    setMessage("");
-    try {
-      const med = medicines.find((m: any) => m.id === stockMedId);
-      await apiFetch("/pharmacy/purchases", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          supplier_id: stockSuppliers[0]?.id || null,
-          purchase_order_id: poId,
-          invoice_number: `PINV-${Date.now().toString().slice(-5)}`,
-          purchase_date: new Date(`${poDate}T00:00:00`).toISOString(),
-          discount_percentage: Number(poHdrDisc || 0),
-          items: [
-            {
-              medicine_id: stockMedId,
-              batch_number: `B-${Date.now().toString().slice(-4)}`,
-              quantity: Number(poQty || 0),
-              cost_price: Math.max(1, Number(med?.default_sale_price || 0) - 2),
-              sale_price: Number(med?.default_sale_price || 0),
-              discount_percentage: Number(poLineDisc || 0),
-              cgst_percentage: Number(poCgst || 0),
-              sgst_percentage: Number(poSgst || 0),
-            },
-          ],
-          purchased_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Purchase added and stock ledger updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create purchase.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function returnExpiredStock() {
-    if (!apiSession || !stockMedId || !stockBatchId) return;
-    setBusy("return");
-    setMessage("");
-    try {
-      const batch = stockBatches.find((b: any) => b.id === stockBatchId);
-      await apiFetch("/pharmacy/returns", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          supplier_id: stockSuppliers[0]?.id || null,
-          purchase_id: batch?.purchase_id || null,
-          reason: "Expired medicine returned to supplier",
-          items: [
-            {
-              medicine_id: stockMedId,
-              batch_id: stockBatchId,
-              quantity: Number(retQty || 1),
-              amount: Number(retQty || 1) * Number(batch?.cost_price || 0),
-            },
-          ],
-          returned_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Expired stock returned and ledger updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not return expired stock.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   async function deleteItem(row: any) {
     if (!apiSession || !confirm(`Delete ${row.name}?`)) return;
     setBusy(`delete-${row.id}`);
@@ -632,8 +543,8 @@ export function Items({ apiSession, branchId }: any) {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
-  const pagedRows = filteredRows.slice(
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const pagedRows = sortedRows.slice(
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE,
   );
@@ -651,7 +562,7 @@ export function Items({ apiSession, branchId }: any) {
           </div>
           <div className="flex items-center gap-2">
             <RefreshButton onRefresh={load} />
-            <Badge tone="blue" className="normal-badge">{filteredRows.length} items</Badge>
+            <Badge tone="blue" className="normal-badge">{sortedRows.length} items</Badge>
           </div>
         </div>
         <StatusToast message={message} onClose={() => setMessage("")} />
@@ -672,11 +583,11 @@ export function Items({ apiSession, branchId }: any) {
             className="search-input "
           />
           <TextField
-            label={homeServiceTypes.includes(type) || type=='lab_package'? "Service Name" : "Item Name"}
+            label={serviceItemTypes.includes(type) ? "Service Name" : "Item Name"}
             value={form.name}
             onChange={(v) => setField("name", v)}
             required
-            placeholder={`please enter ${homeServiceTypes.includes(type) || type=='lab_package'? "Service Name" : "Item Name"}`}
+            placeholder={`please enter ${serviceItemTypes.includes(type) ? "Service Name" : "Item Name"}`}
             className="search-input placeholder:text-xs"
           />
           <NumberField
@@ -689,20 +600,18 @@ export function Items({ apiSession, branchId }: any) {
           {type !== "physio_equipment" && (
             <NumberField
               label={
-                homeServiceTypes.includes(type)
-                  ? "Rate / Hour"
-                  : type === "lab_package"
-                    ? "Service Price"
-                    : "Price"
+                serviceItemTypes.includes(type)
+                  ? "Service Price"
+                  : "Price"
               }
               value={form.price}
               onChange={(v) => setField("price", v)}
               min={0}
-              required={homeServiceTypes.includes(type)}
+              required={serviceItemTypes.includes(type)}
               placeholder="Enter the price"
             />
           )}
-          {!homeServiceTypes.includes(type) && (
+          {!serviceItemTypes.includes(type) && (
             <>
               <SelectField
                 label="Supplier"
@@ -752,7 +661,7 @@ export function Items({ apiSession, branchId }: any) {
               placeholder="Enter the sample type "
             />
           )}
-          {homeServiceTypes.includes(type) && (
+          {serviceItemTypes.includes(type) && (
             <>
               <TextField
                 label="Description"
@@ -829,161 +738,14 @@ export function Items({ apiSession, branchId }: any) {
         </form>
       </Card>
       <Card>
-        <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-          <div>
-            <h3 className="card-title font-bold">Pharmacy Stock</h3>
-            <p className="card-desc text-slate-500">
-              Suppliers, purchases, batches, stock ledger, and low-stock alerts.
-            </p>
-          </div>
-          <div className="w-[15%]">
-            <Badge
-            tone={stockLow.length ? "amber" : "green"}
-            className="normal-badge"
-          >
-            {stockLow.length} low stock
-          </Badge>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <TextField
-              label="Supplier Name"
-              value={suppNameInput}
-              onChange={setSuppNameInput}
-              className="search-input"
-            />
-            <button
-              type="button"
-              onClick={createSupplier}
-              disabled={busy === "supplier"}
-              className="mt-2 close-button font-bold disabled:text-slate-300"
-            >
-              {busy === "supplier" ? "Adding..." : "Add Supplier"}
-            </button>
-            <p className="mt-2 text-xs text-slate-500">
-              {stockSuppliers.length} suppliers
-            </p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <div className="grid gap-2 md:grid-cols-2">
-              <TextField label="PO ID" value={poId} onChange={setPoId} className="search-input" />
-              <DateField
-                label="Purchase Date"
-                value={poDate}
-                onChange={setPoDate}
-              />
-              <SelectField
-                label="Medicine"
-                value={stockMedId}
-                onChange={setStockMedId}
-                options={medicines.map((m: any) => ({
-                  value: m.id,
-                  label: m.name,
-                }))}
-              />
-              <NumberField
-                label="Quantity"
-                value={poQty}
-                onChange={setPoQty}
-                min={1}
-              />
-              <NumberField
-                label="Header Discount %"
-                value={poHdrDisc}
-                onChange={setPoHdrDisc}
-                min={0}
-                max={100}
-              />
-              <NumberField
-                label="Line Discount %"
-                value={poLineDisc}
-                onChange={setPoLineDisc}
-                min={0}
-                max={100}
-              />
-              <NumberField
-                label="CGST %"
-                value={poCgst}
-                onChange={setPoCgst}
-                min={0}
-              />
-              <NumberField
-                label="SGST %"
-                value={poSgst}
-                onChange={setPoSgst}
-                min={0}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={createPurchase}
-              disabled={busy === "purchase"}
-              className="mt-2 close-button font-bold disabled:text-slate-300"
-            >
-              {busy === "purchase" ? "Saving..." : "Create Purchase"}
-            </button>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-xs font-bold uppercase text-slate-500">
-              Low Stock / Return
-            </p>
-            <div className="mt-2 grid gap-2">
-              {stockLow.length === 0 ? (
-                <p className="text-sm text-slate-500">No low-stock items.</p>
-              ) : (
-                stockLow.map((row: any) => (
-                  <div
-                    key={row.medicine_id}
-                    className="rounded-xl bg-white p-3 text-sm"
-                  >
-                    <b>{row.medicine_name}</b>
-                    <p className="text-xs text-slate-500">
-                      Qty {row.quantity_on_hand} / Reorder {row.reorder_level}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-            <div className="mt-3 grid gap-2 md:grid-cols-2">
-              <SelectField
-                label="Return Batch"
-                value={stockBatchId}
-                onChange={setStockBatchId}
-                options={stockBatches
-                  .filter((b: any) => b.medicine_id === stockMedId)
-                  .map((b: any) => ({
-                    value: b.id,
-                    label: `${b.batch_number} · Qty ${b.quantity_on_hand}`,
-                  }))}
-              />
-              <NumberField
-                label="Return Qty"
-                value={retQty}
-                onChange={setRetQty}
-                min={1}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={returnExpiredStock}
-              disabled={busy === "return"}
-              className="mt-2 close-button font-bold text-red-600 disabled:text-slate-300"
-            >
-              {busy === "return" ? "Returning..." : "Return Expired"}
-            </button>
-          </div>
-        </div>
-      </Card>
-      <Card>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <h3 className="card-title font-bold">Item List</h3>
             <p className="card-desc text-slate-500">
-            Configure items used across healthcare services
+              Configure items used across healthcare services
             </p>
           </div>
-          <div className="grid gap-3 md:grid-cols-3 lg:min-w-[720px]">
+          <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
             <TextField
               label="Search"
               value={filters.query}
@@ -998,6 +760,29 @@ export function Items({ apiSession, branchId }: any) {
               options={[
                 { value: "all", label: "All item types" },
                 ...itemTypes.map(([value, label]) => ({ value, label })),
+              ]}
+            />
+            <SelectField
+              label="Sort By"
+              value={filters.sortBy}
+              onChange={(v) => setFiltersAndReset({ ...filters, sortBy: v })}
+              options={[
+                { value: "name", label: "Name" },
+                { value: "latest", label: "Latest" },
+                { value: "type", label: "Type" },
+                { value: "code", label: "Code" },
+                { value: "mrp", label: "MRP" },
+                { value: "price", label: "Service / Sale Price" },
+              ]}
+            />
+            <SelectField
+              label="Price"
+              value={filters.priceBand}
+              onChange={(v) => setFiltersAndReset({ ...filters, priceBand: v })}
+              options={[
+                { value: "all", label: "All prices" },
+                { value: "priced", label: "Priced only" },
+                { value: "free", label: "Free / zero" },
               ]}
             />
             {/* <SelectField
@@ -1022,12 +807,12 @@ export function Items({ apiSession, branchId }: any) {
                 <th>Supplier</th>
                 <th>Purchase</th>
                 <th>MRP</th>
-                <th>Price / Rate</th>
+                <th>Service / Sale Price</th>
                 <th className="pr-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredRows.length === 0 && (
+              {sortedRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-4 text-slate-500">
                     No items match your filter.
@@ -1053,12 +838,8 @@ export function Items({ apiSession, branchId }: any) {
                   <td className="text-xs">
                     {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
                   </td>
-                  <td className="text-xs"  >
-                    {row.price === null
-                      ? "-"
-                    : homeServiceTypes.includes(row.type)
-                        ? `₹${row.price}/hr`
-                        : `₹${row.price}`}
+                  <td className="text-xs">
+                    {row.price === null ? "-" : `₹${row.price}`}
                   </td>
                   <td className="pr-4">
                     <ActionGroup className="justify-end">
@@ -1081,7 +862,7 @@ export function Items({ apiSession, branchId }: any) {
         </div>
         <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
           <span className="text-slate-500">
-            Page {page} of {totalPages} · {filteredRows.length} items
+            Page {page} of {totalPages} · {sortedRows.length} items
           </span>
           <div className="flex gap-2">
             <ActionButton

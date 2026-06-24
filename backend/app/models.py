@@ -25,6 +25,7 @@ from app.modules.home_care.models import (
     HomeCareBooking,
     HomeCareBookingItem,
     HomeCareService,
+    HomeCareVisitLog,
 )
 from app.modules.identity.models import (
     AuthSession,
@@ -118,6 +119,7 @@ __all__ = [
     "HomeCareBooking",
     "HomeCareBookingItem",
     "HomeCareService",
+    "HomeCareVisitLog",
     "DoctorSettlement",
     "DiscountApproval",
     "DiscountOffer",

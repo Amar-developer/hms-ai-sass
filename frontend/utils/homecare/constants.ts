@@ -17,13 +17,19 @@ export const recurrenceOptions = [
   ["custom", "Custom"],
 ];
 
+export const bookingTypeOptions = [
+  ["home_care", "Home Care"],
+  ["home_visit", "Home Visit"],
+];
+
 export const staffTypeOptions = [
   ["nurse", "Nurse"],
-  ["staff", "Staff"],
+  ["staff", "General Staff"],
+  ["lab_technician", "Lab Technician"],
   ["doctor", "Doctor"],
   ["physiotherapist", "Physiotherapist"],
   ["receptionist", "Receptionist"],
-  ["custom", "Custom"],
+  ["users", "Users"],
 ];
 
 export const LOCKED_STATUSES = ["invoiced", "paid", "completed", "cancelled"];
@@ -32,11 +38,13 @@ export const emptyForm = {
   patient_id: "",
   assigned_staff_user_id: "",
   assigned_staff_name: "",
+  booking_type: "home_care",
   staff_type: "nurse",
   recurrence: "daily",
   start_date: today(),
   end_date: today(),
   status: "requested",
+  location: "",
   complaints: "",
   notes: "",
 };
@@ -44,6 +52,6 @@ export const emptyForm = {
 export const emptyLine = {
   service_id: "",
   description: "",
-  quantity: "1",
-  unit_amount: "0",
+  quantity: "2",
+  unit_amount: "500",
 };

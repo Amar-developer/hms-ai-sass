@@ -223,11 +223,12 @@ type TextareaFieldProps = BaseFieldProps & {
   placeholder?: string;
   rows?: number;
   maxLength?: number;
+  inputClass?: string;
 };
 
 export function TextareaField({
-  label, error, hint, required, disabled, className ="px-4 px-2",
-  value, onChange, placeholder, rows = 3, maxLength,
+  label, error, hint, required, disabled, className = "",
+  value, onChange, placeholder, rows = 3, maxLength, inputClass = "",
 }: TextareaFieldProps) {
   return (
     <FormField label={label} error={error} hint={hint} required={required} className={className}>
@@ -239,7 +240,7 @@ export function TextareaField({
         disabled={disabled}
         rows={rows}
         maxLength={maxLength}
-        className={`w-full resize-y rounded-lg border  text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)} ${className}`}
+        className={`w-full resize-y rounded-lg border px-3 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-400 ${inputBorder(error)} ${inputClass}`}
       />
     </FormField>
   );
