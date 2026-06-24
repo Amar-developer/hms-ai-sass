@@ -71,6 +71,8 @@ class InvoiceItemRead(BaseModel):
     selling_amount: int = 0
     buying_amount: int = 0
     supplier_id: str | None = None
+    vendor_name: str | None = None
+    vendor_amount: int = 0
     external_source: str | None = None
     external_slug: str | None = None
     external_item_code: str | None = None
@@ -141,9 +143,12 @@ class InvoiceMembershipBenefitRead(BaseModel):
 
 
 class InvoiceDetailRead(BaseModel):
+    status: InvoiceStatus
     invoice: InvoiceRead
     items: list[InvoiceItemRead]
     payments: list["PaymentRead"] = []
+    credit_notes: list["CreditNoteRead"] = []
+    ledger_entries: list["BillingLedgerEntryRead"] = []
     membership_benefit: InvoiceMembershipBenefitRead | None = None
 
 
@@ -169,12 +174,38 @@ class PaymentRead(BaseModel):
     refund_reason: str | None
 
 
+class BillingLedgerEntryRead(BaseModel):
+    id: str
+    tenant_id: str
+    branch_id: str
+    invoice_id: str
+    invoice_number: str
+    entry_type: str
+    description: str
+    debit_amount: int
+    credit_amount: int
+    invoice_total_delta: int
+    paid_amount_delta: int
+    balance_amount_delta: int
+    status_after: InvoiceStatus
+    reason: str | None
+    related_payment_id: str | None
+    related_credit_note_id: str | None
+    actor_user_id: str | None
+    created_at: datetime
+
+
 class RefundRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
     actor_user_id: str | None = None
 
 
 class CancelInvoiceRequest(BaseModel):
+    reason: str = Field(min_length=2, max_length=500)
+    actor_user_id: str | None = None
+
+
+class AmendInvoiceRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
     actor_user_id: str | None = None
 

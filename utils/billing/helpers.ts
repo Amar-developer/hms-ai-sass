@@ -15,7 +15,7 @@ export function invoiceSource(invoice: any) {
     string,
     { label: string; tone: "slate" | "blue" | "amber" | "purple" }
   > = {
-    lab_scan: { label: "Lab / Scan", tone: "blue" },
+    lab_scan: { label: "Lab / Service", tone: "blue" },
     pharmacy: { label: "Pharmacy", tone: "amber" },
     physiotherapy: { label: "Physiotherapy", tone: "purple" },
     home_care: { label: "Home Care / Visit", tone: "blue" },
@@ -31,7 +31,7 @@ export function invoiceLinkedRecord(invoice: any) {
   if (invoice.physiotherapy_case_id) return "Physiotherapy case";
   if (invoice.home_care_booking_id) return "Home care / visit booking";
   if (invoice.pharmacy_issue_id) return "Pharmacy issue";
-  if (invoice.lab_order_id) return "Lab / Scan order";
+  if (invoice.lab_order_id) return "Lab / Service order";
   if (invoice.consultation_id) return "Consultation";
   if (invoice.appointment_id) return "Appointment";
   return "Direct invoice";
@@ -117,12 +117,12 @@ export function invoicePaidStatus(invoice: any) {
 export function itemTypeLabel(type: any) {
   const labels: Record<string, string> = {
     consultation: "Consultation",
-    lab: "Lab / Scan",
+    lab: "Lab / Service",
     pharmacy: "Medicine",
     ip_room: "IP Room",
     ip_consultation: "IP Doctor",
     ip_medication: "IP Medicine",
-    ip_lab: "IP Lab / Scan",
+    ip_lab: "IP Lab / Service",
     ip_charge: "IP Charge",
     physiotherapy: "Physiotherapy",
     home_care: "Home Care / Visit",

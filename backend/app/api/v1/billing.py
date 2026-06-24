@@ -1,5 +1,6 @@
 from datetime import date, datetime, timezone
 from pathlib import Path
+import json
 import re
 import zlib
 
@@ -21,6 +22,7 @@ from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.audit.service import record_audit_event
 
 from app.modules.billing.models import (
+    BillingLedgerEntry,
     DoctorFeeRule,
     CreditNote,
     DiscountApproval,
@@ -36,6 +38,8 @@ from app.modules.billing.models import (
     TaxRule,
 )
 from app.modules.billing.schemas import (
+    AmendInvoiceRequest,
+    BillingLedgerEntryRead,
     CancelInvoiceRequest,
     CreditNoteCreate,
     CreditNoteRead,
@@ -97,6 +101,70 @@ from app.modules.tenants.models import Branch, Tenant
 router = APIRouter(prefix="/billing")
 
 
+def _record_billing_ledger(
+    session: Session,
+    invoice: Invoice,
+    *,
+    entry_type: str,
+    description: str,
+    debit_amount: int = 0,
+    credit_amount: int = 0,
+    invoice_total_delta: int = 0,
+    paid_amount_delta: int = 0,
+    balance_amount_delta: int = 0,
+    reason: str | None = None,
+    actor_user_id: str | None = None,
+    related_payment_id: str | None = None,
+    related_credit_note_id: str | None = None,
+    commit: bool = True,
+) -> BillingLedgerEntry:
+    entry = BillingLedgerEntry(
+        tenant_id=invoice.tenant_id,
+        branch_id=invoice.branch_id,
+        invoice_id=invoice.id,
+        invoice_number=invoice.invoice_number,
+        entry_type=entry_type,
+        description=description,
+        debit_amount=max(int(debit_amount or 0), 0),
+        credit_amount=max(int(credit_amount or 0), 0),
+        invoice_total_delta=int(invoice_total_delta or 0),
+        paid_amount_delta=int(paid_amount_delta or 0),
+        balance_amount_delta=int(balance_amount_delta or 0),
+        status_after=invoice.status,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        related_payment_id=related_payment_id,
+        related_credit_note_id=related_credit_note_id,
+    )
+    session.add(entry)
+    if commit:
+        session.commit()
+        session.refresh(entry)
+    return entry
+
+
+def _ensure_invoice_submit_ledger(session: Session, invoice: Invoice) -> None:
+    exists = session.exec(
+        select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == invoice.tenant_id,
+            BillingLedgerEntry.invoice_id == invoice.id,
+            BillingLedgerEntry.entry_type == "invoice_submitted",
+        )
+    ).first()
+    if exists:
+        return
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="invoice_submitted",
+        description="Invoice submitted",
+        debit_amount=int(invoice.total_amount or 0),
+        invoice_total_delta=int(invoice.total_amount or 0),
+        balance_amount_delta=int(invoice.balance_amount or 0),
+        actor_user_id=invoice.created_by_user_id,
+    )
+
+
 def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
     if not invoice.physiotherapy_case_id:
         return
@@ -108,7 +176,9 @@ def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
         return
     target_status = (
         "paid"
-        if invoice.balance_amount <= 0 and invoice.total_amount > 0
+        if invoice.status not in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}
+        and invoice.balance_amount <= 0
+        and invoice.total_amount > 0
         else "completed"
     )
     if case.status == target_status:
@@ -130,7 +200,9 @@ def _sync_home_care_booking_status(session: Session, invoice: Invoice) -> None:
         return
     target_status = (
         "paid"
-        if invoice.balance_amount <= 0 and invoice.total_amount > 0
+        if invoice.status not in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}
+        and invoice.balance_amount <= 0
+        and invoice.total_amount > 0
         else "invoiced"
     )
     if booking.status == target_status:
@@ -520,6 +592,13 @@ def _money_pdf(value: object) -> str:
     return f"Rs. {int(value or 0):,}"
 
 
+def _signed_money_pdf(value: object) -> str:
+    amount = int(value or 0)
+    if amount < 0:
+        return f"- Rs. {abs(amount):,}"
+    return _money_pdf(amount)
+
+
 def _percent_pdf(amount: int, base: int) -> str:
     if amount <= 0 or base <= 0:
         return "0%"
@@ -759,6 +838,10 @@ def _build_receipt_pdf(
         font = "F2" if bold else "F1"
         ops.append(f"{fill} rg BT /{font} {size} Tf 1 0 0 1 {x} {y} Tm ({value}) Tj ET")
 
+    def text_width(value: object, size: int, bold: bool = False) -> int:
+        width_factor = 0.52 if bold else 0.48
+        return int(len(_pdf_text(value)) * size * width_factor)
+
     def wrap_text(value: object, max_chars: int) -> list[str]:
         words = str(value or "").split()
         lines: list[str] = []
@@ -776,6 +859,28 @@ def _build_receipt_pdf(
 
     def center(x1: int, x2: int, y: int, value: object, size=8, bold=False) -> None:
         text((x1 + x2) // 2, y, value, size, bold, "center")
+
+    def item_selling_amount(item: InvoiceItem) -> int:
+        return int(item.selling_amount or item.unit_amount or 0)
+
+    def item_mrp_amount(item: InvoiceItem) -> int | None:
+        mrp = int(item.mrp_amount or 0)
+        if mrp > 0:
+            return mrp
+        if item.item_type == "pharmacy":
+            return item_selling_amount(item) or None
+        return None
+
+    def item_mrp_text(item: InvoiceItem) -> str:
+        mrp = item_mrp_amount(item)
+        return _money_pdf(mrp) if mrp else "-"
+
+    def item_discount_percent(item: InvoiceItem) -> str:
+        mrp = item_mrp_amount(item)
+        selling = item_selling_amount(item)
+        if not mrp or selling >= mrp:
+            return "-"
+        return f"{((mrp - selling) * 100 / mrp):.2f}"
 
     def field_label(x: int, y: int, label: str, value: object = "") -> None:
         text(x, y, label, 8, True)
@@ -850,19 +955,7 @@ def _build_receipt_pdf(
         or tenant_name
         or "Hospital"
     ).strip()
-    header_address_parts = [
-        part
-        for part in [
-            branch.address if branch and branch.address else "",
-            branch.city if branch and branch.city else "",
-            branch.state if branch and branch.state else "",
-        ]
-        if part
-    ]
-    header_address = " | ".join(header_address_parts) or (
-        tenant.address if tenant and tenant.address else ""
-    )
-    header_phone = (tenant.phone if tenant and tenant.phone else "").strip()
+    header_address = (tenant.address if tenant and tenant.address else "").strip()
     patient_name = (
         getattr(patient, "full_name", None)
         or getattr(patient, "name", None)
@@ -885,30 +978,33 @@ def _build_receipt_pdf(
         ops.append(f"q {image_w} 0 0 {image_h} 31 765 cm /Logo Do Q")
     title_size = 20 if len(legal_name) <= 36 else 17 if len(legal_name) <= 52 else 14
     title_parts = legal_name.split(maxsplit=1)
-    title_x = 120 if logo else 20
-    text(title_x, 790, title_parts[0], title_size, True, fill=blue)
+    title_center_x = 297
+    title_first = title_parts[0] if title_parts else legal_name
+    title_rest = title_parts[1] if len(title_parts) > 1 else ""
+    title_gap = 8 if title_rest else 0
+    title_total_width = (
+        text_width(title_first, title_size, True)
+        + title_gap
+        + text_width(title_rest, title_size, True)
+    )
+    title_x = title_center_x - title_total_width // 2
+    text(title_x, 790, title_first, title_size, True, fill=blue)
     if len(title_parts) > 1:
         text(
-            title_x + int(len(title_parts[0]) * title_size * 0.52) + 8,
+            title_x + text_width(title_first, title_size, True) + title_gap,
             790,
-            title_parts[1],
+            title_rest,
             title_size,
             True,
             fill=brand_green,
         )
-    line(title_x, 781, 496, 781, green)
-    address_line = wrap_text(header_address, 74)[0] if header_address else ""
+    line(max(16, title_x), 781, min(579, title_x + title_total_width), 781, green)
+    address_line = wrap_text(header_address, 90)[0] if header_address else ""
     if header_address:
-        location_icon(title_x, 763)
-        text(title_x + 18, 764, address_line, 10, True, fill=brand_green)
-    if header_phone:
-        phone_x = (
-            title_x + 18 + int(len(address_line) * 10 * 0.48) + 18
-            if address_line
-            else title_x
-        )
-        phone_icon(phone_x, 764)
-        text(phone_x + 18, 764, header_phone, 10, True, fill=brand_green)
+        address_width = 18 + text_width(address_line, 10, True)
+        address_x = title_center_x - address_width // 2
+        location_icon(address_x, 763)
+        text(address_x + 18, 764, address_line, 10, True, fill=brand_green)
     text(575, 776, "INVOICE", 13, True, "right", fill=red)
     line(16, 742, 579, 742, green)
     text(
@@ -931,8 +1027,8 @@ def _build_receipt_pdf(
     text(485, 706, ":", 9, True)
     field_label(25, 682, "Name", patient_name)
     field_label(25, 666, "Phone No.", patient_phone)
-    field_label(25, 650, "WhatsApp No.", patient_phone)
-    field_label(25, 634, "GSTIN No.", "")
+    field_label(25, 650, "Patient ID", getattr(patient, "patient_number", "") or "")
+    field_label(25, 634, "WhatsApp No.", patient_phone)
     field_label(25, 618, "Address", patient_address)
     field_label(306, 679, "Invoice No.", invoice.invoice_number)
     field_label(306, 662, "Invoice Date", invoice.created_at.strftime("%d/%m/%Y"))
@@ -953,23 +1049,51 @@ def _build_receipt_pdf(
     center(467, 515, 563, "Disc. %", 8, True)
     center(515, 579, 563, "Rate", 8, True)
 
+    subtotal = int(invoice.subtotal_amount or 0)
+    extra_discount = int(invoice.discount_amount or 0)
+    taxable = int(invoice.taxable_amount or max(subtotal - extra_discount, 0))
+    tax = int(invoice.tax_amount or 0)
+    item_quantity_total = sum(int(item.quantity or 0) for item in items)
+    item_discount_total = sum(
+        max((item_mrp_amount(item) or 0) - item_selling_amount(item), 0)
+        * int(item.quantity or 0)
+        for item in items
+    )
+    total_discount = item_discount_total + extra_discount
+
     row_y = 532
     for index, item in enumerate(items[:10], start=1):
         text(25, row_y, index, 8)
         for offset, line_value in enumerate(wrap_text(item.description, 36)[:2]):
             text(45, row_y - offset * 10, line_value, 8)
         text(396, row_y, item.quantity, 8, align="right")
-        text(459, row_y, _money_pdf(item.unit_amount), 8, align="right")
-        text(505, row_y, "-", 8, align="right")
+        text(459, row_y, item_mrp_text(item), 8, align="right")
+        text(505, row_y, item_discount_percent(item), 8, align="right")
         text(570, row_y, _money_pdf(item.total_amount), 8, align="right")
         row_y -= 18
     if len(items) > 10:
         text(45, row_y, f"+ {len(items) - 10} more item(s)", 8, True)
 
+    summary_y = 338
+    summary_rows: list[tuple[str, int]] = [
+        ("Subtotal", subtotal),
+    ]
+    if extra_discount > 0:
+        summary_rows.append(("Extra Discount", -extra_discount))
+    if tax > 0:
+        summary_rows.append((f"Tax ({_percent_pdf(tax, taxable)})", tax))
+    for label, amount in summary_rows:
+        text(350, summary_y, label, 8, True, "right")
+        text(570, summary_y, _signed_money_pdf(amount), 8, amount >= 0, "right")
+        summary_y -= 16
+
     line(16, 264, 579, 264, green)
     for x in [371, 419, 467, 515]:
         line(x, 264, x, 280, green)
     text(25, 269, f"Date: {invoice.created_at.strftime('%d/%m/%Y')}", 8, True)
+    text(406, 269, item_quantity_total, 8, True, "right")
+    if total_discount > 0:
+        text(505, 269, _money_pdf(total_discount), 8, True, "right")
     text(350, 269, "Total", 9, True, "right")
     text(570, 269, _money_pdf(invoice.total_amount), 9, True, "right")
 
@@ -1060,6 +1184,7 @@ def _build_receipt_pdf(
 
 def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
     invoice = _normalize_invoice_status(session, invoice)
+    _ensure_invoice_submit_ledger(session, invoice)
     items = list(
         session.exec(
             select(InvoiceItem)
@@ -1079,19 +1204,82 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
             .order_by(Payment.collected_at)
         ).all()
     )
+    credit_notes = list(
+        session.exec(
+            select(CreditNote)
+            .where(
+                CreditNote.tenant_id == invoice.tenant_id,
+                CreditNote.invoice_id == invoice.id,
+            )
+            .order_by(CreditNote.created_at)
+        ).all()
+    )
+    ledger_entries = list(
+        session.exec(
+            select(BillingLedgerEntry)
+            .where(
+                BillingLedgerEntry.tenant_id == invoice.tenant_id,
+                BillingLedgerEntry.invoice_id == invoice.id,
+            )
+            .order_by(BillingLedgerEntry.created_at.desc())
+        ).all()
+    )
+    supplier_names: dict[str, str] = {}
+    supplier_ids = {item.supplier_id for item in items if item.supplier_id}
+    if supplier_ids:
+        from app.modules.pharmacy.models import PharmacySupplier
+
+        suppliers = session.exec(
+            select(PharmacySupplier).where(
+                PharmacySupplier.tenant_id == invoice.tenant_id,
+                PharmacySupplier.id.in_(supplier_ids),
+            )
+        ).all()
+        supplier_names = {supplier.id: supplier.name for supplier in suppliers}
+    consultation_vendor_name: str | None = None
+    if invoice.appointment_id:
+        appointment = session.get(Appointment, invoice.appointment_id)
+        if appointment and appointment.tenant_id == invoice.tenant_id:
+            if appointment.practitioner_id:
+                practitioner = session.get(Practitioner, appointment.practitioner_id)
+                if practitioner and practitioner.tenant_id == invoice.tenant_id:
+                    consultation_vendor_name = practitioner.full_name
+    consultation_vendor_amount = int(invoice.doctor_share_amount or 0)
+
+    def item_read(item: InvoiceItem) -> InvoiceItemRead:
+        read = InvoiceItemRead.model_validate(item, from_attributes=True)
+        if item.item_type == "consultation" and consultation_vendor_amount > 0:
+            read.vendor_name = consultation_vendor_name or "Doctor share"
+            read.vendor_amount = consultation_vendor_amount
+        elif item.item_type in {"lab", "pharmacy"}:
+            read.vendor_name = (
+                supplier_names.get(str(item.supplier_id or ""))
+                or item.supplier_id
+                or None
+            )
+            read.vendor_amount = int(item.buying_amount or 0)
+        return read
+
     invoice_read = InvoiceRead.model_validate(invoice, from_attributes=True)
     if invoice.appointment_id:
         appointment = session.get(Appointment, invoice.appointment_id)
         if appointment and appointment.tenant_id == invoice.tenant_id:
             invoice_read.appointment_type = appointment.appointment_type
     return InvoiceDetailRead(
+        status=invoice_read.status,
         invoice=invoice_read,
-        items=[
-            InvoiceItemRead.model_validate(item, from_attributes=True) for item in items
-        ],
+        items=[item_read(item) for item in items],
         payments=[
             PaymentRead.model_validate(payment, from_attributes=True)
             for payment in payments
+        ],
+        credit_notes=[
+            CreditNoteRead.model_validate(credit_note, from_attributes=True)
+            for credit_note in credit_notes
+        ],
+        ledger_entries=[
+            BillingLedgerEntryRead.model_validate(entry, from_attributes=True)
+            for entry in ledger_entries
         ],
         membership_benefit=_invoice_membership_benefit(session, invoice),
     )
@@ -1272,6 +1460,16 @@ def _create_service_invoice(
         )
     session.commit()
     session.refresh(invoice)
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="invoice_submitted",
+        description="Invoice submitted",
+        debit_amount=total_amount,
+        invoice_total_delta=total_amount,
+        balance_amount_delta=total_amount,
+        actor_user_id=created_by_user_id,
+    )
     return invoice
 
 
@@ -1727,6 +1925,7 @@ def create_invoice_from_consultation(
         treatment_type=consultation.treatment_type,
     )
     invoice = refresh_consultation_invoice(session, invoice)
+    _ensure_invoice_submit_ledger(session, invoice)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -1756,14 +1955,15 @@ def create_invoice_from_consultation(
     return _read_invoice_detail(session, invoice)
 
 
-def _reprice_zero_lab_items(
+def _sync_lab_order_item_catalog_prices(
     session: Session, tenant_id: str, order, items: list
 ) -> None:
-    """Backfill prices for zero-priced lab items from the external catalog.
+    """Refresh lab order item MRP/selling metadata from the catalog.
 
-    Orders captured while the external catalog was misconfigured can persist a
-    price of 0. When the integration is healthy, re-fetch the price at invoice
-    time so the lab bill reflects the real catalog price instead of zero."""
+    Older lab orders may have copied default/selling price into the MRP field.
+    Invoice creation reads from LabOrderItem, so keep the order item price
+    metadata aligned with the latest lab catalog before building invoice rows.
+    """
     from app.api.v1.lab import (
         _external_lab_items_enabled,
         _find_lab_test,
@@ -1772,26 +1972,51 @@ def _reprice_zero_lab_items(
     from app.api.v1.lab import _frappe_catalog_client as _lab_frappe_client
     from app.modules.lab.models import LabTestCatalog
 
-    zero_items = [item for item in items if int(item.price or 0) <= 0]
-    if not zero_items or not _external_lab_items_enabled(session, tenant_id):
-        return
-    try:
-        client = _lab_frappe_client()
-    except Exception:
-        return
+    use_external = _external_lab_items_enabled(session, tenant_id)
+    client = None
+    if use_external:
+        try:
+            client = _lab_frappe_client()
+        except Exception:
+            client = None
     changed = False
-    for item in zero_items:
+    for item in items:
+        old_price = int(item.price or 0)
+        old_selling = int(item.selling_price or 0)
+        old_mrp = int(item.mrp_price or 0)
+        old_buying = int(item.buying_price or 0)
+        old_supplier_id = item.supplier_id
+        old_external_source = item.external_source
+        old_external_slug = item.external_slug
+        old_external_item_code = item.external_item_code
+
         test = session.get(LabTestCatalog, item.test_id) if item.test_id else None
         if test is None:
             test = _find_lab_test(session, tenant_id, order.branch_id, item.test_name)
-        pricing = _resolve_lab_price(client, test, item.test_name)
+        pricing = _resolve_lab_price(
+            client,
+            test,
+            item.test_name,
+            external_item_code=item.external_item_code,
+            external_slug=item.external_slug,
+        )
         new_price = int(pricing.get("price") or 0)
-        if new_price <= 0:
-            continue
-        item.price = new_price
-        item.mrp_price = int(pricing.get("mrp_price") or item.mrp_price or 0)
-        item.selling_price = int(pricing.get("selling_price") or new_price)
-        item.buying_price = int(pricing.get("buying_price") or item.buying_price or 0)
+        new_mrp = int(pricing.get("mrp_price") or 0)
+        new_selling = int(pricing.get("selling_price") or new_price or 0)
+        new_buying = int(pricing.get("buying_price") or 0)
+
+        if old_price <= 0 and new_price > 0:
+            item.price = new_price
+        if new_mrp > 0:
+            item.mrp_price = new_mrp
+        if new_selling > 0:
+            item.selling_price = new_selling
+        elif int(item.selling_price or 0) <= 0:
+            item.selling_price = int(item.price or 0)
+        if new_buying > 0:
+            item.buying_price = new_buying
+        if pricing.get("supplier_id"):
+            item.supplier_id = str(pricing.get("supplier_id") or "")
         if pricing.get("external_source"):
             item.external_source = str(pricing.get("external_source"))
             item.external_slug = str(
@@ -1800,8 +2025,18 @@ def _reprice_zero_lab_items(
             item.external_item_code = str(
                 pricing.get("external_item_code") or item.external_item_code or ""
             )
-        session.add(item)
-        changed = True
+        if (
+            int(item.price or 0) != old_price
+            or int(item.selling_price or 0) != old_selling
+            or int(item.mrp_price or 0) != old_mrp
+            or int(item.buying_price or 0) != old_buying
+            or item.supplier_id != old_supplier_id
+            or item.external_source != old_external_source
+            or item.external_slug != old_external_slug
+            or item.external_item_code != old_external_item_code
+        ):
+            session.add(item)
+            changed = True
     if changed:
         if int(order.amount or 0) <= 0:
             order.amount = sum(int(item.price or 0) for item in items)
@@ -1809,6 +2044,105 @@ def _reprice_zero_lab_items(
         session.commit()
         for item in items:
             session.refresh(item)
+
+
+def _sync_lab_invoice_item_catalog_prices(
+    session: Session, invoice: Invoice, lab_items: list
+) -> None:
+    invoice_items = list(
+        session.exec(
+            select(InvoiceItem)
+            .where(
+                InvoiceItem.invoice_id == invoice.id,
+                InvoiceItem.item_type == "lab",
+            )
+            .order_by(InvoiceItem.created_at)
+        ).all()
+    )
+    changed = False
+    for invoice_item, lab_item in zip(invoice_items, lab_items, strict=False):
+        item_changed = False
+        mrp_amount = int(lab_item.mrp_price or 0)
+        selling_amount = int(lab_item.selling_price or lab_item.price or 0)
+        buying_amount = int(lab_item.buying_price or 0)
+        if invoice_item.mrp_amount != mrp_amount:
+            invoice_item.mrp_amount = mrp_amount
+            item_changed = True
+        if invoice_item.selling_amount != selling_amount:
+            invoice_item.selling_amount = selling_amount
+            item_changed = True
+        if invoice_item.buying_amount != buying_amount:
+            invoice_item.buying_amount = buying_amount
+            item_changed = True
+        if invoice_item.supplier_id != lab_item.supplier_id:
+            invoice_item.supplier_id = lab_item.supplier_id
+            item_changed = True
+        if invoice_item.external_source != lab_item.external_source:
+            invoice_item.external_source = lab_item.external_source
+            item_changed = True
+        if invoice_item.external_slug != lab_item.external_slug:
+            invoice_item.external_slug = lab_item.external_slug
+            item_changed = True
+        if invoice_item.external_item_code != lab_item.external_item_code:
+            invoice_item.external_item_code = lab_item.external_item_code
+            item_changed = True
+        if int(invoice_item.unit_amount or 0) <= 0 and int(lab_item.price or 0) > 0:
+            invoice_item.unit_amount = int(lab_item.price or 0)
+            invoice_item.total_amount = int(lab_item.price or 0)
+            item_changed = True
+        if item_changed:
+            session.add(invoice_item)
+            changed = True
+    if changed:
+        session.commit()
+        session.refresh(invoice)
+
+
+def _sync_pharmacy_invoice_item_catalog_prices(
+    session: Session, invoice: Invoice, issue_items: list, medicine_by_id: dict
+) -> None:
+    invoice_items = list(
+        session.exec(
+            select(InvoiceItem)
+            .where(
+                InvoiceItem.invoice_id == invoice.id,
+                InvoiceItem.item_type == "pharmacy",
+            )
+            .order_by(InvoiceItem.created_at)
+        ).all()
+    )
+    changed = False
+    for invoice_item, issue_item in zip(invoice_items, issue_items, strict=False):
+        item_changed = False
+        medicine = medicine_by_id.get(issue_item.medicine_id or "")
+        selling_amount = int(
+            issue_item.unit_price or getattr(medicine, "default_sale_price", 0) or 0
+        )
+        mrp_amount = int(getattr(medicine, "mrp_price", 0) or selling_amount)
+        buying_amount = int(getattr(medicine, "purchase_price", 0) or 0)
+        supplier_id = getattr(medicine, "supplier_id", None)
+        if invoice_item.mrp_amount != mrp_amount:
+            invoice_item.mrp_amount = mrp_amount
+            item_changed = True
+        if invoice_item.selling_amount != selling_amount:
+            invoice_item.selling_amount = selling_amount
+            item_changed = True
+        if invoice_item.buying_amount != buying_amount:
+            invoice_item.buying_amount = buying_amount
+            item_changed = True
+        if invoice_item.supplier_id != supplier_id:
+            invoice_item.supplier_id = supplier_id
+            item_changed = True
+        if int(invoice_item.unit_amount or 0) <= 0 and selling_amount > 0:
+            invoice_item.unit_amount = selling_amount
+            invoice_item.total_amount = int(issue_item.quantity or 1) * selling_amount
+            item_changed = True
+        if item_changed:
+            session.add(invoice_item)
+            changed = True
+    if changed:
+        session.commit()
+        session.refresh(invoice)
 
 
 @router.post(
@@ -1842,12 +2176,24 @@ def create_invoice_from_lab_order(
             detail="Cancelled lab order cannot be invoiced",
         )
     require_user_branch_access(current_user, order.branch_id)
+    items = list(
+        session.exec(
+            select(LabOrderItem)
+            .where(
+                LabOrderItem.tenant_id == tenant_id,
+                LabOrderItem.lab_order_id == order.id,
+            )
+            .order_by(LabOrderItem.created_at)
+        ).all()
+    )
+    _sync_lab_order_item_catalog_prices(session, tenant_id, order, items)
     existing = session.exec(
         select(Invoice).where(
             Invoice.tenant_id == tenant_id, Invoice.lab_order_id == order.id
         )
     ).first()
     if existing:
+        _sync_lab_invoice_item_catalog_prices(session, existing, items)
         return _read_invoice_detail(
             session, update_invoice_payment_status(session, existing)
         )
@@ -1857,15 +2203,6 @@ def create_invoice_from_lab_order(
         consultation = session.get(Consultation, order.consultation_id)
         if consultation and consultation.tenant_id == tenant_id:
             appointment_id = consultation.appointment_id
-    items = list(
-        session.exec(
-            select(LabOrderItem).where(
-                LabOrderItem.tenant_id == tenant_id,
-                LabOrderItem.lab_order_id == order.id,
-            )
-        ).all()
-    )
-    _reprice_zero_lab_items(session, tenant_id, order, items)
     amount = int(order.amount or sum(item.price for item in items) or 0)
     if amount <= 0:
         raise HTTPException(
@@ -1962,6 +2299,7 @@ def create_invoice_from_pharmacy_issue(
 ) -> InvoiceDetailRead:
     enforce_module_enabled(session, tenant_id, "billing_basic")
     from app.modules.pharmacy.models import (
+        MedicineCatalog,
         PharmacyIssue,
         PharmacyIssueItem,
         PharmacyIssueStatus,
@@ -1978,6 +2316,21 @@ def create_invoice_from_pharmacy_issue(
             detail="Cancelled pharmacy issue cannot be invoiced",
         )
     require_user_branch_access(current_user, issue.branch_id)
+    items = list(
+        session.exec(
+            select(PharmacyIssueItem)
+            .where(
+                PharmacyIssueItem.tenant_id == tenant_id,
+                PharmacyIssueItem.pharmacy_issue_id == issue.id,
+            )
+            .order_by(PharmacyIssueItem.created_at)
+        ).all()
+    )
+    medicine_by_id = {
+        medicine_id: medicine
+        for medicine_id in {item.medicine_id for item in items if item.medicine_id}
+        if (medicine := session.get(MedicineCatalog, medicine_id)) is not None
+    }
     existing = session.exec(
         select(Invoice).where(
             Invoice.tenant_id == tenant_id, Invoice.pharmacy_issue_id == issue.id
@@ -1987,6 +2340,9 @@ def create_invoice_from_pharmacy_issue(
         issue.billing_invoice_id = existing.id
         session.add(issue)
         session.commit()
+        _sync_pharmacy_invoice_item_catalog_prices(
+            session, existing, items, medicine_by_id
+        )
         return _read_invoice_detail(
             session, update_invoice_payment_status(session, existing)
         )
@@ -1996,14 +2352,6 @@ def create_invoice_from_pharmacy_issue(
         consultation = session.get(Consultation, issue.consultation_id)
         if consultation and consultation.tenant_id == tenant_id:
             appointment_id = consultation.appointment_id
-    items = list(
-        session.exec(
-            select(PharmacyIssueItem).where(
-                PharmacyIssueItem.tenant_id == tenant_id,
-                PharmacyIssueItem.pharmacy_issue_id == issue.id,
-            )
-        ).all()
-    )
     amount = int(
         issue.amount or sum(item.quantity * item.unit_price for item in items) or 0
     )
@@ -2018,6 +2366,26 @@ def create_invoice_from_pharmacy_issue(
             pharmacy_benefit_amounts[item.medicine_id] = pharmacy_benefit_amounts.get(
                 item.medicine_id, 0
             ) + int(item.quantity * item.unit_price)
+
+    def pharmacy_line_item(item: PharmacyIssueItem) -> dict[str, int | str | None]:
+        medicine = medicine_by_id.get(item.medicine_id or "")
+        selling_amount = int(
+            item.unit_price or (medicine.default_sale_price if medicine else 0) or 0
+        )
+        mrp_amount = int((medicine.mrp_price if medicine else 0) or selling_amount)
+        buying_amount = int((medicine.purchase_price if medicine else 0) or 0)
+        return {
+            "item_type": "pharmacy",
+            "description": item.medicine_name,
+            "quantity": item.quantity,
+            "unit_amount": selling_amount,
+            "total_amount": item.quantity * selling_amount,
+            "mrp_amount": mrp_amount,
+            "selling_amount": selling_amount,
+            "buying_amount": buying_amount,
+            "supplier_id": medicine.supplier_id if medicine else None,
+        }
+
     invoice = _create_service_invoice(
         session,
         tenant_id=tenant_id,
@@ -2034,17 +2402,7 @@ def create_invoice_from_pharmacy_issue(
         discount_offer_id=payload.discount_offer_id,
         benefit_item_ids=[item.medicine_id for item in items if item.medicine_id],
         benefit_item_amounts=pharmacy_benefit_amounts,
-        line_items=[
-            {
-                "item_type": "pharmacy",
-                "description": item.medicine_name,
-                "quantity": item.quantity,
-                "unit_amount": item.unit_price,
-                "total_amount": item.quantity * item.unit_price,
-            }
-            for item in items
-        ]
-        or None,
+        line_items=[pharmacy_line_item(item) for item in items] or None,
         created_by_user_id=payload.created_by_user_id,
     )
     issue.billing_invoice_id = invoice.id
@@ -2507,6 +2865,17 @@ def record_payment(
     session.commit()
     session.refresh(payment)
     invoice = update_invoice_payment_status(session, invoice)
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="payment_recorded",
+        description="Payment recorded",
+        credit_amount=payment.amount,
+        paid_amount_delta=payment.amount,
+        balance_amount_delta=-payment.amount,
+        actor_user_id=payload.collected_by_user_id or current_user.id,
+        related_payment_id=payment.id,
+    )
     _sync_physiotherapy_case_status(session, invoice)
     _sync_home_care_booking_status(session, invoice)
     _sync_patient_membership_payment(session, invoice)
@@ -2571,6 +2940,18 @@ def refund_payment(
     session.commit()
     session.refresh(payment)
     invoice = update_invoice_payment_status(session, invoice)
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="payment_refunded",
+        description="Payment refunded",
+        debit_amount=payment.amount,
+        paid_amount_delta=-payment.amount,
+        balance_amount_delta=payment.amount,
+        reason=payload.reason,
+        actor_user_id=payload.actor_user_id or current_user.id,
+        related_payment_id=payment.id,
+    )
     _sync_physiotherapy_case_status(session, invoice)
     _sync_home_care_booking_status(session, invoice)
     _sync_patient_membership_payment(session, invoice)
@@ -2614,14 +2995,14 @@ def refund_payment(
     return _read_invoice_detail(session, invoice)
 
 
-@router.post("/invoices/{invoice_id}/cancel", response_model=InvoiceRead)
+@router.post("/invoices/{invoice_id}/cancel", response_model=InvoiceDetailRead)
 def cancel_invoice(
     invoice_id: str,
     payload: CancelInvoiceRequest,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
-) -> Invoice:
+) -> InvoiceDetailRead:
     enforce_entitlement(session, tenant_id, "billing_basic")
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
@@ -2629,32 +3010,141 @@ def cancel_invoice(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
         )
     require_user_branch_access(current_user, invoice.branch_id)
-    if invoice.paid_amount > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Paid invoices cannot be cancelled; refund payments first",
-        )
     if invoice.status == InvoiceStatus.CANCELLED:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Invoice already cancelled"
         )
+    old_paid = int(invoice.paid_amount or 0)
+    old_balance = int(invoice.balance_amount or 0)
+    old_total = int(invoice.total_amount or 0)
+    if old_paid > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Paid invoices cannot be cancelled; refund payments first",
+        )
+    payments = list(
+        session.exec(
+            select(Payment).where(
+                Payment.tenant_id == tenant_id,
+                Payment.invoice_id == invoice.id,
+                Payment.status == PaymentStatus.RECORDED,
+            )
+        ).all()
+    )
+    for payment in payments:
+        payment.status = PaymentStatus.REFUNDED
+        payment.refunded_at = datetime.now(timezone.utc)
+        payment.refund_reason = payload.reason
+        session.add(payment)
+        credit = CreditNote(
+            tenant_id=tenant_id,
+            branch_id=invoice.branch_id,
+            invoice_id=invoice.id,
+            credit_note_number=next_credit_note_number(session, tenant_id),
+            amount=payment.amount,
+            reason=f"Invoice cancellation: {payload.reason}",
+            created_by_user_id=payload.actor_user_id or current_user.id,
+        )
+        session.add(credit)
     invoice.status = InvoiceStatus.CANCELLED
+    invoice.paid_amount = 0
+    invoice.balance_amount = 0
     invoice.updated_at = datetime.now(timezone.utc)
     session.add(invoice)
     session.commit()
     session.refresh(invoice)
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="invoice_cancelled",
+        description="Invoice cancelled and financial impact reversed",
+        credit_amount=old_total,
+        invoice_total_delta=-old_total,
+        paid_amount_delta=-old_paid,
+        balance_amount_delta=-old_balance,
+        reason=payload.reason,
+        actor_user_id=payload.actor_user_id or current_user.id,
+    )
+    _sync_physiotherapy_case_status(session, invoice)
+    _sync_home_care_booking_status(session, invoice)
+    _sync_patient_membership_payment(session, invoice)
     record_audit_event(
         session,
         tenant_id=tenant_id,
         branch_id=invoice.branch_id,
-        actor_user_id=payload.actor_user_id,
+        actor_user_id=payload.actor_user_id or current_user.id,
         action="invoice.cancelled",
         resource_type="invoice",
         resource_id=invoice.id,
         purpose="billing_cancellation",
-        metadata_json=f'{{"reason": "{payload.reason}"}}',
+        metadata_json=json.dumps(
+            {
+                "reason": payload.reason,
+                "reversed_paid_amount": old_paid,
+                "reversed_balance_amount": old_balance,
+                "reversed_invoice_amount": old_total,
+            }
+        ),
     )
-    return invoice
+    return _read_invoice_detail(session, invoice)
+
+
+@router.post("/invoices/{invoice_id}/amend", response_model=InvoiceDetailRead)
+def amend_invoice(
+    invoice_id: str,
+    payload: AmendInvoiceRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    invoice = session.get(Invoice, invoice_id)
+    if not invoice or invoice.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
+    require_user_branch_access(current_user, invoice.branch_id)
+    if invoice.status != InvoiceStatus.CANCELLED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only cancelled invoices can be amended",
+        )
+    restored_balance = int(invoice.total_amount or 0)
+    invoice.status = (
+        InvoiceStatus.ISSUED if restored_balance > 0 else InvoiceStatus.PAID
+    )
+    invoice.paid_amount = 0
+    invoice.balance_amount = restored_balance
+    invoice.updated_at = datetime.now(timezone.utc)
+    session.add(invoice)
+    session.commit()
+    session.refresh(invoice)
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="invoice_amended",
+        description="Cancelled invoice amended and reopened",
+        debit_amount=restored_balance,
+        invoice_total_delta=restored_balance,
+        balance_amount_delta=restored_balance,
+        reason=payload.reason,
+        actor_user_id=payload.actor_user_id or current_user.id,
+    )
+    _sync_physiotherapy_case_status(session, invoice)
+    _sync_home_care_booking_status(session, invoice)
+    _sync_patient_membership_payment(session, invoice)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        actor_user_id=payload.actor_user_id or current_user.id,
+        action="invoice.amended",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        purpose="billing_amendment",
+        metadata_json=json.dumps({"reason": payload.reason}),
+    )
+    return _read_invoice_detail(session, invoice)
 
 
 @router.get("/doctor-settlements/summary", response_model=DoctorSettlementSummary)
@@ -2670,7 +3160,10 @@ def doctor_settlement_summary(
     statement = (
         select(Invoice, Appointment)
         .join(Appointment, Invoice.appointment_id == Appointment.id)
-        .where(Invoice.tenant_id == tenant_id)
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
+        )
     )
     if branch_id:
         statement = statement.where(Invoice.branch_id == branch_id)
@@ -2801,7 +3294,9 @@ def due_collection_report(
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(Invoice).where(
-        Invoice.tenant_id == tenant_id, Invoice.balance_amount > 0
+        Invoice.tenant_id == tenant_id,
+        Invoice.balance_amount > 0,
+        Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
     )
     if branch_id:
         statement = statement.where(Invoice.branch_id == branch_id)
@@ -2843,7 +3338,10 @@ def revenue_report(
     statement = (
         select(Invoice, Appointment)
         .join(Appointment, Invoice.appointment_id == Appointment.id)
-        .where(Invoice.tenant_id == tenant_id)
+        .where(
+            Invoice.tenant_id == tenant_id,
+            Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
+        )
     )
     if branch_id:
         statement = statement.where(Invoice.branch_id == branch_id)

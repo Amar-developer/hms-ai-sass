@@ -185,7 +185,7 @@ export const requiredRolePermissions = [
 export const serviceScopes = [
   ["all", "All billable modules"],
   ["consultation", "Consultation"],
-  ["lab", "Lab / Scan"],
+  ["lab", "Lab / Service"],
   ["pharmacy", "Pharmacy"],
   ["items", "Items"],
 ] as const;

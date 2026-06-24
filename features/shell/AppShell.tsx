@@ -281,7 +281,7 @@ export function AppShell(props: any) {
       case "queue":
         return <TokenQueue {...ctx} setActive={navigatePage} />;
       case "patients":
-        return <Patient {...ctx} />;
+        return <Patient {...ctx} setActive={navigatePage} />;
       case "practitioners":
         return <Doctors {...ctx} />;
       case "scheduling":

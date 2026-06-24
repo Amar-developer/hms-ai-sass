@@ -161,6 +161,27 @@ class InvoiceItem(SQLModel, table=True):
     created_at: datetime = Field(default_factory=now_utc, index=True)
 
 
+class BillingLedgerEntry(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("billledger"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    invoice_id: str = Field(index=True, foreign_key="invoice.id")
+    invoice_number: str = Field(index=True, max_length=60)
+    entry_type: str = Field(index=True, max_length=60)
+    description: str = Field(max_length=500)
+    debit_amount: int = Field(default=0, ge=0)
+    credit_amount: int = Field(default=0, ge=0)
+    invoice_total_delta: int = Field(default=0)
+    paid_amount_delta: int = Field(default=0)
+    balance_amount_delta: int = Field(default=0)
+    status_after: InvoiceStatus = Field(index=True)
+    reason: str | None = Field(default=None, max_length=500)
+    related_payment_id: str | None = Field(default=None, index=True)
+    related_credit_note_id: str | None = Field(default=None, index=True)
+    actor_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+
+
 class Payment(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("payment"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")

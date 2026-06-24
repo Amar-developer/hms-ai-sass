@@ -40,7 +40,8 @@ repos:
       - id: conventional-pre-commit
         stages: [commit-msg]
 
-  # Full quality gate before pushing a feature branch
+  # Quality gates — backend moved to manual (run on demand / let CI handle it),
+  # frontend kept on pre-push since it's comparatively fast.
   - repo: local
     hooks:
       - id: backend-quality
@@ -49,7 +50,7 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
-        stages: [pre-push]
+        stages: [manual]
       - id: frontend-quality
         name: Frontend quality gate (test + typecheck + build)
         entry: bash -c 'npm test && npm run typecheck && npm run build'

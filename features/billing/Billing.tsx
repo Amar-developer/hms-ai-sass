@@ -432,6 +432,9 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
           }),
         },
       );
+      await loadLiveData(apiSession);
+      await loadReports();
+      await openInvoiceDetail(invoice);
       setMessage(`Credit note issued for ${invoice.invoice_number}.`);
     } catch (err: any) {
       setMessage(err.message || "Could not issue credit note.");
@@ -486,6 +489,44 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       setDetail(row);
       setMessage('Invoice amount updated.');
     }catch(err:any){setMessage(err.message||'Could not update amount.')}
+    finally{setBusy('')}
+  }
+
+  async function cancelInvoice(invoice:any){
+    if(!apiSession)return;
+    const reason=window.prompt(`Cancel reason for ${invoice.invoice_number}`);
+    if(!reason)return;
+    setBusy(`cancel-${invoice.id}`);
+    setMessage('');
+    try{
+      const row=await apiFetch(`/billing/invoices/${invoice.id}/cancel`,apiSession,{
+        method:'POST',
+        body:JSON.stringify({reason,actor_user_id:apiSession.user?.id}),
+      });
+      setDetail(row);
+      await loadLiveData(apiSession);
+      await loadReports();
+      setMessage(`Invoice ${invoice.invoice_number} cancelled and ledger reversed.`);
+    }catch(err:any){setMessage(err.message||'Could not cancel invoice.')}
+    finally{setBusy('')}
+  }
+
+  async function amendInvoice(invoice:any){
+    if(!apiSession)return;
+    const reason=window.prompt(`Amend reason for ${invoice.invoice_number}`);
+    if(!reason)return;
+    setBusy(`amend-${invoice.id}`);
+    setMessage('');
+    try{
+      const row=await apiFetch(`/billing/invoices/${invoice.id}/amend`,apiSession,{
+        method:'POST',
+        body:JSON.stringify({reason,actor_user_id:apiSession.user?.id}),
+      });
+      setDetail(row);
+      await loadLiveData(apiSession);
+      await loadReports();
+      setMessage(`Invoice ${invoice.invoice_number} amended and reopened.`);
+    }catch(err:any){setMessage(err.message||'Could not amend invoice.')}
     finally{setBusy('')}
   }
 
@@ -547,6 +588,8 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         applyMembershipBenefit={applyMembershipBenefit}
         openReceipt={openReceipt}
         issueCreditNote={issueCreditNote}
+        cancelInvoice={cancelInvoice}
+        amendInvoice={amendInvoice}
         supplierOptions={supplierOptions}
         updateInvoiceItemSupplier={updateInvoiceItemSupplier}
         updateInvoiceAmount={updateInvoiceAmount}
