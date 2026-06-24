@@ -16,8 +16,11 @@ const itemTypes = [
   ["lab_test", "Lab Test"],
   ["lab_package", "Service"],
   ["physio_equipment", "Physiotherapy Equipment"],
-  ["home_care_service", "Home Care / Visit Service"],
+  ["home_care_service", "Home Care Service"],
+  ["home_visit_service", "Home Visit Service"],
 ];
+
+const homeServiceTypes = ["home_care_service", "home_visit_service"];
 
 const modalities = [
   ["ift", "IFT / Interferential Therapy"],
@@ -37,6 +40,7 @@ function generatedItemCode(type: string, name: string) {
     lab_package: "PKG",
     physio_equipment: "PHY",
     home_care_service: "HC",
+    home_visit_service: "HV",
   };
   const compactName = String(name || "ITEM")
     .toUpperCase()
@@ -52,6 +56,7 @@ function itemCodePreview(type: string, name: string) {
     lab_package: "PKG",
     physio_equipment: "PHY",
     home_care_service: "HC",
+    home_visit_service: "HV",
   };
   const compactName = String(name || "ITEM")
     .toUpperCase()
@@ -67,7 +72,7 @@ function createEmptyForm(type: string) {
     generic_name: "",
     mrp_price: "",
     price: "",
-    purchase_price: type === "home_care_service" ? "" : "0",
+    purchase_price: homeServiceTypes.includes(type) ? "" : "0",
     supplier_id: "",
     reorder_level: "",
     sample_type: "",
@@ -182,19 +187,23 @@ export function Items({ apiSession, branchId }: any) {
         id: row.id,
         raw: row,
       })),
-      ...homeCareServices.map((row: any) => ({
-        type: "home_care_service",
-        kind: "Home Care / Visit Service",
-        name: row.name,
-        code: row.code,
-        mrp_price: null,
-        price: row.default_price,
-        purchase_price: null,
-        supplier: "-",
-        meta: row.description || "Home care / visit",
-        id: row.id,
-        raw: row,
-      })),
+      ...homeCareServices.map((row: any) => {
+        const isHomeVisit = String(row.code || "").startsWith("HV-");
+        const rowType = isHomeVisit ? "home_visit_service" : "home_care_service";
+        return {
+          type: rowType,
+          kind: isHomeVisit ? "Home Visit Service" : "Home Care Service",
+          name: row.name,
+          code: row.code,
+          mrp_price: row.mrp_price || 0,
+          price: row.default_price,
+          purchase_price: null,
+          supplier: "-",
+          meta: row.description || (isHomeVisit ? "Home visit" : "Home care"),
+          id: row.id,
+          raw: row,
+        };
+      }),
     ],
     [medicines, tests, packages, equipment, homeCareServices, stockSuppliers],
   );
@@ -236,6 +245,14 @@ export function Items({ apiSession, branchId }: any) {
   }
 
   function changeItemType(nextType: string) {
+    if (editing && homeServiceTypes.includes(type) && homeServiceTypes.includes(nextType)) {
+      setType(nextType);
+      setForm((prev: any) => ({
+        ...prev,
+        code: generatedItemCode(nextType, prev.name),
+      }));
+      return;
+    }
     setType(nextType);
     setEditing(null);
     setPackageTestIds([]);
@@ -362,7 +379,7 @@ export function Items({ apiSession, branchId }: any) {
           },
         );
         setPackageTestIds([]);
-      } else if (type === "home_care_service") {
+      } else if (homeServiceTypes.includes(type)) {
         savedHomeCareService = await apiFetch(
           editing ? `/home-care/services/${editing.id}` : "/home-care/services",
           apiSession,
@@ -373,6 +390,7 @@ export function Items({ apiSession, branchId }: any) {
               code: itemCode,
               name: form.name,
               description: form.description || null,
+              mrp_price: Number(form.mrp_price || 0),
               default_price: Number(form.price || 0),
             }),
           },
@@ -404,7 +422,7 @@ export function Items({ apiSession, branchId }: any) {
       setEditing(null);
       setPackageTestIds([]);
       resetItemForm(type);
-      if (type === "home_care_service" && savedHomeCareService) {
+      if (homeServiceTypes.includes(type) && savedHomeCareService) {
         setHomeCareServices((prev: any[]) =>
           wasEditing
             ? prev.map((row) =>
@@ -462,11 +480,12 @@ export function Items({ apiSession, branchId }: any) {
         supplier_id: raw.supplier_id || "",
       });
       setPackageTestIds(raw.test_ids || []);
-    } else if (row.type === "home_care_service")
+    } else if (homeServiceTypes.includes(row.type))
       setForm({
         ...form,
         code: raw.code,
         name: raw.name,
+        mrp_price: String(raw.mrp_price || 0),
         price: String(raw.default_price || 0),
         description: raw.description || "",
         branch_scope: raw.branch_id ? "branch" : "tenant",
@@ -599,7 +618,7 @@ export function Items({ apiSession, branchId }: any) {
           ? `/lab/catalog/tests/${row.id}`
           : row.type === "lab_package"
             ? `/lab/catalog/packages/${row.id}`
-            : row.type === "home_care_service"
+            : homeServiceTypes.includes(row.type)
               ? `/home-care/services/${row.id}`
               : `/physiotherapy/equipment/${row.id}`;
     try {
@@ -642,7 +661,7 @@ export function Items({ apiSession, branchId }: any) {
             value={type}
             onChange={changeItemType}
             options={itemTypes.map(([value, label]) => ({ value, label }))}
-          
+
           />
           <TextField
             label="Code / Serial"
@@ -653,26 +672,24 @@ export function Items({ apiSession, branchId }: any) {
             className="search-input "
           />
           <TextField
-            label={type === "home_care_service" || type=='lab_package'? "Service Name" : "Item Name"}
+            label={homeServiceTypes.includes(type) || type=='lab_package'? "Service Name" : "Item Name"}
             value={form.name}
             onChange={(v) => setField("name", v)}
             required
-            placeholder={`please enter ${type === "home_care_service" || type=='lab_package'? "Service Name" : "Item Name"}`}
+            placeholder={`please enter ${homeServiceTypes.includes(type) || type=='lab_package'? "Service Name" : "Item Name"}`}
             className="search-input placeholder:text-xs"
           />
-          {type !== "home_care_service" && (
-            <NumberField
-              label="MRP Price"
-              value={form.mrp_price}
-              onChange={(v) => setField("mrp_price", v)}
-              placeholder="Enter the MRP price"
-              min={0}
-            />
-          )}
+          <NumberField
+            label="MRP Price"
+            value={form.mrp_price}
+            onChange={(v) => setField("mrp_price", v)}
+            placeholder="Enter the MRP price"
+            min={0}
+          />
           {type !== "physio_equipment" && (
             <NumberField
               label={
-                type === "home_care_service"
+                homeServiceTypes.includes(type)
                   ? "Rate / Hour"
                   : type === "lab_package"
                     ? "Service Price"
@@ -681,11 +698,11 @@ export function Items({ apiSession, branchId }: any) {
               value={form.price}
               onChange={(v) => setField("price", v)}
               min={0}
-              required={type === "home_care_service"}
+              required={homeServiceTypes.includes(type)}
               placeholder="Enter the price"
             />
           )}
-          {type !== "home_care_service" && (
+          {!homeServiceTypes.includes(type) && (
             <>
               <SelectField
                 label="Supplier"
@@ -735,7 +752,7 @@ export function Items({ apiSession, branchId }: any) {
               placeholder="Enter the sample type "
             />
           )}
-          {type === "home_care_service" && (
+          {homeServiceTypes.includes(type) && (
             <>
               <TextField
                 label="Description"
@@ -1039,7 +1056,7 @@ export function Items({ apiSession, branchId }: any) {
                   <td className="text-xs"  >
                     {row.price === null
                       ? "-"
-                      : row.type === "home_care_service"
+                    : homeServiceTypes.includes(row.type)
                         ? `₹${row.price}/hr`
                         : `₹${row.price}`}
                   </td>

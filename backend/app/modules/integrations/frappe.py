@@ -6,7 +6,7 @@ from urllib.request import Request, urlopen
 from fastapi import HTTPException, status
 
 
-def normalize_frappe_item(row: dict) -> dict[str, str]:
+def normalize_frappe_item(row: dict) -> dict[str, str | float]:
     item_name = str(row.get("item_name") or row.get("name") or "").strip()
     name = str(row.get("name") or item_name).strip()
     item_code = str(row.get("item_code") or name or item_name).strip()
@@ -19,6 +19,10 @@ def normalize_frappe_item(row: dict) -> dict[str, str]:
         "slug": slug,
         "erpnext_name": name,
         "source": "erpnext",
+        "mrp_price": float(row.get("mrp_price") or 0),
+        "selling_price": float(row.get("selling_price") or 0),
+        "price": float(row.get("selling_price") or 0),
+        "buying_price": float(row.get("buying_price") or 0),
     }
 
 
@@ -70,7 +74,7 @@ class FrappeCatalogClient:
         self.token = token
         self.timeout_seconds = timeout_seconds
 
-    def get_lab_items(self, search: str | None = None) -> list[dict[str, str]]:
+    def get_lab_items(self, search: str | None = None) -> list[dict[str, str | float]]:
         endpoint = urljoin(
             self.base_url,
             "api/method/healthcare.healthcare.api.lab_items.get_lab_items",

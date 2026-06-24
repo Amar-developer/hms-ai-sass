@@ -41,3 +41,4 @@ __pycache__/
 # Runtime uploads
 uploads/
 backend/uploads/
+.deploy-backups/

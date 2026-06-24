@@ -25,6 +25,7 @@ type PatientProps = {
   apiSession: ApiSession | null;
   branchId?: string;
   loadLiveData?: (session: ApiSession) => void | Promise<unknown>;
+  setActive?: (page: string) => void;
 };
 
 const pageSize = 10;
@@ -35,7 +36,7 @@ const genders = [
   ["unknown", "Unknown"],
 ] as const;
 
-export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
+export function Patient({ apiSession, branchId, loadLiveData, setActive }: PatientProps) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
@@ -457,6 +458,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
         onBack={() => open("list")}
         onEdit={() => openPatientEdit(selected.id)}
         onUploadPhoto={uploadPhoto}
+        setActive={setActive}
       />
     );
 
@@ -550,7 +552,7 @@ export function Patient({ apiSession, branchId, loadLiveData }: PatientProps) {
               { value: "all", label: "All branches" },
               ...branches.map((b: any) => ({ value: b.id, label: b.name })),
             ]}
-            
+
           />
           {/* <SelectField
             label="Gender"

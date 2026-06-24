@@ -183,6 +183,17 @@ export function Lab({
   const selectedAvailableTest = availableTests.find(
     (t: any) => (t.id || t.slug || t.name) === selectedAvailableTestId,
   );
+  const selectedTestMrp = Number(
+    selectedAvailableTest?.mrp_price || selectedAvailableTest?.mrp || 0,
+  );
+  const selectedTestSelling = Number(
+    selectedAvailableTest?.selling_price ||
+      selectedAvailableTest?.default_price ||
+      selectedAvailableTest?.price ||
+      0,
+  );
+  const formatPrice = (value: number) =>
+    value > 0 ? `₹${value.toLocaleString("en-IN")}` : "";
 
   async function load() {
     if (!apiSession) {
@@ -598,7 +609,7 @@ export function Lab({
         <h3 className="card-title font-bold">Create Lab / Service Order</h3>
         <form
           onSubmit={createDirect}
-          className="mt-4 grid gap-3 md:grid-cols-4"
+          className="mt-4 grid gap-3 md:grid-cols-6"
         >
           <SearchableSelectField
             label="Patient"
@@ -651,6 +662,20 @@ export function Lab({
               loading={testLoading}
             />
           </FormField>
+          <TextField
+            label="MRP"
+            value={formatPrice(selectedTestMrp)}
+            onChange={() => undefined}
+            disabled
+            className="search-input bg-slate-50"
+          />
+          <TextField
+            label="Selling Rate"
+            value={formatPrice(selectedTestSelling)}
+            onChange={() => undefined}
+            disabled
+            className="search-input bg-slate-50"
+          />
           <div className=" flex items-end lg:mb-1">
             <ActionButton type="button" onClick={addOrderTest} className='close-button  h-[65%] text-white bg-black/90'>
               Add
@@ -669,7 +694,7 @@ export function Lab({
             </Button>
           </div>
           {orderTests.length > 0 && (
-            <div className="md:col-span-4 flex flex-wrap gap-2">
+            <div className="md:col-span-6 flex flex-wrap gap-2">
               {orderTests.map((test: any, index: number) => (
                 <button
                   key={`${test.name}-${index}`}

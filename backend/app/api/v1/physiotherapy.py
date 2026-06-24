@@ -106,6 +106,7 @@ def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
         ).all()
     )
     return InvoiceDetailRead(
+        status=invoice.status,
         invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
         items=[
             InvoiceItemRead.model_validate(item, from_attributes=True) for item in items

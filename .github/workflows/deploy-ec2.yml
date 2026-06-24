@@ -37,6 +37,9 @@ jobs:
           script: |
             cd "${{ secrets.EC2_APP_DIR }}"
 
+            # Reset any local changes on server before pulling
+            git checkout -- .
+
             # Pull latest code from main
             git fetch origin
             git checkout main

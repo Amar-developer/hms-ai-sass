@@ -122,6 +122,7 @@ def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
         ).all()
     )
     return InvoiceDetailRead(
+        status=invoice.status,
         invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
         items=[
             InvoiceItemRead.model_validate(item, from_attributes=True) for item in items
@@ -614,7 +615,23 @@ def generate_invoice(
     session.add(invoice)
     session.commit()
     session.refresh(invoice)
+    service_by_id = {
+        service.id: service
+        for service in session.exec(
+            select(HomeCareService).where(
+                HomeCareService.tenant_id == tenant_id,
+                HomeCareService.id.in_(
+                    [row.service_id for row in rows if row.service_id]
+                ),
+            )
+        ).all()
+    }
     for row in rows:
+        service = service_by_id.get(row.service_id or "")
+        selling_amount = int(
+            row.unit_amount or (service.default_price if service else 0)
+        )
+        mrp_amount = int(service.mrp_price if service else 0)
         session.add(
             InvoiceItem(
                 tenant_id=tenant_id,
@@ -624,6 +641,8 @@ def generate_invoice(
                 quantity=row.quantity,
                 unit_amount=row.unit_amount,
                 total_amount=row.total_amount,
+                mrp_amount=mrp_amount,
+                selling_amount=selling_amount,
                 external_source="home_care",
                 external_slug="home_care_service",
                 external_item_code=row.service_id,

@@ -124,8 +124,20 @@ export function ConsultationWorkspace(props: any) {
     item: test,
   }));
   const selectedLabTest = activeLabCatalog.find(
-    (test: any) => test.id === selectedLabTestId,
+    (test: any) =>
+      (test.id || test.slug || test.name) === selectedLabTestId,
   );
+  const selectedLabMrp = Number(
+    selectedLabTest?.mrp_price || selectedLabTest?.mrp || 0,
+  );
+  const selectedLabSelling = Number(
+    selectedLabTest?.selling_price ||
+      selectedLabTest?.default_price ||
+      selectedLabTest?.price ||
+      0,
+  );
+  const formatPrice = (value: number) =>
+    value > 0 ? `₹${value.toLocaleString("en-IN")}` : "";
   useEffect(() => {
     setAvailableMedicineCatalog(
       Array.isArray(medicineCatalog) ? medicineCatalog : [],
@@ -611,7 +623,7 @@ export function ConsultationWorkspace(props: any) {
                   }
                 />
               </Field>
-              <div className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.5fr_auto] md:items-end">
+              <div className="mt-3 grid gap-2 md:grid-cols-[2fr_0.8fr_0.8fr_1fr_1.5fr_auto] md:items-end">
                 <FormField label="Available Lab Test">
                   <SearchPicker
                     value={selectedLabTestId}
@@ -649,6 +661,22 @@ export function ConsultationWorkspace(props: any) {
                       {externalLabError}
                     </p>
                   )}
+                </FormField>
+                <FormField label="MRP">
+                  <Input
+                    value={formatPrice(selectedLabMrp)}
+                    readOnly
+                    placeholder="MRP"
+                    className="rounded-lg bg-slate-50 px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+                  />
+                </FormField>
+                <FormField label="Selling Rate">
+                  <Input
+                    value={formatPrice(selectedLabSelling)}
+                    readOnly
+                    placeholder="Selling"
+                    className="rounded-lg bg-slate-50 px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+                  />
                 </FormField>
                 <Select
                   value={labPriority}

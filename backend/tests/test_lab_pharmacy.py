@@ -4,7 +4,12 @@ from sqlmodel import Session, select
 
 from app.modules.settings.models import SettingKey, SettingScope
 from app.modules.settings.service import upsert_setting
-from app.modules.lab.models import LabOrder, LabOrderItem, LabOrderSource
+from app.modules.lab.models import (
+    LabOrder,
+    LabOrderItem,
+    LabOrderSource,
+    LabTestCatalog,
+)
 
 
 def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
@@ -29,6 +34,26 @@ def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
     assert read.mrp_price == 120
     assert read.package_price == 80
     assert read.purchase_price == 10
+
+
+def test_local_lab_price_uses_catalog_mrp_not_selling_price():
+    from app.api.v1.lab import _local_lab_price
+
+    test = LabTestCatalog(
+        tenant_id="tenant_lab_price",
+        code="ECG12",
+        name="12-Lead ECG",
+        mrp_price=350,
+        default_price=200,
+        purchase_price=40,
+    )
+
+    pricing = _local_lab_price(test)
+
+    assert pricing["price"] == 200
+    assert pricing["selling_price"] == 200
+    assert pricing["mrp_price"] == 350
+    assert pricing["buying_price"] == 40
 
 
 def test_local_lab_catalog_setting_disables_external_lookup(test_engine, monkeypatch):

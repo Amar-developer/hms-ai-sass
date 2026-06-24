@@ -2,6 +2,7 @@ import { money, numberValue } from "@/features/reports/utils";
 import { claimedDetail, invoiceDiscountParts, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, itemTypeLabel } from "@/utils/billing/helpers";
 import { useEffect, useState } from "react";
 import { Badge,ActionButton,Select,Card,Input } from "../common/ui";
+import { displayDate } from "@/utils/helper";
 
 export function InvoiceDetailPage({
   detail,
@@ -22,6 +23,8 @@ export function InvoiceDetailPage({
   applyMembershipBenefit,
   openReceipt,
   issueCreditNote,
+  cancelInvoice,
+  amendInvoice,
   supplierOptions={},
   updateInvoiceItemSupplier,
   updateInvoiceAmount,
@@ -29,8 +32,16 @@ export function InvoiceDetailPage({
   const invoice=detail.invoice||{};
   const items=detail.items||[];
   const payments=detail.payments||[];
+  const creditNotes=detail.credit_notes||[];
+  const ledgerEntries=detail.ledger_entries||[];
   const source=invoiceSource(invoice);
-  const showInternalLabPrices=Boolean(invoice.lab_order_id);
+  const showItemVendor=items.some(
+    (item:any)=>Boolean(item.vendor_name)||numberValue(item.vendor_amount)>0,
+  );
+  const showSupplierPicker=Boolean(invoice.lab_order_id);
+  const showItemPricing=showItemVendor||items.some(
+    (item:any)=>numberValue(item.mrp_amount)>0||numberValue(item.buying_amount)>0,
+  );
   const linkedRecord=invoiceLinkedRecord(invoice);
   const discountParts=invoiceDiscountParts(invoice);
   const membershipLabel=invoiceMembershipLabel(invoice);
@@ -87,6 +98,13 @@ export function InvoiceDetailPage({
   function removePayRow(index:number){
     setPayRows((rows)=>rows.length>1?rows.filter((_,i)=>i!==index):rows);
   }
+  function itemMrp(item:any){
+    return numberValue(item.mrp_amount);
+  }
+  function itemRate(item:any){
+    return numberValue(item.selling_amount)||numberValue(item.unit_amount);
+  }
+  const itemTableColSpan=5+(showItemVendor?2:0)+(showItemPricing?1:0);
   return (
     <div className="space-y-5">
       <Card>
@@ -163,65 +181,70 @@ export function InvoiceDetailPage({
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className={`w-full text-left text-sm ${showInternalLabPrices?'min-w-[1080px]':'min-w-[760px]'}`}>
-                  <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
+                <table className={`w-full text-left text-sm ${showItemVendor||showItemPricing?'min-w-[980px]':'min-w-[720px]'}`}>
+                  <thead className="bg-slate-100 text-xs font-semibold text-slate-500">
                     <tr>
-                      <th className="px-4 py-3">Item</th>
-                      <th className="px-3 py-3">Description</th>
-                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">MRP</th>}
-                      {showInternalLabPrices&&<th className="px-3 py-3">Supplier</th>}
-                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">Buying</th>}
-                      {showInternalLabPrices&&<th className="px-3 py-3 text-right">Selling</th>}
-                      <th className="px-3 py-3 text-right">Qty</th>
-                      <th className="px-3 py-3 text-right">Rate</th>
-                      <th className="px-4 py-3 text-right">Amount</th>
+                      <th className="w-12 px-4 py-3 text-center">No.</th>
+                      <th className="px-3 py-3">Item</th>
+                      <th className="px-3 py-3 text-right">Quantity</th>
+                      {showItemVendor&&<th className="px-3 py-3">Vendor</th>}
+                      {showItemVendor&&<th className="px-3 py-3 text-right">Vendor Price</th>}
+                      {showItemPricing&&<th className="px-3 py-3 text-right">MRP</th>}
+                      <th className="px-3 py-3 text-right">Rate (INR)</th>
+                      <th className="px-4 py-3 text-right">Amount (INR)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {items.length === 0 && (
                       <tr>
-                        <td colSpan={showInternalLabPrices?9:5} className="px-4 py-5 text-sm font-semibold text-slate-500">No bill items found.</td>
+                        <td colSpan={itemTableColSpan} className="px-4 py-5 text-sm font-semibold text-slate-500">No bill items found.</td>
                       </tr>
                     )}
-                    {items.map((item:any)=>{
+                    {items.map((item:any,index:number)=>{
                       const itemSupplierOptions=supplierOptions[item.id]||[];
+                      const vendorName=item.vendor_name||item.supplier_id||'';
+                      const canPickSupplier=showSupplierPicker&&item.item_type==='lab'&&itemSupplierOptions.length>0;
                       return (
                       <tr key={item.id} className="align-middle">
-                        <td className="px-4 py-4">
-                          <Badge tone={source.tone as any} className="normal-badge">
-                            {itemTypeLabel(item.item_type)}
-                          </Badge>
-                        </td>
+                        <td className="px-4 py-4 text-center table-data tabular-nums">{index+1}</td>
                         <td className="px-3 py-4">
                           <span
-                            className="block max-w-[520px] table-data break-words font-semibold text-slate-950"
+                            className="block max-w-[420px] table-data break-words font-bold text-slate-950"
                             title={
                               item.description || itemTypeLabel(item.item_type)
                             }
                           >
                             {item.description || itemTypeLabel(item.item_type)}
                           </span>
-                          {showInternalLabPrices&&item.external_item_code&&<span className="mt-1 block text-xs text-slate-500">{item.external_item_code}</span>}
+                          <span className="mt-1 inline-flex rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500">
+                            {itemTypeLabel(item.item_type)}
+                          </span>
+                          {item.external_item_code&&<span className="ml-2 text-xs text-slate-500">{item.external_item_code}</span>}
                         </td>
-                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.mrp_amount||0)}</td>}
-                        {showInternalLabPrices&&(
+                        <td className="px-3 py-4 text-right table-data font-bold tabular-nums">{item.quantity}</td>
+                        {showItemVendor&&(
                           <td className="px-3 py-4">
-                            <Select
-                              value={item.supplier_id||''}
-                              onChange={(event:any)=>updateInvoiceItemSupplier?.(invoice,item,event.target.value)}
-                              disabled={busy===`supplier-${item.id}`}
-                            >
-                              <option value="">No supplier</option>
-                              {itemSupplierOptions.map((supplier:any)=>(
-                                <option key={supplier.supplier} value={supplier.supplier}>{supplier.supplier_name} · {money(supplier.buying_price)}</option>
-                              ))}
-                            </Select>
+                            {canPickSupplier ? (
+                              <Select
+                                value={item.supplier_id||''}
+                                onChange={(event:any)=>updateInvoiceItemSupplier?.(invoice,item,event.target.value)}
+                                disabled={busy===`supplier-${item.id}`}
+                              >
+                                <option value="">No supplier</option>
+                                {itemSupplierOptions.map((supplier:any)=>(
+                                  <option key={supplier.supplier} value={supplier.supplier}>{supplier.supplier_name} · {money(supplier.buying_price)}</option>
+                                ))}
+                              </Select>
+                            ) : (
+                              <span className="table-data font-semibold text-slate-800">
+                                {vendorName || "-"}
+                              </span>
+                            )}
                           </td>
                         )}
-                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.buying_amount||0)}</td>}
-                        {showInternalLabPrices&&<td className="px-3 py-4 text-right tabular-nums">{money(item.selling_amount||item.unit_amount||0)}</td>}
-                        <td className="px-3 py-4 text-right table-data font-bold tabular-nums">{item.quantity}</td>
-                        <td className="px-3 py-4 text-right table-data tabular-nums">{money(item.unit_amount)}</td>
+                        {showItemVendor&&<td className="px-3 py-4 text-right table-data tabular-nums">{numberValue(item.vendor_amount)>0?money(item.vendor_amount):"-"}</td>}
+                        {showItemPricing&&<td className="px-3 py-4 text-right table-data tabular-nums">{money(itemMrp(item))}</td>}
+                        <td className="px-3 py-4 text-right table-data font-bold tabular-nums">{money(itemRate(item))}</td>
                         <td className="px-4 py-4 text-right table-data font-black tabular-nums text-slate-950">{money(item.total_amount)}</td>
                       </tr>
                     )})}
@@ -500,6 +523,21 @@ export function InvoiceDetailPage({
                     <ActionButton onClick={() => issueCreditNote(invoice)}>
                       Credit Note
                     </ActionButton>
+                    {String(invoice.status) !== "cancelled" ? (
+                      <ActionButton
+                        onClick={() => cancelInvoice?.(invoice)}
+                        disabled={busy === `cancel-${invoice.id}`}
+                      >
+                        {busy === `cancel-${invoice.id}` ? "Cancelling..." : "Cancel"}
+                      </ActionButton>
+                    ) : (
+                      <ActionButton
+                        onClick={() => amendInvoice?.(invoice)}
+                        disabled={busy === `amend-${invoice.id}`}
+                      >
+                        {busy === `amend-${invoice.id}` ? "Amending..." : "Amend"}
+                      </ActionButton>
+                    )}
                   </div>
                 </div>
               </div>
@@ -508,12 +546,12 @@ export function InvoiceDetailPage({
 
           <div className="mt-5 rounded-lg border border-slate-200">
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <h4 className="card-title font-bold">Payments</h4>
+              <h4 className="card-title font-bold">Payments & Credit Notes</h4>
             </div>
             <div className="grid gap-2 p-4">
-              {payments.length === 0 && (
+              {payments.length === 0 && creditNotes.length === 0 && (
                 <p className="table-data text-slate-500">
-                  No payments recorded yet.
+                  No payments or credit notes recorded yet.
                 </p>
               )}
               {payments.map((payment: any) => (
@@ -538,6 +576,74 @@ export function InvoiceDetailPage({
                     {payment.status}
                   </Badge>
                   <b>{money(payment.amount)}</b>
+                </div>
+              ))}
+              {creditNotes.map((credit: any) => (
+                <div
+                  key={credit.id}
+                  className="flex flex-col justify-between gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm md:flex-row md:items-center"
+                >
+                  <div>
+                    <b>{credit.credit_note_number}</b>
+                    <p className="text-xs text-slate-500">
+                      {displayDate(credit.created_at)} · {credit.reason}
+                    </p>
+                  </div>
+                  <Badge tone="amber" className="normal-badge">
+                    {credit.status}
+                  </Badge>
+                  <b>{money(credit.amount)}</b>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-lg border border-slate-200">
+            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <h4 className="card-title font-bold">Billing Ledger</h4>
+              <p className="table-data text-slate-500">
+                Invoice, payment, cancellation, and amendment activity.
+              </p>
+            </div>
+            <div className="grid gap-2 p-4">
+              {ledgerEntries.length === 0 && (
+                <p className="table-data text-slate-500">
+                  No ledger entries recorded yet.
+                </p>
+              )}
+              {ledgerEntries.map((entry: any) => (
+                <div
+                  key={entry.id}
+                  className="rounded-2xl border border-slate-100 bg-white p-3 text-sm shadow-sm"
+                >
+                  <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
+                    <div>
+                      <b className="capitalize">
+                        {String(entry.entry_type || "").replaceAll("_", " ")}
+                      </b>
+                      <p className="text-xs text-slate-500">
+                        {displayDate(entry.created_at)} · User {entry.actor_user_id || "-"}
+                      </p>
+                      {entry.reason && (
+                        <p className="mt-1 text-xs font-semibold text-slate-600">
+                          {entry.reason}
+                        </p>
+                      )}
+                    </div>
+                    <Badge
+                      tone={entry.status_after === "cancelled" ? "amber" : "slate"}
+                      className="normal-badge"
+                    >
+                      {entry.status_after}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 grid gap-2 text-xs sm:grid-cols-5">
+                    <InvoiceMeta label="Debit" value={money(entry.debit_amount)} />
+                    <InvoiceMeta label="Credit" value={money(entry.credit_amount)} />
+                    <InvoiceMeta label="Invoice Delta" value={money(entry.invoice_total_delta)} />
+                    <InvoiceMeta label="Paid Delta" value={money(entry.paid_amount_delta)} />
+                    <InvoiceMeta label="Balance Delta" value={money(entry.balance_amount_delta)} />
+                  </div>
                 </div>
               ))}
             </div>

@@ -228,13 +228,17 @@ def _frappe_catalog_client() -> FrappeCatalogClient:
     )
 
 
-def _normalize_local_lab_test(row: LabTestCatalog) -> dict[str, str]:
+def _normalize_local_lab_test(row: LabTestCatalog) -> dict[str, object]:
     return {
         "id": row.id,
         "name": row.name,
         "item_name": row.name,
         "slug": row.code or row.id,
         "source": "local",
+        "mrp_price": row.mrp_price,
+        "selling_price": row.default_price,
+        "price": row.default_price,
+        "buying_price": row.purchase_price,
     }
 
 
@@ -271,7 +275,7 @@ def _local_lab_price(test: LabTestCatalog | None) -> dict[str, int | str | None]
         return _price_payload(price=0)
     return _price_payload(
         price=test.default_price,
-        mrp_price=test.default_price,
+        mrp_price=test.mrp_price or test.default_price,
         selling_price=test.default_price,
         buying_price=test.purchase_price,
         supplier_id=test.supplier_id,
@@ -536,7 +540,7 @@ def list_external_lab_items(
             permissions.LAB_READ,
         )
     ),
-) -> list[dict[str, str]]:
+) -> list[dict[str, object]]:
     return _frappe_catalog_client().get_lab_items(search)
 
 
@@ -575,7 +579,7 @@ def list_available_lab_tests(
             permissions.SETTINGS_MANAGE,
         )
     ),
-) -> list[dict[str, str]]:
+) -> list[dict[str, object]]:
     enforce_module_enabled(session, tenant_id, "lab")
     if _external_lab_items_enabled(session, tenant_id):
         try:
