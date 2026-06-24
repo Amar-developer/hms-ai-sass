@@ -35,6 +35,7 @@ class HomeCareServiceRead(HomeCareServiceCreate):
 
 class HomeCareBookingItemCreate(BaseModel):
     service_id: str | None = None
+    service_category: str | None = Field(default=None, max_length=80)
     description: str | None = Field(default=None, max_length=260)
     quantity: int = Field(default=1, ge=1)
     unit_amount: int | None = Field(default=None, ge=0)
@@ -45,9 +46,54 @@ class HomeCareBookingItemRead(HomeCareBookingItemCreate):
     tenant_id: str
     booking_id: str
     description: str
+    service_category: str
     unit_amount: int
     total_amount: int
     created_at: datetime
+
+
+class HomeCareVisitLogCreate(BaseModel):
+    visit_date: date | None = None
+    assigned_staff_user_id: str | None = None
+    assigned_staff_name: str | None = Field(default=None, max_length=160)
+    staff_type: str | None = Field(default=None, max_length=80)
+    service_id: str | None = None
+    service_category: str | None = Field(default=None, max_length=80)
+    description: str | None = Field(default=None, max_length=260)
+    quantity: int = Field(default=1, ge=1)
+    unit_amount: int | None = Field(default=None, ge=0)
+    status: str = Field(default="completed", max_length=40)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class HomeCareVisitLogUpdate(BaseModel):
+    visit_date: date | None = None
+    assigned_staff_user_id: str | None = None
+    assigned_staff_name: str | None = Field(default=None, max_length=160)
+    staff_type: str | None = Field(default=None, max_length=80)
+    service_id: str | None = None
+    service_category: str | None = Field(default=None, max_length=80)
+    description: str | None = Field(default=None, max_length=260)
+    quantity: int | None = Field(default=None, ge=1)
+    unit_amount: int | None = Field(default=None, ge=0)
+    status: str | None = Field(default=None, max_length=40)
+    notes: str | None = Field(default=None, max_length=1000)
+
+
+class HomeCareVisitLogRead(HomeCareVisitLogCreate):
+    id: str
+    tenant_id: str
+    booking_id: str
+    visit_date: date
+    service_category: str
+    description: str
+    unit_amount: int
+    total_amount: int
+    status: str
+    created_by_user_id: str | None
+    updated_by_user_id: str | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class HomeCareBookingCreate(BaseModel):
@@ -60,6 +106,7 @@ class HomeCareBookingCreate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     status: str = Field(default="requested", max_length=40)
+    location: str | None = Field(default=None, max_length=500)
     complaints: str | None = Field(default=None, max_length=2000)
     notes: str | None = Field(default=None, max_length=2000)
     services: list[HomeCareBookingItemCreate] = Field(default_factory=list)
@@ -73,6 +120,7 @@ class HomeCareBookingUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     status: str | None = Field(default=None, max_length=40)
+    location: str | None = Field(default=None, max_length=500)
     complaints: str | None = Field(default=None, max_length=2000)
     notes: str | None = Field(default=None, max_length=2000)
     services: list[HomeCareBookingItemCreate] | None = None
@@ -91,6 +139,7 @@ class HomeCareBookingRead(BaseModel):
     start_date: date
     end_date: date | None
     status: str
+    location: str | None
     complaints: str | None
     notes: str | None
     created_by_user_id: str | None
@@ -98,6 +147,7 @@ class HomeCareBookingRead(BaseModel):
     created_at: datetime
     updated_at: datetime
     services: list[HomeCareBookingItemRead] = Field(default_factory=list)
+    visit_logs: list[HomeCareVisitLogRead] = Field(default_factory=list)
 
 
 class HomeCareInvoiceCreate(BaseModel):

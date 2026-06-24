@@ -1,0 +1,33 @@
+{
+  "scripts": {
+    "dev": "next dev",
+    "prebuild": "if [ ! -e .next-build ]; then exit 0; fi; mv .next-build .next-build-stale-$(date +%s)-$$",
+    "build": "NEXT_PRIVATE_BUILD_WORKER=0 next build",
+    "start": "next start",
+    "test": "vitest run --cache=false --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "quality": "npm run quality:backend && npm run quality:frontend",
+    "quality:backend": "backend/.venv/bin/ruff check backend/app backend/tests && backend/.venv/bin/pytest backend/tests -q",
+    "quality:frontend": "npm test && npm run typecheck && npm run build",
+    "hooks:install": "backend/.venv/bin/pre-commit install --install-hooks"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "next": "14.2.16",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.0.1",
+    "@types/node": "25.6.0",
+    "@types/react": "19.2.14",
+    "@vitejs/plugin-react": "latest",
+    "autoprefixer": "10.4.20",
+    "jsdom": "^25.0.1",
+    "postcss": "8.4.49",
+    "tailwindcss": "3.4.17",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

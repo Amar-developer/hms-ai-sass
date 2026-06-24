@@ -24,6 +24,7 @@ from app.modules.home_care.models import (
     HomeCareBooking,
     HomeCareBookingItem,
     HomeCareService,
+    HomeCareVisitLog,
 )
 from app.modules.home_care.schemas import (
     HomeCareBookingCreate,
@@ -35,6 +36,9 @@ from app.modules.home_care.schemas import (
     HomeCareServiceCreate,
     HomeCareServiceRead,
     HomeCareServiceUpdate,
+    HomeCareVisitLogCreate,
+    HomeCareVisitLogRead,
+    HomeCareVisitLogUpdate,
 )
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -85,6 +89,20 @@ def _read_booking(session: Session, booking: HomeCareBooking) -> HomeCareBooking
     data["services"] = [
         HomeCareBookingItemRead.model_validate(item, from_attributes=True)
         for item in items
+    ]
+    visit_logs = list(
+        session.exec(
+            select(HomeCareVisitLog)
+            .where(
+                HomeCareVisitLog.tenant_id == booking.tenant_id,
+                HomeCareVisitLog.booking_id == booking.id,
+            )
+            .order_by(HomeCareVisitLog.visit_date, HomeCareVisitLog.created_at)
+        ).all()
+    )
+    data["visit_logs"] = [
+        HomeCareVisitLogRead.model_validate(row, from_attributes=True)
+        for row in visit_logs
     ]
     return HomeCareBookingRead(**data)
 
@@ -226,17 +244,124 @@ def _replace_booking_items(
             if row.unit_amount is not None
             else (service.default_price if service else 0)
         )
+        service_category = row.service_category or (
+            "home_visit_service"
+            if service and str(service.code or "").upper().startswith("HV")
+            else "home_care_service"
+        )
         session.add(
             HomeCareBookingItem(
                 tenant_id=tenant_id,
                 booking_id=booking.id,
                 service_id=row.service_id,
+                service_category=service_category,
                 description=description or "Home care service",
                 quantity=row.quantity,
                 unit_amount=unit_amount,
                 total_amount=row.quantity * unit_amount,
             )
         )
+
+
+def _visit_log_from_payload(
+    session: Session,
+    tenant_id: str,
+    booking: HomeCareBooking,
+    payload: HomeCareVisitLogCreate | HomeCareVisitLogUpdate,
+    current_user: User,
+    existing: HomeCareVisitLog | None = None,
+) -> HomeCareVisitLog:
+    staff_id = payload.assigned_staff_user_id
+    if staff_id:
+        staff = session.get(User, staff_id)
+        if not staff or staff.tenant_id != tenant_id or not staff.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid assigned staff"
+            )
+    service = (
+        session.get(HomeCareService, payload.service_id) if payload.service_id else None
+    )
+    if payload.service_id and (
+        not service or service.tenant_id != tenant_id or not service.is_active
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid home care service",
+        )
+    status_value = (
+        payload.status or (existing.status if existing else None) or "completed"
+    ).lower()
+    service_category = payload.service_category or (
+        existing.service_category
+        if existing
+        else (
+            "home_visit_service"
+            if service and str(service.code or "").upper().startswith("HV")
+            else "home_care_service"
+        )
+    )
+    description = payload.description or (service.name if service else None)
+    if not description and existing:
+        description = existing.description
+    unit_amount = (
+        payload.unit_amount
+        if payload.unit_amount is not None
+        else (
+            service.default_price
+            if service
+            else (existing.unit_amount if existing else 0)
+        )
+    )
+    quantity = (
+        payload.quantity
+        if payload.quantity is not None
+        else (existing.quantity if existing else 1)
+    )
+    billable = status_value == "completed"
+    values = {
+        "tenant_id": tenant_id,
+        "booking_id": booking.id,
+        "visit_date": payload.visit_date
+        or (existing.visit_date if existing else date.today()),
+        "assigned_staff_user_id": staff_id
+        if staff_id is not None
+        else (
+            existing.assigned_staff_user_id
+            if existing
+            else booking.assigned_staff_user_id
+        ),
+        "assigned_staff_name": payload.assigned_staff_name
+        if payload.assigned_staff_name is not None
+        else (
+            existing.assigned_staff_name if existing else booking.assigned_staff_name
+        ),
+        "staff_type": payload.staff_type
+        if payload.staff_type is not None
+        else (existing.staff_type if existing else booking.staff_type),
+        "service_id": payload.service_id
+        if payload.service_id is not None
+        else (existing.service_id if existing else None),
+        "service_category": service_category,
+        "description": description or "Home care service",
+        "quantity": quantity,
+        "unit_amount": unit_amount,
+        "total_amount": quantity * unit_amount if billable else 0,
+        "status": status_value,
+        "notes": payload.notes
+        if payload.notes is not None
+        else (existing.notes if existing else None),
+    }
+    if existing:
+        for key, value in values.items():
+            setattr(existing, key, value)
+        existing.updated_by_user_id = current_user.id
+        existing.updated_at = now_utc()
+        return existing
+    return HomeCareVisitLog(
+        **values,
+        created_by_user_id=current_user.id,
+        updated_by_user_id=current_user.id,
+    )
 
 
 @router.get("/services", response_model=list[HomeCareServiceRead])
@@ -522,6 +647,121 @@ def update_booking(
     return _read_booking(session, booking)
 
 
+@router.post(
+    "/bookings/{booking_id}/visits",
+    response_model=HomeCareVisitLogRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_visit_log(
+    booking_id: str,
+    payload: HomeCareVisitLogCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.HOME_CARE_CREATE, permissions.HOME_CARE_MANAGE
+        )
+    ),
+) -> HomeCareVisitLogRead:
+    _assert_enabled(session, tenant_id)
+    booking = _get_booking(session, tenant_id, booking_id, current_user)
+    if booking.status in LOCKED_BOOKING_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This booking is {booking.status} and cannot accept visit logs",
+        )
+    row = _visit_log_from_payload(session, tenant_id, booking, payload, current_user)
+    session.add(row)
+    booking.updated_at = now_utc()
+    booking.updated_by_user_id = current_user.id
+    session.add(booking)
+    session.commit()
+    session.refresh(row)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=booking.branch_id,
+        actor_user_id=current_user.id,
+        action="home_care_visit.logged",
+        resource_type="home_care_visit_log",
+        resource_id=row.id,
+        purpose="home_care",
+    )
+    return HomeCareVisitLogRead.model_validate(row, from_attributes=True)
+
+
+@router.patch(
+    "/bookings/{booking_id}/visits/{visit_id}",
+    response_model=HomeCareVisitLogRead,
+)
+def update_visit_log(
+    booking_id: str,
+    visit_id: str,
+    payload: HomeCareVisitLogUpdate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.HOME_CARE_EDIT, permissions.HOME_CARE_MANAGE)
+    ),
+) -> HomeCareVisitLogRead:
+    _assert_enabled(session, tenant_id)
+    booking = _get_booking(session, tenant_id, booking_id, current_user)
+    if booking.status in LOCKED_BOOKING_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This booking is {booking.status} and can no longer be edited",
+        )
+    row = session.get(HomeCareVisitLog, visit_id)
+    if not row or row.tenant_id != tenant_id or row.booking_id != booking.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Visit log not found"
+        )
+    row = _visit_log_from_payload(
+        session, tenant_id, booking, payload, current_user, row
+    )
+    session.add(row)
+    booking.updated_at = now_utc()
+    booking.updated_by_user_id = current_user.id
+    session.add(booking)
+    session.commit()
+    session.refresh(row)
+    return HomeCareVisitLogRead.model_validate(row, from_attributes=True)
+
+
+@router.delete(
+    "/bookings/{booking_id}/visits/{visit_id}",
+    response_model=HomeCareVisitLogRead,
+)
+def delete_visit_log(
+    booking_id: str,
+    visit_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(permissions.HOME_CARE_EDIT, permissions.HOME_CARE_MANAGE)
+    ),
+) -> HomeCareVisitLogRead:
+    _assert_enabled(session, tenant_id)
+    booking = _get_booking(session, tenant_id, booking_id, current_user)
+    if booking.status in LOCKED_BOOKING_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This booking is {booking.status} and can no longer be edited",
+        )
+    row = session.get(HomeCareVisitLog, visit_id)
+    if not row or row.tenant_id != tenant_id or row.booking_id != booking.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Visit log not found"
+        )
+    data = HomeCareVisitLogRead.model_validate(row, from_attributes=True)
+    session.delete(row)
+    booking.updated_at = now_utc()
+    booking.updated_by_user_id = current_user.id
+    session.add(booking)
+    session.commit()
+    return data
+
+
 @router.get("/bookings/{booking_id}/invoice", response_model=InvoiceDetailRead | None)
 def get_booking_invoice(
     booking_id: str,
@@ -565,7 +805,17 @@ def generate_invoice(
     if existing:
         _sync_booking_status_from_invoice(session, booking, existing)
         return _invoice_detail(session, existing)
-    rows = list(
+    visit_rows = list(
+        session.exec(
+            select(HomeCareVisitLog).where(
+                HomeCareVisitLog.tenant_id == tenant_id,
+                HomeCareVisitLog.booking_id == booking.id,
+                HomeCareVisitLog.status == "completed",
+                HomeCareVisitLog.total_amount > 0,
+            )
+        ).all()
+    )
+    planned_rows = list(
         session.exec(
             select(HomeCareBookingItem).where(
                 HomeCareBookingItem.tenant_id == tenant_id,
@@ -574,10 +824,11 @@ def generate_invoice(
             )
         ).all()
     )
+    rows = visit_rows or planned_rows
     if not rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Add at least one billable home care service before generating invoice",
+            detail="Add at least one completed billable service before generating invoice",
         )
     subtotal = sum(row.total_amount for row in rows)
     discount = min(payload.discount_amount, subtotal)
@@ -632,20 +883,25 @@ def generate_invoice(
             row.unit_amount or (service.default_price if service else 0)
         )
         mrp_amount = int(service.mrp_price if service else 0)
+        description = row.description
+        if isinstance(row, HomeCareVisitLog):
+            description = f"{row.description} ({row.visit_date.isoformat()})"
         session.add(
             InvoiceItem(
                 tenant_id=tenant_id,
                 invoice_id=invoice.id,
                 item_type="home_care",
-                description=row.description,
+                description=description,
                 quantity=row.quantity,
                 unit_amount=row.unit_amount,
                 total_amount=row.total_amount,
                 mrp_amount=mrp_amount,
                 selling_amount=selling_amount,
                 external_source="home_care",
-                external_slug="home_care_service",
-                external_item_code=row.service_id,
+                external_slug=row.service_category or "home_care_service",
+                external_item_code=row.id
+                if isinstance(row, HomeCareVisitLog)
+                else row.service_id,
             )
         )
     session.commit()

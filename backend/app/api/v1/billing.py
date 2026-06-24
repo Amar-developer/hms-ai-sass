@@ -740,6 +740,7 @@ def _build_receipt_pdf(
     items: list[InvoiceItem],
     payments: list[Payment],
     logo_url: str | None,
+    bank_details: dict[str, object] | None = None,
 ) -> bytes:
     width, height = 595, 842
     ops: list[str] = []
@@ -839,8 +840,43 @@ def _build_receipt_pdf(
         ops.append(f"{fill} rg BT /{font} {size} Tf 1 0 0 1 {x} {y} Tm ({value}) Tj ET")
 
     def text_width(value: object, size: int, bold: bool = False) -> int:
-        width_factor = 0.52 if bold else 0.48
-        return int(len(_pdf_text(value)) * size * width_factor)
+        raw = _pdf_text(value)
+        if bold:
+            widths = {
+                " ": 0.278,
+                ".": 0.278,
+                ",": 0.278,
+                "-": 0.333,
+                "|": 0.280,
+                "#": 0.556,
+                "+": 0.584,
+                "/": 0.278,
+            }
+            total = 0.0
+            for char in raw:
+                if char.isupper():
+                    total += {
+                        "I": 0.278,
+                        "J": 0.389,
+                        "M": 0.833,
+                        "W": 0.944,
+                    }.get(char, 0.722)
+                elif char.islower():
+                    total += {
+                        "i": 0.278,
+                        "j": 0.278,
+                        "l": 0.278,
+                        "m": 0.833,
+                        "r": 0.389,
+                        "t": 0.333,
+                        "w": 0.722,
+                    }.get(char, 0.556)
+                elif char.isdigit():
+                    total += 0.556
+                else:
+                    total += widths.get(char, 0.556)
+            return int(total * size)
+        return int(len(raw) * size * 0.50)
 
     def wrap_text(value: object, max_chars: int) -> list[str]:
         words = str(value or "").split()
@@ -972,37 +1008,48 @@ def _build_receipt_pdf(
     color(stroke="1 1 1", fill="1 1 1")
     rect(0, 0, width, height, True)
 
+    logo_x = 30
+    logo_w = 78 if logo else 0
     if logo:
-        image_w = 72
-        image_h = max(34, int(image_w * int(logo["height"]) / int(logo["width"])))
-        ops.append(f"q {image_w} 0 0 {image_h} 31 765 cm /Logo Do Q")
+        image_w = logo_w
+        image_h = max(
+            34, min(62, int(image_w * int(logo["height"]) / int(logo["width"])))
+        )
+        ops.append(f"q {image_w} 0 0 {image_h} {logo_x} 765 cm /Logo Do Q")
     title_size = 20 if len(legal_name) <= 36 else 17 if len(legal_name) <= 52 else 14
     title_parts = legal_name.split(maxsplit=1)
-    title_center_x = 297
+    title_left_bound = 120 if logo else 24
+    title_right_bound = 522
+    title_center_x = (title_left_bound + title_right_bound) // 2
     title_first = title_parts[0] if title_parts else legal_name
-    title_rest = title_parts[1] if len(title_parts) > 1 else ""
-    title_gap = 8 if title_rest else 0
-    title_total_width = (
-        text_width(title_first, title_size, True)
-        + title_gap
-        + text_width(title_rest, title_size, True)
-    )
-    title_x = title_center_x - title_total_width // 2
-    text(title_x, 790, title_first, title_size, True, fill=blue)
-    if len(title_parts) > 1:
-        text(
-            title_x + text_width(title_first, title_size, True) + title_gap,
-            790,
-            title_rest,
-            title_size,
-            True,
-            fill=brand_green,
-        )
-    line(max(16, title_x), 781, min(579, title_x + title_total_width), 781, green)
+    title_total_width = text_width(legal_name, title_size, True)
+    title_available_width = title_right_bound - title_left_bound
+    while title_size > 12 and title_total_width > title_available_width:
+        title_size -= 1
+        title_total_width = text_width(legal_name, title_size, True)
+    title_x = max(title_left_bound, title_center_x - title_total_width // 2)
+    text(title_x, 790, legal_name, title_size, True, fill=brand_green)
+    if title_first:
+        text(title_x, 790, title_first, title_size, True, fill=blue)
+    title_line_end = min(title_right_bound, title_x + title_total_width)
+    line(title_x, 781, title_line_end, 781, green)
+    bank_details = bank_details if isinstance(bank_details, dict) else {}
+    bank_name = str(
+        bank_details.get("account_name") or bank_details.get("name") or ""
+    ).strip()
+    bank_branch = str(
+        bank_details.get("branch_name") or bank_details.get("branch") or ""
+    ).strip()
+    bank_account = str(
+        bank_details.get("account_number") or bank_details.get("acc_number") or ""
+    ).strip()
+    bank_ifsc = str(bank_details.get("ifsc") or "").strip().upper()
+    bank_upi = str(bank_details.get("upi_id") or bank_details.get("upi") or "").strip()
+    tenant_gstin = str(bank_details.get("gstin") or "").strip().upper()
     address_line = wrap_text(header_address, 90)[0] if header_address else ""
     if header_address:
         address_width = 18 + text_width(address_line, 10, True)
-        address_x = title_center_x - address_width // 2
+        address_x = max(title_left_bound, title_center_x - address_width // 2)
         location_icon(address_x, 763)
         text(address_x + 18, 764, address_line, 10, True, fill=brand_green)
     text(575, 776, "INVOICE", 13, True, "right", fill=red)
@@ -1025,9 +1072,11 @@ def _build_receipt_pdf(
     gst_label = f"{tenant_name or legal_name} GSTIN"
     text(415, 706, gst_label, 8 if len(gst_label) <= 28 else 7, True, "center")
     text(485, 706, ":", 9, True)
-    field_label(25, 682, "Name", patient_name)
-    field_label(25, 666, "Phone No.", patient_phone)
-    field_label(25, 650, "Patient ID", getattr(patient, "patient_number", "") or "")
+    if tenant_gstin:
+        text(500, 706, tenant_gstin, 8, True)
+    field_label(25, 682, "Patient ID", getattr(patient, "patient_number", "") or "")
+    field_label(25, 666, "Name", patient_name)
+    field_label(25, 650, "Phone No.", patient_phone)
     field_label(25, 634, "WhatsApp No.", patient_phone)
     field_label(25, 618, "Address", patient_address)
     field_label(306, 679, "Invoice No.", invoice.invoice_number)
@@ -1050,8 +1099,13 @@ def _build_receipt_pdf(
     center(515, 579, 563, "Rate", 8, True)
 
     subtotal = int(invoice.subtotal_amount or 0)
-    extra_discount = int(invoice.discount_amount or 0)
-    taxable = int(invoice.taxable_amount or max(subtotal - extra_discount, 0))
+    membership_discount = min(
+        int(getattr(invoice, "membership_discount_amount", 0) or 0),
+        int(invoice.discount_amount or 0),
+    )
+    extra_discount = max(int(invoice.discount_amount or 0) - membership_discount, 0)
+    total_invoice_discount = extra_discount + membership_discount
+    taxable = int(invoice.taxable_amount or max(subtotal - total_invoice_discount, 0))
     tax = int(invoice.tax_amount or 0)
     item_quantity_total = sum(int(item.quantity or 0) for item in items)
     item_discount_total = sum(
@@ -1059,7 +1113,7 @@ def _build_receipt_pdf(
         * int(item.quantity or 0)
         for item in items
     )
-    total_discount = item_discount_total + extra_discount
+    total_discount = item_discount_total + total_invoice_discount
 
     row_y = 532
     for index, item in enumerate(items[:10], start=1):
@@ -1078,6 +1132,8 @@ def _build_receipt_pdf(
     summary_rows: list[tuple[str, int]] = [
         ("Subtotal", subtotal),
     ]
+    if membership_discount > 0:
+        summary_rows.append(("Membership Benefit", -membership_discount))
     if extra_discount > 0:
         summary_rows.append(("Extra Discount", -extra_discount))
     if tax > 0:
@@ -1105,11 +1161,11 @@ def _build_receipt_pdf(
     rect(left_x, 137, mid_x - left_x, 104)
     line(left_x, 224, mid_x, 224, green)
     center(left_x, mid_x, 229, "Bank Details", 8, True)
-    field_label(25, 209, "Name", "")
-    field_label(25, 193, "Branch", "")
-    field_label(25, 177, "Acc. Number", "")
-    field_label(25, 161, "IFSC", "")
-    field_label(25, 145, "UPI ID", "")
+    field_label(25, 209, "Name", bank_name)
+    field_label(25, 193, "Branch", bank_branch)
+    field_label(25, 177, "Acc. Number", bank_account)
+    field_label(25, 161, "IFSC", bank_ifsc)
+    field_label(25, 145, "UPI ID", bank_upi)
     rect(197, 173, 48, 48)
     text(200, 151, "Pay using UPI", 8, True)
 
@@ -2756,6 +2812,13 @@ def invoice_receipt_pdf(
         key=SettingKey.INVOICE_LOGO_URL,
         branch_id=invoice.branch_id,
     )
+    bank_details, _bank_scope, _bank_scope_id = resolve_setting(
+        session,
+        tenant_id=tenant_id,
+        module="accounts",
+        key=SettingKey.ACCOUNTS_BANK_DETAILS,
+        branch_id=invoice.branch_id,
+    )
     pdf = _build_receipt_pdf(
         tenant=tenant,
         branch=branch,
@@ -2764,6 +2827,7 @@ def invoice_receipt_pdf(
         items=items,
         payments=payments,
         logo_url=str(logo_url or ""),
+        bank_details=bank_details if isinstance(bank_details, dict) else {},
     )
     return Response(
         content=pdf,

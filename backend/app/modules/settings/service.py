@@ -47,6 +47,14 @@ DEFAULT_SETTING_VALUES: dict[SettingKey, Any] = {
         "lab_items": {"enabled": False, "provider": "local"},
         "medicine_items": {"enabled": False, "provider": "local"},
     },
+    SettingKey.ACCOUNTS_BANK_DETAILS: {
+        "account_name": "",
+        "branch_name": "",
+        "account_number": "",
+        "ifsc": "",
+        "upi_id": "",
+        "gstin": "",
+    },
 }
 
 

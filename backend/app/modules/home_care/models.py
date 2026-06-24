@@ -36,6 +36,7 @@ class HomeCareBooking(SQLModel, table=True):
     start_date: date = Field(default_factory=date.today, index=True)
     end_date: date | None = Field(default=None, index=True)
     status: str = Field(default="requested", index=True, max_length=40)
+    location: str | None = Field(default=None, max_length=500)
     complaints: str | None = Field(default=None, max_length=2000)
     notes: str | None = Field(default=None, max_length=2000)
     created_by_user_id: str | None = Field(default=None, index=True)
@@ -51,8 +52,39 @@ class HomeCareBookingItem(SQLModel, table=True):
     service_id: str | None = Field(
         default=None, index=True, foreign_key="homecareservice.id"
     )
+    service_category: str = Field(
+        default="home_care_service", index=True, max_length=80
+    )
     description: str = Field(max_length=260)
     quantity: int = Field(default=1, ge=1)
     unit_amount: int = Field(default=0, ge=0)
     total_amount: int = Field(default=0, ge=0)
     created_at: datetime = Field(default_factory=now_utc, index=True)
+
+
+class HomeCareVisitLog(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("hcvisit"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    booking_id: str = Field(index=True, foreign_key="homecarebooking.id")
+    visit_date: date = Field(default_factory=date.today, index=True)
+    assigned_staff_user_id: str | None = Field(
+        default=None, index=True, foreign_key="user.id"
+    )
+    assigned_staff_name: str | None = Field(default=None, index=True, max_length=160)
+    staff_type: str | None = Field(default=None, index=True, max_length=80)
+    service_id: str | None = Field(
+        default=None, index=True, foreign_key="homecareservice.id"
+    )
+    service_category: str = Field(
+        default="home_care_service", index=True, max_length=80
+    )
+    description: str = Field(max_length=260)
+    quantity: int = Field(default=1, ge=1)
+    unit_amount: int = Field(default=0, ge=0)
+    total_amount: int = Field(default=0, ge=0)
+    status: str = Field(default="completed", index=True, max_length=40)
+    notes: str | None = Field(default=None, max_length=1000)
+    created_by_user_id: str | None = Field(default=None, index=True)
+    updated_by_user_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+    updated_at: datetime = Field(default_factory=now_utc)

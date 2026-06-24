@@ -53,7 +53,7 @@ repos:
         stages: [manual]
       - id: frontend-quality
         name: Frontend quality gate (test + typecheck + build)
-        entry: bash -c 'npm test && npm run typecheck && npm run build'
+        entry: bash -c 'cd frontend && npm test && npm run typecheck && npm run build'
         language: system
         pass_filenames: false
         always_run: true

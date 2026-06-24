@@ -398,10 +398,13 @@ Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP 
 | `GET` | `/api/v1/home-care/bookings` | Any of `home_care.read`, `home_care.manage` |
 | `POST` | `/api/v1/home-care/bookings` | Any of `home_care.create`, `home_care.manage` |
 | `PATCH` | `/api/v1/home-care/bookings/{booking_id}` | Any of `home_care.edit`, `home_care.manage` |
+| `POST` | `/api/v1/home-care/bookings/{booking_id}/visits` | Any of `home_care.create`, `home_care.manage` |
+| `PATCH` | `/api/v1/home-care/bookings/{booking_id}/visits/{visit_id}` | Any of `home_care.edit`, `home_care.manage` |
+| `DELETE` | `/api/v1/home-care/bookings/{booking_id}/visits/{visit_id}` | Any of `home_care.delete`, `home_care.manage` |
 | `GET` | `/api/v1/home-care/bookings/{booking_id}/invoice` | `billing.manage` |
 | `POST` | `/api/v1/home-care/bookings/{booking_id}/invoice` | `billing.manage` |
 
-Home-care APIs enforce the `home_care` module entitlement and branch scope for service catalog rows and patient bookings. Booking invoice endpoints use the shared billing permission and create invoices from billable home-care booking items.
+Home-care APIs enforce the `home_care` module entitlement and branch scope for service catalog rows, patient bookings, and actual visit logs. Booking invoice endpoints use the shared billing permission and create invoices from completed visit logs when present, falling back to billable home-care booking items.
 
 ## Files, Settings, Notifications, and Audit
 

@@ -100,6 +100,7 @@ def upgrade() -> None:
                 nullable=False,
                 server_default="requested",
             ),
+            sa.Column("location", sa.String(length=500), nullable=True),
             sa.Column("complaints", sa.String(length=2000), nullable=True),
             sa.Column("notes", sa.String(length=2000), nullable=True),
             sa.Column("created_by_user_id", sa.String(), nullable=True),
@@ -115,6 +116,12 @@ def upgrade() -> None:
             sa.Column("tenant_id", sa.String(), nullable=False),
             sa.Column("booking_id", sa.String(), nullable=False),
             sa.Column("service_id", sa.String(), nullable=True),
+            sa.Column(
+                "service_category",
+                sa.String(length=80),
+                nullable=False,
+                server_default="home_care_service",
+            ),
             sa.Column("description", sa.String(length=260), nullable=False),
             sa.Column("quantity", sa.Integer(), nullable=False, server_default="1"),
             sa.Column("unit_amount", sa.Integer(), nullable=False, server_default="0"),
@@ -122,6 +129,19 @@ def upgrade() -> None:
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         )
 
+    _add_column_if_missing(
+        "homecarebookingitem",
+        sa.Column(
+            "service_category",
+            sa.String(length=80),
+            nullable=False,
+            server_default="home_care_service",
+        ),
+    )
+    _add_column_if_missing(
+        "homecarebooking",
+        sa.Column("location", sa.String(length=500), nullable=True),
+    )
     _add_column_if_missing(
         "homecarebooking",
         sa.Column("assigned_staff_name", sa.String(length=160), nullable=True),
