@@ -166,7 +166,7 @@ export function TokenQueue({
       alive = false;
     };
   }, [
-    apiSession?.token,
+    apiSession?.email,
     apiSession?.tenantId,
     displayMode,
     scopedAppointments.length,

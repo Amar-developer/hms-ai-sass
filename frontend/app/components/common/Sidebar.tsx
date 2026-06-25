@@ -1,5 +1,7 @@
 import { ChevronDown, Settings } from "lucide-react";
 import { BrandBlock } from "./BrandBlock";
+import { useState } from "react";
+import { reportSections } from "@/features/reports/Reports";
 
 interface SidebarProps {
   visibleNav: any[];
@@ -38,6 +40,10 @@ interface SidebarProps {
 }
 
 export function Sidebar(props: SidebarProps) {
+  const [popupMenu, setPopupMenu] = useState<
+    "superadmin" | "admin" | "reports" | null
+  >(null);
+  // console.log(props, "props");
   return (
     <aside
       className={`
@@ -63,12 +69,19 @@ export function Sidebar(props: SidebarProps) {
                 <button
                   type="button"
                   onClick={() => {
+                    if (props.tabletCollapsed) {
+                      setPopupMenu(
+                        popupMenu === "superadmin" ? null : "superadmin",
+                      );
+                      return;
+                    }
                     props.navigatePage(id);
                     props.setSuperAdminSettingsOpen(
                       !props.superAdminSettingsOpen,
                     );
                   }}
                   className={`flex w-full items-center rounded-2xl py-3
+                    ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
                   ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
                   <Icon size={18} />
@@ -84,6 +97,28 @@ export function Sidebar(props: SidebarProps) {
                     />
                   )}
                 </button>
+                {props.tabletCollapsed && popupMenu === "superadmin" && (
+                  <div className="absolute left-14 top-20 z-50 w-56 rounded-xl border bg-white shadow-xl p-2">
+                    {props.superAdminSections.map(
+                      ([sectionId, sectionLabel, SectionIcon]) => (
+                        <button
+                          key={sectionId}
+                          onClick={() => {
+                            props.navigatePage({
+                              id: "superadmin",
+                              section: sectionId,
+                            });
+                            setPopupMenu(null);
+                          }}
+                          className={`flex w-full text-xs justify-start items-start gap-3 px-2 py-2 ${props.superAdminSection == sectionId ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}`}
+                        >
+                          <SectionIcon size={15} />
+                          {sectionLabel}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
                 {!props.tabletCollapsed &&
                   isActive &&
                   props.superAdminSettingsOpen && (
@@ -103,11 +138,7 @@ export function Sidebar(props: SidebarProps) {
                                 section: sectionId,
                               });
                             }}
-                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
-                              props.superAdminSection === sectionId
-                                ? "bg-slate-100 text-slate-950"
-                                : "text-slate-500 hover:bg-slate-50"
-                            }`}
+                            className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs${props.superAdminSection == sectionId ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full font-bold" : "py-3"}`}
                           >
                             <SectionIcon size={15} />
                             {!props.tabletCollapsed && (
@@ -130,6 +161,7 @@ export function Sidebar(props: SidebarProps) {
                   type="button"
                   onClick={() => {
                     props.navigatePage(id);
+                    setPopupMenu("admin");
                     props.setTenantAdminSettingsOpen(
                       !props.tenantAdminSettingsOpen,
                     );
@@ -150,6 +182,29 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                     />
                   )}
                 </button>
+
+                {props.tabletCollapsed && popupMenu === "admin" && (
+                  <div className="absolute left-14 top-20 z-50 w-56 rounded-xl border bg-white shadow-xl p-2">
+                    {props.visibleTenantAdminSections.map(
+                      ([sectionId, sectionLabel, SectionIcon]) => (
+                        <button
+                          key={sectionId}
+                          onClick={() => {
+                            props.navigatePage({
+                              id: "admin",
+                              section: sectionId,
+                            });
+                            setPopupMenu(null);
+                          }}
+                          className={`flex w-full text-xs justify-start items-start gap-3 px-2 py-2 ${props.tenantAdminSection == sectionId ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}`}
+                        >
+                          <SectionIcon size={15} />
+                          {sectionLabel}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
                 {!props.tabletCollapsed &&
                   isActive &&
                   props.tenantAdminSettingsOpen && (
@@ -196,6 +251,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                   type="button"
                   onClick={() => {
                     props.navigatePage(id);
+                    setPopupMenu("reports");
                     props.setReportsOpen(!props.reportsOpen);
 
                     if (!props.reportsSection) {
@@ -203,6 +259,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                     }
                   }}
                   className={`flex w-full items-center rounded-2xl py-3
+                    ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
                   <Icon size={18} />
@@ -218,7 +275,28 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                     />
                   )}
                 </button>
-
+                {props.tabletCollapsed && popupMenu === "reports" && (
+                  <div className="absolute left-14 bottom-5 z-50 w-56 rounded-xl border bg-white shadow-xl p-2">
+                    {props.reportSections.map(
+                      ([sectionId, sectionLabel, SectionIcon]) => (
+                        <button
+                          key={sectionId}
+                          onClick={() => {
+                            props.navigatePage({
+                              id: "reports",
+                              section: sectionId,
+                            });
+                            setPopupMenu(null);
+                          }}
+                          className={`flex w-full text-xs justify-start items-start gap-3 px-2 py-2 ${props.reportSection == sectionId ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}`}
+                        >
+                          <SectionIcon size={15} />
+                          {sectionLabel}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                )}
                 {!props.tabletCollapsed && isActive && props.reportsOpen && (
                   <div className="mt-2 grid gap-1 pl-5">
                     {props.reportSections.map(
@@ -233,7 +311,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                             });
                           }}
                           className={`flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-xs font-bold ${
-                            props.reportsSection === sectionId
+                            props.reportsSection == sectionId
                               ? "bg-slate-100 text-slate-950"
                               : "text-slate-500 hover:bg-slate-50"
                           }`}
@@ -258,6 +336,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
               type="button"
               onClick={() => {
                 props.navigatePage(id);
+                setPopupMenu(null);
                 props.setTenantAdminSettingsOpen(false);
               }}
               className={`flex w-full items-center rounded-2xl py-2.5

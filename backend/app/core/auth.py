@@ -15,6 +15,7 @@ from app.modules.identity.models import (
 )
 from app.modules.identity.security import hash_token
 from app.modules.tenants.models import Tenant, TenantStatus
+from fastapi import Cookie
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -25,11 +26,21 @@ def _bearer_token(authorization: str | None) -> str:
     return authorization.split(" ", 1)[1].strip()
 
 
+def _auth_token(authorization: str | None, access_token: str | None) -> str:
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1].strip()
+    if access_token:
+        return access_token
+    raise HTTPException(401, "Authentication token is required")
+
+
 def get_current_user(
     authorization: Annotated[str | None, Header()] = None,
+    access_token: Annotated[str | None, Cookie()] = None,
     session: Session = Depends(get_session),
 ) -> User:
-    token_hash = hash_token(_bearer_token(authorization))
+    token = _auth_token(authorization, access_token)
+    token_hash = hash_token(token)
     auth_session = session.exec(
         select(AuthSession).where(
             AuthSession.token_hash == token_hash,
@@ -57,9 +68,11 @@ def get_current_user(
 
 def get_current_auth_session(
     authorization: Annotated[str | None, Header()] = None,
+    access_token: Annotated[str | None, Cookie()] = None,
     session: Session = Depends(get_session),
 ) -> AuthSession:
-    token_hash = hash_token(_bearer_token(authorization))
+    token = _auth_token(authorization, access_token)
+    token_hash = hash_token(token)
     auth_session = session.exec(
         select(AuthSession).where(
             AuthSession.token_hash == token_hash,

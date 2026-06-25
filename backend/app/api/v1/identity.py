@@ -3,7 +3,7 @@ import json
 import logging
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlmodel import Session, select
 
 from app.core.auth import (
@@ -353,7 +353,7 @@ def bootstrap_super_admin(
 
 @router.post("/auth/login", response_model=LoginResponse)
 def login(
-    payload: LoginRequest, session: Session = Depends(get_session)
+    payload: LoginRequest, response: Response, session: Session = Depends(get_session)
 ) -> LoginResponse:
     email = _normalize_email(payload.email)
 
@@ -405,6 +405,15 @@ def login(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login"
             )
     token, auth_session = create_access_session(session, user)
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+        path="/",
+        max_age=3600,
+    )
     if user.tenant_id:
         record_audit_event(
             session,

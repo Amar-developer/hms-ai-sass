@@ -187,12 +187,12 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
     if (apiSession) {
       loadTenants();
     }
-  }, [apiSession?.token]);
+  }, [apiSession?.email]);
   useEffect(() => {
     if (apiSession && tenantId) {
       loadData(tenantId);
     }
-  }, [apiSession?.token, tenantId]);
+  }, [apiSession?.email, tenantId]);
 
   useEffect(() => {
     if (!apiSession || !tenantId || typeof window === "undefined") return;
@@ -205,7 +205,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
     );
-  }, [apiSession?.token, tenantId]);
+  }, [apiSession?.email, tenantId]);
 
   function open(nextView: string, id = "") {
     if (id) setSelectedId(id);

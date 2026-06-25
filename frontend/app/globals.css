@@ -71,7 +71,7 @@
 
 @layer components {
   .save-button {
-    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs 
+    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs
   }
 }
 

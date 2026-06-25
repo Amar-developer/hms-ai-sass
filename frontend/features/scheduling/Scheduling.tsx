@@ -401,7 +401,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             <Select
               value={tenantId}
               onChange={(e: any) => setTenantId(e.target.value)}
-              
+
             >
               {tenants.map((tenant: any) => (
                 <option key={tenant.id} value={tenant.id}>

@@ -383,7 +383,7 @@ export function DoctorForm({
                       min={0}
                       required
                       placeholder="650"
-                      
+
                     />
                     <NumberField
                       label="Doctor Share %"

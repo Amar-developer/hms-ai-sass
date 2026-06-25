@@ -367,7 +367,7 @@ export function AppointmentCalendarBooking(props: Props) {
       alive = false;
     };
   }, [
-    apiSession?.token,
+    apiSession?.email,
     apiSession?.tenantId,
     isSuperAdmin,
     query,
@@ -400,7 +400,7 @@ export function AppointmentCalendarBooking(props: Props) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, patientSearch]);
+  }, [apiSession?.email, apiSession?.tenantId, patientSearch]);
 
   useEffect(() => {
     let alive = true;
@@ -426,7 +426,7 @@ export function AppointmentCalendarBooking(props: Props) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+  }, [apiSession?.email, apiSession?.tenantId, branchId]);
 
   useEffect(() => {
     let alive = true;
@@ -515,7 +515,7 @@ export function AppointmentCalendarBooking(props: Props) {
       alive = false;
     };
   }, [
-    apiSession?.token,
+    apiSession?.email,
     apiSession?.tenantId,
     branchId,
     departmentId,
