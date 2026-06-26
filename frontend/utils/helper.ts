@@ -51,11 +51,33 @@ export function displayToIsoDate(value: any) {
   return `${year}-${month}-${day}`;
 }
 
+// Backend timestamps are stored in UTC but serialized without a timezone
+// designator (e.g. "2026-06-26T09:19:00"). The browser would otherwise parse
+// such a naive string as local time, leaving the displayed clock off by the
+// local UTC offset. Treat a designator-less date-time as UTC so it converts to
+// the viewer's local time correctly. Values that already carry a Z/offset (or
+// are plain dates) are left untouched.
+function parseInstant(value: any) {
+  const raw = String(value).trim();
+  if (
+    /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(raw) &&
+    !/([zZ])|([+-]\d{2}:?\d{2})$/.test(raw)
+  ) {
+    return new Date(`${raw.replace(" ", "T")}Z`);
+  }
+  return new Date(value);
+}
+
 export function displayDateTime(value: any, fallback = "-") {
   if (!value) return fallback;
-  const date = new Date(value);
+  const date = parseInstant(value);
   if (Number.isNaN(date.getTime())) return fallback;
-  return `${displayDate(value, fallback)}, ${date.toLocaleTimeString([], {
+  const datePart = [
+    String(date.getDate()).padStart(2, "0"),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    date.getFullYear(),
+  ].join("/");
+  return `${datePart}, ${date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   })}`;

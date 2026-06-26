@@ -209,12 +209,20 @@ export function TenantAdmin({
         entitlements && !Array.isArray(entitlements) ? entitlements : null,
       );
       const find = (key: string) => settingRows.find((x: any) => x.key === key);
+      const findTenant = (key: string) =>
+        settingRows.find((x: any) => x.key === key && x.scope === "tenant") ||
+        find(key);
       if (find("invoice.prefix"))
         setInvoicePrefix(find("invoice.prefix").value);
       setInvoiceLogoUrl(
-        String(find("invoice.logo_url")?.value || clinic?.logo_url || ""),
+        String(findTenant("invoice.logo_url")?.value || clinic?.logo_url || ""),
       );
-      setBankDetails(parseBankDetails(find("accounts.bank_details")?.value));
+      const bankRow =
+        settingRows.find(
+          (x: any) =>
+            x.key === "accounts.bank_details" && x.scope === "tenant",
+        ) || find("accounts.bank_details");
+      setBankDetails(parseBankDetails(bankRow?.value));
       if (find("numbering.rules"))
         setNumberingRules(
           parseNumberingRules(
@@ -983,8 +991,7 @@ export function TenantAdmin({
         apiFetch("/settings", apiSession, {
           method: "PUT",
           body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
+            scope: "tenant",
             module: "invoice",
             key: "invoice.logo_url",
             value: invoiceLogoUrl,
@@ -1048,8 +1055,9 @@ export function TenantAdmin({
         apiFetch("/settings", apiSession, {
           method: "PUT",
           body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
+            // Tenant scoped so it stays in sync with the super admin screen and
+            // the receipt PDF, which read bank details at tenant scope.
+            scope: "tenant",
             module: "accounts",
             key: "accounts.bank_details",
             value: bankDetails,
@@ -1095,8 +1103,7 @@ export function TenantAdmin({
       await apiFetch("/settings", apiSession, {
         method: "PUT",
         body: JSON.stringify({
-          scope: "branch",
-          scope_id: branchId,
+          scope: "tenant",
           module: "invoice",
           key: "invoice.logo_url",
           value: created.file_url,

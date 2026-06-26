@@ -16,6 +16,7 @@ class InvoiceStatus(str, Enum):
     DRAFT = "draft"
     ISSUED = "issued"
     PARTIALLY_PAID = "partially_paid"
+    PARTIALLY_REFUNDED = "partially_refunded"
     PAID = "paid"
     CANCELLED = "cancelled"
     REFUNDED = "refunded"
@@ -34,6 +35,19 @@ class PaymentMethod(str, Enum):
 class PaymentStatus(str, Enum):
     RECORDED = "recorded"
     REFUNDED = "refunded"
+
+
+class BillingAdjustmentType(str, Enum):
+    CANCEL = "cancel"
+    FULL_REFUND = "full_refund"
+    PARTIAL_REFUND = "partial_refund"
+
+
+class BillingAdjustmentStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    EXECUTED = "executed"
 
 
 class ApprovalStatus(str, Enum):
@@ -189,12 +203,36 @@ class Payment(SQLModel, table=True):
     invoice_id: str = Field(index=True, foreign_key="invoice.id")
     method: PaymentMethod = Field(index=True)
     amount: int = Field(gt=0)
+    refunded_amount: int = Field(default=0, ge=0)
     reference_number: str | None = Field(default=None, max_length=120)
     status: PaymentStatus = Field(default=PaymentStatus.RECORDED, index=True)
     collected_by_user_id: str | None = Field(default=None, index=True)
     collected_at: datetime = Field(default_factory=now_utc, index=True)
     refunded_at: datetime | None = Field(default=None, index=True)
     refund_reason: str | None = Field(default=None, max_length=500)
+
+
+class BillingAdjustmentRequest(SQLModel, table=True):
+    id: str = Field(default_factory=lambda: new_id("billreq"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str = Field(index=True, foreign_key="branch.id")
+    invoice_id: str = Field(index=True, foreign_key="invoice.id")
+    request_type: BillingAdjustmentType = Field(index=True)
+    amount: int = Field(default=0, ge=0)
+    reason: str = Field(min_length=2, max_length=500)
+    status: BillingAdjustmentStatus = Field(
+        default=BillingAdjustmentStatus.PENDING, index=True
+    )
+    requested_by_user_id: str | None = Field(default=None, index=True)
+    approved_by_user_id: str | None = Field(default=None, index=True)
+    rejected_by_user_id: str | None = Field(default=None, index=True)
+    executed_by_user_id: str | None = Field(default=None, index=True)
+    decision_reason: str | None = Field(default=None, max_length=500)
+    payment_method: PaymentMethod | None = Field(default=None, index=True)
+    payment_reference: str | None = Field(default=None, max_length=120)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+    decided_at: datetime | None = Field(default=None, index=True)
+    executed_at: datetime | None = Field(default=None, index=True)
 
 
 class DiscountApproval(SQLModel, table=True):

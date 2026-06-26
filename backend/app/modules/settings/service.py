@@ -45,7 +45,7 @@ DEFAULT_SETTING_VALUES: dict[SettingKey, Any] = {
     SettingKey.COMMUNICATION_PROVIDERS_ENABLED: [],
     SettingKey.CATALOG_INTEGRATIONS: {
         "lab_items": {"enabled": False, "provider": "local"},
-        "medicine_items": {"enabled": False, "provider": "local"},
+        "medicine_items": {"enabled": True, "provider": "external_catalog"},
     },
     SettingKey.ACCOUNTS_BANK_DETAILS: {
         "account_name": "",

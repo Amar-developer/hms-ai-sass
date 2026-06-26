@@ -195,6 +195,28 @@ export function FilesPanel({
     }
   }
 
+  async function deleteFile(file: any) {
+    if (!apiSession) return;
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Delete "${file.file_name}" from the registry?`)
+    )
+      return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiFetch(`/files/${file.id}`, apiSession, { method: "DELETE" });
+      setFiles((previous: any[]) =>
+        previous.filter((row: any) => row.id !== file.id),
+      );
+      setMessage(`Deleted ${file.file_name}.`);
+    } catch (err: any) {
+      setMessage(err.message || "Could not delete file.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function syncUploadsFolder() {
     if (!apiSession) return;
     setSyncing(true);
@@ -414,12 +436,13 @@ export function FilesPanel({
                 <th>Patient</th>
                 <th>Created</th>
                 <th className="pr-4">Open</th>
+                <th className="pr-4">Delete</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {visible.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-4 text-slate-500">
+                  <td colSpan={7} className="px-4 py-4 text-slate-500">
                     No files found.
                   </td>
                 </tr>
@@ -484,6 +507,16 @@ export function FilesPanel({
                     >
                       Open
                     </a>
+                  </td>
+                  <td className="pr-4">
+                    <button
+                      type="button"
+                      onClick={() => deleteFile(file)}
+                      disabled={busy}
+                      className="font-semibold text-xs text-red-600 underline disabled:text-slate-300"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

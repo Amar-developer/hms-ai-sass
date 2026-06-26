@@ -9,7 +9,9 @@ from app.modules.lab.models import (
     LabOrderItem,
     LabOrderSource,
     LabTestCatalog,
+    LabTestPackage,
 )
+from app.modules.identity.models import User
 
 
 def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
@@ -56,21 +58,10 @@ def test_local_lab_price_uses_catalog_mrp_not_selling_price():
     assert pricing["buying_price"] == 40
 
 
-def test_local_lab_catalog_setting_disables_external_lookup(test_engine, monkeypatch):
-    from app.api.v1 import lab as lab_api
-
-    monkeypatch.setattr(
-        lab_api.get_settings(), "maha_clinic_url", "https://erpnext.example.test"
-    )
-    monkeypatch.setattr(lab_api.get_settings(), "maha_clinic_token", "token")
-    monkeypatch.setattr(lab_api.get_settings(), "external_lab_items_enabled", True)
+def test_lab_external_plugin_registry_is_empty(test_engine):
+    from app.modules.integrations.service import integration_plugin_registry
 
     with Session(test_engine) as session:
-        assert (
-            lab_api._external_lab_items_enabled(session, "tenant_local_catalog")
-            is False
-        )
-
         upsert_setting(
             session,
             tenant_id="tenant_local_catalog",
@@ -85,10 +76,48 @@ def test_local_lab_catalog_setting_disables_external_lookup(test_engine, monkeyp
         )
         session.commit()
 
-        assert (
-            lab_api._external_lab_items_enabled(session, "tenant_local_catalog")
-            is False
+        assert integration_plugin_registry() == []
+
+
+def test_available_medicines_uses_external_graphql_catalog(test_engine, monkeypatch):
+    from app.api.v1 import pharmacy as pharmacy_api
+
+    class FakeMedicineClient:
+        def get_products(self, search=None, page_size=10, current_page=1):
+            assert search == "dolo"
+            return [
+                {
+                    "id": "dolo-650-mg-tablet",
+                    "name": "DOLO 650 MG TABLET",
+                    "item_name": "DOLO 650 MG TABLET",
+                    "slug": "dolo-650-mg-tablet",
+                    "source": "graphql",
+                }
+            ]
+
+    monkeypatch.setattr(
+        pharmacy_api, "enforce_module_enabled", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        pharmacy_api, "_medicine_graphql_client", lambda: FakeMedicineClient()
+    )
+    current_user = User(
+        tenant_id="tenant_medicine_search",
+        user_type="tenant_admin",
+        name="Tenant Admin",
+        email="tenant-admin@example.test",
+    )
+
+    with Session(test_engine) as session:
+        rows = pharmacy_api.list_available_medicines(
+            tenant_id="tenant_medicine_search",
+            search="dolo",
+            session=session,
+            current_user=current_user,
         )
+
+    assert rows[0]["item_name"] == "DOLO 650 MG TABLET"
+    assert rows[0]["source"] == "graphql"
 
 
 def setup_lab_pharmacy_tenant(client):
@@ -242,37 +271,21 @@ def test_create_lab_order_from_consultation_and_release_result(client):
     assert len(listed) == 1
 
 
-def test_zero_amount_lab_order_reprices_from_external_catalog(test_engine, monkeypatch):
+def test_zero_amount_lab_order_reprices_from_local_catalog(test_engine):
     from app.api.v1 import lab as lab_api
 
-    class FakeFrappeClient:
-        def get_lab_items(self, search=None):
-            return []
-
-        def get_lab_item_details(self, slug):
-            assert slug == "random-blood-sugar"
-            return {
-                "slug": "random-blood-sugar",
-                "item_code": "RBS",
-                "item_name": "Random Blood Sugar",
-                "mrp_price": 100,
-                "selling_price": 75,
-                "buying_price": 20,
-                "suppliers": [
-                    {
-                        "supplier": "Neuberg",
-                        "supplier_name": "Neuberg",
-                        "buying_price": 20,
-                    }
-                ],
-            }
-
-    monkeypatch.setattr(
-        lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True
-    )
-    monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
-
     with Session(test_engine) as session:
+        session.add(
+            LabTestCatalog(
+                tenant_id="tenant_lab_price",
+                branch_id=None,
+                code="RBS",
+                name="Random Blood Sugar",
+                mrp_price=100,
+                default_price=75,
+                purchase_price=20,
+            )
+        )
         order = LabOrder(
             tenant_id="tenant_lab_price",
             branch_id="branch_main",
@@ -300,37 +313,21 @@ def test_zero_amount_lab_order_reprices_from_external_catalog(test_engine, monke
     assert order.amount == 75
 
 
-def test_text_only_lab_order_creates_priced_external_items(test_engine, monkeypatch):
+def test_text_only_lab_order_creates_priced_local_items(test_engine):
     from app.api.v1 import lab as lab_api
 
-    class FakeFrappeClient:
-        def get_lab_items(self, search=None):
-            return []
-
-        def get_lab_item_details(self, slug):
-            assert slug == "random-blood-sugar"
-            return {
-                "slug": "random-blood-sugar",
-                "item_code": "RBS",
-                "item_name": "Random Blood Sugar",
-                "mrp_price": 100,
-                "selling_price": 75,
-                "buying_price": 20,
-                "suppliers": [
-                    {
-                        "supplier": "Neuberg",
-                        "supplier_name": "Neuberg",
-                        "buying_price": 20,
-                    }
-                ],
-            }
-
-    monkeypatch.setattr(
-        lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True
-    )
-    monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
-
     with Session(test_engine) as session:
+        session.add(
+            LabTestCatalog(
+                tenant_id="tenant_lab_price",
+                branch_id=None,
+                code="RBS",
+                name="Random Blood Sugar",
+                mrp_price=100,
+                default_price=75,
+                purchase_price=20,
+            )
+        )
         order = LabOrder(
             tenant_id="tenant_lab_price",
             branch_id="branch_main",
@@ -354,61 +351,30 @@ def test_text_only_lab_order_creates_priced_external_items(test_engine, monkeypa
     assert items[0].price == 75
 
 
-def test_selected_external_lab_item_uses_exact_item_code(test_engine, monkeypatch):
+def test_selected_lab_item_uses_local_catalog_item(test_engine):
     from app.api.v1 import lab as lab_api
 
-    class FakeFrappeClient:
-        def get_lab_items(self, search=None):
-            return [
-                {
-                    "id": "hemoglobin",
-                    "slug": "hemoglobin",
-                    "item_name": "HEMOGLOBIN",
-                    "item_code": "HEMO",
-                    "erpnext_name": "HEMO",
-                },
-                {
-                    "id": "bp-test",
-                    "slug": "bp-test",
-                    "item_name": "BP Test",
-                    "item_code": "BP",
-                    "erpnext_name": "BP",
-                },
-            ]
-
-        def get_lab_item_details(self, slug):
-            if slug == "BP":
-                return {
-                    "slug": "bp-test",
-                    "item_code": "BP",
-                    "item_name": "BP Test",
-                    "mrp_price": 100,
-                    "selling_price": 30,
-                    "buying_price": 0,
-                    "suppliers": [
-                        {
-                            "supplier": "Sri Maha Clinic",
-                            "supplier_name": "Sri Maha Clinic",
-                            "buying_price": 0,
-                        }
-                    ],
-                }
-            return {
-                "slug": "hemoglobin",
-                "item_code": "HEMO",
-                "item_name": "HEMOGLOBIN",
-                "mrp_price": 300,
-                "selling_price": 150,
-                "buying_price": 0,
-                "suppliers": [],
-            }
-
-    monkeypatch.setattr(
-        lab_api, "_external_lab_items_enabled", lambda _session, _tenant_id: True
-    )
-    monkeypatch.setattr(lab_api, "_frappe_catalog_client", lambda: FakeFrappeClient())
-
     with Session(test_engine) as session:
+        session.add(
+            LabTestCatalog(
+                tenant_id="tenant_lab_price",
+                branch_id=None,
+                code="HEMO",
+                name="HEMOGLOBIN",
+                mrp_price=300,
+                default_price=150,
+            )
+        )
+        session.add(
+            LabTestCatalog(
+                tenant_id="tenant_lab_price",
+                branch_id=None,
+                code="BP",
+                name="BP Test",
+                mrp_price=100,
+                default_price=30,
+            )
+        )
         order = LabOrder(
             tenant_id="tenant_lab_price",
             branch_id="branch_main",
@@ -439,11 +405,75 @@ def test_selected_external_lab_item_uses_exact_item_code(test_engine, monkeypatc
     assert total == 30
     assert len(items) == 1
     assert items[0].test_name == "BP Test"
-    assert items[0].external_item_code == "BP"
+    assert items[0].external_item_code is None
     assert items[0].price == 30
 
 
-def test_create_direct_op_and_external_lab_orders(client):
+def test_available_lab_search_returns_local_lab_tests_and_services(
+    test_engine, monkeypatch
+):
+    from app.api.v1 import lab as lab_api
+
+    monkeypatch.setattr(
+        lab_api, "enforce_module_enabled", lambda *_args, **_kwargs: None
+    )
+    current_user = User(
+        tenant_id="tenant_lab_search",
+        user_type="tenant_admin",
+        name="Tenant Admin",
+        email="tenant-admin@example.test",
+    )
+    with Session(test_engine) as session:
+        session.add(
+            LabTestCatalog(
+                tenant_id="tenant_lab_search",
+                branch_id=None,
+                code="CBC",
+                name="Complete Blood Count",
+                sample_type="Blood (EDTA)",
+                default_price=300,
+            )
+        )
+        session.add(
+            LabTestPackage(
+                tenant_id="tenant_lab_search",
+                branch_id=None,
+                code="CARDIAC_SCR",
+                name="Cardiac Screening",
+                description="ECG + Chest X-Ray",
+                package_price=500,
+            )
+        )
+        session.commit()
+
+        lab_rows = lab_api.list_available_lab_tests(
+            tenant_id="tenant_lab_search",
+            branch_id="different_branch",
+            search="com",
+            session=session,
+            current_user=current_user,
+        )
+        service_rows = lab_api.list_available_lab_tests(
+            tenant_id="tenant_lab_search",
+            branch_id="different_branch",
+            search="card",
+            session=session,
+            current_user=current_user,
+        )
+
+    assert any(
+        row["item_name"] == "Complete Blood Count" and row["item_type"] == "lab_test"
+        for row in lab_rows
+    )
+    assert any(
+        row["item_name"] == "Cardiac Screening"
+        and row["item_type"] == "lab_package"
+        and row["kind"] == "Service"
+        for row in service_rows
+    )
+
+
+def test_create_direct_op_and_outside_referral_lab_orders(client):
     tenant, branch, patient = setup_lab_pharmacy_tenant(client)
 
     direct = client.post(

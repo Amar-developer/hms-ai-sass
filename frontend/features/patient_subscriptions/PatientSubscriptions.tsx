@@ -186,10 +186,7 @@ export function PatientSubscriptions({
             apiSession,
           ),
           apiFetch("/patient-subscriptions/enrollments", apiSession),
-          apiFetch(
-            `/lab/catalog/tests?branch_id=${encodeURIComponent(branchId || "")}`,
-            apiSession,
-          ).catch(() => []),
+          apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
           apiFetch(
             `/pharmacy/medicines?branch_id=${encodeURIComponent(branchId || "")}`,
             apiSession,

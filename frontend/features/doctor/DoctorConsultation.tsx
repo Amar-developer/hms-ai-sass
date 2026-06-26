@@ -1286,10 +1286,18 @@ export function DoctorConsultation({
                     !isCompletedAppointment(a) && !isCancelledAppointment(a),
                 )
                 .map((a: any) => (
-                  <button
+                  <div
                     key={a.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => openConsultation(a.id)}
-                    className={`w-36 shrink-0 rounded-lg border p-2.5 text-left transition ${
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openConsultation(a.id);
+                      }
+                    }}
+                    className={`w-36 shrink-0 cursor-pointer rounded-lg border p-2.5 text-left transition ${
                       selected?.id === a.id
                         ? "border-slate-900 bg-slate-50"
                         : "border-slate-200 bg-white hover:border-slate-400"
@@ -1332,7 +1340,7 @@ export function DoctorConsultation({
                     <p className="text-xs text-slate-400">
                       {humanizeOptionLabel(a.queueStatus)}
                     </p>
-                  </button>
+                  </div>
                 ))}
               {doctorQueue.filter(
                 (a: any) =>

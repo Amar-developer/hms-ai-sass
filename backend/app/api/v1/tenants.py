@@ -19,6 +19,8 @@ from app.modules.identity import permissions
 from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole
 from app.modules.identity.security import hash_password
 from app.modules.settings.numbering import next_document_number
+from app.modules.settings.models import SettingKey, SettingScope
+from app.modules.settings.service import upsert_setting
 from app.modules.subscriptions.models import (
     SubscriptionInvoice,
     SubscriptionPlan,
@@ -823,6 +825,16 @@ async def upload_tenant_logo(
     tenant.updated_by_user_id = current_user.id
     tenant.updated_at = now_utc()
     session.add(tenant)
+    upsert_setting(
+        session,
+        tenant_id=tenant.id,
+        scope=SettingScope.TENANT,
+        scope_id=tenant.id,
+        module="invoice",
+        key=SettingKey.INVOICE_LOGO_URL,
+        value=url_path,
+        actor_user_id=current_user.id,
+    )
     record_file_document(
         session,
         tenant_id=tenant.id,

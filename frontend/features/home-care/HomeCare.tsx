@@ -90,6 +90,13 @@ export function HomeCare({
   const [patientSearch, setPatientSearch] = useState("");
   const [form, setForm] = useState<any>({ ...emptyForm });
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
+  // Editing and cancelling bookings is restricted to tenant admins (and super
+  // admins). Other roles can still view bookings and generate invoices.
+  const canManageBooking = Boolean(
+    apiSession?.user?.is_super_admin ||
+      apiSession?.user?.user_type === "tenant_admin" ||
+      apiSession?.user?.roles?.includes("tenant_admin"),
+  );
   const [visitForm, setVisitForm] = useState<any>(() => ({
     visit_date: today(),
     assigned_staff_user_id: "",
@@ -640,6 +647,7 @@ export function HomeCare({
           onView={openView}
           onEdit={startEdit}
           onInvoice={openInvoice}
+          canManage={canManageBooking}
         />
       )}
 
@@ -900,6 +908,7 @@ export function HomeCare({
           onEdit={() => selected && startEdit(selected)}
           onCancel={cancelBooking}
           onInvoice={() => selected && openInvoice(selected)}
+          canManage={canManageBooking}
           onOpenInvoiceModule={() =>
             invoiceDetail?.invoice &&
             goToInvoiceModule(invoiceDetail.invoice.id)

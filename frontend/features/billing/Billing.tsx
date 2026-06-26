@@ -461,6 +461,46 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     }
   }
 
+  async function downloadReceipt(invoice: any) {
+    if (!apiSession) return;
+    setBusy(`download-${invoice.id}`);
+    try {
+      const blob = await apiBlob(
+        `/billing/invoices/${invoice.id}/receipt.pdf`,
+        apiSession,
+      );
+      const patient: any = patientMap.get(invoice.patient_id);
+      const patientName =
+        invoice.patient_name ||
+        patient?.full_name ||
+        patient?.name ||
+        "Patient";
+      // Build "<Patient Name>-<Invoice Number>.pdf". The download attribute
+      // controls the saved filename (a blob preview tab cannot).
+      const safe = (value: string) =>
+        String(value || "")
+          .trim()
+          .replace(/[^a-zA-Z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+      const fileName =
+        [safe(patientName), safe(invoice.invoice_number)]
+          .filter(Boolean)
+          .join("-") || "receipt";
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${fileName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err: any) {
+      setMessage(err.message || "Could not download receipt.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function updateInvoiceItemSupplier(invoice:any,item:any,supplierId:string){
     if(!apiSession)return;
     setBusy(`supplier-${item.id}`);
@@ -494,6 +534,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
 
   async function cancelInvoice(invoice:any){
     if(!apiSession)return;
+    if(!window.confirm(`Cancel invoice ${invoice.invoice_number}? This reverses the ledger and, for home care/visit bills, reopens the booking for editing.`))return;
     const reason=window.prompt(`Cancel reason for ${invoice.invoice_number}`);
     if(!reason)return;
     setBusy(`cancel-${invoice.id}`);
@@ -508,6 +549,87 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       await loadReports();
       setMessage(`Invoice ${invoice.invoice_number} cancelled and ledger reversed.`);
     }catch(err:any){setMessage(err.message||'Could not cancel invoice.')}
+    finally{setBusy('')}
+  }
+
+  async function requestAdjustment(invoice:any,type:string){
+    if(!apiSession)return;
+    const label=String(type).replaceAll('_',' ');
+    const reason=window.prompt(`Reason for ${label} request on ${invoice.invoice_number}`);
+    if(!reason)return;
+    let amount:any=null;
+    if(type==='partial_refund'){
+      const raw=window.prompt(`Partial refund amount for ${invoice.invoice_number}`);
+      if(!raw)return;
+      amount=Number(raw);
+      if(!amount||amount<=0){setMessage('Enter a valid refund amount.');return;}
+    }
+    setBusy(`request-${invoice.id}`);
+    setMessage('');
+    try{
+      const row=await apiFetch(`/billing/invoices/${invoice.id}/adjustment-requests`,apiSession,{
+        method:'POST',
+        body:JSON.stringify({
+          request_type:type,
+          amount,
+          reason,
+          requested_by_user_id:apiSession.user?.id,
+        }),
+      });
+      await openInvoiceDetail(invoice);
+      setMessage(`${String(row.request_type).replaceAll('_',' ')} request raised.`);
+    }catch(err:any){setMessage(err.message||'Could not raise request.')}
+    finally{setBusy('')}
+  }
+
+  async function approveAdjustment(row:any){
+    if(!apiSession)return;
+    const reason=window.prompt('Approval note (optional)')||'';
+    setBusy(`approve-${row.id}`);
+    setMessage('');
+    try{
+      await apiFetch(`/billing/adjustment-requests/${row.id}/approve`,apiSession,{
+        method:'POST',
+        body:JSON.stringify({reason:reason||null,actor_user_id:apiSession.user?.id}),
+      });
+      if(detail?.invoice)await openInvoiceDetail(detail.invoice);
+      setMessage('Request approved.');
+    }catch(err:any){setMessage(err.message||'Could not approve request.')}
+    finally{setBusy('')}
+  }
+
+  async function rejectAdjustment(row:any){
+    if(!apiSession)return;
+    const reason=window.prompt('Reject reason');
+    if(!reason)return;
+    setBusy(`reject-${row.id}`);
+    setMessage('');
+    try{
+      await apiFetch(`/billing/adjustment-requests/${row.id}/reject`,apiSession,{
+        method:'POST',
+        body:JSON.stringify({reason,actor_user_id:apiSession.user?.id}),
+      });
+      if(detail?.invoice)await openInvoiceDetail(detail.invoice);
+      setMessage('Request rejected.');
+    }catch(err:any){setMessage(err.message||'Could not reject request.')}
+    finally{setBusy('')}
+  }
+
+  async function executeAdjustment(row:any){
+    if(!apiSession)return;
+    if(!window.confirm(`Execute ${String(row.request_type).replaceAll('_',' ')} request?`))return;
+    setBusy(`execute-${row.id}`);
+    setMessage('');
+    try{
+      const next=await apiFetch(`/billing/adjustment-requests/${row.id}/execute`,apiSession,{
+        method:'POST',
+        body:JSON.stringify({actor_user_id:apiSession.user?.id}),
+      });
+      setDetail(next);
+      await loadLiveData(apiSession);
+      await loadReports();
+      setMessage('Request executed and ledger updated.');
+    }catch(err:any){setMessage(err.message||'Could not execute request.')}
     finally{setBusy('')}
   }
 
@@ -587,9 +709,16 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         }}
         applyMembershipBenefit={applyMembershipBenefit}
         openReceipt={openReceipt}
+        downloadReceipt={downloadReceipt}
         issueCreditNote={issueCreditNote}
         cancelInvoice={cancelInvoice}
         amendInvoice={amendInvoice}
+        requestAdjustment={requestAdjustment}
+        approveAdjustment={approveAdjustment}
+        rejectAdjustment={rejectAdjustment}
+        executeAdjustment={executeAdjustment}
+        userPermissions={apiSession.user?.permissions||[]}
+        currentUser={apiSession.user}
         supplierOptions={supplierOptions}
         updateInvoiceItemSupplier={updateInvoiceItemSupplier}
         updateInvoiceAmount={updateInvoiceAmount}
@@ -735,6 +864,8 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
               { value: "paid", label: "Paid" },
               { value: "due", label: "Due" },
               { value: "partially_paid", label: "Partially paid" },
+              { value: "partially_refunded", label: "Partially refunded" },
+              { value: "refunded", label: "Refunded" },
               { value: "unpaid", label: "Unpaid" },
             ]}
           />
@@ -822,6 +953,8 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                         tone={
                           invoice.status === "paid"
                             ? "green"
+                            : invoice.status === "partially_refunded" || invoice.status === "refunded"
+                              ? "blue"
                             : invoice.status === "partially_paid"
                               ? "amber"
                               : "slate"
