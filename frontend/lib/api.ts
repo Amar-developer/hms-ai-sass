@@ -117,13 +117,12 @@ export async function apiFetch(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
-      credentials: "include",
+      credentials: 'include',
       headers: {
-        "Content-Type": "application/json",
-        // Authorization: `Bearer ${session.token}`,
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
-        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
+        'Content-Type': 'application/json',
+        'X-Tenant-ID': session.tenantId,
+        'X-Request-ID': correlationId,
+        ...(idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {}),
         ...(options.headers || {}),
       },
     });
@@ -171,11 +170,10 @@ export async function apiBlob(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
-      credentials: "include",
+      credentials: 'include',
       headers: {
-        // Authorization: `Bearer ${session.token}`,
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
+        'X-Tenant-ID': session.tenantId,
+        'X-Request-ID': correlationId,
         ...(options.headers || {}),
       },
     });
@@ -220,12 +218,11 @@ export async function apiUpload(
   const correlationId = requestId();
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      credentials: "include",
+      method: 'POST',
+      credentials: 'include',
       headers: {
-        // Authorization: `Bearer ${session.token}`,
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
+        'X-Tenant-ID': session.tenantId,
+        'X-Request-ID': correlationId,
       },
       body: formData,
     });

@@ -78,7 +78,7 @@
 
 @layer components {
   .search-input {
-    @apply px-2 py-2 lg:px-4 lg:py-3 text-xs placeholder:text-xs;
+    @apply px-2 py-2 lg:px-4 lg:py-3 text-sm placeholder:text-xs;
   }
 }
 @layer components {

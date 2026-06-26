@@ -772,9 +772,9 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
               <tr>
                 <th className="px-4 py-3 w-[60px]">#</th>
                 <th className="px-4 py-3 text-xs lg:text-sm">Invoice</th>
-                <th className="px-3 py-3 text-xs lg:text-sm">Source</th>
+                <th className="px-3 py-3 text-xs lg:text-sm w-[150px]">Source</th>
                 <th className="px-3 py-3 text-xs lg:text-sm">Patient</th>
-                <th className="px-3 py-3 text-xs lg:text-sm">Status</th>
+                <th className="px-3 py-3 text-xs lg:text-sm text-center">Status</th>
                 <th className="px-3 py-3 text-xs lg:text-sm">Total</th>
                 <th className="px-3 py-3 text-xs lg:text-sm">Paid</th>
                 <th className="px-4 py-3 text-xs lg:text-sm">Actions</th>
@@ -803,21 +803,21 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                     <td className="px-4 py-4 font-semibold text-slate-500">
                       {rowNumber}
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-xs lg:text-xs">
                       <b>{invoice.invoice_number}</b>
-                      <p className="mt-1 text-[10px] lg:text-xs font-semibold text-slate-400">
+                      <p className="mt-1 text-xs lg:text-xs font-semibold text-slate-400">
                         {formatInvoiceDate(invoice)}
                       </p>
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs">
-                      <div className="flex flex-col items-start gap-1">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-xs lg:text-xs">
+                      <div className="flex flex-col items-start gap-1 w-full">
                         <Badge tone={source.tone as any} className="table-status text-xs">{source.label}</Badge>
                       </div>
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs font-medium">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-xs lg:text-xs font-medium">
                       {p?.name || p?.full_name || "Patient"}
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-xs lg:text-xs">
                       <Badge
                         tone={
                           invoice.status === "paid"
@@ -831,14 +831,14 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                         {invoice.status}
                       </Badge>
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4 text-[10px] lg:text-xs text-start font-semibold tabular-nums">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4 text-xs lg:text-xs text-start font-semibold tabular-nums">
                       {money(invoice.total_amount)}
                     </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs text-start tabular-nums">
+                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-xs lg:text-xs text-start tabular-nums">
                       {money(invoice.paid_amount)}
                     </td>
                     <td
-                      className="px-2 py-2 lg:px-4 lg:py-4  text-[10px] lg:text-xs text-start"
+                      className="px-2 py-2 lg:px-4 lg:py-4  text-xs lg:text-xs text-start"
                       onClick={(event) => event.stopPropagation()}
                     >
                       <ActionButton

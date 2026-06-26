@@ -1,6 +1,12 @@
 import { publicDisplayValue } from "@/lib/options";
-import { userRoleLabels,formatDate,isLocked,roleKeyLabel,scopeLabel } from "@/utils/tenantAdmin/helpers";
-import { ClickableRow,RoleList,RowActions } from "./Shared";
+import {
+  userRoleLabels,
+  formatDate,
+  isLocked,
+  roleKeyLabel,
+  scopeLabel,
+} from "@/utils/tenantAdmin/helpers";
+import { ClickableRow, RoleList, RowActions } from "./Shared";
 import { Badge } from "../common/ui";
 
 export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
@@ -9,18 +15,27 @@ export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
   return (
     <ClickableRow
       onClick={onEdit}
-      className="md:grid-cols-[1fr_1.15fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
+      className="md:grid-cols-[2fr_1.15fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
     >
       <div>
-        <b className="text-xs ">{user.name}</b>
+        <b className="text-xs flex items-center  h-full">{user.name}</b>
       </div>
-      <span className="break-all text-xs ">{user.email}</span>
+      <span className="break-all text-xs w-[170px]  flex items-center  h-full">
+        {user.email}
+      </span>
       <RoleList labels={roleLabels} />
-      <span className="text-xs ">{branch?.name || "All branches"}</span>
-      <Badge tone={user.is_active ? "green" : "red"} className="rounded-full text-xs  py-1 px-1">
+      <span className="text-xs flex items-center  h-full">
+        {branch?.name || "All branches"}
+      </span>
+      <Badge
+        tone={user.is_active ? "green" : "red"}
+        className="rounded-full text-xs  py-1 px-1"
+      >
         {user.is_active ? "Active" : "Inactive"}
       </Badge>
-      <span className="text-xs ">{formatDate(user.created_at)}</span>
+      <span className="text-xs flex items-center  h-full">
+        {formatDate(user.created_at)}
+      </span>
       <RowActions
         row={user}
         onEdit={onEdit}
@@ -41,15 +56,25 @@ export function RoleRow({ role, onEdit, onStatus, onDelete }: any) {
         <b className="text-xs ">{role.name}</b>
         {isLocked(role) && (
           <span className="ml-2">
-            <Badge tone="purple" className="rounded-full text-xs py-1 px-0 w-[30%]">Locked</Badge>
+            <Badge
+              tone="purple"
+              className="rounded-full text-xs py-1 px-0 w-[30%]"
+            >
+              Locked
+            </Badge>
           </span>
         )}
       </div>
       <span className="text-xs ">{roleKeyLabel(role.key)}</span>
-      <Badge tone={role.is_active ? "green" : "red"} className="rounded-full px-1 py-1 text-xs  w-[40%]">
+      <Badge
+        tone={role.is_active ? "green" : "red"}
+        className="rounded-full px-1 py-1 text-xs  w-[40%]"
+      >
         {role.is_active ? "Active" : "Inactive"}
       </Badge>
-      <span className="text-xs ">{formatDate(role.updated_at || role.created_at)}</span>
+      <span className="text-xs ">
+        {formatDate(role.updated_at || role.created_at)}
+      </span>
       <RowActions
         row={role}
         locked={isLocked(role)}
@@ -81,8 +106,13 @@ export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
         </p>
       </div>
       <span className="text-xs ">{department.code}</span>
-      <span className="text-xs ">{department.branch_names || "All branches"}</span>
-      <Badge tone={department.is_active ? "green" : "red"} className="rounded-full py-2 text-xs w-[60%]">
+      <span className="text-xs ">
+        {department.branch_names || "All branches"}
+      </span>
+      <Badge
+        tone={department.is_active ? "green" : "red"}
+        className="rounded-full py-2 text-xs w-[60%]"
+      >
         {department.is_active ? "Active" : "Inactive"}
       </Badge>
       <RowActions
@@ -115,7 +145,10 @@ export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
         {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") ||
           "-"}
       </span>
-      <Badge tone={branch.is_active ? "green" : "red"} className="rounded-full py-2 text-xs w-[60%]">
+      <Badge
+        tone={branch.is_active ? "green" : "red"}
+        className="rounded-full py-2 text-xs w-[60%]"
+      >
         {branch.is_active ? "Active" : "Inactive"}
       </Badge>
       <RowActions
@@ -145,7 +178,10 @@ export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
           {supplier.email || supplier.address || "-"}
         </p>
       </span>
-      <Badge tone={supplier.is_active ? "green" : "red"} className="rounded-full py-2 text-xs w-[60%]">
+      <Badge
+        tone={supplier.is_active ? "green" : "red"}
+        className="rounded-full py-2 text-xs w-[60%]"
+      >
         {supplier.is_active ? "Active" : "Inactive"}
       </Badge>
       <RowActions
@@ -158,7 +194,13 @@ export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
   );
 }
 
-export function TaxRuleRow({ rule, branches, onEdit, onStatus, onDelete }: any) {
+export function TaxRuleRow({
+  rule,
+  branches,
+  onEdit,
+  onStatus,
+  onDelete,
+}: any) {
   const branch = branches.find((row: any) => row.id === rule.branch_id);
   return (
     <ClickableRow
@@ -175,7 +217,10 @@ export function TaxRuleRow({ rule, branches, onEdit, onStatus, onDelete }: any) 
         <b className="text-xs ">{rule.tax_percentage}%</b>
         <p className="text-xs text-slate-500">{rule.tax_label || "GST"}</p>
       </span>
-      <Badge tone={rule.is_active ? "green" : "red"} className="rounded-full py-2 text-xs w-[60%]">
+      <Badge
+        tone={rule.is_active ? "green" : "red"}
+        className="rounded-full py-2 text-xs w-[60%]"
+      >
         {rule.is_active ? "Active" : "Inactive"}
       </Badge>
       <RowActions
@@ -226,7 +271,10 @@ export function DiscountOfferRow({
             : "No cap"}
         </p>
       </span>
-      <Badge tone={offer.is_active ? "green" : "red"} className="rounded-full py-2 text-xs w-[60%]">
+      <Badge
+        tone={offer.is_active ? "green" : "red"}
+        className="rounded-full py-2 text-xs w-[60%]"
+      >
         {offer.is_active ? "Active" : "Inactive"}
       </Badge>
       <RowActions

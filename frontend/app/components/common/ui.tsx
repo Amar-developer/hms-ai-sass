@@ -615,7 +615,7 @@ export function SuggestionInput({
 }
 
 export function Select({
-  className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs",
+  className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs ",
   children,
   ...props
 }: any) {

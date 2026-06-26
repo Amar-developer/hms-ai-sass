@@ -232,28 +232,24 @@ export function AppShell(props: any) {
     setActive(nextPage);
   }
 
-  // useEffect(() => {
-  //   const handleClickOutside = (event: MouseEvent) => {
-  //     if (
-  //       profileOpenRef.current &&
-  //       !profileOpenRef.current.contains(event.target as Node)
-  //     ) {
-  //       setProfileOpen(false);
-  //       if (sideBarOpen) {
-  //         setSidebarOpen(false);
-  //       }
-  //     }
-  //   };
-  //   document.addEventListener("mousedown", handleClickOutside);
-  //   return () => document.addEventListener("mousedown", handleClickOutside);
-  // }, [sideBarOpen, profileOpenRef.current]);
-
   useEffect(() => {
-    if (window.innerWidth > 1024) {
-      setSidebarOpen(true);
-      setTabletCollapsed(false);
-    }
-  }, [window.innerWidth]);
+    const handleResize = () => {
+      if (window.innerWidth >= 1024) {
+        setSidebarOpen(true);
+        setTabletCollapsed(false);
+      } else {
+        setTabletCollapsed(true);
+      }
+    };
+
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, []);
 
   function renderPage() {
     switch (activePage) {
@@ -387,8 +383,10 @@ export function AppShell(props: any) {
         </div>
       </div>
       <div className="h-full lg:flex">
-        <aside className="scrollbar-hidden hidden h-screen w-64 lg:w-50  shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block">
-          Desktop view
+        <aside
+          className={`scrollbar-hidden hidden h-screen w-64 lg:w-50  shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block`}
+        >
+          {/* Desktop view */}
           <div
             className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-50 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
               sideBarOpen ? "translate-x-0" : "-translate-x-full"
@@ -581,9 +579,7 @@ export function AppShell(props: any) {
             </div>
           </div>
 
-          <section className="space-y-4 py-4 px-6">
-            {renderPage()}
-          </section>
+          <section className="space-y-4 py-4 px-6">{renderPage()}</section>
         </main>
       </div>
     </div>

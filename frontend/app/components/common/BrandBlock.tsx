@@ -30,7 +30,7 @@ export function BrandBlock({
         <div className="min-w-0">
           <h1 className="text-sm font-bold">MedizinHub HMS</h1>
           <p className="truncate text-xs text-slate-500">
-            Healthcare SaaS Workspace
+            Healthcare Workspace
           </p>
         </div>
       )}

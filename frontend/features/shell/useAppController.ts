@@ -595,7 +595,7 @@ export function useAppController() {
       email: input.email,
       user: body.user,
     };
-    // localStorage.setItem("medizinhub.session", JSON.stringify(session));
+    localStorage.setItem("medizinhub.session", JSON.stringify(session));
     const workspace = readWorkspace(session);
     setApiSession(session);
     const nextRole =
@@ -619,7 +619,6 @@ export function useAppController() {
   }
 
   async function handleLogout() {
-    // console.log("handleLogut");
     const sessionToRevoke = apiSession;
     clearLocalSession("Logged out");
     if (sessionToRevoke) {
@@ -987,3 +986,14 @@ function activeTenantOptions(tenants: any[]) {
     return true;
   });
 }
+// ring>();
+//   return (tenants || []).filter((tenant: any) => {
+//     if (tenant.status === "suspended") return false;
+//     const key = String(tenant.name || tenant.id || "")
+//       .trim()
+//       .toLowerCase();
+//     if (key && seen.has(key)) return false;
+//     if (key) seen.add(key);
+//     return true;
+//   });
+// }

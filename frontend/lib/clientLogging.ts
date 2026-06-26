@@ -45,7 +45,7 @@ export function reportClientError(
 ) {
   if (typeof window === 'undefined') return;
   const session = providedSession || storedClientLogSession();
-  if (!session?.token || !session?.tenantId) return;
+  if (!session?.tenantId) return;
   const resolvedError = error instanceof Error ? error : new Error(String(error));
   const message = sanitize(resolvedError.message, 1000);
   const event = sanitize(context.event || 'frontend.unhandled_error', 120);
@@ -62,9 +62,9 @@ export function reportClientError(
   void fetch(`${API_BASE}/client-logs`, {
     method: 'POST',
     keepalive: true,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.token}`,
       'X-Tenant-ID': session.tenantId,
     },
     body: JSON.stringify({

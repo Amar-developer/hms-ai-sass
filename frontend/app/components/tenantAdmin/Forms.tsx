@@ -190,7 +190,7 @@ export function UserForm({
             onChange={(event: any) => changeUserType(event.target.value)}
           >
             {userTypes.map(([value, label]) => (
-              <option key={value} value={value}>
+              <option key={value} value={value} className="text-xs">
                 {label}
               </option>
             ))}

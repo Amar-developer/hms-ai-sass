@@ -60,7 +60,7 @@ export function ClickableRow({ children, onClick, className }: any) {
           onClick();
         }
       }}
-      className={`grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:items-center ${className}`}
+      className={`grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none  xl:items-center ${className}`}
     >
       {children}
     </div>
@@ -338,7 +338,7 @@ export function ListCard({
     columns.length === 8
       ? "grid-cols-[1fr_1.15fr_.72fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
       : columns.length === 7
-        ? "grid-cols-[1.05fr_1.15fr_1fr_.8fr_.65fr_.6fr_1.65fr]"
+        ? "grid-cols-[2fr_1.15fr_1fr_.8fr_.65fr_.6fr_1.65fr]"
         : columns.length === 6
           ? "grid-cols-[1.2fr_1.2fr_1fr_.7fr_.75fr_1.45fr]"
           : columns.length === 5

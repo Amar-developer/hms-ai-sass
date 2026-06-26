@@ -34,7 +34,6 @@ export function InvoiceDetailPage({
   const payments=detail.payments||[];
   const creditNotes=detail.credit_notes||[];
   const ledgerEntries=detail.ledger_entries||[];
-  console.log(ledgerEntries,'ledgerEntries')
   const source=invoiceSource(invoice);
   const showItemVendor=items.some(
     (item:any)=>Boolean(item.vendor_name)||numberValue(item.vendor_amount)>0,

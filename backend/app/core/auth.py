@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlmodel import Session, select
 
 from app.core.database import get_session
@@ -15,23 +15,20 @@ from app.modules.identity.models import (
 )
 from app.modules.identity.security import hash_token
 from app.modules.tenants.models import Tenant, TenantStatus
-from fastapi import Cookie
 
 
-def _bearer_token(authorization: str | None) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token is required"
-        )
-    return authorization.split(" ", 1)[1].strip()
-
-
-def _auth_token(authorization: str | None, access_token: str | None) -> str:
+def _extract_token(
+    authorization: str | None,
+    access_token: str | None,
+) -> str:
+    """Prefer Bearer header for explicit API clients; fall back to HTTP-only cookie for browsers."""
     if authorization and authorization.lower().startswith("bearer "):
         return authorization.split(" ", 1)[1].strip()
     if access_token:
         return access_token
-    raise HTTPException(401, "Authentication token is required")
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token is required"
+    )
 
 
 def get_current_user(
@@ -39,8 +36,7 @@ def get_current_user(
     access_token: Annotated[str | None, Cookie()] = None,
     session: Session = Depends(get_session),
 ) -> User:
-    token = _auth_token(authorization, access_token)
-    token_hash = hash_token(token)
+    token_hash = hash_token(_extract_token(authorization, access_token))
     auth_session = session.exec(
         select(AuthSession).where(
             AuthSession.token_hash == token_hash,
@@ -71,8 +67,7 @@ def get_current_auth_session(
     access_token: Annotated[str | None, Cookie()] = None,
     session: Session = Depends(get_session),
 ) -> AuthSession:
-    token = _auth_token(authorization, access_token)
-    token_hash = hash_token(token)
+    token_hash = hash_token(_extract_token(authorization, access_token))
     auth_session = session.exec(
         select(AuthSession).where(
             AuthSession.token_hash == token_hash,
