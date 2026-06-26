@@ -1,8 +1,8 @@
 import { money, numberValue } from "@/features/reports/utils";
 import { claimedDetail, invoiceDiscountParts, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, itemTypeLabel } from "@/utils/billing/helpers";
 import { useEffect, useState } from "react";
-import { Badge,ActionButton,Select,Card,Input } from "../common/ui";
-import { displayDate } from "@/utils/helper";
+import { Badge,ActionButton,ActionGroup,Select,Card,Input } from "../common/ui";
+import { displayDateTime } from "@/utils/helper";
 
 export function InvoiceDetailPage({
   detail,
@@ -22,9 +22,16 @@ export function InvoiceDetailPage({
   refreshConsultationInvoice,
   applyMembershipBenefit,
   openReceipt,
+  downloadReceipt,
   issueCreditNote,
   cancelInvoice,
   amendInvoice,
+  requestAdjustment,
+  approveAdjustment,
+  rejectAdjustment,
+  executeAdjustment,
+  userPermissions=[],
+  currentUser,
   supplierOptions={},
   updateInvoiceItemSupplier,
   updateInvoiceAmount,
@@ -34,6 +41,7 @@ export function InvoiceDetailPage({
   const payments=detail.payments||[];
   const creditNotes=detail.credit_notes||[];
   const ledgerEntries=detail.ledger_entries||[];
+  const adjustmentRequests=detail.adjustment_requests||[];
   const source=invoiceSource(invoice);
   const showItemVendor=items.some(
     (item:any)=>Boolean(item.vendor_name)||numberValue(item.vendor_amount)>0,
@@ -98,6 +106,19 @@ export function InvoiceDetailPage({
   function removePayRow(index:number){
     setPayRows((rows)=>rows.length>1?rows.filter((_,i)=>i!==index):rows);
   }
+  function signedMoney(value:any,mode:"delta"|"debit"|"credit"="delta"){
+    const amount=numberValue(value);
+    if(amount===0)return money(0);
+    if(mode==="credit")return `-${money(Math.abs(amount))}`;
+    if(mode==="debit")return `+${money(Math.abs(amount))}`;
+    return `${amount>0?"+":"-"}${money(Math.abs(amount))}`;
+  }
+  function amountTone(value:any,mode:"delta"|"debit"|"credit"="delta"){
+    const amount=numberValue(value);
+    if(amount===0)return "text-slate-500";
+    if(mode==="credit"||amount<0)return "text-rose-700";
+    return "text-emerald-700";
+  }
   function itemMrp(item:any){
     return numberValue(item.mrp_amount);
   }
@@ -105,6 +126,50 @@ export function InvoiceDetailPage({
     return numberValue(item.selling_amount)||numberValue(item.unit_amount);
   }
   const itemTableColSpan=5+(showItemVendor?2:0)+(showItemPricing?1:0);
+  const currentUserRoles=Array.isArray(currentUser?.roles)?currentUser.roles:[];
+  const isTenantBillingAdmin=
+    currentUser?.user_type==="tenant_admin"||
+    currentUser?.user_type==="super_admin"||
+    currentUserRoles.includes("tenant_admin")||
+    currentUserRoles.includes("super_admin");
+  const canApproveAdjustments=
+    isTenantBillingAdmin||
+    userPermissions.includes("*")||
+    userPermissions.includes("billing.manage");
+  const hasOpenAdjustment=adjustmentRequests.some((row:any)=>["pending","approved"].includes(String(row.status)));
+  const adjustmentClosed=["cancelled","refunded"].includes(String(invoice.status));
+  const canRequestAdjustment=!hasOpenAdjustment&&!adjustmentClosed;
+  const canRequestCancel=canRequestAdjustment&&numberValue(invoice.paid_amount)<=0;
+  const canRequestRefund=canRequestAdjustment&&numberValue(invoice.paid_amount)>0;
+  const financialLedgerEntries=ledgerEntries.filter((entry:any)=>
+    numberValue(entry.debit_amount)!==0||
+    numberValue(entry.credit_amount)!==0||
+    numberValue(entry.invoice_total_delta)!==0||
+    numberValue(entry.paid_amount_delta)!==0||
+    numberValue(entry.balance_amount_delta)!==0
+  );
+  const settlementRows=[
+    ...payments.map((payment:any)=>({
+      id:`payment-${payment.id}`,
+      date:payment.collected_at,
+      type:"Payment",
+      method:String(payment.method||"payment").replaceAll("_"," "),
+      reference:payment.reference_number||"-",
+      status:payment.status||"recorded",
+      amount:numberValue(payment.amount),
+      tone:"green" as const,
+    })),
+    ...creditNotes.map((credit:any)=>({
+      id:`credit-${credit.id}`,
+      date:credit.created_at,
+      type:"Credit Note",
+      method:credit.credit_note_number||"-",
+      reference:credit.reason||"-",
+      status:credit.status||"issued",
+      amount:-Math.abs(numberValue(credit.amount)),
+      tone:"amber" as const,
+    })),
+  ].sort((a:any,b:any)=>new Date(a.date||0).getTime()-new Date(b.date||0).getTime());
   return (
     <div className="space-y-5">
       <Card>
@@ -117,6 +182,8 @@ export function InvoiceDetailPage({
                   tone={
                     invoice.status === "paid"
                       ? "green"
+                      : invoice.status === "partially_refunded" || invoice.status === "refunded"
+                        ? "blue"
                       : invoice.status === "partially_paid"
                         ? "amber"
                         : "slate"
@@ -219,7 +286,6 @@ export function InvoiceDetailPage({
                           <span className="mt-1 inline-flex rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500">
                             {itemTypeLabel(item.item_type)}
                           </span>
-                          {item.external_item_code&&<span className="ml-2 text-xs text-slate-500">{item.external_item_code}</span>}
                         </td>
                         <td className="px-3 py-4 text-right table-data font-bold tabular-nums">{item.quantity}</td>
                         {showItemVendor&&(
@@ -520,13 +586,25 @@ export function InvoiceDetailPage({
                     <ActionButton onClick={() => openReceipt(invoice)}>
                       Receipt
                     </ActionButton>
-                    <ActionButton onClick={() => issueCreditNote(invoice)}>
-                      Credit Note
-                    </ActionButton>
+                    {downloadReceipt && (
+                      <ActionButton
+                        onClick={() => downloadReceipt(invoice)}
+                        disabled={busy === `download-${invoice.id}`}
+                      >
+                        {busy === `download-${invoice.id}`
+                          ? "Downloading..."
+                          : "Download"}
+                      </ActionButton>
+                    )}
+                    {canApproveAdjustments && (
+                      <ActionButton onClick={() => issueCreditNote(invoice)}>
+                        Credit Note
+                      </ActionButton>
+                    )}
                     {String(invoice.status) !== "cancelled" ? (
                       <ActionButton
                         onClick={() => cancelInvoice?.(invoice)}
-                        disabled={busy === `cancel-${invoice.id}`}
+                        disabled={busy === `cancel-${invoice.id}`||numberValue(invoice.paid_amount)>0}
                       >
                         {busy === `cancel-${invoice.id}` ? "Cancelling..." : "Cancel"}
                       </ActionButton>
@@ -546,108 +624,229 @@ export function InvoiceDetailPage({
 
           <div className="mt-5 rounded-lg border border-slate-200">
             <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <h4 className="card-title font-bold">Payments & Credit Notes</h4>
+              <h4 className="card-title font-bold">Settlement History</h4>
             </div>
-            <div className="grid gap-2 p-4">
-              {payments.length === 0 && creditNotes.length === 0 && (
-                <p className="table-data text-slate-500">
+            <div className="overflow-auto">
+              {settlementRows.length === 0 ? (
+                <p className="p-4 table-data text-slate-500">
                   No payments or credit notes recorded yet.
                 </p>
+              ) : (
+                <table className="w-full min-w-[820px] table-fixed text-left text-xs">
+                  <thead className="bg-slate-50 font-semibold uppercase text-slate-500">
+                    <tr>
+                      <th className="w-[180px] px-4 py-3">Date & Time</th>
+                      <th className="w-[120px] px-3 py-3">Type</th>
+                      <th className="w-[170px] px-3 py-3">Method / No.</th>
+                      <th className="px-3 py-3">Reference / Reason</th>
+                      <th className="w-[120px] px-3 py-3">Status</th>
+                      <th className="w-[130px] px-4 py-3 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {settlementRows.map((row:any)=>(
+                      <tr key={row.id} className="align-middle">
+                        <td className="px-4 py-3 font-semibold text-slate-700">
+                          {displayDateTime(row.date)}
+                        </td>
+                        <td className="px-3 py-3 font-semibold text-slate-900">
+                          {row.type}
+                        </td>
+                        <td className="px-3 py-3 capitalize text-slate-700">
+                          {row.method}
+                        </td>
+                        <td className="truncate px-3 py-3 text-slate-600" title={row.reference}>
+                          {row.reference}
+                        </td>
+                        <td className="px-3 py-3">
+                          <Badge tone={row.tone} className="normal-badge">
+                            {row.status}
+                          </Badge>
+                        </td>
+                        <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(row.amount)}`}>
+                          {signedMoney(row.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-              {payments.map((payment: any) => (
-                <div
-                  key={payment.id}
-                  className="flex flex-col justify-between gap-2 rounded-2xl bg-slate-50 p-3 text-sm md:flex-row md:items-center"
-                >
-                  <div>
-                    <b className="capitalize">
-                      {String(payment.method || "payment").replaceAll("_", " ")}
-                    </b>
-                    {payment.reference_number && (
-                      <p className="text-xs text-slate-500">
-                        {payment.reference_number}
-                      </p>
-                    )}
-                  </div>
-                  <Badge
-                    tone={payment.status === "recorded" ? "green" : "amber"}
-                    className="normal-badge"
-                  >
-                    {payment.status}
-                  </Badge>
-                  <b>{money(payment.amount)}</b>
-                </div>
-              ))}
-              {creditNotes.map((credit: any) => (
-                <div
-                  key={credit.id}
-                  className="flex flex-col justify-between gap-2 rounded-2xl border border-amber-100 bg-amber-50 p-3 text-sm md:flex-row md:items-center"
-                >
-                  <div>
-                    <b>{credit.credit_note_number}</b>
-                    <p className="text-xs text-slate-500">
-                      {displayDate(credit.created_at)} · {credit.reason}
-                    </p>
-                  </div>
-                  <Badge tone="amber" className="normal-badge">
-                    {credit.status}
-                  </Badge>
-                  <b>{money(credit.amount)}</b>
-                </div>
-              ))}
             </div>
           </div>
 
           <div className="mt-5 rounded-lg border border-slate-200">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <h4 className="card-title font-bold">Billing Ledger</h4>
-              <p className="table-data text-slate-500">
-                Invoice, payment, cancellation, and amendment activity.
-              </p>
-            </div>
-            <div className="grid gap-2 p-4">
-              {ledgerEntries.length === 0 && (
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h4 className="card-title font-bold">Refund & Cancellation Requests</h4>
                 <p className="table-data text-slate-500">
-                  No ledger entries recorded yet.
+                  Request, approve, and execute invoice reversals.
                 </p>
-              )}
-              {ledgerEntries.map((entry: any) => (
-                <div
-                  key={entry.id}
-                  className="rounded-2xl border border-slate-100 bg-white p-3 text-sm shadow-sm"
+              </div>
+              <ActionGroup className="justify-start">
+                <ActionButton
+                  onClick={()=>requestAdjustment?.(invoice,"cancel")}
+                  disabled={!canRequestCancel}
                 >
-                  <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
-                    <div>
-                      <b className="capitalize">
-                        {String(entry.entry_type || "").replaceAll("_", " ")}
-                      </b>
-                      <p className="text-xs text-slate-500">
-                        {displayDate(entry.created_at)} · User {entry.actor_user_id || "-"}
-                      </p>
-                      {entry.reason && (
-                        <p className="mt-1 text-xs font-semibold text-slate-600">
-                          {entry.reason}
-                        </p>
-                      )}
-                    </div>
-                    <Badge
-                      tone={entry.status_after === "cancelled" ? "amber" : "slate"}
-                      className="normal-badge"
-                    >
-                      {entry.status_after}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 grid gap-2 text-xs sm:grid-cols-5">
-                    <InvoiceMeta label="Debit" value={money(entry.debit_amount)} />
-                    <InvoiceMeta label="Credit" value={money(entry.credit_amount)} />
-                    <InvoiceMeta label="Invoice Delta" value={money(entry.invoice_total_delta)} />
-                    <InvoiceMeta label="Paid Delta" value={money(entry.paid_amount_delta)} />
-                    <InvoiceMeta label="Balance Delta" value={money(entry.balance_amount_delta)} />
-                  </div>
-                </div>
-              ))}
+                  Request Cancel
+                </ActionButton>
+                <ActionButton
+                  onClick={()=>requestAdjustment?.(invoice,"full_refund")}
+                  disabled={!canRequestRefund}
+                >
+                  Request Full Refund
+                </ActionButton>
+                <ActionButton
+                  onClick={()=>requestAdjustment?.(invoice,"partial_refund")}
+                  disabled={!canRequestRefund}
+                >
+                  Request Partial Refund
+                </ActionButton>
+              </ActionGroup>
+            </div>
+            <div className="overflow-auto">
+              {adjustmentRequests.length===0 ? (
+                <p className="p-4 table-data text-slate-500">
+                  No refund or cancellation requests yet.
+                </p>
+              ) : (
+                <table className="w-full min-w-[980px] text-left text-xs">
+                  <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
+                    <tr>
+                      <th className="whitespace-nowrap px-4 py-3">Requested</th>
+                      <th className="whitespace-nowrap px-4 py-3">Type</th>
+                      <th className="whitespace-nowrap px-4 py-3 text-right">Amount</th>
+                      <th className="whitespace-nowrap px-4 py-3">Reason</th>
+                      <th className="whitespace-nowrap px-4 py-3">Requested By</th>
+                      <th className="whitespace-nowrap px-4 py-3">Status</th>
+                      <th className="whitespace-nowrap px-4 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {adjustmentRequests.map((row:any)=>(
+                      <tr key={row.id} className="whitespace-nowrap align-middle">
+                        <td className="px-4 py-3 font-semibold text-slate-700">
+                          {displayDateTime(row.created_at)}
+                        </td>
+                        <td className="px-4 py-3 font-bold capitalize">
+                          {String(row.request_type||"").replaceAll("_"," ")}
+                        </td>
+                        <td className="px-4 py-3 text-right font-black tabular-nums">
+                          {money(row.amount)}
+                        </td>
+                        <td className="max-w-[260px] truncate px-4 py-3 font-semibold text-slate-600" title={row.reason}>
+                          {row.reason}
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-slate-700">
+                          {row.requested_by_user_name||"Unknown user"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Badge
+                            tone={
+                              row.status==="executed"?"green":
+                              row.status==="rejected"?"red":
+                              row.status==="approved"?"blue":"amber"
+                            }
+                            className="normal-badge"
+                          >
+                            {row.status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-3">
+                          {canApproveAdjustments&&row.status==="pending" ? (
+                            <ActionGroup>
+                              <ActionButton onClick={()=>approveAdjustment?.(row)}>Approve</ActionButton>
+                              <ActionButton tone="danger" onClick={()=>rejectAdjustment?.(row)}>Reject</ActionButton>
+                            </ActionGroup>
+                          ) : canApproveAdjustments&&row.status==="approved"&&!adjustmentClosed ? (
+                            <ActionButton onClick={()=>executeAdjustment?.(row)}>
+                              Execute
+                            </ActionButton>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
+
+          {canApproveAdjustments && (
+            <div className="mt-5 rounded-lg border border-slate-200">
+              <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <h4 className="card-title font-bold">Billing Ledger</h4>
+                <p className="table-data text-slate-500">
+                  Financial impact from invoice, payment, cancellation, and refund activity.
+                </p>
+              </div>
+              <div className="overflow-auto">
+                {financialLedgerEntries.length === 0 && (
+                  <p className="p-4 table-data text-slate-500">
+                    No financial ledger entries recorded yet.
+                  </p>
+                )}
+                {financialLedgerEntries.length > 0 && (
+                  <table className="w-full min-w-[1040px] text-left text-xs">
+                    <thead className="bg-slate-50 text-[11px] uppercase text-slate-500">
+                      <tr>
+                        <th className="whitespace-nowrap px-4 py-3">Date & Time</th>
+                        <th className="whitespace-nowrap px-4 py-3">Activity</th>
+                        <th className="whitespace-nowrap px-4 py-3">User</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">Debit</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">Credit</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">Invoice</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">Paid</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">Balance</th>
+                        <th className="whitespace-nowrap px-4 py-3">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {financialLedgerEntries.map((entry:any)=>(
+                        <tr key={entry.id} className="whitespace-nowrap align-middle">
+                          <td className="px-4 py-3 font-semibold text-slate-700">
+                            {displayDateTime(entry.created_at)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-bold capitalize text-slate-950">
+                              {String(entry.entry_type||"").replaceAll("_"," ")}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-700">
+                            {entry.actor_user_name||"Unknown user"}
+                          </td>
+                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.debit_amount,"debit")}`}>
+                            {signedMoney(entry.debit_amount,"debit")}
+                          </td>
+                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.credit_amount,"credit")}`}>
+                            {signedMoney(entry.credit_amount,"credit")}
+                          </td>
+                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.invoice_total_delta)}`}>
+                            {signedMoney(entry.invoice_total_delta)}
+                          </td>
+                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.paid_amount_delta)}`}>
+                            {signedMoney(entry.paid_amount_delta)}
+                          </td>
+                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.balance_amount_delta)}`}>
+                            {signedMoney(entry.balance_amount_delta)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge
+                              tone={entry.status_after==="cancelled"?"amber":"slate"}
+                              className="normal-badge"
+                            >
+                              {entry.status_after}
+                            </Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </Card>
     </div>
