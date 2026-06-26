@@ -3091,6 +3091,11 @@ def create_credit_note(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
         )
     require_user_branch_access(current_user, invoice.branch_id)
+    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot issue credit note for {invoice.status.value} invoice",
+        )
     if payload.amount > invoice.total_amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -3108,6 +3113,19 @@ def create_credit_note(
     session.add(credit)
     session.commit()
     session.refresh(credit)
+    invoice = update_invoice_payment_status(session, invoice)
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="credit_note_issued",
+        description="Credit note issued",
+        debit_amount=credit.amount,
+        balance_amount_delta=-credit.amount,
+        reason=payload.reason,
+        actor_user_id=payload.created_by_user_id,
+        related_credit_note_id=credit.id,
+    )
+    _sync_invoice_source_after_reversal(session, invoice)
     record_audit_event(
         session,
         tenant_id=tenant_id,
