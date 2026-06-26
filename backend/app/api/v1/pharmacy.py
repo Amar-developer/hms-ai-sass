@@ -57,8 +57,6 @@ from app.modules.pharmacy.schemas import (
     SupplierUpdate,
 )
 from app.modules.settings.numbering import next_document_number
-from app.modules.settings.models import SettingKey
-from app.modules.settings.service import resolve_setting
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, now_utc
 
@@ -194,19 +192,7 @@ def _get_issue_or_404(session: Session, tenant_id: str, issue_id: str) -> Pharma
 
 
 def _external_medicine_items_enabled(session: Session, tenant_id: str) -> bool:
-    value, _scope, _scope_id = resolve_setting(
-        session,
-        tenant_id=tenant_id,
-        module="integrations",
-        key=SettingKey.CATALOG_INTEGRATIONS,
-    )
-    medicine_items = value.get("medicine_items") if isinstance(value, dict) else {}
-    if isinstance(medicine_items, dict) and "enabled" in medicine_items:
-        return (
-            bool(medicine_items.get("enabled"))
-            and medicine_items.get("provider") != "local"
-        )
-    return False
+    return True
 
 
 def _medicine_graphql_client() -> GraphQLCatalogClient:

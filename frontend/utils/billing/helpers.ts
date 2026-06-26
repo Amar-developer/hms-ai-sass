@@ -109,6 +109,8 @@ export function invoicePaidStatus(invoice: any) {
   const paid = Number(invoice.paid_amount || 0);
   const balance = Number(invoice.balance_amount || 0);
   const status = String(invoice.status || "").toLowerCase();
+  if (status === "partially_refunded") return "partially_refunded";
+  if (status === "refunded" || status === "cancelled") return status;
   if (status === "paid" || balance <= 0) return "paid";
   if (status === "partially_paid" || paid > 0) return "partially_paid";
   return "unpaid";

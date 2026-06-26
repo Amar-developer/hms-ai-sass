@@ -147,7 +147,7 @@ export function ConsultationWorkspace(props: any) {
     setAvailableLabCatalog(Array.isArray(labCatalog) ? labCatalog : []);
   }, [labCatalog]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setAvailableMedicineCatalog([]);
       return;
     }
@@ -183,9 +183,9 @@ export function ConsultationWorkspace(props: any) {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, medicineDraftName]);
+  }, [apiSession, apiSession?.tenantId, medicineDraftName]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setAvailableLabCatalog([]);
       return;
     }
@@ -221,9 +221,9 @@ export function ConsultationWorkspace(props: any) {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, labDraftName]);
+  }, [apiSession, apiSession?.tenantId, branchId, labDraftName]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setPopularMedicines([]);
       setPopularLabTests([]);
       return;
@@ -250,7 +250,7 @@ export function ConsultationWorkspace(props: any) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession, apiSession?.tenantId]);
   // Suggestion tags prefer the most-used items from prescription/referral
   // history; fall back to the catalog when there is no history yet.
   const medicineSuggestions = popularMedicines.length
@@ -597,7 +597,7 @@ export function ConsultationWorkspace(props: any) {
           </div>
           <div className="grid gap-3">
             <div className="rounded-lg bg-slate-50 p-4">
-              <Field label="Lab Tests">
+              <Field label="Lab / Service">
                 <TagEntryBox
                   tags={referralItems.filter(
                     (item: any) => item.type === "lab",
@@ -624,7 +624,7 @@ export function ConsultationWorkspace(props: any) {
                 />
               </Field>
               <div className="mt-3 grid gap-2 md:grid-cols-[2fr_0.8fr_0.8fr_1fr_1.5fr_auto] md:items-end">
-                <FormField label="Available Lab Test">
+                <FormField label="Available Lab/Service">
                   <SearchPicker
                     value={selectedLabTestId}
                     inputValue={labDraftName}

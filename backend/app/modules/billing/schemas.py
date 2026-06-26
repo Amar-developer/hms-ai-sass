@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field
 from app.modules.appointments.models import AppointmentType
 from app.modules.billing.models import (
     ApprovalStatus,
+    BillingAdjustmentStatus,
+    BillingAdjustmentType,
     CreditNoteStatus,
     DiscountType,
     FeeShareType,
@@ -149,6 +151,7 @@ class InvoiceDetailRead(BaseModel):
     payments: list["PaymentRead"] = []
     credit_notes: list["CreditNoteRead"] = []
     ledger_entries: list["BillingLedgerEntryRead"] = []
+    adjustment_requests: list["BillingAdjustmentRequestRead"] = []
     membership_benefit: InvoiceMembershipBenefitRead | None = None
 
 
@@ -192,17 +195,59 @@ class BillingLedgerEntryRead(BaseModel):
     related_payment_id: str | None
     related_credit_note_id: str | None
     actor_user_id: str | None
+    actor_user_name: str | None = None
     created_at: datetime
 
 
 class RefundRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
+    amount: int | None = Field(default=None, ge=1)
+    payment_method: PaymentMethod | None = None
+    payment_reference: str | None = Field(default=None, max_length=120)
     actor_user_id: str | None = None
 
 
 class CancelInvoiceRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
     actor_user_id: str | None = None
+
+
+class BillingAdjustmentRequestCreate(BaseModel):
+    request_type: BillingAdjustmentType
+    amount: int | None = Field(default=None, ge=0)
+    reason: str = Field(min_length=2, max_length=500)
+    requested_by_user_id: str | None = None
+    payment_method: PaymentMethod | None = None
+    payment_reference: str | None = Field(default=None, max_length=120)
+
+
+class BillingAdjustmentDecision(BaseModel):
+    reason: str | None = Field(default=None, max_length=500)
+    actor_user_id: str | None = None
+
+
+class BillingAdjustmentRequestRead(BaseModel):
+    id: str
+    tenant_id: str
+    branch_id: str
+    invoice_id: str
+    request_type: BillingAdjustmentType
+    amount: int
+    reason: str
+    status: BillingAdjustmentStatus
+    requested_by_user_id: str | None
+    requested_by_user_name: str | None = None
+    approved_by_user_id: str | None
+    approved_by_user_name: str | None = None
+    rejected_by_user_id: str | None
+    executed_by_user_id: str | None
+    executed_by_user_name: str | None = None
+    decision_reason: str | None
+    payment_method: PaymentMethod | None
+    payment_reference: str | None
+    created_at: datetime
+    decided_at: datetime | None
+    executed_at: datetime | None
 
 
 class AmendInvoiceRequest(BaseModel):

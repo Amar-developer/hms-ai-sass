@@ -165,7 +165,7 @@ export function Pharmacy({
       );
   }, [dismissedConsultations]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setAvailableMedicines([]);
       return;
     }
@@ -195,7 +195,7 @@ export function Pharmacy({
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, medicineSearch]);
+  }, [apiSession, apiSession?.tenantId, branchId, medicineSearch]);
 
   const medicineOptions = availableMedicines.map((m: any) => ({
     value: m.id || m.slug || m.name,

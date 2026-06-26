@@ -293,6 +293,10 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
 | `PATCH` | `/api/v1/billing/invoices/{invoice_id}/amount` | `billing.manage` |
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/adjustment-requests` | Any of `billing.manage`, `invoices.read`, `invoices.edit`, `payments.manage` |
+| `POST` | `/api/v1/billing/adjustment-requests/{request_id}/approve` | `billing.manage` |
+| `POST` | `/api/v1/billing/adjustment-requests/{request_id}/reject` | `billing.manage` |
+| `POST` | `/api/v1/billing/adjustment-requests/{request_id}/execute` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/cancel` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/amend` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier-options` | `billing.manage` |
@@ -331,8 +335,6 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `DELETE` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
 | `GET` | `/api/v1/lab/catalog/available-tests` | `lab.manage` |
 | `GET` | `/api/v1/lab/catalog/popular-tests` | `lab.manage` |
-| `GET` | `/api/v1/lab/external/items` | `lab.manage` |
-| `GET` | `/api/v1/lab/external/items/{slug}/details` | `lab.manage` |
 | `POST` | `/api/v1/lab/result-templates` | `lab.manage` |
 | `GET` | `/api/v1/lab/result-templates` | `lab.manage` |
 | `POST` | `/api/v1/lab/orders` | `lab.manage` |

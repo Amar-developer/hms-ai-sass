@@ -12,7 +12,13 @@ from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import Invoice, InvoiceItem, Payment, TaxRule
+from app.modules.billing.models import (
+    Invoice,
+    InvoiceItem,
+    InvoiceStatus,
+    Payment,
+    TaxRule,
+)
 from app.modules.billing.schemas import (
     InvoiceDetailRead,
     InvoiceItemRead,
@@ -178,11 +184,12 @@ def _resolve_tax_rule(
 def _sync_booking_status_from_invoice(
     session: Session, booking: HomeCareBooking, invoice: Invoice
 ) -> None:
-    target = (
-        "paid"
-        if invoice.balance_amount <= 0 and invoice.total_amount > 0
-        else "invoiced"
-    )
+    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+        target = "scheduled"
+    elif invoice.balance_amount <= 0 and invoice.total_amount > 0:
+        target = "paid"
+    else:
+        target = "invoiced"
     if booking.status != target:
         booking.status = target
         booking.updated_at = now_utc()
@@ -374,16 +381,11 @@ def list_services(
     ),
 ) -> list[HomeCareService]:
     _assert_enabled(session, tenant_id)
+    scoped_branch_id(current_user, branch_id)
     statement = select(HomeCareService).where(
         HomeCareService.tenant_id == tenant_id,
         HomeCareService.is_active == True,  # noqa: E712
     )  # noqa: E712
-    if branch_id:
-        branch_scope = scoped_branch_id(current_user, branch_id)
-        statement = statement.where(
-            (HomeCareService.branch_id == branch_scope)
-            | (HomeCareService.branch_id.is_(None))
-        )
     return list(session.exec(statement.order_by(HomeCareService.name)).all())
 
 
@@ -401,10 +403,10 @@ def create_service(
     ),
 ) -> HomeCareServiceRead:
     _assert_enabled(session, tenant_id)
-    require_branch_in_tenant(session, tenant_id, payload.branch_id)
-    require_user_branch_access(current_user, payload.branch_id)
+    data = payload.model_dump()
+    data["branch_id"] = None
     service = HomeCareService.model_validate(
-        payload,
+        data,
         update={
             "tenant_id": tenant_id,
             "code": payload.code or _service_code(payload.name),
@@ -445,11 +447,9 @@ def update_service(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Home care service not found"
         )
-    require_user_branch_access(current_user, service.branch_id)
     data = payload.model_dump(exclude_unset=True)
-    next_branch_id = data.get("branch_id", service.branch_id)
-    require_branch_in_tenant(session, tenant_id, next_branch_id)
-    require_user_branch_access(current_user, next_branch_id)
+    if "branch_id" in data:
+        data["branch_id"] = None
     for key, value in data.items():
         if key == "code" and not value:
             continue
@@ -771,9 +771,13 @@ def get_booking_invoice(
 ) -> InvoiceDetailRead | None:
     _assert_enabled(session, tenant_id)
     booking = _get_booking(session, tenant_id, booking_id, current_user)
+    # Ignore voided invoices so a booking whose invoice was cancelled shows as
+    # un-billed again (the UI then offers "Generate Invoice" instead of "View").
     invoice = session.exec(
         select(Invoice).where(
-            Invoice.tenant_id == tenant_id, Invoice.home_care_booking_id == booking.id
+            Invoice.tenant_id == tenant_id,
+            Invoice.home_care_booking_id == booking.id,
+            Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
         )
     ).first()
     if not invoice:
@@ -797,9 +801,13 @@ def generate_invoice(
     _assert_enabled(session, tenant_id)
     payload = payload or HomeCareInvoiceCreate()
     booking = _get_booking(session, tenant_id, booking_id, current_user)
+    # Ignore voided invoices so a booking whose invoice was cancelled can be
+    # re-billed instead of returning the dead invoice and re-locking it.
     existing = session.exec(
         select(Invoice).where(
-            Invoice.tenant_id == tenant_id, Invoice.home_care_booking_id == booking.id
+            Invoice.tenant_id == tenant_id,
+            Invoice.home_care_booking_id == booking.id,
+            Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
         )
     ).first()
     if existing:

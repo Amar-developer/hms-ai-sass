@@ -82,7 +82,7 @@ function createEmptyForm(type: string) {
     model_number: "",
     serial_number: "",
     is_portable: "false",
-    branch_scope: "branch",
+    branch_scope: "tenant",
   };
 }
 
@@ -322,7 +322,7 @@ export function Items({ apiSession, branchId }: any) {
           {
             method,
             body: JSON.stringify({
-              branch_id: branchId,
+              branch_id: null,
               code: itemCode,
               name: form.name,
               generic_name: form.generic_name || null,
@@ -344,7 +344,7 @@ export function Items({ apiSession, branchId }: any) {
           {
             method,
             body: JSON.stringify({
-              branch_id: branchId,
+              branch_id: null,
               code: itemCode,
               name: form.name,
               supplier_id: supplierId,
@@ -368,7 +368,7 @@ export function Items({ apiSession, branchId }: any) {
             body: JSON.stringify({
               code: itemCode,
               name: form.name,
-              branch_id: form.branch_scope === "branch" ? branchId : null,
+              branch_id: null,
               description: form.description || null,
               supplier_id: null,
               mrp_price: Number(form.mrp_price || 0),
@@ -388,7 +388,7 @@ export function Items({ apiSession, branchId }: any) {
           {
             method,
             body: JSON.stringify({
-              branch_id: form.branch_scope === "branch" ? branchId : null,
+              branch_id: null,
               code: itemCode,
               name: form.name,
               description: form.description || null,
@@ -406,7 +406,7 @@ export function Items({ apiSession, branchId }: any) {
           {
             method,
             body: JSON.stringify({
-              branch_id: form.branch_scope === "branch" ? branchId : null,
+              branch_id: null,
               name: form.name,
               modality_type: form.modality_type,
               supplier_id: supplierId,
@@ -459,6 +459,7 @@ export function Items({ apiSession, branchId }: any) {
         purchase_price: String(raw.purchase_price || 0),
         supplier_id: raw.supplier_id || "",
         reorder_level: String(raw.reorder_level || 0),
+        branch_scope: raw.branch_id ? "branch" : "tenant",
       });
     else if (row.type === "lab_test")
       setForm({
@@ -470,6 +471,7 @@ export function Items({ apiSession, branchId }: any) {
         purchase_price: String(raw.purchase_price || 0),
         supplier_id: raw.supplier_id || "",
         sample_type: raw.sample_type || "",
+        branch_scope: raw.branch_id ? "branch" : "tenant",
       });
     else if (row.type === "lab_package") {
       setForm({
@@ -670,15 +672,6 @@ export function Items({ apiSession, branchId }: any) {
                 className="search-input"
                 placeholder="Enter the description placeholder:text-xs"
               />
-              <SelectField
-                label="Scope"
-                value={form.branch_scope}
-                onChange={(v) => setField("branch_scope", v)}
-                options={[
-                  { value: "branch", label: "Current Branch" },
-                  { value: "tenant", label: "All Branches" },
-                ]}
-              />
             </>
           )}
           {type === "physio_equipment" && (
@@ -710,15 +703,6 @@ export function Items({ apiSession, branchId }: any) {
                 options={[
                   { value: "false", label: "No" },
                   { value: "true", label: "Yes" },
-                ]}
-              />
-              <SelectField
-                label="Scope"
-                value={form.branch_scope}
-                onChange={(v) => setField("branch_scope", v)}
-                options={[
-                  { value: "branch", label: "Current Branch" },
-                  { value: "tenant", label: "All Branches" },
                 ]}
               />
             </>

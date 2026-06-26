@@ -113,6 +113,7 @@ export function BookingsList({
   onView,
   onEdit,
   onInvoice,
+  canManage = false,
 }: any) {
   return (
     <Card>
@@ -220,17 +221,19 @@ export function BookingsList({
                       <ActionButton onClick={() => onView(booking)}>
                         View
                       </ActionButton>
-                      <ActionButton
-                        onClick={() => onEdit(booking)}
-                        disabled={isBookingLocked(booking)}
-                        title={
-                          isBookingLocked(booking)
-                            ? "Locked after billing/completion"
-                            : undefined
-                        }
-                      >
-                        Edit
-                      </ActionButton>
+                      {canManage && (
+                        <ActionButton
+                          onClick={() => onEdit(booking)}
+                          disabled={isBookingLocked(booking)}
+                          title={
+                            isBookingLocked(booking)
+                              ? "Locked after billing/completion"
+                              : undefined
+                          }
+                        >
+                          Edit
+                        </ActionButton>
+                      )}
                       <ActionButton onClick={() => onInvoice(booking)}>
                         Invoice
                       </ActionButton>
@@ -263,6 +266,7 @@ export function BookingDetail({
   onCancel,
   onInvoice,
   onOpenInvoiceModule,
+  canManage = false,
 }: any) {
   if (!booking) {
     return (
@@ -541,28 +545,35 @@ export function BookingDetail({
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <ActionButton
-            onClick={onEdit}
-            disabled={locked}
-            title={locked ? "Locked after billing/completion" : undefined}
-          >
-            Edit
-          </ActionButton>
-          <ActionButton
-            tone="danger"
-            onClick={onCancel}
-            disabled={locked || busy === "cancel-booking"}
-            title={locked ? "Locked after billing/completion" : undefined}
-          >
-            {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
-          </ActionButton>
-          <Button
-            type="button"
-            className="rounded-lg px-3 py-2 text-xs"
-            onClick={invoiceDetail?.invoice ? onOpenInvoiceModule : onInvoice}
-          >
-            {invoiceDetail?.invoice ? "View Invoice" : "Generate Invoice"}
-          </Button>
+          {canManage && (
+            <ActionButton
+              onClick={onEdit}
+              disabled={locked}
+              title={locked ? "Locked after billing/completion" : undefined}
+            >
+              Edit
+            </ActionButton>
+          )}
+          {canManage && (
+            <ActionButton
+              tone="danger"
+              onClick={onCancel}
+              disabled={locked || busy === "cancel-booking"}
+              title={locked ? "Locked after billing/completion" : undefined}
+            >
+              {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
+            </ActionButton>
+          )}
+          {(invoiceDetail?.invoice ||
+            String(booking.status).toLowerCase() !== "cancelled") && (
+            <Button
+              type="button"
+              className="rounded-lg px-3 py-2 text-xs"
+              onClick={invoiceDetail?.invoice ? onOpenInvoiceModule : onInvoice}
+            >
+              {invoiceDetail?.invoice ? "View Invoice" : "Generate Invoice"}
+            </Button>
+          )}
           {locked && (
             <span className="text-xs font-bold text-slate-400">
               🔒 {humanizeOptionLabel(booking.status)} — editing locked
@@ -689,6 +700,10 @@ export function InvoiceCard({
             Open in Invoices Module
           </Button>
         </div>
+      ) : String(booking.status).toLowerCase() === "cancelled" ? (
+        <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+          This booking is cancelled. Invoices can no longer be generated for it.
+        </p>
       ) : (
         <div className="mt-4 grid gap-3">
           <NumberField

@@ -19,16 +19,18 @@ import {
 import { Empty } from "@/app/components/admin/Empty";
 import { Info } from "../shared/Info";
 import { TenantPicker } from "../shared/TenantPicker";
-function CatalogPluginControl({ title, value, onChange }: any) {
+function CatalogPluginControl({ title, value, onChange, allowExternal = true }: any) {
   const enabled = Boolean(value?.enabled);
+  const effectiveEnabled = allowExternal && enabled;
   return (
     <div
-      className={`rounded-2xl border p-4 text-sm ${enabled ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white"}`}
+      className={`rounded-2xl border p-4 text-sm ${effectiveEnabled ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white"}`}
     >
       <label className="flex items-start gap-3">
         <input
           type="checkbox"
-          checked={enabled}
+          checked={effectiveEnabled}
+          disabled={!allowExternal}
           onChange={(e: any) =>
             onChange({
               enabled: e.target.checked,
@@ -44,16 +46,19 @@ function CatalogPluginControl({ title, value, onChange }: any) {
         <span>
           <b>{title}</b>
           <span className="mt-1 block text-xs text-slate-500">
-            {enabled
-              ? "Plugin source enabled for this tenant."
-              : "Using local MedizinHub catalog."}
+            {!allowExternal
+              ? "Using local MedizinHub catalog."
+              : effectiveEnabled
+                ? "Plugin source enabled for this tenant."
+                : "Using local MedizinHub catalog."}
           </span>
         </span>
       </label>
       <div className="mt-3">
         <FormField label="Provider">
           <Select
-            value={value?.provider || "local"}
+            value={allowExternal ? value?.provider || "local" : "local"}
+            disabled={!allowExternal}
             onChange={(e: any) =>
               onChange({
                 provider: e.target.value,
@@ -62,8 +67,9 @@ function CatalogPluginControl({ title, value, onChange }: any) {
             }
           >
             <option value="local">MedizinHub Local</option>
-            <option value="external_catalog">External Catalog Provider</option>
-            <option value="frappe_erpnext">Legacy External Provider</option>
+            {allowExternal && (
+              <option value="external_catalog">External Catalog Provider</option>
+            )}
           </Select>
         </FormField>
       </div>
@@ -179,7 +185,13 @@ export function TenantBranchSettings({
       setCatalogIntegrations(
         parseCatalogIntegrations(find("catalog.integrations")?.value),
       );
-      setBankDetails(parseBankDetails(find("accounts.bank_details")?.value));
+      const bankRow =
+        rows.find(
+          (setting: any) =>
+            setting.key === "accounts.bank_details" &&
+            setting.scope === "tenant",
+        ) || find("accounts.bank_details");
+      setBankDetails(parseBankDetails(bankRow?.value));
     } catch (err: any) {
       setSettings([]);
       setNumberingRules(parseNumberingRules(null, "SUN"));
@@ -538,6 +550,7 @@ export function TenantBranchSettings({
           <CatalogPluginControl
             title="Lab Item Catalog"
             value={catalogIntegrations.lab_items}
+            allowExternal={false}
             onChange={(patch: any) => setCatalogPlugin("lab_items", patch)}
           />
           <CatalogPluginControl

@@ -143,7 +143,7 @@ export function Lab({
       );
   }, [dismissedConsultations]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setAvailableTests([]);
       return;
     }
@@ -154,7 +154,6 @@ export function Lab({
         setTestLoading(true);
         try {
           const params = new URLSearchParams();
-          if (branchId) params.set("branch_id", branchId);
           if (search) params.set("search", search);
           const rows = await apiFetch(
             `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
@@ -173,14 +172,52 @@ export function Lab({
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, testSearch]);
+  }, [apiSession, apiSession?.tenantId, testSearch]);
 
-  const testOptions = availableTests.map((t: any) => ({
+  const localAvailableTests = useMemo(
+    () => [
+      ...tests.map((row: any) => ({
+        ...row,
+        item_name: row.name,
+        slug: row.code || row.id,
+        source: "local",
+        item_type: "lab_test",
+        kind: "Lab Test",
+        category: "Lab Test",
+        selling_price: row.default_price,
+        price: row.default_price,
+        buying_price: row.purchase_price,
+      })),
+      ...packages.map((row: any) => ({
+        ...row,
+        item_name: row.name,
+        slug: row.code || row.id,
+        source: "local",
+        item_type: "lab_package",
+        kind: "Service",
+        category: "Service",
+        selling_price: row.package_price,
+        price: row.package_price,
+        buying_price: row.purchase_price,
+      })),
+    ],
+    [tests, packages],
+  );
+  const activeAvailableTests = useMemo(() => {
+    const byKey = new Map<string, any>();
+    [...localAvailableTests, ...availableTests].forEach((row: any) => {
+      const key = String(row.id || row.slug || row.name || "").trim();
+      if (key) byKey.set(key, row);
+    });
+    return Array.from(byKey.values());
+  }, [availableTests, localAvailableTests]);
+
+  const testOptions = activeAvailableTests.map((t: any) => ({
     value: t.id || t.slug || t.name,
     label: t.item_name || t.name,
     item: t,
   }));
-  const selectedAvailableTest = availableTests.find(
+  const selectedAvailableTest = activeAvailableTests.find(
     (t: any) => (t.id || t.slug || t.name) === selectedAvailableTestId,
   );
   const selectedTestMrp = Number(
@@ -305,15 +342,11 @@ export function Lab({
     setMessage("");
     const selectedNames = orderTests.map((t: any) => t.name).filter(Boolean);
     const localTestIds = orderTests
-      .filter((t: any) => t.id)
+      .filter((t: any) => t.id && t.item_type !== "lab_package")
       .map((t: any) => t.id);
-    const externalItems = orderTests
-      .filter((t: any) => t.source === "erpnext")
-      .map((t: any) => ({
-        name: t.name,
-        external_item_code: t.external_item_code || null,
-        external_slug: t.external_slug || null,
-      }));
+    const packageIds = orderTests
+      .filter((t: any) => t.id && t.item_type === "lab_package")
+      .map((t: any) => t.id);
     const testsText = selectedNames.filter(Boolean).join(", ");
     if (!testsText) {
       setMessage("Select at least one lab test.");
@@ -329,8 +362,8 @@ export function Lab({
           source,
           tests: testsText,
           test_ids: localTestIds,
-          package_ids: [],
-          external_items: externalItems,
+          package_ids: packageIds,
+          external_items: [],
           external_referrer:
             source === "external_referral" ? externalReferrer : null,
           amount: 0,
@@ -362,11 +395,7 @@ export function Lab({
               id: t?.source === "local" ? t.id || "" : "",
               name,
               source: t?.source || "typed",
-              external_item_code:
-                t?.source === "erpnext"
-                  ? t.item_code || t.erpnext_name || t.name || ""
-                  : "",
-              external_slug: t?.source === "erpnext" ? t.slug || t.id || "" : "",
+              item_type: t?.item_type || "typed",
             },
           ],
     );
@@ -609,7 +638,7 @@ export function Lab({
         <h3 className="card-title font-bold">Create Lab / Service Order</h3>
         <form
           onSubmit={createDirect}
-          className="mt-4 grid gap-3 md:grid-cols-6"
+          className="mt-4 grid gap-3 md:grid-cols-8"
         >
           <SearchableSelectField
             label="Patient"
@@ -618,7 +647,7 @@ export function Lab({
             options={patients.map((p: any) => ({ value: p.id, label: p.name }))}
             placeholder="Select patient"
             searchPlaceholder="Search patient by name"
-            className="text-xs"
+            className="text-xs md:col-span-2"
           />
           <SelectField
             label="Source"
@@ -629,7 +658,7 @@ export function Lab({
               { value: "external_referral", label: "External Referral" },
             ]}
           />
-          <FormField label="Lab Test / Service">
+          <FormField label="Lab Test / Service" className="md:col-span-2">
             <SearchPicker
               value={selectedAvailableTestId}
               inputValue={testSearch}
@@ -653,6 +682,8 @@ export function Lab({
                   test?.name,
                   test?.sample_type,
                   test?.category,
+                  test?.kind,
+                  test?.description,
                   test?.code,
                   test?.slug,
                 ]
@@ -676,25 +707,18 @@ export function Lab({
             disabled
             className="search-input bg-slate-50"
           />
-          <div className=" flex items-end lg:mb-1">
-            <ActionButton type="button" onClick={addOrderTest} className='close-button  h-[65%] text-white bg-black/90'>
+          <div className="flex items-end">
+            <ActionButton type="button" onClick={addOrderTest} className='close-button w-full !bg-black/90 !text-white hover:!bg-black'>
               Add
             </ActionButton>
           </div>
-          <TextField
-            label="External Referrer"
-            value={externalReferrer}
-            onChange={setExternalReferrer}
-            disabled={source !== "external_referral"}
-            className="search-input"
-          />
           <div className="flex items-end">
             <Button disabled={busy === "create"} className='save-button text-xs'>
               {busy === "create" ? "Saving..." : "Create Order"}
             </Button>
           </div>
           {orderTests.length > 0 && (
-            <div className="md:col-span-6 flex flex-wrap gap-2">
+            <div className="md:col-span-8 flex flex-wrap gap-2">
               {orderTests.map((test: any, index: number) => (
                 <button
                   key={`${test.name}-${index}`}

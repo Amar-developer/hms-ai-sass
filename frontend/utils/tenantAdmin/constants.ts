@@ -228,7 +228,7 @@ export const fileCategoryRules: Record<string, FileCategoryRule> = {
   logo: {
     modules: ["tenants"],
     doctypes: ["Tenant"],
-    fields: ["logo_url", "invoice_logo_url"],
+    fields: ["logo_url", "invoice.logo_url"],
     labels: ["Tenant Logo", "Invoice Logo"],
     folders: ["Branding"],
   },

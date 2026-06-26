@@ -6,6 +6,8 @@ from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.billing.models import (
+    CreditNote,
+    CreditNoteStatus,
     DoctorFeeRule,
     DiscountOffer,
     DiscountType,
@@ -14,7 +16,6 @@ from app.modules.billing.models import (
     InvoiceItem,
     InvoiceStatus,
     Payment,
-    PaymentStatus,
     TaxRule,
 )
 from app.modules.settings.models import SettingKey
@@ -423,16 +424,46 @@ def refresh_consultation_invoice(session: Session, invoice: Invoice) -> Invoice:
 
 
 def update_invoice_payment_status(session: Session, invoice: Invoice) -> Invoice:
-    paid_amount = session.exec(
+    collected_amount = session.exec(
         select(func.coalesce(func.sum(Payment.amount), 0)).where(
             Payment.tenant_id == invoice.tenant_id,
             Payment.invoice_id == invoice.id,
-            Payment.status == PaymentStatus.RECORDED,
         )
     ).one()
-    invoice.paid_amount = int(paid_amount or 0)
-    invoice.balance_amount = max(invoice.total_amount - invoice.paid_amount, 0)
-    if invoice.total_amount <= 0 or invoice.balance_amount <= 0:
+    refunded_amount = session.exec(
+        select(
+            func.coalesce(
+                func.sum(func.coalesce(Payment.refunded_amount, 0)),
+                0,
+            )
+        ).where(
+            Payment.tenant_id == invoice.tenant_id,
+            Payment.invoice_id == invoice.id,
+        )
+    ).one()
+    credited_amount = session.exec(
+        select(func.coalesce(func.sum(CreditNote.amount), 0)).where(
+            CreditNote.tenant_id == invoice.tenant_id,
+            CreditNote.invoice_id == invoice.id,
+            CreditNote.status == CreditNoteStatus.ISSUED,
+        )
+    ).one()
+    collected = int(collected_amount or 0)
+    refunded = int(refunded_amount or 0)
+    credited = int(credited_amount or 0)
+    effective_paid = max(collected - refunded, 0)
+    effective_total = max(int(invoice.total_amount or 0) - credited, 0)
+    invoice.paid_amount = effective_paid
+    invoice.balance_amount = max(effective_total - effective_paid, 0)
+    if invoice.total_amount <= 0 or effective_total <= 0:
+        invoice.status = (
+            InvoiceStatus.REFUNDED if refunded or credited else InvoiceStatus.PAID
+        )
+    elif refunded >= collected and collected > 0:
+        invoice.status = InvoiceStatus.REFUNDED
+    elif refunded > 0 or credited > 0:
+        invoice.status = InvoiceStatus.PARTIALLY_REFUNDED
+    elif invoice.balance_amount <= 0:
         invoice.status = InvoiceStatus.PAID
     elif invoice.paid_amount <= 0:
         invoice.status = InvoiceStatus.ISSUED
@@ -448,10 +479,11 @@ def update_invoice_payment_status(session: Session, invoice: Invoice) -> Invoice
 
 def refundable_paid_total(session: Session, invoice: Invoice) -> int:
     paid_amount = session.exec(
-        select(func.coalesce(func.sum(Payment.amount), 0)).where(
+        select(
+            func.coalesce(func.sum(Payment.amount - Payment.refunded_amount), 0)
+        ).where(
             Payment.tenant_id == invoice.tenant_id,
             Payment.invoice_id == invoice.id,
-            Payment.status == PaymentStatus.RECORDED,
         )
     ).one()
     return int(paid_amount or 0)
