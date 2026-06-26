@@ -3,6 +3,9 @@ from io import BytesIO
 from sqlmodel import Session, select
 
 from app.modules.audit.models import AuditEvent
+from app.modules.settings.models import AdminSetting, SettingKey
+from app.modules.settings.service import decode_value
+from app.modules.tenants.models import Tenant
 
 
 def create_file_tenant_and_branch(client):
@@ -103,3 +106,60 @@ def test_files_are_tenant_isolated(client):
     assert cross_tenant_list.status_code == 200
     assert cross_tenant_list.json() == []
     assert cross_tenant_update.status_code == 404
+
+
+def test_tenant_logo_upload_persists_invoice_logo_setting(client, test_engine):
+    tenant, _branch = create_file_tenant_and_branch(client)
+
+    upload = client.post(
+        f"/api/v1/tenants/{tenant['id']}/logo",
+        files={"file": ("clinic-logo.png", BytesIO(b"fake-png"), "image/png")},
+    )
+
+    assert upload.status_code == 200
+    logo_url = upload.json()["logo_url"]
+    assert logo_url
+    with Session(test_engine) as db:
+        setting = db.exec(
+            select(AdminSetting).where(
+                AdminSetting.tenant_id == tenant["id"],
+                AdminSetting.key == SettingKey.INVOICE_LOGO_URL,
+            )
+        ).first()
+        assert setting is not None
+        assert decode_value(setting.value_json) == logo_url
+
+
+def test_file_registry_invoice_logo_attachment_updates_invoice_logo_setting(
+    client, test_engine
+):
+    tenant, _branch = create_file_tenant_and_branch(client)
+    headers = {"X-Tenant-ID": tenant["id"]}
+
+    upload = client.post(
+        "/api/v1/files",
+        headers=headers,
+        data={
+            "category": "logo",
+            "source_module": "settings",
+            "attached_to_doctype": "Tenant",
+            "attached_to_name": tenant["id"],
+            "attached_to_field": "invoice.logo_url",
+            "attached_to_label": "Invoice Logo",
+        },
+        files={"file": ("invoice-logo.png", BytesIO(b"fake-png"), "image/png")},
+    )
+
+    assert upload.status_code == 201
+    file_url = upload.json()["file_url"]
+    with Session(test_engine) as db:
+        tenant_row = db.get(Tenant, tenant["id"])
+        setting = db.exec(
+            select(AdminSetting).where(
+                AdminSetting.tenant_id == tenant["id"],
+                AdminSetting.key == SettingKey.INVOICE_LOGO_URL,
+            )
+        ).first()
+        assert tenant_row.logo_url in (None, "")
+        assert setting is not None
+        assert decode_value(setting.value_json) == file_url

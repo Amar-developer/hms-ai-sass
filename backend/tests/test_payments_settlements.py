@@ -126,6 +126,17 @@ def test_credit_note_can_be_issued_for_invoice(client):
     assert credit.status_code == 201
     assert credit.json()["credit_note_number"] == "CN-000001"
     assert credit.json()["amount"] == 100
+    detail = client.get(
+        f"/api/v1/billing/invoices/{invoice['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+    assert detail.status_code == 200
+    assert detail.json()["invoice"]["status"] == "partially_refunded"
+    assert detail.json()["invoice"]["balance_amount"] == 900
+    assert any(
+        entry["entry_type"] == "credit_note_issued"
+        for entry in detail.json()["ledger_entries"]
+    )
 
 
 def test_unpaid_invoice_can_be_cancelled(client):
@@ -252,3 +263,111 @@ def test_payment_and_refund_write_audit_events(client):
 
     assert "payment.recorded" in actions
     assert "payment.refunded" in actions
+
+
+def test_adjustment_request_prevents_duplicate_and_executes_full_refund(client):
+    data, invoice = create_invoice(client, fee=750)
+    tenant_id = data["tenant"]["id"]
+    paid = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"method": "cash", "amount": 750, "collected_by_user_id": "cashier"},
+    )
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "full_refund",
+            "reason": "Patient cancelled after payment",
+            "requested_by_user_id": "frontdesk",
+        },
+    )
+    duplicate = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "full_refund",
+            "reason": "Duplicate refund request",
+        },
+    )
+    approved = client.post(
+        f"/api/v1/billing/adjustment-requests/{request.json()['id']}/approve",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"actor_user_id": "tenant_admin"},
+    )
+    executed = client.post(
+        f"/api/v1/billing/adjustment-requests/{request.json()['id']}/execute",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"actor_user_id": "tenant_admin"},
+    )
+    after_closed = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "full_refund",
+            "reason": "Should not be allowed after refund",
+        },
+    )
+
+    assert paid.status_code == 201
+    assert request.status_code == 201
+    assert duplicate.status_code == 409
+    assert (
+        duplicate.json()["detail"]
+        == "Invoice already has a pending or approved adjustment request"
+    )
+    assert approved.status_code == 200
+    assert executed.status_code == 200
+    assert executed.json()["invoice"]["status"] == "refunded"
+    assert executed.json()["invoice"]["paid_amount"] == 0
+    assert executed.json()["credit_notes"][0]["amount"] == 750
+    assert any(
+        entry["entry_type"] == "payment_refunded"
+        for entry in executed.json()["ledger_entries"]
+    )
+    assert after_closed.status_code == 409
+    assert (
+        after_closed.json()["detail"]
+        == "Invoice is already closed for cancellation/refund"
+    )
+
+
+def test_partial_refund_updates_net_revenue_report(client):
+    data, invoice = create_invoice(client, fee=1000, doctor_pct=60)
+    tenant_id = data["tenant"]["id"]
+    client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"method": "cash", "amount": 1000},
+    )
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "partial_refund",
+            "amount": 250,
+            "reason": "One service removed",
+        },
+    ).json()
+    client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/approve",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+    executed = client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/execute",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+    revenue = client.get(
+        "/api/v1/billing/reports/revenue?group_by=doctor",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+
+    assert executed.status_code == 200
+    assert executed.json()["invoice"]["status"] == "partially_refunded"
+    assert executed.json()["invoice"]["paid_amount"] == 750
+    assert revenue.status_code == 200
+    assert revenue.json()["total_invoice_amount"] == 750
+    assert revenue.json()["total_paid_amount"] == 750
+    assert revenue.json()["total_doctor_share"] == 450
