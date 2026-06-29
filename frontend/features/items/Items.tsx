@@ -246,7 +246,7 @@ export function Items({ apiSession, branchId }: any) {
 
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+  }, [apiSession?.tenantId, branchId]);
 
   function setField(key: string, value: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
@@ -756,7 +756,7 @@ export function Items({ apiSession, branchId }: any) {
                 { value: "type", label: "Type" },
                 { value: "code", label: "Code" },
                 { value: "mrp", label: "MRP" },
-                { value: "price", label: "Service / Sale Price" },
+                { value: "price", label: "Sale Price" },
               ]}
             />
             <SelectField
@@ -791,7 +791,7 @@ export function Items({ apiSession, branchId }: any) {
                 <th>Supplier</th>
                 <th>Purchase</th>
                 <th>MRP</th>
-                <th>Service / Sale Price</th>
+                <th>Sale Price</th>
                 <th className="pr-4 text-right">Actions</th>
               </tr>
             </thead>

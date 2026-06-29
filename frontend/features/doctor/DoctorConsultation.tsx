@@ -128,6 +128,18 @@ function isCancelledAppointment(row: any) {
   );
 }
 
+function isQueueActionLocked(row: any) {
+  const consultation = statusKey(
+    row?.consultationStatus || row?.consultation_status,
+  );
+  return (
+    !row ||
+    consultation === "signed" ||
+    isCompletedAppointment(row) ||
+    isCancelledAppointment(row)
+  );
+}
+
 function asArray(value: any) {
   return Array.isArray(value) ? value.filter(Boolean) : value ? [value] : [];
 }
@@ -302,7 +314,7 @@ export function DoctorConsultation({
   >("booked");
   const [selectedPatientDetail, setSelectedPatientDetail] = useState<any>(null);
   useEffect(() => {
-    if (!apiSession?.token) return;
+    if (!apiSession?.tenantId) return;
     if (doctorScope?.practitionerId) {
       setScopedPractitioners([]);
       return;
@@ -319,7 +331,6 @@ export function DoctorConsultation({
       )
       .catch(() => setScopedPractitioners([]));
   }, [
-    apiSession?.token,
     apiSession?.tenantId,
     branchId,
     departmentId,
@@ -579,7 +590,7 @@ export function DoctorConsultation({
     return () => {
       alive = false;
     };
-  }, [selected?.id, selected?.consultationId, apiSession?.token]);
+  }, [selected?.id, selected?.consultationId, apiSession?.tenantId]);
   const selectedPatientId =
     selected?.patientId ||
     selected?.patient_id ||
@@ -620,7 +631,7 @@ export function DoctorConsultation({
     return () => {
       alive = false;
     };
-  }, [selectedPatientId, Boolean(localPatient), apiSession?.token]);
+  }, [selectedPatientId, Boolean(localPatient), apiSession?.tenantId]);
   const completedToday = selectedDateQueue.filter(
     isCompletedAppointment,
   ).length;
@@ -717,7 +728,7 @@ export function DoctorConsultation({
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, departmentId]);
+  }, [apiSession?.tenantId, departmentId]);
   useEffect(() => {
     let alive = true;
     async function loadCatalogs() {
@@ -751,7 +762,7 @@ export function DoctorConsultation({
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+  }, [apiSession?.tenantId, branchId]);
   function updateAppt(id: string, patch: any) {
     setAppointments(
       appointments.map((a: any) => (a.id === id ? { ...a, ...patch } : a)),
@@ -938,6 +949,7 @@ export function DoctorConsultation({
     };
   }
   async function callPatient(a: any) {
+    if (isQueueActionLocked(a)) return;
     if (apiSession && a.queueEntryId) {
       setBusy(true);
       setMessage("");
@@ -992,6 +1004,7 @@ export function DoctorConsultation({
   }
   async function skipPatient() {
     if (!selected) return;
+    if (isQueueActionLocked(selected)) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");
@@ -1023,6 +1036,7 @@ export function DoctorConsultation({
   }
   async function requeuePatient(mode: "after2" | "end") {
     if (!selected) return;
+    if (isQueueActionLocked(selected)) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");
@@ -1071,6 +1085,7 @@ export function DoctorConsultation({
 };
   async function cancelAppointment() {
     if (!selected) return;
+    if (isQueueActionLocked(selected)) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");

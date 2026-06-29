@@ -118,7 +118,7 @@ export function FilesPanel({
     return () => {
       cancelled = true;
     };
-  }, [apiSession?.token, apiSession?.tenantId, doctype, patientOptions]);
+  }, [apiSession?.tenantId, doctype, patientOptions]);
 
   const visible = files.filter((file: any) =>
     [

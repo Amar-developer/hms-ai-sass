@@ -69,6 +69,8 @@ class ProfitReportEmailRequest(BaseModel):
     doctor_id: str | None = None
     invoice_type: str = "overall"
     supplier_id: str | None = None
+    supplier_ids: list[str] = Field(default_factory=list)
+    report_sections: list[str] = Field(default_factory=list)
     branch_id: str | None = None
 
 
@@ -264,12 +266,26 @@ def send_profit_report_now(
     doctor_id = None if payload.doctor_id in (None, "", "all") else payload.doctor_id
     invoice_type = (
         payload.invoice_type
-        if payload.invoice_type in {"overall", "consultation", "lab", "pharmacy"}
+        if payload.invoice_type
+        in {
+            "overall",
+            "consultation",
+            "lab",
+            "service",
+            "pharmacy",
+            "home_visit",
+            "home_care",
+            "ip",
+            "physiotherapy",
+        }
         else "overall"
     )
     supplier_id = (
         None if payload.supplier_id in (None, "", "all") else payload.supplier_id
     )
+    supplier_ids = [
+        supplier for supplier in payload.supplier_ids if supplier and supplier != "all"
+    ]
     branch_id = None if payload.branch_id in (None, "", "all") else payload.branch_id
     attachments = build_profit_report_email_attachments(
         session,
@@ -279,6 +295,8 @@ def send_profit_report_now(
         doctor_id=doctor_id,
         invoice_type=invoice_type,
         supplier_id=supplier_id,
+        supplier_ids=supplier_ids,
+        report_sections=payload.report_sections,
         branch_id=branch_id,
     )
     provider_id = send_report_email(
@@ -287,7 +305,7 @@ def send_profit_report_now(
         subject=f"Healthcare profit report: {payload.from_date.isoformat()} to {payload.to_date.isoformat()}",
         body=(
             "Please find the filtered healthcare profit report attached. "
-            "The email includes separate Excel files for doctor settlement, lab settlement, pharmacy settlement, and invoice profit details."
+            "The email includes separate Excel files based on the selected report sections."
         ),
         attachments=attachments,
     )

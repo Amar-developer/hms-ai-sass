@@ -94,7 +94,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
           </Badge>
         </div>
         <ActionGroup className="justify-start md:justify-end">
-          <ActionButton onClick={stop(onView)}d>View</ActionButton>
+          <ActionButton onClick={stop(onView)}>View</ActionButton>
           <ActionButton onClick={stop(onEdit)}>Edit</ActionButton>
           <ActionButton tone="danger" onClick={stop(onDelete)}>
             Delete

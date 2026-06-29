@@ -200,10 +200,10 @@ export function SuperAdminDashboard({
 
   useEffect(() => {
     loadPlatform();
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (selectedId) loadTenantAccess(selectedId);
-  }, [selectedId, apiSession?.token]);
+  }, [selectedId, apiSession?.tenantId]);
   useEffect(() => {
     const detailRoutes: Record<string, { list: string; exists: boolean }> = {
       tenantEdit: { list: "tenants", exists: Boolean(selected) },

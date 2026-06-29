@@ -143,7 +143,7 @@ export function Lab({
   }, [activePatients, patientId]);
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);

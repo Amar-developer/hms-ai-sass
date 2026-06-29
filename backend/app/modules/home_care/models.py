@@ -31,6 +31,7 @@ class HomeCareBooking(SQLModel, table=True):
     )
     assigned_staff_name: str | None = Field(default=None, index=True, max_length=160)
     staff_type: str | None = Field(default=None, index=True, max_length=80)
+    booking_type: str = Field(default="home_care", index=True, max_length=40)
     booking_number: str = Field(index=True, min_length=3, max_length=60)
     recurrence: str = Field(default="daily", index=True, max_length=40)
     start_date: date = Field(default_factory=date.today, index=True)

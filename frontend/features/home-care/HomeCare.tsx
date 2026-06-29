@@ -168,7 +168,7 @@ export function HomeCare({
 
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+  }, [apiSession?.tenantId, branchId]);
   useEffect(() => {
     if (selected?.id) loadInvoice(selected.id);
     else setInvoiceDetail(null);
@@ -396,6 +396,7 @@ export function HomeCare({
     return {
       branch_id: branchId,
       patient_id: form.patient_id,
+      booking_type: bookingType,
       location: form.location || null,
       recurrence: form.recurrence,
       start_date: form.start_date || today,
@@ -574,10 +575,14 @@ export function HomeCare({
     }
     setEditing(booking);
     setSelectedId(booking.id);
-    const isVisitBooking = booking.services?.some((row: any) => {
-      const service = services.find((item: any) => item.id === row.service_id);
-      return String(service?.code || "").toUpperCase().startsWith("HV");
-    });
+    const isVisitBooking = booking.booking_type
+      ? booking.booking_type === "home_visit"
+      : booking.services?.some((row: any) => {
+          const service = services.find(
+            (item: any) => item.id === row.service_id,
+          );
+          return String(service?.code || "").toUpperCase().startsWith("HV");
+        });
     setForm({
       patient_id: booking.patient_id || "",
       assigned_staff_user_id: booking.assigned_staff_user_id || "",

@@ -279,7 +279,7 @@ export function TenantAdmin({
 
   useEffect(() => {
     loadAdmin();
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     setView("list");
     setSelectedId("");
@@ -320,7 +320,7 @@ export function TenantAdmin({
       open(visibleSections[0][0]);
     }
   }, [
-    apiSession?.token,
+    apiSession?.tenantId,
     section,
     visibleSections.map(([sectionId]) => sectionId).join(","),
   ]);

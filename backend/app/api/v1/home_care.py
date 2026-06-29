@@ -571,6 +571,7 @@ def create_booking(
                 session, tenant_id, payload.branch_id
             ),
             "start_date": payload.start_date or date.today(),
+            "booking_type": payload.booking_type.lower(),
             "recurrence": payload.recurrence.lower(),
             "status": payload.status.lower(),
             "created_by_user_id": current_user.id,
@@ -619,7 +620,8 @@ def update_booking(
             booking,
             key,
             value.lower()
-            if key in {"status", "recurrence"} and isinstance(value, str)
+            if key in {"status", "recurrence", "booking_type"}
+            and isinstance(value, str)
             else value,
         )
     if booking.end_date and booking.start_date > booking.end_date:

@@ -213,7 +213,7 @@ export function TenantBranchSettings({
   useEffect(() => {
     loadTenantSubscription();
     loadTenantSettings();
-  }, [apiSession?.token, selectedId, plans?.length, modules?.length]);
+  }, [apiSession?.tenantId, selectedId, plans?.length, modules?.length]);
 
   function setNumberRule(key: string, value: any) {
     setNumberingRules({ ...numberingRules, [key]: value });

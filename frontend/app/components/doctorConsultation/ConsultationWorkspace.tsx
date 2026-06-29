@@ -109,7 +109,33 @@ export function ConsultationWorkspace(props: any) {
   const [popularLabTests, setPopularLabTests] = useState<any[]>([]);
   // A signed consultation is a locked clinical record — only the addendum may
   // change. This flag locks every editable field below.
-  const signed = selected?.consultationStatus === "signed";
+  const statusKey = (value: any) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replaceAll(" ", "_");
+  const signed = statusKey(selected?.consultationStatus) === "signed";
+  const selectedStatus = statusKey(selected?.status);
+  const selectedQueueStatus = statusKey(
+    selected?.queueStatus || selected?.queue_status,
+  );
+  const completeStatuses = [
+    "consultation_completed",
+    "consultation_done",
+    "completed",
+    "done",
+    "seen",
+    "billed",
+  ];
+  const cancelledStatuses = ["cancelled", "canceled", "no_show"];
+  const queueActionsLocked =
+    !selected ||
+    signed ||
+    completeStatuses.includes(selectedStatus) ||
+    completeStatuses.includes(selectedQueueStatus) ||
+    cancelledStatuses.includes(selectedStatus) ||
+    cancelledStatuses.includes(selectedQueueStatus);
+  const queueActionDisabled = Boolean(busy || queueActionsLocked);
   const activeMedicineCatalog = availableMedicineCatalog;
   const medicineOptions = activeMedicineCatalog.map((medicine: any) => ({
     value: medicine.id || medicine.slug || medicine.name,
@@ -299,31 +325,35 @@ export function ConsultationWorkspace(props: any) {
         <div className="flex flex-wrap gap-2 md:flex-nowrap">
           <button
             onClick={() => setActive?.("doctor")}
-            className="close-button font-bold"
+            className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
            Back
           </button>
           <button
             onClick={() => selected && callPatient(selected)}
-            className="close-button font-bold"
+            disabled={queueActionDisabled}
+            className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Call
           </button>
           <button
             onClick={skipPatient}
-            className="close-button font-bold"
+            disabled={queueActionDisabled}
+            className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Not Present
           </button>
           <button
             onClick={() => requeuePatient("after2")}
-            className="close-button font-bold"
+            disabled={queueActionDisabled}
+            className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Requeue
           </button>
           <button
             onClick={cancelAppointment}
-            className="close-button font-bold text-red-600"
+            disabled={queueActionDisabled}
+            className="close-button font-bold text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel Appointment
           </button>
@@ -847,7 +877,8 @@ export function ConsultationWorkspace(props: any) {
             )}
             <button
               onClick={() => requeuePatient("end")}
-              className="rounded-lg border px-4 py-3 text-sm font-bold"
+              disabled={queueActionDisabled}
+              className="rounded-lg border px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
               Requeue to End
             </button>

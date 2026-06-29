@@ -47,9 +47,22 @@ export const reportSections = [
   ["pharmacy", "Pharmacy Report", Users],
 ];
 
+const defaultEmailReportSections = [
+  "overall",
+  "consultation",
+  "lab",
+  "service",
+  "home_visit",
+  "home_care",
+  "pharmacy",
+  "ip",
+  "physiotherapy",
+];
+
 function aggregateInvoiceMetrics(
   list: any[],
   homeVisitBookingIds: Set<string> = new Set(),
+  homeVisitInvoiceIds: Set<string> = new Set(),
 ) {
   return list.reduce(
     (acc: any, invoice: any) => {
@@ -93,7 +106,10 @@ function aggregateInvoiceMetrics(
       if (type === "pharmacy") acc.pharmacyRevenue += paid;
       if (type === "consultation") acc.consultationRevenue += paid;
       if (type === "home_care") {
-        if (homeVisitBookingIds.has(invoice.home_care_booking_id))
+        if (
+          homeVisitInvoiceIds.has(invoice.id) ||
+          homeVisitBookingIds.has(invoice.home_care_booking_id)
+        )
           acc.homeVisitRevenue += paid;
         else acc.homeCareRevenue += paid;
       }
@@ -170,6 +186,12 @@ export function Reports({
   const [sendPanelOpen, setSendPanelOpen] = useState(false);
   const [recipientInput, setRecipientInput] = useState("");
   const [recentEmails, setRecentEmails] = useState<string[]>([]);
+  const [emailReportSections, setEmailReportSections] = useState<string[]>(
+    defaultEmailReportSections,
+  );
+  const [emailLabSupplierIds, setEmailLabSupplierIds] = useState<string[]>([
+    "all",
+  ]);
   const [labTests, setLabTests] = useState<any[]>([]);
   const [labPackages, setLabPackages] = useState<any[]>([]);
   const [labOrderDetails, setLabOrderDetails] = useState<any[]>([]);
@@ -177,6 +199,9 @@ export function Reports({
   const [pharmacyIssueDetails, setPharmacyIssueDetails] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [homeCareBookings, setHomeCareBookings] = useState<any[]>([]);
+  const [homeCareInvoiceDetails, setHomeCareInvoiceDetails] = useState<any[]>(
+    [],
+  );
   const patientById = useMemo(
     () => new Map<string, any>(patients.map((row: any) => [row.id, row])),
     [patients],
@@ -187,6 +212,16 @@ export function Reports({
     [scopedAppointments],
   );
   const pageSize = 10;
+  const homeCareInvoiceIds = useMemo(
+    () =>
+      liveInvoices
+        .filter((invoice: any) => invoice.home_care_booking_id)
+        .map((invoice: any) => invoice.id)
+        .filter(Boolean)
+        .sort(),
+    [liveInvoices],
+  );
+  const homeCareInvoiceIdsKey = homeCareInvoiceIds.join("|");
   const doctorById = useMemo(
     () =>
       new Map(
@@ -301,7 +336,7 @@ export function Reports({
   }, [apiSession?.tenantId]);
 
   useEffect(() => {
-    if (!apiSession?.token) return;
+    if (!apiSession?.tenantId) return;
     let cancelled = false;
     async function loadLabSettlementData() {
       const [testRows, packageRows, supplierRows, orderRows] =
@@ -336,10 +371,10 @@ export function Reports({
     return () => {
       cancelled = true;
     };
-  }, [apiSession?.token, apiSession?.tenantId, liveInvoices.length, refreshTick]);
+  }, [apiSession?.tenantId, liveInvoices.length, refreshTick]);
 
   useEffect(() => {
-    if (!apiSession?.token) return;
+    if (!apiSession?.tenantId) return;
     let cancelled = false;
     async function loadHomeCareBookings() {
       const rows = await apiFetch(
@@ -352,10 +387,36 @@ export function Reports({
     return () => {
       cancelled = true;
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, refreshTick]);
+  }, [apiSession?.tenantId, branchId, refreshTick]);
 
   useEffect(() => {
-    if (!apiSession?.token) return;
+    if (!apiSession?.tenantId || homeCareInvoiceIds.length === 0) {
+      setHomeCareInvoiceDetails([]);
+      return;
+    }
+    let cancelled = false;
+    async function loadHomeCareInvoiceDetails() {
+      const details = await Promise.all(
+        homeCareInvoiceIds.map((invoiceId: string) =>
+          apiFetch(`/billing/invoices/${invoiceId}`, apiSession).catch(
+            () => null,
+          ),
+        ),
+      );
+      if (!cancelled) setHomeCareInvoiceDetails(details.filter(Boolean));
+    }
+    loadHomeCareInvoiceDetails();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    apiSession?.tenantId,
+    homeCareInvoiceIdsKey,
+    refreshTick,
+  ]);
+
+  useEffect(() => {
+    if (!apiSession?.tenantId) return;
     let cancelled = false;
     async function loadPharmacySettlementData() {
       const [medicines, issueRows] = await Promise.all([
@@ -385,7 +446,7 @@ export function Reports({
     return () => {
       cancelled = true;
     };
-  }, [apiSession?.token, apiSession?.tenantId, liveInvoices.length, refreshTick]);
+  }, [apiSession?.tenantId, liveInvoices.length, refreshTick]);
 
   const completedAppointments = scopedAppointments.filter((row: any) => {
     const appointmentDate = dateKey(
@@ -400,11 +461,16 @@ export function Reports({
     );
   });
 
-  // Bookings whose service lines are predominantly home-visit (vs home-care),
-  // used to split home care / home visit revenue on the Metrics dashboard.
+  // Split home care / home visit revenue by the booking type. Older bookings
+  // may not have booking_type, so service categories remain the fallback.
   const homeVisitBookingIds = useMemo(() => {
     const ids = new Set<string>();
     for (const booking of homeCareBookings) {
+      if (booking.booking_type === "home_visit") {
+        ids.add(booking.id);
+        continue;
+      }
+      if (booking.booking_type === "home_care") continue;
       const lines = [
         ...(booking.services || []),
         ...(booking.visit_logs || []),
@@ -420,7 +486,36 @@ export function Reports({
     return ids;
   }, [homeCareBookings]);
 
-  const totals = aggregateInvoiceMetrics(filteredInvoices, homeVisitBookingIds);
+  const homeVisitInvoiceIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const detail of homeCareInvoiceDetails) {
+      const invoiceId = detail?.invoice?.id;
+      const items = detail?.items || [];
+      const hasHomeVisitItem = items.some((item: any) => {
+        const fields = [
+          item.external_slug,
+          item.service_category,
+          item.item_type,
+          item.description,
+        ]
+          .map(normalized)
+          .join(" ");
+        return (
+          fields.includes("home_visit") ||
+          fields.includes("home visit") ||
+          fields.includes("hv_")
+        );
+      });
+      if (invoiceId && hasHomeVisitItem) ids.add(invoiceId);
+    }
+    return ids;
+  }, [homeCareInvoiceDetails]);
+
+  const totals = aggregateInvoiceMetrics(
+    filteredInvoices,
+    homeVisitBookingIds,
+    homeVisitInvoiceIds,
+  );
   const membershipClaimRows = Object.values(totals.membershipClaims).sort(
     (a: any, b: any) => b.claimedAmount - a.claimedAmount,
   );
@@ -444,8 +539,18 @@ export function Reports({
       const invoiceDate = rowDateKey(invoice);
       return invoiceDate >= startKey && invoiceDate <= endKey;
     });
-    return aggregateInvoiceMetrics(previousMonthInvoices, homeVisitBookingIds);
-  }, [liveInvoices, branchId, appointmentById, homeVisitBookingIds]);
+    return aggregateInvoiceMetrics(
+      previousMonthInvoices,
+      homeVisitBookingIds,
+      homeVisitInvoiceIds,
+    );
+  }, [
+    liveInvoices,
+    branchId,
+    appointmentById,
+    homeVisitBookingIds,
+    homeVisitInvoiceIds,
+  ]);
   const previousFinalProfit = Math.max(
     previousTotals.paidRevenue - previousTotals.settlement,
     0,
@@ -976,6 +1081,10 @@ export function Reports({
           doctor_id: doctorId === "all" ? null : doctorId,
           invoice_type: typeFilter,
           supplier_id: supplierFilter === "all" ? null : supplierFilter,
+          supplier_ids: emailLabSupplierIds.includes("all")
+            ? []
+            : emailLabSupplierIds,
+          report_sections: emailReportSections,
           branch_id: branchId || null,
         }),
       });
@@ -1103,6 +1212,10 @@ export function Reports({
         setRecipientInput={setRecipientInput}
         recentEmails={recentEmails}
         addRecipientSuggestion={addRecipientSuggestion}
+        emailReportSections={emailReportSections}
+        setEmailReportSections={setEmailReportSections}
+        emailLabSupplierIds={emailLabSupplierIds}
+        setEmailLabSupplierIds={setEmailLabSupplierIds}
         sendEmailReport={sendEmailReport}
         sendBusy={sendBusy}
         period={period}

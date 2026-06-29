@@ -28,7 +28,7 @@ export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any
     return () => {
       cancelled = true;
     };
-  }, [apiSession?.token, issue?.consultation_id]);
+  }, [apiSession?.tenantId, issue?.consultation_id]);
   const parsedMedicines = parseMedicines(issue?.medicine_text);
   const medicines = consultMedicines.length
     ? consultMedicines.map((m: any) =>

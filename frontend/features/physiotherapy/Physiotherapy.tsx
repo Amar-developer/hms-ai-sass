@@ -76,7 +76,7 @@ export function Physiotherapy({
 
   useEffect(() => {
     loadPhysio();
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (selected?.id) {
       loadSessions(selected.id);

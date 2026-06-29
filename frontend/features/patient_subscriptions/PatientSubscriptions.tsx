@@ -226,7 +226,7 @@ export function PatientSubscriptions({
 
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId, branchId, patients?.length]);
+  }, [apiSession?.tenantId, branchId, patients?.length]);
 
   async function resolveLabBenefitIds(values: string[], branchValue: string) {
     const resolved: string[] = [];

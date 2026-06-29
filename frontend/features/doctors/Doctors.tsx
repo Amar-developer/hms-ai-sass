@@ -91,12 +91,12 @@ export function Doctors({ apiSession, clinic }: any) {
     if (apiSession) {
       loadTenants();
     }
-  }, [apiSession?.token]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (apiSession && tenantId) {
       loadData(tenantId);
     }
-  }, [apiSession?.token, tenantId]);
+  }, [apiSession?.tenantId, tenantId]);
 
   function open(nextView: string, id = "") {
     setSelectedId(id);

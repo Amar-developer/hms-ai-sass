@@ -258,7 +258,6 @@ export function IPAdmission({
   useEffect(() => {
     loadRooms();
   }, [
-    apiSession?.token,
     apiSession?.tenantId,
     branchId,
     admissionDate,
@@ -266,7 +265,7 @@ export function IPAdmission({
   ]);
   useEffect(() => {
     loadCatalogs();
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+  }, [apiSession?.tenantId, branchId]);
 
   async function refresh() {
     if (apiSession && loadLiveData) await loadLiveData(apiSession);

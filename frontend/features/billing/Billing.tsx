@@ -183,7 +183,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
 
   useEffect(() => {
     if (apiSession) loadReports();
-  }, [apiSession?.token, apiSession?.tenantId, invoices.length]);
+  }, [apiSession?.tenantId, invoices.length]);
   useEffect(() => {
     setPage(1);
   }, [
@@ -204,7 +204,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     if (!invoiceId) return;
     window.sessionStorage.removeItem("medizinhub.billingInvoiceId");
     openInvoiceDetail({ id: invoiceId });
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
 
   function updateFilter(key: string, value: string) {
     setFilters((current) => ({ ...current, [key]: value }));

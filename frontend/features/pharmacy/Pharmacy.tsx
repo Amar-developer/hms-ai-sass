@@ -158,7 +158,7 @@ export function Pharmacy({
   }, [activePatients, patientId]);
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (!medicineId && medicines[0]?.id) setMedicineId(medicines[0].id);
   }, [medicines, medicineId]);

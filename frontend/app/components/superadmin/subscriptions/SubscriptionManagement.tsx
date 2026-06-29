@@ -145,7 +145,7 @@ export function SubscriptionManagement({
 
   useEffect(() => {
     loadSubscriptionConsole();
-  }, [apiSession?.token, apiSession?.tenantId, selectedId, tenants.length]);
+  }, [apiSession?.tenantId, selectedId, tenants.length]);
   useEffect(() => {
     setPage(1);
   }, [filters, subscriptions.length]);

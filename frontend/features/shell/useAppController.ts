@@ -534,7 +534,7 @@ export function useAppController() {
       );
       document.removeEventListener("visibilitychange", refreshLiveData);
     };
-    // }, [apiSession?.token, apiSession?.tenantId]);
+    // }, [apiSession?.tenantId]);
   }, [apiSession, apiSession?.tenantId]);
 
   async function handleLogin(input: { email: string; password: string }) {
@@ -568,7 +568,6 @@ export function useAppController() {
       try {
         tenantsRes = await fetch(`${API_BASE}/tenants`, {
           credentials: "include",
-          headers: { Authorization: `Bearer ${body.access_token}` },
         });
       } catch {
         throw new Error(
@@ -590,7 +589,6 @@ export function useAppController() {
     if (!tenantId) throw new Error("No tenant is available for this user.");
 
     const session = {
-      // token: body.access_token,
       tenantId,
       email: input.email,
       user: body.user,

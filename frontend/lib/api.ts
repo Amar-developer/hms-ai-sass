@@ -7,7 +7,6 @@ export const API_BASE = (
 export const UPLOADS_BASE = API_BASE.replace(/\/api\/v1$/, "");
 
 export type ApiSession = {
-  // token: string;
   tenantId: string;
   email: string;
   user: any;
