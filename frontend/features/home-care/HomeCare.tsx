@@ -918,7 +918,7 @@ export function HomeCare({
               </div>
             </div>
             <div className="flex items-end gap-2 md:col-span-4">
-              <Button disabled={busy === "save"}>
+              <Button disabled={busy === "save"} className='save-button'>
                 {busy === "save"
                   ? "Saving..."
                   : editing

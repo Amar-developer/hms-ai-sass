@@ -238,14 +238,14 @@ export function ScheduleForm({
                   .map(([value, label]) => ({ value, label })),
               ]}
             />
-            <div className="flex min-h-[50px] flex-wrap items-end gap-2">
+            <div className="flex min-h-[40px] flex-wrap items-end gap-2">
               {selectedDays.map((value) => {
                 const label =
                   weekdays.find(([day]) => day === value)?.[1] || value;
                 return (
                   <span
                     key={value}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white close-button table-data font-bold text-slate-800"
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white close-button font-bold text-slate-800"
                   >
                     {label}
                     <button

@@ -322,7 +322,7 @@ export function ConsultationWorkspace(props: any) {
             follow-up and addendums.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 md:flex-nowrap">
+        <div className="flex flex-wrap gap-2 md:flex-wrap lg:flex-nowrap">
           <button
             onClick={() => setActive?.("doctor")}
             className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
@@ -607,7 +607,7 @@ export function ConsultationWorkspace(props: any) {
                     ))}
                 </Select>
               </FormField>
-              <Button type="button" onClick={addDraftMedicine}>
+              <Button type="button" className='save-button md:w-[50%] lg:w-full' onClick={addDraftMedicine}>
                 Add
               </Button>
             </div>
@@ -657,7 +657,7 @@ export function ConsultationWorkspace(props: any) {
                 />
               </Field>
               <div className="mt-3 grid gap-2 md:grid-cols-[2fr_0.8fr_0.8fr_1fr_1.5fr_auto] md:items-end">
-                <FormField label="Available Lab/Service">
+                <FormField label="Lab/Service">
                   <SearchPicker
                     value={selectedLabTestId}
                     inputValue={labDraftName}
@@ -700,15 +700,15 @@ export function ConsultationWorkspace(props: any) {
                     value={formatPrice(selectedLabMrp)}
                     readOnly
                     placeholder="MRP"
-                    className="rounded-lg bg-slate-50 px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+                    className="search-input"
                   />
                 </FormField>
-                <FormField label="Selling Rate">
+                <FormField label="Rate">
                   <Input
                     value={formatPrice(selectedLabSelling)}
                     readOnly
                     placeholder="Selling"
-                    className="rounded-lg bg-slate-50 px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+                    className="search-input"
                   />
                 </FormField>
                 <Select
@@ -724,7 +724,7 @@ export function ConsultationWorkspace(props: any) {
                   onChange={(e: any) => setLabInstructions(e.target.value)}
                   placeholder="Instructions"
                 />
-                <Button type="button" onClick={addDraftLabTest}>
+                <Button type="button" className='save-button' onClick={addDraftLabTest}>
                   Add Lab Test
                 </Button>
               </div>

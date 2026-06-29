@@ -337,3 +337,10 @@ export const parseBankDetails = (value: any) => ({
   upi_id: String(value?.upi_id || value?.upi || ""),
   gstin: String(value?.gstin || "").toUpperCase(),
 });
+
+
+export const APPOINTMENT_GRID =
+  "grid-cols-[180px_140px_180px_180px_180px_120px_320px]";
+
+export const SUPER_APPOINTMENT_GRID =
+  "grid-cols-[220px_220px_140px_180px_180px_180px_120px]";

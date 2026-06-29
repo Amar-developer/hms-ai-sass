@@ -59,7 +59,7 @@ export function ClickableRow({ children, onClick, className }: any) {
         }
       }}
       className={`
-        flex w-max cursor-pointer gap-0 px-4 py-4 text-sm transition
+        flex w-full cursor-pointer gap-0 px-4 py-4 text-sm transition
         hover:bg-slate-50 focus:bg-slate-50 focus:outline-none
         items-center
         ${className ?? ""}

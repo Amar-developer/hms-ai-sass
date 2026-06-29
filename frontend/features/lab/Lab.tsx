@@ -717,19 +717,19 @@ export function Lab({
             className="search-input bg-slate-50"
           />
           <TextField
-            label="Selling Rate"
+            label="Rate"
             value={formatPrice(selectedTestSelling)}
             onChange={() => undefined}
             disabled
             className="search-input bg-slate-50"
           />
-          <div className="flex items-end">
+          <div className="flex items-end lg:items-center lg:mt-3">
             <ActionButton type="button" onClick={addOrderTest} className='close-button w-full !bg-black/90 !text-white hover:!bg-black'>
               Add
             </ActionButton>
           </div>
-          <div className="flex items-end">
-            <Button disabled={busy === "create"} className='save-button text-xs'>
+          <div className="flex items-end w-[120px]">
+            <Button disabled={busy === "create"} className='px-2 py-2'>
               {busy === "create" ? "Saving..." : "Create Order"}
             </Button>
           </div>
@@ -819,11 +819,11 @@ export function Lab({
               <tr>
                 <th className="w-[80px] px-4 py-3">#</th>
                 <th className="w-[170px]">Date & Time</th>
-                <th className="w-[190px]">Patient</th>
+                <th className="w-[130px]">Patient</th>
                 <th className="w-[150px]">Source</th>
                 <th className="w-[150px]">Status</th>
                 <th className="w-[90px]">Amount</th>
-                <th className="w-[250px]">Report</th>
+                <th className="w-[150px] text-center pr-4">Report</th>
                 <th className="w-[210px] pr-4 text-right">Action</th>
               </tr>
             </thead>
@@ -875,21 +875,21 @@ export function Lab({
                       {p?.name || publicDisplayValue(o.patient_id, "Patient")}
                     </td>
                     <td>
-                      <Badge className="normal-badge">{humanizeOptionLabel(o.source)}</Badge>
+                      <Badge className="normal-badge w-[70%]">{humanizeOptionLabel(o.source)}</Badge>
                     </td>
                     <td>
-                      <Badge tone={statusTone as any} className="normal-badge">{statusLabel}</Badge>
+                      <Badge tone={statusTone as any} className="normal-badge w-[70%]">{statusLabel}</Badge>
                     </td>
                     <td>₹{o.amount}</td>
                     <td onClick={(event) => event.stopPropagation()}>
                       <div className="flex min-w-[230px] items-center gap-2">
                         <label
-                          className={`flex min-w-[210px] cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${released || cancelled ? "cursor-not-allowed bg-slate-50 text-slate-300" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+                          className={`flex min-w-[120px] cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${released || cancelled ? "cursor-not-allowed bg-slate-50 text-slate-300" : "bg-white text-slate-700 hover:bg-slate-50"}`}
                         >
                           <input
                             type="file"
                             accept="application/pdf,image/*"
-                            className="hidden file:rounded-lg"
+                            className="hidden file:rounded-lg "
                             disabled={released || cancelled}
                             onChange={(event: any) =>
                               setReportFiles({

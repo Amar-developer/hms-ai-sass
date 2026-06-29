@@ -439,7 +439,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             ))}
           </Select>
         </Field>
-        <Field label="Medical Department">
+        <Field label="Department">
           <Select
             value={filterDepartment}
             onChange={(e: any) => {
@@ -493,7 +493,7 @@ export function Scheduling({ apiSession, branchId }: any) {
           <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span>Doctor</span>
             <span>Branch</span>
-            <span>Medical Department</span>
+            <span>Department</span>
             <span>Room No.</span>
             <span>Timing</span>
             <span>Slots</span>

@@ -822,7 +822,7 @@ export function Items({ apiSession, branchId }: any) {
                   <td className="text-xs">
                     {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
                   </td>
-                  <td className="text-xs">
+                  <td className="text-xs text-center pr-2">
                     {row.price === null ? "-" : `₹${row.price}`}
                   </td>
                   <td className="pr-4">

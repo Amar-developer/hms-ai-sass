@@ -41,7 +41,7 @@ import {
 } from "@/app/components/tenantAdmin/Forms";
 import { FilesPanel } from "@/app/components/tenantAdmin/FilesPanel";
 import { SettingsPanel } from "@/app/components/tenantAdmin/SettingsPanel";
-import { USER_COLUMNS } from "@/utils/constants";
+import { BRANCH_COLUMNS, DEPARTMENT_COLUMNS, DISCOUNT_OFFER_COLUMNS, ROLE_COLUMNS, SUPPLIER_COLUMNS, TAX_RULE_COLUMNS, USER_COLUMNS } from "@/utils/constants";
 
 export function TenantAdmin({
   apiSession,
@@ -1309,7 +1309,7 @@ export function TenantAdmin({
           createLabel="Create Role"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Role", "Key", "Status", "Modified", "Actions"]}
+          columns={ROLE_COLUMNS}
           render={(role: Role) => (
             <RoleRow
               key={role.id}
@@ -1353,16 +1353,10 @@ export function TenantAdmin({
           title="Medical Departments"
           rows={departmentGroups}
           searchKeys={["name", "code", "branch_names", "description", "id"]}
-          createLabel="Create Medical Department"
+          createLabel="Create  Department"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={[
-            "Medical Department",
-            "Code",
-            "Branches",
-            "Status",
-            "Actions",
-          ]}
+          columns={DEPARTMENT_COLUMNS}
           render={(department: any) => (
             <DepartmentRow
               key={department.id}
@@ -1392,7 +1386,7 @@ export function TenantAdmin({
       )}
       {section === "departments" && view === "create" && (
         <DepartmentForm
-          title="Create Medical Department"
+          title="Create Department"
           departments={departments}
           branches={branches}
           busy={busy}
@@ -1402,7 +1396,7 @@ export function TenantAdmin({
       )}
       {section === "departments" && view === "edit" && selectedDepartment && (
         <DepartmentForm
-          title="Edit Medical Department"
+          title="Edit Department"
           department={selectedDepartment}
           departments={departments}
           branches={branches}
@@ -1420,7 +1414,7 @@ export function TenantAdmin({
           createLabel="Create Branch"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Branch", "Code", "Location", "Status", "Actions"]}
+          columns={BRANCH_COLUMNS}
           render={(branch: any) => (
             <BranchRow
               key={branch.id}
@@ -1469,7 +1463,7 @@ export function TenantAdmin({
           createLabel="Create Supplier"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Supplier", "GSTIN", "Contact", "Status", "Actions"]}
+          columns={SUPPLIER_COLUMNS}
           render={(supplier: any) => (
             <SupplierRow
               key={supplier.id}
@@ -1522,7 +1516,7 @@ export function TenantAdmin({
           createLabel="Create Tax Rule"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Tax Rule", "Scope", "Percentage", "Status", "Actions"]}
+          columns={TAX_RULE_COLUMNS}
           render={(rule: any) => (
             <TaxRuleRow
               key={rule.id}
@@ -1570,7 +1564,7 @@ export function TenantAdmin({
           createLabel="Create Offer"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Offer", "Scope", "Value", "Status", "Actions"]}
+          columns={DISCOUNT_OFFER_COLUMNS}
           render={(offer: any) => (
             <DiscountOfferRow
               key={offer.id}

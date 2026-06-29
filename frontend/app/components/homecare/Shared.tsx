@@ -171,8 +171,8 @@ export function BookingsList({
               <th>Staff</th>
               <th>Date Range</th>
               <th>Status</th>
-              <th>Total</th>
-              <th className="pr-4 text-right">Actions</th>
+              <th className=" w-[120px] text-center">Total</th>
+              <th className="pr-4 w-[220px]  text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -215,7 +215,7 @@ export function BookingsList({
                       {humanizeOptionLabel(booking.status)}
                     </Badge>
                   </td>
-                  <td className="card-desc">{money(bookingTotal(booking))}</td>
+                  <td className="card-desc text-center">{money(bookingTotal(booking))}</td>
                   <td className="pr-4">
                     <ActionGroup className="justify-end">
                       <ActionButton onClick={() => onView(booking)}>

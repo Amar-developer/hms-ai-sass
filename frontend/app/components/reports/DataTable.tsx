@@ -32,7 +32,7 @@ export function DataTable<T>({
             {columns.map((column) => (
               <th
                 key={String(column.key)}
-                className={`px-4 py-3 text-[10px] lg:text-xs ${column.className ?? ""}`}
+                className={`px-4 py-3 text-sm ${column.className ?? ""}`}
               >
                 {column.header}
               </th>

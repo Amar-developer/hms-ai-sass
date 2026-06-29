@@ -156,16 +156,16 @@ const Header = ({
             final profit, and paid-basis settlement.
           </p>
         </div>
-        <Badge tone="blue" className="normal-badge w-[15%]">
+        <Badge tone="blue" className="normal-badge w-[20%]">
           {apiSession?.user?.is_super_admin ? "Super Admin" : "Tenant Admin"}
         </Badge>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap  gap-2">
         {onRefresh ? (
           <RefreshButton
             onRefresh={onRefresh}
             label="Refresh"
-            className="rounded-2xl"
+            className="rounded-2xl text-sm py-3 h-12"
           />
         ) : null}
         <button

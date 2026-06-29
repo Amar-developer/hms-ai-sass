@@ -8,6 +8,7 @@ import {
 } from "@/utils/tenantAdmin/helpers";
 import { ClickableRow, RoleList, RowActions } from "./Shared";
 import { Badge } from "../common/ui";
+import { Column } from "@/utils/tenantAdmin/types";
 
 
 export type Role = {
@@ -79,65 +80,98 @@ export function RoleRow({
   onEdit,
   onStatus,
   onDelete,
-}: {
-  role: Role;
-  onEdit: () => void;
-  onStatus: () => void;
-  onDelete: () => void;
-}) {
+}: any) {
   const locked = isLocked(role);
 
   return (
-    <ClickableRow
-      onClick={onEdit}
-      className="
-        grid
-        grid-cols-1
-        md:grid-cols-[1fr_1fr_1fr_1fr_1.2fr]
-        lg:grid-cols-[0.8fr_0.8fr_0.9fr_0.9fr_1.2fr]
-        items-center
-        gap-2
-        px-2
-        py-2
-      "
-    >
-      {/* ROLE NAME */}
-      <div className="flex items-center gap-2 min-w-0">
-        <b className="text-xs truncate">{role.name}</b>
+    <ClickableRow onClick={onEdit} className="flex w-full border">
+      {/* Role Name */}
+      <div className="min-w-[220px] px-2 flex items-center text-xs">
+        <div className="flex items-center gap-2 min-w-0">
+          <b className="truncate">{role.name}</b>
 
-        {locked && (
-          <Badge
-            tone="purple"
-            className="rounded-full text-[10px] px-2 py-[2px]"
-          >
-            Locked
-          </Badge>
-        )}
+          {locked && (
+            <Badge
+              tone="purple"
+              className="rounded-full text-[10px] px-2 py-[2px]"
+            >
+              Locked
+            </Badge>
+          )}
+        </div>
       </div>
 
-      {/* KEY */}
-      <span className="text-xs truncate">{roleKeyLabel(role.key)}</span>
+      {/* Key */}
+      <div className="min-w-[180px] px-2 flex items-center text-xs">
+        <span>{roleKeyLabel(role.key)}</span>
+      </div>
 
-      {/* STATUS */}
-      <div>
+      {/* Status */}
+      <div className="min-w-[140px] px-2 flex items-center text-xs">
         <Badge
           tone={role.is_active ? "green" : "red"}
-          className="rounded-full text-[10px] px-2 py-[2px] w-fit"
+          className="rounded-full text-[10px] px-2 py-[2px]"
         >
           {role.is_active ? "Active" : "Inactive"}
         </Badge>
       </div>
 
-      {/* DATE */}
-      <span className="text-xs">
+      {/* Modified */}
+      <div className="min-w-[140px] px-2 flex items-center text-xs">
         {formatDate(role.updated_at || role.created_at)}
-      </span>
+      </div>
 
-      {/* ACTIONS */}
-      <div onClick={(e) => e.stopPropagation()} className="flex justify-end">
+      {/* Actions */}
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
+        <div onClick={(e) => e.stopPropagation()}>
+          <RowActions
+            row={role}
+            locked={locked}
+            onEdit={onEdit}
+            onStatus={onStatus}
+            onDelete={onDelete}
+          />
+        </div>
+      </div>
+    </ClickableRow>
+  );
+}
+
+export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
+  return (
+    <ClickableRow onClick={onEdit} className="flex w-max border">
+
+      <div className="min-w-[200px] px-2 flex items-center text-xs">
+        <span className="font-bold">{department.name}</span>
+
+        {department.locked && (
+          <span className="ml-2">
+            <Badge tone="purple">Locked</Badge>
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
+        {department.code}
+      </div>
+
+      <div className="min-w-[200px] px-2 flex items-center text-xs">
+        {department.branch_names || "All branches"}
+      </div>
+
+      <div className="min-w-[120px] px-2 flex items-center text-xs">
+        <Badge
+          tone={department.is_active ? "green" : "red"}
+          className="rounded-full py-1 text-xs"
+        >
+          {department.is_active ? "Active" : "Inactive"}
+        </Badge>
+      </div>
+
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
         <RowActions
-          row={role}
-          locked={locked}
+          row={department.primary || department}
+          locked={department.locked}
           onEdit={onEdit}
           onStatus={onStatus}
           onDelete={onDelete}
@@ -147,153 +181,121 @@ export function RoleRow({
   );
 }
 
-export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
-  return (
-    <ClickableRow
-      onClick={onEdit}
-      className="md:grid-cols-[.9fr_.9fr_.9fr_.9fr_1.4fr] lg:grid-cols-[.8fr_.8fr_.9fr_.9fr_1.2fr]"
-    >
-      <div>
-        <span className="text-xs flex  font-bold h-full items-center">
-          {department.name}
-        </span>
-        {department.locked && (
-          <span className="ml-2">
-            <Badge tone="purple">Locked</Badge>
-          </span>
-        )}
-        {/* <p className="text-xs  text-slate-500">
-          {department.rows?.length > 1
-            ? `${department.rows.length} branch mappings`
-            : "Single branch mapping"}
-        </p> */}
-      </div>
-      <span className="text-xs flex  justify-start items-center">
-        {department.code}
-      </span>
-      <span className="text-xs flex  justify-start items-center">
-        {department.branch_names || "All branches"}
-      </span>
-      <Badge
-        tone={department.is_active ? "green" : "red"}
-        className="rounded-full py-2 text-xs w-[60%]"
-      >
-        {department.is_active ? "Active" : "Inactive"}
-      </Badge>
-      <RowActions
-        row={department.primary || department}
-        locked={department.locked}
-        onEdit={onEdit}
-        onStatus={onStatus}
-        onDelete={onDelete}
-      />
-    </ClickableRow>
-  );
-}
-
 export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
   return (
-    <ClickableRow
-      onClick={onEdit}
-      className="md:grid-cols-[.9fr_.9fr_.9fr_.9fr_1.4fr] lg:grid-cols-[.8fr_.8fr_.9fr_.9fr_1.2fr]"
-    >
-      <div>
-        <b className="text-xs ">{branch.name}</b>
+    <ClickableRow onClick={onEdit} className="flex w-max border">
+
+      <div className="min-w-[220px] px-2 flex items-center text-xs">
+        <b>{branch.name}</b>
+
         {isLocked(branch) && (
           <span className="ml-2">
             <Badge tone="purple">Locked</Badge>
           </span>
         )}
       </div>
-      <span className="text-xs ">{branch.code}</span>
-      <span className="text-xs ">
-        {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") ||
-          "-"}
-      </span>
-      <Badge
-        tone={branch.is_active ? "green" : "red"}
-        className="rounded-full py-2 text-xs w-[60%]"
-      >
-        {branch.is_active ? "Active" : "Inactive"}
-      </Badge>
-      <RowActions
-        row={branch}
-        locked={isLocked(branch)}
-        onEdit={onEdit}
-        onStatus={onStatus}
-        onDelete={onDelete}
-      />
+
+      <div className="min-w-[140px] px-2 flex items-center text-xs">
+        {branch.code}
+      </div>
+
+      <div className="min-w-[260px] px-2 flex items-center text-xs">
+        {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") || "-"}
+      </div>
+
+      <div className="min-w-[120px] px-2 flex items-center text-xs">
+        <Badge tone={branch.is_active ? "green" : "red"} className="rounded-full py-1 text-xs">
+          {branch.is_active ? "Active" : "Inactive"}
+        </Badge>
+      </div>
+
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
+        <RowActions
+          row={branch}
+          locked={isLocked(branch)}
+          onEdit={onEdit}
+          onStatus={onStatus}
+          onDelete={onDelete}
+        />
+      </div>
     </ClickableRow>
   );
 }
 
 export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
   return (
-    <ClickableRow
-      onClick={onEdit}
-      className="md:grid-cols-[.9fr_.9fr_.9fr_.9fr_1.4fr] lg:grid-cols-[.9fr_.8fr_.85fr_.9fr_1.2fr]"
-    >
-      <div>
-        <b className="text-xs ">{supplier.name}</b>
+    <ClickableRow onClick={onEdit} className="flex w-max border">
+
+      <div className="min-w-[220px] px-2 flex items-center text-xs">
+        <b>{supplier.name}</b>
       </div>
-      <span className="text-xs ">{supplier.gstin || "-"}</span>
-      <span>
-        <b className="text-xs ">{supplier.phone || "-"}</b>
-        <p className="break-all text-xs text-slate-500">
-          {supplier.email || supplier.address || "-"}
-        </p>
-      </span>
-      <Badge
-        tone={supplier.is_active ? "green" : "red"}
-        className="rounded-full py-2 text-xs w-[60%]"
-      >
-        {supplier.is_active ? "Active" : "Inactive"}
-      </Badge>
-      <RowActions
-        row={supplier}
-        onEdit={onEdit}
-        onStatus={onStatus}
-        onDelete={onDelete}
-      />
+
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
+        {supplier.gstin || "-"}
+      </div>
+
+      <div className="min-w-[260px] px-2 flex items-center text-xs">
+        <div>
+          <b>{supplier.phone || "-"}</b>
+          <p className="text-slate-500 break-all text-xs">
+            {supplier.email || supplier.address || "-"}
+          </p>
+        </div>
+      </div>
+
+      <div className="min-w-[120px] px-2 flex items-center text-xs">
+        <Badge tone={supplier.is_active ? "green" : "red"} className="rounded-full py-1 text-xs">
+          {supplier.is_active ? "Active" : "Inactive"}
+        </Badge>
+      </div>
+
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
+        <RowActions
+          row={supplier}
+          onEdit={onEdit}
+          onStatus={onStatus}
+          onDelete={onDelete}
+        />
+      </div>
     </ClickableRow>
   );
 }
 
-export function TaxRuleRow({
-  rule,
-  branches,
-  onEdit,
-  onStatus,
-  onDelete,
-}: any) {
+export function TaxRuleRow({ rule, branches, onEdit, onStatus, onDelete }: any) {
   const branch = branches.find((row: any) => row.id === rule.branch_id);
+
   return (
-    <ClickableRow
-      onClick={onEdit}
-      className="md:grid-cols-[.9fr_.9fr_.9fr_.9fr_1.4fr] lg:grid-cols-[.8fr_.9fr_.8fr_.9fr_1.2fr]"
-    >
-      <div>
-        <b className="text-xs ">{rule.name}</b>
+    <ClickableRow onClick={onEdit} className="flex w-max border">
+
+      <div className="min-w-[220px] px-2 flex items-center text-xs">
+        <b>{rule.name}</b>
       </div>
-      <span className="text-xs ">
+
+      <div className="min-w-[260px] px-2 flex items-center text-xs">
         {scopeLabel(rule.service_scope)} · {branch?.name || "All branches"}
-      </span>
-      <span>
-        <b className="text-xs ">{rule.tax_percentage}%</b>
-        <p className="text-xs text-slate-500">{rule.tax_label || "GST"}</p>
-      </span>
-      <Badge
-        tone={rule.is_active ? "green" : "red"}
-        className="rounded-full py-2 text-xs w-[60%]"
-      >
-        {rule.is_active ? "Active" : "Inactive"}
-      </Badge>
-      <RowActions
-        row={rule}
-        onEdit={onEdit}
-        onStatus={onStatus}
-        onDelete={onDelete}
-      />
+      </div>
+
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
+        <div>
+          <b>{rule.tax_percentage}%</b>
+          <p className="text-slate-500 text-xs">{rule.tax_label || "GST"}</p>
+        </div>
+      </div>
+
+      <div className="min-w-[120px] px-2 flex items-center text-xs">
+        <Badge tone={rule.is_active ? "green" : "red"} className="rounded-full py-1 text-xs">
+          {rule.is_active ? "Active" : "Inactive"}
+        </Badge>
+      </div>
+
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
+        <RowActions
+          row={rule}
+          onEdit={onEdit}
+          onStatus={onStatus}
+          onDelete={onDelete}
+        />
+      </div>
     </ClickableRow>
   );
 }
@@ -306,48 +308,57 @@ export function DiscountOfferRow({
   onDelete,
 }: any) {
   const branch = branches.find((row: any) => row.id === offer.branch_id);
+
   const value =
     offer.discount_type === "fixed"
       ? `₹${Number(offer.value || 0).toLocaleString("en-IN")}`
       : `${offer.value}%`;
+
   const code = publicDisplayValue(offer.code, "");
+
   const minimum = Number(offer.minimum_bill_amount || 0);
+
   return (
-    <ClickableRow
-      onClick={onEdit}
-      className="md:grid-cols-[.9fr_.9fr_.9fr_.9fr_1.4fr] lg:grid-cols-[.8fr_.8fr_.9fr_.9fr_1.2fr]"
-    >
-      <div>
-        <b className="text-xs ">{offer.name}</b>
-        {code && <p className="break-all text-xs text-slate-500">{code}</p>}
+    <ClickableRow onClick={onEdit} className="flex w-max border">
+
+      <div className="min-w-[220px] px-2 flex items-center text-xs">
+        <div>
+          <b>{offer.name}</b>
+        </div>
       </div>
-      <span className="text-xs ">
+
+      <div className="min-w-[260px] px-2 flex items-center text-xs">
         {scopeLabel(offer.service_scope)} · {branch?.name || "All branches"}
-      </span>
-      <span>
-        <b className="text-xs ">{value}</b>
-        <p className="text-xs text-slate-500">
-          {minimum > 0
-            ? `Min bill ₹${minimum.toLocaleString("en-IN")}`
-            : "No minimum"}{" "}
-          ·{" "}
-          {offer.max_discount_amount
-            ? `Max ₹${Number(offer.max_discount_amount).toLocaleString("en-IN")}`
-            : "No cap"}
-        </p>
-      </span>
-      <Badge
-        tone={offer.is_active ? "green" : "red"}
-        className="rounded-full py-2 text-xs w-[60%]"
-      >
-        {offer.is_active ? "Active" : "Inactive"}
-      </Badge>
-      <RowActions
-        row={offer}
-        onEdit={onEdit}
-        onStatus={onStatus}
-        onDelete={onDelete}
-      />
+      </div>
+
+      <div className="min-w-[200px] px-2 flex items-center text-xs">
+        <div>
+          <b>{value}</b>
+          <p className="text-slate-500 text-xs">
+            {minimum > 0
+              ? `Min ₹${minimum.toLocaleString("en-IN")}`
+              : "No minimum"} ·{" "}
+            {offer.max_discount_amount
+              ? `Max ₹${Number(offer.max_discount_amount).toLocaleString("en-IN")}`
+              : "No cap"}
+          </p>
+        </div>
+      </div>
+
+      <div className="min-w-[120px] px-2 flex items-center text-xs">
+        <Badge tone={offer.is_active ? "green" : "red"} className="rounded-full py-1 text-xs">
+          {offer.is_active ? "Active" : "Inactive"}
+        </Badge>
+      </div>
+
+      <div className="min-w-[160px] px-2 flex items-center text-xs">
+        <RowActions
+          row={offer}
+          onEdit={onEdit}
+          onStatus={onStatus}
+          onDelete={onDelete}
+        />
+      </div>
     </ClickableRow>
   );
 }

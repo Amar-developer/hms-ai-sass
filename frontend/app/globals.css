@@ -70,10 +70,15 @@
     @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-base lg:text-xs border;
   }
 }
+@layer components {
+  .cancel-button {
+    @apply rounded-lg px-4 py-1.5 lg:px-4 lg:py-2.5 md:text-sm lg:text-xs border;
+  }
+}
 
 @layer components {
   .save-button {
-    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-base lg:text-xs
+    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-sm lg:text-xs
   }
 }
 
@@ -88,6 +93,11 @@
     @apply rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 md:text-sm lg:text-xs md:placeholder:text-sm lg:placeholder:text-xs;
   }
 }
+@layer components {
+  .date-input {
+    @apply px-2 py-2 lg:px-4  md:text-base lg:text-xs md:placeholder:text-sm lg:placeholder:text-xs;
+  }
+}
 
 
 @layer components {
@@ -98,7 +108,7 @@
 
 @layer components {
   .select-filter {
-    @apply py-2 px-2 text-xs rounded-lg placeholder:text-xs;
+    @apply py-2 px-2.5 text-xs rounded-lg placeholder:text-xs;
   }
 }
 

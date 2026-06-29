@@ -357,7 +357,7 @@ export function TenantBranchSettings({
               providers.
             </p>
           </div>
-         <div className="w-[30%] lg:w-[15%]">
+         <div className="w-[30%] lg:w-[25%]">
            <TenantPicker
             tenants={tenants}
             selectedId={selectedId}

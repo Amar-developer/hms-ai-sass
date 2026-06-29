@@ -190,7 +190,7 @@ export function UserForm({
             onChange={(event: any) => changeUserType(event.target.value)}
           >
             {userTypes.map(([value, label]) => (
-              <option key={value} value={value} className="text-sm">
+              <option key={value} value={value} className="text-xs">
                 {label}
               </option>
             ))}
@@ -620,6 +620,7 @@ export function TaxRuleForm({
             defaultValue={rule?.name || ""}
             required
             placeholder="Enter tax name"
+            className='search-input'
           />
         </FormField>
         <FormField label="Branch">
@@ -649,6 +650,7 @@ export function TaxRuleForm({
             name="taxLabel"
             defaultValue={rule?.tax_label || "GST"}
             required
+            className='search-input'
           />
         </FormField>
         <FormField label="Tax Percentage">
@@ -701,6 +703,7 @@ export function DiscountOfferForm({
             defaultValue={offer?.name || ""}
             required
             placeholder="Enter offer name"
+            className='search-input'
           />
         </FormField>
         <FormField label="Code">
@@ -708,6 +711,7 @@ export function DiscountOfferForm({
             name="code"
             defaultValue={offer?.code || ""}
             placeholder="HEALTH10"
+            className='search-input'
           />
         </FormField>
         <FormField label="Branch">
@@ -748,6 +752,7 @@ export function DiscountOfferForm({
             min="0"
             defaultValue={offer?.value ?? 0}
             required
+            className='search-input'
           />
         </FormField>
         <FormField label="Minimum Bill Amount">
@@ -756,6 +761,7 @@ export function DiscountOfferForm({
             type="number"
             min="0"
             defaultValue={offer?.minimum_bill_amount ?? 0}
+            className='search-input'
           />
         </FormField>
         <FormField label="Max Discount">
@@ -765,6 +771,7 @@ export function DiscountOfferForm({
             min="0"
             defaultValue={offer?.max_discount_amount ?? ""}
             placeholder="Enter maximum amount"
+            className='search-input'
           />
         </FormField>
         <FormField label="Valid From">
@@ -772,6 +779,7 @@ export function DiscountOfferForm({
             name="validFrom"
             type="date"
             defaultValue={dateToInput(offer?.valid_from)}
+            className='search-input'
           />
         </FormField>
         <FormField label="Valid Until">
@@ -779,6 +787,7 @@ export function DiscountOfferForm({
             name="validUntil"
             type="date"
             defaultValue={dateToInput(offer?.valid_until)}
+            className='search-input'
           />
         </FormField>
         {offer && (
@@ -859,7 +868,7 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                       value={permission.key}
                       defaultChecked={selectedSet.has(permission.key)}
                       disabled={disabled}
-                      className="mt-1 h-4 w-4"
+                      className="mt-1 h-3 w-3"
                     />
                     <span>
                       <span className="text-sm lg:text-[12px] font-semibold">

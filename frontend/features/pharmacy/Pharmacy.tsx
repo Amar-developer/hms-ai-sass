@@ -685,7 +685,7 @@ export function Pharmacy({
             onChange={setQuantity}
             min={1}
           />
-          <div className="md:col-span-1">
+          {/* <div className="md:col-span-1">
             <TextField
               label="External Prescriber"
               value={externalPrescriber}
@@ -693,12 +693,12 @@ export function Pharmacy({
               disabled={source !== "external_prescription"}
               className="search-input"
             />
-          </div>
-          <div className="flex items-end gap-2">
+          </div> */}
+          <div className="flex items-end gap-2 w-full lg:w-[80%]">
             <button type="button" onClick={addIssueItem} className='close-button font-bold'>
               Add
             </button>
-            <Button disabled={busy === "create"} className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-3.5 text-xs'>
+            <Button disabled={busy === "create"} className='w-[130px] px-1 py-3 lg:px-2 py-2.5'>
               {busy === "create" ? "Saving..." : "Create Issue"}
             </Button>
           </div>

@@ -1275,7 +1275,7 @@ export function DoctorConsultation({
                 Select any waiting patient for consultation.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-[50%] lg:w-[40%]">
               <Select
                 value={doctorId}
                 onChange={(e: any) => {
@@ -1291,7 +1291,7 @@ export function DoctorConsultation({
                   </option>
                 ))}
               </Select>
-              <Badge className="normal-badge text-center" tone="blue">
+              <Badge className="normal-badge text-center w-[50%]" tone="blue">
                 {branch.name}
               </Badge>
             </div>
