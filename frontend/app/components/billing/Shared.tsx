@@ -159,6 +159,18 @@ export function InvoiceDetailPage({
       amount:numberValue(payment.amount),
       tone:"green" as const,
     })),
+    ...ledgerEntries
+      .filter((entry:any)=>entry.entry_type==="membership_benefit_applied")
+      .map((entry:any)=>({
+        id:`membership-${entry.id}`,
+        date:entry.created_at,
+        type:"Membership Benefit",
+        method:membershipLabel,
+        reference:entry.reason||entry.description||"Membership benefit applied",
+        status:"applied",
+        amount:numberValue(entry.credit_amount),
+        tone:"green" as const,
+      })),
     ...creditNotes.map((credit:any)=>({
       id:`credit-${credit.id}`,
       date:credit.created_at,

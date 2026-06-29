@@ -6,6 +6,7 @@ import {
   ActionGroup,
   Badge,
   Card,
+  Input,
   RefreshButton,
   Select,
   StatusToast,
@@ -339,13 +340,13 @@ export function TokenQueue({
         </div>
         <div className="grid gap-2 sm:grid-cols-[1fr_1.5fr_1.5fr_2fr]">
           <FormField label="Appointment Date">
-            <input
+            <Input
               type="date"
               value={selectedDate}
               onChange={(event: any) =>
                 setSelectedDate(event.target.value || today)
               }
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-slate-500"
+              className="bg-white px-3 py-2 text-xs"
             />
           </FormField>
           <FormField label="Display Mode">

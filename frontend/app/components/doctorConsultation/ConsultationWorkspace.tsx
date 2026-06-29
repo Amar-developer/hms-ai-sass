@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import { Card, Select, Input, Field, Button, Badge} from "../common/ui";
 import { FormField } from "../FormElements";
+import { displayDateTime } from "@/utils/helper";
+import { displayPatientGender } from "@/utils/patient/helpers";
 import {
   SearchPicker,
   TagEntryBox,
@@ -75,6 +77,7 @@ export function ConsultationWorkspace(props: any) {
     doctor,
     addendumNote,
     setAddendumNote,
+    addendums,
     saveAddendum,
     busy,
     apiSession,
@@ -347,7 +350,7 @@ export function ConsultationWorkspace(props: any) {
               <p className="text-xs text-slate-500">Age / Gender</p>
               <p className="font-bold">
                 {patient?.age_years ?? patient?.age ?? "-"} /{" "}
-                {patient?.gender ?? "-"}
+                {displayPatientGender(patient?.gender)}
               </p>
             </div>
             <div className="rounded-lg bg-slate-50 p-4">
@@ -804,6 +807,26 @@ export function ConsultationWorkspace(props: any) {
               >
                 Save Addendum
               </Button>
+              {addendums?.length ? (
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-bold uppercase text-emerald-900">
+                    Saved addendums
+                  </p>
+                  {addendums.map((addendum: any) => (
+                    <div
+                      key={addendum.id || addendum.created_at || addendum.note}
+                      className="rounded-lg border border-emerald-100 bg-white p-3 text-sm"
+                    >
+                      <p className="whitespace-pre-wrap text-slate-700">
+                        {addendum.note}
+                      </p>
+                      <p className="mt-2 text-xs font-semibold text-slate-400">
+                        {displayDateTime(addendum.created_at)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
           <div className="flex flex-wrap gap-3">

@@ -28,11 +28,9 @@ import {
   publicDisplayValue,
   uniqueDepartmentRows,
 } from "@/lib/options";
-import {
-  PatientFormFields,
-  patientFormPayload,
-} from "@/features/patients/PatientFormFields";
+import { NewPatientForm } from "@/app/components/patient/PatientLookupCreate";
 import { displayDate } from "@/utils/helper";
+import { isActivePatientRecord } from "@/utils/patient/helpers";
 
 type Props = {
   clinic: any;
@@ -310,8 +308,7 @@ export function AppointmentCalendarBooking(props: Props) {
           status: patient.status,
         }))
   ).filter(
-    (patient: any) =>
-      !patient.status || String(patient.status).toLowerCase() === "active",
+    (patient: any) => isActivePatientRecord(patient),
   );
 
   useEffect(
@@ -391,7 +388,7 @@ export function AppointmentCalendarBooking(props: Props) {
           `/patients?${params.toString()}`,
           apiSession,
         );
-        if (alive) setLiveMatches(rows);
+        if (alive) setLiveMatches((rows || []).filter(isActivePatientRecord));
       } catch (err: any) {
         if (alive) setMessage(err.message || "Could not search patients.");
       }
@@ -576,6 +573,7 @@ export function AppointmentCalendarBooking(props: Props) {
               full_name: data.fullName,
               date_of_birth: data.dateOfBirth || null,
               gender: data.gender || "unknown",
+              age_years: data.ageYears ? Number(data.ageYears) : null,
               mobile: data.mobile || null,
               guardian_name: data.guardianName || null,
               guardian_mobile: data.guardianMobile || null,
@@ -603,6 +601,7 @@ export function AppointmentCalendarBooking(props: Props) {
             full_name: data.fullName,
             date_of_birth: data.dateOfBirth || null,
             gender: data.gender || "unknown",
+            age_years: data.ageYears ? Number(data.ageYears) : null,
             mobile: data.mobile || null,
             alternate_mobile: data.alternateMobile || null,
             email: data.email || null,
@@ -1153,7 +1152,9 @@ export function AppointmentCalendarBooking(props: Props) {
               />
               <Info
                 label="Date"
-                value={booked.appointment?.appointment_date || appointmentDate}
+                value={displayDate(
+                  booked.appointment?.appointment_date || appointmentDate,
+                )}
               />
               <Info
                 label="Time"
@@ -1391,7 +1392,11 @@ export function AppointmentCalendarBooking(props: Props) {
                     publicDisplayValue(appointment.doctorId, "Doctor")}
                 </span>
                 <span className="text-[10px] lg:text-xs ">
-                  {appointment.appointmentDate || "-"}
+                  {displayDate(
+                    appointment.appointmentDate ||
+                      appointment.appointment_date ||
+                      appointment.date,
+                  )}
                   {appointment.appointmentTime || appointment.appointment_time
                     ? ` ${formatDisplayTime(
                         appointment.appointmentTime ||
@@ -1436,65 +1441,6 @@ export function AppointmentCalendarBooking(props: Props) {
         onPage={setPage}
       />
     </Card>
-  );
-}
-
-function NewPatientForm({
-  busy,
-  branches,
-  defaultBranchId,
-  searchValue,
-  onSave,
-  onCancel,
-}: any) {
-  const normalizedSearch = String(searchValue || "").trim();
-  const patientDefaults = normalizedSearch
-    ? /^[+\d][\d\s()-]*$/.test(normalizedSearch)
-      ? { mobile: normalizedSearch }
-      : { full_name: normalizedSearch }
-    : undefined;
-
-  function handleSubmit(e: any) {
-    e.preventDefault();
-    onSave(patientFormPayload(new FormData(e.currentTarget)));
-  }
-
-  return (
-    <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
-      <div className="flex justify-between gap-3">
-        <div>
-          <h4 className="font-bold">Create New Patient</h4>
-          <p className="mt-1 table-data text-slate-500">
-            Save this record to select the patient and continue the appointment.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-xl border p-2"
-          title="Cancel"
-        >
-          <X size={16} />
-        </button>
-      </div>
-      <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-3">
-        <PatientFormFields
-          patient={patientDefaults}
-          branches={branches}
-          defaultBranchId={defaultBranchId}
-        />
-        <div className="flex flex-wrap gap-2 md:col-span-3">
-          <Button disabled={busy}>{busy ? "Saving..." : "Save Patient"}</Button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4 font-bold"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
   );
 }
 

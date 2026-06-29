@@ -104,9 +104,6 @@ export function BranchesManagement({
                     )}
                     {locked && <Badge tone="purple">Locked</Badge>}
                   </div>
-                  <p className="break-all text-[10px] lg:text-xs text-slate-500">
-                    {branch.id}
-                  </p>
                 </div>
                 <span className="text-xs lg:text-sm">{branch.code}</span>
                 <span className="text-xs lg:text-sm text-slate-500">

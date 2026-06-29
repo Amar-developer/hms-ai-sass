@@ -26,6 +26,7 @@ import {
   WorklistDetailModal,
 } from "@/app/components/lab/Shared";
 import { Pagination } from "@/app/components/common/Pagination";
+import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
 export function Lab({
   apiSession,
@@ -42,7 +43,9 @@ export function Lab({
   const [templates, setTemplates] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [patientId, setPatientId] = useState(patients[0]?.id || "");
+  const [patientId, setPatientId] = useState(
+    patients.find(isActivePatientRecord)?.id || "",
+  );
   const [source, setSource] = useState("op_direct");
   const [externalReferrer, setExternalReferrer] = useState("");
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
@@ -115,6 +118,10 @@ export function Lab({
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
+  const activePatients = useMemo(
+    () => patients.filter(isActivePatientRecord),
+    [patients],
+  );
   const invoicedOrderIds = useMemo(
     () =>
       new Set([
@@ -127,8 +134,13 @@ export function Lab({
   );
 
   useEffect(() => {
-    if (!patientId && patients[0]?.id) setPatientId(patients[0].id);
-  }, [patients, patientId]);
+    if (
+      (!patientId ||
+        !activePatients.some((patient: any) => patient.id === patientId)) &&
+      activePatients[0]?.id
+    )
+      setPatientId(activePatients[0].id);
+  }, [activePatients, patientId]);
   useEffect(() => {
     load();
   }, [apiSession?.token, apiSession?.tenantId]);
@@ -644,9 +656,13 @@ export function Lab({
             label="Patient"
             value={patientId}
             onChange={setPatientId}
-            options={patients.map((p: any) => ({ value: p.id, label: p.name }))}
+            options={activePatients.map((p: any) => ({
+              value: p.id,
+              label: patientPickerLabel(p),
+              sublabel: p.mobile || p.patient_number || p.id,
+            }))}
             placeholder="Select patient"
-            searchPlaceholder="Search patient by name"
+            searchPlaceholder="Search patient by name, mobile, or number"
             className="text-xs md:col-span-2"
           />
           <SelectField

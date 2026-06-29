@@ -578,11 +578,6 @@ export function SubscriptionManagement({
                       <b className="text-xs lg:text-sm block truncate">
                         {plan?.name || "Custom plan"}
                       </b>
-                      <span className="text-[10px] lg:text-xs text-slate-500">
-                        {plan?.key?.startsWith("tenant_")
-                          ? "Tenant custom"
-                          : plan?.key || "Plan"}
-                      </span>
                     </div>
                     <div>
                       <Badge

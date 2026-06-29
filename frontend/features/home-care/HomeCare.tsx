@@ -18,8 +18,8 @@ import {
   TextField,
   TextareaField,
 } from "@/app/components/FormElements";
+import { PatientLookupField } from "@/app/components/patient/PatientLookupCreate";
 import { apiFetch } from "@/lib/api";
-import { searchPatients } from "@/lib/hmsLogic";
 import { humanizeOptionLabel } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
 import {
@@ -88,6 +88,7 @@ export function HomeCare({
   const [busy, setBusy] = useState("");
   const [filters, setFilters] = useState({ query: "", status: "all" });
   const [patientSearch, setPatientSearch] = useState("");
+  const [lookupPatient, setLookupPatient] = useState<any>(null);
   const [form, setForm] = useState<any>({ ...emptyForm });
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
   // Editing and cancelling bookings is restricted to tenant admins (and super
@@ -121,11 +122,8 @@ export function HomeCare({
   );
   const bookingType = form.booking_type || "home_care";
   const isHomeVisitBooking = bookingType === "home_visit";
-  const patientMatches = useMemo(() => {
-    const query = patientSearch.trim().toLowerCase();
-    if (!query || form.patient_id) return [];
-    return searchPatients(patients, query).slice(0, 6);
-  }, [form.patient_id, patientSearch, patients]);
+  const selectedLookupPatient =
+    (form.patient_id && patientMap.get(form.patient_id)) || lookupPatient;
   const visitServices = useMemo(
     () =>
       services.filter((service: any) =>
@@ -250,12 +248,54 @@ export function HomeCare({
 
   function selectPatient(patient: any) {
     const location = patientLocation(patient);
+    setLookupPatient(patient);
     setForm((prev: any) => ({
       ...prev,
       patient_id: patient.id,
       location: location || prev.location,
     }));
     setPatientSearch(patientSearchLabel(patient));
+  }
+
+  async function createPatient(data: any) {
+    if (!apiSession) return null;
+    setBusy("patient");
+    setError("");
+    setMessage("");
+    try {
+      const saved = await apiFetch("/patients", apiSession, {
+        method: "POST",
+        body: JSON.stringify({
+          branch_id: data.branchId || branchId,
+          full_name: data.fullName,
+          date_of_birth: data.dateOfBirth || null,
+          gender: data.gender || "unknown",
+          age_years: data.ageYears ? Number(data.ageYears) : null,
+          mobile: data.mobile || null,
+          alternate_mobile: data.alternateMobile || null,
+          email: data.email || null,
+          guardian_name: data.guardianName || null,
+          guardian_mobile: data.guardianMobile || null,
+          area: data.area || null,
+          address: data.address || null,
+          blood_group: data.bloodGroup || null,
+        }),
+      });
+      const patient = {
+        ...saved,
+        full_name: saved.full_name || data.fullName,
+        mobile: saved.mobile || data.mobile,
+      };
+      selectPatient(patient);
+      await loadLiveData?.(apiSession);
+      setMessage("Patient created and selected.");
+      return patient;
+    } catch (err: any) {
+      setError(err.message || "Unable to create patient.");
+      return null;
+    } finally {
+      setBusy("");
+    }
   }
 
   async function load() {
@@ -552,7 +592,9 @@ export function HomeCare({
       complaints: booking.complaints || "",
       notes: booking.notes || "",
     });
-    setPatientSearch(patientSearchLabel(patientMap.get(booking.patient_id)));
+    const bookingPatient = patientMap.get(booking.patient_id);
+    setLookupPatient(bookingPatient || null);
+    setPatientSearch(patientSearchLabel(bookingPatient));
     const bookingDays = dayCount(booking.start_date, booking.end_date);
     setLineItems(
       booking.services?.length
@@ -574,6 +616,7 @@ export function HomeCare({
     setEditing(null);
     setForm({ ...emptyForm });
     setPatientSearch("");
+    setLookupPatient(null);
     setLineItems([{ ...emptyLine }]);
   }
 
@@ -665,43 +708,37 @@ export function HomeCare({
             </div>
             <ActionButton onClick={backToList}>Back to list</ActionButton>
           </div>
-          <form
-            onSubmit={saveBooking}
-            className="mt-5 grid gap-3 md:grid-cols-4"
-          >
-            <div className="relative">
-              <TextField
-                label="Patient Search"
-                value={patientSearch}
-                onChange={(value) => {
-                  setPatientSearch(value);
-                  if (form.patient_id) {
-                    setForm((prev: any) => ({ ...prev, patient_id: "" }));
-                  }
-                }}
-                placeholder="Search patient name or mobile number"
-                required={!form.patient_id}
-                type="search"
-                className="search-input"
-              />
-              {patientMatches.length > 0 && (
-                <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
-                  {patientMatches.map((patient: any) => (
-                    <button
-                      key={patient.id}
-                      type="button"
-                      onClick={() => selectPatient(patient)}
-                      className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-50"
-                    >
-                      <b>{patientName(patient)}</b>
-                      <p className="text-xs text-slate-500">
-                        {patient.mobile || "-"} · {patientCode(patient) || "-"}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="mt-5">
+            <PatientLookupField
+              label="Patient Search"
+              patients={patients}
+              searchValue={patientSearch}
+              onSearchChange={(value: string) => {
+                setPatientSearch(value);
+                if (form.patient_id) {
+                  setForm((prev: any) => ({ ...prev, patient_id: "" }));
+                  setLookupPatient(null);
+                }
+              }}
+              selectedPatient={selectedLookupPatient}
+              onSelect={selectPatient}
+              onClear={() => {
+                setForm((prev: any) => ({ ...prev, patient_id: "" }));
+                setPatientSearch("");
+                setLookupPatient(null);
+              }}
+              onCreatePatient={createPatient}
+              branches={
+                branchId ? [{ id: branchId, name: "Current branch" }] : []
+              }
+              defaultBranchId={branchId}
+              busy={busy === "patient"}
+              required={!form.patient_id}
+              placeholder="Search patient name or mobile number"
+              createDescription="Save this record to select the patient and continue the booking."
+            />
+          </div>
+          <form onSubmit={saveBooking} className="mt-3 grid gap-3 md:grid-cols-4">
             <SelectField
               label="Booking Type"
               value={bookingType}

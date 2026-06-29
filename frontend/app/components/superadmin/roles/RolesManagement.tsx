@@ -258,11 +258,6 @@ export function RolesManagement({
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xs  text-slate-500">
-                      {role.rows.length > 1
-                        ? `${role.rows.length} branch variants grouped`
-                        : role.primary.id}
-                    </p>
                   </div>
                   <span className="text-xs lg:text-sm">{role.display_key}</span>
                   <Badge

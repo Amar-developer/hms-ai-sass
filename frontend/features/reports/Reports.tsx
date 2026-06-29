@@ -17,6 +17,7 @@ import {
   normalized,
   isCompleted,
   currentRange,
+  toInputDate,
   percent,
   settlementPaidBasis,
   rowDate,
@@ -45,6 +46,93 @@ export const reportSections = [
   ["appointments", "Appointments Report", FileText],
   ["pharmacy", "Pharmacy Report", Users],
 ];
+
+function aggregateInvoiceMetrics(
+  list: any[],
+  homeVisitBookingIds: Set<string> = new Set(),
+) {
+  return list.reduce(
+    (acc: any, invoice: any) => {
+      const total = numberValue(invoice.total_amount);
+      const paid = numberValue(invoice.paid_amount);
+      const balance = numberValue(invoice.balance_amount);
+      const doctorShare = numberValue(invoice.doctor_share_amount);
+      const settlement = settlementPaidBasis(invoice);
+      acc.invoices += 1;
+      acc.grossRevenue += total;
+      acc.paidRevenue += paid;
+      acc.balance += balance;
+      acc.doctorFee += doctorShare;
+      acc.settlement += settlement;
+      acc.clinicFee +=
+        numberValue(invoice.clinic_share_amount) ||
+        Math.max(total - doctorShare, 0);
+      acc.tax += numberValue(invoice.tax_amount);
+      acc.membershipDiscount += numberValue(invoice.membership_discount_amount);
+      if (
+        invoice.patient_subscription_enrollment_id ||
+        invoice.patient_subscription_plan_id
+      )
+        acc.membershipPurchases += 1;
+      const isPlanPurchase = Boolean(
+        (invoice.patient_subscription_enrollment_id ||
+          invoice.patient_subscription_plan_id) &&
+          !invoice.lab_order_id &&
+          !invoice.pharmacy_issue_id &&
+          !invoice.consultation_id &&
+          !invoice.ip_admission_id &&
+          !invoice.physiotherapy_case_id &&
+          !invoice.home_care_booking_id,
+      );
+      if (isPlanPurchase) {
+        acc.membershipEnrollCount += 1;
+        acc.membershipEnrollAmount += paid;
+      }
+      const type = invoiceType(invoice);
+      if (type === "lab") acc.labRevenue += paid;
+      if (type === "pharmacy") acc.pharmacyRevenue += paid;
+      if (type === "consultation") acc.consultationRevenue += paid;
+      if (type === "home_care") {
+        if (homeVisitBookingIds.has(invoice.home_care_booking_id))
+          acc.homeVisitRevenue += paid;
+        else acc.homeCareRevenue += paid;
+      }
+      const membershipClaim = numberValue(invoice.membership_discount_amount);
+      if (membershipClaim > 0) {
+        const claimRow = acc.membershipClaims[type] || {
+          type,
+          label: invoiceTypeLabel(type),
+          invoices: 0,
+          claimedAmount: 0,
+        };
+        claimRow.invoices += 1;
+        claimRow.claimedAmount += membershipClaim;
+        acc.membershipClaims[type] = claimRow;
+      }
+      return acc;
+    },
+    {
+      invoices: 0,
+      grossRevenue: 0,
+      paidRevenue: 0,
+      balance: 0,
+      doctorFee: 0,
+      settlement: 0,
+      clinicFee: 0,
+      tax: 0,
+      membershipDiscount: 0,
+      membershipPurchases: 0,
+      membershipEnrollCount: 0,
+      membershipEnrollAmount: 0,
+      consultationRevenue: 0,
+      labRevenue: 0,
+      pharmacyRevenue: 0,
+      homeCareRevenue: 0,
+      homeVisitRevenue: 0,
+      membershipClaims: {},
+    },
+  );
+}
 
 export function Reports({
   scopedAppointments,
@@ -88,6 +176,7 @@ export function Reports({
   const [medicineRows, setMedicineRows] = useState<any[]>([]);
   const [pharmacyIssueDetails, setPharmacyIssueDetails] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [homeCareBookings, setHomeCareBookings] = useState<any[]>([]);
   const patientById = useMemo(
     () => new Map<string, any>(patients.map((row: any) => [row.id, row])),
     [patients],
@@ -171,6 +260,18 @@ export function Reports({
     setInvoicePage(1);
   }, [fromDate, toDate, doctorId, typeFilter, branchId]);
 
+  // The Metrics tab hides the shared filter/export header and always shows a
+  // current-month snapshot, so reset the range/filters to this month on entry.
+  useEffect(() => {
+    if (section !== "metrix") return;
+    const [start, end] = currentRange("monthly");
+    setPeriod("monthly");
+    setFromDate(start);
+    setToDate(end);
+    setDoctorId("all");
+    setTypeFilter("overall");
+  }, [section]);
+
   useEffect(() => {
     if (
       doctorId !== "all" &&
@@ -240,6 +341,22 @@ export function Reports({
   useEffect(() => {
     if (!apiSession?.token) return;
     let cancelled = false;
+    async function loadHomeCareBookings() {
+      const rows = await apiFetch(
+        `/home-care/bookings${branchId ? `?branch_id=${branchId}` : ""}`,
+        apiSession,
+      ).catch(() => []);
+      if (!cancelled) setHomeCareBookings(Array.isArray(rows) ? rows : []);
+    }
+    loadHomeCareBookings();
+    return () => {
+      cancelled = true;
+    };
+  }, [apiSession?.token, apiSession?.tenantId, branchId, refreshTick]);
+
+  useEffect(() => {
+    if (!apiSession?.token) return;
+    let cancelled = false;
     async function loadPharmacySettlementData() {
       const [medicines, issueRows] = await Promise.all([
         apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
@@ -283,54 +400,56 @@ export function Reports({
     );
   });
 
-  const totals = filteredInvoices.reduce(
-    (acc: any, invoice: any) => {
-      const total = numberValue(invoice.total_amount);
-      const paid = numberValue(invoice.paid_amount);
-      const balance = numberValue(invoice.balance_amount);
-      const doctorShare = numberValue(invoice.doctor_share_amount);
-      const settlement = settlementPaidBasis(invoice);
-      acc.invoices += 1;
-      acc.grossRevenue += total;
-      acc.paidRevenue += paid;
-      acc.balance += balance;
-      acc.doctorFee += doctorShare;
-      acc.settlement += settlement;
-      acc.clinicFee +=
-        numberValue(invoice.clinic_share_amount) ||
-        Math.max(total - doctorShare, 0);
-      acc.tax += numberValue(invoice.tax_amount);
-      acc.membershipDiscount += numberValue(invoice.membership_discount_amount);
-      if (
-        invoice.patient_subscription_enrollment_id ||
-        invoice.patient_subscription_plan_id
-      )
-        acc.membershipPurchases += 1;
-      const type = invoiceType(invoice);
-      if (type === "lab") acc.labRevenue += paid;
-      if (type === "pharmacy") acc.pharmacyRevenue += paid;
-      if (type === "consultation") acc.consultationRevenue += paid;
-      return acc;
-    },
-    {
-      invoices: 0,
-      grossRevenue: 0,
-      paidRevenue: 0,
-      balance: 0,
-      doctorFee: 0,
-      settlement: 0,
-      clinicFee: 0,
-      tax: 0,
-      membershipDiscount: 0,
-      membershipPurchases: 0,
-      consultationRevenue: 0,
-      labRevenue: 0,
-      pharmacyRevenue: 0,
-    },
+  // Bookings whose service lines are predominantly home-visit (vs home-care),
+  // used to split home care / home visit revenue on the Metrics dashboard.
+  const homeVisitBookingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const booking of homeCareBookings) {
+      const lines = [
+        ...(booking.services || []),
+        ...(booking.visit_logs || []),
+      ];
+      let homeVisit = 0;
+      let homeCare = 0;
+      for (const line of lines) {
+        if (line.service_category === "home_visit_service") homeVisit += 1;
+        else homeCare += 1;
+      }
+      if (homeVisit > 0 && homeVisit >= homeCare) ids.add(booking.id);
+    }
+    return ids;
+  }, [homeCareBookings]);
+
+  const totals = aggregateInvoiceMetrics(filteredInvoices, homeVisitBookingIds);
+  const membershipClaimRows = Object.values(totals.membershipClaims).sort(
+    (a: any, b: any) => b.claimedAmount - a.claimedAmount,
   );
 
   const grossProfit = Math.max(totals.grossRevenue - totals.doctorFee, 0);
   const finalProfit = Math.max(totals.paidRevenue - totals.settlement, 0);
+
+  // Previous calendar month aggregation, used only for the Metrics dashboard
+  // month-over-month comparison lines. Branch-scoped but independent of the
+  // active filters (the Metrics tab always reflects the current month).
+  const previousTotals = useMemo(() => {
+    const now = new Date();
+    const startKey = toInputDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const endKey = toInputDate(new Date(now.getFullYear(), now.getMonth(), 0));
+    const previousMonthInvoices = liveInvoices.filter((invoice: any) => {
+      if (!isPaidInvoice(invoice)) return false;
+      const appointment = appointmentById.get(invoice.appointment_id);
+      const invoiceBranchId =
+        invoice.branch_id || appointment?.branchId || appointment?.branch_id;
+      if (branchId && invoiceBranchId !== branchId) return false;
+      const invoiceDate = rowDateKey(invoice);
+      return invoiceDate >= startKey && invoiceDate <= endKey;
+    });
+    return aggregateInvoiceMetrics(previousMonthInvoices, homeVisitBookingIds);
+  }, [liveInvoices, branchId, appointmentById, homeVisitBookingIds]);
+  const previousFinalProfit = Math.max(
+    previousTotals.paidRevenue - previousTotals.settlement,
+    0,
+  );
   const doctorRows = Array.from(
     filteredInvoices
       .reduce((acc: Map<string, any>, invoice: any) => {
@@ -720,6 +839,10 @@ export function Reports({
     ["Pharmacy Revenue", totals.pharmacyRevenue],
     ["Membership Purchases", totals.membershipPurchases],
     ["Membership Discounts Used", totals.membershipDiscount],
+    ...membershipClaimRows.map((row: any) => [
+      `Membership Claimed - ${row.label}`,
+      row.claimedAmount,
+    ]),
     ["Balance", totals.balance],
     ["Doctor Fee", totals.doctorFee],
     ["Settlement", totals.settlement],
@@ -944,13 +1067,12 @@ export function Reports({
         return (
           <MetricsReport
             totals={totals}
+            previousTotals={previousTotals}
             grossProfit={grossProfit}
             finalProfit={finalProfit}
-            completedAppointments={completedAppointments}
-            patients={patients}
-            ipAdmissions={ipAdmissions}
+            previousFinalProfit={previousFinalProfit}
             labSettlementSummary={labSettlementSummary}
-            pharmacySettlementSummary={pharmacySettlementSummary}
+            membershipClaimRows={membershipClaimRows}
             money={money}
             percent={percent}
           />
@@ -963,6 +1085,7 @@ export function Reports({
 
   return (
     <div className="space-y-6">
+      {section !== "metrix" && (
       <Header
         apiSession={apiSession}
         onRefresh={refreshReports}
@@ -998,6 +1121,7 @@ export function Reports({
         suppliers={suppliers}
         setPeriod={setPeriod}
       />
+      )}
 
       {/* DYNAMIC CONTENT */}
       {renderReportSection(section)}

@@ -1,4 +1,5 @@
 import { Badge,ActionGroup,ActionButton } from "../common/ui";
+import { displayPatientGender } from "@/utils/patient/helpers";
 
 
 export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
@@ -49,7 +50,7 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
             Gender / Age
           </p> */}
           <span className="text-xs text-slate-700">
-            {row.gender || "-"} / {row.age_years ?? "-"}
+            {displayPatientGender(row.gender)} / {row.age_years ?? "-"}
           </span>
         </div>
         <div className="min-w-0">

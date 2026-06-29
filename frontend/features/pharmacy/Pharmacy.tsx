@@ -25,6 +25,7 @@ import { displayDate, displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { isBilledIssue, isCancelledIssue, isDispensed } from "@/utils/pharmacy/helpers";
 import { ConsultPrescriptionModal, MedicineDetailModal } from "@/app/components/pharmacy/Shared";
+import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
 const pageSize = 10;
 
@@ -44,7 +45,9 @@ export function Pharmacy({
   const [lowStock, setLowStock] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [patientId, setPatientId] = useState(patients[0]?.id || "");
+  const [patientId, setPatientId] = useState(
+    patients.find(isActivePatientRecord)?.id || "",
+  );
   const [source, setSource] = useState("op_direct");
   const [externalPrescriber, setExternalPrescriber] = useState("");
   const [medicineText, setMedicineText] = useState("Paracetamol 500mg");
@@ -140,10 +143,19 @@ export function Pharmacy({
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
+  const activePatients = useMemo(
+    () => patients.filter(isActivePatientRecord),
+    [patients],
+  );
 
   useEffect(() => {
-    if (!patientId && patients[0]?.id) setPatientId(patients[0].id);
-  }, [patients, patientId]);
+    if (
+      (!patientId ||
+        !activePatients.some((patient: any) => patient.id === patientId)) &&
+      activePatients[0]?.id
+    )
+      setPatientId(activePatients[0].id);
+  }, [activePatients, patientId]);
   useEffect(() => {
     load();
   }, [apiSession?.token, apiSession?.tenantId]);
@@ -614,9 +626,13 @@ export function Pharmacy({
             label="Patient"
             value={patientId}
             onChange={setPatientId}
-            options={patients.map((p: any) => ({ value: p.id, label: p.name }))}
+            options={activePatients.map((p: any) => ({
+              value: p.id,
+              label: patientPickerLabel(p),
+              sublabel: p.mobile || p.patient_number || p.id,
+            }))}
             placeholder="Select patient"
-            searchPlaceholder="Search patient by name"
+            searchPlaceholder="Search patient by name, mobile, or number"
           />
           <SelectField
             label="Source"

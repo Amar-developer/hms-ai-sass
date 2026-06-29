@@ -106,9 +106,6 @@ export function DepartmentsManagement({
                       )}
                       {locked && <Badge tone="purple" className="table-status">Locked</Badge>}
                     </div>
-                    <p className="break-all text-[10px] lg:text-xs text-slate-500">
-                      {department.id}
-                    </p>
                   </div>
                   <span className="text-xs lg:text-sm">{department.code}</span>
                   <span className="text-slate-500 text-xs lg:text-sm">

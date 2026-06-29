@@ -524,6 +524,11 @@ export function Input({
 }: any) {
   const [error, setError] = useState("");
 
+  if (props.type === "date") {
+    const { type: _type, ...dateProps } = props;
+    return <DateInput {...dateProps} className={className} />;
+  }
+
   return (
     <>
       <input

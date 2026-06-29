@@ -3,17 +3,17 @@ import { Badge, Button, Card, StatusToast } from "../common/ui";
 import { hiddenScrollbar } from "@/utils/patient/constants";
 import {
   clinicalRecordsWithUniqueItems,
+  displayPatientGender,
   fmtDate,
   uniqueClinicalRecords,
 } from "@/utils/patient/helpers";
 import { money } from "@/features/reports/utils";
+import { invoiceSource } from "@/utils/billing/helpers";
 import { ChevronDown } from "lucide-react";
 import { MembershipEnrollForm } from "./Forms";
 import {
   AlertCard,
-  ClinicalItemList,
   Info,
-  Row,
   SectionEmpty,
   StatusBadge,
 } from "./Shared";
@@ -162,16 +162,18 @@ export function PatientDetail({
   const freeConsultationsUsed = Number(
     visibleMembership?.used_consultations || 0,
   );
-  const freeLabAllocated = Number(
-    visibleMembership?.allocated_free_lab_count ??
-      visibleMembership?.plan?.free_lab_count ??
-      visibleMembership?.plan?.free_lab_tests ??
-      0,
-  );
+  const freeLabUsed = Number(visibleMembership?.used_free_lab_count || 0);
   const freeLabRemaining = Number(
     visibleMembership?.remaining_free_lab_count || 0,
   );
-  const freeLabUsed = Math.max(freeLabAllocated - freeLabRemaining, 0);
+  const freeLabAllocated = freeLabUsed + freeLabRemaining;
+  const freeMedicineUsed = Number(
+    visibleMembership?.used_free_medicine_count || 0,
+  );
+  const freeMedicineRemaining = Number(
+    visibleMembership?.remaining_free_medicine_count || 0,
+  );
+  const freeMedicineAllocated = freeMedicineUsed + freeMedicineRemaining;
   const membershipUsageInvoices = patientInvoices.filter(
     (invoice: any) =>
       Number(invoice.membership_discount_amount || 0) > 0 &&
@@ -208,6 +210,28 @@ export function PatientDetail({
       sessionStorage.setItem("medizinhub.consultationDoctorId", c.practitioner_id);
     }
     setActive?.("consultation");
+  }
+
+  function openInvoice(invoice: any) {
+    if (!invoice?.id || typeof window === "undefined") return;
+    window.sessionStorage.setItem("medizinhub.billingInvoiceId", invoice.id);
+    setActive?.("billing");
+  }
+
+  function goToModule(page: string) {
+    setActive?.(page);
+  }
+
+  function benefitUsageLabel(invoice: any) {
+    const saved = Number(invoice.membership_discount_amount || 0);
+    const subtotal = Number(invoice.subtotal_amount || 0);
+    const source = invoiceSource(invoice).label;
+    const kind = invoice.consultation_id
+      ? "Free consultation"
+      : subtotal > 0 && saved >= subtotal
+        ? "Free item"
+        : "Discount";
+    return { source, kind, saved };
   }
 
   return (
@@ -247,16 +271,6 @@ export function PatientDetail({
                 <Badge tone={isAdmitted ? "amber" : "green"} className="normal-badge">
                   {isAdmitted ? "Admitted" : "Outpatient"}
                 </Badge>
-                <Badge
-                  tone={activeMembership ? "green" : pendingMembership ? "amber" : "slate"}
-                  className="normal-badge"
-                >
-                  {activeMembership
-                    ? "Membership Active"
-                    : pendingMembership
-                      ? "Membership Due"
-                      : "No Membership"}
-                </Badge>
               </div>
               <p className="table-data mt-1 text-slate-500">
                 {patient.patient_number} · {patient.mobile || "No mobile"}
@@ -273,7 +287,7 @@ export function PatientDetail({
         </div>
         <StatusToast message={message} onClose={onMessageClose} />
         <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <Info k="Age / Gender" v={`${patient.age_years ?? "-"} / ${patient.gender || "-"}`} />
+          <Info k="Age / Gender" v={`${patient.age_years ?? "-"} / ${displayPatientGender(patient.gender)}`} />
           <Info k="Blood Group" v={patient.blood_group || "-"} />
           <Info k="Area" v={patient.area || "-"} />
           <Info k="Address" v={patient.address || "-"} />
@@ -316,7 +330,7 @@ export function PatientDetail({
               }
             />
             <CompactMetric
-              label="Free Lab Usage"
+              label="Free Lab Tests"
               value={
                 visibleMembership
                   ? `${freeLabUsed}/${freeLabAllocated}`
@@ -324,8 +338,12 @@ export function PatientDetail({
               }
             />
             <CompactMetric
-              label="Lab Remaining"
-              value={visibleMembership ? String(freeLabRemaining) : "-"}
+              label="Free Medicines"
+              value={
+                visibleMembership
+                  ? `${freeMedicineUsed}/${freeMedicineAllocated}`
+                  : "-"
+              }
             />
           </div>
         </div>
@@ -411,14 +429,19 @@ export function PatientDetail({
           {labOrders.length === 0 && <SectionEmpty text="No lab orders found." />}
           <div className={`max-h-[300px] space-y-3 overflow-y-auto pr-1 ${hiddenScrollbar}`}>
             {labRows.map(({ row: order, items }: any) => (
-              <div key={order.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold">{fmtDate(order.created_at)}</span>
+              <button
+                type="button"
+                key={order.id}
+                onClick={() => goToModule("lab")}
+                title="Open in Lab / Service"
+                className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2.5 text-left text-sm hover:bg-slate-100"
+              >
+                <span className="font-bold">{fmtDate(order.created_at)}</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">{items.length} test(s)</span>
                   <StatusBadge status={order.status} />
-                </div>
-                <ClinicalItemList items={items} />
-                {order.notes && <p className="mt-1 text-xs text-slate-500">{order.notes}</p>}
-              </div>
+                </span>
+              </button>
             ))}
           </div>
         </DetailSection>
@@ -427,17 +450,19 @@ export function PatientDetail({
           {pharmacyIssues.length === 0 && <SectionEmpty text="No pharmacy records found." />}
           <div className={`max-h-[300px] space-y-3 overflow-y-auto pr-1 ${hiddenScrollbar}`}>
             {medicineRows.map(({ row: issue, items }: any) => (
-              <div key={issue.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-bold">{fmtDate(issue.created_at)}</span>
+              <button
+                type="button"
+                key={issue.id}
+                onClick={() => goToModule("pharmacy")}
+                title="Open in Pharmacy"
+                className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2.5 text-left text-sm hover:bg-slate-100"
+              >
+                <span className="font-bold">{fmtDate(issue.created_at)}</span>
+                <span className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-500">{items.length} item(s)</span>
                   <StatusBadge status={issue.status} />
-                </div>
-                <ClinicalItemList items={items} />
-                {issue.notes && <p className="mt-1 text-xs text-slate-500">{issue.notes}</p>}
-                {issue.amount > 0 && (
-                  <p className="mt-1 text-xs font-semibold text-slate-600">₹{issue.amount}</p>
-                )}
-              </div>
+                </span>
+              </button>
             ))}
           </div>
         </DetailSection>
@@ -447,15 +472,16 @@ export function PatientDetail({
         {physioCases.length === 0 && <SectionEmpty text="No physiotherapy records found." />}
         <div className="grid gap-3 lg:grid-cols-2">
           {physioCases.map((c: any) => (
-            <div key={c.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-bold">{c.case_number || fmtDate(c.assessment_date)}</span>
-                <StatusBadge status={c.status} />
-              </div>
-              {c.body_region && <Row label="Body Region" value={c.body_region} />}
-              {c.condition && <Row label="Condition" value={c.condition} />}
-              {c.treatment_goal && <Row label="Goal" value={c.treatment_goal} />}
-            </div>
+            <button
+              type="button"
+              key={c.id}
+              onClick={() => goToModule("physiotherapy")}
+              title="Open in Physiotherapy"
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
+            >
+              <span className="font-bold">{c.case_number || fmtDate(c.assessment_date)}</span>
+              <StatusBadge status={c.status} />
+            </button>
           ))}
         </div>
       </DetailSection>
@@ -464,21 +490,16 @@ export function PatientDetail({
         {patientIpAdmissions.length === 0 && <SectionEmpty text="No IP admission records found." />}
         <div className="space-y-3">
           {patientIpAdmissions.map((adm: any) => (
-            <div key={adm.id} className="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-bold">{adm.admission_number || fmtDate(adm.admission_date)}</span>
-                <StatusBadge status={adm.status} />
-              </div>
-              <div className="mt-2 grid gap-2 md:grid-cols-3">
-                <Info k="Ward" v={adm.ward || "-"} />
-                <Info k="Room / Bed" v={adm.room ? `${adm.room} / ${adm.bed}` : adm.bed || "-"} />
-                <Info k="Admitted" v={fmtDate(adm.admission_date)} />
-              </div>
-              {adm.reason && <Row label="Reason" value={adm.reason} />}
-              {adm.provisional_diagnosis && (
-                <Row label="Provisional Diagnosis" value={adm.provisional_diagnosis} />
-              )}
-            </div>
+            <button
+              type="button"
+              key={adm.id}
+              onClick={() => goToModule("ip")}
+              title="Open in IP Admission"
+              className="flex w-full items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2.5 text-left text-sm hover:bg-slate-50"
+            >
+              <span className="font-bold">{adm.admission_number || fmtDate(adm.admission_date)}</span>
+              <StatusBadge status={adm.status} />
+            </button>
           ))}
         </div>
       </DetailSection>
@@ -490,64 +511,51 @@ export function PatientDetail({
         defaultOpen={false}
       >
         <div className="grid gap-3 md:grid-cols-4">
-          <CompactMetric label="Membership" value={activeMembership ? "Subscribed" : pendingMembership ? "Payment due" : "Not subscribed"} />
+          <CompactMetric label="Membership Saved" value={money(membershipSavings)} />
           <CompactMetric label="Billed" value={money(totalBilled)} />
           <CompactMetric label="Paid" value={money(totalPaid)} />
           <CompactMetric label="Due" value={money(totalDue)} />
         </div>
 
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
-          <div className="rounded-lg border border-slate-200">
-            <div className="border-b border-slate-100 bg-slate-50 px-3 py-2">
-              <h5 className="text-sm font-black text-slate-950">Membership History</h5>
-            </div>
-            <div className="space-y-2 p-3">
-              {resolvedMembershipEnrollments.length === 0 && <SectionEmpty text="No membership history." />}
-              {resolvedMembershipEnrollments.map((row: any) => {
-                const invoice = purchaseInvoiceFor(row);
-                const due = Number(
-                  invoice?.balance_amount ??
-                    Math.max(Number(row.plan?.price_amount || 0) - Number(row.paid_amount || 0), 0),
-                );
-                return (
-                  <div key={row.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-                    <div className="flex justify-between gap-3">
-                      <b>{row.plan?.name || row.plan_id}</b>
-                      <Badge tone={due > 0 ? "amber" : "green"} className="normal-badge">
-                        {due > 0 ? "payment due" : row.status}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      {fmtDate(row.starts_on)} to {fmtDate(row.ends_on)} · paid{" "}
-                      {money(invoice?.paid_amount ?? row.paid_amount)} /{" "}
-                      {money(invoice?.total_amount ?? row.plan?.price_amount)}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      Purchase invoice: {invoice?.invoice_number || row.purchase_invoice_id || "-"}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+        <div className="mt-3 rounded-lg border border-slate-200">
+          <div className="border-b border-slate-100 bg-slate-50 px-3 py-2">
+            <h5 className="text-sm font-black text-slate-950">Membership History</h5>
           </div>
-          <div className="rounded-lg border border-slate-200">
-            <div className="border-b border-slate-100 bg-slate-50 px-3 py-2">
-              <h5 className="text-sm font-black text-slate-950">Benefit Usage</h5>
-            </div>
-            <div className={`max-h-[300px] space-y-2 overflow-y-auto p-3 pr-1 ${hiddenScrollbar}`}>
-              {membershipUsageInvoices.length === 0 && <SectionEmpty text="No membership benefits used yet." />}
-              {membershipUsageInvoices.map((invoice: any) => (
-                <div key={invoice.id} className="rounded-lg bg-slate-50 px-3 py-2 text-sm">
+          <div className="space-y-2 p-3">
+            {resolvedMembershipEnrollments.length === 0 && <SectionEmpty text="No membership history." />}
+            {resolvedMembershipEnrollments.map((row: any) => {
+              const invoice = purchaseInvoiceFor(row);
+              const due = Number(
+                invoice?.balance_amount ??
+                  Math.max(Number(row.plan?.price_amount || 0) - Number(row.paid_amount || 0), 0),
+              );
+              const clickable = Boolean(invoice?.id);
+              return (
+                <div
+                  key={row.id}
+                  role={clickable ? "button" : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onClick={clickable ? () => openInvoice(invoice) : undefined}
+                  title={clickable ? "Open purchase invoice" : undefined}
+                  className={`rounded-lg bg-slate-50 px-3 py-2 text-sm ${clickable ? "cursor-pointer hover:bg-slate-100" : ""}`}
+                >
                   <div className="flex justify-between gap-3">
-                    <b>{invoice.invoice_number}</b>
-                    <span>{money(invoice.membership_discount_amount)}</span>
+                    <b>{row.plan?.name || row.plan_id}</b>
+                    <Badge tone={due > 0 ? "amber" : "green"} className="normal-badge">
+                      {due > 0 ? "payment due" : row.status}
+                    </Badge>
                   </div>
                   <p className="text-xs text-slate-500">
-                    {fmtDate(invoice.created_at)} · total {money(invoice.total_amount)} · discount {money(invoice.discount_amount)}
+                    {fmtDate(row.starts_on)} to {fmtDate(row.ends_on)} · paid{" "}
+                    {money(invoice?.paid_amount ?? row.paid_amount)} /{" "}
+                    {money(invoice?.total_amount ?? row.plan?.price_amount)}
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Purchase invoice: {invoice?.invoice_number || row.purchase_invoice_id || "-"}
                   </p>
                 </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
         <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
@@ -555,6 +563,7 @@ export function PatientDetail({
             <thead className="bg-slate-50 text-xs font-black uppercase text-slate-500">
               <tr>
                 <th className="px-3 py-2.5">Invoice</th>
+                <th className="px-3 py-2.5">Source</th>
                 <th className="px-3 py-2.5">Status</th>
                 <th className="px-3 py-2.5 text-right">Total</th>
                 <th className="px-3 py-2.5 text-right">Paid</th>
@@ -564,14 +573,24 @@ export function PatientDetail({
             <tbody className="divide-y divide-slate-100">
               {patientInvoices.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-4 text-sm font-semibold text-slate-500">
+                  <td colSpan={6} className="px-3 py-4 text-sm font-semibold text-slate-500">
                     No billing invoices found.
                   </td>
                 </tr>
               )}
               {patientInvoices.map((invoice: any) => (
-                <tr key={invoice.id} className="hover:bg-slate-50">
-                  <td className="px-3 py-3 font-black text-slate-950">{invoice.invoice_number}</td>
+                <tr
+                  key={invoice.id}
+                  onClick={() => openInvoice(invoice)}
+                  title="Open invoice"
+                  className="cursor-pointer hover:bg-slate-50"
+                >
+                  <td className="px-3 py-3 font-black text-slate-950 underline decoration-slate-300 underline-offset-2">{invoice.invoice_number}</td>
+                  <td className="px-3 py-3">
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">
+                      {invoiceSource(invoice).label}
+                    </span>
+                  </td>
                   <td className="px-3 py-3 capitalize">{String(invoice.status || "").replaceAll("_", " ")}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{money(invoice.total_amount)}</td>
                   <td className="px-3 py-3 text-right tabular-nums">{money(invoice.paid_amount)}</td>
@@ -581,9 +600,57 @@ export function PatientDetail({
             </tbody>
           </table>
         </div>
-        <p className="mt-3 text-xs font-semibold text-slate-500">
-          Membership savings: {money(membershipSavings)}
-        </p>
+
+        <div className="mt-3 rounded-lg border border-slate-200">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
+            <div>
+              <h5 className="text-sm font-black text-slate-950">Membership Benefit Usage</h5>
+              <p className="text-xs font-semibold text-slate-500">
+                Free tests, free medicines, and discounts claimed on the invoices above.
+              </p>
+            </div>
+            <span className="shrink-0 rounded-lg bg-white px-2.5 py-1 text-xs font-black text-emerald-700 ring-1 ring-slate-200">
+              Saved {money(membershipSavings)}
+            </span>
+          </div>
+          <div className={`max-h-[320px] space-y-2 overflow-y-auto p-3 pr-1 ${hiddenScrollbar}`}>
+            {membershipUsageInvoices.length === 0 && (
+              <SectionEmpty text="No membership benefits used yet." />
+            )}
+            {membershipUsageInvoices.map((invoice: any) => {
+              const { source, kind, saved } = benefitUsageLabel(invoice);
+              return (
+                <button
+                  type="button"
+                  key={invoice.id}
+                  onClick={() => openInvoice(invoice)}
+                  title="Open invoice"
+                  className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-left text-sm hover:bg-slate-100"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <b className="underline decoration-slate-300 underline-offset-2">
+                        {invoice.invoice_number}
+                      </b>
+                      <span className="rounded bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500 ring-1 ring-slate-200">
+                        {source}
+                      </span>
+                      <span className="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase text-emerald-700">
+                        {kind}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {fmtDate(invoice.created_at)} · bill {money(invoice.total_amount)}
+                    </p>
+                  </div>
+                  <span className="shrink-0 font-black tabular-nums text-emerald-700">
+                    -{money(saved)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </DetailSection>
 
       <div className="px-1 pb-2">

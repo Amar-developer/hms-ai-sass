@@ -92,7 +92,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
       const [branchRows, patientRows] = await Promise.all([
         apiFetch(`/tenants/${nextTenantId}/branches`, session).catch(() => []),
         apiFetch(
-          `/patients?limit=100${query ? `&q=${encodeURIComponent(query)}` : ""}`,
+          `/patients?limit=100&active_only=false${query ? `&q=${encodeURIComponent(query)}` : ""}`,
           session,
         ),
       ]);

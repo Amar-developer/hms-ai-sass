@@ -95,12 +95,18 @@ export function isPaidInvoice(invoice: any) {
 export function invoiceType(invoice: any) {
   if (invoice.pharmacy_issue_id) return "pharmacy";
   if (invoice.lab_order_id) return "lab";
+  if (invoice.physiotherapy_case_id) return "physiotherapy";
+  if (invoice.home_care_booking_id) return "home_care";
+  if (invoice.ip_admission_id) return "ip";
   return "consultation";
 }
 
 export function invoiceTypeLabel(type: string) {
   if (type === "pharmacy") return "Pharmacy";
-  if (type === "lab") return "Lab";
+  if (type === "lab") return "Lab / Service";
+  if (type === "physiotherapy") return "Physiotherapy";
+  if (type === "home_care") return "Home Care / Visit";
+  if (type === "ip") return "IP Billing";
   return "Consultation";
 }
 

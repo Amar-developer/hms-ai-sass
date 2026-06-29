@@ -282,6 +282,7 @@ export function DoctorConsultation({
   const [labInstructions, setLabInstructions] = useState("");
   const [templates, setTemplates] = useState<any[]>([]);
   const [addendumNote, setAddendumNote] = useState("");
+  const [addendums, setAddendums] = useState<any[]>([]);
   const [medicineAmount, setMedicineAmount] = useState(250);
   const [labNeeded, setLabNeeded] = useState(false);
   const [admissionNeeded, setAdmissionNeeded] = useState(false);
@@ -446,6 +447,7 @@ export function DoctorConsultation({
     setRemarks("");
     setDiagnosis("");
     setPrescription("");
+    setAddendums([]);
     setLabNeeded(false);
     setLabTests("");
     setScanNeeded(false);
@@ -474,6 +476,7 @@ export function DoctorConsultation({
         );
         if (!alive) return;
         const c = detail.consultation;
+        setAddendums(Array.isArray(detail.addendums) ? detail.addendums : []);
         if (c.treatment_type) setTreatmentType(c.treatment_type);
         setNotes(c.clinical_notes || "");
         setRemarks(c.follow_up_advice || "");
@@ -1226,7 +1229,7 @@ export function DoctorConsultation({
     setBusy(true);
     setMessage("");
     try {
-      await apiFetch(
+      const saved = await apiFetch(
         `/consultations/${selected.consultationId}/addendums`,
         apiSession,
         {
@@ -1237,6 +1240,7 @@ export function DoctorConsultation({
           }),
         },
       );
+      setAddendums((previous: any[]) => [...previous, saved]);
       setAddendumNote("");
       setMessage("Addendum saved to signed consultation.");
     } catch (err: any) {
@@ -1418,6 +1422,7 @@ export function DoctorConsultation({
           doctor={doctor}
           addendumNote={addendumNote}
           setAddendumNote={setAddendumNote}
+          addendums={addendums}
           saveAddendum={saveAddendum}
           busy={busy}
           apiSession={apiSession}

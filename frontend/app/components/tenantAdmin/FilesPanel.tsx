@@ -18,6 +18,7 @@ import { asOptionList, patientLabel } from "@/utils/tenantAdmin/helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { UPLOADS_BASE } from "@/lib/api";
 import { displayDateTime } from "@/utils/helper";
+import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
 export function FilesPanel({
   apiSession,
@@ -56,14 +57,11 @@ export function FilesPanel({
 
   const patientOptions = useMemo(
     () =>
-      patients.slice(0, 500).map((patient: any) => {
-        const name = patient.full_name || patient.name || "Patient";
+      patients.filter(isActivePatientRecord).slice(0, 500).map((patient: any) => {
         return {
           value: patient.id,
-          label:
-            name +
-            (patient.patient_number ? ` — ${patient.patient_number}` : ""),
-          sublabel: patient.patient_number || patient.mobile || "",
+          label: patientPickerLabel(patient),
+          sublabel: patient.patient_number || patient.mobile || patient.id,
         };
       }),
     [patients],

@@ -170,6 +170,37 @@ def _ensure_invoice_submit_ledger(session: Session, invoice: Invoice) -> None:
     )
 
 
+def _ensure_invoice_membership_benefit_ledger(
+    session: Session,
+    invoice: Invoice,
+    *,
+    actor_user_id: str | None = None,
+) -> None:
+    membership_amount = int(invoice.membership_discount_amount or 0)
+    if membership_amount <= 0:
+        return
+    exists = session.exec(
+        select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == invoice.tenant_id,
+            BillingLedgerEntry.invoice_id == invoice.id,
+            BillingLedgerEntry.entry_type == "membership_benefit_applied",
+        )
+    ).first()
+    if exists:
+        return
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="membership_benefit_applied",
+        description="Membership benefit applied",
+        credit_amount=membership_amount,
+        invoice_total_delta=-membership_amount,
+        balance_amount_delta=-membership_amount,
+        reason="Membership benefit settled by patient plan",
+        actor_user_id=actor_user_id or invoice.created_by_user_id,
+    )
+
+
 def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
     if not invoice.physiotherapy_case_id:
         return
@@ -1488,6 +1519,7 @@ def _build_receipt_pdf(
 def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
     invoice = _normalize_invoice_status(session, invoice)
     _ensure_invoice_submit_ledger(session, invoice)
+    _ensure_invoice_membership_benefit_ledger(session, invoice)
     items = list(
         session.exec(
             select(InvoiceItem)
@@ -1779,6 +1811,11 @@ def _create_service_invoice(
         debit_amount=total_amount,
         invoice_total_delta=total_amount,
         balance_amount_delta=total_amount,
+        actor_user_id=created_by_user_id,
+    )
+    _ensure_invoice_membership_benefit_ledger(
+        session,
+        invoice,
         actor_user_id=created_by_user_id,
     )
     return invoice
@@ -2976,6 +3013,11 @@ def apply_invoice_membership_benefit(
         )
     require_user_branch_access(current_user, invoice.branch_id)
     invoice = _apply_invoice_membership_benefit(session, invoice)
+    _ensure_invoice_membership_benefit_ledger(
+        session,
+        invoice,
+        actor_user_id=current_user.id,
+    )
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -3843,7 +3885,7 @@ def revenue_report(
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = (
         select(Invoice, Appointment)
-        .join(Appointment, Invoice.appointment_id == Appointment.id)
+        .outerjoin(Appointment, Invoice.appointment_id == Appointment.id)
         .where(
             Invoice.tenant_id == tenant_id,
             Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
@@ -3858,15 +3900,18 @@ def revenue_report(
     rows = list(session.exec(statement).all())
     grouped: dict[str, dict] = {}
     for invoice, appointment in rows:
-        key = (
-            invoice.branch_id
-            if group_by == "branch"
-            else appointment.practitioner_id
-            if group_by == "doctor"
-            else appointment.department_id
-            if group_by == "department"
-            else appointment.visit_purpose or appointment.appointment_type.value
-        )
+        if group_by == "branch":
+            key = invoice.branch_id
+        elif group_by == "doctor":
+            key = appointment.practitioner_id if appointment else "non_appointment"
+        elif group_by == "department":
+            key = appointment.department_id if appointment else "non_appointment"
+        else:
+            key = (
+                appointment.visit_purpose or appointment.appointment_type.value
+                if appointment
+                else _invoice_membership_service(invoice) or "direct"
+            )
         key = key or "unassigned"
         bucket = grouped.setdefault(
             key,

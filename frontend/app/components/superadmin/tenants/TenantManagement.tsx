@@ -244,7 +244,6 @@ export function TenantManagement({
                   <b className="truncate text-xs md:text-sm">{tenant.name}</b>
                   {tenant.is_primary && <Badge tone="blue" className="rounded-xl px-2 py-1">Primary</Badge>}
                 </div>
-                <p className="break-all text-[10px] lg:text-xs text-slate-500 ">{tenant.id}</p>
               </div>
               <div>
                 <span className="xl:hidden text-[10px] lg:text-xs font-bold uppercase text-slate-500">

@@ -300,12 +300,15 @@ def search_patients(
     tenant_id: str = Depends(require_tenant_id),
     q: str | None = Query(default=None, max_length=120),
     branch_id: str | None = Query(default=None),
+    active_only: bool = Query(default=True),
     limit: int = Query(default=25, ge=1, le=100),
     current_user: User = Depends(require_permission(permissions.PATIENTS_READ)),
     session: Session = Depends(get_session),
 ) -> list[PatientSearchResult]:
     enforce_entitlement(session, tenant_id, "patients")
     statement = select(Patient).where(Patient.tenant_id == tenant_id)
+    if active_only:
+        statement = statement.where(Patient.status == PatientStatus.ACTIVE)
     if branch_id:
         require_branch_in_tenant(session, tenant_id, branch_id)
         statement = statement.where(Patient.branch_id == branch_id)

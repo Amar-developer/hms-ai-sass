@@ -24,6 +24,62 @@ export function patientDateInputValue(value: any) {
   return match?.[1] || "";
 }
 
+export function calculateAgeYears(dateOfBirth: string) {
+  if (!dateOfBirth) return "";
+  const dob = new Date(`${dateOfBirth}T00:00:00`);
+  if (Number.isNaN(dob.getTime())) return "";
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDelta = today.getMonth() - dob.getMonth();
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dob.getDate())) {
+    age -= 1;
+  }
+  return age >= 0 && age <= 130 ? String(age) : "";
+}
+
+export function displayPatientGender(value: any) {
+  const text = String(value || "").trim();
+  if (!text) return "-";
+  return text
+    .replace(/[_-]+/g, " ")
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+export function isActivePatientRecord(patient: any) {
+  const status = String(patient?.status || "active").trim().toLowerCase();
+  return !["inactive", "deceased", "disabled", "archived"].includes(status);
+}
+
+export function patientDisplayName(patient: any) {
+  return patient?.full_name || patient?.name || patient?.patient_name || "Patient";
+}
+
+export function patientDisplayNumber(patient: any) {
+  return patient?.patient_number || patient?.patientNumber || patient?.id || "";
+}
+
+export function patientDisplayMobile(patient: any) {
+  return (
+    patient?.mobile ||
+    patient?.alternate_mobile ||
+    patient?.guardian_mobile ||
+    patient?.guardianMobile ||
+    ""
+  );
+}
+
+export function patientPickerLabel(patient: any) {
+  return [
+    patientDisplayName(patient),
+    patientDisplayNumber(patient),
+    patientDisplayMobile(patient),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 export function patientSearchText(patient: any, branch?: any) {
   return [
     patient.id,

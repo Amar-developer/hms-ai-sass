@@ -38,7 +38,9 @@ export function patientName(p: any) {
   return p?.name || p?.full_name || p?.patient_name || "Patient";
 }
 export function patientLabel(p: any) {
-  const detail = p?.patientNumber || p?.patient_number || p?.mobile || "";
+  const detail = [p?.patientNumber || p?.patient_number || p?.id, p?.mobile]
+    .filter(Boolean)
+    .join(" · ");
   return detail ? `${patientName(p)} · ${detail}` : patientName(p);
 }
 export function appointmentPatientId(row: any) {

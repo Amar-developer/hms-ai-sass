@@ -21,6 +21,7 @@ import {
 } from "@/app/components/clinicalRows";
 import { UPLOADS_BASE, apiFetch, apiUpload } from "@/lib/api";
 import { displayDate } from "@/utils/helper";
+import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -2193,9 +2194,10 @@ function AdmissionFields({
             onChange={setPatientId}
             placeholder="Select patient"
             searchPlaceholder="Search patient by name, mobile, or number"
-            options={patients.map((p: any) => ({
+            options={patients.filter(isActivePatientRecord).map((p: any) => ({
               value: p.id,
-              label: `${patientName(p)} · ${p.mobile || p.patientNumber || p.id}`,
+              label: patientPickerLabel(p),
+              sublabel: p.mobile || p.patient_number || p.patientNumber || p.id,
             }))}
           />
         </FormField>
