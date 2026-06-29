@@ -163,7 +163,7 @@ export function UserForm({
         subtitle={user?.email || "Create tenant-scoped users only."}
         back={back}
       />
-      <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
+      <form onSubmit={onSubmit} className="mt-4 grid gap-6 md:grid-cols-2 ">
         <FormField label="Name">
           <Input
             name="name"
@@ -190,7 +190,7 @@ export function UserForm({
             onChange={(event: any) => changeUserType(event.target.value)}
           >
             {userTypes.map(([value, label]) => (
-              <option key={value} value={value} className="text-xs">
+              <option key={value} value={value} className="text-sm">
                 {label}
               </option>
             ))}
@@ -372,9 +372,9 @@ export function DepartmentForm({
             onChange={(event: any) => setSelectedBranchId(event.target.value)}
             disabled={isLocked(department)}
           >
-            <option value="">All branches</option>
+            <option value="" className="md:text-lg lg:text-xs">All branches</option>
             {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
+              <option className="md:text-lg lg:text-xs" key={branch.id} value={branch.id}>
                 {branch.name}
               </option>
             ))}
@@ -835,7 +835,7 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
           >
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
               <div className="flex justify-between  w-full">
-                <h5 className="font-bold">{permissionModuleTitle(module)}</h5>
+                <h5 className="text-base lg:text-sm font-bold">{permissionModuleTitle(module)}</h5>
                 <p className="text-xs text-slate-500">
                   {grouped[module].length} permissions
                 </p>
@@ -850,7 +850,7 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                 .map((permission: any) => (
                   <label
                     key={permission.key}
-                    className="flex items-start gap-2 text-[11px]"
+                    className="flex items-start gap-2  lg:text-[11px]"
                     title={permission.description || permission.key}
                   >
                     <input
@@ -859,10 +859,10 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                       value={permission.key}
                       defaultChecked={selectedSet.has(permission.key)}
                       disabled={disabled}
-                      className="mt-1 h-3 w-3"
+                      className="mt-1 h-4 w-4"
                     />
                     <span>
-                      <span className="text-[12px] font-semibold">
+                      <span className="text-sm lg:text-[12px] font-semibold">
                         {labelFor(permission)}
                       </span>
                       {/* <span className="block break-all text-[11px] text-slate-400">

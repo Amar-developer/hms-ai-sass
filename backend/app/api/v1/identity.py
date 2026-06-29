@@ -54,9 +54,12 @@ from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
 load_dotenv()
-secure_cookie = os.getenv("SECURE_COOKIE")
-print(secure_cookie, "secure_cookies")
+ENV = os.getenv("MEDIZINHUB_ENVIRONMENT", "local")
 
+secure_cookie = (
+    ENV == "production"
+    and os.getenv("MEDIZINHUB_SECURE_COOKIE", "false").lower() == "true"
+)
 router = APIRouter()
 security_logger = logging.getLogger("medizinhub.security")
 

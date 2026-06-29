@@ -196,7 +196,7 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] lg:text-xs font-bold uppercase tracking-wide text-slate-500">
+      <span className="mb-1 block text-sm lg:text-xs font-bold uppercase tracking-wide text-slate-500">
         {label}
       </span>
       {children}
@@ -518,7 +518,7 @@ export function DateInput({
 }
 
 export function Input({
-  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
   mobileNumber = false,
   ...props
 }: any) {
@@ -588,7 +588,7 @@ export function SuggestionInput({
           setOpen(true);
         }}
         autoComplete="off"
-        className={`w-full rounded-lg border border-slate-200 px-2 py-2 lg:px-4 lg:py-3 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-4 lg:py-2.5 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
       {open && !disabled && filtered.length > 0 && (
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
@@ -615,7 +615,7 @@ export function SuggestionInput({
 }
 
 export function Select({
-  className = "rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs ",
+  className = "rounded-lg px-2 py-2.5 lg:px-4 lg:py-3 text-sm",
   children,
   ...props
 }: any) {
@@ -767,13 +767,13 @@ export function SearchableSelect({
 
 export function Button({
   children,
-  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm",
+  className = "rounded-lg px-2 py-3 lg:px-4 lg:py-3 text-base lg:text-sm",
   ...props
 }: any) {
   return (
     <button
       {...props}
-      className={`rounded-lg bg-brand  ${className ? className : "text-xs lg:text-sm px-3 py-2 lg:px-4 lg:py-3"} font-bold text-brand-fg disabled:bg-slate-300`}
+      className={`rounded-lg bg-brand ${className} font-bold text-brand-fg disabled:bg-slate-300`}
     >
       {children}
     </button>

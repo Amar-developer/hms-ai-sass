@@ -411,7 +411,7 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                             });
                             setPopupMenu(null);
                           }}
-                          className="flex w-full items-center gap-3 px-2 py-2 text-xs"
+                          className={`flex w-full items-center gap-3 px-2 py-2 text-xs ${props.reportSection == sectionId ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}`}
                         >
                           <SectionIcon size={15} />
                           {sectionLabel}
@@ -465,10 +465,10 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                   showModuleBadge(label, e);
                 }
               }}
-              className={`flex w-full items-center rounded-2xl py-2.5
+              className={`flex w-full items-center rounded-2xl md:py-3  lg:py-2
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"} ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : ""}`}
             >
-              <Icon size={18} title={label} />
+              <Icon size={22} title={label} />
               {!props.tabletCollapsed && (
                 <span
                   className={`truncate text-xs ${isActive ? "font-bold bg-slate-900 text-white w-full text-left  rounded-full" : ""}`}

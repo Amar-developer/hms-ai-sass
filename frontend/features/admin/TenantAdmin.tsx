@@ -23,8 +23,12 @@ import {
   SupplierRow,
   TaxRuleRow,
   DiscountOfferRow,
+  Role,
 } from "@/app/components/tenantAdmin/Rows";
-import { ListCard, PasswordResetModal } from "@/app/components/tenantAdmin/Shared";
+import {
+  ListCard,
+  PasswordResetModal,
+} from "@/app/components/tenantAdmin/Shared";
 import { ConfirmModal } from "@/app/components/admin/ConfirmModal";
 import {
   BranchForm,
@@ -37,6 +41,7 @@ import {
 } from "@/app/components/tenantAdmin/Forms";
 import { FilesPanel } from "@/app/components/tenantAdmin/FilesPanel";
 import { SettingsPanel } from "@/app/components/tenantAdmin/SettingsPanel";
+import { USER_COLUMNS } from "@/utils/constants";
 
 export function TenantAdmin({
   apiSession,
@@ -219,8 +224,7 @@ export function TenantAdmin({
       );
       const bankRow =
         settingRows.find(
-          (x: any) =>
-            x.key === "accounts.bank_details" && x.scope === "tenant",
+          (x: any) => x.key === "accounts.bank_details" && x.scope === "tenant",
         ) || find("accounts.bank_details");
       setBankDetails(parseBankDetails(bankRow?.value));
       if (find("numbering.rules"))
@@ -339,9 +343,7 @@ export function TenantAdmin({
     );
     const conflict = matchingDepartments.find(
       (row: any) =>
-        String(row.branch_id || "") === branchId ||
-        !row.branch_id ||
-        !branchId,
+        String(row.branch_id || "") === branchId || !row.branch_id || !branchId,
     );
     if (conflict) {
       setMessage(
@@ -445,7 +447,7 @@ export function TenantAdmin({
       setBusy(false);
     }
   }
-``
+  ``;
   async function updateUser(e: any) {
     e.preventDefault();
     if (!selectedUser) return;
@@ -1253,15 +1255,7 @@ export function TenantAdmin({
           createLabel="Create User"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={[
-            "Name",
-            "Email",
-            "Roles",
-            "Branch",
-            "Status",
-            "Created",
-            "Actions",
-          ]}
+          columns={USER_COLUMNS}
           render={(user: any) => (
             <UserRow
               key={user.id}
@@ -1307,7 +1301,6 @@ export function TenantAdmin({
           back={() => open("users")}
         />
       )}
-
       {section === "roles" && view === "list" && (
         <ListCard
           title="Roles"
@@ -1317,7 +1310,7 @@ export function TenantAdmin({
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
           columns={["Role", "Key", "Status", "Modified", "Actions"]}
-          render={(role: any) => (
+          render={(role: Role) => (
             <RoleRow
               key={role.id}
               role={role}
@@ -1449,7 +1442,9 @@ export function TenantAdmin({
       {section === "branches" && view === "create" && (
         <BranchForm
           title="Create Branch"
-          branchCount={branches.filter((branch: any) => branch.is_active !== false).length}
+          branchCount={
+            branches.filter((branch: any) => branch.is_active !== false).length
+          }
           branchLimit={subscriptionEntitlements?.included_branches}
           busy={busy}
           onSubmit={createBranch}

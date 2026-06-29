@@ -57,35 +57,35 @@
 }
 @layer components {
   .card-desc {
-    @apply text-xs;
+    @apply text-sm lg:text-xs;
   }
 }
 @layer components {
   .card-title {
-    @apply text-sm lg:text-base;
+    @apply text-lg lg:text-base;
   }
 }
 @layer components {
   .close-button {
-    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs  border;
+    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-base lg:text-xs border;
   }
 }
 
 @layer components {
   .save-button {
-    @apply rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs
+    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-base lg:text-xs
   }
 }
 
 
 @layer components {
   .search-input {
-    @apply px-2 py-2 lg:px-4 lg:py-3 text-sm placeholder:text-xs;
+    @apply px-2 py-2 lg:px-4 lg:py-2 md:text-base lg:text-sm md:placeholder:text-sm lg:placeholder:text-xs;
   }
 }
 @layer components {
   .select-input {
-    @apply rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs;
+    @apply rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 md:text-sm lg:text-xs md:placeholder:text-sm lg:placeholder:text-xs;
   }
 }
 
