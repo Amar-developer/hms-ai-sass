@@ -14,14 +14,20 @@ from app.core.access_control import (
     require_user_branch_access,
     scoped_branch_id,
 )
-from app.core.auth import require_any_permission, require_permission
-from app.core.config import get_settings
+from app.core.auth import (
+    is_tenant_admin_user,
+    require_any_permission,
+    require_permission,
+)
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.audit.service import record_audit_event
 
 from app.modules.billing.models import (
+    BillingAdjustmentRequest,
+    BillingAdjustmentStatus,
+    BillingAdjustmentType,
     BillingLedgerEntry,
     DoctorFeeRule,
     CreditNote,
@@ -33,12 +39,16 @@ from app.modules.billing.models import (
     InvoiceItem,
     InvoiceStatus,
     Payment,
+    PaymentMethod,
     PaymentStatus,
     SettlementStatus,
     TaxRule,
 )
 from app.modules.billing.schemas import (
     AmendInvoiceRequest,
+    BillingAdjustmentDecision,
+    BillingAdjustmentRequestCreate,
+    BillingAdjustmentRequestRead,
     BillingLedgerEntryRead,
     CancelInvoiceRequest,
     CreditNoteCreate,
@@ -88,7 +98,6 @@ from app.modules.practitioners.models import Practitioner, PractitionerDepartmen
 from app.modules.consultations.models import Consultation, ConsultationStatus
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.integrations.frappe import FrappeCatalogClient
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patient_subscriptions.models import PatientSubscriptionEnrollment
@@ -99,6 +108,17 @@ from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, Tenant
 
 router = APIRouter(prefix="/billing")
+
+
+def _require_direct_invoice_reversal_admin(
+    session: Session, current_user: User
+) -> None:
+    if current_user.is_super_admin or is_tenant_admin_user(session, current_user):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Tenant admin access required for direct invoice cancellation or amendment",
+    )
 
 
 def _record_billing_ledger(
@@ -165,6 +185,37 @@ def _ensure_invoice_submit_ledger(session: Session, invoice: Invoice) -> None:
     )
 
 
+def _ensure_invoice_membership_benefit_ledger(
+    session: Session,
+    invoice: Invoice,
+    *,
+    actor_user_id: str | None = None,
+) -> None:
+    membership_amount = int(invoice.membership_discount_amount or 0)
+    if membership_amount <= 0:
+        return
+    exists = session.exec(
+        select(BillingLedgerEntry).where(
+            BillingLedgerEntry.tenant_id == invoice.tenant_id,
+            BillingLedgerEntry.invoice_id == invoice.id,
+            BillingLedgerEntry.entry_type == "membership_benefit_applied",
+        )
+    ).first()
+    if exists:
+        return
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="membership_benefit_applied",
+        description="Membership benefit applied",
+        credit_amount=membership_amount,
+        invoice_total_delta=-membership_amount,
+        balance_amount_delta=-membership_amount,
+        reason="Membership benefit settled by patient plan",
+        actor_user_id=actor_user_id or invoice.created_by_user_id,
+    )
+
+
 def _sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
     if not invoice.physiotherapy_case_id:
         return
@@ -198,13 +249,14 @@ def _sync_home_care_booking_status(session: Session, invoice: Invoice) -> None:
     booking = session.get(HomeCareBooking, invoice.home_care_booking_id)
     if not booking or booking.tenant_id != invoice.tenant_id:
         return
-    target_status = (
-        "paid"
-        if invoice.status not in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}
-        and invoice.balance_amount <= 0
-        and invoice.total_amount > 0
-        else "invoiced"
-    )
+    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+        # The invoice was voided, so reopen the booking (back to an editable,
+        # non-locked state) so it can be corrected and re-billed.
+        target_status = "scheduled"
+    elif invoice.balance_amount <= 0 and invoice.total_amount > 0:
+        target_status = "paid"
+    else:
+        target_status = "invoiced"
     if booking.status == target_status:
         return
     booking.status = target_status
@@ -250,71 +302,300 @@ def _sync_patient_membership_payment(session: Session, invoice: Invoice) -> None
     session.commit()
 
 
-def _frappe_catalog_client() -> FrappeCatalogClient:
-    settings = get_settings()
-    if not settings.maha_clinic_url or not settings.maha_clinic_token:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ERPNext catalog plugin is not configured",
+def _sync_invoice_source_after_reversal(session: Session, invoice: Invoice) -> None:
+    _sync_physiotherapy_case_status(session, invoice)
+    _sync_home_care_booking_status(session, invoice)
+    _sync_patient_membership_payment(session, invoice)
+    if invoice.pharmacy_issue_id:
+        from app.modules.pharmacy.models import PharmacyIssue
+
+        issue = session.get(PharmacyIssue, invoice.pharmacy_issue_id)
+        if issue and issue.tenant_id == invoice.tenant_id:
+            if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+                issue.billing_invoice_id = None
+            else:
+                issue.billing_invoice_id = invoice.id
+            issue.updated_at = datetime.now(timezone.utc)
+            session.add(issue)
+            session.commit()
+
+
+def _actor_names(session: Session, user_ids: set[str | None]) -> dict[str, str]:
+    ids = {user_id for user_id in user_ids if user_id}
+    if not ids:
+        return {}
+    users = session.exec(select(User).where(User.id.in_(ids))).all()
+    return {user.id: user.name for user in users}
+
+
+def _invoice_payment_methods(session: Session, invoice: Invoice) -> list[PaymentMethod]:
+    payments = session.exec(
+        select(Payment).where(
+            Payment.tenant_id == invoice.tenant_id,
+            Payment.invoice_id == invoice.id,
+            Payment.status == PaymentStatus.RECORDED,
+            Payment.amount > 0,
         )
-    return FrappeCatalogClient(
-        base_url=settings.maha_clinic_url,
-        token=settings.maha_clinic_token,
-        timeout_seconds=settings.maha_clinic_timeout_seconds,
+    ).all()
+    methods: list[PaymentMethod] = []
+    seen: set[PaymentMethod] = set()
+    for payment in payments:
+        if payment.method in seen:
+            continue
+        seen.add(payment.method)
+        methods.append(payment.method)
+    return methods
+
+
+def _invoice_read(session: Session, invoice: Invoice) -> InvoiceRead:
+    invoice_read = InvoiceRead.model_validate(invoice, from_attributes=True)
+    invoice_read.payment_methods = _invoice_payment_methods(session, invoice)
+    if invoice.appointment_id:
+        appointment = session.get(Appointment, invoice.appointment_id)
+        if appointment and appointment.tenant_id == invoice.tenant_id:
+            invoice_read.appointment_type = appointment.appointment_type
+    return invoice_read
+
+
+def _read_adjustment_request(
+    session: Session, row: BillingAdjustmentRequest
+) -> BillingAdjustmentRequestRead:
+    names = _actor_names(
+        session,
+        {
+            row.requested_by_user_id,
+            row.approved_by_user_id,
+            row.executed_by_user_id,
+        },
+    )
+    read = BillingAdjustmentRequestRead.model_validate(row, from_attributes=True)
+    read.requested_by_user_name = names.get(str(row.requested_by_user_id or ""))
+    read.approved_by_user_name = names.get(str(row.approved_by_user_id or ""))
+    read.executed_by_user_name = names.get(str(row.executed_by_user_id or ""))
+    return read
+
+
+def _invoice_adjustment_requests(
+    session: Session, invoice: Invoice
+) -> list[BillingAdjustmentRequestRead]:
+    rows = list(
+        session.exec(
+            select(BillingAdjustmentRequest)
+            .where(
+                BillingAdjustmentRequest.tenant_id == invoice.tenant_id,
+                BillingAdjustmentRequest.invoice_id == invoice.id,
+            )
+            .order_by(BillingAdjustmentRequest.created_at.desc())
+        ).all()
+    )
+    names = _actor_names(
+        session,
+        {
+            user_id
+            for row in rows
+            for user_id in (
+                row.requested_by_user_id,
+                row.approved_by_user_id,
+                row.executed_by_user_id,
+            )
+        },
+    )
+    result = []
+    for row in rows:
+        read = BillingAdjustmentRequestRead.model_validate(row, from_attributes=True)
+        read.requested_by_user_name = names.get(str(row.requested_by_user_id or ""))
+        read.approved_by_user_name = names.get(str(row.approved_by_user_id or ""))
+        read.executed_by_user_name = names.get(str(row.executed_by_user_id or ""))
+        result.append(read)
+    return result
+
+
+def _validate_adjustment_amount(
+    invoice: Invoice, request_type: BillingAdjustmentType, amount: int | None
+) -> int:
+    refundable = int(invoice.paid_amount or 0)
+    if request_type == BillingAdjustmentType.CANCEL:
+        return 0
+    if request_type == BillingAdjustmentType.FULL_REFUND:
+        if refundable <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invoice has no refundable paid amount",
+            )
+        return refundable
+    requested = int(amount or 0)
+    if requested <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Partial refund amount is required",
+        )
+    if requested > refundable:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refund amount cannot exceed refundable paid amount",
+        )
+    return requested
+
+
+def _invoice_has_open_adjustment_request(session: Session, invoice: Invoice) -> bool:
+    return (
+        session.exec(
+            select(BillingAdjustmentRequest)
+            .where(
+                BillingAdjustmentRequest.tenant_id == invoice.tenant_id,
+                BillingAdjustmentRequest.invoice_id == invoice.id,
+                BillingAdjustmentRequest.status.in_(
+                    [
+                        BillingAdjustmentStatus.PENDING,
+                        BillingAdjustmentStatus.APPROVED,
+                    ]
+                ),
+            )
+            .limit(1)
+        ).first()
+        is not None
     )
 
 
-def _invoice_item_external_slug(item: InvoiceItem) -> str:
-    if item.external_slug:
-        return item.external_slug
-    return re.sub(
-        r"[^a-z0-9]+",
-        "-",
-        str(item.external_item_code or item.description or "").strip().lower(),
-    ).strip("-")
+def _ensure_invoice_can_request_adjustment(
+    session: Session, invoice: Invoice, request_type: BillingAdjustmentType
+) -> None:
+    if invoice.status in {
+        InvoiceStatus.CANCELLED,
+        InvoiceStatus.REFUNDED,
+    }:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invoice is already closed for cancellation/refund",
+        )
+    if _invoice_has_open_adjustment_request(session, invoice):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invoice already has a pending or approved adjustment request",
+        )
+    if (
+        request_type == BillingAdjustmentType.CANCEL
+        and int(invoice.paid_amount or 0) > 0
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Paid invoices must be refunded instead of cancelled",
+        )
 
 
-def _catalog_key(value: str | None) -> str:
-    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
-
-
-def _external_supplier_options(item: InvoiceItem) -> list[dict[str, int | str]]:
-    if item.external_source != "erpnext":
-        return []
-    client = _frappe_catalog_client()
-    detail = None
-    for lookup in (item.external_item_code, _invoice_item_external_slug(item)):
-        lookup = str(lookup or "").strip()
-        if not lookup:
+def _apply_refund_to_payments(
+    session: Session, invoice: Invoice, amount: int, reason: str
+) -> list[Payment]:
+    remaining = amount
+    changed: list[Payment] = []
+    payments = list(
+        session.exec(
+            select(Payment)
+            .where(
+                Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id
+            )
+            .order_by(Payment.collected_at.desc())
+        ).all()
+    )
+    for payment in payments:
+        available = max(int(payment.amount or 0) - int(payment.refunded_amount or 0), 0)
+        if available <= 0:
             continue
-        try:
-            candidate = client.get_lab_item_details(lookup)
-        except HTTPException:
-            continue
-        if item.external_item_code and _catalog_key(
-            str(candidate.get("item_code") or "")
-        ) != _catalog_key(item.external_item_code):
-            continue
-        detail = candidate
-        break
-    if detail is None:
+        refund_part = min(available, remaining)
+        payment.refunded_amount = int(payment.refunded_amount or 0) + refund_part
+        payment.refund_reason = reason
+        if payment.refunded_amount >= payment.amount:
+            payment.status = PaymentStatus.REFUNDED
+            payment.refunded_at = datetime.now(timezone.utc)
+        session.add(payment)
+        changed.append(payment)
+        remaining -= refund_part
+        if remaining <= 0:
+            break
+    if remaining > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refund amount exceeds available payment balance",
+        )
+    session.commit()
+    return changed
+
+
+def _external_supplier_options(
+    session: Session, item: InvoiceItem
+) -> list[dict[str, int | str]]:
+    from app.modules.lab.models import LabTestCatalog, LabTestPackage
+    from app.modules.pharmacy.models import PharmacySupplier
+
+    options: dict[str, int] = {}
+
+    def add_option(supplier_id: str | None, buying_price: int | None) -> None:
+        supplier = str(supplier_id or "").strip()
+        if not supplier:
+            return
+        options[supplier] = int(buying_price or options.get(supplier, 0) or 0)
+
+    if item.item_type == "lab":
+        catalog_rows = []
+        if item.external_item_code:
+            catalog_rows.extend(
+                session.exec(
+                    select(LabTestCatalog).where(
+                        LabTestCatalog.tenant_id == item.tenant_id,
+                        LabTestCatalog.id == item.external_item_code,
+                    )
+                ).all()
+            )
+            catalog_rows.extend(
+                session.exec(
+                    select(LabTestPackage).where(
+                        LabTestPackage.tenant_id == item.tenant_id,
+                        LabTestPackage.id == item.external_item_code,
+                    )
+                ).all()
+            )
+        if not catalog_rows:
+            name = str(item.description or "").strip().lower()
+            if name:
+                catalog_rows.extend(
+                    session.exec(
+                        select(LabTestCatalog).where(
+                            LabTestCatalog.tenant_id == item.tenant_id,
+                            func.lower(LabTestCatalog.name) == name,
+                        )
+                    ).all()
+                )
+                catalog_rows.extend(
+                    session.exec(
+                        select(LabTestPackage).where(
+                            LabTestPackage.tenant_id == item.tenant_id,
+                            func.lower(LabTestPackage.name) == name,
+                        )
+                    ).all()
+                )
+        for row in catalog_rows:
+            add_option(row.supplier_id, row.purchase_price)
+
+    add_option(item.supplier_id, int(item.buying_amount or 0))
+    if not options:
         return []
-    suppliers = detail.get("suppliers") if isinstance(detail, dict) else []
-    if not isinstance(suppliers, list):
-        return []
+
+    suppliers = session.exec(
+        select(PharmacySupplier).where(
+            PharmacySupplier.tenant_id == item.tenant_id,
+            PharmacySupplier.id.in_(list(options.keys())),
+        )
+    ).all()
+    supplier_names = {supplier.id: supplier.name for supplier in suppliers}
     return [
         {
-            "supplier": str(
-                supplier.get("supplier") or supplier.get("supplier_name") or ""
-            ),
-            "supplier_name": str(
-                supplier.get("supplier_name") or supplier.get("supplier") or ""
-            ),
-            "buying_price": max(round(float(supplier.get("buying_price") or 0)), 0),
+            "supplier": supplier_id,
+            "supplier_name": supplier_names.get(supplier_id, supplier_id),
+            "buying_price": buying_price,
         }
-        for supplier in suppliers
-        if isinstance(supplier, dict)
-        and (supplier.get("supplier") or supplier.get("supplier_name"))
+        for supplier_id, buying_price in sorted(
+            options.items(), key=lambda row: supplier_names.get(row[0], row[0])
+        )
     ]
 
 
@@ -744,7 +1025,13 @@ def _build_receipt_pdf(
 ) -> bytes:
     width, height = 595, 842
     ops: list[str] = []
-    logo = _local_logo_image((tenant.logo_url if tenant else "") or logo_url)
+    # The invoice-specific "Invoice Logo" setting (logo_url) is the authoritative
+    # source for receipts; fall back to the general tenant logo. Resolve at the
+    # image level (not the string level) so a stale/missing file for one source
+    # never blocks a valid file from the other.
+    logo = _local_logo_image(logo_url) or _local_logo_image(
+        tenant.logo_url if tenant else None
+    )
     green = "0.10 0.95 0.22"
     blue = "0.08 0.60 0.85"
     brand_green = "0.09 0.78 0.06"
@@ -785,41 +1072,6 @@ def _build_receipt_pdf(
             "12.3153 22.5774 19.4982 14.6249 19.4982 9.23764 c "
             "19.4982 7.3326 18.7415 5.50559 17.3944 4.15853 c "
             "16.0473 2.81146 14.2203 2.05469 12.3153 2.05469 c f Q"
-        )
-
-    def phone_icon(x: int, y: int, fill: str = "0.00 0.68 0.00") -> None:
-        scale = 0.56
-        ops.append(
-            f"q {scale} 0 0 {-scale} {x} {y + int(20 * scale)} cm {fill} rg "
-            "15.1834 18.4213 m "
-            "14.4253 18.4213 13.3604 18.1502 11.7658 17.2694 c "
-            "9.82673 16.1942 8.32689 15.2016 6.39831 13.2996 c "
-            "4.53885 11.4622 3.63398 10.2726 2.36754 7.99398 c "
-            "0.936831 5.42121 1.18072 4.07262 1.45335 3.49625 c "
-            "1.77801 2.80736 2.25725 2.39534 2.87668 1.98638 c "
-            "3.22851 1.75846 3.60084 1.56307 3.98894 1.40271 c "
-            "4.02777 1.3862 4.06389 1.37046 4.09612 1.35625 c "
-            "4.28836 1.27062 4.57963 1.14121 4.94857 1.27945 c "
-            "5.19479 1.37084 5.4146 1.55784 5.75868 1.89384 c "
-            "6.46433 2.58196 7.42862 4.11448 7.78436 4.86711 c "
-            "8.0232 5.37437 8.18126 5.70921 8.18165 6.08475 c "
-            "8.18165 6.52443 7.95796 6.8635 7.68649 7.22944 c "
-            "7.63562 7.29818 7.58513 7.36384 7.5362 7.42758 c "
-            "7.24066 7.81158 7.1758 7.92255 7.21852 8.12069 c "
-            "7.30513 8.5189 7.95096 9.70429 9.01235 10.7514 c "
-            "10.0737 11.7986 11.238 12.3969 11.6423 12.4821 c "
-            "11.8512 12.5263 11.9658 12.4594 12.3666 12.1569 c "
-            "12.4241 12.1135 12.4831 12.0685 12.5449 12.0236 c "
-            "12.9588 11.7191 13.2858 11.5037 13.72 11.5037 c "
-            "13.7224 11.5037 l "
-            "14.1002 11.5037 14.4237 11.6657 14.9597 11.933 c "
-            "15.6587 12.2817 17.2552 13.2228 17.9555 13.9213 c "
-            "18.296 14.2608 18.486 14.4773 18.5788 14.7204 c "
-            "18.7186 15.0864 18.5869 15.3732 18.5011 15.5652 c "
-            "18.4867 15.5971 18.4708 15.632 18.4541 15.6708 c "
-            "18.2906 16.0538 18.0919 16.4212 17.8603 16.7682 c "
-            "17.4475 17.3788 17.0292 17.8515 16.331 18.1729 c "
-            "15.9724 18.3406 15.58 18.4255 15.1834 18.4213 c f Q"
         )
 
     def text(
@@ -918,12 +1170,27 @@ def _build_receipt_pdf(
             return "-"
         return f"{((mrp - selling) * 100 / mrp):.2f}"
 
-    def field_label(x: int, y: int, label: str, value: object = "") -> None:
+    def field_label(
+        x: int, y: int, label: str, value: object = "", max_chars: int = 33
+    ) -> int:
+        """Draws a label/value row. Returns the number of value lines drawn
+        so callers can shift subsequent rows down when the value wraps."""
         text(x, y, label, 8, True)
         text(x + 58, y, ":", 8, True)
+        lines_drawn = 1
         if value not in (None, ""):
-            for offset, line_value in enumerate(wrap_text(value, 33)[:3]):
+            wrapped = wrap_text(value, max_chars)[:3]
+            for offset, line_value in enumerate(wrapped):
                 text(x + 70, y - offset * 10, line_value, 8)
+            lines_drawn = max(len(wrapped), 1)
+        return lines_drawn
+
+    def field_label_height(value: object, max_chars: int = 33) -> int:
+        """Vertical space (in row units of 10pt) a field_label call will need
+        beyond its first line, so the next row can be pushed down accordingly."""
+        if value in (None, ""):
+            return 0
+        return max(len(wrap_text(value, max_chars)[:3]) - 1, 0)
 
     def amount_words(value: int) -> str:
         ones = [
@@ -1053,10 +1320,10 @@ def _build_receipt_pdf(
         location_icon(address_x, 763)
         text(address_x + 18, 764, address_line, 10, True, fill=brand_green)
     text(575, 776, "INVOICE", 13, True, "right", fill=red)
-    line(16, 742, 579, 742, green)
+    line(16, 752, 579, 752, green)
     text(
         297,
-        727,
+        734,
         "A Single Stop for All Your HealthCare Needs !",
         9,
         True,
@@ -1069,11 +1336,21 @@ def _build_receipt_pdf(
     line(16, 700, 579, 700, green)
     line(291, 592, 291, 718, green)
     text(130, 706, "Customer Details", 9, True, "center")
+    # Center the whole "<name> GSTIN : <value>" line within the right column
+    # section (between the divider at x=291 and the right border at x=579).
     gst_label = f"{tenant_name or legal_name} GSTIN"
-    text(415, 706, gst_label, 8 if len(gst_label) <= 28 else 7, True, "center")
-    text(485, 706, ":", 9, True)
-    if tenant_gstin:
-        text(500, 706, tenant_gstin, 8, True)
+    gst_size = 8 if len(gst_label) <= 28 else 7
+    gst_sep = " : "
+    gst_value = tenant_gstin or ""
+    gst_label_w = text_width(gst_label, gst_size, True)
+    gst_sep_w = text_width(gst_sep, gst_size, True)
+    gst_value_w = text_width(gst_value, 8, True)
+    gst_total_w = gst_label_w + gst_sep_w + gst_value_w
+    gst_start_x = (291 + 579) // 2 - gst_total_w // 2
+    text(gst_start_x, 706, gst_label, gst_size, True)
+    text(gst_start_x + gst_label_w, 706, gst_sep, gst_size, True)
+    if gst_value:
+        text(gst_start_x + gst_label_w + gst_sep_w, 706, gst_value, 8, True)
     field_label(25, 682, "Patient ID", getattr(patient, "patient_number", "") or "")
     field_label(25, 666, "Name", patient_name)
     field_label(25, 650, "Phone No.", patient_phone)
@@ -1146,7 +1423,6 @@ def _build_receipt_pdf(
     line(16, 264, 579, 264, green)
     for x in [371, 419, 467, 515]:
         line(x, 264, x, 280, green)
-    text(25, 269, f"Date: {invoice.created_at.strftime('%d/%m/%Y')}", 8, True)
     text(406, 269, item_quantity_total, 8, True, "right")
     if total_discount > 0:
         text(505, 269, _money_pdf(total_discount), 8, True, "right")
@@ -1154,38 +1430,150 @@ def _build_receipt_pdf(
     text(570, 269, _money_pdf(invoice.total_amount), 9, True, "right")
 
     rect(16, 241, 563, 23)
-    text(25, 250, f"Total in words: {amount_words(int(invoice.total_amount or 0))}", 8)
+    words_label = "Total in words: "
+    text(25, 250, words_label, 8)
+    text(
+        25 + text_width(words_label, 8),
+        250,
+        amount_words(int(invoice.total_amount or 0)),
+        8,
+        True,
+        fill="0.012 0.780 0.467",  # #03C777
+    )
 
-    left_x, mid_x, right_x = 16, 272, 579
+    # ------------------------------------------------------------------
+    # Footer: Bank Details (left column) cascades dynamically based on how
+    # many lines each field wraps to, so long bank/account names never
+    # collide with the QR box or the rows below them. Terms & Conditions
+    # and the Customer Signature box (left column), plus the certification
+    # text and Authorized Signature (right column), all derive their
+    # vertical position from the bank box's actual height instead of using
+    # fixed y-coordinates.
+    # ------------------------------------------------------------------
+    # 7:5 column split — bank details (left) gets 7/12 of the footer width,
+    # the certification column (right) gets the remaining 5/12.
+    left_x, right_x = 16, 579
+    mid_x = left_x + round((right_x - left_x) * 7 / 12)  # = 344
     footer_bottom = 24
-    rect(left_x, 137, mid_x - left_x, 104)
-    line(left_x, 224, mid_x, 224, green)
-    center(left_x, mid_x, 229, "Bank Details", 8, True)
-    field_label(25, 209, "Name", bank_name)
-    field_label(25, 193, "Branch", bank_branch)
-    field_label(25, 177, "Acc. Number", bank_account)
-    field_label(25, 161, "IFSC", bank_ifsc)
-    field_label(25, 145, "UPI ID", bank_upi)
-    rect(197, 173, 48, 48)
-    text(200, 151, "Pay using UPI", 8, True)
+    row_gap = 16  # vertical gap between label rows when value is a single line
+    min_sig_box_height = 30  # never shrink the signature box below this
+    min_terms_box_height = 20  # never shrink the terms box below this (last resort)
+    page_top_y = 241  # original fixed top of the whole left-column box stack
 
-    rect(left_x, 62, mid_x - left_x, 75)
-    line(left_x, 120, mid_x, 120, green)
-    center(left_x, mid_x, 125, "Terms and Conditions", 8, True)
-    text(25, 101, "Subject to Tamil Nadu Junction.", 7)
-    text(25, 90, "Our Responsibility Ceases as soon as goods leaves our Premises.", 7)
-    text(25, 79, "Goods Once sold will not taken back.", 7)
-    text(25, 68, "Delivery Ex-Premises.", 7)
+    bank_header_y = 224  # "Bank Details" header divider stays anchored here
+    name_y = bank_header_y - 15
+    name_extra = field_label_height(bank_name)
+    branch_y = name_y - row_gap - (name_extra * 10)
+    branch_extra = field_label_height(bank_branch)
+    acc_y = branch_y - row_gap - (branch_extra * 10)
+    acc_extra = field_label_height(bank_account)
+    ifsc_y = acc_y - row_gap - (acc_extra * 10)
+    ifsc_extra = field_label_height(bank_ifsc)
+    upi_y = ifsc_y - row_gap - (ifsc_extra * 10)
+    upi_extra = field_label_height(bank_upi)
 
-    rect(left_x, footer_bottom, mid_x - left_x, 38)
-    text(25, 42, "Customer Signature", 8, True)
+    bank_box_top = page_top_y
+    # 8pt gap from the last drawn row down to the box border, same as original.
+    bank_box_bottom = upi_y - (upi_extra * 10) - 8
+    bank_box_height = bank_box_top - bank_box_bottom
 
-    rect(mid_x, footer_bottom, right_x - mid_x, 217)
-    line(mid_x, 205, right_x, 205, green)
-    line(mid_x, 62, right_x, 62, green)
-    text(290, 224, "Certified that the particulars give above are true and correct.", 7)
-    text(290, 210, f"For {legal_name}", 8, True)
-    text(470, 39, "Authorized Signature", 8, True, "center")
+    rect(left_x, bank_box_bottom, mid_x - left_x, bank_box_height)
+    line(left_x, bank_header_y, mid_x, bank_header_y, green)
+    center(left_x, mid_x, bank_header_y + 5, "Bank Details", 8, True)
+    field_label(25, name_y, "Name", bank_name)
+    field_label(25, branch_y, "Branch", bank_branch)
+    field_label(25, acc_y, "Acc. Number", bank_account)
+    field_label(25, ifsc_y, "IFSC", bank_ifsc)
+    field_label(25, upi_y, "UPI ID", bank_upi)
+
+    # QR box: a true square (equal width/height), right-aligned within the
+    # bank box and vertically centered against the Acc. Number / IFSC rows,
+    # clamped so the whole square always stays inside the (possibly taller)
+    # bank box.
+    qr_size = 48
+    caption_gap = 14  # room for the "Pay using UPI" caption below the square
+    qr_x = mid_x - 28 - qr_size  # leave a ~28pt margin to the column border
+    qr_y_top = min(acc_y + 6, bank_box_top - 8)
+    qr_y_bottom = qr_y_top - qr_size
+    # Keep the square *and* its caption inside the bank box so the caption
+    # never crosses the Terms & Conditions border below.
+    if qr_y_bottom - caption_gap < bank_box_bottom + 4:
+        qr_y_bottom = bank_box_bottom + 4 + caption_gap
+        qr_y_top = qr_y_bottom + qr_size
+    rect(qr_x, qr_y_bottom, qr_size, qr_size)
+    text(qr_x + 3, qr_y_bottom - 10, "Pay using UPI", 8, True)
+
+    # Terms & Conditions and Customer Signature share whatever vertical room
+    # is left below the bank box (the three boxes are contiguous, just as in
+    # the original fixed layout). The signature box keeps a usable minimum
+    # height first; Terms & Conditions absorbs the remaining wrap overflow
+    # from the bank box, and only shrinks below its natural height once the
+    # bank box has grown enough to need it. This guarantees the stack never
+    # overflows past the page footer, however long the bank details are.
+    remaining_height = bank_box_bottom - footer_bottom
+    sig_box_height = min_sig_box_height
+    terms_box_height = max(remaining_height - sig_box_height, min_terms_box_height)
+    natural_terms_height = 75
+    if terms_box_height > natural_terms_height:
+        # Plenty of room: give Terms & Conditions its natural height and let
+        # the signature box take any leftover space.
+        terms_box_height = natural_terms_height
+        sig_box_height = max(remaining_height - terms_box_height, min_sig_box_height)
+
+    terms_box_top = bank_box_bottom
+    terms_box_bottom = terms_box_top - terms_box_height
+    rect(left_x, terms_box_bottom, mid_x - left_x, terms_box_height)
+    # Header text sits 12pt *below* the top border (matching the original
+    # fixed layout's relationship between its rect-top and header y), so it
+    # never crowds the bank box's last row sitting just above this border.
+    header_divider_y = terms_box_top - 18
+    line(left_x, header_divider_y, mid_x, header_divider_y, green)
+    center(left_x, mid_x, terms_box_top - 12, "Terms and Conditions", 8, True)
+    terms_lines = [
+        "Subject to Tamil Nadu Junction.",
+        "Our Responsibility Ceases as soon as goods leaves our Premises.",
+        "Goods Once sold will not taken back.",
+        "Delivery Ex-Premises.",
+    ]
+    # Show as many terms lines as fit in whatever height this box ended up
+    # with, instead of overflowing past its own border when squeezed.
+    max_terms_lines = max(int((terms_box_height - 24) // 11), 1)
+    for offset, line_value in enumerate(terms_lines[:max_terms_lines]):
+        text(25, terms_box_top - 33 - offset * 11, line_value, 7)
+
+    sig_box_top = terms_box_bottom
+    sig_box_bottom = sig_box_top - sig_box_height
+    rect(left_x, sig_box_bottom, mid_x - left_x, sig_box_height)
+    text(
+        25, sig_box_bottom + max(sig_box_height - 20, 4), "Customer Signature", 8, True
+    )
+
+    # Right column mirrors the full combined height of the left column boxes
+    # so the two columns' outer borders always line up with each other.
+    right_col_top = bank_box_top
+    right_col_bottom = sig_box_bottom
+    rect(mid_x, right_col_bottom, right_x - mid_x, right_col_top - right_col_bottom)
+    # Left padding inside the right column so text never sits on the column
+    # border; the certification line wraps to the column width.
+    cert_pad = mid_x + 10
+    top_divider_y = right_col_top - 44
+    line(mid_x, top_divider_y, right_x, top_divider_y, green)
+    line(mid_x, right_col_bottom + 38, right_x, right_col_bottom + 38, green)
+    cert_lines = wrap_text(
+        "Certified that the particulars give above are true and correct.", 50
+    )
+    for offset, cert_line in enumerate(cert_lines):
+        text(cert_pad, right_col_top - 11 - offset * 11, cert_line, 7)
+    # "For <legal name>" gets clear space above the divider line below it.
+    text(cert_pad, top_divider_y + 9, f"For {legal_name}", 8, True)
+    text(
+        (mid_x + right_x) // 2,
+        right_col_bottom + 15,
+        "Authorized Signature",
+        8,
+        True,
+        "center",
+    )
 
     text(
         25,
@@ -1241,6 +1629,7 @@ def _build_receipt_pdf(
 def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
     invoice = _normalize_invoice_status(session, invoice)
     _ensure_invoice_submit_ledger(session, invoice)
+    _ensure_invoice_membership_benefit_ledger(session, invoice)
     items = list(
         session.exec(
             select(InvoiceItem)
@@ -1280,6 +1669,11 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
             .order_by(BillingLedgerEntry.created_at.desc())
         ).all()
     )
+    actor_ids = {entry.actor_user_id for entry in ledger_entries if entry.actor_user_id}
+    actor_names: dict[str, str] = {}
+    if actor_ids:
+        actors = session.exec(select(User).where(User.id.in_(actor_ids))).all()
+        actor_names = {actor.id: actor.name for actor in actors}
     supplier_names: dict[str, str] = {}
     supplier_ids = {item.supplier_id for item in items if item.supplier_id}
     if supplier_ids:
@@ -1316,11 +1710,12 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
             read.vendor_amount = int(item.buying_amount or 0)
         return read
 
-    invoice_read = InvoiceRead.model_validate(invoice, from_attributes=True)
-    if invoice.appointment_id:
-        appointment = session.get(Appointment, invoice.appointment_id)
-        if appointment and appointment.tenant_id == invoice.tenant_id:
-            invoice_read.appointment_type = appointment.appointment_type
+    def ledger_read(entry: BillingLedgerEntry) -> BillingLedgerEntryRead:
+        read = BillingLedgerEntryRead.model_validate(entry, from_attributes=True)
+        read.actor_user_name = actor_names.get(str(entry.actor_user_id or ""))
+        return read
+
+    invoice_read = _invoice_read(session, invoice)
     return InvoiceDetailRead(
         status=invoice_read.status,
         invoice=invoice_read,
@@ -1333,10 +1728,8 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
             CreditNoteRead.model_validate(credit_note, from_attributes=True)
             for credit_note in credit_notes
         ],
-        ledger_entries=[
-            BillingLedgerEntryRead.model_validate(entry, from_attributes=True)
-            for entry in ledger_entries
-        ],
+        ledger_entries=[ledger_read(entry) for entry in ledger_entries],
+        adjustment_requests=_invoice_adjustment_requests(session, invoice),
         membership_benefit=_invoice_membership_benefit(session, invoice),
     )
 
@@ -1524,6 +1917,11 @@ def _create_service_invoice(
         debit_amount=total_amount,
         invoice_total_delta=total_amount,
         balance_amount_delta=total_amount,
+        actor_user_id=created_by_user_id,
+    )
+    _ensure_invoice_membership_benefit_ledger(
+        session,
+        invoice,
         actor_user_id=created_by_user_id,
     )
     return invoice
@@ -2021,20 +2419,11 @@ def _sync_lab_order_item_catalog_prices(
     metadata aligned with the latest lab catalog before building invoice rows.
     """
     from app.api.v1.lab import (
-        _external_lab_items_enabled,
         _find_lab_test,
         _resolve_lab_price,
     )
-    from app.api.v1.lab import _frappe_catalog_client as _lab_frappe_client
     from app.modules.lab.models import LabTestCatalog
 
-    use_external = _external_lab_items_enabled(session, tenant_id)
-    client = None
-    if use_external:
-        try:
-            client = _lab_frappe_client()
-        except Exception:
-            client = None
     changed = False
     for item in items:
         old_price = int(item.price or 0)
@@ -2049,13 +2438,7 @@ def _sync_lab_order_item_catalog_prices(
         test = session.get(LabTestCatalog, item.test_id) if item.test_id else None
         if test is None:
             test = _find_lab_test(session, tenant_id, order.branch_id, item.test_name)
-        pricing = _resolve_lab_price(
-            client,
-            test,
-            item.test_name,
-            external_item_code=item.external_item_code,
-            external_slug=item.external_slug,
-        )
+        pricing = _resolve_lab_price(test, item.test_name)
         new_price = int(pricing.get("price") or 0)
         new_mrp = int(pricing.get("mrp_price") or 0)
         new_selling = int(pricing.get("selling_price") or new_price or 0)
@@ -2268,27 +2651,6 @@ def create_invoice_from_lab_order(
     def lab_line_item(item: LabOrderItem) -> dict[str, int | str | None]:
         supplier_id = item.supplier_id
         buying_amount = item.buying_price
-        if item.external_source == "erpnext" and item.external_slug:
-            try:
-                suppliers = _external_supplier_options(
-                    InvoiceItem(
-                        tenant_id=tenant_id,
-                        invoice_id="preview",
-                        item_type="lab",
-                        description=item.test_name,
-                        quantity=1,
-                        unit_amount=item.price,
-                        total_amount=item.price,
-                        external_source=item.external_source,
-                        external_slug=item.external_slug,
-                        external_item_code=item.external_item_code,
-                    )
-                )
-                if suppliers:
-                    supplier_id = str(suppliers[0]["supplier"] or "")
-                    buying_amount = int(suppliers[0]["buying_price"] or 0)
-            except HTTPException:
-                pass
         return {
             "item_type": "lab",
             "description": item.test_name,
@@ -2301,7 +2663,9 @@ def create_invoice_from_lab_order(
             "supplier_id": supplier_id,
             "external_source": item.external_source,
             "external_slug": item.external_slug,
-            "external_item_code": item.external_item_code,
+            "external_item_code": (
+                item.test_id or item.package_id or item.external_item_code
+            ),
         }
 
     lab_benefit_amounts: dict[str, int] = {}
@@ -2491,7 +2855,7 @@ def list_invoices(
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
         )
     ),
-) -> list[Invoice]:
+) -> list[InvoiceRead]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(Invoice).where(Invoice.tenant_id == tenant_id)
@@ -2500,7 +2864,10 @@ def list_invoices(
     if patient_id:
         statement = statement.where(Invoice.patient_id == patient_id)
     invoices = list(session.exec(statement.order_by(Invoice.created_at.desc())).all())
-    return [_normalize_invoice_status(session, invoice) for invoice in invoices]
+    return [
+        _invoice_read(session, _normalize_invoice_status(session, invoice))
+        for invoice in invoices
+    ]
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDetailRead)
@@ -2677,7 +3044,7 @@ def update_invoice_item_supplier(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice item not found"
         )
-    options = _external_supplier_options(item)
+    options = _external_supplier_options(session, item)
     if payload.supplier_id:
         selected = next(
             (
@@ -2736,7 +3103,7 @@ def list_invoice_item_supplier_options(
         )
     return [
         InvoiceItemSupplierOptionRead(**supplier)
-        for supplier in _external_supplier_options(item)
+        for supplier in _external_supplier_options(session, item)
     ]
 
 
@@ -2757,6 +3124,11 @@ def apply_invoice_membership_benefit(
         )
     require_user_branch_access(current_user, invoice.branch_id)
     invoice = _apply_invoice_membership_benefit(session, invoice)
+    _ensure_invoice_membership_benefit_ledger(
+        session,
+        invoice,
+        actor_user_id=current_user.id,
+    )
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -2810,14 +3182,16 @@ def invoice_receipt_pdf(
         tenant_id=tenant_id,
         module="invoice",
         key=SettingKey.INVOICE_LOGO_URL,
-        branch_id=invoice.branch_id,
     )
+    # Bank/account details are tenant-wide (managed identically by super admin
+    # and tenant admin screens), so resolve at tenant scope only. Passing
+    # branch_id here let a stale branch-scoped row permanently shadow tenant
+    # edits, so receipts kept printing old account details.
     bank_details, _bank_scope, _bank_scope_id = resolve_setting(
         session,
         tenant_id=tenant_id,
         module="accounts",
         key=SettingKey.ACCOUNTS_BANK_DETAILS,
-        branch_id=invoice.branch_id,
     )
     pdf = _build_receipt_pdf(
         tenant=tenant,
@@ -2826,15 +3200,29 @@ def invoice_receipt_pdf(
         invoice=invoice,
         items=items,
         payments=payments,
-        logo_url=str(logo_url or ""),
+        logo_url=str(logo_url or getattr(tenant, "logo_url", "") or ""),
         bank_details=bank_details if isinstance(bank_details, dict) else {},
+    )
+    patient_name = (
+        getattr(patient, "full_name", None)
+        or getattr(patient, "name", None)
+        or "Patient"
+    )
+    receipt_filename = (
+        "-".join(
+            part
+            for part in (
+                re.sub(r"[^a-zA-Z0-9]+", "-", str(patient_name)).strip("-"),
+                re.sub(r"[^a-zA-Z0-9]+", "-", str(invoice.invoice_number)).strip("-"),
+            )
+            if part
+        )
+        or "receipt"
     )
     return Response(
         content=pdf,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'inline; filename="{invoice.invoice_number}-receipt.pdf"'
-        },
+        headers={"Content-Disposition": f'inline; filename="{receipt_filename}.pdf"'},
     )
 
 
@@ -2856,6 +3244,11 @@ def create_credit_note(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
         )
     require_user_branch_access(current_user, invoice.branch_id)
+    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot issue credit note for {invoice.status.value} invoice",
+        )
     if payload.amount > invoice.total_amount:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -2873,6 +3266,19 @@ def create_credit_note(
     session.add(credit)
     session.commit()
     session.refresh(credit)
+    invoice = update_invoice_payment_status(session, invoice)
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="credit_note_issued",
+        description="Credit note issued",
+        debit_amount=credit.amount,
+        balance_amount_delta=-credit.amount,
+        reason=payload.reason,
+        actor_user_id=payload.created_by_user_id,
+        related_credit_note_id=credit.id,
+    )
+    _sync_invoice_source_after_reversal(session, invoice)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -2972,6 +3378,280 @@ def record_payment(
     return _read_invoice_detail(session, invoice)
 
 
+def _execute_billing_adjustment(
+    session: Session,
+    *,
+    invoice: Invoice,
+    request_type: BillingAdjustmentType,
+    amount: int,
+    reason: str,
+    actor_user_id: str | None,
+    payment_method: PaymentMethod | None = None,
+    payment_reference: str | None = None,
+) -> Invoice:
+    old_paid = int(invoice.paid_amount or 0)
+    old_balance = int(invoice.balance_amount or 0)
+    old_total = int(invoice.total_amount or 0)
+    if request_type == BillingAdjustmentType.CANCEL:
+        if old_paid > 0:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Paid invoices must be refunded before cancellation",
+            )
+        invoice.status = InvoiceStatus.CANCELLED
+        invoice.paid_amount = 0
+        invoice.balance_amount = 0
+        invoice.updated_at = datetime.now(timezone.utc)
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+        _record_billing_ledger(
+            session,
+            invoice,
+            entry_type="invoice_cancelled",
+            description="Invoice cancelled and financial impact reversed",
+            credit_amount=old_total,
+            invoice_total_delta=-old_total,
+            paid_amount_delta=-old_paid,
+            balance_amount_delta=-old_balance,
+            reason=reason,
+            actor_user_id=actor_user_id,
+        )
+        _sync_invoice_source_after_reversal(session, invoice)
+        return invoice
+
+    refund_amount = _validate_adjustment_amount(invoice, request_type, amount)
+    changed_payments = _apply_refund_to_payments(
+        session, invoice, refund_amount, reason
+    )
+    credit = CreditNote(
+        tenant_id=invoice.tenant_id,
+        branch_id=invoice.branch_id,
+        invoice_id=invoice.id,
+        credit_note_number=next_credit_note_number(session, invoice.tenant_id),
+        amount=refund_amount,
+        reason=reason,
+        created_by_user_id=actor_user_id,
+    )
+    session.add(credit)
+    session.commit()
+    session.refresh(credit)
+    invoice = update_invoice_payment_status(session, invoice)
+    _record_billing_ledger(
+        session,
+        invoice,
+        entry_type="payment_refunded"
+        if request_type == BillingAdjustmentType.FULL_REFUND
+        else "payment_partially_refunded",
+        description="Payment refunded"
+        if request_type == BillingAdjustmentType.FULL_REFUND
+        else "Payment partially refunded",
+        debit_amount=refund_amount,
+        paid_amount_delta=-refund_amount,
+        balance_amount_delta=0,
+        reason=reason,
+        actor_user_id=actor_user_id,
+        related_payment_id=changed_payments[0].id if changed_payments else None,
+        related_credit_note_id=credit.id,
+    )
+    if payment_method or payment_reference:
+        _record_billing_ledger(
+            session,
+            invoice,
+            entry_type="refund_disbursed",
+            description="Refund disbursed",
+            debit_amount=refund_amount,
+            reason=payment_reference or reason,
+            actor_user_id=actor_user_id,
+            related_credit_note_id=credit.id,
+        )
+    _sync_invoice_source_after_reversal(session, invoice)
+    record_audit_event(
+        session,
+        tenant_id=invoice.tenant_id,
+        branch_id=invoice.branch_id,
+        actor_user_id=actor_user_id,
+        action="payment.refunded"
+        if request_type == BillingAdjustmentType.FULL_REFUND
+        else "payment.partially_refunded",
+        resource_type="invoice",
+        resource_id=invoice.id,
+        purpose="refund",
+        metadata_json=json.dumps(
+            {
+                "amount": refund_amount,
+                "reason": reason,
+                "payment_method": payment_method.value if payment_method else None,
+                "payment_reference": payment_reference,
+            }
+        ),
+    )
+    return invoice
+
+
+@router.post(
+    "/invoices/{invoice_id}/adjustment-requests",
+    response_model=BillingAdjustmentRequestRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_billing_adjustment_request(
+    invoice_id: str,
+    payload: BillingAdjustmentRequestCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.INVOICES_READ,
+            permissions.INVOICES_EDIT,
+            permissions.PAYMENTS_MANAGE,
+        )
+    ),
+) -> BillingAdjustmentRequestRead:
+    invoice = session.get(Invoice, invoice_id)
+    if not invoice or invoice.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
+    require_user_branch_access(current_user, invoice.branch_id)
+    _ensure_invoice_can_request_adjustment(session, invoice, payload.request_type)
+    amount = _validate_adjustment_amount(invoice, payload.request_type, payload.amount)
+    row = BillingAdjustmentRequest(
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        invoice_id=invoice.id,
+        request_type=payload.request_type,
+        amount=amount,
+        reason=payload.reason,
+        requested_by_user_id=payload.requested_by_user_id or current_user.id,
+        payment_method=payload.payment_method,
+        payment_reference=payload.payment_reference,
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return _read_adjustment_request(session, row)
+
+
+@router.post(
+    "/adjustment-requests/{request_id}/approve",
+    response_model=BillingAdjustmentRequestRead,
+)
+def approve_billing_adjustment_request(
+    request_id: str,
+    payload: BillingAdjustmentDecision,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> BillingAdjustmentRequestRead:
+    row = session.get(BillingAdjustmentRequest, request_id)
+    if not row or row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
+        )
+    require_user_branch_access(current_user, row.branch_id)
+    if row.status != BillingAdjustmentStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Request already decided"
+        )
+    row.status = BillingAdjustmentStatus.APPROVED
+    row.approved_by_user_id = payload.actor_user_id or current_user.id
+    row.decision_reason = payload.reason
+    row.decided_at = datetime.now(timezone.utc)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return _read_adjustment_request(session, row)
+
+
+@router.post(
+    "/adjustment-requests/{request_id}/reject",
+    response_model=BillingAdjustmentRequestRead,
+)
+def reject_billing_adjustment_request(
+    request_id: str,
+    payload: BillingAdjustmentDecision,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> BillingAdjustmentRequestRead:
+    row = session.get(BillingAdjustmentRequest, request_id)
+    if not row or row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
+        )
+    require_user_branch_access(current_user, row.branch_id)
+    if row.status != BillingAdjustmentStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Request already decided"
+        )
+    row.status = BillingAdjustmentStatus.REJECTED
+    row.rejected_by_user_id = payload.actor_user_id or current_user.id
+    row.decision_reason = payload.reason
+    row.decided_at = datetime.now(timezone.utc)
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return _read_adjustment_request(session, row)
+
+
+@router.post(
+    "/adjustment-requests/{request_id}/execute",
+    response_model=InvoiceDetailRead,
+)
+def execute_billing_adjustment_request(
+    request_id: str,
+    payload: BillingAdjustmentDecision,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+) -> InvoiceDetailRead:
+    row = session.get(BillingAdjustmentRequest, request_id)
+    if not row or row.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
+        )
+    require_user_branch_access(current_user, row.branch_id)
+    if row.status != BillingAdjustmentStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Approve request before execution",
+        )
+    invoice = session.get(Invoice, row.invoice_id)
+    if not invoice or invoice.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
+        )
+    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+        row.status = BillingAdjustmentStatus.REJECTED
+        row.rejected_by_user_id = payload.actor_user_id or current_user.id
+        row.decision_reason = "Invoice is already closed"
+        row.decided_at = datetime.now(timezone.utc)
+        session.add(row)
+        session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Invoice is already closed for cancellation/refund",
+        )
+    _validate_adjustment_amount(invoice, row.request_type, row.amount)
+    invoice = _execute_billing_adjustment(
+        session,
+        invoice=invoice,
+        request_type=row.request_type,
+        amount=row.amount,
+        reason=payload.reason or row.reason,
+        actor_user_id=payload.actor_user_id or current_user.id,
+        payment_method=row.payment_method,
+        payment_reference=row.payment_reference,
+    )
+    row.status = BillingAdjustmentStatus.EXECUTED
+    row.executed_by_user_id = payload.actor_user_id or current_user.id
+    row.executed_at = datetime.now(timezone.utc)
+    session.add(row)
+    session.commit()
+    return _read_invoice_detail(session, invoice)
+
+
 @router.post("/payments/{payment_id}/refund", response_model=InvoiceDetailRead)
 def refund_payment(
     payment_id: str,
@@ -2996,65 +3676,24 @@ def refund_payment(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
         )
     require_user_branch_access(current_user, invoice.branch_id)
-
-    payment.status = PaymentStatus.REFUNDED
-    payment.refunded_at = datetime.now(timezone.utc)
-    payment.refund_reason = payload.reason
-    session.add(payment)
-    session.commit()
-    session.refresh(payment)
-    invoice = update_invoice_payment_status(session, invoice)
-    _record_billing_ledger(
+    available = max(int(payment.amount or 0) - int(payment.refunded_amount or 0), 0)
+    amount = int(payload.amount or available)
+    if amount > available:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refund amount exceeds selected payment balance",
+        )
+    invoice = _execute_billing_adjustment(
         session,
-        invoice,
-        entry_type="payment_refunded",
-        description="Payment refunded",
-        debit_amount=payment.amount,
-        paid_amount_delta=-payment.amount,
-        balance_amount_delta=payment.amount,
+        invoice=invoice,
+        request_type=BillingAdjustmentType.FULL_REFUND
+        if amount >= refundable_paid_total(session, invoice)
+        else BillingAdjustmentType.PARTIAL_REFUND,
+        amount=amount,
         reason=payload.reason,
         actor_user_id=payload.actor_user_id or current_user.id,
-        related_payment_id=payment.id,
-    )
-    _sync_physiotherapy_case_status(session, invoice)
-    _sync_home_care_booking_status(session, invoice)
-    _sync_patient_membership_payment(session, invoice)
-    if refundable_paid_total(session, invoice) == 0:
-        invoice.status = InvoiceStatus.REFUNDED
-        session.add(invoice)
-        session.commit()
-        session.refresh(invoice)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=invoice.branch_id,
-        actor_user_id=payload.actor_user_id,
-        action="payment.refunded",
-        resource_type="payment",
-        resource_id=payment.id,
-        purpose="refund",
-    )
-    credit = CreditNote(
-        tenant_id=tenant_id,
-        branch_id=invoice.branch_id,
-        invoice_id=invoice.id,
-        credit_note_number=next_credit_note_number(session, tenant_id),
-        amount=payment.amount,
-        reason=payload.reason,
-        created_by_user_id=payload.actor_user_id,
-    )
-    session.add(credit)
-    session.commit()
-    session.refresh(credit)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=invoice.branch_id,
-        actor_user_id=payload.actor_user_id,
-        action="credit_note.issued_for_refund",
-        resource_type="credit_note",
-        resource_id=credit.id,
-        purpose="refund_credit_note",
+        payment_method=payload.payment_method,
+        payment_reference=payload.payment_reference,
     )
     return _read_invoice_detail(session, invoice)
 
@@ -3068,6 +3707,7 @@ def cancel_invoice(
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
     enforce_entitlement(session, tenant_id, "billing_basic")
+    _require_direct_invoice_reversal_admin(session, current_user)
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
         raise HTTPException(
@@ -3078,60 +3718,19 @@ def cancel_invoice(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Invoice already cancelled"
         )
-    old_paid = int(invoice.paid_amount or 0)
-    old_balance = int(invoice.balance_amount or 0)
-    old_total = int(invoice.total_amount or 0)
-    if old_paid > 0:
+    if int(invoice.paid_amount or 0) > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Paid invoices cannot be cancelled; refund payments first",
         )
-    payments = list(
-        session.exec(
-            select(Payment).where(
-                Payment.tenant_id == tenant_id,
-                Payment.invoice_id == invoice.id,
-                Payment.status == PaymentStatus.RECORDED,
-            )
-        ).all()
-    )
-    for payment in payments:
-        payment.status = PaymentStatus.REFUNDED
-        payment.refunded_at = datetime.now(timezone.utc)
-        payment.refund_reason = payload.reason
-        session.add(payment)
-        credit = CreditNote(
-            tenant_id=tenant_id,
-            branch_id=invoice.branch_id,
-            invoice_id=invoice.id,
-            credit_note_number=next_credit_note_number(session, tenant_id),
-            amount=payment.amount,
-            reason=f"Invoice cancellation: {payload.reason}",
-            created_by_user_id=payload.actor_user_id or current_user.id,
-        )
-        session.add(credit)
-    invoice.status = InvoiceStatus.CANCELLED
-    invoice.paid_amount = 0
-    invoice.balance_amount = 0
-    invoice.updated_at = datetime.now(timezone.utc)
-    session.add(invoice)
-    session.commit()
-    session.refresh(invoice)
-    _record_billing_ledger(
+    invoice = _execute_billing_adjustment(
         session,
-        invoice,
-        entry_type="invoice_cancelled",
-        description="Invoice cancelled and financial impact reversed",
-        credit_amount=old_total,
-        invoice_total_delta=-old_total,
-        paid_amount_delta=-old_paid,
-        balance_amount_delta=-old_balance,
+        invoice=invoice,
+        request_type=BillingAdjustmentType.CANCEL,
+        amount=0,
         reason=payload.reason,
         actor_user_id=payload.actor_user_id or current_user.id,
     )
-    _sync_physiotherapy_case_status(session, invoice)
-    _sync_home_care_booking_status(session, invoice)
-    _sync_patient_membership_payment(session, invoice)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -3144,9 +3743,6 @@ def cancel_invoice(
         metadata_json=json.dumps(
             {
                 "reason": payload.reason,
-                "reversed_paid_amount": old_paid,
-                "reversed_balance_amount": old_balance,
-                "reversed_invoice_amount": old_total,
             }
         ),
     )
@@ -3162,6 +3758,7 @@ def amend_invoice(
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
     enforce_entitlement(session, tenant_id, "billing_basic")
+    _require_direct_invoice_reversal_admin(session, current_user)
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
         raise HTTPException(
@@ -3401,7 +3998,7 @@ def revenue_report(
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = (
         select(Invoice, Appointment)
-        .join(Appointment, Invoice.appointment_id == Appointment.id)
+        .outerjoin(Appointment, Invoice.appointment_id == Appointment.id)
         .where(
             Invoice.tenant_id == tenant_id,
             Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
@@ -3416,15 +4013,18 @@ def revenue_report(
     rows = list(session.exec(statement).all())
     grouped: dict[str, dict] = {}
     for invoice, appointment in rows:
-        key = (
-            invoice.branch_id
-            if group_by == "branch"
-            else appointment.practitioner_id
-            if group_by == "doctor"
-            else appointment.department_id
-            if group_by == "department"
-            else appointment.visit_purpose or appointment.appointment_type.value
-        )
+        if group_by == "branch":
+            key = invoice.branch_id
+        elif group_by == "doctor":
+            key = appointment.practitioner_id if appointment else "non_appointment"
+        elif group_by == "department":
+            key = appointment.department_id if appointment else "non_appointment"
+        else:
+            key = (
+                appointment.visit_purpose or appointment.appointment_type.value
+                if appointment
+                else _invoice_membership_service(invoice) or "direct"
+            )
         key = key or "unassigned"
         bucket = grouped.setdefault(
             key,
@@ -3437,11 +4037,22 @@ def revenue_report(
                 "doctor_share": 0,
             },
         )
+        net_invoice_amount = int(invoice.paid_amount or 0) + int(
+            invoice.balance_amount or 0
+        )
+        original_total = int(invoice.total_amount or 0)
+        net_ratio = (
+            net_invoice_amount / original_total
+            if original_total and net_invoice_amount < original_total
+            else 1
+        )
         bucket["invoice_count"] += 1
-        bucket["invoice_amount"] += invoice.total_amount
+        bucket["invoice_amount"] += net_invoice_amount
         bucket["paid_amount"] += invoice.paid_amount
-        bucket["tax_amount"] += invoice.tax_amount
-        bucket["doctor_share"] += invoice.doctor_share_amount
+        bucket["tax_amount"] += round(int(invoice.tax_amount or 0) * net_ratio)
+        bucket["doctor_share"] += round(
+            int(invoice.doctor_share_amount or 0) * net_ratio
+        )
     report_rows = list(grouped.values())
     return RevenueReport(
         tenant_id=tenant_id,

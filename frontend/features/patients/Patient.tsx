@@ -92,7 +92,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
       const [branchRows, patientRows] = await Promise.all([
         apiFetch(`/tenants/${nextTenantId}/branches`, session).catch(() => []),
         apiFetch(
-          `/patients?limit=100${query ? `&q=${encodeURIComponent(query)}` : ""}`,
+          `/patients?limit=100&active_only=false${query ? `&q=${encodeURIComponent(query)}` : ""}`,
           session,
         ),
       ]);
@@ -187,12 +187,12 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
     if (apiSession) {
       loadTenants();
     }
-  }, [apiSession?.token]);
+  }, [apiSession?.email]);
   useEffect(() => {
     if (apiSession && tenantId) {
       loadData(tenantId);
     }
-  }, [apiSession?.token, tenantId]);
+  }, [apiSession?.email, tenantId]);
 
   useEffect(() => {
     if (!apiSession || !tenantId || typeof window === "undefined") return;
@@ -205,7 +205,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
     );
-  }, [apiSession?.token, tenantId]);
+  }, [apiSession?.email, tenantId]);
 
   function open(nextView: string, id = "") {
     if (id) setSelectedId(id);
@@ -440,6 +440,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
   if (view === "detail" && selected)
     return (
       <PatientDetail
+        apiSession={apiSession}
         patient={selected}
         summary={summary}
         patientIpAdmissions={patientIpAdmissions}
@@ -617,13 +618,13 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
         <div className="min-w-[1120px]">
           <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr]  lg:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
-            <span>Patient</span>
-            <span>Mobile</span>
-            <span>Branch</span>
-            <span>Gender / Age</span>
-            <span>Subscription Plan</span>
-            <span className="text-center">Status</span>
-            <span className="text-right">Actions</span>
+            <span className="text-sm">Patient</span>
+            <span className="text-sm">Mobile</span>
+            <span className="text-sm">Branch</span>
+            <span className="text-sm">Gender / Age</span>
+            <span className="text-sm">Plan</span>
+            <span className="text-sm text-center">Status</span>
+            <span className="text-sm text-right">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
             {pageRows.length === 0 && (

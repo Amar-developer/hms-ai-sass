@@ -14,7 +14,11 @@ from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.reports.models import ReportJob, ReportJobStatus
+from app.modules.reports.models import (
+    MonthlyRevenueSnapshot,
+    ReportJob,
+    ReportJobStatus,
+)
 from app.modules.reports.queue import enqueue_monthly_report_job
 from app.modules.reports.service import (
     build_profit_report_email_attachments,
@@ -24,6 +28,7 @@ from app.modules.reports.service import (
     save_monthly_report_config,
     send_report_email,
 )
+from app.modules.reports.snapshots import archive_month, previous_calendar_month
 from app.modules.tenants.models import now_utc
 
 router = APIRouter(prefix="/reports")
@@ -69,6 +74,8 @@ class ProfitReportEmailRequest(BaseModel):
     doctor_id: str | None = None
     invoice_type: str = "overall"
     supplier_id: str | None = None
+    supplier_ids: list[str] = Field(default_factory=list)
+    report_sections: list[str] = Field(default_factory=list)
     branch_id: str | None = None
 
 
@@ -264,12 +271,26 @@ def send_profit_report_now(
     doctor_id = None if payload.doctor_id in (None, "", "all") else payload.doctor_id
     invoice_type = (
         payload.invoice_type
-        if payload.invoice_type in {"overall", "consultation", "lab", "pharmacy"}
+        if payload.invoice_type
+        in {
+            "overall",
+            "consultation",
+            "lab",
+            "service",
+            "pharmacy",
+            "home_visit",
+            "home_care",
+            "ip",
+            "physiotherapy",
+        }
         else "overall"
     )
     supplier_id = (
         None if payload.supplier_id in (None, "", "all") else payload.supplier_id
     )
+    supplier_ids = [
+        supplier for supplier in payload.supplier_ids if supplier and supplier != "all"
+    ]
     branch_id = None if payload.branch_id in (None, "", "all") else payload.branch_id
     attachments = build_profit_report_email_attachments(
         session,
@@ -279,6 +300,8 @@ def send_profit_report_now(
         doctor_id=doctor_id,
         invoice_type=invoice_type,
         supplier_id=supplier_id,
+        supplier_ids=supplier_ids,
+        report_sections=payload.report_sections,
         branch_id=branch_id,
     )
     provider_id = send_report_email(
@@ -287,7 +310,7 @@ def send_profit_report_now(
         subject=f"Healthcare profit report: {payload.from_date.isoformat()} to {payload.to_date.isoformat()}",
         body=(
             "Please find the filtered healthcare profit report attached. "
-            "The email includes separate Excel files for doctor settlement, lab settlement, pharmacy settlement, and invoice profit details."
+            "The email includes separate Excel files based on the selected report sections."
         ),
         attachments=attachments,
     )
@@ -354,3 +377,138 @@ def download_monthly_report_job(
         media_type="application/vnd.ms-excel",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+class MonthlySnapshotRead(BaseModel):
+    id: str
+    branch_id: str | None
+    period_year: int
+    period_month: int
+    period_start: str
+    period_end: str
+    period_label: str
+    invoice_count: int
+    gross_revenue: int
+    paid_revenue: int
+    final_profit: int
+    metrics: dict
+    created_at: str
+    updated_at: str
+
+
+class MonthlySnapshotArchiveRequest(BaseModel):
+    year: int | None = None
+    month: int | None = Field(default=None, ge=1, le=12)
+    overwrite: bool = False
+
+
+def _read_snapshot(snapshot: MonthlyRevenueSnapshot) -> MonthlySnapshotRead:
+    return MonthlySnapshotRead(
+        id=snapshot.id,
+        branch_id=snapshot.branch_id,
+        period_year=snapshot.period_year,
+        period_month=snapshot.period_month,
+        period_start=snapshot.period_start,
+        period_end=snapshot.period_end,
+        period_label=snapshot.period_label,
+        invoice_count=snapshot.invoice_count,
+        gross_revenue=snapshot.gross_revenue,
+        paid_revenue=snapshot.paid_revenue,
+        final_profit=snapshot.final_profit,
+        metrics=snapshot.metrics_json or {},
+        created_at=snapshot.created_at.isoformat(),
+        updated_at=snapshot.updated_at.isoformat(),
+    )
+
+
+@router.get("/monthly-snapshots", response_model=list[MonthlySnapshotRead])
+def list_monthly_snapshots(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = Query(default=None),
+    limit: int = Query(default=24, ge=1, le=120),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.REPORTS_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.BILLING_MANAGE,
+        )
+    ),
+) -> list[MonthlySnapshotRead]:
+    # branch_id NULL is the all-branches aggregate; a specific branch returns
+    # that branch's frozen figures.
+    statement = (
+        select(MonthlyRevenueSnapshot)
+        .where(
+            MonthlyRevenueSnapshot.tenant_id == tenant_id,
+            MonthlyRevenueSnapshot.branch_id == branch_id,
+        )
+        .order_by(
+            MonthlyRevenueSnapshot.period_year.desc(),
+            MonthlyRevenueSnapshot.period_month.desc(),
+        )
+        .limit(limit)
+    )
+    return [_read_snapshot(row) for row in session.exec(statement).all()]
+
+
+@router.get("/monthly-snapshots/{snapshot_id}", response_model=MonthlySnapshotRead)
+def get_monthly_snapshot(
+    snapshot_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.REPORTS_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.BILLING_MANAGE,
+        )
+    ),
+) -> MonthlySnapshotRead:
+    snapshot = session.get(MonthlyRevenueSnapshot, snapshot_id)
+    if not snapshot or snapshot.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found"
+        )
+    return _read_snapshot(snapshot)
+
+
+@router.post(
+    "/monthly-snapshots/archive",
+    response_model=list[MonthlySnapshotRead],
+    status_code=status.HTTP_201_CREATED,
+)
+def archive_monthly_snapshot(
+    payload: MonthlySnapshotArchiveRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.SETTINGS_MANAGE,
+        )
+    ),
+) -> list[MonthlySnapshotRead]:
+    # Backfill / re-close a specific month on demand. Defaults to the previous
+    # calendar month. Existing frozen snapshots are kept unless overwrite=True.
+    default_year, default_month = previous_calendar_month()
+    year = payload.year or default_year
+    month = payload.month or default_month
+    if not 1 <= month <= 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid month"
+        )
+    if date(year, month, 1) > date.today():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot archive a future month",
+        )
+    snapshots = archive_month(
+        session,
+        tenant_id=tenant_id,
+        year=year,
+        month=month,
+        actor_user_id=current_user.id,
+        overwrite=payload.overwrite,
+    )
+    return [_read_snapshot(row) for row in snapshots]

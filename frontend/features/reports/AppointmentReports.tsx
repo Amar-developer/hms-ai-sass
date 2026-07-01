@@ -25,6 +25,7 @@ const AppointmentReports = ({
     {
       key: "consultations",
       header: "Consultations",
+      width: '140px'
     },
     {
       key: "invoices",
@@ -48,6 +49,7 @@ const AppointmentReports = ({
     {
       key: "settlement",
       header: "Settlement",
+      width:'120px',
       render: (row: any) => money(row.settlement),
     },
     {

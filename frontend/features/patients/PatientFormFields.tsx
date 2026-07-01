@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Field, Input, Select } from "@/app/components/common/ui";
-import { patientDateInputValue } from "@/utils/patient/helpers";
+import {
+  calculateAgeYears,
+  patientDateInputValue,
+} from "@/utils/patient/helpers";
 
 type BranchOption = {
   id: string;
@@ -73,19 +76,6 @@ function patientField(patient: any, snakeKey: string, camelKey?: string) {
   return patient?.[snakeKey] ?? patient?.[camelKey || snakeKey] ?? "";
 }
 
-function calculateAgeYears(dateOfBirth: string) {
-  if (!dateOfBirth) return "";
-  const dob = new Date(`${dateOfBirth}T00:00:00`);
-  if (Number.isNaN(dob.getTime())) return "";
-  const today = new Date();
-  let age = today.getFullYear() - dob.getFullYear();
-  const monthDelta = today.getMonth() - dob.getMonth();
-  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dob.getDate())) {
-    age -= 1;
-  }
-  return age >= 0 && age <= 130 ? String(age) : "";
-}
-
 function todayInputValue() {
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, "0");
@@ -113,10 +103,15 @@ export function PatientFormFields({
       patientField(patient, "date_of_birth", "dateOfBirth"),
     ),
   );
+  const [ageYears, setAgeYears] = useState(() => {
+    const birthDate = patientDateInputValue(
+      patientField(patient, "date_of_birth", "dateOfBirth"),
+    );
+    return birthDate
+      ? calculateAgeYears(birthDate)
+      : String(patientField(patient, "age_years", "ageYears") || "");
+  });
   const [status, setStatus] = useState(patient?.status || "active");
-  const calculatedAge = dateOfBirth
-    ? calculateAgeYears(dateOfBirth)
-    : patientField(patient, "age_years", "ageYears");
   const [mobile, setMobile] = useState(patientField(patient, "mobile") || "");
   const branchOptions = [...branches];
   if (
@@ -133,6 +128,14 @@ export function PatientFormFields({
       patientDateInputValue(
         patientField(patient, "date_of_birth", "dateOfBirth"),
       ),
+    );
+    const birthDate = patientDateInputValue(
+      patientField(patient, "date_of_birth", "dateOfBirth"),
+    );
+    setAgeYears(
+      birthDate
+        ? calculateAgeYears(birthDate)
+        : String(patientField(patient, "age_years", "ageYears") || ""),
     );
     setStatus(patient?.status || "active");
   }, [patient?.id, patient?.updated_at, defaultBranchId]);
@@ -204,7 +207,11 @@ export function PatientFormFields({
           type="date"
           max={today}
           value={dateOfBirth}
-          onChange={(event: any) => setDateOfBirth(event.target.value)}
+          onChange={(event: any) => {
+            const nextDate = event.target.value;
+            setDateOfBirth(nextDate);
+            setAgeYears(nextDate ? calculateAgeYears(nextDate) : "");
+          }}
           className='search-input'
         />
       </Field>
@@ -214,8 +221,8 @@ export function PatientFormFields({
           type="number"
           min="0"
           max="130"
-          value={calculatedAge}
-          readOnly
+          value={ageYears}
+          onChange={(event: any) => setAgeYears(event.target.value)}
           placeholder='Age'
           className='search-input'
         />

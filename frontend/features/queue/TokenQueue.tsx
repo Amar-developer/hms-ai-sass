@@ -6,6 +6,7 @@ import {
   ActionGroup,
   Badge,
   Card,
+  Input,
   RefreshButton,
   Select,
   StatusToast,
@@ -166,7 +167,7 @@ export function TokenQueue({
       alive = false;
     };
   }, [
-    apiSession?.token,
+    apiSession?.email,
     apiSession?.tenantId,
     displayMode,
     scopedAppointments.length,
@@ -325,7 +326,7 @@ export function TokenQueue({
             <h3 className="card-title font-bold">
               Patient Queue & Token Priority
             </h3>
-            <p className="text-xs text-slate-500">
+            <p className="card-desc text-xs text-slate-500">
               {apiSession
                 ? "Reception can manually call, skip, requeue, or close remaining tokens at end of day."
                 : "Emergency tokens appear first. Skipped patients can be requeued."}
@@ -337,15 +338,15 @@ export function TokenQueue({
             ) : null}
           </div>
         </div>
-        <div className="grid gap-2 sm:grid-cols-[1fr_1.5fr_1.5fr_2fr]">
-          <FormField label="Appointment Date">
-            <input
+        <div className="grid gap-2 grid-cols-[1.5fr_1.7fr_1.5fr_2fr] ">
+          <FormField label="Date">
+            <Input
               type="date"
               value={selectedDate}
               onChange={(event: any) =>
                 setSelectedDate(event.target.value || today)
               }
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-slate-500"
+              className="text-xs"
             />
           </FormField>
           <FormField label="Display Mode">
@@ -374,7 +375,7 @@ export function TokenQueue({
               type="button"
               onClick={cancelRemainingTokens}
               disabled={busyId === "end-of-day" || queue.length === 0}
-              className="close-button border-red-100 bg-white table-xs font-bold text-red-600 hover:bg-red-50 disabled:text-slate-300"
+              className="cancel-button border-red-100 bg-white table-xs font-bold text-red-600 hover:bg-red-50 disabled:text-slate-300"
             >
               {busyId === "end-of-day" ? "Closing..." : "Cancel Remaining"}
             </button>

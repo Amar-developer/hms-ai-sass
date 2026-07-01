@@ -48,7 +48,7 @@ export function SidebarModuleAccessCard({ apiSession }: any) {
         current || options[0]?.value || "",
       );
     });
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
 
   const modulesFor = (role: string) =>
     map[role] ?? roleModules[role] ?? roleModules[normalizeSidebarRole(role)] ?? [];

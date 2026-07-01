@@ -26,6 +26,7 @@ import {
   WorklistDetailModal,
 } from "@/app/components/lab/Shared";
 import { Pagination } from "@/app/components/common/Pagination";
+import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
 export function Lab({
   apiSession,
@@ -37,12 +38,16 @@ export function Lab({
 }: any) {
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
+  const [consultationReferrals, setConsultationReferrals] = useState<any[]>([]);
   const [tests, setTests] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [patientId, setPatientId] = useState(patients[0]?.id || "");
+  const [patientId, setPatientId] = useState(
+    patients.find(isActivePatientRecord)?.id || "",
+  );
   const [source, setSource] = useState("op_direct");
   const [externalReferrer, setExternalReferrer] = useState("");
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
@@ -93,7 +98,19 @@ export function Lab({
       // referrals briefly pass the filter and flash before being hidden.
       !ordersLoaded
         ? []
-        : appointments.filter(
+        : (consultationReferrals.length
+            ? consultationReferrals.map((row: any) => ({
+                id: row.appointment_id || row.id,
+                consultationId: row.consultation_id,
+                consultationStatus: row.status,
+                labReferralText: row.lab_referral_text,
+                token: row.token_number || "",
+                tokenType: "Normal",
+                patient: row.patient_name || row.patient_id,
+                referrals: row.referrals || [],
+              }))
+            : appointments
+          ).filter(
             (a: any) =>
               a.consultationId &&
               a.consultationStatus === "signed" &&
@@ -103,7 +120,7 @@ export function Lab({
               String(a.labReferralText || "").trim() &&
               !orderedConsultationIds.has(a.consultationId),
           ),
-    [appointments, orderedConsultationIds, ordersLoaded],
+    [appointments, consultationReferrals, orderedConsultationIds, ordersLoaded],
   );
   const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -113,6 +130,10 @@ export function Lab({
   );
   const patientMap = useMemo(
     () => new Map(patients.map((p: any) => [p.id, p])),
+    [patients],
+  );
+  const activePatients = useMemo(
+    () => patients.filter(isActivePatientRecord),
     [patients],
   );
   const invoicedOrderIds = useMemo(
@@ -127,11 +148,16 @@ export function Lab({
   );
 
   useEffect(() => {
-    if (!patientId && patients[0]?.id) setPatientId(patients[0].id);
-  }, [patients, patientId]);
+    if (
+      (!patientId ||
+        !activePatients.some((patient: any) => patient.id === patientId)) &&
+      activePatients[0]?.id
+    )
+      setPatientId(activePatients[0].id);
+  }, [activePatients, patientId]);
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
@@ -143,7 +169,7 @@ export function Lab({
       );
   }, [dismissedConsultations]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setAvailableTests([]);
       return;
     }
@@ -154,7 +180,6 @@ export function Lab({
         setTestLoading(true);
         try {
           const params = new URLSearchParams();
-          if (branchId) params.set("branch_id", branchId);
           if (search) params.set("search", search);
           const rows = await apiFetch(
             `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
@@ -173,14 +198,54 @@ export function Lab({
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, testSearch]);
+  }, [apiSession, apiSession?.tenantId, testSearch]);
 
-  const testOptions = availableTests.map((t: any) => ({
+  const localAvailableTests = useMemo(
+    () => [
+      ...tests.map((row: any) => ({
+        ...row,
+        item_name: row.name,
+        slug: row.code || row.id,
+        source: "local",
+        item_type: "lab_test",
+        kind: "Lab Test",
+        category: "Lab Test",
+        selling_price: row.default_price,
+        price: row.default_price,
+        buying_price: row.purchase_price,
+        supplier_id: row.supplier_id,
+      })),
+      ...packages.map((row: any) => ({
+        ...row,
+        item_name: row.name,
+        slug: row.code || row.id,
+        source: "local",
+        item_type: "lab_package",
+        kind: "Service",
+        category: "Service",
+        selling_price: row.package_price,
+        price: row.package_price,
+        buying_price: row.purchase_price,
+        supplier_id: row.supplier_id,
+      })),
+    ],
+    [tests, packages],
+  );
+  const activeAvailableTests = useMemo(() => {
+    const byKey = new Map<string, any>();
+    [...localAvailableTests, ...availableTests].forEach((row: any) => {
+      const key = String(row.id || row.slug || row.name || "").trim();
+      if (key) byKey.set(key, row);
+    });
+    return Array.from(byKey.values());
+  }, [availableTests, localAvailableTests]);
+
+  const testOptions = activeAvailableTests.map((t: any) => ({
     value: t.id || t.slug || t.name,
     label: t.item_name || t.name,
     item: t,
   }));
-  const selectedAvailableTest = availableTests.find(
+  const selectedAvailableTest = activeAvailableTests.find(
     (t: any) => (t.id || t.slug || t.name) === selectedAvailableTestId,
   );
   const selectedTestMrp = Number(
@@ -192,26 +257,51 @@ export function Lab({
       selectedAvailableTest?.price ||
       0,
   );
+  const supplierById = useMemo(
+    () => new Map(suppliers.map((supplier: any) => [supplier.id, supplier.name])),
+    [suppliers],
+  );
+  const selectedSupplierId = selectedAvailableTest?.supplier_id || "";
+  const selectedSupplierName = selectedSupplierId
+    ? supplierById.get(selectedSupplierId) || selectedSupplierId
+    : "-";
+  const selectedSupplierPrice = Number(
+    selectedAvailableTest?.buying_price ||
+      selectedAvailableTest?.purchase_price ||
+      0,
+  );
   const formatPrice = (value: number) =>
     value > 0 ? `₹${value.toLocaleString("en-IN")}` : "";
 
   async function load() {
     if (!apiSession) {
       setOrders([]);
+      setConsultationReferrals([]);
       return;
     }
     try {
-      const [orderRows, testRows, packageRows, templateRows] =
+      const [
+        orderRows,
+        referralRows,
+        testRows,
+        packageRows,
+        templateRows,
+        supplierRows,
+      ] =
         await Promise.all([
           apiFetch("/lab/orders", apiSession),
+          apiFetch("/lab/consultation-referrals", apiSession).catch(() => []),
           apiFetch("/lab/catalog/tests", apiSession),
           apiFetch("/lab/catalog/packages", apiSession),
           apiFetch("/lab/result-templates", apiSession),
+          apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
         ]);
       setOrders(orderRows);
+      setConsultationReferrals(referralRows || []);
       setTests(testRows);
       setPackages(packageRows);
       setTemplates(templateRows);
+      setSuppliers(supplierRows || []);
     } catch (err: any) {
       setMessage(err.message || "Could not load lab workspace.");
     } finally {
@@ -305,15 +395,11 @@ export function Lab({
     setMessage("");
     const selectedNames = orderTests.map((t: any) => t.name).filter(Boolean);
     const localTestIds = orderTests
-      .filter((t: any) => t.id)
+      .filter((t: any) => t.id && t.item_type !== "lab_package")
       .map((t: any) => t.id);
-    const externalItems = orderTests
-      .filter((t: any) => t.source === "erpnext")
-      .map((t: any) => ({
-        name: t.name,
-        external_item_code: t.external_item_code || null,
-        external_slug: t.external_slug || null,
-      }));
+    const packageIds = orderTests
+      .filter((t: any) => t.id && t.item_type === "lab_package")
+      .map((t: any) => t.id);
     const testsText = selectedNames.filter(Boolean).join(", ");
     if (!testsText) {
       setMessage("Select at least one lab test.");
@@ -329,8 +415,8 @@ export function Lab({
           source,
           tests: testsText,
           test_ids: localTestIds,
-          package_ids: [],
-          external_items: externalItems,
+          package_ids: packageIds,
+          external_items: [],
           external_referrer:
             source === "external_referral" ? externalReferrer : null,
           amount: 0,
@@ -362,11 +448,7 @@ export function Lab({
               id: t?.source === "local" ? t.id || "" : "",
               name,
               source: t?.source || "typed",
-              external_item_code:
-                t?.source === "erpnext"
-                  ? t.item_code || t.erpnext_name || t.name || ""
-                  : "",
-              external_slug: t?.source === "erpnext" ? t.slug || t.id || "" : "",
+              item_type: t?.item_type || "typed",
             },
           ],
     );
@@ -552,6 +634,10 @@ export function Lab({
 
   async function loadConsultDetail(a: any) {
     setViewConsult(a);
+    if (a.referrals?.length) {
+      setConsultDetail({ referrals: a.referrals });
+      return;
+    }
     setConsultDetail(null);
     setLoadingDetail(true);
     try {
@@ -609,16 +695,20 @@ export function Lab({
         <h3 className="card-title font-bold">Create Lab / Service Order</h3>
         <form
           onSubmit={createDirect}
-          className="mt-4 grid gap-3 md:grid-cols-6"
+          className="mt-4 grid gap-3 md:grid-cols-8"
         >
           <SearchableSelectField
             label="Patient"
             value={patientId}
             onChange={setPatientId}
-            options={patients.map((p: any) => ({ value: p.id, label: p.name }))}
+            options={activePatients.map((p: any) => ({
+              value: p.id,
+              label: patientPickerLabel(p),
+              sublabel: p.mobile || p.patient_number || p.id,
+            }))}
             placeholder="Select patient"
-            searchPlaceholder="Search patient by name"
-            className="text-xs"
+            searchPlaceholder="Search patient by name, mobile, or number"
+            className="text-xs md:col-span-2"
           />
           <SelectField
             label="Source"
@@ -629,7 +719,7 @@ export function Lab({
               { value: "external_referral", label: "External Referral" },
             ]}
           />
-          <FormField label="Lab Test / Service">
+          <FormField label="Lab Test / Service" className="md:col-span-2">
             <SearchPicker
               value={selectedAvailableTestId}
               inputValue={testSearch}
@@ -653,6 +743,8 @@ export function Lab({
                   test?.name,
                   test?.sample_type,
                   test?.category,
+                  test?.kind,
+                  test?.description,
                   test?.code,
                   test?.slug,
                 ]
@@ -663,6 +755,20 @@ export function Lab({
             />
           </FormField>
           <TextField
+            label="Supplier"
+            value={selectedSupplierName}
+            onChange={() => undefined}
+            disabled
+            className="search-input bg-slate-50"
+          />
+          <TextField
+            label="Supplier Price"
+            value={formatPrice(selectedSupplierPrice)}
+            onChange={() => undefined}
+            disabled
+            className="search-input bg-slate-50"
+          />
+          <TextField
             label="MRP"
             value={formatPrice(selectedTestMrp)}
             onChange={() => undefined}
@@ -670,31 +776,24 @@ export function Lab({
             className="search-input bg-slate-50"
           />
           <TextField
-            label="Selling Rate"
+            label="Rate"
             value={formatPrice(selectedTestSelling)}
             onChange={() => undefined}
             disabled
             className="search-input bg-slate-50"
           />
-          <div className=" flex items-end lg:mb-1">
-            <ActionButton type="button" onClick={addOrderTest} className='close-button  h-[65%] text-white bg-black/90'>
+          <div className="flex items-end lg:items-center lg:mt-3">
+            <ActionButton type="button" onClick={addOrderTest} className='close-button w-full !bg-black/90 !text-white hover:!bg-black'>
               Add
             </ActionButton>
           </div>
-          <TextField
-            label="External Referrer"
-            value={externalReferrer}
-            onChange={setExternalReferrer}
-            disabled={source !== "external_referral"}
-            className="search-input"
-          />
-          <div className="flex items-end">
-            <Button disabled={busy === "create"} className='save-button text-xs'>
+          <div className="flex items-end w-[120px]">
+            <Button disabled={busy === "create"} className='px-2 py-2'>
               {busy === "create" ? "Saving..." : "Create Order"}
             </Button>
           </div>
           {orderTests.length > 0 && (
-            <div className="md:col-span-6 flex flex-wrap gap-2">
+            <div className="md:col-span-8 flex flex-wrap gap-2">
               {orderTests.map((test: any, index: number) => (
                 <button
                   key={`${test.name}-${index}`}
@@ -734,6 +833,14 @@ export function Lab({
                       </b>
                       <p className="text-xs text-slate-500">
                         Signed consultation referral
+                        {a.doctor && a.doctor !== "Unassigned" ? (
+                          <>
+                            {" · Signed by "}
+                            <span className="font-semibold text-slate-700">
+                              {a.doctor}
+                            </span>
+                          </>
+                        ) : null}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -779,11 +886,11 @@ export function Lab({
               <tr>
                 <th className="w-[80px] px-4 py-3">#</th>
                 <th className="w-[170px]">Date & Time</th>
-                <th className="w-[190px]">Patient</th>
+                <th className="w-[130px]">Patient</th>
                 <th className="w-[150px]">Source</th>
                 <th className="w-[150px]">Status</th>
                 <th className="w-[90px]">Amount</th>
-                <th className="w-[250px]">Report</th>
+                <th className="w-[150px] text-center pr-4">Report</th>
                 <th className="w-[210px] pr-4 text-right">Action</th>
               </tr>
             </thead>
@@ -817,7 +924,7 @@ export function Lab({
                   <tr
                     key={o.id}
                     onClick={() => setSelectedOrder(o)}
-                    className={`cursor-pointer transition hover:bg-slate-50 ${selected ? "bg-slate-50" : ""}`}
+                    className={`cursor-pointer transition hover:bg-slate-50 ${selected ? "bg-slate-50" : ""} h-20`}
                   >
                     <td className="px-4 py-4">
                       <b>{(safePage - 1) * pageSize + index + 1}</b>
@@ -835,21 +942,21 @@ export function Lab({
                       {p?.name || publicDisplayValue(o.patient_id, "Patient")}
                     </td>
                     <td>
-                      <Badge className="normal-badge">{humanizeOptionLabel(o.source)}</Badge>
+                      <Badge className="normal-badge w-[70%]">{humanizeOptionLabel(o.source)}</Badge>
                     </td>
                     <td>
-                      <Badge tone={statusTone as any} className="normal-badge">{statusLabel}</Badge>
+                      <Badge tone={statusTone as any} className="normal-badge w-[70%]">{statusLabel}</Badge>
                     </td>
                     <td>₹{o.amount}</td>
                     <td onClick={(event) => event.stopPropagation()}>
                       <div className="flex min-w-[230px] items-center gap-2">
                         <label
-                          className={`flex min-w-[210px] cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${released || cancelled ? "cursor-not-allowed bg-slate-50 text-slate-300" : "bg-white text-slate-700 hover:bg-slate-50"}`}
+                          className={`flex min-w-[120px] cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${released || cancelled ? "cursor-not-allowed bg-slate-50 text-slate-300" : "bg-white text-slate-700 hover:bg-slate-50"}`}
                         >
                           <input
                             type="file"
                             accept="application/pdf,image/*"
-                            className="hidden file:rounded-lg"
+                            className="hidden file:rounded-lg "
                             disabled={released || cancelled}
                             onChange={(event: any) =>
                               setReportFiles({

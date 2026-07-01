@@ -37,7 +37,7 @@ export function FormField({
 }: BaseFieldProps & { children?: React.ReactNode }) {
   return (
     <div className={`inline lg:block ${className}`}>
-      <span className="mb-1 block text-[10px] lg:text-xs font-bold uppercase tracking-wide text-slate-500">
+      <span className="mb-1 block text-sm lg:text-xs font-bold uppercase tracking-wide text-slate-500">
         {label}
         {required && <span className="ml-1 text-red-500">*</span>}
       </span>
@@ -275,7 +275,7 @@ export function SelectField({
           </option>
         )}
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
+          <option key={opt.value} value={opt.value} className="text-xs">
             {opt.label}
           </option>
         ))}

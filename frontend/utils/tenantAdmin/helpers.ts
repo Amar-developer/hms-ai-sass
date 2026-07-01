@@ -1,6 +1,7 @@
 import { serviceScopes } from "./constants";
 import { humanizeOptionLabel,normalizeOptionLabel } from "@/lib/options";
 import { UPLOADS_BASE } from "@/lib/api";
+import { displayDate } from "@/utils/helper";
 
 export function title(value: string) {
   return value
@@ -11,7 +12,7 @@ export function title(value: string) {
 }
 
 export function formatDate(value: any) {
-  return value ? new Date(value).toLocaleDateString() : "-";
+  return displayDate(value);
 }
 
 export function isLocked(row: any) {

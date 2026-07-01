@@ -2,8 +2,10 @@ from datetime import datetime, timezone
 import json
 import logging
 import re
+import os
+from dotenv import load_dotenv
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlmodel import Session, select
 
 from app.core.auth import (
@@ -51,7 +53,13 @@ from app.modules.subscriptions.service import ensure_default_plans
 from app.modules.tenants.models import Tenant, TenantStatus, TenantType, now_utc
 
 PRIMARY_TENANT_NAME = "MedizinHub HMS"
+load_dotenv()
+ENV = os.getenv("MEDIZINHUB_ENVIRONMENT", "local")
 
+secure_cookie = (
+    ENV == "production"
+    and os.getenv("MEDIZINHUB_SECURE_COOKIE", "false").lower() == "true"
+)
 router = APIRouter()
 security_logger = logging.getLogger("medizinhub.security")
 
@@ -353,7 +361,9 @@ def bootstrap_super_admin(
 
 @router.post("/auth/login", response_model=LoginResponse)
 def login(
-    payload: LoginRequest, session: Session = Depends(get_session)
+    payload: LoginRequest,
+    response: Response,
+    session: Session = Depends(get_session),
 ) -> LoginResponse:
     email = _normalize_email(payload.email)
 
@@ -405,6 +415,19 @@ def login(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid login"
             )
     token, auth_session = create_access_session(session, user)
+    expires_at = auth_session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    max_age = max(0, int((expires_at - datetime.now(timezone.utc)).total_seconds()))
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        max_age=max_age,
+        path="/",
+    )
     if user.tenant_id:
         record_audit_event(
             session,
@@ -434,6 +457,7 @@ def me(
 
 @router.post("/auth/logout")
 def logout(
+    response: Response,
     auth_session: AuthSession = Depends(get_current_auth_session),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -441,6 +465,7 @@ def logout(
     auth_session.revoked_at = datetime.now(timezone.utc)
     session.add(auth_session)
     session.commit()
+    response.delete_cookie(key="access_token", path="/")
     if current_user.tenant_id:
         record_audit_event(
             session,
@@ -970,7 +995,8 @@ def _replace_user_roles(
     )
     for row in existing:
         session.delete(row)
-    for role_key in role_keys:
+    normalized_role_keys = list(dict.fromkeys(role_keys))
+    for role_key in normalized_role_keys:
         role = _resolve_role_for_user_assignment(
             session, tenant_id, role_key, current_user
         )

@@ -102,6 +102,7 @@ class HomeCareBookingCreate(BaseModel):
     assigned_staff_user_id: str | None = None
     assigned_staff_name: str | None = Field(default=None, max_length=160)
     staff_type: str | None = Field(default=None, max_length=80)
+    booking_type: str = Field(default="home_care", max_length=40)
     recurrence: str = Field(default="daily", max_length=40)
     start_date: date | None = None
     end_date: date | None = None
@@ -116,6 +117,7 @@ class HomeCareBookingUpdate(BaseModel):
     assigned_staff_user_id: str | None = None
     assigned_staff_name: str | None = Field(default=None, max_length=160)
     staff_type: str | None = Field(default=None, max_length=80)
+    booking_type: str | None = Field(default=None, max_length=40)
     recurrence: str | None = Field(default=None, max_length=40)
     start_date: date | None = None
     end_date: date | None = None
@@ -134,6 +136,7 @@ class HomeCareBookingRead(BaseModel):
     assigned_staff_user_id: str | None
     assigned_staff_name: str | None = None
     staff_type: str | None = None
+    booking_type: str = "home_care"
     booking_number: str
     recurrence: str
     start_date: date

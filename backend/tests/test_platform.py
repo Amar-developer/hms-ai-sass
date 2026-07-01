@@ -282,9 +282,9 @@ def test_tenant_admin_cannot_change_locked_global_department_template(
             "password": "TenantPass123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     tenant_admin_headers = {
-        "Authorization": f"Bearer {tenant_login['access_token']}",
+        "Authorization": f"Bearer {tenant_login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 
@@ -541,9 +541,9 @@ def test_settings_manage_permission_can_crud_tenant_branches_and_departments(
             "password": "Settings123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 
@@ -704,9 +704,9 @@ def test_tenant_admin_role_can_manage_branches_and_departments_even_for_legacy_p
             "password": "TenantPass123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 
@@ -778,9 +778,9 @@ def test_tenant_admin_cannot_change_locked_global_branch_template(
             "password": "TenantPass123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     tenant_admin_headers = {
-        "Authorization": f"Bearer {tenant_login['access_token']}",
+        "Authorization": f"Bearer {tenant_login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 

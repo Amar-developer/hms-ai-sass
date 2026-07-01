@@ -1,5 +1,6 @@
 PLATFORM_TENANTS_MANAGE = "platform.tenants.manage"
 PLATFORM_SUBSCRIPTIONS_MANAGE = "platform.subscriptions.manage"
+SUBSCRIPTIONS_REPORTS_READ = "subscriptions.reports.read"
 IDENTITY_USERS_MANAGE = "identity.users.manage"
 IDENTITY_USERS_CREATE = "identity.users.create"
 IDENTITY_USERS_READ = "identity.users.read"
@@ -55,27 +56,38 @@ APPOINTMENTS_CREATE = "appointments.create"
 APPOINTMENTS_READ = "appointments.read"
 APPOINTMENTS_EDIT = "appointments.edit"
 APPOINTMENTS_DELETE = "appointments.delete"
+APPOINTMENTS_CANCEL = "appointments.cancel"
 QUEUE_MANAGE = "queue.manage"
+QUEUE_READ = "queue.read"
 CONSULTATIONS_READ = "consultations.read"
 CONSULTATIONS_WRITE = "consultations.write"
+CONSULTATIONS_CREATE = "consultations.create"
+CONSULTATIONS_EDIT = "consultations.edit"
 CONSULTATIONS_SIGN = "consultations.sign"
 BILLING_MANAGE = "billing.manage"
+BILLING_READ = "billing.read"
+BILLING_CREATE = "billing.create"
+BILLING_DISCOUNTS_APPROVE = "billing.discounts.approve"
+BILLING_REFUNDS_MANAGE = "billing.refunds.manage"
 INVOICES_CREATE = "invoices.create"
 INVOICES_READ = "invoices.read"
 INVOICES_EDIT = "invoices.edit"
 INVOICES_DELETE = "invoices.delete"
 PAYMENTS_MANAGE = "payments.manage"
+PAYMENTS_CREATE = "payments.create"
 SETTLEMENTS_READ = "settlements.read"
 LAB_MANAGE = "lab.manage"
 LAB_CREATE = "lab.create"
 LAB_READ = "lab.read"
 LAB_EDIT = "lab.edit"
 LAB_DELETE = "lab.delete"
+LAB_RESULTS_MANAGE = "lab.results.manage"
 PHARMACY_MANAGE = "pharmacy.manage"
 PHARMACY_CREATE = "pharmacy.create"
 PHARMACY_READ = "pharmacy.read"
 PHARMACY_EDIT = "pharmacy.edit"
 PHARMACY_DELETE = "pharmacy.delete"
+PHARMACY_DISPENSE = "pharmacy.dispense"
 SUPPLIERS_MANAGE = "suppliers.manage"
 SUPPLIERS_CREATE = "suppliers.create"
 SUPPLIERS_READ = "suppliers.read"
@@ -101,12 +113,22 @@ NOTIFICATIONS_CREATE = "notifications.create"
 NOTIFICATIONS_READ = "notifications.read"
 NOTIFICATIONS_EDIT = "notifications.edit"
 NOTIFICATIONS_DELETE = "notifications.delete"
+COMMUNICATIONS_READ = "communications.read"
+COMMUNICATIONS_MANAGE = "communications.manage"
+COMMUNICATIONS_WHATSAPP_MANAGE = "communications.whatsapp.manage"
+COMMUNICATIONS_SMS_MANAGE = "communications.sms.manage"
+COMMUNICATIONS_VOICE_MANAGE = "communications.voice.manage"
+AI_ASSIST_MANAGE = "ai.assist.manage"
+AI_ASSIST_USE = "ai.assist.use"
 AUDIT_READ = "audit.read"
+AUDIT_EXPORT = "audit.export"
 REPORTS_READ = "reports.read"
 REPORTS_MANAGE = "reports.manage"
 REPORTS_CREATE = "reports.create"
 REPORTS_EDIT = "reports.edit"
 REPORTS_DELETE = "reports.delete"
+REPORTS_EXPORT = "reports.export"
+REPORTS_REVENUE_READ = "reports.revenue.read"
 TAX_MANAGE = "tax.manage"
 TAX_CREATE = "tax.create"
 TAX_READ = "tax.read"
@@ -121,6 +143,7 @@ DISCOUNTS_DELETE = "discounts.delete"
 PERMISSION_CATALOG = [
     PLATFORM_TENANTS_MANAGE,
     PLATFORM_SUBSCRIPTIONS_MANAGE,
+    SUBSCRIPTIONS_REPORTS_READ,
     IDENTITY_USERS_MANAGE,
     IDENTITY_USERS_CREATE,
     IDENTITY_USERS_READ,
@@ -176,27 +199,38 @@ PERMISSION_CATALOG = [
     APPOINTMENTS_READ,
     APPOINTMENTS_EDIT,
     APPOINTMENTS_DELETE,
+    APPOINTMENTS_CANCEL,
     QUEUE_MANAGE,
+    QUEUE_READ,
     CONSULTATIONS_READ,
     CONSULTATIONS_WRITE,
+    CONSULTATIONS_CREATE,
+    CONSULTATIONS_EDIT,
     CONSULTATIONS_SIGN,
     BILLING_MANAGE,
+    BILLING_READ,
+    BILLING_CREATE,
+    BILLING_DISCOUNTS_APPROVE,
+    BILLING_REFUNDS_MANAGE,
     INVOICES_CREATE,
     INVOICES_READ,
     INVOICES_EDIT,
     INVOICES_DELETE,
     PAYMENTS_MANAGE,
+    PAYMENTS_CREATE,
     SETTLEMENTS_READ,
     LAB_MANAGE,
     LAB_CREATE,
     LAB_READ,
     LAB_EDIT,
     LAB_DELETE,
+    LAB_RESULTS_MANAGE,
     PHARMACY_MANAGE,
     PHARMACY_CREATE,
     PHARMACY_READ,
     PHARMACY_EDIT,
     PHARMACY_DELETE,
+    PHARMACY_DISPENSE,
     SUPPLIERS_MANAGE,
     SUPPLIERS_CREATE,
     SUPPLIERS_READ,
@@ -222,12 +256,22 @@ PERMISSION_CATALOG = [
     NOTIFICATIONS_READ,
     NOTIFICATIONS_EDIT,
     NOTIFICATIONS_DELETE,
+    COMMUNICATIONS_READ,
+    COMMUNICATIONS_MANAGE,
+    COMMUNICATIONS_WHATSAPP_MANAGE,
+    COMMUNICATIONS_SMS_MANAGE,
+    COMMUNICATIONS_VOICE_MANAGE,
+    AI_ASSIST_MANAGE,
+    AI_ASSIST_USE,
     AUDIT_READ,
+    AUDIT_EXPORT,
     REPORTS_READ,
     REPORTS_MANAGE,
     REPORTS_CREATE,
     REPORTS_EDIT,
     REPORTS_DELETE,
+    REPORTS_EXPORT,
+    REPORTS_REVENUE_READ,
     TAX_MANAGE,
     TAX_CREATE,
     TAX_READ,

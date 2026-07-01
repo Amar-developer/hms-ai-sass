@@ -62,10 +62,11 @@ export function resolveSidebarModules({
   const configuredRoles = sidebarRolesForUser(user, fallbackRole).filter(
     (role) => Object.prototype.hasOwnProperty.call(effective, role),
   );
-  if (configuredRoles.length === 0) {
-    return Array.from(new Set(permissionModules));
-  }
+  const permissionModuleList = Array.from(permissionModules);
   return Array.from(
-    new Set(configuredRoles.flatMap((role) => effective[role] || [])),
+    new Set([
+      ...configuredRoles.flatMap((role) => effective[role] || []),
+      ...permissionModuleList,
+    ]),
   );
 }

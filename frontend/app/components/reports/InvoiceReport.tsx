@@ -2,13 +2,18 @@ import React from "react";
 import { Card, Badge } from "../common/ui";
 import { Pagination } from "./Pagination";
 import { DataTable } from "./DataTable";
+import { settlementPaidBasis } from "@/features/reports/utils";
 
 type InvoiceProps = {
   filteredInvoices: any;
   invoicePageRows: any;
   appointmentById: any;
   patientById: any;
-  settlementPaidBasis: any;
+  invoiceDoctorStaffName: any;
+  invoicePaymentMode: any;
+  invoiceGrossProfit: any;
+  invoiceGrossProfitPercent: any;
+  invoiceSettlementAmount: any;
   numberValue: any;
   doctorById: any;
   rowDate: any;
@@ -32,7 +37,11 @@ const InvoiceReport = ({
   invoicePageRows,
   appointmentById,
   patientById,
-  settlementPaidBasis,
+  invoiceDoctorStaffName,
+  invoicePaymentMode,
+  invoiceGrossProfit,
+  invoiceGrossProfitPercent,
+  invoiceSettlementAmount,
   numberValue,
   doctorById,
   rowDate,
@@ -51,6 +60,7 @@ const InvoiceReport = ({
   {
     key: "invoice_number",
     header: "Invoice",
+    width:'130px',
     render: (row: any) => (
       <>
         <b>{row.invoice_number}</b>
@@ -63,11 +73,13 @@ const InvoiceReport = ({
   {
     key: "type",
     header: "Type",
+    width:'140px',
     render: (row: any) => invoiceTypeLabel(invoiceType(row)),
   },
   {
     key: "patient",
     header: "Patient",
+    width:'80px',
     render: (row: any) => {
       const patient = patientById.get(row.patient_id);
 
@@ -84,6 +96,7 @@ const InvoiceReport = ({
   {
     key: "doctor",
     header: "Doctor",
+    width:'100px',
     render: (row: any) => {
       const appointment = appointmentById.get(row.appointment_id);
 
@@ -99,6 +112,7 @@ const InvoiceReport = ({
   {
     key: "status",
     header: "Status",
+    width:'90px',
     render: (row: any) => (
       <Badge
         tone={
@@ -117,39 +131,46 @@ const InvoiceReport = ({
   {
     key: "total_amount",
     header: "Total",
+    width:'90px',
     render: (row: any) => money(row.total_amount),
   },
   {
     key: "paid_amount",
     header: "Paid",
+    width:'90px',
     render: (row: any) => money(numberValue(row.paid_amount)),
   },
   {
     key: "balance_amount",
     header: "Balance",
+    width:'90px',
     render: (row: any) => money(row.balance_amount),
   },
   {
     key: "membership_discount_amount",
     header: "Membership",
+    width:'100px',
     render: (row: any) =>
       money(row.membership_discount_amount),
   },
   {
     key: "doctor_share_amount",
     header: "Doctor Fee",
+    width:'100px',
     render: (row: any) =>
       money(row.doctor_share_amount),
   },
   {
     key: "settlement",
     header: "Settlement",
+    width:'90px',
     render: (row: any) =>
-      money(settlementPaidBasis(row)),
+      money(invoiceSettlementAmount(row)),
   },
   {
     key: "clinic_profit",
     header: "Clinic Profit",
+    width:'90px',
     render: (row: any) => {
       const paid = numberValue(row.paid_amount);
       const settlement = settlementPaidBasis(row);
@@ -175,7 +196,7 @@ const InvoiceReport = ({
       </div>
       <div className="mt-4 overflow-auto rounded-lg border">
         <DataTable
-          className="w-full min-w-[1520px] text-left text-sm"
+          className="w-full min-w-[1120px] text-left text-sm"
           columns={invoiceColumns}
           data={filteredInvoices}
           emptyMessage="No paid invoices match this filter."

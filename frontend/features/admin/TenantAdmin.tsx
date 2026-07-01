@@ -23,8 +23,12 @@ import {
   SupplierRow,
   TaxRuleRow,
   DiscountOfferRow,
+  Role,
 } from "@/app/components/tenantAdmin/Rows";
-import { ListCard, PasswordResetModal } from "@/app/components/tenantAdmin/Shared";
+import {
+  ListCard,
+  PasswordResetModal,
+} from "@/app/components/tenantAdmin/Shared";
 import { ConfirmModal } from "@/app/components/admin/ConfirmModal";
 import {
   BranchForm,
@@ -37,6 +41,7 @@ import {
 } from "@/app/components/tenantAdmin/Forms";
 import { FilesPanel } from "@/app/components/tenantAdmin/FilesPanel";
 import { SettingsPanel } from "@/app/components/tenantAdmin/SettingsPanel";
+import { BRANCH_COLUMNS, DEPARTMENT_COLUMNS, DISCOUNT_OFFER_COLUMNS, ROLE_COLUMNS, SUPPLIER_COLUMNS, TAX_RULE_COLUMNS, USER_COLUMNS } from "@/utils/constants";
 
 export function TenantAdmin({
   apiSession,
@@ -209,12 +214,19 @@ export function TenantAdmin({
         entitlements && !Array.isArray(entitlements) ? entitlements : null,
       );
       const find = (key: string) => settingRows.find((x: any) => x.key === key);
+      const findTenant = (key: string) =>
+        settingRows.find((x: any) => x.key === key && x.scope === "tenant") ||
+        find(key);
       if (find("invoice.prefix"))
         setInvoicePrefix(find("invoice.prefix").value);
       setInvoiceLogoUrl(
-        String(find("invoice.logo_url")?.value || clinic?.logo_url || ""),
+        String(findTenant("invoice.logo_url")?.value || clinic?.logo_url || ""),
       );
-      setBankDetails(parseBankDetails(find("accounts.bank_details")?.value));
+      const bankRow =
+        settingRows.find(
+          (x: any) => x.key === "accounts.bank_details" && x.scope === "tenant",
+        ) || find("accounts.bank_details");
+      setBankDetails(parseBankDetails(bankRow?.value));
       if (find("numbering.rules"))
         setNumberingRules(
           parseNumberingRules(
@@ -267,7 +279,7 @@ export function TenantAdmin({
 
   useEffect(() => {
     loadAdmin();
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     setView("list");
     setSelectedId("");
@@ -308,7 +320,7 @@ export function TenantAdmin({
       open(visibleSections[0][0]);
     }
   }, [
-    apiSession?.token,
+    apiSession?.tenantId,
     section,
     visibleSections.map(([sectionId]) => sectionId).join(","),
   ]);
@@ -331,9 +343,7 @@ export function TenantAdmin({
     );
     const conflict = matchingDepartments.find(
       (row: any) =>
-        String(row.branch_id || "") === branchId ||
-        !row.branch_id ||
-        !branchId,
+        String(row.branch_id || "") === branchId || !row.branch_id || !branchId,
     );
     if (conflict) {
       setMessage(
@@ -437,7 +447,7 @@ export function TenantAdmin({
       setBusy(false);
     }
   }
-``
+  ``;
   async function updateUser(e: any) {
     e.preventDefault();
     if (!selectedUser) return;
@@ -983,8 +993,7 @@ export function TenantAdmin({
         apiFetch("/settings", apiSession, {
           method: "PUT",
           body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
+            scope: "tenant",
             module: "invoice",
             key: "invoice.logo_url",
             value: invoiceLogoUrl,
@@ -1048,8 +1057,9 @@ export function TenantAdmin({
         apiFetch("/settings", apiSession, {
           method: "PUT",
           body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
+            // Tenant scoped so it stays in sync with the super admin screen and
+            // the receipt PDF, which read bank details at tenant scope.
+            scope: "tenant",
             module: "accounts",
             key: "accounts.bank_details",
             value: bankDetails,
@@ -1095,8 +1105,7 @@ export function TenantAdmin({
       await apiFetch("/settings", apiSession, {
         method: "PUT",
         body: JSON.stringify({
-          scope: "branch",
-          scope_id: branchId,
+          scope: "tenant",
           module: "invoice",
           key: "invoice.logo_url",
           value: created.file_url,
@@ -1246,15 +1255,7 @@ export function TenantAdmin({
           createLabel="Create User"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={[
-            "Name",
-            "Email",
-            "Roles",
-            "Branch",
-            "Status",
-            "Created",
-            "Actions",
-          ]}
+          columns={USER_COLUMNS}
           render={(user: any) => (
             <UserRow
               key={user.id}
@@ -1300,7 +1301,6 @@ export function TenantAdmin({
           back={() => open("users")}
         />
       )}
-
       {section === "roles" && view === "list" && (
         <ListCard
           title="Roles"
@@ -1309,8 +1309,8 @@ export function TenantAdmin({
           createLabel="Create Role"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Role", "Key", "Status", "Modified", "Actions"]}
-          render={(role: any) => (
+          columns={ROLE_COLUMNS}
+          render={(role: Role) => (
             <RoleRow
               key={role.id}
               role={role}
@@ -1353,16 +1353,10 @@ export function TenantAdmin({
           title="Medical Departments"
           rows={departmentGroups}
           searchKeys={["name", "code", "branch_names", "description", "id"]}
-          createLabel="Create Medical Department"
+          createLabel="Create  Department"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={[
-            "Medical Department",
-            "Code",
-            "Branches",
-            "Status",
-            "Actions",
-          ]}
+          columns={DEPARTMENT_COLUMNS}
           render={(department: any) => (
             <DepartmentRow
               key={department.id}
@@ -1392,7 +1386,7 @@ export function TenantAdmin({
       )}
       {section === "departments" && view === "create" && (
         <DepartmentForm
-          title="Create Medical Department"
+          title="Create Department"
           departments={departments}
           branches={branches}
           busy={busy}
@@ -1402,7 +1396,7 @@ export function TenantAdmin({
       )}
       {section === "departments" && view === "edit" && selectedDepartment && (
         <DepartmentForm
-          title="Edit Medical Department"
+          title="Edit Department"
           department={selectedDepartment}
           departments={departments}
           branches={branches}
@@ -1420,7 +1414,7 @@ export function TenantAdmin({
           createLabel="Create Branch"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Branch", "Code", "Location", "Status", "Actions"]}
+          columns={BRANCH_COLUMNS}
           render={(branch: any) => (
             <BranchRow
               key={branch.id}
@@ -1442,7 +1436,9 @@ export function TenantAdmin({
       {section === "branches" && view === "create" && (
         <BranchForm
           title="Create Branch"
-          branchCount={branches.filter((branch: any) => branch.is_active !== false).length}
+          branchCount={
+            branches.filter((branch: any) => branch.is_active !== false).length
+          }
           branchLimit={subscriptionEntitlements?.included_branches}
           busy={busy}
           onSubmit={createBranch}
@@ -1467,7 +1463,7 @@ export function TenantAdmin({
           createLabel="Create Supplier"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Supplier", "GSTIN", "Contact", "Status", "Actions"]}
+          columns={SUPPLIER_COLUMNS}
           render={(supplier: any) => (
             <SupplierRow
               key={supplier.id}
@@ -1520,7 +1516,7 @@ export function TenantAdmin({
           createLabel="Create Tax Rule"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Tax Rule", "Scope", "Percentage", "Status", "Actions"]}
+          columns={TAX_RULE_COLUMNS}
           render={(rule: any) => (
             <TaxRuleRow
               key={rule.id}
@@ -1568,7 +1564,7 @@ export function TenantAdmin({
           createLabel="Create Offer"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
-          columns={["Offer", "Scope", "Value", "Status", "Actions"]}
+          columns={DISCOUNT_OFFER_COLUMNS}
           render={(offer: any) => (
             <DiscountOfferRow
               key={offer.id}

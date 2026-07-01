@@ -23,7 +23,8 @@ const LabReports = ({
     },
     {
       key: "item",
-      header: "Lab Test / Package",
+      header: "Lab / Package",
+      width: '160px'
     },
     {
       key: "orderCount",
@@ -41,6 +42,7 @@ const LabReports = ({
     {
       key: "purchaseCost",
       header: "Purchase Cost",
+      width: '160px',
       render: (row: any) => money(row.purchaseCost),
     },
     {
@@ -55,7 +57,7 @@ const LabReports = ({
     <div>
       <CollapsibleReportSection
         title="Lab Test Settlement & Profitability"
-        subtitle="Outside lab purchase cost is taken from each lab test or package supplier setup."
+        subtitle="Supplier tests use purchase cost from setup. In-house tenant hospital tests show zero purchase cost."
         badge={`${labSettlementRows.length} lab items`}
         isOpen={openSections.lab}
         onToggle={() =>

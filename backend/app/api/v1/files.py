@@ -29,6 +29,8 @@ from app.modules.ip.models import IPAdmission
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient
 from app.modules.physiotherapy.models import PhysiotherapyCase
+from app.modules.settings.models import SettingKey, SettingScope
+from app.modules.settings.service import upsert_setting
 from app.modules.tenants.models import Tenant, now_utc
 
 router = APIRouter(prefix="/files")
@@ -157,6 +159,43 @@ def _get_file(session: Session, tenant_id: str, file_id: str) -> FileDocument:
     return row
 
 
+def _sync_tenant_logo_attachment(
+    session: Session,
+    row: FileDocument,
+    *,
+    actor_user_id: str | None,
+    overwrite_existing: bool = True,
+) -> None:
+    if row.attached_to_doctype != "Tenant":
+        return
+    if row.attached_to_name and row.attached_to_name != row.tenant_id:
+        return
+    field = (row.attached_to_field or "").strip().lower()
+    if field not in {"logo_url", "invoice.logo_url", "invoice_logo_url"}:
+        return
+    tenant = session.get(Tenant, row.tenant_id)
+    if not tenant:
+        return
+    if field == "logo_url":
+        if overwrite_existing or not tenant.logo_url:
+            tenant.logo_url = row.file_url
+            tenant.updated_by_user_id = actor_user_id
+            tenant.updated_at = now_utc()
+            session.add(tenant)
+        if not overwrite_existing and tenant.logo_url:
+            return
+    upsert_setting(
+        session,
+        tenant_id=row.tenant_id,
+        scope=SettingScope.TENANT,
+        scope_id=row.tenant_id,
+        module="invoice",
+        key=SettingKey.INVOICE_LOGO_URL,
+        value=row.file_url,
+        actor_user_id=actor_user_id,
+    )
+
+
 @router.get("", response_model=list[FileDocumentRead])
 def list_files(
     tenant_id: str = Depends(require_tenant_id),
@@ -267,6 +306,7 @@ async def upload_file(
         uploaded_by_user_id=current_user.id,
         is_private=is_private,
     )
+    _sync_tenant_logo_attachment(session, row, actor_user_id=current_user.id)
     session.commit()
     session.refresh(row)
     record_audit_event(
@@ -352,6 +392,12 @@ def sync_uploads_folder(
             folder=rule["folder"],
             uploaded_by_user_id=current_user.id,
         )
+        _sync_tenant_logo_attachment(
+            session,
+            row,
+            actor_user_id=current_user.id,
+            overwrite_existing=False,
+        )
         created_rows.append(row)
     if created_rows:
         session.commit()
@@ -390,6 +436,7 @@ def update_file(
         setattr(row, key, value)
     row.updated_at = now_utc()
     session.add(row)
+    _sync_tenant_logo_attachment(session, row, actor_user_id=current_user.id)
     session.commit()
     session.refresh(row)
     record_audit_event(
@@ -425,6 +472,23 @@ def delete_file(
     session.add(row)
     session.commit()
     session.refresh(row)
+    # Remove the physical file too, but only when no other active record still
+    # points at it, so deleting one duplicate row never breaks another that
+    # references the same upload.
+    if row.file_url and row.file_url.startswith("/uploads/"):
+        still_referenced = session.exec(
+            select(FileDocument).where(
+                FileDocument.tenant_id == tenant_id,
+                FileDocument.file_url == row.file_url,
+                FileDocument.is_active == True,  # noqa: E712
+            )
+        ).first()
+        if not still_referenced:
+            disk_path = UPLOADS_DIR / Path(row.file_url).name
+            try:
+                disk_path.unlink(missing_ok=True)
+            except OSError:
+                pass
     record_audit_event(
         session,
         tenant_id=tenant_id,

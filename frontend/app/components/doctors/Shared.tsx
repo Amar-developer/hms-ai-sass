@@ -47,13 +47,13 @@ export function DoctorRow({
       className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_1.45fr] xl:items-center"
     >
       <div>
-        <b className="text-xs">{formatPractitionerName(row)}</b>
+        <b className="text-sm">{formatPractitionerName(row)}</b>
       </div>
-      <span className="text-xs">{typeLabel}</span>
-      <span className="text-slate-600 text-xs">
+      <span className="text-sm">{typeLabel}</span>
+      <span className="text-slate-600 text-sm">
         {branchNames.length ? branchNames.join(", ") : "-"}
       </span>
-      <div className="grid gap-1 text-slate-600 text-xs">
+      <div className="grid gap-1 text-slate-600 text-sm">
         {specialties.length
           ? specialties.map((specialty: any) => (
               <span key={specialty.departmentId}>
@@ -62,8 +62,8 @@ export function DoctorRow({
             ))
           : "-"}
       </div>
-      <span className="break-all text-xs">{row.mobile || row.email || "-"}</span>
-      <div className="grid gap-1 text-xs">
+      <span className="break-all text-sm">{row.mobile || row.email || "-"}</span>
+      <div className="grid gap-1 text-sm">
         {specialties.length
           ? specialties.map((specialty: any) => (
               <span key={specialty.departmentId}>
@@ -76,15 +76,15 @@ export function DoctorRow({
             ))
           : "-"}
       </div>
-      <Badge tone={row.status === "active" ? "green" : "red"} className="table-status text-xs">
+      <Badge tone={row.status === "active" ? "green" : "red"} className="table-status text-sm">
         {row.status === "active" ? "Active" : "Inactive"}
       </Badge>
       <ActionGroup className="justify-start xl:justify-end">
-        <ActionButton onClick={stop(onEdit)}>Edit</ActionButton>
-        <ActionButton onClick={stop(onStatus)}>
+        <ActionButton onClick={stop(onEdit)} className='rounded-lg border px-3 text-xs'>Edit</ActionButton>
+        <ActionButton onClick={stop(onStatus)} className='rounded-lg border px-3 text-xs'>
           {row.status === "active" ? "Inactive" : "Active"}
         </ActionButton>
-        <ActionButton tone="danger" onClick={stop(onDelete)}>
+        <ActionButton tone="danger" onClick={stop(onDelete)} className='rounded-lg border px-3 text-xs'>
           Delete
         </ActionButton>
       </ActionGroup>

@@ -128,6 +128,18 @@ function isCancelledAppointment(row: any) {
   );
 }
 
+function isQueueActionLocked(row: any) {
+  const consultation = statusKey(
+    row?.consultationStatus || row?.consultation_status,
+  );
+  return (
+    !row ||
+    consultation === "signed" ||
+    isCompletedAppointment(row) ||
+    isCancelledAppointment(row)
+  );
+}
+
 function asArray(value: any) {
   return Array.isArray(value) ? value.filter(Boolean) : value ? [value] : [];
 }
@@ -282,6 +294,7 @@ export function DoctorConsultation({
   const [labInstructions, setLabInstructions] = useState("");
   const [templates, setTemplates] = useState<any[]>([]);
   const [addendumNote, setAddendumNote] = useState("");
+  const [addendums, setAddendums] = useState<any[]>([]);
   const [medicineAmount, setMedicineAmount] = useState(250);
   const [labNeeded, setLabNeeded] = useState(false);
   const [admissionNeeded, setAdmissionNeeded] = useState(false);
@@ -301,7 +314,7 @@ export function DoctorConsultation({
   >("booked");
   const [selectedPatientDetail, setSelectedPatientDetail] = useState<any>(null);
   useEffect(() => {
-    if (!apiSession?.token) return;
+    if (!apiSession?.tenantId) return;
     if (doctorScope?.practitionerId) {
       setScopedPractitioners([]);
       return;
@@ -318,7 +331,6 @@ export function DoctorConsultation({
       )
       .catch(() => setScopedPractitioners([]));
   }, [
-    apiSession?.token,
     apiSession?.tenantId,
     branchId,
     departmentId,
@@ -446,6 +458,7 @@ export function DoctorConsultation({
     setRemarks("");
     setDiagnosis("");
     setPrescription("");
+    setAddendums([]);
     setLabNeeded(false);
     setLabTests("");
     setScanNeeded(false);
@@ -474,6 +487,7 @@ export function DoctorConsultation({
         );
         if (!alive) return;
         const c = detail.consultation;
+        setAddendums(Array.isArray(detail.addendums) ? detail.addendums : []);
         if (c.treatment_type) setTreatmentType(c.treatment_type);
         setNotes(c.clinical_notes || "");
         setRemarks(c.follow_up_advice || "");
@@ -576,7 +590,7 @@ export function DoctorConsultation({
     return () => {
       alive = false;
     };
-  }, [selected?.id, selected?.consultationId, apiSession?.token]);
+  }, [selected?.id, selected?.consultationId, apiSession?.tenantId]);
   const selectedPatientId =
     selected?.patientId ||
     selected?.patient_id ||
@@ -617,7 +631,7 @@ export function DoctorConsultation({
     return () => {
       alive = false;
     };
-  }, [selectedPatientId, Boolean(localPatient), apiSession?.token]);
+  }, [selectedPatientId, Boolean(localPatient), apiSession?.tenantId]);
   const completedToday = selectedDateQueue.filter(
     isCompletedAppointment,
   ).length;
@@ -714,7 +728,7 @@ export function DoctorConsultation({
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, departmentId]);
+  }, [apiSession?.tenantId, departmentId]);
   useEffect(() => {
     let alive = true;
     async function loadCatalogs() {
@@ -748,7 +762,7 @@ export function DoctorConsultation({
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+  }, [apiSession?.tenantId, branchId]);
   function updateAppt(id: string, patch: any) {
     setAppointments(
       appointments.map((a: any) => (a.id === id ? { ...a, ...patch } : a)),
@@ -935,6 +949,7 @@ export function DoctorConsultation({
     };
   }
   async function callPatient(a: any) {
+    if (isQueueActionLocked(a)) return;
     if (apiSession && a.queueEntryId) {
       setBusy(true);
       setMessage("");
@@ -989,6 +1004,7 @@ export function DoctorConsultation({
   }
   async function skipPatient() {
     if (!selected) return;
+    if (isQueueActionLocked(selected)) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");
@@ -1020,6 +1036,7 @@ export function DoctorConsultation({
   }
   async function requeuePatient(mode: "after2" | "end") {
     if (!selected) return;
+    if (isQueueActionLocked(selected)) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");
@@ -1068,6 +1085,7 @@ export function DoctorConsultation({
 };
   async function cancelAppointment() {
     if (!selected) return;
+    if (isQueueActionLocked(selected)) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");
@@ -1226,7 +1244,7 @@ export function DoctorConsultation({
     setBusy(true);
     setMessage("");
     try {
-      await apiFetch(
+      const saved = await apiFetch(
         `/consultations/${selected.consultationId}/addendums`,
         apiSession,
         {
@@ -1237,6 +1255,7 @@ export function DoctorConsultation({
           }),
         },
       );
+      setAddendums((previous: any[]) => [...previous, saved]);
       setAddendumNote("");
       setMessage("Addendum saved to signed consultation.");
     } catch (err: any) {
@@ -1256,7 +1275,7 @@ export function DoctorConsultation({
                 Select any waiting patient for consultation.
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 w-[50%] lg:w-[40%]">
               <Select
                 value={doctorId}
                 onChange={(e: any) => {
@@ -1272,7 +1291,7 @@ export function DoctorConsultation({
                   </option>
                 ))}
               </Select>
-              <Badge className="normal-badge text-center" tone="blue">
+              <Badge className="normal-badge text-center w-[50%]" tone="blue">
                 {branch.name}
               </Badge>
             </div>
@@ -1286,10 +1305,18 @@ export function DoctorConsultation({
                     !isCompletedAppointment(a) && !isCancelledAppointment(a),
                 )
                 .map((a: any) => (
-                  <button
+                  <div
                     key={a.id}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => openConsultation(a.id)}
-                    className={`w-36 shrink-0 rounded-lg border p-2.5 text-left transition ${
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openConsultation(a.id);
+                      }
+                    }}
+                    className={`w-36 shrink-0 cursor-pointer rounded-lg border p-2.5 text-left transition ${
                       selected?.id === a.id
                         ? "border-slate-900 bg-slate-50"
                         : "border-slate-200 bg-white hover:border-slate-400"
@@ -1332,7 +1359,7 @@ export function DoctorConsultation({
                     <p className="text-xs text-slate-400">
                       {humanizeOptionLabel(a.queueStatus)}
                     </p>
-                  </button>
+                  </div>
                 ))}
               {doctorQueue.filter(
                 (a: any) =>
@@ -1410,6 +1437,7 @@ export function DoctorConsultation({
           doctor={doctor}
           addendumNote={addendumNote}
           setAddendumNote={setAddendumNote}
+          addendums={addendums}
           saveAddendum={saveAddendum}
           busy={busy}
           apiSession={apiSession}

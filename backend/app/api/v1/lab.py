@@ -1,5 +1,4 @@
 import json
-import logging
 import re
 from datetime import datetime, timezone
 
@@ -9,11 +8,15 @@ from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.auth import require_any_permission, require_permission
-from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
+from app.modules.appointments.models import Appointment
 from app.modules.audit.service import record_audit_event
-from app.modules.consultations.models import Consultation, ConsultationReferral
+from app.modules.consultations.models import (
+    Consultation,
+    ConsultationReferral,
+    ConsultationStatus,
+)
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.lab.models import (
@@ -35,6 +38,8 @@ from app.modules.lab.schemas import (
     LabOrderFromConsultation,
     LabOrderRead,
     LabOrderStatusUpdate,
+    LabConsultationReferralItemRead,
+    LabConsultationReferralRead,
     LabResultCreate,
     LabResultRead,
     LabResultTemplateCreate,
@@ -49,28 +54,19 @@ from app.modules.lab.schemas import (
     LabTestPackageUpdate,
 )
 from app.modules.files.service import record_file_document
-from app.modules.integrations.frappe import FrappeCatalogClient
 from app.modules.settings.numbering import next_document_number
-from app.modules.settings.models import SettingKey
-from app.modules.settings.service import resolve_setting
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
+from app.modules.queue.models import QueueEntry
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, now_utc
 
 router = APIRouter(prefix="/lab")
 
-logger = logging.getLogger(__name__)
-
 
 def _catalog_key(value: str | None) -> str:
     return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
-
-
-def _slugify(value: str | None) -> str:
-    """Kebab-case slug, matching ERPNext lab item slugs (e.g. 'random-blood-sugar')."""
-    return re.sub(r"[^a-z0-9]+", "-", (value or "").strip().lower()).strip("-")
 
 
 def _find_lab_test(
@@ -110,6 +106,39 @@ def _find_lab_test(
     return matches[0][1] if matches and matches[0][0] > 0 else None
 
 
+def _find_lab_package(
+    session: Session, tenant_id: str, branch_id: str, package_name: str
+) -> LabTestPackage | None:
+    requested = _catalog_key(package_name)
+    if not requested:
+        return None
+    packages = list(
+        session.exec(
+            select(LabTestPackage).where(
+                LabTestPackage.tenant_id == tenant_id,
+                LabTestPackage.is_active == True,  # noqa: E712
+            )
+        ).all()
+    )
+
+    def score(row: LabTestPackage) -> int:
+        keys = [_catalog_key(row.name), _catalog_key(row.code)]
+        value = 0
+        for key in keys:
+            if not key:
+                continue
+            if key == requested:
+                value = max(value, 100)
+            elif requested in key or key in requested:
+                value = max(value, 70)
+        return value
+
+    matches = sorted(
+        ((score(row), row) for row in packages), key=lambda item: item[0], reverse=True
+    )
+    return matches[0][1] if matches and matches[0][0] > 0 else None
+
+
 def _fallback_lab_referrals(text: str | None) -> list[dict[str, str | None]]:
     rows = []
     for line in re.split(r"\n|,(?=\s*[A-Za-z0-9])", text or ""):
@@ -133,6 +162,92 @@ def _fallback_lab_referrals(text: str | None) -> list[dict[str, str | None]]:
                 }
             )
     return rows
+
+
+@router.get(
+    "/consultation-referrals",
+    response_model=list[LabConsultationReferralRead],
+)
+def list_lab_consultation_referrals(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.LAB_CREATE,
+            permissions.LAB_EDIT,
+        )
+    ),
+) -> list[LabConsultationReferralRead]:
+    enforce_module_enabled(session, tenant_id, "lab")
+    branch_id = scoped_branch_id(current_user, branch_id)
+    statement = (
+        select(Consultation, Appointment, Patient, QueueEntry)
+        .join(Appointment, Appointment.id == Consultation.appointment_id)
+        .join(Patient, Patient.id == Consultation.patient_id)
+        .outerjoin(QueueEntry, QueueEntry.appointment_id == Consultation.appointment_id)
+        .where(
+            Consultation.tenant_id == tenant_id,
+            Consultation.status == ConsultationStatus.SIGNED,
+            Consultation.lab_referral_text.is_not(None),
+            Consultation.lab_referral_text != "",
+        )
+        .order_by(Consultation.created_at.desc())
+    )
+    if branch_id:
+        statement = statement.where(Consultation.branch_id == branch_id)
+    rows = session.exec(statement).all()
+    consultation_ids = [consultation.id for consultation, *_rest in rows]
+    referral_rows = (
+        list(
+            session.exec(
+                select(ConsultationReferral).where(
+                    ConsultationReferral.tenant_id == tenant_id,
+                    ConsultationReferral.consultation_id.in_(consultation_ids),
+                    ConsultationReferral.referral_type == "lab",
+                )
+            ).all()
+        )
+        if consultation_ids
+        else []
+    )
+    referrals_by_consultation: dict[str, list[ConsultationReferral]] = {}
+    for row in referral_rows:
+        referrals_by_consultation.setdefault(row.consultation_id, []).append(row)
+
+    result: list[LabConsultationReferralRead] = []
+    for consultation, appointment, patient, queue_entry in rows:
+        structured = referrals_by_consultation.get(consultation.id, [])
+        referrals = [
+            LabConsultationReferralItemRead(
+                referral_type=row.referral_type,
+                item_name=row.item_name,
+                priority=row.priority,
+                instructions=row.instructions,
+            )
+            for row in structured
+        ] or [
+            LabConsultationReferralItemRead(referral_type="lab", **row)
+            for row in _fallback_lab_referrals(consultation.lab_referral_text)
+        ]
+        result.append(
+            LabConsultationReferralRead(
+                id=appointment.id,
+                consultation_id=consultation.id,
+                appointment_id=appointment.id,
+                patient_id=patient.id,
+                patient_name=patient.full_name,
+                token_number=queue_entry.token_number if queue_entry else None,
+                lab_referral_text=consultation.lab_referral_text or "",
+                status=consultation.status.value,
+                referrals=referrals,
+                signed_at=consultation.signed_at,
+                created_at=consultation.created_at,
+            )
+        )
+    return result
 
 
 def _simple_pdf(lines: list[str]) -> bytes:
@@ -199,42 +314,18 @@ def _get_order_or_404(session: Session, tenant_id: str, order_id: str) -> LabOrd
     return order
 
 
-def _external_lab_items_enabled(session: Session, tenant_id: str) -> bool:
-    value, _scope, _scope_id = resolve_setting(
-        session,
-        tenant_id=tenant_id,
-        module="integrations",
-        key=SettingKey.CATALOG_INTEGRATIONS,
-    )
-    lab_items = value.get("lab_items") if isinstance(value, dict) else {}
-    if isinstance(lab_items, dict) and "enabled" in lab_items:
-        # Tenant catalog controls are authoritative. Disabled plugins and the
-        # local provider must use MedizinHub's local lab catalog everywhere.
-        return bool(lab_items.get("enabled")) and lab_items.get("provider") != "local"
-    return bool(get_settings().external_lab_items_enabled)
-
-
-def _frappe_catalog_client() -> FrappeCatalogClient:
-    settings = get_settings()
-    if not settings.maha_clinic_url or not settings.maha_clinic_token:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ERPNext catalog plugin is not configured",
-        )
-    return FrappeCatalogClient(
-        base_url=settings.maha_clinic_url,
-        token=settings.maha_clinic_token,
-        timeout_seconds=settings.maha_clinic_timeout_seconds,
-    )
-
-
 def _normalize_local_lab_test(row: LabTestCatalog) -> dict[str, object]:
     return {
         "id": row.id,
         "name": row.name,
         "item_name": row.name,
         "slug": row.code or row.id,
+        "code": row.code,
         "source": "local",
+        "item_type": "lab_test",
+        "kind": "Lab Test",
+        "category": "Lab Test",
+        "sample_type": row.sample_type,
         "mrp_price": row.mrp_price,
         "selling_price": row.default_price,
         "price": row.default_price,
@@ -242,8 +333,24 @@ def _normalize_local_lab_test(row: LabTestCatalog) -> dict[str, object]:
     }
 
 
-def _round_price(value: object) -> int:
-    return max(round(float(value or 0)), 0)
+def _normalize_local_lab_package(row: LabTestPackage) -> dict[str, object]:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "item_name": row.name,
+        "slug": row.code or row.id,
+        "code": row.code,
+        "source": "local",
+        "item_type": "lab_package",
+        "kind": "Service",
+        "category": "Service",
+        "description": row.description,
+        "mrp_price": row.mrp_price,
+        "selling_price": row.package_price,
+        "price": row.package_price,
+        "buying_price": row.purchase_price,
+        "package_id": row.id,
+    }
 
 
 def _price_payload(
@@ -282,108 +389,13 @@ def _local_lab_price(test: LabTestCatalog | None) -> dict[str, int | str | None]
     )
 
 
-def _external_lab_price(
-    client: FrappeCatalogClient,
-    item_name: str,
-    external_item_code: str | None = None,
-    external_slug: str | None = None,
-) -> dict[str, int | str | None]:
-    requested = _catalog_key(item_name)
-    requested_code = _catalog_key(external_item_code)
-    try:
-        matches = client.get_lab_items(item_name)
-    except Exception:
-        logger.warning("External lab search failed for %r", item_name, exc_info=True)
-        matches = []
-    exact = next(
-        (
-            item
-            for item in matches
-            if _catalog_key(str(item.get("item_name") or item.get("name") or ""))
-            == requested
-            or _catalog_key(str(item.get("erpnext_name") or "")) == requested
-        ),
-        matches[0] if matches else None,
-    )
-    # Build slug candidates: whatever the search returned, plus the kebab-case
-    # name (ERPNext lab item slugs look like "random-blood-sugar"). This lets
-    # pricing work even when the name search misses or omits a usable slug.
-    candidate_slugs: list[str] = []
-    for value in (external_item_code, external_slug):
-        value = str(value or "").strip()
-        if value and value not in candidate_slugs:
-            candidate_slugs.append(value)
-    for source in (exact or {}, {}):
-        for key in ("item_code", "erpnext_name", "slug", "id"):
-            value = str(source.get(key) or "").strip()
-            if value and value not in candidate_slugs:
-                candidate_slugs.append(value)
-    for guess in (_slugify(item_name), item_name.strip()):
-        if guess and guess not in candidate_slugs:
-            candidate_slugs.append(guess)
-
-    for slug in candidate_slugs:
-        try:
-            detail = client.get_lab_item_details(slug)
-        except Exception:
-            continue
-        detail_code = _catalog_key(
-            str(detail.get("item_code") or detail.get("erpnext_name") or "")
-        )
-        detail_name = _catalog_key(
-            str(detail.get("item_name") or detail.get("name") or "")
-        )
-        if requested_code:
-            if detail_code != requested_code:
-                continue
-        elif requested and requested not in {detail_name, detail_code}:
-            continue
-        selling_price = _round_price(detail.get("selling_price"))
-        if selling_price <= 0:
-            continue
-        return _price_payload(
-            price=selling_price,
-            mrp_price=_round_price(detail.get("mrp_price")),
-            selling_price=selling_price,
-            buying_price=_round_price(detail.get("buying_price")),
-            external_source="erpnext",
-            external_slug=str(detail.get("slug") or slug or ""),
-            external_item_code=str(detail.get("item_code") or detail.get("name") or ""),
-        )
-    return _price_payload(price=0)
-
-
 def _resolve_lab_price(
-    frappe_client: FrappeCatalogClient | None,
     test: LabTestCatalog | None,
     item_name: str,
     external_item_code: str | None = None,
     external_slug: str | None = None,
 ) -> dict[str, int | str | None]:
-    """Price a lab item, falling back to the local catalog when the external
-    catalog lookup fails or returns no price, so order creation is never blocked
-    or silently zero-priced by the integration."""
-    if frappe_client is not None:
-        try:
-            pricing = _external_lab_price(
-                frappe_client,
-                item_name,
-                external_item_code=external_item_code,
-                external_slug=external_slug,
-            )
-        except Exception:
-            logger.warning(
-                "External lab pricing failed for %r; using local catalog price",
-                item_name,
-                exc_info=True,
-            )
-        else:
-            if int(pricing.get("price") or 0) > 0:
-                return pricing
-            logger.warning(
-                "External lab pricing returned no price for %r; using local catalog price",
-                item_name,
-            )
+    """Price a lab item from the tenant local catalog only."""
     return _local_lab_price(test)
 
 
@@ -394,13 +406,8 @@ def _add_priced_order_items_from_names(
     item_names: list[str | dict[str, str | None]],
     seen_keys: set[str] | None = None,
 ) -> int:
-    """Create LabOrderItem rows for external/manual test names and return total price."""
+    """Create LabOrderItem rows for local/manual test or service names."""
     seen_keys = seen_keys or set()
-    frappe_client = (
-        _frappe_catalog_client()
-        if _external_lab_items_enabled(session, order.tenant_id)
-        else None
-    )
     total = 0
     for raw_item in item_names:
         if isinstance(raw_item, dict):
@@ -419,13 +426,28 @@ def _add_priced_order_items_from_names(
         if not item_name or not item_key or item_key in seen_keys:
             continue
         test = _find_lab_test(session, order.tenant_id, order.branch_id, item_name)
-        pricing = _resolve_lab_price(
-            frappe_client,
-            test,
-            item_name,
-            external_item_code=external_item_code,
-            external_slug=external_slug,
+        package = (
+            None
+            if test
+            else _find_lab_package(session, order.tenant_id, order.branch_id, item_name)
         )
+        if test:
+            pricing = _resolve_lab_price(
+                test,
+                item_name,
+                external_item_code=external_item_code,
+                external_slug=external_slug,
+            )
+        elif package:
+            pricing = _price_payload(
+                price=package.package_price,
+                mrp_price=package.mrp_price or package.package_price,
+                selling_price=package.package_price,
+                buying_price=package.purchase_price,
+                supplier_id=package.supplier_id,
+            )
+        else:
+            pricing = _price_payload(price=0)
         price = int(pricing.get("price") or 0)
         if price <= 0:
             continue
@@ -437,7 +459,8 @@ def _add_priced_order_items_from_names(
                 branch_id=order.branch_id,
                 lab_order_id=order.id,
                 test_id=test.id if test else None,
-                test_name=test.name if test else item_name,
+                package_id=package.id if package else None,
+                test_name=test.name if test else package.name if package else item_name,
                 sample_type=test.sample_type if test else None,
                 **pricing,
             )
@@ -446,7 +469,7 @@ def _add_priced_order_items_from_names(
 
 
 def _reprice_zero_order_items(session: Session, order: LabOrder) -> bool:
-    """Fill zero-priced lab order items from the active external/local catalog."""
+    """Fill zero-priced lab order items from the active local catalog."""
     items = list(
         session.exec(
             select(LabOrderItem).where(
@@ -475,11 +498,6 @@ def _reprice_zero_order_items(session: Session, order: LabOrder) -> bool:
     zero_items = [item for item in items if int(item.price or 0) <= 0]
     if not zero_items:
         return False
-    frappe_client = (
-        _frappe_catalog_client()
-        if _external_lab_items_enabled(session, order.tenant_id)
-        else None
-    )
     changed = False
     for item in zero_items:
         test = session.get(LabTestCatalog, item.test_id) if item.test_id else None
@@ -487,7 +505,7 @@ def _reprice_zero_order_items(session: Session, order: LabOrder) -> bool:
             test = _find_lab_test(
                 session, order.tenant_id, order.branch_id, item.test_name
             )
-        pricing = _resolve_lab_price(frappe_client, test, item.test_name)
+        pricing = _resolve_lab_price(test, item.test_name)
         new_price = int(pricing.get("price") or 0)
         if new_price <= 0:
             continue
@@ -527,41 +545,6 @@ def _reprice_zero_order_items(session: Session, order: LabOrder) -> bool:
     return changed
 
 
-@router.get("/external/items")
-def list_external_lab_items(
-    tenant_id: str = Depends(require_tenant_id),
-    search: str | None = None,
-    _current_user: User = Depends(
-        require_any_permission(
-            permissions.CONSULTATIONS_READ,
-            permissions.CONSULTATIONS_WRITE,
-            permissions.CONSULTATIONS_SIGN,
-            permissions.LAB_MANAGE,
-            permissions.LAB_READ,
-        )
-    ),
-) -> list[dict[str, object]]:
-    return _frappe_catalog_client().get_lab_items(search)
-
-
-@router.get("/external/items/{slug}/details")
-def get_external_lab_item_details(
-    slug: str,
-    _tenant_id: str = Depends(require_tenant_id),
-    _current_user: User = Depends(
-        require_any_permission(
-            permissions.CONSULTATIONS_READ,
-            permissions.CONSULTATIONS_WRITE,
-            permissions.CONSULTATIONS_SIGN,
-            permissions.LAB_MANAGE,
-            permissions.LAB_READ,
-            permissions.BILLING_MANAGE,
-        )
-    ),
-) -> dict[str, int | str | float]:
-    return _frappe_catalog_client().get_lab_item_details(slug)
-
-
 @router.get("/catalog/available-tests")
 def list_available_lab_tests(
     tenant_id: str = Depends(require_tenant_id),
@@ -581,33 +564,34 @@ def list_available_lab_tests(
     ),
 ) -> list[dict[str, object]]:
     enforce_module_enabled(session, tenant_id, "lab")
-    if _external_lab_items_enabled(session, tenant_id):
-        try:
-            return _frappe_catalog_client().get_lab_items(search)
-        except HTTPException:
-            # External ERPNext catalog is unreachable or not configured —
-            # fall back to the local MedizinHub lab catalog so the picker keeps working.
-            pass
-
-    branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(LabTestCatalog).where(
+    scoped_branch_id(current_user, branch_id)
+    test_statement = select(LabTestCatalog).where(
         LabTestCatalog.tenant_id == tenant_id,
         LabTestCatalog.is_active == True,  # noqa: E712
     )  # noqa: E712
-    if branch_id:
-        statement = statement.where(
-            (LabTestCatalog.branch_id == branch_id)
-            | (LabTestCatalog.branch_id.is_(None))
-        )
+    package_statement = select(LabTestPackage).where(
+        LabTestPackage.tenant_id == tenant_id,
+        LabTestPackage.is_active == True,  # noqa: E712
+    )  # noqa: E712
     if search:
         pattern = f"%{search}%"
-        statement = statement.where(
+        test_statement = test_statement.where(
             (LabTestCatalog.name.ilike(pattern)) | (LabTestCatalog.code.ilike(pattern))
         )
-    return [
+        package_statement = package_statement.where(
+            (LabTestPackage.name.ilike(pattern)) | (LabTestPackage.code.ilike(pattern))
+        )
+    rows = [
         _normalize_local_lab_test(row)
-        for row in session.exec(statement.order_by(LabTestCatalog.name)).all()
+        for row in session.exec(test_statement.order_by(LabTestCatalog.name)).all()
     ]
+    rows.extend(
+        _normalize_local_lab_package(row)
+        for row in session.exec(package_statement.order_by(LabTestPackage.name)).all()
+    )
+    return sorted(
+        rows, key=lambda row: str(row.get("item_name") or row.get("name") or "")
+    )
 
 
 @router.get("/catalog/popular-tests")
@@ -894,9 +878,9 @@ def create_lab_test(
     ),
 ) -> LabTestCatalog:
     enforce_module_enabled(session, tenant_id, "lab")
-    if payload.branch_id:
-        require_user_branch_access(current_user, payload.branch_id)
-    test = LabTestCatalog.model_validate(payload, update={"tenant_id": tenant_id})
+    data = payload.model_dump()
+    data["branch_id"] = None
+    test = LabTestCatalog.model_validate(data, update={"tenant_id": tenant_id})
     session.add(test)
     session.commit()
     session.refresh(test)
@@ -929,16 +913,11 @@ def list_lab_tests(
     ),
 ) -> list[LabTestCatalog]:
     enforce_module_enabled(session, tenant_id, "lab")
-    branch_id = scoped_branch_id(current_user, branch_id)
+    scoped_branch_id(current_user, branch_id)
     statement = select(LabTestCatalog).where(
         LabTestCatalog.tenant_id == tenant_id,
         LabTestCatalog.is_active == True,  # noqa: E712
     )  # noqa: E712
-    if branch_id:
-        statement = statement.where(
-            (LabTestCatalog.branch_id == branch_id)
-            | (LabTestCatalog.branch_id.is_(None))
-        )
     if search:
         pattern = f"%{search}%"
         statement = statement.where(
@@ -963,9 +942,8 @@ def update_lab_test(
         )
     require_user_branch_access(current_user, test.branch_id)
     data = payload.model_dump(exclude_unset=True)
-    next_branch_id = data.get("branch_id", test.branch_id)
-    if next_branch_id:
-        require_user_branch_access(current_user, next_branch_id)
+    if "branch_id" in data:
+        data["branch_id"] = None
     for key, value in data.items():
         setattr(test, key, value)
     test.updated_at = now_utc()
@@ -1030,11 +1008,9 @@ def create_lab_package(
     current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
 ) -> LabTestPackageRead:
     enforce_module_enabled(session, tenant_id, "lab")
-    if payload.branch_id:
-        require_user_branch_access(current_user, payload.branch_id)
-    package = LabTestPackage.model_validate(
-        payload.model_dump(exclude={"test_ids"}), update={"tenant_id": tenant_id}
-    )
+    data = payload.model_dump(exclude={"test_ids"})
+    data["branch_id"] = None
+    package = LabTestPackage.model_validate(data, update={"tenant_id": tenant_id})
     session.add(package)
     session.commit()
     session.refresh(package)
@@ -1071,16 +1047,11 @@ def list_lab_packages(
     current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
 ) -> list[LabTestPackageRead]:
     enforce_module_enabled(session, tenant_id, "lab")
-    branch_id = scoped_branch_id(current_user, branch_id)
+    scoped_branch_id(current_user, branch_id)
     statement = select(LabTestPackage).where(
         LabTestPackage.tenant_id == tenant_id,
         LabTestPackage.is_active == True,  # noqa: E712
     )  # noqa: E712
-    if branch_id:
-        statement = statement.where(
-            (LabTestPackage.branch_id == branch_id)
-            | (LabTestPackage.branch_id.is_(None))
-        )
     packages = list(session.exec(statement.order_by(LabTestPackage.name)).all())
     return [_package_read(session, package) for package in packages]
 
@@ -1101,9 +1072,8 @@ def update_lab_package(
         )
     require_user_branch_access(current_user, package.branch_id)
     data = payload.model_dump(exclude_unset=True, exclude={"test_ids"})
-    next_branch_id = data.get("branch_id", package.branch_id)
-    if next_branch_id:
-        require_user_branch_access(current_user, next_branch_id)
+    if "branch_id" in data:
+        data["branch_id"] = None
     for key, value in data.items():
         setattr(package, key, value)
     package.updated_at = now_utc()
@@ -1369,17 +1339,30 @@ def create_lab_order_from_consultation(
         for row in structured_referrals
     ] or _fallback_lab_referrals(consultation.lab_referral_text)
     total = 0
-    frappe_client = (
-        _frappe_catalog_client()
-        if _external_lab_items_enabled(session, tenant_id)
-        else None
-    )
     for referral in referrals:
         item_name = str(referral["item_name"] or "").strip()
         if not item_name:
             continue
         test = _find_lab_test(session, tenant_id, consultation.branch_id, item_name)
-        pricing = _resolve_lab_price(frappe_client, test, item_name)
+        package = (
+            None
+            if test
+            else _find_lab_package(
+                session, tenant_id, consultation.branch_id, item_name
+            )
+        )
+        if test:
+            pricing = _resolve_lab_price(test, item_name)
+        elif package:
+            pricing = _price_payload(
+                price=package.package_price,
+                mrp_price=package.mrp_price or package.package_price,
+                selling_price=package.package_price,
+                buying_price=package.purchase_price,
+                supplier_id=package.supplier_id,
+            )
+        else:
+            pricing = _price_payload(price=0)
         total += int(pricing.get("price") or 0)
         session.add(
             LabOrderItem(
@@ -1387,7 +1370,8 @@ def create_lab_order_from_consultation(
                 branch_id=order.branch_id,
                 lab_order_id=order.id,
                 test_id=test.id if test else None,
-                test_name=test.name if test else item_name,
+                package_id=package.id if package else None,
+                test_name=test.name if test else package.name if package else item_name,
                 sample_type=test.sample_type if test else None,
                 **pricing,
             )

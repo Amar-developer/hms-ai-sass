@@ -1,3 +1,5 @@
+import { displayDate as formatDisplayDate } from "@/utils/helper";
+
 export function displayTime(value: any) {
   const raw = String(value || "").slice(0, 5);
   const [hourText, minuteText = "00"] = raw.split(":");
@@ -9,10 +11,7 @@ export function displayTime(value: any) {
 }
 
 export function displayDate(value: any) {
-  if (!value) return "Today";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleDateString(undefined, { day: "2-digit", month: "short" });
+  return value ? formatDisplayDate(value, String(value)) : "Today";
 }
 
 export function toneForQueue(status: string) {

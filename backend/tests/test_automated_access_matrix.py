@@ -96,7 +96,7 @@ def _create_role_user_and_login(
     )
     assert login.status_code == 200
     return {
-        "Authorization": f"Bearer {login.json()['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant_id,
     }
 

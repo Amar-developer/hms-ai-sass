@@ -3,28 +3,12 @@ from typing import Any
 
 from sqlmodel import Session, select
 
-from app.core.config import get_settings
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.tenants.models import now_utc
 
-PLUGIN_ERPNext_LAB_CATALOG = "erpnext_lab_catalog"
-
 
 def integration_plugin_registry() -> list[dict[str, Any]]:
-    settings = get_settings()
-    return [
-        {
-            "key": PLUGIN_ERPNext_LAB_CATALOG,
-            "name": "ERPNext Laboratory Item Catalog",
-            "category": "Catalog",
-            "module_key": "lab",
-            "provider": "ERPNext / Frappe",
-            "description": "Use ERPNext healthcare laboratory items in consultation lab-test search.",
-            "requires": ["MEDIZINHUB_MAHA_CLINIC_URL", "MEDIZINHUB_MAHA_CLINIC_TOKEN"],
-            "configured": bool(settings.maha_clinic_url and settings.maha_clinic_token),
-            "default_config": {},
-        }
-    ]
+    return []
 
 
 def get_plugin_definition(plugin_key: str) -> dict[str, Any] | None:

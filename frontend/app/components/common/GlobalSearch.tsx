@@ -117,12 +117,7 @@ export function GlobalSearch({ items }: GlobalSearchProps) {
                   index === activeIndex ? "bg-slate-100" : "hover:bg-slate-50"
                 }`}
               >
-                <span className="font-semibold text-slate-900">{item.label}</span>
-                {item.description && (
-                  <span className="mt-0.5 truncate text-xs text-slate-500">
-                    {item.description}
-                  </span>
-                )}
+                <span className="font-semibold text-xs text-slate-900">{item.label}</span>
               </button>
             ))
           ) : (

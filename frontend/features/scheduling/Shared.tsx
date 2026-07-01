@@ -51,20 +51,20 @@ export function ScheduleRow({
       className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] md:items-center"
     >
       <div>
-        <b className="text-xs">{doctor?.full_name || publicDisplayValue(row.practitioner_id, "Doctor")}</b>
-        <p className="break-all text-xs text-slate-500">
+        <b className="text-sm">{doctor?.full_name || publicDisplayValue(row.practitioner_id, "Doctor")}</b>
+        <p className="break-all text-sm text-slate-500">
           {scheduleRows.length} schedule{" "}
           {scheduleRows.length === 1 ? "slot" : "slots"}
         </p>
       </div>
-      <span className="text-xs">{branch?.name || publicDisplayValue(row.branch_id, "Assigned branch")}</span>
-      <span className="text-xs">{department?.name || "All Departments"}</span>
-      <span className="text-xs">{row.room_number ? row.room_number.padStart(3, "0") : "-"}</span>
-      <span className="text-xs">
+      <span className="text-sm">{branch?.name || publicDisplayValue(row.branch_id, "Assigned branch")}</span>
+      <span className="text-sm">{department?.name || "All Departments"}</span>
+      <span className="text-sm">{row.room_number ? row.room_number.padStart(3, "0") : "-"}</span>
+      <span className="text-sm">
         {formatDisplayRange(firstSchedule.start_time, firstSchedule.end_time)}
       </span>
-      <span className="text-xs">{row.slot_minutes} min</span>
-      <Badge tone={statusTone as any} className="table-status text-xs">{statusLabel}</Badge>
+      <span className="text-sm">{row.slot_minutes} min</span>
+      <Badge tone={statusTone as any} className="table-status text-sm">{statusLabel}</Badge>
       <ActionGroup className="justify-end">
         <ActionButton onClick={stop(onEdit)}>Edit</ActionButton>
         <ActionButton tone="danger" onClick={stop(onDelete)}>

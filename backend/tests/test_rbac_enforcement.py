@@ -36,7 +36,7 @@ def test_limited_role_can_read_patients_but_cannot_write_or_manage_settings(clie
             "tenant_id": tenant["id"],
         },
     )
-    token = login.json()["access_token"]
+    token = login.cookies["access_token"]
     limited_headers = {"Authorization": f"Bearer {token}", "X-Tenant-ID": tenant["id"]}
 
     can_read = client.get("/api/v1/patients", headers=limited_headers)
@@ -83,7 +83,7 @@ def test_authenticated_user_cannot_cross_tenant_with_permission(client):
             "tenant_id": tenant["id"],
         },
     )
-    token = login.json()["access_token"]
+    token = login.cookies["access_token"]
 
     response = client.get(
         "/api/v1/appointments",
@@ -140,7 +140,7 @@ def test_inactive_role_no_longer_grants_permissions(client):
     response = client.get(
         "/api/v1/patients",
         headers={
-            "Authorization": f"Bearer {login.json()['access_token']}",
+            "Authorization": f"Bearer {login.cookies['access_token']}",
             "X-Tenant-ID": tenant["id"],
         },
     )
@@ -185,7 +185,7 @@ def test_suspended_tenant_blocks_tenant_user_access(client):
     response = client.get(
         "/api/v1/patients",
         headers={
-            "Authorization": f"Bearer {login.json()['access_token']}",
+            "Authorization": f"Bearer {login.cookies['access_token']}",
             "X-Tenant-ID": tenant["id"],
         },
     )
@@ -243,14 +243,14 @@ def test_branch_scoped_user_can_read_tenant_patient_from_other_branch(client):
     response = client.get(
         f"/api/v1/patients/{patient['id']}",
         headers={
-            "Authorization": f"Bearer {login.json()['access_token']}",
+            "Authorization": f"Bearer {login.cookies['access_token']}",
             "X-Tenant-ID": tenant["id"],
         },
     )
     search = client.get(
         "/api/v1/patients?q=Other",
         headers={
-            "Authorization": f"Bearer {login.json()['access_token']}",
+            "Authorization": f"Bearer {login.cookies['access_token']}",
             "X-Tenant-ID": tenant["id"],
         },
     )

@@ -28,6 +28,12 @@ type HeaderProps = {
 
   addRecipientSuggestion: (email: string) => void;
 
+  emailReportSections: string[];
+  setEmailReportSections: React.Dispatch<React.SetStateAction<string[]>>;
+
+  emailLabSupplierIds: string[];
+  setEmailLabSupplierIds: React.Dispatch<React.SetStateAction<string[]>>;
+
   sendEmailReport: () => void;
 
   sendBusy: boolean;
@@ -75,6 +81,10 @@ const Header = ({
   setRecipientInput,
   recentEmails,
   addRecipientSuggestion,
+  emailReportSections,
+  setEmailReportSections,
+  emailLabSupplierIds,
+  setEmailLabSupplierIds,
   sendEmailReport,
   sendBusy,
   period,
@@ -93,6 +103,47 @@ const Header = ({
   suppliers,
   setPeriod,
 }: HeaderProps) => {
+  const emailSectionGroups = [
+    {
+      title: "Financial views",
+      options: [
+        ["overall", "Overall"],
+        ["consultation", "Consultations"],
+        ["lab", "Lab"],
+        ["service", "Service"],
+        ["pharmacy", "Pharmacy"],
+      ],
+    },
+    {
+      title: "Care modules",
+      options: [
+        ["home_visit", "Home Visit"],
+        ["home_care", "Home Care"],
+        ["ip", "IP"],
+        ["physiotherapy", "Physiotherapy"],
+      ],
+    },
+  ];
+  const toggleEmailSection = (value: string) => {
+    setEmailReportSections((current) => {
+      if (current.includes(value)) {
+        const next = current.filter((item) => item !== value);
+        return next.length ? next : current;
+      }
+      return [...current, value];
+    });
+  };
+  const toggleLabSupplier = (value: string) => {
+    setEmailLabSupplierIds((current) => {
+      if (value === "all") return ["all"];
+      const base = current.filter((item) => item !== "all");
+      if (base.includes(value)) {
+        const next = base.filter((item) => item !== value);
+        return next.length ? next : ["all"];
+      }
+      return [...base, value];
+    });
+  };
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
@@ -105,16 +156,16 @@ const Header = ({
             final profit, and paid-basis settlement.
           </p>
         </div>
-        <Badge tone="blue" className="normal-badge w-[15%]">
+        <Badge tone="blue" className="normal-badge w-[20%]">
           {apiSession?.user?.is_super_admin ? "Super Admin" : "Tenant Admin"}
         </Badge>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap  gap-2">
         {onRefresh ? (
           <RefreshButton
             onRefresh={onRefresh}
             label="Refresh"
-            className="rounded-2xl"
+            className="rounded-2xl text-sm py-3 h-12"
           />
         ) : null}
         <button
@@ -179,6 +230,69 @@ const Header = ({
               ))}
             </div>
           )}
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            {emailSectionGroups.map((group) => (
+              <div
+                key={group.title}
+                className="rounded-lg border border-slate-200 bg-white p-3"
+              >
+                <p className="mb-2 text-xs font-black uppercase text-slate-500">
+                  {group.title}
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {group.options.map(([value, label]) => (
+                    <label
+                      key={value}
+                      className="flex items-center gap-2 text-xs font-bold text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={emailReportSections.includes(value)}
+                        onChange={() => toggleEmailSection(value)}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <div className="rounded-lg border border-slate-200 bg-white p-3 lg:col-span-2">
+              <p className="mb-2 text-xs font-black uppercase text-slate-500">
+                Lab suppliers
+              </p>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={emailLabSupplierIds.includes("all")}
+                    onChange={() => toggleLabSupplier("all")}
+                  />
+                  All suppliers
+                </label>
+                <label className="flex items-center gap-2 text-xs font-bold text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={emailLabSupplierIds.includes("none")}
+                    onChange={() => toggleLabSupplier("none")}
+                  />
+                  Tenant Hospital / In-house
+                </label>
+                {suppliers.map((supplier: any) => (
+                  <label
+                    key={supplier.id}
+                    className="flex items-center gap-2 text-xs font-bold text-slate-700"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={emailLabSupplierIds.includes(supplier.id)}
+                      onChange={() => toggleLabSupplier(supplier.id)}
+                    />
+                    {supplier.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
@@ -280,7 +394,7 @@ const Header = ({
             className="select-filter"
           >
             <option value="all">All suppliers</option>
-            <option value="none">No supplier</option>
+            <option value="none">Tenant Hospital / In-house</option>
             {suppliers.map((supplier: any) => (
               <option key={supplier.id} value={supplier.id}>
                 {supplier.name}

@@ -37,7 +37,7 @@ export const parseNumberingRules = (value: any, fallbackPrefix = "SUN") => ({
 
 export const defaultCatalogIntegrations: any = {
   lab_items: { enabled: false, provider: "local" },
-  medicine_items: { enabled: false, provider: "local" },
+  medicine_items: { enabled: true, provider: "external_catalog" },
 };
 
 export const parseCatalogIntegrations = (value: any) => ({

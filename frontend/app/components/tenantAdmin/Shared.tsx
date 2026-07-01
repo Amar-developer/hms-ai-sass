@@ -22,11 +22,7 @@ export function Header({ title, subtitle, back }: any) {
         <h3 className="card-title font-bold">{title}</h3>
         <p className="card-desc text-slate-500">{subtitle}</p>
       </div>
-      <button
-        type="button"
-        onClick={back}
-        className="close-button font-bold"
-      >
+      <button type="button" onClick={back} className="close-button font-bold">
         Back
       </button>
     </div>
@@ -36,7 +32,9 @@ export function Header({ title, subtitle, back }: any) {
 export function Actions({ busy, back, disabled, label }: any) {
   return (
     <div className="flex flex-wrap gap-2 md:col-span-2">
-      <Button disabled={busy || disabled} className='save-button'>{busy ? "Saving..." : label}</Button>
+      <Button disabled={busy || disabled} className="save-button">
+        {busy ? "Saving..." : label}
+      </Button>
       <button
         type="button"
         onClick={back}
@@ -57,10 +55,15 @@ export function ClickableRow({ children, onClick, className }: any) {
       onKeyDown={(event: any) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onClick();
+          onClick?.();
         }
       }}
-      className={`grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none xl:items-center ${className}`}
+      className={`
+        flex w-full cursor-pointer gap-0 px-4 py-4 text-sm transition
+        hover:bg-slate-50 focus:bg-slate-50 focus:outline-none
+        items-center
+        ${className ?? ""}
+      `}
     >
       {children}
     </div>
@@ -267,10 +270,10 @@ export function CheckboxList({
                       : (selected || []).filter((item: any) => item !== value),
                   );
                 }}
-                className="mt-1 h-4 w-4"
+                className="mt-1 lg:h-4 lg:w-4 h-5 w-5"
               />
-              <span>
-                <b>{row[labelKey]}</b>
+              <span className="flex items-center h-full">
+                <b className="md:text-sm lg:text-xs">{row[labelKey]}</b>
                 {row.branchLabel && (
                   <span className="block text-xs text-slate-500">
                     {row.branchLabel}
@@ -303,6 +306,7 @@ export function ListCard({
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 8;
+
   const filtered = useMemo(
     () =>
       rows.filter((row: any) =>
@@ -314,102 +318,86 @@ export function ListCard({
       ),
     [rows, query, searchKeys],
   );
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
+
   const pageRows = filtered.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
+
   useEffect(() => {
     setPage(1);
   }, [query, rows.length]);
-  const gridClass =
-    columns.length === 8
-      ? "grid-cols-[1fr_1.15fr_.72fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
-      : columns.length === 7
-        ? "grid-cols-[1.05fr_1.15fr_1fr_.8fr_.65fr_.6fr_1.65fr]"
-        : columns.length === 6
-          ? "grid-cols-[1.2fr_1.2fr_1fr_.7fr_.75fr_1.45fr]"
-          : columns.length === 5
-            ? "grid-cols-[.9fr_.9fr_.9fr_.9fr_1fr]"
-            : "grid-cols-[1fr_1fr_1fr_1fr_1fr]";
 
-  const gridClassTab =
-    columns.length === 8
-      ? "grid-cols-[1fr_1.15fr_.72fr_1.15fr_.9fr_.6fr_.65fr_1.7fr]"
-      : columns.length === 7
-        ? "grid-cols-[1.05fr_1.15fr_1fr_.8fr_.65fr_.6fr_1.65fr]"
-        : columns.length === 6
-          ? "grid-cols-[1.2fr_1.2fr_1fr_.7fr_.75fr_1.45fr]"
-          : columns.length === 5
-            ? "grid-cols-[.8fr_.8fr_.8fr_1fr_1fr]"
-            : "grid-cols-[1fr_1fr_1fr_1fr_1fr]";
-
-  const tableMinWidth =
-    columns.length === 8
-     ? "min-w-[1380px]"
-     : columns.length === 7
-        ? "min-w-[940px]"
-        : columns.length === 6
-          ? "min-w-[940px]"
-          : columns.length === 5
-            ? "min-w-[740px]"
-            : "min-w-[740px]"
   return (
     <Card>
+      {/* HEADER */}
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="card-title font-bold">{title}</h3>
           <p className="card-desc text-slate-500">
-            Latest created or updated records appear first. Click a row to open
-            it, or use the action buttons.
+            Latest created or updated records appear first. Click a row to open it.
           </p>
         </div>
+
         <div className="flex items-center gap-2">
-          {onRefresh ? <RefreshButton onRefresh={onRefresh} /> : null}
+          {onRefresh && <RefreshButton onRefresh={onRefresh} />}
+
           <button
             type="button"
             onClick={onCreate}
-            className={`inline-flex items-center justify-center ${createLabel == "Create Role" || createLabel == "Create User" || createLabel == 'Create Offer'? "w-[30%] lg:w-[80%]" : "md:w-[40%] lg:w-[85%]"}  gap-2 rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs bg-slate-900 px-4 py-3 font-bold text-white`}
+            className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-xs bg-slate-900 font-bold text-white"
           >
             <Plus size={16} />
             {createLabel}
           </button>
         </div>
       </div>
+
+      {/* SEARCH */}
       <div className="mt-4 max-w-md">
         <FormField label={`Search ${title}`}>
           <Input
             value={query}
             onChange={(e: any) => setQuery(e.target.value)}
             placeholder={`Search ${title.toLowerCase()}`}
-            className='search-filter'
+            className="search-filter"
           />
         </FormField>
       </div>
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-        <div className={`${tableMinWidth}`}>
-          <div
-            className={`gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500
-              md:grid ${gridClassTab}  lg:grid ${gridClass}`}
-          >
-            {columns.map((column: string, index: number) => (
-              <span
-                key={column}
-                className={index === columns.length - 1 ? "text-right" : ""}
+
+      {/* TABLE */}
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 ">
+        <div className="min-w-max w-full">
+
+          {/* HEADER */}
+          <div className="flex bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
+            {columns.map((col: any) => (
+              <div
+                key={col.label}
+                className={`${col?.width ?? "w-[160px]"} px-2 flex-shrink-0 `}
               >
-                {column}
-              </span>
+                {col.label}
+              </div>
             ))}
           </div>
+
+          {/* ROWS */}
           <div className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
               <Empty text="No records match your search." />
             )}
-            {pageRows.map(render)}
+
+            {pageRows.map((row: any, index: number) =>
+              render(row, index),
+            )}
           </div>
         </div>
       </div>
+
+      {/* PAGINATION */}
       <Pagination
         page={safePage}
         totalPages={totalPages}

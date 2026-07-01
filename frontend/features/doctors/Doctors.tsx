@@ -91,12 +91,12 @@ export function Doctors({ apiSession, clinic }: any) {
     if (apiSession) {
       loadTenants();
     }
-  }, [apiSession?.token]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (apiSession && tenantId) {
       loadData(tenantId);
     }
-  }, [apiSession?.token, tenantId]);
+  }, [apiSession?.tenantId, tenantId]);
 
   function open(nextView: string, id = "") {
     setSelectedId(id);
@@ -453,14 +453,14 @@ export function Doctors({ apiSession, clinic }: any) {
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1280px]">
           <div className="hidden md:grid grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
-            <span>Doctor</span>
-            <span>Type</span>
-            <span>Branches</span>
-            <span>Medical Departments</span>
-            <span>Contact</span>
-            <span>Fee</span>
-            <span className="text-center">Status</span>
-            <span className="text-right">Actions</span>
+            <span className="text-sm">Doctor</span>
+            <span className="text-sm">Type</span>
+            <span className="text-sm">Branches</span>
+            <span className="text-sm">Departments</span>
+            <span className="text-sm">Contact</span>
+            <span className="text-sm">Fee</span>
+            <span className="text-sm text-center">Status</span>
+            <span className="text-sm text-center lg:text-right">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
             {pageRows.length === 0 && (

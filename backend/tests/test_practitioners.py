@@ -112,9 +112,9 @@ def test_appointment_create_permission_can_read_doctors_and_calendar(client):
             "password": "NurseBook123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 
@@ -191,9 +191,9 @@ def test_appointment_creator_can_read_doctor_when_department_code_is_sent(client
             "password": "NurseCode123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 
@@ -257,9 +257,9 @@ def test_appointment_create_permission_can_read_tenant_reference_data_for_bookin
             "password": "NurseRefs123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 
@@ -323,9 +323,9 @@ def test_scheduling_crud_permissions_can_manage_doctor_time_slots(client):
             "password": "Schedule123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 
@@ -409,9 +409,9 @@ def test_scheduling_read_permission_cannot_create_doctor_time_slots(client):
             "password": "Schedule123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 

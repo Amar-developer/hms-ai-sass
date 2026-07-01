@@ -3,6 +3,7 @@
 from app.modules.appointments.models import Appointment
 from app.modules.audit.models import AuditEvent
 from app.modules.billing.models import (
+    BillingAdjustmentRequest,
     CreditNote,
     DiscountApproval,
     DiscountOffer,
@@ -106,6 +107,7 @@ __all__ = [
     "AuditEvent",
     "AuthSession",
     "Branch",
+    "BillingAdjustmentRequest",
     "Consultation",
     "ConsultationAddendum",
     "ConsultationComplaint",

@@ -1560,13 +1560,15 @@ def list_medication_administrations(
     )
 
 
-@router.get("/admissions/{admission_id}/invoice", response_model=InvoiceDetailRead)
+@router.get(
+    "/admissions/{admission_id}/invoice", response_model=InvoiceDetailRead | None
+)
 def get_ip_invoice(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
-) -> InvoiceDetailRead:
+) -> InvoiceDetailRead | None:
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     invoice = session.exec(
@@ -1575,10 +1577,7 @@ def get_ip_invoice(
         )
     ).first()
     if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No invoice found for this admission",
-        )
+        return None
     return _invoice_detail(session, invoice)
 
 

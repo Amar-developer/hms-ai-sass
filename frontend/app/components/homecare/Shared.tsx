@@ -113,6 +113,7 @@ export function BookingsList({
   onView,
   onEdit,
   onInvoice,
+  canManage = false,
 }: any) {
   return (
     <Card>
@@ -127,11 +128,7 @@ export function BookingsList({
           </div>
           <div className="mt-2 flex items-center gap-2">
             <RefreshButton onRefresh={onRefresh} />
-            <Button
-              type="button"
-              onClick={onCreate}
-              className="save-button text-xs"
-            >
+            <Button type="button" onClick={onCreate} className="save-button">
               New Booking
             </Button>
           </div>
@@ -170,8 +167,8 @@ export function BookingsList({
               <th>Staff</th>
               <th>Date Range</th>
               <th>Status</th>
-              <th>Total</th>
-              <th className="pr-4 text-right">Actions</th>
+              <th className=" w-[120px] text-center">Total</th>
+              <th className="pr-4 w-[220px]  text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -214,23 +211,27 @@ export function BookingsList({
                       {humanizeOptionLabel(booking.status)}
                     </Badge>
                   </td>
-                  <td className="card-desc">{money(bookingTotal(booking))}</td>
+                  <td className="card-desc text-center">
+                    {money(bookingTotal(booking))}
+                  </td>
                   <td className="pr-4">
                     <ActionGroup className="justify-end">
                       <ActionButton onClick={() => onView(booking)}>
                         View
                       </ActionButton>
-                      <ActionButton
-                        onClick={() => onEdit(booking)}
-                        disabled={isBookingLocked(booking)}
-                        title={
-                          isBookingLocked(booking)
-                            ? "Locked after billing/completion"
-                            : undefined
-                        }
-                      >
-                        Edit
-                      </ActionButton>
+                      {canManage && (
+                        <ActionButton
+                          onClick={() => onEdit(booking)}
+                          disabled={isBookingLocked(booking)}
+                          title={
+                            isBookingLocked(booking)
+                              ? "Locked after billing/completion"
+                              : undefined
+                          }
+                        >
+                          Edit
+                        </ActionButton>
+                      )}
                       <ActionButton onClick={() => onInvoice(booking)}>
                         Invoice
                       </ActionButton>
@@ -263,6 +264,7 @@ export function BookingDetail({
   onCancel,
   onInvoice,
   onOpenInvoiceModule,
+  canManage = false,
 }: any) {
   if (!booking) {
     return (
@@ -282,7 +284,9 @@ export function BookingDetail({
       userTypeKey(user) === visitForm?.staff_type,
   );
   const visitServices = (services || []).filter((service: any) =>
-    String(service.code || "").toUpperCase().startsWith("HV"),
+    String(service.code || "")
+      .toUpperCase()
+      .startsWith("HV"),
   );
   const isHomeVisitBooking =
     (booking.services || []).some(
@@ -309,15 +313,14 @@ export function BookingDetail({
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Badge>{humanizeOptionLabel(booking.status)}</Badge>
+            <Badge className="normal-badge">
+              {humanizeOptionLabel(booking.status)}
+            </Badge>
             <ActionButton onClick={onBack}>Back to list</ActionButton>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
-          <Info
-            title="Patient"
-            value={patientName(patient)}
-          />
+        <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3 md:max-w-2xl lg:max-w-4xl">
+          <Info title="Patient" value={patientName(patient)} />
           <Info
             title="Recurrence"
             value={humanizeOptionLabel(booking.recurrence || "daily")}
@@ -348,14 +351,15 @@ export function BookingDetail({
             )}
           </div>
         )}
-        <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+        <div className="mt-4 rounded-2xl bg-slate-50 p-4 md:max-w-2xl lg:max-w-5xl">
           <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center">
             <div>
               <p className="text-xs font-bold uppercase text-slate-500">
                 Actual Service Logs
               </p>
               <p className="text-xs text-slate-500">
-                Bill only completed visits. Missed or cancelled days stay tracked with zero amount.
+                Bill only completed visits. Missed or cancelled days stay
+                tracked with zero amount.
               </p>
             </div>
             <Badge tone="blue" className="normal-badge">
@@ -395,7 +399,9 @@ export function BookingDetail({
                 options={[
                   {
                     value: "",
-                    label: filteredVisitStaff.length ? "Select staff" : "No staff found",
+                    label: filteredVisitStaff.length
+                      ? "Select staff"
+                      : "No staff found",
                   },
                   ...filteredVisitStaff.map((user: any) => ({
                     value: user.id,
@@ -414,14 +420,18 @@ export function BookingDetail({
                   Service Type
                 </p>
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-bold">
-                  {isHomeVisitBooking ? "Home Visit Service" : "Home Care Service"}
+                  {isHomeVisitBooking
+                    ? "Home Visit Service"
+                    : "Home Care Service"}
                 </div>
               </div>
               {fixedServiceCategory === "home_visit_service" ? (
                 <SearchableSelectField
                   label="Visit Service"
                   value={visitForm.service_id}
-                  onChange={(value: string) => setVisitField("service_id", value)}
+                  onChange={(value: string) =>
+                    setVisitField("service_id", value)
+                  }
                   options={[
                     { value: "", label: "Select visit service" },
                     ...visitServices.map((service: any) => ({
@@ -435,7 +445,9 @@ export function BookingDetail({
                 <TextField
                   label="Service Name"
                   value={visitForm.description}
-                  onChange={(value: string) => setVisitField("description", value)}
+                  onChange={(value: string) =>
+                    setVisitField("description", value)
+                  }
                   placeholder="Type actual service done"
                   className="search-input"
                 />
@@ -465,7 +477,9 @@ export function BookingDetail({
                     : "Price"
                 }
                 value={visitForm.unit_amount}
-                onChange={(value: string) => setVisitField("unit_amount", value)}
+                onChange={(value: string) =>
+                  setVisitField("unit_amount", value)
+                }
                 min={0}
                 className={
                   fixedServiceCategory === "home_visit_service"
@@ -501,10 +515,13 @@ export function BookingDetail({
                   {!locked && <th className="pr-3 text-right">Actions</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y">
+              <tbody className="divide-y py-2">
                 {(booking.visit_logs || []).length === 0 && (
                   <tr>
-                    <td colSpan={locked ? 7 : 8} className="px-3 py-3 text-slate-500">
+                    <td
+                      colSpan={locked ? 7 : 8}
+                      className="px-3 py-3 text-slate-500"
+                    >
                       No actual service logs yet.
                     </td>
                   </tr>
@@ -512,17 +529,24 @@ export function BookingDetail({
                 {(booking.visit_logs || []).map((row: any) => (
                   <tr key={row.id}>
                     <td className="px-3 py-2">{displayDate(row.visit_date)}</td>
-                    <td>{row.assigned_staff_name || userName(staffMap.get(row.assigned_staff_user_id))}</td>
+                    <td>
+                      {row.assigned_staff_name ||
+                        userName(staffMap.get(row.assigned_staff_user_id))}
+                    </td>
                     <td>
                       {row.description}
                       <p className="text-slate-400">
-                        {humanizeOptionLabel(row.service_category || "home_care_service")}
+                        {humanizeOptionLabel(
+                          row.service_category || "home_care_service",
+                        )}
                       </p>
                     </td>
                     <td>{row.quantity}</td>
                     <td>{money(row.unit_amount)}</td>
                     <td>{humanizeOptionLabel(row.status)}</td>
-                    <td className="pr-3 text-right">{money(row.total_amount)}</td>
+                    <td className="pr-3 text-right">
+                      {money(row.total_amount)}
+                    </td>
                     {!locked && (
                       <td className="pr-3 text-right">
                         <ActionButton
@@ -541,28 +565,35 @@ export function BookingDetail({
           </div>
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <ActionButton
-            onClick={onEdit}
-            disabled={locked}
-            title={locked ? "Locked after billing/completion" : undefined}
-          >
-            Edit
-          </ActionButton>
-          <ActionButton
-            tone="danger"
-            onClick={onCancel}
-            disabled={locked || busy === "cancel-booking"}
-            title={locked ? "Locked after billing/completion" : undefined}
-          >
-            {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
-          </ActionButton>
-          <Button
-            type="button"
-            className="rounded-lg px-3 py-2 text-xs"
-            onClick={invoiceDetail?.invoice ? onOpenInvoiceModule : onInvoice}
-          >
-            {invoiceDetail?.invoice ? "View Invoice" : "Generate Invoice"}
-          </Button>
+          {canManage && (
+            <ActionButton
+              onClick={onEdit}
+              disabled={locked}
+              title={locked ? "Locked after billing/completion" : undefined}
+            >
+              Edit
+            </ActionButton>
+          )}
+          {canManage && (
+            <ActionButton
+              tone="danger"
+              onClick={onCancel}
+              disabled={locked || busy === "cancel-booking"}
+              title={locked ? "Locked after billing/completion" : undefined}
+            >
+              {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
+            </ActionButton>
+          )}
+          {(invoiceDetail?.invoice ||
+            String(booking.status).toLowerCase() !== "cancelled") && (
+            <Button
+              type="button"
+              className="rounded-lg px-3 py-2 text-xs"
+              onClick={invoiceDetail?.invoice ? onOpenInvoiceModule : onInvoice}
+            >
+              {invoiceDetail?.invoice ? "View Invoice" : "Generate Invoice"}
+            </Button>
+          )}
           {locked && (
             <span className="text-xs font-bold text-slate-400">
               🔒 {humanizeOptionLabel(booking.status)} — editing locked
@@ -681,14 +712,20 @@ export function InvoiceCard({
           <p className="mt-3 text-xs text-slate-500">
             Payment and receipt are handled from the Invoices module.
           </p>
-          <Button
-            type="button"
-            className="w-full rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
-            onClick={onOpenInvoiceModule}
-          >
-            Open in Invoices Module
-          </Button>
+          <div className="w-full flex justify-center">
+            <Button
+              type="button"
+              className="w-1/2 rounded-lg px-2 py-2 mt-4 lg:px-4 lg:py-3 text-xs lg:text-sm"
+              onClick={onOpenInvoiceModule}
+            >
+              Open in Invoices Module
+            </Button>
+          </div>
         </div>
+      ) : String(booking.status).toLowerCase() === "cancelled" ? (
+        <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+          This booking is cancelled. Invoices can no longer be generated for it.
+        </p>
       ) : (
         <div className="mt-4 grid gap-3">
           <NumberField

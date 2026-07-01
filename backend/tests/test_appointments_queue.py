@@ -206,9 +206,9 @@ def _create_doctor_login(
     login = client.post(
         "/api/v1/auth/login",
         json={"email": email, "password": "DoctorPass123", "tenant_id": tenant_id},
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant_id,
     }
     return user, practitioner, headers

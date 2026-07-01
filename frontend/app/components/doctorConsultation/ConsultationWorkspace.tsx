@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
 import { Card, Select, Input, Field, Button, Badge} from "../common/ui";
 import { FormField } from "../FormElements";
+import { displayDateTime } from "@/utils/helper";
+import { displayPatientGender } from "@/utils/patient/helpers";
 import {
   SearchPicker,
   TagEntryBox,
@@ -75,6 +77,7 @@ export function ConsultationWorkspace(props: any) {
     doctor,
     addendumNote,
     setAddendumNote,
+    addendums,
     saveAddendum,
     busy,
     apiSession,
@@ -106,7 +109,33 @@ export function ConsultationWorkspace(props: any) {
   const [popularLabTests, setPopularLabTests] = useState<any[]>([]);
   // A signed consultation is a locked clinical record — only the addendum may
   // change. This flag locks every editable field below.
-  const signed = selected?.consultationStatus === "signed";
+  const statusKey = (value: any) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replaceAll(" ", "_");
+  const signed = statusKey(selected?.consultationStatus) === "signed";
+  const selectedStatus = statusKey(selected?.status);
+  const selectedQueueStatus = statusKey(
+    selected?.queueStatus || selected?.queue_status,
+  );
+  const completeStatuses = [
+    "consultation_completed",
+    "consultation_done",
+    "completed",
+    "done",
+    "seen",
+    "billed",
+  ];
+  const cancelledStatuses = ["cancelled", "canceled", "no_show"];
+  const queueActionsLocked =
+    !selected ||
+    signed ||
+    completeStatuses.includes(selectedStatus) ||
+    completeStatuses.includes(selectedQueueStatus) ||
+    cancelledStatuses.includes(selectedStatus) ||
+    cancelledStatuses.includes(selectedQueueStatus);
+  const queueActionDisabled = Boolean(busy || queueActionsLocked);
   const activeMedicineCatalog = availableMedicineCatalog;
   const medicineOptions = activeMedicineCatalog.map((medicine: any) => ({
     value: medicine.id || medicine.slug || medicine.name,
@@ -147,7 +176,7 @@ export function ConsultationWorkspace(props: any) {
     setAvailableLabCatalog(Array.isArray(labCatalog) ? labCatalog : []);
   }, [labCatalog]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setAvailableMedicineCatalog([]);
       return;
     }
@@ -183,9 +212,9 @@ export function ConsultationWorkspace(props: any) {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, medicineDraftName]);
+  }, [apiSession, apiSession?.tenantId, medicineDraftName]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setAvailableLabCatalog([]);
       return;
     }
@@ -221,9 +250,9 @@ export function ConsultationWorkspace(props: any) {
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, labDraftName]);
+  }, [apiSession, apiSession?.tenantId, branchId, labDraftName]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setPopularMedicines([]);
       setPopularLabTests([]);
       return;
@@ -250,7 +279,7 @@ export function ConsultationWorkspace(props: any) {
     return () => {
       alive = false;
     };
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession, apiSession?.tenantId]);
   // Suggestion tags prefer the most-used items from prescription/referral
   // history; fall back to the catalog when there is no history yet.
   const medicineSuggestions = popularMedicines.length
@@ -293,34 +322,38 @@ export function ConsultationWorkspace(props: any) {
             follow-up and addendums.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 md:flex-nowrap">
+        <div className="flex flex-wrap gap-2 md:flex-wrap lg:flex-nowrap">
           <button
             onClick={() => setActive?.("doctor")}
-            className="close-button font-bold"
+            className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
            Back
           </button>
           <button
             onClick={() => selected && callPatient(selected)}
-            className="close-button font-bold"
+            disabled={queueActionDisabled}
+            className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Call
           </button>
           <button
             onClick={skipPatient}
-            className="close-button font-bold"
+            disabled={queueActionDisabled}
+            className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Not Present
           </button>
           <button
             onClick={() => requeuePatient("after2")}
-            className="close-button font-bold"
+            disabled={queueActionDisabled}
+            className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
           >
             Requeue
           </button>
           <button
             onClick={cancelAppointment}
-            className="close-button font-bold text-red-600"
+            disabled={queueActionDisabled}
+            className="close-button font-bold text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Cancel Appointment
           </button>
@@ -347,7 +380,7 @@ export function ConsultationWorkspace(props: any) {
               <p className="text-xs text-slate-500">Age / Gender</p>
               <p className="font-bold">
                 {patient?.age_years ?? patient?.age ?? "-"} /{" "}
-                {patient?.gender ?? "-"}
+                {displayPatientGender(patient?.gender)}
               </p>
             </div>
             <div className="rounded-lg bg-slate-50 p-4">
@@ -574,7 +607,7 @@ export function ConsultationWorkspace(props: any) {
                     ))}
                 </Select>
               </FormField>
-              <Button type="button" onClick={addDraftMedicine}>
+              <Button type="button" className='save-button md:w-[50%] lg:w-full' onClick={addDraftMedicine}>
                 Add
               </Button>
             </div>
@@ -597,7 +630,7 @@ export function ConsultationWorkspace(props: any) {
           </div>
           <div className="grid gap-3">
             <div className="rounded-lg bg-slate-50 p-4">
-              <Field label="Lab Tests">
+              <Field label="Lab / Service">
                 <TagEntryBox
                   tags={referralItems.filter(
                     (item: any) => item.type === "lab",
@@ -624,7 +657,7 @@ export function ConsultationWorkspace(props: any) {
                 />
               </Field>
               <div className="mt-3 grid gap-2 md:grid-cols-[2fr_0.8fr_0.8fr_1fr_1.5fr_auto] md:items-end">
-                <FormField label="Available Lab Test">
+                <FormField label="Lab/Service">
                   <SearchPicker
                     value={selectedLabTestId}
                     inputValue={labDraftName}
@@ -667,15 +700,15 @@ export function ConsultationWorkspace(props: any) {
                     value={formatPrice(selectedLabMrp)}
                     readOnly
                     placeholder="MRP"
-                    className="rounded-lg bg-slate-50 px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+                    className="search-input"
                   />
                 </FormField>
-                <FormField label="Selling Rate">
+                <FormField label="Rate">
                   <Input
                     value={formatPrice(selectedLabSelling)}
                     readOnly
                     placeholder="Selling"
-                    className="rounded-lg bg-slate-50 px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+                    className="search-input"
                   />
                 </FormField>
                 <Select
@@ -691,7 +724,7 @@ export function ConsultationWorkspace(props: any) {
                   onChange={(e: any) => setLabInstructions(e.target.value)}
                   placeholder="Instructions"
                 />
-                <Button type="button" onClick={addDraftLabTest}>
+                <Button type="button" className='save-button' onClick={addDraftLabTest}>
                   Add Lab Test
                 </Button>
               </div>
@@ -804,6 +837,26 @@ export function ConsultationWorkspace(props: any) {
               >
                 Save Addendum
               </Button>
+              {addendums?.length ? (
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-bold uppercase text-emerald-900">
+                    Saved addendums
+                  </p>
+                  {addendums.map((addendum: any) => (
+                    <div
+                      key={addendum.id || addendum.created_at || addendum.note}
+                      className="rounded-lg border border-emerald-100 bg-white p-3 text-sm"
+                    >
+                      <p className="whitespace-pre-wrap text-slate-700">
+                        {addendum.note}
+                      </p>
+                      <p className="mt-2 text-xs font-semibold text-slate-400">
+                        {displayDateTime(addendum.created_at)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
           )}
           <div className="flex flex-wrap gap-3">
@@ -824,7 +877,8 @@ export function ConsultationWorkspace(props: any) {
             )}
             <button
               onClick={() => requeuePatient("end")}
-              className="rounded-lg border px-4 py-3 text-sm font-bold"
+              disabled={queueActionDisabled}
+              className="rounded-lg border px-4 py-3 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-50"
             >
               Requeue to End
             </button>

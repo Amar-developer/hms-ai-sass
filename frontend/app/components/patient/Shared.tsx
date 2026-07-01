@@ -1,5 +1,6 @@
 import { splitListText } from "@/utils/patient/helpers";
 import { Badge,Card,Button } from "../common/ui";
+import { humanizeOptionLabel } from "@/lib/options";
 
 export function ClinicalItemList({ value, items: providedItems, empty = "-" }: any) {
   const items = providedItems || splitListText(value);
@@ -30,7 +31,7 @@ export function StatusBadge({ status }: any) {
         : status === "pending" || status === "issued"
           ? "amber"
           : "slate";
-  return <Badge tone={tone} className="normal-badge">{status}</Badge>;
+  return <Badge tone={tone} className="normal-badge">{humanizeOptionLabel(status)}</Badge>;
 }
 
 
@@ -49,7 +50,7 @@ export function AlertCard({ alert }: any) {
       <b>{alert.title}</b>
       <p className="text-slate-600">{alert.description || alert.alert_type}</p>
       <Badge tone={alert.severity === "critical" ? "red" : "amber"}>
-        {alert.severity}
+        {humanizeOptionLabel(alert.severity)}
       </Badge>
     </div>
   );

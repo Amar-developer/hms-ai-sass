@@ -186,10 +186,7 @@ export function PatientSubscriptions({
             apiSession,
           ),
           apiFetch("/patient-subscriptions/enrollments", apiSession),
-          apiFetch(
-            `/lab/catalog/tests?branch_id=${encodeURIComponent(branchId || "")}`,
-            apiSession,
-          ).catch(() => []),
+          apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
           apiFetch(
             `/pharmacy/medicines?branch_id=${encodeURIComponent(branchId || "")}`,
             apiSession,
@@ -229,7 +226,7 @@ export function PatientSubscriptions({
 
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId, branchId, patients?.length]);
+  }, [apiSession?.tenantId, branchId, patients?.length]);
 
   async function resolveLabBenefitIds(values: string[], branchValue: string) {
     const resolved: string[] = [];
@@ -770,7 +767,7 @@ export function PatientSubscriptions({
               )}
               {plans.length > 0 && (
                 <div>
-                  <div className="hidden min-w-full overflow-x-auto lg:block">
+                  <div className="min-w-full overflow-x-auto lg:block">
                     <table className="min-w-full text-left text-sm">
                       <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
                         <tr>
@@ -809,31 +806,6 @@ export function PatientSubscriptions({
                         })}
                       </tbody>
                     </table>
-                  </div>
-                  <div className="divide-y divide-slate-100 lg:hidden">
-                    {plans.map((plan: any) => {
-                      const activeEnrollmentCount =
-                        activeEnrollmentCountByPlan.get(plan.id) || 0;
-                      return (
-                        <PlanMobileRow
-                          key={plan.id}
-                          plan={plan}
-                          activeEnrollmentCount={activeEnrollmentCount}
-                          busy={busy}
-                          confirmDelete={confirmDelete}
-                          setConfirmDelete={setConfirmDelete}
-                          deletePlan={deletePlan}
-                          requestDeletePlan={requestDeletePlan}
-                          startEdit={startEdit}
-                          togglePlanActive={togglePlanActive}
-                          canDeletePlans={canDeletePlans}
-                          openDetail={() => {
-                            setDetailPlanId(plan.id);
-                            setView("detail");
-                          }}
-                        />
-                      );
-                    })}
                   </div>
                 </div>
               )}
@@ -1492,73 +1464,7 @@ function PlanTableRow({
   );
 }
 
-function PlanMobileRow({
-  plan,
-  activeEnrollmentCount,
-  busy,
-  confirmDelete,
-  setConfirmDelete,
-  deletePlan,
-  requestDeletePlan,
-  startEdit,
-  togglePlanActive,
-  canDeletePlans,
-  openDetail,
-}: any) {
-  return (
-    <div className="bg-white px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <button type="button" onClick={openDetail} className="min-w-0 text-left">
-          <b className="block break-words text-sm text-slate-950">
-            {plan.name}
-          </b>
-          <span className="text-xs font-semibold uppercase text-slate-500">
-            {plan.code || "-"}
-          </span>
-        </button>
-        <Badge
-          tone={plan.is_active ? "green" : "red"}
-          className="rounded-full px-2 py-1 text-xs"
-        >
-          {plan.is_active ? "Active" : "Paused"}
-        </Badge>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-        <PlanInlineDetail label="Price" value={money(plan.price_amount)} />
-        <PlanInlineDetail label="Duration" value={`${plan.duration_days} days`} />
-        <PlanInlineDetail label="Consults" value={plan.free_consultations} />
-        <PlanInlineDetail label="Scope" value="Tenant" />
-      </div>
-      {activeEnrollmentCount > 0 && (
-        <p className="mt-2 text-[11px] font-semibold text-slate-500">
-          {activeEnrollmentCount} enrolled
-        </p>
-      )}
-      <div className="mt-3">
-        <PlanRowActions
-          plan={plan}
-          activeEnrollmentCount={activeEnrollmentCount}
-          busy={busy}
-          openDetail={openDetail}
-          startEdit={startEdit}
-          togglePlanActive={togglePlanActive}
-          requestDeletePlan={requestDeletePlan}
-          canDeletePlans={canDeletePlans}
-        />
-      </div>
-      {confirmDelete === plan.id && (
-        <div className="mt-3 rounded-xl bg-red-50 p-3">
-          <DeleteConfirm
-            plan={plan}
-            busy={busy}
-            deletePlan={deletePlan}
-            onCancel={() => setConfirmDelete("")}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
+
 
 function PlanRowActions({
   plan,
@@ -1952,17 +1858,17 @@ function ActiveEnrollmentsTable({
           {rows.length} active
         </Badge>
       </div>
-      <div className="mt-4 overflow-auto rounded-2xl border border-slate-200">
-        <table className="w-full min-w-[860px] table-fixed text-left text-sm">
-          <colgroup>
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+        <table className="min-w-[560px] text-left text-sm ">
+          <colgroup className="">
             <col className="w-[80px]" />
             <col className="w-[140px]" />
             <col className="w-[180px]" />
-            <col className="w-[140px]" />
-            <col className="w-[110px]" />
-            <col className="w-[80px]" />
+            <col className="w-[180px]" />
             <col className="w-[120px]" />
-            {canManage && <col className="w-[150px]" />}
+            <col className="w-[120px]" />
+            <col className="w-[160px]" />
+            {/* {canManage ? <col className="w-[150px]" />:''} */}
           </colgroup>
           <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
             <tr>

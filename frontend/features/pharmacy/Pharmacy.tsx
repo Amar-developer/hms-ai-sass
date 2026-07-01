@@ -25,6 +25,7 @@ import { displayDate, displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { isBilledIssue, isCancelledIssue, isDispensed } from "@/utils/pharmacy/helpers";
 import { ConsultPrescriptionModal, MedicineDetailModal } from "@/app/components/pharmacy/Shared";
+import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
 const pageSize = 10;
 
@@ -44,7 +45,9 @@ export function Pharmacy({
   const [lowStock, setLowStock] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [patientId, setPatientId] = useState(patients[0]?.id || "");
+  const [patientId, setPatientId] = useState(
+    patients.find(isActivePatientRecord)?.id || "",
+  );
   const [source, setSource] = useState("op_direct");
   const [externalPrescriber, setExternalPrescriber] = useState("");
   const [medicineText, setMedicineText] = useState("Paracetamol 500mg");
@@ -140,13 +143,22 @@ export function Pharmacy({
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
+  const activePatients = useMemo(
+    () => patients.filter(isActivePatientRecord),
+    [patients],
+  );
 
   useEffect(() => {
-    if (!patientId && patients[0]?.id) setPatientId(patients[0].id);
-  }, [patients, patientId]);
+    if (
+      (!patientId ||
+        !activePatients.some((patient: any) => patient.id === patientId)) &&
+      activePatients[0]?.id
+    )
+      setPatientId(activePatients[0].id);
+  }, [activePatients, patientId]);
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId]);
+  }, [apiSession?.tenantId]);
   useEffect(() => {
     if (!medicineId && medicines[0]?.id) setMedicineId(medicines[0].id);
   }, [medicines, medicineId]);
@@ -165,7 +177,7 @@ export function Pharmacy({
       );
   }, [dismissedConsultations]);
   useEffect(() => {
-    if (!apiSession?.token) {
+    if (!apiSession?.tenantId) {
       setAvailableMedicines([]);
       return;
     }
@@ -195,7 +207,7 @@ export function Pharmacy({
       alive = false;
       window.clearTimeout(timer);
     };
-  }, [apiSession?.token, apiSession?.tenantId, branchId, medicineSearch]);
+  }, [apiSession, apiSession?.tenantId, branchId, medicineSearch]);
 
   const medicineOptions = availableMedicines.map((m: any) => ({
     value: m.id || m.slug || m.name,
@@ -614,9 +626,13 @@ export function Pharmacy({
             label="Patient"
             value={patientId}
             onChange={setPatientId}
-            options={patients.map((p: any) => ({ value: p.id, label: p.name }))}
+            options={activePatients.map((p: any) => ({
+              value: p.id,
+              label: patientPickerLabel(p),
+              sublabel: p.mobile || p.patient_number || p.id,
+            }))}
             placeholder="Select patient"
-            searchPlaceholder="Search patient by name"
+            searchPlaceholder="Search patient by name, mobile, or number"
           />
           <SelectField
             label="Source"
@@ -669,7 +685,7 @@ export function Pharmacy({
             onChange={setQuantity}
             min={1}
           />
-          <div className="md:col-span-1">
+          {/* <div className="md:col-span-1">
             <TextField
               label="External Prescriber"
               value={externalPrescriber}
@@ -677,12 +693,12 @@ export function Pharmacy({
               disabled={source !== "external_prescription"}
               className="search-input"
             />
-          </div>
-          <div className="flex items-end gap-2">
+          </div> */}
+          <div className="flex items-end gap-2 w-full lg:w-[80%]">
             <button type="button" onClick={addIssueItem} className='close-button font-bold'>
               Add
             </button>
-            <Button disabled={busy === "create"} className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-3.5 text-xs'>
+            <Button disabled={busy === "create"} className='w-[130px] px-1 py-3 lg:px-2 py-2.5'>
               {busy === "create" ? "Saving..." : "Create Issue"}
             </Button>
           </div>
@@ -728,6 +744,14 @@ export function Pharmacy({
                       </b>
                       <p className="card-desc text-slate-500">
                         Signed prescription ready
+                        {a.doctor && a.doctor !== "Unassigned" ? (
+                          <>
+                            {" · Signed by "}
+                            <span className="font-semibold text-slate-700">
+                              {a.doctor}
+                            </span>
+                          </>
+                        ) : null}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -937,7 +961,7 @@ export function Pharmacy({
             </tbody>
           </table>
         </div>
-        <Pagination 
+        <Pagination
           page={safePage}
           totalPages={totalPages}
           total={issues.length}

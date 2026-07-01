@@ -163,7 +163,7 @@ export function UserForm({
         subtitle={user?.email || "Create tenant-scoped users only."}
         back={back}
       />
-      <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
+      <form onSubmit={onSubmit} className="mt-4 grid gap-6 md:grid-cols-2 ">
         <FormField label="Name">
           <Input
             name="name"
@@ -190,7 +190,7 @@ export function UserForm({
             onChange={(event: any) => changeUserType(event.target.value)}
           >
             {userTypes.map(([value, label]) => (
-              <option key={value} value={value}>
+              <option key={value} value={value} className="text-xs">
                 {label}
               </option>
             ))}
@@ -372,9 +372,9 @@ export function DepartmentForm({
             onChange={(event: any) => setSelectedBranchId(event.target.value)}
             disabled={isLocked(department)}
           >
-            <option value="">All branches</option>
+            <option value="" className="md:text-lg lg:text-xs">All branches</option>
             {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
+              <option className="md:text-lg lg:text-xs" key={branch.id} value={branch.id}>
                 {branch.name}
               </option>
             ))}
@@ -620,6 +620,7 @@ export function TaxRuleForm({
             defaultValue={rule?.name || ""}
             required
             placeholder="Enter tax name"
+            className='search-input'
           />
         </FormField>
         <FormField label="Branch">
@@ -649,6 +650,7 @@ export function TaxRuleForm({
             name="taxLabel"
             defaultValue={rule?.tax_label || "GST"}
             required
+            className='search-input'
           />
         </FormField>
         <FormField label="Tax Percentage">
@@ -701,6 +703,7 @@ export function DiscountOfferForm({
             defaultValue={offer?.name || ""}
             required
             placeholder="Enter offer name"
+            className='search-input'
           />
         </FormField>
         <FormField label="Code">
@@ -708,6 +711,7 @@ export function DiscountOfferForm({
             name="code"
             defaultValue={offer?.code || ""}
             placeholder="HEALTH10"
+            className='search-input'
           />
         </FormField>
         <FormField label="Branch">
@@ -748,6 +752,7 @@ export function DiscountOfferForm({
             min="0"
             defaultValue={offer?.value ?? 0}
             required
+            className='search-input'
           />
         </FormField>
         <FormField label="Minimum Bill Amount">
@@ -756,6 +761,7 @@ export function DiscountOfferForm({
             type="number"
             min="0"
             defaultValue={offer?.minimum_bill_amount ?? 0}
+            className='search-input'
           />
         </FormField>
         <FormField label="Max Discount">
@@ -765,6 +771,7 @@ export function DiscountOfferForm({
             min="0"
             defaultValue={offer?.max_discount_amount ?? ""}
             placeholder="Enter maximum amount"
+            className='search-input'
           />
         </FormField>
         <FormField label="Valid From">
@@ -772,6 +779,7 @@ export function DiscountOfferForm({
             name="validFrom"
             type="date"
             defaultValue={dateToInput(offer?.valid_from)}
+            className='search-input'
           />
         </FormField>
         <FormField label="Valid Until">
@@ -779,6 +787,7 @@ export function DiscountOfferForm({
             name="validUntil"
             type="date"
             defaultValue={dateToInput(offer?.valid_until)}
+            className='search-input'
           />
         </FormField>
         {offer && (
@@ -835,7 +844,7 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
           >
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
               <div className="flex justify-between  w-full">
-                <h5 className="font-bold">{permissionModuleTitle(module)}</h5>
+                <h5 className="text-base lg:text-sm font-bold">{permissionModuleTitle(module)}</h5>
                 <p className="text-xs text-slate-500">
                   {grouped[module].length} permissions
                 </p>
@@ -850,7 +859,7 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                 .map((permission: any) => (
                   <label
                     key={permission.key}
-                    className="flex items-start gap-2 text-[11px]"
+                    className="flex items-start gap-2  lg:text-[11px]"
                     title={permission.description || permission.key}
                   >
                     <input
@@ -862,7 +871,7 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
                       className="mt-1 h-3 w-3"
                     />
                     <span>
-                      <span className="text-[12px] font-semibold">
+                      <span className="text-sm lg:text-[12px] font-semibold">
                         {labelFor(permission)}
                       </span>
                       {/* <span className="block break-all text-[11px] text-slate-400">

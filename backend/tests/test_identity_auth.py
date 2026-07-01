@@ -18,7 +18,7 @@ def bootstrap_super_admin(client):
         json={"email": "admin@medizinhub.test", "password": "SecretPass123"},
     )
     assert login.status_code == 200
-    return login.json()["access_token"]
+    return login.cookies["access_token"]
 
 
 def create_tenant_with_paid_plan(client, super_token):
@@ -206,7 +206,7 @@ def test_tenant_admin_can_manage_only_own_tenant_users(unauthenticated_client):
         },
     )
     assert login.status_code == 200
-    tenant_token = login.json()["access_token"]
+    tenant_token = login.cookies["access_token"]
 
     own_users = client.get(
         "/api/v1/identity/users",
@@ -326,9 +326,9 @@ def test_identity_users_manage_permission_can_manage_users_without_tenant_admin_
             "password": "UserManage123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     headers = {
-        "Authorization": f"Bearer {login['access_token']}",
+        "Authorization": f"Bearer {login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 
@@ -691,9 +691,9 @@ def test_tenant_admin_cannot_change_locked_global_role_template(unauthenticated_
             "password": "TenantPass123",
             "tenant_id": tenant["id"],
         },
-    ).json()
+    )
     tenant_admin_headers = {
-        "Authorization": f"Bearer {tenant_login['access_token']}",
+        "Authorization": f"Bearer {tenant_login.cookies['access_token']}",
         "X-Tenant-ID": tenant["id"],
     }
 

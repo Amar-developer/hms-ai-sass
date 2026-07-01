@@ -2,6 +2,7 @@ import ast
 from pathlib import Path
 
 from app.api.v1.identity import _permission_read
+from app.modules import manifest
 from app.modules.identity import permissions
 
 
@@ -71,3 +72,15 @@ def test_every_backend_permission_reference_is_in_the_catalog():
 
     assert referenced
     assert referenced <= catalog
+
+
+def test_every_manifest_permission_is_in_the_catalog():
+    catalog = set(permissions.PERMISSION_CATALOG)
+    manifest_permissions = {
+        permission_key
+        for module in manifest.MODULES
+        for permission_key in module.get("permissions", [])
+    }
+
+    assert manifest_permissions
+    assert manifest_permissions <= catalog

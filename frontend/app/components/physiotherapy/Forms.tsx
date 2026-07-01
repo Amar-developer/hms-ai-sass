@@ -3,6 +3,7 @@ import { Card,Button } from "../common/ui";
 import { useState } from "react";
 import { appointmentLabel, appointmentPatientId, formatPhysiotherapistName, patientLabel, patientName } from "@/utils/physiotherapy/helpers";
 import { FormField} from "../FormElements";
+import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
 export function CaseForm({
   title,
@@ -17,9 +18,9 @@ export function CaseForm({
   const [patientId, setPatientId] = useState("");
   const [appointmentId, setAppointmentId] = useState("");
   const [physiotherapistId, setPhysiotherapistId] = useState("");
-  const patientOptions = patients.map((p: any) => ({
+  const patientOptions = patients.filter(isActivePatientRecord).map((p: any) => ({
     value: p.id,
-    label: patientLabel(p),
+    label: patientPickerLabel(p),
     item: p,
   }));
   const appointmentOptions = [

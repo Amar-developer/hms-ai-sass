@@ -7,7 +7,6 @@ import {useAppController} from '@/features/shell/useAppController';
 
 export default function Page() {
   const {authenticated, authScreenProps, shellProps} = useAppController();
-
   if (!authenticated) {
     return (
       <AppErrorBoundary>

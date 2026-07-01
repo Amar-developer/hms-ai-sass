@@ -18,8 +18,8 @@ import {
   TextField,
   TextareaField,
 } from "@/app/components/FormElements";
+import { PatientLookupField } from "@/app/components/patient/PatientLookupCreate";
 import { apiFetch } from "@/lib/api";
-import { searchPatients } from "@/lib/hmsLogic";
 import { humanizeOptionLabel } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
 import {
@@ -88,8 +88,16 @@ export function HomeCare({
   const [busy, setBusy] = useState("");
   const [filters, setFilters] = useState({ query: "", status: "all" });
   const [patientSearch, setPatientSearch] = useState("");
+  const [lookupPatient, setLookupPatient] = useState<any>(null);
   const [form, setForm] = useState<any>({ ...emptyForm });
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
+  // Editing and cancelling bookings is restricted to tenant admins (and super
+  // admins). Other roles can still view bookings and generate invoices.
+  const canManageBooking = Boolean(
+    apiSession?.user?.is_super_admin ||
+      apiSession?.user?.user_type === "tenant_admin" ||
+      apiSession?.user?.roles?.includes("tenant_admin"),
+  );
   const [visitForm, setVisitForm] = useState<any>(() => ({
     visit_date: today(),
     assigned_staff_user_id: "",
@@ -114,11 +122,8 @@ export function HomeCare({
   );
   const bookingType = form.booking_type || "home_care";
   const isHomeVisitBooking = bookingType === "home_visit";
-  const patientMatches = useMemo(() => {
-    const query = patientSearch.trim().toLowerCase();
-    if (!query || form.patient_id) return [];
-    return searchPatients(patients, query).slice(0, 6);
-  }, [form.patient_id, patientSearch, patients]);
+  const selectedLookupPatient =
+    (form.patient_id && patientMap.get(form.patient_id)) || lookupPatient;
   const visitServices = useMemo(
     () =>
       services.filter((service: any) =>
@@ -163,7 +168,7 @@ export function HomeCare({
 
   useEffect(() => {
     load();
-  }, [apiSession?.token, apiSession?.tenantId, branchId]);
+  }, [apiSession?.tenantId, branchId]);
   useEffect(() => {
     if (selected?.id) loadInvoice(selected.id);
     else setInvoiceDetail(null);
@@ -243,12 +248,54 @@ export function HomeCare({
 
   function selectPatient(patient: any) {
     const location = patientLocation(patient);
+    setLookupPatient(patient);
     setForm((prev: any) => ({
       ...prev,
       patient_id: patient.id,
       location: location || prev.location,
     }));
     setPatientSearch(patientSearchLabel(patient));
+  }
+
+  async function createPatient(data: any) {
+    if (!apiSession) return null;
+    setBusy("patient");
+    setError("");
+    setMessage("");
+    try {
+      const saved = await apiFetch("/patients", apiSession, {
+        method: "POST",
+        body: JSON.stringify({
+          branch_id: data.branchId || branchId,
+          full_name: data.fullName,
+          date_of_birth: data.dateOfBirth || null,
+          gender: data.gender || "unknown",
+          age_years: data.ageYears ? Number(data.ageYears) : null,
+          mobile: data.mobile || null,
+          alternate_mobile: data.alternateMobile || null,
+          email: data.email || null,
+          guardian_name: data.guardianName || null,
+          guardian_mobile: data.guardianMobile || null,
+          area: data.area || null,
+          address: data.address || null,
+          blood_group: data.bloodGroup || null,
+        }),
+      });
+      const patient = {
+        ...saved,
+        full_name: saved.full_name || data.fullName,
+        mobile: saved.mobile || data.mobile,
+      };
+      selectPatient(patient);
+      await loadLiveData?.(apiSession);
+      setMessage("Patient created and selected.");
+      return patient;
+    } catch (err: any) {
+      setError(err.message || "Unable to create patient.");
+      return null;
+    } finally {
+      setBusy("");
+    }
   }
 
   async function load() {
@@ -349,6 +396,7 @@ export function HomeCare({
     return {
       branch_id: branchId,
       patient_id: form.patient_id,
+      booking_type: bookingType,
       location: form.location || null,
       recurrence: form.recurrence,
       start_date: form.start_date || today,
@@ -363,7 +411,7 @@ export function HomeCare({
             ? "home_visit_service"
             : "home_care_service",
           description: row.description || null,
-          quantity: Number(row.quantity || 1) * days,
+          quantity: Number(row.quantity || 1),
           unit_amount: Number(row.unit_amount || 0),
         })),
     };
@@ -527,10 +575,14 @@ export function HomeCare({
     }
     setEditing(booking);
     setSelectedId(booking.id);
-    const isVisitBooking = booking.services?.some((row: any) => {
-      const service = services.find((item: any) => item.id === row.service_id);
-      return String(service?.code || "").toUpperCase().startsWith("HV");
-    });
+    const isVisitBooking = booking.booking_type
+      ? booking.booking_type === "home_visit"
+      : booking.services?.some((row: any) => {
+          const service = services.find(
+            (item: any) => item.id === row.service_id,
+          );
+          return String(service?.code || "").toUpperCase().startsWith("HV");
+        });
     setForm({
       patient_id: booking.patient_id || "",
       assigned_staff_user_id: booking.assigned_staff_user_id || "",
@@ -545,16 +597,15 @@ export function HomeCare({
       complaints: booking.complaints || "",
       notes: booking.notes || "",
     });
-    setPatientSearch(patientSearchLabel(patientMap.get(booking.patient_id)));
-    const bookingDays = dayCount(booking.start_date, booking.end_date);
+    const bookingPatient = patientMap.get(booking.patient_id);
+    setLookupPatient(bookingPatient || null);
+    setPatientSearch(patientSearchLabel(bookingPatient));
     setLineItems(
       booking.services?.length
         ? booking.services.map((row: any) => ({
             service_id: row.service_id || "",
             description: row.description || "",
-            quantity: String(
-              Math.max(1, Math.round(Number(row.quantity || 1) / bookingDays)),
-            ),
+            quantity: String(Math.max(1, Number(row.quantity || 1))),
             unit_amount: String(row.unit_amount || 0),
           }))
         : [{ ...emptyLine }],
@@ -567,6 +618,7 @@ export function HomeCare({
     setEditing(null);
     setForm({ ...emptyForm });
     setPatientSearch("");
+    setLookupPatient(null);
     setLineItems([{ ...emptyLine }]);
   }
 
@@ -606,7 +658,10 @@ export function HomeCare({
   const days = dayCount(form.start_date, form.end_date);
   const formLineTotal = lineItems.reduce(
     (sum, row) =>
-      sum + Number(row.quantity || 0) * Number(row.unit_amount || 0) * days,
+      sum +
+      (isHomeVisitBooking
+        ? Number(row.quantity || 0) * Number(row.unit_amount || 0) * days
+        : Number(row.unit_amount || 0) * days),
     0,
   );
   const isFormView = view === "create" || view === "edit";
@@ -640,6 +695,7 @@ export function HomeCare({
           onView={openView}
           onEdit={startEdit}
           onInvoice={openInvoice}
+          canManage={canManageBooking}
         />
       )}
 
@@ -657,43 +713,37 @@ export function HomeCare({
             </div>
             <ActionButton onClick={backToList}>Back to list</ActionButton>
           </div>
-          <form
-            onSubmit={saveBooking}
-            className="mt-5 grid gap-3 md:grid-cols-4"
-          >
-            <div className="relative">
-              <TextField
-                label="Patient Search"
-                value={patientSearch}
-                onChange={(value) => {
-                  setPatientSearch(value);
-                  if (form.patient_id) {
-                    setForm((prev: any) => ({ ...prev, patient_id: "" }));
-                  }
-                }}
-                placeholder="Search patient name or mobile number"
-                required={!form.patient_id}
-                type="search"
-                className="search-input"
-              />
-              {patientMatches.length > 0 && (
-                <div className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
-                  {patientMatches.map((patient: any) => (
-                    <button
-                      key={patient.id}
-                      type="button"
-                      onClick={() => selectPatient(patient)}
-                      className="block w-full border-b border-slate-100 px-3 py-2 text-left text-sm hover:bg-slate-50"
-                    >
-                      <b>{patientName(patient)}</b>
-                      <p className="text-xs text-slate-500">
-                        {patient.mobile || "-"} · {patientCode(patient) || "-"}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="mt-5">
+            <PatientLookupField
+              label="Patient Search"
+              patients={patients}
+              searchValue={patientSearch}
+              onSearchChange={(value: string) => {
+                setPatientSearch(value);
+                if (form.patient_id) {
+                  setForm((prev: any) => ({ ...prev, patient_id: "" }));
+                  setLookupPatient(null);
+                }
+              }}
+              selectedPatient={selectedLookupPatient}
+              onSelect={selectPatient}
+              onClear={() => {
+                setForm((prev: any) => ({ ...prev, patient_id: "" }));
+                setPatientSearch("");
+                setLookupPatient(null);
+              }}
+              onCreatePatient={createPatient}
+              branches={
+                branchId ? [{ id: branchId, name: "Current branch" }] : []
+              }
+              defaultBranchId={branchId}
+              busy={busy === "patient"}
+              required={!form.patient_id}
+              placeholder="Search patient name or mobile number"
+              createDescription="Save this record to select the patient and continue the booking."
+            />
+          </div>
+          <form onSubmit={saveBooking} className="mt-3 grid gap-3 md:grid-cols-4">
             <SelectField
               label="Booking Type"
               value={bookingType}
@@ -827,7 +877,7 @@ export function HomeCare({
                       />
                     )}
                     <NumberField
-                      label={isHomeVisitBooking ? "Visit Price" : "Hourly Price"}
+                      label={isHomeVisitBooking ? "Visit Price" : "Price"}
                       value={line.unit_amount}
                       onChange={(value) => setLine(index, "unit_amount", value)}
                       min={0}
@@ -849,14 +899,16 @@ export function HomeCare({
                       </p>
                       {Number(line.quantity || 0)}{" "}
                       {isHomeVisitBooking ? "visit" : "hr"}
-                      {Number(line.quantity || 0) === 1 ? "" : "s"} ×{" "}
-                      {money(line.unit_amount)} × {days} day
+                      {Number(line.quantity || 0) === 1 ? "" : "s"}{" "}
+                      {isHomeVisitBooking ? "×" : "-"} {money(line.unit_amount)} × {days} day
                       {days > 1 ? "s" : ""} ={" "}
                       <b className="text-slate-700">
                         {money(
-                          Number(line.quantity || 0) *
-                            Number(line.unit_amount || 0) *
-                            days,
+                          isHomeVisitBooking
+                            ? Number(line.quantity || 0) *
+                                Number(line.unit_amount || 0) *
+                                days
+                            : Number(line.unit_amount || 0) * days,
                         )}
                       </b>
                     </div>
@@ -868,7 +920,7 @@ export function HomeCare({
               </div>
             </div>
             <div className="flex items-end gap-2 md:col-span-4">
-              <Button disabled={busy === "save"}>
+              <Button disabled={busy === "save"} className='save-button'>
                 {busy === "save"
                   ? "Saving..."
                   : editing
@@ -900,6 +952,7 @@ export function HomeCare({
           onEdit={() => selected && startEdit(selected)}
           onCancel={cancelBooking}
           onInvoice={() => selected && openInvoice(selected)}
+          canManage={canManageBooking}
           onOpenInvoiceModule={() =>
             invoiceDetail?.invoice &&
             goToInvoiceModule(invoiceDetail.invoice.id)

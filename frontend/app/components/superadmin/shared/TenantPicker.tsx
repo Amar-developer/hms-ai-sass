@@ -12,7 +12,7 @@ export function TenantPicker({ tenants, selectedId, setSelectedId }: any) {
         className='rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm'
       >
         {tenants.map((tenant: any) => (
-          <option key={tenant.id} value={tenant.id}>
+          <option key={tenant.id} value={tenant.id} className="">
             {tenant.name}
           </option>
         ))}

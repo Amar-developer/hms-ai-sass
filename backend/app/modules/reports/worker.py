@@ -18,12 +18,11 @@ from app.modules.reports.service import (
     process_report_job,
     report_period_key,
 )
+from app.modules.reports.snapshots import archive_due_months
 from app.modules.tenants.models import Tenant, TenantStatus, now_utc
 
 
 def enqueue_due_monthly_reports(session: Session) -> None:
-    if not scheduler_lock():
-        return
     today = date.today()
     start, end = previous_month_range(today)
     period_key = report_period_key(start, end)
@@ -62,8 +61,14 @@ def enqueue_due_monthly_reports(session: Session) -> None:
 
 
 def run_once() -> None:
-    with Session(engine) as session:
-        enqueue_due_monthly_reports(session)
+    # A single scheduler lock guards both the monthly email digest and the
+    # month-end dashboard snapshot so only one worker runs them per cycle.
+    if scheduler_lock():
+        with Session(engine) as session:
+            enqueue_due_monthly_reports(session)
+            # Freeze the just-finished month into income dashboard snapshots
+            # once it rolls over (idempotent; skips already-archived tenants).
+            archive_due_months(session)
     job_id = dequeue_monthly_report_job(timeout=5)
     if not job_id:
         return

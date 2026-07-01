@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.modules.appointments.models import Appointment, AppointmentStatus
-from app.modules.billing.models import Invoice, InvoiceStatus
+from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.lab.models import LabOrderItem, LabTestCatalog, LabTestPackage
 from app.modules.patients.models import Patient
 from app.modules.pharmacy.models import (
@@ -521,6 +521,8 @@ def build_profit_report_email_attachments(
     doctor_id: str | None = None,
     invoice_type: str = "overall",
     supplier_id: str | None = None,
+    supplier_ids: list[str] | None = None,
+    report_sections: list[str] | None = None,
     branch_id: str | None = None,
 ) -> list[tuple[str, bytes]]:
     tenant = session.get(Tenant, tenant_id)
@@ -540,26 +542,109 @@ def build_profit_report_email_attachments(
         paid_invoices = [
             invoice for invoice in paid_invoices if invoice.branch_id == branch_id
         ]
+    invoice_ids = [invoice.id for invoice in paid_invoices]
+    invoice_items_by_invoice: dict[str, list[InvoiceItem]] = {
+        invoice.id: [] for invoice in paid_invoices
+    }
+    if invoice_ids:
+        for item in session.exec(
+            select(InvoiceItem).where(
+                InvoiceItem.tenant_id == tenant_id,
+                InvoiceItem.invoice_id.in_(invoice_ids),
+            )
+        ).all():
+            invoice_items_by_invoice.setdefault(item.invoice_id, []).append(item)
+
+    allowed_sections = {
+        "overall",
+        "consultation",
+        "lab",
+        "service",
+        "pharmacy",
+        "home_visit",
+        "home_care",
+        "ip",
+        "physiotherapy",
+        "lab_suppliers",
+    }
+    selected_sections = {
+        section for section in (report_sections or []) if section in allowed_sections
+    } or {"overall", "consultation", "lab", "service", "pharmacy"}
+    supplier_filter_ids = {
+        supplier for supplier in (supplier_ids or []) if supplier and supplier != "all"
+    }
+    pharmacy_supplier_filter_ids: set[str] = set()
+    if supplier_id:
+        supplier_filter_ids.add(supplier_id)
+        pharmacy_supplier_filter_ids.add(supplier_id)
 
     def classify_invoice(invoice: Invoice) -> str:
         if invoice.pharmacy_issue_id:
             return "pharmacy"
         if invoice.lab_order_id:
             return "lab"
+        if invoice.physiotherapy_case_id:
+            return "physiotherapy"
+        if invoice.ip_admission_id:
+            return "ip"
+        if invoice.home_care_booking_id:
+            fields = " ".join(
+                f"{item.external_slug or ''} {item.description or ''}"
+                for item in invoice_items_by_invoice.get(invoice.id, [])
+            ).lower()
+            if "home_visit" in fields or "home visit" in fields or "hv_" in fields:
+                return "home_visit"
+            return "home_care"
         return "consultation"
 
     def type_label(value: str) -> str:
         if value == "pharmacy":
             return "Pharmacy"
         if value == "lab":
-            return "Lab"
+            return "Lab / Service"
+        if value == "physiotherapy":
+            return "Physiotherapy"
+        if value == "ip":
+            return "IP"
+        if value == "home_visit":
+            return "Home Visit"
+        if value == "home_care":
+            return "Home Care"
         return "Consultation"
 
-    if invoice_type in {"consultation", "lab", "pharmacy"}:
+    if invoice_type in {
+        "consultation",
+        "lab",
+        "service",
+        "pharmacy",
+        "home_visit",
+        "home_care",
+        "ip",
+        "physiotherapy",
+    }:
         paid_invoices = [
             invoice
             for invoice in paid_invoices
-            if classify_invoice(invoice) == invoice_type
+            if classify_invoice(invoice)
+            == ("lab" if invoice_type == "service" else invoice_type)
+        ]
+    elif "overall" not in selected_sections:
+        selected_invoice_types = set()
+        if "consultation" in selected_sections:
+            selected_invoice_types.add("consultation")
+        if (
+            "lab" in selected_sections
+            or "service" in selected_sections
+            or "lab_suppliers" in selected_sections
+        ):
+            selected_invoice_types.add("lab")
+        for value in ("pharmacy", "home_visit", "home_care", "ip", "physiotherapy"):
+            if value in selected_sections:
+                selected_invoice_types.add(value)
+        paid_invoices = [
+            invoice
+            for invoice in paid_invoices
+            if classify_invoice(invoice) in selected_invoice_types
         ]
 
     appointments = {
@@ -876,9 +961,14 @@ def build_profit_report_email_attachments(
         item_supplier_id = (
             getattr(catalog_item, "supplier_id", None) if catalog_item else None
         )
-        if supplier_id and (item_supplier_id or "none") != supplier_id:
+        if (
+            supplier_filter_ids
+            and (item_supplier_id or "none") not in supplier_filter_ids
+        ):
             continue
-        supplier_name = suppliers.get(item_supplier_id or "", "No supplier")
+        supplier_name = suppliers.get(
+            item_supplier_id or "", "Tenant Hospital / In-house"
+        )
         purchase_price = (
             int(getattr(catalog_item, "purchase_price", 0) or 0) if catalog_item else 0
         )
@@ -1004,9 +1094,14 @@ def build_profit_report_email_attachments(
         invoice = pharmacy_invoice_by_issue.get(item.pharmacy_issue_id)
         medicine = medicines.get(item.medicine_id or "")
         item_supplier_id = getattr(medicine, "supplier_id", None) if medicine else None
-        if supplier_id and (item_supplier_id or "none") != supplier_id:
+        if (
+            pharmacy_supplier_filter_ids
+            and (item_supplier_id or "none") not in pharmacy_supplier_filter_ids
+        ):
             continue
-        supplier_name = suppliers.get(item_supplier_id or "", "No supplier")
+        supplier_name = suppliers.get(
+            item_supplier_id or "", "Tenant Hospital / In-house"
+        )
         quantity = int(item.dispensed_quantity or item.quantity or 1)
         line_amount = int(item.unit_price or 0) * quantity
         revenue = allocated_line_revenue(invoice, line_amount) if invoice else 0
@@ -1082,49 +1177,64 @@ def build_profit_report_email_attachments(
     doctor_suffix = f"-{doctor_id}" if doctor_id else "-all-doctors"
     type_suffix = f"-{invoice_type}" if invoice_type != "overall" else "-overall"
     base = f"{start.isoformat()}-{end.isoformat()}{doctor_suffix}{type_suffix}"
-    return [
-        (
-            f"doctor-settlement-{base}.xls",
-            _xls_document(
-                "Doctor Settlement",
-                period,
-                [
-                    _table(
-                        "Doctor Settlement and Profitability",
-                        settlement_headers,
-                        settlement_rows,
-                    )
-                ],
-            ),
-        ),
-        (
-            f"lab-settlement-{base}.xls",
-            _xls_document(
-                "Lab Settlement",
-                period,
-                [
-                    _table(
-                        "Lab Test Settlement and Profitability",
-                        lab_settlement_headers,
-                        lab_settlement_rows,
-                    )
-                ],
-            ),
-        ),
-        (
-            f"pharmacy-settlement-{base}.xls",
-            _xls_document(
-                "Pharmacy Settlement",
-                period,
-                [
-                    _table(
-                        "Pharmacy Settlement and Profitability",
-                        pharmacy_settlement_headers,
-                        pharmacy_settlement_rows,
-                    )
-                ],
-            ),
-        ),
+    attachments: list[tuple[str, bytes]] = []
+    if "overall" in selected_sections or "consultation" in selected_sections:
+        attachments.append(
+            (
+                f"doctor-settlement-{base}.xls",
+                _xls_document(
+                    "Doctor Settlement",
+                    period,
+                    [
+                        _table(
+                            "Doctor Settlement and Profitability",
+                            settlement_headers,
+                            settlement_rows,
+                        )
+                    ],
+                ),
+            )
+        )
+    if (
+        "overall" in selected_sections
+        or "lab" in selected_sections
+        or "service" in selected_sections
+        or "lab_suppliers" in selected_sections
+    ):
+        attachments.append(
+            (
+                f"lab-settlement-{base}.xls",
+                _xls_document(
+                    "Lab Settlement",
+                    period,
+                    [
+                        _table(
+                            "Lab Test Settlement and Profitability",
+                            lab_settlement_headers,
+                            lab_settlement_rows,
+                        )
+                    ],
+                ),
+            )
+        )
+    if "overall" in selected_sections or "pharmacy" in selected_sections:
+        attachments.append(
+            (
+                f"pharmacy-settlement-{base}.xls",
+                _xls_document(
+                    "Pharmacy Settlement",
+                    period,
+                    [
+                        _table(
+                            "Pharmacy Settlement and Profitability",
+                            pharmacy_settlement_headers,
+                            pharmacy_settlement_rows,
+                        )
+                    ],
+                ),
+            )
+        )
+    attachments.append(
         (
             f"invoice-profit-details-{base}.xls",
             _xls_document(
@@ -1132,8 +1242,9 @@ def build_profit_report_email_attachments(
                 period,
                 [_table("Invoice Profit Details", invoice_headers, invoice_rows)],
             ),
-        ),
-    ]
+        )
+    )
+    return attachments
 
 
 def send_report_email(
