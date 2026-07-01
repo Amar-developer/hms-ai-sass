@@ -203,7 +203,13 @@ def _validate_patient_and_staff(
     payload: HomeCareBookingCreate | HomeCareBookingUpdate,
 ) -> None:
     patient_id = getattr(payload, "patient_id", None)
-    if patient_id:
+    if patient_id is not None:
+        patient_id = patient_id.strip()
+        if not patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Patient is required",
+            )
         patient = session.get(Patient, patient_id)
         if not patient or patient.tenant_id != tenant_id:
             raise HTTPException(
@@ -842,6 +848,18 @@ def generate_invoice(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Add at least one completed billable service before generating invoice",
         )
+    patient_id = (booking.patient_id or "").strip()
+    if not patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Home care booking must be linked to a patient before generating invoice",
+        )
+    patient = session.get(Patient, patient_id)
+    if not patient or patient.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Home care booking patient is invalid",
+        )
     subtotal = sum(row.total_amount for row in rows)
     discount = min(payload.discount_amount, subtotal)
     taxable = subtotal - discount
@@ -860,7 +878,7 @@ def generate_invoice(
     invoice = Invoice(
         tenant_id=tenant_id,
         branch_id=booking.branch_id,
-        patient_id=booking.patient_id,
+        patient_id=patient_id,
         home_care_booking_id=booking.id,
         invoice_number=next_invoice_number(
             session, tenant_id, str(invoice_prefix or "INV"), booking.branch_id
