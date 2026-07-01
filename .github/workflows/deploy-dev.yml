@@ -39,6 +39,9 @@ jobs:
 
             # Reset any local changes on server
             git checkout -- .
+            # Older EC2 checkouts may have this as an untracked local file.
+            # Remove only this known collision so git pull can fast-forward.
+            git clean -f -- frontend/Dockerfile
 
             # Pull latest code from develop
             git fetch origin
