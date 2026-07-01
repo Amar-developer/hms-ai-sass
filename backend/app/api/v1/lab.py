@@ -10,8 +10,13 @@ from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
+from app.modules.appointments.models import Appointment
 from app.modules.audit.service import record_audit_event
-from app.modules.consultations.models import Consultation, ConsultationReferral
+from app.modules.consultations.models import (
+    Consultation,
+    ConsultationReferral,
+    ConsultationStatus,
+)
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.lab.models import (
@@ -33,6 +38,8 @@ from app.modules.lab.schemas import (
     LabOrderFromConsultation,
     LabOrderRead,
     LabOrderStatusUpdate,
+    LabConsultationReferralItemRead,
+    LabConsultationReferralRead,
     LabResultCreate,
     LabResultRead,
     LabResultTemplateCreate,
@@ -51,6 +58,7 @@ from app.modules.settings.numbering import next_document_number
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
 from app.modules.patients.models import Patient
+from app.modules.queue.models import QueueEntry
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, now_utc
 
@@ -154,6 +162,92 @@ def _fallback_lab_referrals(text: str | None) -> list[dict[str, str | None]]:
                 }
             )
     return rows
+
+
+@router.get(
+    "/consultation-referrals",
+    response_model=list[LabConsultationReferralRead],
+)
+def list_lab_consultation_referrals(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.LAB_CREATE,
+            permissions.LAB_EDIT,
+        )
+    ),
+) -> list[LabConsultationReferralRead]:
+    enforce_module_enabled(session, tenant_id, "lab")
+    branch_id = scoped_branch_id(current_user, branch_id)
+    statement = (
+        select(Consultation, Appointment, Patient, QueueEntry)
+        .join(Appointment, Appointment.id == Consultation.appointment_id)
+        .join(Patient, Patient.id == Consultation.patient_id)
+        .outerjoin(QueueEntry, QueueEntry.appointment_id == Consultation.appointment_id)
+        .where(
+            Consultation.tenant_id == tenant_id,
+            Consultation.status == ConsultationStatus.SIGNED,
+            Consultation.lab_referral_text.is_not(None),
+            Consultation.lab_referral_text != "",
+        )
+        .order_by(Consultation.created_at.desc())
+    )
+    if branch_id:
+        statement = statement.where(Consultation.branch_id == branch_id)
+    rows = session.exec(statement).all()
+    consultation_ids = [consultation.id for consultation, *_rest in rows]
+    referral_rows = (
+        list(
+            session.exec(
+                select(ConsultationReferral).where(
+                    ConsultationReferral.tenant_id == tenant_id,
+                    ConsultationReferral.consultation_id.in_(consultation_ids),
+                    ConsultationReferral.referral_type == "lab",
+                )
+            ).all()
+        )
+        if consultation_ids
+        else []
+    )
+    referrals_by_consultation: dict[str, list[ConsultationReferral]] = {}
+    for row in referral_rows:
+        referrals_by_consultation.setdefault(row.consultation_id, []).append(row)
+
+    result: list[LabConsultationReferralRead] = []
+    for consultation, appointment, patient, queue_entry in rows:
+        structured = referrals_by_consultation.get(consultation.id, [])
+        referrals = [
+            LabConsultationReferralItemRead(
+                referral_type=row.referral_type,
+                item_name=row.item_name,
+                priority=row.priority,
+                instructions=row.instructions,
+            )
+            for row in structured
+        ] or [
+            LabConsultationReferralItemRead(referral_type="lab", **row)
+            for row in _fallback_lab_referrals(consultation.lab_referral_text)
+        ]
+        result.append(
+            LabConsultationReferralRead(
+                id=appointment.id,
+                consultation_id=consultation.id,
+                appointment_id=appointment.id,
+                patient_id=patient.id,
+                patient_name=patient.full_name,
+                token_number=queue_entry.token_number if queue_entry else None,
+                lab_referral_text=consultation.lab_referral_text or "",
+                status=consultation.status.value,
+                referrals=referrals,
+                signed_at=consultation.signed_at,
+                created_at=consultation.created_at,
+            )
+        )
+    return result
 
 
 def _simple_pdf(lines: list[str]) -> bytes:

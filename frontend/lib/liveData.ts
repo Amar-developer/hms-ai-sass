@@ -39,6 +39,7 @@ export function mapAppointment(
   const c = consultations.find((x) => x.appointment_id === row.id);
   const p = patientMap.get(row.patient_id);
   const practitioner = practitionerMap.get(row.practitioner_id);
+  const tokenNumber = q?.token_number || row.token_number || row.token || '';
 
   // Resolve room number from today's active schedule for this practitioner+branch
   let roomNumber: string | null = null;
@@ -69,11 +70,12 @@ export function mapAppointment(
     clinicId,
     branchId: row.branch_id || branchId,
     branch_id: row.branch_id || branchId,
-    token: q?.token_number || row.id.slice(-4),
+    token: tokenNumber,
     tokenType: row.appointment_type === 'emergency' ? 'Emergency' : 'Normal',
     priority: q?.priority_rank || 2,
     patientId: row.patient_id,
-    patient: p?.name || row.patient_id,
+    patient: p?.name || row.patient_name || row.patient_id,
+    patientMobile: p?.mobile || row.patient_mobile || '',
     departmentId: row.department_id || 'general',
     department_id: row.department_id || 'general',
     doctorId: row.practitioner_id || '',

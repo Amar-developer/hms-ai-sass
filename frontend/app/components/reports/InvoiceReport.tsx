@@ -8,7 +8,11 @@ type InvoiceProps = {
   invoicePageRows: any;
   appointmentById: any;
   patientById: any;
-  settlementPaidBasis: any;
+  invoiceDoctorStaffName: any;
+  invoicePaymentMode: any;
+  invoiceGrossProfit: any;
+  invoiceGrossProfitPercent: any;
+  invoiceSettlementAmount: any;
   numberValue: any;
   doctorById: any;
   rowDate: any;
@@ -32,7 +36,11 @@ const InvoiceReport = ({
   invoicePageRows,
   appointmentById,
   patientById,
-  settlementPaidBasis,
+  invoiceDoctorStaffName,
+  invoicePaymentMode,
+  invoiceGrossProfit,
+  invoiceGrossProfitPercent,
+  invoiceSettlementAmount,
   numberValue,
   doctorById,
   rowDate,
@@ -83,18 +91,8 @@ const InvoiceReport = ({
   },
   {
     key: "doctor",
-    header: "Doctor",
-    render: (row: any) => {
-      const appointment = appointmentById.get(row.appointment_id);
-
-      return (
-        appointment?.doctor ||
-        doctorById.get(
-          appointment?.doctorId || appointment?.practitioner_id,
-        ) ||
-        "Unassigned"
-      );
-    },
+    header: "Doctor / Staff",
+    render: (row: any) => invoiceDoctorStaffName(row),
   },
   {
     key: "status",
@@ -115,51 +113,32 @@ const InvoiceReport = ({
     ),
   },
   {
-    key: "total_amount",
-    header: "Total",
-    render: (row: any) => money(row.total_amount),
-  },
-  {
     key: "paid_amount",
-    header: "Paid",
+    header: "Paid Amount",
     render: (row: any) => money(numberValue(row.paid_amount)),
   },
   {
-    key: "balance_amount",
-    header: "Balance",
-    render: (row: any) => money(row.balance_amount),
-  },
-  {
-    key: "membership_discount_amount",
-    header: "Membership",
-    render: (row: any) =>
-      money(row.membership_discount_amount),
-  },
-  {
-    key: "doctor_share_amount",
-    header: "Doctor Fee",
-    render: (row: any) =>
-      money(row.doctor_share_amount),
+    key: "payment_mode",
+    header: "Mode of Payment",
+    render: (row: any) => invoicePaymentMode(row),
   },
   {
     key: "settlement",
     header: "Settlement",
     render: (row: any) =>
-      money(settlementPaidBasis(row)),
+      money(invoiceSettlementAmount(row)),
   },
   {
-    key: "clinic_profit",
-    header: "Clinic Profit",
-    render: (row: any) => {
-      const paid = numberValue(row.paid_amount);
-      const settlement = settlementPaidBasis(row);
-
-      return (
-        <span className="font-bold">
-          {money(Math.max(paid - settlement, 0))}
-        </span>
-      );
-    },
+    key: "gross_profit",
+    header: "Gross Profit",
+    render: (row: any) => (
+      <span className="font-bold">{money(invoiceGrossProfit(row))}</span>
+    ),
+  },
+  {
+    key: "gross_profit_percentage",
+    header: "Gross Profit %",
+    render: (row: any) => invoiceGrossProfitPercent(row),
   },
 ];
   return (
@@ -175,7 +154,7 @@ const InvoiceReport = ({
       </div>
       <div className="mt-4 overflow-auto rounded-lg border">
         <DataTable
-          className="w-full min-w-[1520px] text-left text-sm"
+          className="w-full min-w-[1120px] text-left text-sm"
           columns={invoiceColumns}
           data={filteredInvoices}
           emptyMessage="No paid invoices match this filter."

@@ -275,7 +275,7 @@ const Header = ({
                     checked={emailLabSupplierIds.includes("none")}
                     onChange={() => toggleLabSupplier("none")}
                   />
-                  No supplier
+                  Tenant Hospital / In-house
                 </label>
                 {suppliers.map((supplier: any) => (
                   <label
@@ -394,7 +394,7 @@ const Header = ({
             className="select-filter"
           >
             <option value="all">All suppliers</option>
-            <option value="none">No supplier</option>
+            <option value="none">Tenant Hospital / In-house</option>
             {suppliers.map((supplier: any) => (
               <option key={supplier.id} value={supplier.id}>
                 {supplier.name}

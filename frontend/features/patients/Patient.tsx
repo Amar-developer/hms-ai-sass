@@ -440,6 +440,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
   if (view === "detail" && selected)
     return (
       <PatientDetail
+        apiSession={apiSession}
         patient={selected}
         summary={summary}
         patientIpAdmissions={patientIpAdmissions}

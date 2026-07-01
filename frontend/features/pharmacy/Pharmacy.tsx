@@ -744,6 +744,14 @@ export function Pharmacy({
                       </b>
                       <p className="card-desc text-slate-500">
                         Signed prescription ready
+                        {a.doctor && a.doctor !== "Unassigned" ? (
+                          <>
+                            {" · Signed by "}
+                            <span className="font-semibold text-slate-700">
+                              {a.doctor}
+                            </span>
+                          </>
+                        ) : null}
                       </p>
                     </div>
                     <div className="flex gap-2">

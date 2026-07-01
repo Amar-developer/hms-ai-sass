@@ -995,7 +995,8 @@ def _replace_user_roles(
     )
     for row in existing:
         session.delete(row)
-    for role_key in role_keys:
+    normalized_role_keys = list(dict.fromkeys(role_keys))
+    for role_key in normalized_role_keys:
         role = _resolve_role_for_user_assignment(
             session, tenant_id, role_key, current_user
         )

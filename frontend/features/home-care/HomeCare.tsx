@@ -411,7 +411,7 @@ export function HomeCare({
             ? "home_visit_service"
             : "home_care_service",
           description: row.description || null,
-          quantity: Number(row.quantity || 1) * days,
+          quantity: Number(row.quantity || 1),
           unit_amount: Number(row.unit_amount || 0),
         })),
     };
@@ -600,15 +600,12 @@ export function HomeCare({
     const bookingPatient = patientMap.get(booking.patient_id);
     setLookupPatient(bookingPatient || null);
     setPatientSearch(patientSearchLabel(bookingPatient));
-    const bookingDays = dayCount(booking.start_date, booking.end_date);
     setLineItems(
       booking.services?.length
         ? booking.services.map((row: any) => ({
             service_id: row.service_id || "",
             description: row.description || "",
-            quantity: String(
-              Math.max(1, Math.round(Number(row.quantity || 1) / bookingDays)),
-            ),
+            quantity: String(Math.max(1, Number(row.quantity || 1))),
             unit_amount: String(row.unit_amount || 0),
           }))
         : [{ ...emptyLine }],
@@ -661,7 +658,10 @@ export function HomeCare({
   const days = dayCount(form.start_date, form.end_date);
   const formLineTotal = lineItems.reduce(
     (sum, row) =>
-      sum + Number(row.quantity || 0) * Number(row.unit_amount || 0) * days,
+      sum +
+      (isHomeVisitBooking
+        ? Number(row.quantity || 0) * Number(row.unit_amount || 0) * days
+        : Number(row.unit_amount || 0) * days),
     0,
   );
   const isFormView = view === "create" || view === "edit";
@@ -877,7 +877,7 @@ export function HomeCare({
                       />
                     )}
                     <NumberField
-                      label={isHomeVisitBooking ? "Visit Price" : "Hourly Price"}
+                      label={isHomeVisitBooking ? "Visit Price" : "Price"}
                       value={line.unit_amount}
                       onChange={(value) => setLine(index, "unit_amount", value)}
                       min={0}
@@ -899,14 +899,16 @@ export function HomeCare({
                       </p>
                       {Number(line.quantity || 0)}{" "}
                       {isHomeVisitBooking ? "visit" : "hr"}
-                      {Number(line.quantity || 0) === 1 ? "" : "s"} ×{" "}
-                      {money(line.unit_amount)} × {days} day
+                      {Number(line.quantity || 0) === 1 ? "" : "s"}{" "}
+                      {isHomeVisitBooking ? "×" : "-"} {money(line.unit_amount)} × {days} day
                       {days > 1 ? "s" : ""} ={" "}
                       <b className="text-slate-700">
                         {money(
-                          Number(line.quantity || 0) *
-                            Number(line.unit_amount || 0) *
-                            days,
+                          isHomeVisitBooking
+                            ? Number(line.quantity || 0) *
+                                Number(line.unit_amount || 0) *
+                                days
+                            : Number(line.unit_amount || 0) * days,
                         )}
                       </b>
                     </div>

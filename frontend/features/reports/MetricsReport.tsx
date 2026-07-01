@@ -1,5 +1,9 @@
+import { useState } from "react";
 import {
   Activity,
+  ArrowLeft,
+  ChevronRight,
+  History,
   Home,
   IndianRupee,
   ReceiptIndianRupee,
@@ -17,8 +21,19 @@ type MetrixProps = {
   previousFinalProfit: number;
   labSettlementSummary: any;
   membershipClaimRows: any[];
+  snapshots?: any[];
   money: (value: number) => string;
   percent: (value: number, total: number) => string;
+};
+
+type DashboardView = {
+  totals: any;
+  previousTotals: any;
+  grossProfit: number;
+  finalProfit: number;
+  previousFinalProfit: number;
+  labSettlementSummary: any;
+  membershipClaimRows: any[];
 };
 
 function changeLine(current: number, previous: number) {
@@ -36,17 +51,47 @@ function changeLine(current: number, previous: number) {
   };
 }
 
-const MetricsReport = ({
-  totals,
-  previousTotals,
-  grossProfit,
-  finalProfit,
-  previousFinalProfit,
-  labSettlementSummary,
-  membershipClaimRows,
+// Derive the dashboard card props from a stored month snapshot. The previous
+// month for the comparison lines is the next-older snapshot in the (desc) list.
+function snapshotView(snapshot: any, snapshots: any[]): DashboardView {
+  const metrics = snapshot?.metrics || {};
+  const totals = metrics.totals || {};
+  const index = snapshots.findIndex((row) => row.id === snapshot.id);
+  const older = index >= 0 ? snapshots[index + 1] : undefined;
+  const olderMetrics = older?.metrics || {};
+  return {
+    totals,
+    previousTotals: olderMetrics.totals || {},
+    grossProfit: Number(metrics.grossProfit || 0),
+    finalProfit: Number(metrics.finalProfit || 0),
+    previousFinalProfit: Number(olderMetrics.finalProfit || 0),
+    labSettlementSummary: metrics.labSettlement || {
+      revenue: 0,
+      purchaseCost: 0,
+      profit: 0,
+    },
+    membershipClaimRows: totals.membershipClaims || [],
+  };
+}
+
+function DashboardCards({
+  view,
   money,
   percent,
-}: MetrixProps) => {
+}: {
+  view: DashboardView;
+  money: (value: number) => string;
+  percent: (value: number, total: number) => string;
+}) {
+  const {
+    totals,
+    previousTotals,
+    grossProfit,
+    finalProfit,
+    previousFinalProfit,
+    labSettlementSummary,
+    membershipClaimRows,
+  } = view;
   const topMembershipClaim = membershipClaimRows[0];
 
   return (
@@ -56,7 +101,7 @@ const MetricsReport = ({
           icon={IndianRupee}
           label="Gross Revenue"
           value={money(totals.grossRevenue)}
-          hint={`${totals.invoices} invoices`}
+          hint={`${totals.invoices || 0} invoices`}
           trend={changeLine(totals.grossRevenue, previousTotals.grossRevenue)}
         />
 
@@ -143,7 +188,7 @@ const MetricsReport = ({
         <Metric
           icon={Users}
           label="Membership Enrollments"
-          value={totals.membershipEnrollCount}
+          value={totals.membershipEnrollCount || 0}
           hint={`Purchase ${money(totals.membershipEnrollAmount)}`}
           trend={changeLine(
             totals.membershipEnrollCount,
@@ -206,6 +251,153 @@ const MetricsReport = ({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function ClosedMonths({
+  snapshots,
+  selectedId,
+  onSelect,
+  money,
+}: {
+  snapshots: any[];
+  selectedId: string | null;
+  onSelect: (snapshot: any) => void;
+  money: (value: number) => string;
+}) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <History className="h-4 w-4 text-slate-500" />
+          <h4 className="text-sm font-bold text-slate-950">Closed Months</h4>
+        </div>
+        <span className="rounded-lg bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
+          {snapshots.length}
+        </span>
+      </div>
+      {snapshots.length === 0 ? (
+        <p className="px-4 py-4 text-xs font-semibold text-slate-500">
+          No closed months yet. Each month is frozen automatically once it ends,
+          then appears here — click a month to reopen its dashboard.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-100 bg-slate-50/60 text-left text-[11px] uppercase tracking-wide text-slate-500">
+                <th className="px-4 py-2 font-bold">Month</th>
+                <th className="px-4 py-2 text-right font-bold">Invoices</th>
+                <th className="px-4 py-2 text-right font-bold">Gross</th>
+                <th className="px-4 py-2 text-right font-bold">Paid</th>
+                <th className="px-4 py-2 text-right font-bold">Final Profit</th>
+                <th className="px-4 py-2" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {snapshots.map((snapshot: any) => {
+                const active = snapshot.id === selectedId;
+                return (
+                  <tr
+                    key={snapshot.id}
+                    onClick={() => onSelect(snapshot)}
+                    className={`cursor-pointer transition-colors ${
+                      active ? "bg-emerald-50" : "hover:bg-slate-50"
+                    }`}
+                  >
+                    <td className="px-4 py-3 font-bold text-slate-900">
+                      {snapshot.period_label}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-600">
+                      {snapshot.invoice_count}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                      {money(snapshot.gross_revenue)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-700">
+                      {money(snapshot.paid_revenue)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-black tabular-nums text-emerald-700">
+                      {money(snapshot.final_profit)}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <ChevronRight className="ml-auto h-4 w-4 text-slate-400" />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const MetricsReport = ({
+  totals,
+  previousTotals,
+  grossProfit,
+  finalProfit,
+  previousFinalProfit,
+  labSettlementSummary,
+  membershipClaimRows,
+  snapshots = [],
+  money,
+  percent,
+}: MetrixProps) => {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = snapshots.find((row) => row.id === selectedId) || null;
+
+  const liveView: DashboardView = {
+    totals,
+    previousTotals,
+    grossProfit,
+    finalProfit,
+    previousFinalProfit,
+    labSettlementSummary,
+    membershipClaimRows,
+  };
+  const view = selected ? snapshotView(selected, snapshots) : liveView;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {selected && (
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Current month
+            </button>
+          )}
+          <h3 className="text-sm font-black text-slate-900">
+            {selected ? `${selected.period_label} · Closed` : "Current Month"}
+          </h3>
+        </div>
+        {selected && (
+          <span className="rounded-lg bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700">
+            Frozen at month end
+          </span>
+        )}
+      </div>
+
+      <DashboardCards view={view} money={money} percent={percent} />
+
+      <ClosedMonths
+        snapshots={snapshots}
+        selectedId={selectedId}
+        onSelect={(snapshot) =>
+          setSelectedId((current) =>
+            current === snapshot.id ? null : snapshot.id,
+          )
+        }
+        money={money}
+      />
     </div>
   );
 };

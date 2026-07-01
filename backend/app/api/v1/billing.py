@@ -14,7 +14,11 @@ from app.core.access_control import (
     require_user_branch_access,
     scoped_branch_id,
 )
-from app.core.auth import require_any_permission, require_permission
+from app.core.auth import (
+    is_tenant_admin_user,
+    require_any_permission,
+    require_permission,
+)
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.appointments.models import Appointment, AppointmentType
@@ -104,6 +108,17 @@ from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import Branch, Tenant
 
 router = APIRouter(prefix="/billing")
+
+
+def _require_direct_invoice_reversal_admin(
+    session: Session, current_user: User
+) -> None:
+    if current_user.is_super_admin or is_tenant_admin_user(session, current_user):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Tenant admin access required for direct invoice cancellation or amendment",
+    )
 
 
 def _record_billing_ledger(
@@ -313,6 +328,35 @@ def _actor_names(session: Session, user_ids: set[str | None]) -> dict[str, str]:
     return {user.id: user.name for user in users}
 
 
+def _invoice_payment_methods(session: Session, invoice: Invoice) -> list[PaymentMethod]:
+    payments = session.exec(
+        select(Payment).where(
+            Payment.tenant_id == invoice.tenant_id,
+            Payment.invoice_id == invoice.id,
+            Payment.status == PaymentStatus.RECORDED,
+            Payment.amount > 0,
+        )
+    ).all()
+    methods: list[PaymentMethod] = []
+    seen: set[PaymentMethod] = set()
+    for payment in payments:
+        if payment.method in seen:
+            continue
+        seen.add(payment.method)
+        methods.append(payment.method)
+    return methods
+
+
+def _invoice_read(session: Session, invoice: Invoice) -> InvoiceRead:
+    invoice_read = InvoiceRead.model_validate(invoice, from_attributes=True)
+    invoice_read.payment_methods = _invoice_payment_methods(session, invoice)
+    if invoice.appointment_id:
+        appointment = session.get(Appointment, invoice.appointment_id)
+        if appointment and appointment.tenant_id == invoice.tenant_id:
+            invoice_read.appointment_type = appointment.appointment_type
+    return invoice_read
+
+
 def _read_adjustment_request(
     session: Session, row: BillingAdjustmentRequest
 ) -> BillingAdjustmentRequestRead:
@@ -477,15 +521,81 @@ def _apply_refund_to_payments(
     return changed
 
 
-def _external_supplier_options(item: InvoiceItem) -> list[dict[str, int | str]]:
-    if not item.supplier_id:
+def _external_supplier_options(
+    session: Session, item: InvoiceItem
+) -> list[dict[str, int | str]]:
+    from app.modules.lab.models import LabTestCatalog, LabTestPackage
+    from app.modules.pharmacy.models import PharmacySupplier
+
+    options: dict[str, int] = {}
+
+    def add_option(supplier_id: str | None, buying_price: int | None) -> None:
+        supplier = str(supplier_id or "").strip()
+        if not supplier:
+            return
+        options[supplier] = int(buying_price or options.get(supplier, 0) or 0)
+
+    if item.item_type == "lab":
+        catalog_rows = []
+        if item.external_item_code:
+            catalog_rows.extend(
+                session.exec(
+                    select(LabTestCatalog).where(
+                        LabTestCatalog.tenant_id == item.tenant_id,
+                        LabTestCatalog.id == item.external_item_code,
+                    )
+                ).all()
+            )
+            catalog_rows.extend(
+                session.exec(
+                    select(LabTestPackage).where(
+                        LabTestPackage.tenant_id == item.tenant_id,
+                        LabTestPackage.id == item.external_item_code,
+                    )
+                ).all()
+            )
+        if not catalog_rows:
+            name = str(item.description or "").strip().lower()
+            if name:
+                catalog_rows.extend(
+                    session.exec(
+                        select(LabTestCatalog).where(
+                            LabTestCatalog.tenant_id == item.tenant_id,
+                            func.lower(LabTestCatalog.name) == name,
+                        )
+                    ).all()
+                )
+                catalog_rows.extend(
+                    session.exec(
+                        select(LabTestPackage).where(
+                            LabTestPackage.tenant_id == item.tenant_id,
+                            func.lower(LabTestPackage.name) == name,
+                        )
+                    ).all()
+                )
+        for row in catalog_rows:
+            add_option(row.supplier_id, row.purchase_price)
+
+    add_option(item.supplier_id, int(item.buying_amount or 0))
+    if not options:
         return []
+
+    suppliers = session.exec(
+        select(PharmacySupplier).where(
+            PharmacySupplier.tenant_id == item.tenant_id,
+            PharmacySupplier.id.in_(list(options.keys())),
+        )
+    ).all()
+    supplier_names = {supplier.id: supplier.name for supplier in suppliers}
     return [
         {
-            "supplier": item.supplier_id,
-            "supplier_name": item.supplier_id,
-            "buying_price": int(item.buying_amount or 0),
+            "supplier": supplier_id,
+            "supplier_name": supplier_names.get(supplier_id, supplier_id),
+            "buying_price": buying_price,
         }
+        for supplier_id, buying_price in sorted(
+            options.items(), key=lambda row: supplier_names.get(row[0], row[0])
+        )
     ]
 
 
@@ -1605,11 +1715,7 @@ def _read_invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRea
         read.actor_user_name = actor_names.get(str(entry.actor_user_id or ""))
         return read
 
-    invoice_read = InvoiceRead.model_validate(invoice, from_attributes=True)
-    if invoice.appointment_id:
-        appointment = session.get(Appointment, invoice.appointment_id)
-        if appointment and appointment.tenant_id == invoice.tenant_id:
-            invoice_read.appointment_type = appointment.appointment_type
+    invoice_read = _invoice_read(session, invoice)
     return InvoiceDetailRead(
         status=invoice_read.status,
         invoice=invoice_read,
@@ -2557,7 +2663,9 @@ def create_invoice_from_lab_order(
             "supplier_id": supplier_id,
             "external_source": item.external_source,
             "external_slug": item.external_slug,
-            "external_item_code": item.external_item_code,
+            "external_item_code": (
+                item.test_id or item.package_id or item.external_item_code
+            ),
         }
 
     lab_benefit_amounts: dict[str, int] = {}
@@ -2747,7 +2855,7 @@ def list_invoices(
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
         )
     ),
-) -> list[Invoice]:
+) -> list[InvoiceRead]:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(current_user, branch_id)
     statement = select(Invoice).where(Invoice.tenant_id == tenant_id)
@@ -2756,7 +2864,10 @@ def list_invoices(
     if patient_id:
         statement = statement.where(Invoice.patient_id == patient_id)
     invoices = list(session.exec(statement.order_by(Invoice.created_at.desc())).all())
-    return [_normalize_invoice_status(session, invoice) for invoice in invoices]
+    return [
+        _invoice_read(session, _normalize_invoice_status(session, invoice))
+        for invoice in invoices
+    ]
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDetailRead)
@@ -2933,7 +3044,7 @@ def update_invoice_item_supplier(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice item not found"
         )
-    options = _external_supplier_options(item)
+    options = _external_supplier_options(session, item)
     if payload.supplier_id:
         selected = next(
             (
@@ -2992,7 +3103,7 @@ def list_invoice_item_supplier_options(
         )
     return [
         InvoiceItemSupplierOptionRead(**supplier)
-        for supplier in _external_supplier_options(item)
+        for supplier in _external_supplier_options(session, item)
     ]
 
 
@@ -3596,6 +3707,7 @@ def cancel_invoice(
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
     enforce_entitlement(session, tenant_id, "billing_basic")
+    _require_direct_invoice_reversal_admin(session, current_user)
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
         raise HTTPException(
@@ -3646,6 +3758,7 @@ def amend_invoice(
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
     enforce_entitlement(session, tenant_id, "billing_basic")
+    _require_direct_invoice_reversal_admin(session, current_user)
     invoice = session.get(Invoice, invoice_id)
     if not invoice or invoice.tenant_id != tenant_id:
         raise HTTPException(

@@ -913,10 +913,9 @@ export function useAppController() {
       apiSession?.user?.roles?.includes("tenant_admin") ||
       apiSession?.user?.user_type === "tenant_admin"),
   );
-  // Role-based sidebar control: when the user has one or more predefined roles, the
-  // sidebar is gated strictly by those roles' module lists (e.g. reception never sees
-  // the doctor module, even if a stray permission would otherwise expose it). Only
-  // users with no recognized role fall back to permission-derived modules.
+  // Role-based sidebar control is additive: users with multiple roles get the union
+  // of every assigned role's configured modules plus modules exposed by their
+  // combined permission set.
   // Tenant-admin-configurable per-role sidebar modules override the built-in defaults
   // (lib/navigation.ts). Unconfigured roles keep their defaults.
   const roleAllowedModules = resolveSidebarModules({

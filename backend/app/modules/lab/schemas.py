@@ -138,6 +138,27 @@ class LabOrderFromConsultation(BaseModel):
     ordered_by_user_id: str | None = None
 
 
+class LabConsultationReferralItemRead(BaseModel):
+    referral_type: str
+    item_name: str
+    priority: str | None = None
+    instructions: str | None = None
+
+
+class LabConsultationReferralRead(BaseModel):
+    id: str
+    consultation_id: str
+    appointment_id: str
+    patient_id: str
+    patient_name: str
+    token_number: str | None = None
+    lab_referral_text: str
+    status: str
+    referrals: list[LabConsultationReferralItemRead] = Field(default_factory=list)
+    signed_at: datetime | None = None
+    created_at: datetime
+
+
 class LabOrderStatusUpdate(BaseModel):
     status: LabOrderStatus
     notes: str | None = Field(default=None, max_length=2000)

@@ -81,12 +81,21 @@ class AppointmentGridRead(BaseModel):
     token_number: str | None
     appointment_type: AppointmentType
     visit_purpose: str | None
+    reason: str | None = None
+    source_appointment_id: str | None = None
     is_billable: bool
+    custom_fee_amount: int | None = None
+    billing_note: str | None = None
+    emergency_reason: str | None = None
+    intake_vitals: str | None = None
+    intake_complaints: str | None = None
     appointment_date: date
     appointment_time: time | None
     status: AppointmentStatus
     consultation_status: str | None
+    created_by_user_id: str | None = None
     created_at: datetime
+    updated_at: datetime
 
 
 class QueueEntryRead(BaseModel):

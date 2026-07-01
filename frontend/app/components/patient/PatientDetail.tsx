@@ -1,4 +1,4 @@
-import { UPLOADS_BASE } from "@/lib/api";
+import { UPLOADS_BASE, type ApiSession } from "@/lib/api";
 import { Badge, Button, Card, StatusToast } from "../common/ui";
 import { hiddenScrollbar } from "@/utils/patient/constants";
 import {
@@ -63,6 +63,7 @@ function CompactMetric({ label, value }: any) {
 }
 
 export function PatientDetail({
+  apiSession,
   patient,
   summary,
   patientIpAdmissions,
@@ -82,7 +83,27 @@ export function PatientDetail({
   onEdit,
   onUploadPhoto,
   setActive,
-}: any) {
+}: any & { apiSession?: ApiSession | null }) {
+  const permissionKeys = apiSession?.user?.permissions || [];
+  const hasAnyPermission = (keys: string[]) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        permissionKeys.includes("*") ||
+        keys.some((key) => permissionKeys.includes(key)),
+    );
+  const canReadMembership = hasAnyPermission([
+    "patient_subscriptions.manage",
+    "patient_subscriptions.read",
+  ]);
+  const canCreateMembership = hasAnyPermission([
+    "patient_subscriptions.manage",
+    "patient_subscriptions.create",
+  ]);
+  const canReadBilling = hasAnyPermission([
+    "billing.manage",
+    "billing.read",
+    "invoices.read",
+  ]);
   const alerts = [
     ...(summary?.critical_alerts || []),
     ...(summary?.allergies || []),
@@ -294,6 +315,7 @@ export function PatientDetail({
           <Info k="Guardian" v={patient.guardian_name || "-"} />
           <Info k="Alternate Mobile" v={patient.alternate_mobile || "-"} />
         </div>
+        {canReadMembership && (
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/40 p-3">
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -309,13 +331,15 @@ export function PatientDetail({
               {activeMembership ? "active" : pendingMembership ? "payment due" : "not enrolled"}
             </Badge>
           </div>
-          <MembershipEnrollForm
-            membershipPlans={membershipPlans}
-            patient={patient}
-            branches={branches}
-            loading={loading}
-            onSubmit={onEnrollMembership}
-          />
+          {canCreateMembership && (
+            <MembershipEnrollForm
+              membershipPlans={membershipPlans}
+              patient={patient}
+              branches={branches}
+              loading={loading}
+              onSubmit={onEnrollMembership}
+            />
+          )}
           <div className="mt-3 grid gap-3 md:grid-cols-4">
             <CompactMetric
               label="Current Plan"
@@ -347,6 +371,7 @@ export function PatientDetail({
             />
           </div>
         </div>
+        )}
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -427,43 +452,81 @@ export function PatientDetail({
       <div className="grid gap-5 lg:grid-cols-2">
         <DetailSection title="Lab / Service" description="Ordered diagnostic tests and services." count={labRows.length}>
           {labOrders.length === 0 && <SectionEmpty text="No lab orders found." />}
-          <div className={`max-h-[300px] space-y-3 overflow-y-auto pr-1 ${hiddenScrollbar}`}>
-            {labRows.map(({ row: order, items }: any) => (
-              <button
-                type="button"
-                key={order.id}
-                onClick={() => goToModule("lab")}
-                title="Open in Lab / Service"
-                className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2.5 text-left text-sm hover:bg-slate-100"
-              >
-                <span className="font-bold">{fmtDate(order.created_at)}</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-500">{items.length} test(s)</span>
-                  <StatusBadge status={order.status} />
-                </span>
-              </button>
-            ))}
+          <div className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}>
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2.5">Date</th>
+                  <th className="px-3 py-2.5 text-right">Tests</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {labRows.map(({ row: order, items }: any) => (
+                  <tr key={order.id} className="hover:bg-slate-50">
+                    <td className="px-3 py-3 font-black text-slate-950">
+                      {fmtDate(order.created_at)}
+                    </td>
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
+                      {items.length} test(s)
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge status={order.status} />
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => goToModule("lab")}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
+                      >
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </DetailSection>
 
         <DetailSection title="Medicines" description="Pharmacy issues and dispensed medicines." count={medicineRows.length}>
           {pharmacyIssues.length === 0 && <SectionEmpty text="No pharmacy records found." />}
-          <div className={`max-h-[300px] space-y-3 overflow-y-auto pr-1 ${hiddenScrollbar}`}>
-            {medicineRows.map(({ row: issue, items }: any) => (
-              <button
-                type="button"
-                key={issue.id}
-                onClick={() => goToModule("pharmacy")}
-                title="Open in Pharmacy"
-                className="flex w-full items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2.5 text-left text-sm hover:bg-slate-100"
-              >
-                <span className="font-bold">{fmtDate(issue.created_at)}</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-500">{items.length} item(s)</span>
-                  <StatusBadge status={issue.status} />
-                </span>
-              </button>
-            ))}
+          <div className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}>
+            <table className="w-full min-w-[520px] text-left text-sm">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
+                <tr>
+                  <th className="px-3 py-2.5">Date</th>
+                  <th className="px-3 py-2.5 text-right">Items</th>
+                  <th className="px-3 py-2.5">Status</th>
+                  <th className="px-3 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {medicineRows.map(({ row: issue, items }: any) => (
+                  <tr key={issue.id} className="hover:bg-slate-50">
+                    <td className="px-3 py-3 font-black text-slate-950">
+                      {fmtDate(issue.created_at)}
+                    </td>
+                    <td className="px-3 py-3 text-right text-xs font-semibold text-slate-500">
+                      {items.length} item(s)
+                    </td>
+                    <td className="px-3 py-3">
+                      <StatusBadge status={issue.status} />
+                    </td>
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => goToModule("pharmacy")}
+                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-700 hover:border-slate-900 hover:bg-white"
+                      >
+                        Open
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </DetailSection>
       </div>
@@ -504,17 +567,15 @@ export function PatientDetail({
         </div>
       </DetailSection>
 
+      {canReadMembership && (
       <DetailSection
         title="Billing & Membership"
-        description="Membership, invoices, paid amount, due amount, and benefit usage."
-        count={patientInvoices.length}
+        description="Membership plan history and benefit usage."
+        count={resolvedMembershipEnrollments.length}
         defaultOpen={false}
       >
         <div className="grid gap-3 md:grid-cols-4">
           <CompactMetric label="Membership Saved" value={money(membershipSavings)} />
-          <CompactMetric label="Billed" value={money(totalBilled)} />
-          <CompactMetric label="Paid" value={money(totalPaid)} />
-          <CompactMetric label="Due" value={money(totalDue)} />
         </div>
 
         <div className="mt-3 rounded-lg border border-slate-200">
@@ -558,49 +619,8 @@ export function PatientDetail({
             })}
           </div>
         </div>
-        <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-black uppercase text-slate-500">
-              <tr>
-                <th className="px-3 py-2.5">Invoice</th>
-                <th className="px-3 py-2.5">Source</th>
-                <th className="px-3 py-2.5">Status</th>
-                <th className="px-3 py-2.5 text-right">Total</th>
-                <th className="px-3 py-2.5 text-right">Paid</th>
-                <th className="px-3 py-2.5 text-right">Due</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {patientInvoices.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-4 text-sm font-semibold text-slate-500">
-                    No billing invoices found.
-                  </td>
-                </tr>
-              )}
-              {patientInvoices.map((invoice: any) => (
-                <tr
-                  key={invoice.id}
-                  onClick={() => openInvoice(invoice)}
-                  title="Open invoice"
-                  className="cursor-pointer hover:bg-slate-50"
-                >
-                  <td className="px-3 py-3 font-black text-slate-950 underline decoration-slate-300 underline-offset-2">{invoice.invoice_number}</td>
-                  <td className="px-3 py-3">
-                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">
-                      {invoiceSource(invoice).label}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3 capitalize">{String(invoice.status || "").replaceAll("_", " ")}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{money(invoice.total_amount)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{money(invoice.paid_amount)}</td>
-                  <td className="px-3 py-3 text-right tabular-nums">{money(invoice.balance_amount)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
 
+        {canReadBilling && (
         <div className="mt-3 rounded-lg border border-slate-200">
           <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2">
             <div>
@@ -629,7 +649,7 @@ export function PatientDetail({
                 >
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <b className="underline decoration-slate-300 underline-offset-2">
+                      <b className=" decoration-slate-300 ">
                         {invoice.invoice_number}
                       </b>
                       <span className="rounded bg-white px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500 ring-1 ring-slate-200">
@@ -651,7 +671,66 @@ export function PatientDetail({
             })}
           </div>
         </div>
+        )}
       </DetailSection>
+      )}
+
+      {canReadBilling && (
+      <DetailSection
+        title="Billing Invoices"
+        description="Patient invoices, paid amount, and due amount."
+        count={patientInvoices.length}
+        defaultOpen={false}
+      >
+        <div className="mb-3 grid gap-3 md:grid-cols-3">
+          <CompactMetric label="Overall Billed" value={money(totalBilled)} />
+          <CompactMetric label="Overall Paid" value={money(totalPaid)} />
+          <CompactMetric label="Overall Due" value={money(totalDue)} />
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-slate-200">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead className="bg-slate-50 text-xs font-black uppercase text-slate-500">
+              <tr>
+                <th className="px-3 py-2.5">Invoice</th>
+                <th className="px-3 py-2.5">Source</th>
+                <th className="px-3 py-2.5">Status</th>
+                <th className="px-3 py-2.5 text-right">Total</th>
+                <th className="px-3 py-2.5 text-right">Paid</th>
+                <th className="px-3 py-2.5 text-right">Due</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {patientInvoices.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-4 text-sm font-semibold text-slate-500">
+                    No billing invoices found.
+                  </td>
+                </tr>
+              )}
+              {patientInvoices.map((invoice: any) => (
+                <tr
+                  key={invoice.id}
+                  onClick={() => openInvoice(invoice)}
+                  title="Open invoice"
+                  className="cursor-pointer hover:bg-slate-50"
+                >
+                  <td className="px-3 py-3 font-black text-slate-950  decoration-slate-300">{invoice.invoice_number}</td>
+                  <td className="px-3 py-3">
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-600">
+                      {invoiceSource(invoice).label}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3 capitalize">{String(invoice.status || "").replaceAll("_", " ")}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{money(invoice.total_amount)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{money(invoice.paid_amount)}</td>
+                  <td className="px-3 py-3 text-right tabular-nums">{money(invoice.balance_amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </DetailSection>
+      )}
 
       <div className="px-1 pb-2">
         <h4 className="text-sm font-black text-slate-950">Timeline</h4>

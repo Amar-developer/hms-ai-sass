@@ -318,6 +318,9 @@ Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, pa
 | `GET` | `/api/v1/reports/monthly-email/jobs` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-email/jobs/{job_id}/download` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `POST` | `/api/v1/reports/profit-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+| `GET` | `/api/v1/reports/monthly-snapshots` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+| `GET` | `/api/v1/reports/monthly-snapshots/{snapshot_id}` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+| `POST` | `/api/v1/reports/monthly-snapshots/archive` | Any of `billing.manage`, `settings.manage` |
 
 Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `ReportJob`, pushes the job id to Redis, and returns `202 Accepted`. The worker sends an Excel-compatible `.xls` report through SMTP. Manual send defaults to previous month and supports `from_date` / `to_date` for testing current-month reports.
 
@@ -335,6 +338,7 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `DELETE` | `/api/v1/lab/catalog/packages/{package_id}` | `lab.manage` |
 | `GET` | `/api/v1/lab/catalog/available-tests` | `lab.manage` |
 | `GET` | `/api/v1/lab/catalog/popular-tests` | `lab.manage` |
+| `GET` | `/api/v1/lab/consultation-referrals` | Any of `lab.manage`, `lab.read`, `lab.create`, `lab.edit` |
 | `POST` | `/api/v1/lab/result-templates` | `lab.manage` |
 | `GET` | `/api/v1/lab/result-templates` | `lab.manage` |
 | `POST` | `/api/v1/lab/orders` | `lab.manage` |

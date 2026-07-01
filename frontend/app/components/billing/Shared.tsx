@@ -3,6 +3,7 @@ import { claimedDetail, invoiceDiscountParts, invoiceLinkedRecord, invoiceMember
 import { useEffect, useState } from "react";
 import { Badge,ActionButton,ActionGroup,Select,Card,Input } from "../common/ui";
 import { displayDateTime } from "@/utils/helper";
+import { humanizeOptionLabel } from "@/lib/options";
 
 export function InvoiceDetailPage({
   detail,
@@ -44,12 +45,17 @@ export function InvoiceDetailPage({
   const adjustmentRequests=detail.adjustment_requests||[];
   const source=invoiceSource(invoice);
   const showItemVendor=items.some(
-    (item:any)=>Boolean(item.vendor_name)||numberValue(item.vendor_amount)>0,
+    (item:any)=>
+      Boolean(item.vendor_name)||
+      numberValue(item.vendor_amount)>0||
+      (item.item_type==="lab"&&(supplierOptions[item.id]?.length||0)>0),
   );
   const showSupplierPicker=Boolean(invoice.lab_order_id);
   const showItemPricing=showItemVendor||items.some(
     (item:any)=>numberValue(item.mrp_amount)>0||numberValue(item.buying_amount)>0,
   );
+  const vendorLabel=invoice.lab_order_id?"Supplier":"Vendor";
+  const vendorPriceLabel=invoice.lab_order_id?"Supplier Price":"Vendor Price";
   const linkedRecord=invoiceLinkedRecord(invoice);
   const discountParts=invoiceDiscountParts(invoice);
   const membershipLabel=invoiceMembershipLabel(invoice);
@@ -109,14 +115,14 @@ export function InvoiceDetailPage({
   function signedMoney(value:any,mode:"delta"|"debit"|"credit"="delta"){
     const amount=numberValue(value);
     if(amount===0)return money(0);
-    if(mode==="credit")return `-${money(Math.abs(amount))}`;
-    if(mode==="debit")return `+${money(Math.abs(amount))}`;
+    if(mode==="credit")return `+${money(Math.abs(amount))}`;
+    if(mode==="debit")return `-${money(Math.abs(amount))}`;
     return `${amount>0?"+":"-"}${money(Math.abs(amount))}`;
   }
   function amountTone(value:any,mode:"delta"|"debit"|"credit"="delta"){
     const amount=numberValue(value);
     if(amount===0)return "text-slate-500";
-    if(mode==="credit"||amount<0)return "text-rose-700";
+    if(mode==="debit"||amount<0)return "text-rose-700";
     return "text-emerald-700";
   }
   function itemMrp(item:any){
@@ -141,6 +147,24 @@ export function InvoiceDetailPage({
   const canRequestAdjustment=!hasOpenAdjustment&&!adjustmentClosed;
   const canRequestCancel=canRequestAdjustment&&numberValue(invoice.paid_amount)<=0;
   const canRequestRefund=canRequestAdjustment&&numberValue(invoice.paid_amount)>0;
+  const paymentClosedStatuses=[
+    "cancelled",
+    "refunded",
+    "partially_refunded",
+  ];
+  const isPaymentClosed=paymentClosedStatuses.includes(
+    String(invoice.status||"").toLowerCase(),
+  );
+  const canCollectPayment=balanceDue>0&&!isPaymentClosed;
+  function ledgerCreditAmount(entry:any){
+    if(entry.entry_type==="membership_benefit_applied"){
+      return numberValue(entry.credit_amount);
+    }
+    return Math.max(numberValue(entry.paid_amount_delta),0);
+  }
+  function ledgerDebitAmount(entry:any){
+    return Math.max(-numberValue(entry.paid_amount_delta),0);
+  }
   const financialLedgerEntries=ledgerEntries.filter((entry:any)=>
     numberValue(entry.debit_amount)!==0||
     numberValue(entry.credit_amount)!==0||
@@ -148,12 +172,30 @@ export function InvoiceDetailPage({
     numberValue(entry.paid_amount_delta)!==0||
     numberValue(entry.balance_amount_delta)!==0
   );
+  const ledgerRunningById=new Map<string,any>();
+  [...financialLedgerEntries]
+    .sort(
+      (a:any,b:any)=>
+        new Date(a.created_at||0).getTime()-new Date(b.created_at||0).getTime(),
+    )
+    .reduce(
+      (running:any,entry:any)=>{
+        const next={
+          invoiceTotal:running.invoiceTotal+numberValue(entry.invoice_total_delta),
+          paidAmount:running.paidAmount+numberValue(entry.paid_amount_delta),
+          balanceAmount:running.balanceAmount+numberValue(entry.balance_amount_delta),
+        };
+        ledgerRunningById.set(entry.id,next);
+        return next;
+      },
+      {invoiceTotal:0,paidAmount:0,balanceAmount:0},
+    );
   const settlementRows=[
     ...payments.map((payment:any)=>({
       id:`payment-${payment.id}`,
       date:payment.collected_at,
       type:"Payment",
-      method:String(payment.method||"payment").replaceAll("_"," "),
+      method:humanizeOptionLabel(payment.method||"payment"),
       reference:payment.reference_number||"-",
       status:payment.status||"recorded",
       amount:numberValue(payment.amount),
@@ -202,7 +244,7 @@ export function InvoiceDetailPage({
                   }
                   className="normal-badge"
                 >
-                  {invoice.status}
+                  {humanizeOptionLabel(invoice.status)}
                 </Badge>
                 {membershipLabel && (
                   <Badge tone="green" className="normal-badge">{membershipLabel}</Badge>
@@ -236,7 +278,7 @@ export function InvoiceDetailPage({
               />
               <InvoiceMeta
                 label="Status"
-                value={String(invoice.status || "issued").replaceAll("_", " ")}
+                value={humanizeOptionLabel(invoice.status || "issued")}
               />
             </div>
           </div>
@@ -266,8 +308,8 @@ export function InvoiceDetailPage({
                       <th className="w-12 px-4 py-3 text-center">No.</th>
                       <th className="px-3 py-3">Item</th>
                       <th className="px-3 py-3 text-right">Quantity</th>
-                      {showItemVendor&&<th className="px-3 py-3">Vendor</th>}
-                      {showItemVendor&&<th className="px-3 py-3 text-right">Vendor Price</th>}
+                      {showItemVendor&&<th className="px-3 py-3">{vendorLabel}</th>}
+                      {showItemVendor&&<th className="px-3 py-3 text-right">{vendorPriceLabel}</th>}
                       {showItemPricing&&<th className="px-3 py-3 text-right">MRP</th>}
                       <th className="px-3 py-3 text-right">Rate (INR)</th>
                       <th className="px-4 py-3 text-right">Amount (INR)</th>
@@ -283,6 +325,10 @@ export function InvoiceDetailPage({
                       const itemSupplierOptions=supplierOptions[item.id]||[];
                       const vendorName=item.vendor_name||item.supplier_id||'';
                       const canPickSupplier=showSupplierPicker&&item.item_type==='lab'&&itemSupplierOptions.length>0;
+                      const vendorAmount=numberValue(item.vendor_amount)||
+                        (canPickSupplier&&itemSupplierOptions.length===1
+                          ? numberValue(itemSupplierOptions[0].buying_price)
+                          : 0);
                       return (
                       <tr key={item.id} className="align-middle">
                         <td className="px-4 py-4 text-center table-data tabular-nums">{index+1}</td>
@@ -320,7 +366,7 @@ export function InvoiceDetailPage({
                             )}
                           </td>
                         )}
-                        {showItemVendor&&<td className="px-3 py-4 text-right table-data tabular-nums">{numberValue(item.vendor_amount)>0?money(item.vendor_amount):"-"}</td>}
+                        {showItemVendor&&<td className="px-3 py-4 text-right table-data tabular-nums">{vendorAmount>0?money(vendorAmount):"-"}</td>}
                         {showItemPricing&&<td className="px-3 py-4 text-right table-data tabular-nums">{money(itemMrp(item))}</td>}
                         <td className="px-3 py-4 text-right table-data font-bold tabular-nums">{money(itemRate(item))}</td>
                         <td className="px-4 py-4 text-right table-data font-black tabular-nums text-slate-950">{money(item.total_amount)}</td>
@@ -467,7 +513,7 @@ export function InvoiceDetailPage({
                       />
                     </div>
                   </div>
-                  {numberValue(invoice.balance_amount) > 0 ? (
+                  {canCollectPayment ? (
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
                       <div className="flex items-center justify-between gap-2">
                         <div>
@@ -578,6 +624,11 @@ export function InvoiceDetailPage({
                         )}
                       </button>
                     </div>
+                  ) : isPaymentClosed ? (
+                    <div className="flex items-center justify-between rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">
+                      <span>{humanizeOptionLabel(invoice.status)} invoice</span>
+                      <span>Payment locked</span>
+                    </div>
                   ) : (
                     <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
                       <span>Payment settled</span>
@@ -613,20 +664,22 @@ export function InvoiceDetailPage({
                         Credit Note
                       </ActionButton>
                     )}
-                    {String(invoice.status) !== "cancelled" ? (
-                      <ActionButton
-                        onClick={() => cancelInvoice?.(invoice)}
-                        disabled={busy === `cancel-${invoice.id}`||numberValue(invoice.paid_amount)>0}
-                      >
-                        {busy === `cancel-${invoice.id}` ? "Cancelling..." : "Cancel"}
-                      </ActionButton>
-                    ) : (
-                      <ActionButton
-                        onClick={() => amendInvoice?.(invoice)}
-                        disabled={busy === `amend-${invoice.id}`}
-                      >
-                        {busy === `amend-${invoice.id}` ? "Amending..." : "Amend"}
-                      </ActionButton>
+                    {isTenantBillingAdmin&&(
+                      String(invoice.status) !== "cancelled" ? (
+                        <ActionButton
+                          onClick={() => cancelInvoice?.(invoice)}
+                          disabled={busy === `cancel-${invoice.id}`||numberValue(invoice.paid_amount)>0}
+                        >
+                          {busy === `cancel-${invoice.id}` ? "Cancelling..." : "Cancel"}
+                        </ActionButton>
+                      ) : (
+                        <ActionButton
+                          onClick={() => amendInvoice?.(invoice)}
+                          disabled={busy === `amend-${invoice.id}`}
+                        >
+                          {busy === `amend-${invoice.id}` ? "Amending..." : "Amend"}
+                        </ActionButton>
+                      )
                     )}
                   </div>
                 </div>
@@ -672,7 +725,7 @@ export function InvoiceDetailPage({
                         </td>
                         <td className="px-3 py-3">
                           <Badge tone={row.tone} className="normal-badge">
-                            {row.status}
+                            {humanizeOptionLabel(row.status)}
                           </Badge>
                         </td>
                         <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(row.amount)}`}>
@@ -740,7 +793,7 @@ export function InvoiceDetailPage({
                           {displayDateTime(row.created_at)}
                         </td>
                         <td className="px-4 py-3 font-bold capitalize">
-                          {String(row.request_type||"").replaceAll("_"," ")}
+                          {humanizeOptionLabel(row.request_type)}
                         </td>
                         <td className="px-4 py-3 text-right font-black tabular-nums">
                           {money(row.amount)}
@@ -760,7 +813,7 @@ export function InvoiceDetailPage({
                             }
                             className="normal-badge"
                           >
-                            {row.status}
+                            {humanizeOptionLabel(row.status)}
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
@@ -790,7 +843,7 @@ export function InvoiceDetailPage({
               <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
                 <h4 className="card-title font-bold">Billing Ledger</h4>
                 <p className="table-data text-slate-500">
-                  Financial impact from invoice, payment, cancellation, and refund activity.
+                  Invoice lifecycle is tracked for audit. Credit and debit show only payment, refund, or membership benefit movement.
                 </p>
               </div>
               <div className="overflow-auto">
@@ -806,53 +859,61 @@ export function InvoiceDetailPage({
                         <th className="whitespace-nowrap px-4 py-3">Date & Time</th>
                         <th className="whitespace-nowrap px-4 py-3">Activity</th>
                         <th className="whitespace-nowrap px-4 py-3">User</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">Debit</th>
                         <th className="whitespace-nowrap px-4 py-3 text-right">Credit</th>
-                        <th className="whitespace-nowrap px-4 py-3 text-right">Invoice</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">Debit</th>
+                        <th className="whitespace-nowrap px-4 py-3 text-right">Bill Amount</th>
                         <th className="whitespace-nowrap px-4 py-3 text-right">Paid</th>
                         <th className="whitespace-nowrap px-4 py-3 text-right">Balance</th>
                         <th className="whitespace-nowrap px-4 py-3">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
-                      {financialLedgerEntries.map((entry:any)=>(
+                      {financialLedgerEntries.map((entry:any)=>{
+                        const running=ledgerRunningById.get(entry.id)||{
+                          invoiceTotal:0,
+                          paidAmount:0,
+                          balanceAmount:0,
+                        };
+                        const creditAmount=ledgerCreditAmount(entry);
+                        const debitAmount=ledgerDebitAmount(entry);
+                        return (
                         <tr key={entry.id} className="whitespace-nowrap align-middle">
                           <td className="px-4 py-3 font-semibold text-slate-700">
                             {displayDateTime(entry.created_at)}
                           </td>
                           <td className="px-4 py-3">
                             <span className="font-bold capitalize text-slate-950">
-                              {String(entry.entry_type||"").replaceAll("_"," ")}
+                              {humanizeOptionLabel(entry.entry_type)}
                             </span>
                           </td>
                           <td className="px-4 py-3 font-semibold text-slate-700">
                             {entry.actor_user_name||"Unknown user"}
                           </td>
-                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.debit_amount,"debit")}`}>
-                            {signedMoney(entry.debit_amount,"debit")}
+                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(creditAmount,"credit")}`}>
+                            {signedMoney(creditAmount,"credit")}
                           </td>
-                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.credit_amount,"credit")}`}>
-                            {signedMoney(entry.credit_amount,"credit")}
+                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(debitAmount,"debit")}`}>
+                            {signedMoney(debitAmount,"debit")}
                           </td>
-                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.invoice_total_delta)}`}>
-                            {signedMoney(entry.invoice_total_delta)}
+                          <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
+                            {money(running.invoiceTotal)}
                           </td>
-                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.paid_amount_delta)}`}>
-                            {signedMoney(entry.paid_amount_delta)}
+                          <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
+                            {money(running.paidAmount)}
                           </td>
-                          <td className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(entry.balance_amount_delta)}`}>
-                            {signedMoney(entry.balance_amount_delta)}
+                          <td className="px-4 py-3 text-right font-black tabular-nums text-slate-700">
+                            {money(running.balanceAmount)}
                           </td>
                           <td className="px-4 py-3">
                             <Badge
                               tone={entry.status_after==="cancelled"?"amber":"slate"}
                               className="normal-badge"
                             >
-                              {entry.status_after}
+                              {humanizeOptionLabel(entry.status_after)}
                             </Badge>
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 )}

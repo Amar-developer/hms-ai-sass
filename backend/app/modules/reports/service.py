@@ -966,7 +966,9 @@ def build_profit_report_email_attachments(
             and (item_supplier_id or "none") not in supplier_filter_ids
         ):
             continue
-        supplier_name = suppliers.get(item_supplier_id or "", "No supplier")
+        supplier_name = suppliers.get(
+            item_supplier_id or "", "Tenant Hospital / In-house"
+        )
         purchase_price = (
             int(getattr(catalog_item, "purchase_price", 0) or 0) if catalog_item else 0
         )
@@ -1097,7 +1099,9 @@ def build_profit_report_email_attachments(
             and (item_supplier_id or "none") not in pharmacy_supplier_filter_ids
         ):
             continue
-        supplier_name = suppliers.get(item_supplier_id or "", "No supplier")
+        supplier_name = suppliers.get(
+            item_supplier_id or "", "Tenant Hospital / In-house"
+        )
         quantity = int(item.dispensed_quantity or item.quantity or 1)
         line_amount = int(item.unit_price or 0) * quantity
         revenue = allocated_line_revenue(invoice, line_amount) if invoice else 0

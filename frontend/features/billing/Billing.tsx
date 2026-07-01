@@ -804,6 +804,14 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
                 </b>
                 <p className="text-xs lg:text-sm text-slate-500">
                   Signed consultation ready for billing
+                  {a.doctor && a.doctor !== "Unassigned" ? (
+                    <>
+                      {" · Signed by "}
+                      <span className="font-semibold text-slate-700">
+                        {a.doctor}
+                      </span>
+                    </>
+                  ) : null}
                 </p>
               </div>
               <Button

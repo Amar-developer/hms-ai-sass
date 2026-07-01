@@ -256,6 +256,7 @@ def _replace_booking_items(
             if service and str(service.code or "").upper().startswith("HV")
             else "home_care_service"
         )
+        total_amount = row.quantity * unit_amount
         session.add(
             HomeCareBookingItem(
                 tenant_id=tenant_id,
@@ -265,7 +266,7 @@ def _replace_booking_items(
                 description=description or "Home care service",
                 quantity=row.quantity,
                 unit_amount=unit_amount,
-                total_amount=row.quantity * unit_amount,
+                total_amount=total_amount,
             )
         )
 
@@ -325,6 +326,7 @@ def _visit_log_from_payload(
         else (existing.quantity if existing else 1)
     )
     billable = status_value == "completed"
+    total_amount = quantity * unit_amount
     values = {
         "tenant_id": tenant_id,
         "booking_id": booking.id,
@@ -352,7 +354,7 @@ def _visit_log_from_payload(
         "description": description or "Home care service",
         "quantity": quantity,
         "unit_amount": unit_amount,
-        "total_amount": quantity * unit_amount if billable else 0,
+        "total_amount": total_amount if billable else 0,
         "status": status_value,
         "notes": payload.notes
         if payload.notes is not None
@@ -890,7 +892,9 @@ def generate_invoice(
     for row in rows:
         service = service_by_id.get(row.service_id or "")
         selling_amount = int(
-            row.unit_amount or (service.default_price if service else 0)
+            row.total_amount
+            if row.service_category == "home_care_service"
+            else row.unit_amount or (service.default_price if service else 0)
         )
         mrp_amount = int(service.mrp_price if service else 0)
         description = row.description

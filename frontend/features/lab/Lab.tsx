@@ -38,8 +38,10 @@ export function Lab({
 }: any) {
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
+  const [consultationReferrals, setConsultationReferrals] = useState<any[]>([]);
   const [tests, setTests] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
@@ -96,7 +98,19 @@ export function Lab({
       // referrals briefly pass the filter and flash before being hidden.
       !ordersLoaded
         ? []
-        : appointments.filter(
+        : (consultationReferrals.length
+            ? consultationReferrals.map((row: any) => ({
+                id: row.appointment_id || row.id,
+                consultationId: row.consultation_id,
+                consultationStatus: row.status,
+                labReferralText: row.lab_referral_text,
+                token: row.token_number || "",
+                tokenType: "Normal",
+                patient: row.patient_name || row.patient_id,
+                referrals: row.referrals || [],
+              }))
+            : appointments
+          ).filter(
             (a: any) =>
               a.consultationId &&
               a.consultationStatus === "signed" &&
@@ -106,7 +120,7 @@ export function Lab({
               String(a.labReferralText || "").trim() &&
               !orderedConsultationIds.has(a.consultationId),
           ),
-    [appointments, orderedConsultationIds, ordersLoaded],
+    [appointments, consultationReferrals, orderedConsultationIds, ordersLoaded],
   );
   const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -199,6 +213,7 @@ export function Lab({
         selling_price: row.default_price,
         price: row.default_price,
         buying_price: row.purchase_price,
+        supplier_id: row.supplier_id,
       })),
       ...packages.map((row: any) => ({
         ...row,
@@ -211,6 +226,7 @@ export function Lab({
         selling_price: row.package_price,
         price: row.package_price,
         buying_price: row.purchase_price,
+        supplier_id: row.supplier_id,
       })),
     ],
     [tests, packages],
@@ -241,26 +257,51 @@ export function Lab({
       selectedAvailableTest?.price ||
       0,
   );
+  const supplierById = useMemo(
+    () => new Map(suppliers.map((supplier: any) => [supplier.id, supplier.name])),
+    [suppliers],
+  );
+  const selectedSupplierId = selectedAvailableTest?.supplier_id || "";
+  const selectedSupplierName = selectedSupplierId
+    ? supplierById.get(selectedSupplierId) || selectedSupplierId
+    : "-";
+  const selectedSupplierPrice = Number(
+    selectedAvailableTest?.buying_price ||
+      selectedAvailableTest?.purchase_price ||
+      0,
+  );
   const formatPrice = (value: number) =>
     value > 0 ? `₹${value.toLocaleString("en-IN")}` : "";
 
   async function load() {
     if (!apiSession) {
       setOrders([]);
+      setConsultationReferrals([]);
       return;
     }
     try {
-      const [orderRows, testRows, packageRows, templateRows] =
+      const [
+        orderRows,
+        referralRows,
+        testRows,
+        packageRows,
+        templateRows,
+        supplierRows,
+      ] =
         await Promise.all([
           apiFetch("/lab/orders", apiSession),
+          apiFetch("/lab/consultation-referrals", apiSession).catch(() => []),
           apiFetch("/lab/catalog/tests", apiSession),
           apiFetch("/lab/catalog/packages", apiSession),
           apiFetch("/lab/result-templates", apiSession),
+          apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
         ]);
       setOrders(orderRows);
+      setConsultationReferrals(referralRows || []);
       setTests(testRows);
       setPackages(packageRows);
       setTemplates(templateRows);
+      setSuppliers(supplierRows || []);
     } catch (err: any) {
       setMessage(err.message || "Could not load lab workspace.");
     } finally {
@@ -593,6 +634,10 @@ export function Lab({
 
   async function loadConsultDetail(a: any) {
     setViewConsult(a);
+    if (a.referrals?.length) {
+      setConsultDetail({ referrals: a.referrals });
+      return;
+    }
     setConsultDetail(null);
     setLoadingDetail(true);
     try {
@@ -710,6 +755,20 @@ export function Lab({
             />
           </FormField>
           <TextField
+            label="Supplier"
+            value={selectedSupplierName}
+            onChange={() => undefined}
+            disabled
+            className="search-input bg-slate-50"
+          />
+          <TextField
+            label="Supplier Price"
+            value={formatPrice(selectedSupplierPrice)}
+            onChange={() => undefined}
+            disabled
+            className="search-input bg-slate-50"
+          />
+          <TextField
             label="MRP"
             value={formatPrice(selectedTestMrp)}
             onChange={() => undefined}
@@ -774,6 +833,14 @@ export function Lab({
                       </b>
                       <p className="text-xs text-slate-500">
                         Signed consultation referral
+                        {a.doctor && a.doctor !== "Unassigned" ? (
+                          <>
+                            {" · Signed by "}
+                            <span className="font-semibold text-slate-700">
+                              {a.doctor}
+                            </span>
+                          </>
+                        ) : null}
                       </p>
                     </div>
                     <div className="flex gap-2">

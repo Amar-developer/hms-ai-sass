@@ -147,12 +147,21 @@ def _appointment_grid_row(row) -> AppointmentGridRead:
         token_number=queue_entry.token_number if queue_entry else None,
         appointment_type=appointment.appointment_type,
         visit_purpose=appointment.visit_purpose,
+        reason=appointment.reason,
+        source_appointment_id=appointment.source_appointment_id,
         is_billable=appointment.is_billable,
+        custom_fee_amount=appointment.custom_fee_amount,
+        billing_note=appointment.billing_note,
+        emergency_reason=appointment.emergency_reason,
+        intake_vitals=appointment.intake_vitals,
+        intake_complaints=appointment.intake_complaints,
         appointment_date=appointment.appointment_date,
         appointment_time=appointment.appointment_time,
         status=appointment.status,
         consultation_status=consultation.status.value if consultation else None,
+        created_by_user_id=appointment.created_by_user_id,
         created_at=appointment.created_at,
+        updated_at=appointment.updated_at,
     )
 
 
@@ -650,7 +659,7 @@ def book_follow_up_appointment(
 
 @router.get(
     "",
-    response_model=list[AppointmentRead],
+    response_model=list[AppointmentGridRead],
     dependencies=[
         Depends(
             require_any_permission(
@@ -676,14 +685,14 @@ def list_appointments(
         )
     ),
     session: Session = Depends(get_session),
-) -> list[Appointment]:
+) -> list[AppointmentGridRead]:
     enforce_entitlement(session, tenant_id, "appointments")
     branch_id = scoped_branch_id(current_user, branch_id)
     require_branch_in_tenant(session, tenant_id, branch_id)
     doctor_practitioner_id = current_doctor_practitioner_id(
         session, tenant_id, current_user
     )
-    statement = select(Appointment).where(Appointment.tenant_id == tenant_id)
+    statement = _appointment_grid_statement().where(Appointment.tenant_id == tenant_id)
     if branch_id:
         statement = statement.where(Appointment.branch_id == branch_id)
     if department_id:
@@ -698,23 +707,23 @@ def list_appointments(
         statement = statement.where(Appointment.appointment_date == appointment_date)
     if q:
         pattern = f"%{q.strip().lower()}%"
-        statement = statement.join(Patient, Patient.id == Appointment.patient_id).where(
+        statement = statement.where(
             or_(
                 func.lower(Patient.patient_number).like(pattern),
                 func.lower(Patient.full_name).like(pattern),
                 func.lower(Patient.mobile).like(pattern),
                 func.lower(Patient.guardian_mobile).like(pattern),
+                func.lower(QueueEntry.token_number).like(pattern),
             )
         )
-    return list(
-        session.exec(
-            statement.order_by(
-                Appointment.appointment_date.desc(), Appointment.created_at.desc()
-            )
-            .offset(skip)
-            .limit(limit)
-        ).all()
+    rows = session.exec(
+        statement.order_by(
+            Appointment.appointment_date.desc(), Appointment.created_at.desc()
+        )
+        .offset(skip)
+        .limit(limit)
     )
+    return [_appointment_grid_row(row) for row in rows]
 
 
 @router.get(

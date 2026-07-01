@@ -127,6 +127,7 @@ class InvoiceRead(BaseModel):
     fee_rule_id: str | None
     discount_approval_id: str | None
     discount_offer_id: str | None = None
+    payment_methods: list[PaymentMethod] = Field(default_factory=list)
     created_by_user_id: str | None
     created_at: datetime
     updated_at: datetime
