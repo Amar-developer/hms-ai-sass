@@ -2,6 +2,7 @@ import React from "react";
 import { Card, Badge } from "../common/ui";
 import { Pagination } from "./Pagination";
 import { DataTable } from "./DataTable";
+import { settlementPaidBasis } from "@/features/reports/utils";
 
 type InvoiceProps = {
   filteredInvoices: any;
@@ -59,6 +60,7 @@ const InvoiceReport = ({
   {
     key: "invoice_number",
     header: "Invoice",
+    width:'130px',
     render: (row: any) => (
       <>
         <b>{row.invoice_number}</b>
@@ -71,11 +73,13 @@ const InvoiceReport = ({
   {
     key: "type",
     header: "Type",
+    width:'140px',
     render: (row: any) => invoiceTypeLabel(invoiceType(row)),
   },
   {
     key: "patient",
     header: "Patient",
+    width:'80px',
     render: (row: any) => {
       const patient = patientById.get(row.patient_id);
 
@@ -91,12 +95,24 @@ const InvoiceReport = ({
   },
   {
     key: "doctor",
-    header: "Doctor / Staff",
-    render: (row: any) => invoiceDoctorStaffName(row),
+    header: "Doctor",
+    width:'100px',
+    render: (row: any) => {
+      const appointment = appointmentById.get(row.appointment_id);
+
+      return (
+        appointment?.doctor ||
+        doctorById.get(
+          appointment?.doctorId || appointment?.practitioner_id,
+        ) ||
+        "Unassigned"
+      );
+    },
   },
   {
     key: "status",
     header: "Status",
+    width:'90px',
     render: (row: any) => (
       <Badge
         tone={
@@ -113,32 +129,58 @@ const InvoiceReport = ({
     ),
   },
   {
+    key: "total_amount",
+    header: "Total",
+    width:'90px',
+    render: (row: any) => money(row.total_amount),
+  },
+  {
     key: "paid_amount",
-    header: "Paid Amount",
+    header: "Paid",
+    width:'90px',
     render: (row: any) => money(numberValue(row.paid_amount)),
   },
   {
-    key: "payment_mode",
-    header: "Mode of Payment",
-    render: (row: any) => invoicePaymentMode(row),
+    key: "balance_amount",
+    header: "Balance",
+    width:'90px',
+    render: (row: any) => money(row.balance_amount),
+  },
+  {
+    key: "membership_discount_amount",
+    header: "Membership",
+    width:'100px',
+    render: (row: any) =>
+      money(row.membership_discount_amount),
+  },
+  {
+    key: "doctor_share_amount",
+    header: "Doctor Fee",
+    width:'100px',
+    render: (row: any) =>
+      money(row.doctor_share_amount),
   },
   {
     key: "settlement",
     header: "Settlement",
+    width:'90px',
     render: (row: any) =>
       money(invoiceSettlementAmount(row)),
   },
   {
-    key: "gross_profit",
-    header: "Gross Profit",
-    render: (row: any) => (
-      <span className="font-bold">{money(invoiceGrossProfit(row))}</span>
-    ),
-  },
-  {
-    key: "gross_profit_percentage",
-    header: "Gross Profit %",
-    render: (row: any) => invoiceGrossProfitPercent(row),
+    key: "clinic_profit",
+    header: "Clinic Profit",
+    width:'90px',
+    render: (row: any) => {
+      const paid = numberValue(row.paid_amount);
+      const settlement = settlementPaidBasis(row);
+
+      return (
+        <span className="font-bold">
+          {money(Math.max(paid - settlement, 0))}
+        </span>
+      );
+    },
   },
 ];
   return (

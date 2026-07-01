@@ -3,6 +3,7 @@ import React from "react";
 export type Column<T> = {
   key: keyof T | string;
   header: string;
+  width?: string;
   className?: string;
   cellClassName?: string;
   render?: (row: T, index: number) => React.ReactNode;
@@ -26,12 +27,15 @@ export function DataTable<T>({
 }: DataTableProps<T>) {
   return (
     <div className="overflow-auto rounded-lg border">
-      <table className={className}>
+      <table
+        className={`w-full min-w-[920px] table-fixed text-left text-sm ${className ?? ""}`}
+      >
         <thead className="bg-slate-50 text-xs uppercase text-slate-500">
           <tr>
             {columns.map((column) => (
               <th
                 key={String(column.key)}
+                style={column.width ? { width: column.width } : undefined}
                 className={`px-4 py-3 text-sm ${column.className ?? ""}`}
               >
                 {column.header}

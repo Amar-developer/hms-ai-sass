@@ -12,34 +12,55 @@ import {
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
-import { DateField, SelectField, TextField } from "@/app/components/FormElements";
+import {
+  DateField,
+  SelectField,
+  TextField,
+} from "@/app/components/FormElements";
 import { apiBlob, apiFetch } from "@/lib/api";
 import { paymentMethodOptions } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
-import { formatInvoiceDate, invoiceDateKey, invoicePaidStatus, invoiceSource, invoiceSourceKey, money } from "@/utils/billing/helpers";
+import {
+  formatInvoiceDate,
+  invoiceDateKey,
+  invoicePaidStatus,
+  invoiceSource,
+  invoiceSourceKey,
+  money,
+} from "@/utils/billing/helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "@/app/components/billing/Shared";
+import { Column, DataTable } from "@/app/components/reports/DataTable";
 
-
-export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoices}:any){
-  const [busy,setBusy]=useState('');
-  const [message,setMessage]=useState('');
-  const [amounts,setAmounts]=useState<Record<string,string>>({});
-  const [methods,setMethods]=useState<Record<string,string>>({});
-  const [enabledPaymentMethods,setEnabledPaymentMethods]=useState<string[]>(paymentMethodOptions.map((option)=>option.value));
-  const [references,setReferences]=useState<Record<string,string>>({});
-  const [dueReport,setDueReport]=useState<any>(null);
-  const [revenueReport,setRevenueReport]=useState<any>(null);
-  const [settlement,setSettlement]=useState<any>(null);
-  const [detail,setDetail]=useState<any>(null);
-  const [supplierOptions,setSupplierOptions]=useState<Record<string,any[]>>({});
-  const [detailLoading,setDetailLoading]=useState('');
-  const [filters,setFilters]=useState({
-    query:'',
-    source:'all',
-    paidStatus:'all',
-    fromDate:'',
-    toDate:'',
+export function Billing({
+  apiSession,
+  loadLiveData,
+  appointments,
+  patients,
+  liveInvoices,
+}: any) {
+  const [busy, setBusy] = useState("");
+  const [message, setMessage] = useState("");
+  const [amounts, setAmounts] = useState<Record<string, string>>({});
+  const [methods, setMethods] = useState<Record<string, string>>({});
+  const [enabledPaymentMethods, setEnabledPaymentMethods] = useState<string[]>(
+    paymentMethodOptions.map((option) => option.value),
+  );
+  const [references, setReferences] = useState<Record<string, string>>({});
+  const [dueReport, setDueReport] = useState<any>(null);
+  const [revenueReport, setRevenueReport] = useState<any>(null);
+  const [settlement, setSettlement] = useState<any>(null);
+  const [detail, setDetail] = useState<any>(null);
+  const [supplierOptions, setSupplierOptions] = useState<Record<string, any[]>>(
+    {},
+  );
+  const [detailLoading, setDetailLoading] = useState("");
+  const [filters, setFilters] = useState({
+    query: "",
+    source: "all",
+    paidStatus: "all",
+    fromDate: "",
+    toDate: "",
   });
   const [page, setPage] = useState(1);
 
@@ -47,6 +68,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
+  console.log(patientMap, "patientmap");
   useEffect(() => {
     let alive = true;
     apiFetch(
@@ -307,26 +329,41 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       const row = await apiFetch(`/billing/invoices/${invoice.id}`, apiSession);
       setDetail(row);
       await loadInvoiceSupplierOptions(row);
-    }catch(err:any){setMessage(err.message||'Could not load invoice details.')}
-    finally{setDetailLoading('')}
+    } catch (err: any) {
+      setMessage(err.message || "Could not load invoice details.");
+    } finally {
+      setDetailLoading("");
+    }
   }
 
-  async function loadInvoiceSupplierOptions(row:any){
-    if(!apiSession||!row?.invoice?.lab_order_id){setSupplierOptions({});return}
-    const optionRows=await Promise.all(
-      (row.items||[]).map((item:any)=>
-        apiFetch(`/billing/invoices/${row.invoice.id}/items/${item.id}/supplier-options`,apiSession)
-          .then((options:any)=>[item.id,Array.isArray(options)?options:[]])
-          .catch(()=>[item.id,[]]),
+  async function loadInvoiceSupplierOptions(row: any) {
+    if (!apiSession || !row?.invoice?.lab_order_id) {
+      setSupplierOptions({});
+      return;
+    }
+    const optionRows = await Promise.all(
+      (row.items || []).map((item: any) =>
+        apiFetch(
+          `/billing/invoices/${row.invoice.id}/items/${item.id}/supplier-options`,
+          apiSession,
+        )
+          .then((options: any) => [
+            item.id,
+            Array.isArray(options) ? options : [],
+          ])
+          .catch(() => [item.id, []]),
       ),
     );
     setSupplierOptions(Object.fromEntries(optionRows));
   }
 
-  async function collectPayment(invoice:any){
-    if(!apiSession)return;
-    const amount=Number(amounts[invoice.id]||invoice.balance_amount||0);
-    if(!amount){setMessage('Enter payment amount.');return}
+  async function collectPayment(invoice: any) {
+    if (!apiSession) return;
+    const amount = Number(amounts[invoice.id] || invoice.balance_amount || 0);
+    if (!amount) {
+      setMessage("Enter payment amount.");
+      return;
+    }
     setBusy(invoice.id);
     setMessage("");
     try {
@@ -367,7 +404,9 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     const total = valid.reduce((sum, row) => sum + row.amount, 0);
     const balance = Number(invoice.balance_amount || 0);
     if (total > balance) {
-      setMessage(`Total ${money(total)} exceeds balance due ${money(balance)}.`);
+      setMessage(
+        `Total ${money(total)} exceeds balance due ${money(balance)}.`,
+      );
       return;
     }
     setBusy(invoice.id);
@@ -376,14 +415,20 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       for (const row of valid) {
         await apiFetch(`/billing/invoices/${invoice.id}/payments`, apiSession, {
           method: "POST",
-          body: JSON.stringify({ ...row, collected_by_user_id: apiSession.user?.id }),
+          body: JSON.stringify({
+            ...row,
+            collected_by_user_id: apiSession.user?.id,
+          }),
         });
       }
       await loadLiveData(apiSession);
       await loadReports();
       await openInvoiceDetail(invoice);
-      const modes = valid.length > 1 ? `${valid.length} payment modes` : valid[0].method;
-      setMessage(`Recorded ${money(total)} (${modes}) for ${invoice.invoice_number}.`);
+      const modes =
+        valid.length > 1 ? `${valid.length} payment modes` : valid[0].method;
+      setMessage(
+        `Recorded ${money(total)} (${modes}) for ${invoice.invoice_number}.`,
+      );
     } catch (err: any) {
       setMessage(err.message || "Could not record payment.");
     } finally {
@@ -501,165 +546,256 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
     }
   }
 
-  async function updateInvoiceItemSupplier(invoice:any,item:any,supplierId:string){
-    if(!apiSession)return;
+  async function updateInvoiceItemSupplier(
+    invoice: any,
+    item: any,
+    supplierId: string,
+  ) {
+    if (!apiSession) return;
     setBusy(`supplier-${item.id}`);
-    setMessage('');
-    try{
-      const row=await apiFetch(`/billing/invoices/${invoice.id}/items/${item.id}/supplier`,apiSession,{
-        method:'PATCH',
-        body:JSON.stringify({supplier_id:supplierId||null}),
-      });
+    setMessage("");
+    try {
+      const row = await apiFetch(
+        `/billing/invoices/${invoice.id}/items/${item.id}/supplier`,
+        apiSession,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ supplier_id: supplierId || null }),
+        },
+      );
       setDetail(row);
       await loadInvoiceSupplierOptions(row);
-      setMessage('Supplier updated.');
-    }catch(err:any){setMessage(err.message||'Could not update supplier.')}
-    finally{setBusy('')}
+      setMessage("Supplier updated.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not update supplier.");
+    } finally {
+      setBusy("");
+    }
   }
 
-  async function updateInvoiceAmount(invoice:any,amount:number){
-    if(!apiSession)return;
+  async function updateInvoiceAmount(invoice: any, amount: number) {
+    if (!apiSession) return;
     setBusy(`amount-${invoice.id}`);
-    setMessage('');
-    try{
-      const row=await apiFetch(`/billing/invoices/${invoice.id}/amount`,apiSession,{
-        method:'PATCH',
-        body:JSON.stringify({amount,updated_by_user_id:apiSession.user?.id}),
-      });
+    setMessage("");
+    try {
+      const row = await apiFetch(
+        `/billing/invoices/${invoice.id}/amount`,
+        apiSession,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            amount,
+            updated_by_user_id: apiSession.user?.id,
+          }),
+        },
+      );
       setDetail(row);
-      setMessage('Invoice amount updated.');
-    }catch(err:any){setMessage(err.message||'Could not update amount.')}
-    finally{setBusy('')}
+      setMessage("Invoice amount updated.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not update amount.");
+    } finally {
+      setBusy("");
+    }
   }
 
-  async function cancelInvoice(invoice:any){
-    if(!apiSession)return;
-    if(!window.confirm(`Cancel invoice ${invoice.invoice_number}? This reverses the ledger and, for home care/visit bills, reopens the booking for editing.`))return;
-    const reason=window.prompt(`Cancel reason for ${invoice.invoice_number}`);
-    if(!reason)return;
+  async function cancelInvoice(invoice: any) {
+    if (!apiSession) return;
+    if (
+      !window.confirm(
+        `Cancel invoice ${invoice.invoice_number}? This reverses the ledger and, for home care/visit bills, reopens the booking for editing.`,
+      )
+    )
+      return;
+    const reason = window.prompt(`Cancel reason for ${invoice.invoice_number}`);
+    if (!reason) return;
     setBusy(`cancel-${invoice.id}`);
-    setMessage('');
-    try{
-      const row=await apiFetch(`/billing/invoices/${invoice.id}/cancel`,apiSession,{
-        method:'POST',
-        body:JSON.stringify({reason,actor_user_id:apiSession.user?.id}),
-      });
+    setMessage("");
+    try {
+      const row = await apiFetch(
+        `/billing/invoices/${invoice.id}/cancel`,
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason, actor_user_id: apiSession.user?.id }),
+        },
+      );
       setDetail(row);
       await loadLiveData(apiSession);
       await loadReports();
-      setMessage(`Invoice ${invoice.invoice_number} cancelled and ledger reversed.`);
-    }catch(err:any){setMessage(err.message||'Could not cancel invoice.')}
-    finally{setBusy('')}
+      setMessage(
+        `Invoice ${invoice.invoice_number} cancelled and ledger reversed.`,
+      );
+    } catch (err: any) {
+      setMessage(err.message || "Could not cancel invoice.");
+    } finally {
+      setBusy("");
+    }
   }
 
-  async function requestAdjustment(invoice:any,type:string){
-    if(!apiSession)return;
-    const label=String(type).replaceAll('_',' ');
-    const reason=window.prompt(`Reason for ${label} request on ${invoice.invoice_number}`);
-    if(!reason)return;
-    let amount:any=null;
-    if(type==='partial_refund'){
-      const raw=window.prompt(`Partial refund amount for ${invoice.invoice_number}`);
-      if(!raw)return;
-      amount=Number(raw);
-      if(!amount||amount<=0){setMessage('Enter a valid refund amount.');return;}
+  async function requestAdjustment(invoice: any, type: string) {
+    if (!apiSession) return;
+    const label = String(type).replaceAll("_", " ");
+    const reason = window.prompt(
+      `Reason for ${label} request on ${invoice.invoice_number}`,
+    );
+    if (!reason) return;
+    let amount: any = null;
+    if (type === "partial_refund") {
+      const raw = window.prompt(
+        `Partial refund amount for ${invoice.invoice_number}`,
+      );
+      if (!raw) return;
+      amount = Number(raw);
+      if (!amount || amount <= 0) {
+        setMessage("Enter a valid refund amount.");
+        return;
+      }
     }
     setBusy(`request-${invoice.id}`);
-    setMessage('');
-    try{
-      const row=await apiFetch(`/billing/invoices/${invoice.id}/adjustment-requests`,apiSession,{
-        method:'POST',
-        body:JSON.stringify({
-          request_type:type,
-          amount,
-          reason,
-          requested_by_user_id:apiSession.user?.id,
-        }),
-      });
+    setMessage("");
+    try {
+      const row = await apiFetch(
+        `/billing/invoices/${invoice.id}/adjustment-requests`,
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            request_type: type,
+            amount,
+            reason,
+            requested_by_user_id: apiSession.user?.id,
+          }),
+        },
+      );
       await openInvoiceDetail(invoice);
-      setMessage(`${String(row.request_type).replaceAll('_',' ')} request raised.`);
-    }catch(err:any){setMessage(err.message||'Could not raise request.')}
-    finally{setBusy('')}
+      setMessage(
+        `${String(row.request_type).replaceAll("_", " ")} request raised.`,
+      );
+    } catch (err: any) {
+      setMessage(err.message || "Could not raise request.");
+    } finally {
+      setBusy("");
+    }
   }
 
-  async function approveAdjustment(row:any){
-    if(!apiSession)return;
-    const reason=window.prompt('Approval note (optional)')||'';
+  async function approveAdjustment(row: any) {
+    if (!apiSession) return;
+    const reason = window.prompt("Approval note (optional)") || "";
     setBusy(`approve-${row.id}`);
-    setMessage('');
-    try{
-      await apiFetch(`/billing/adjustment-requests/${row.id}/approve`,apiSession,{
-        method:'POST',
-        body:JSON.stringify({reason:reason||null,actor_user_id:apiSession.user?.id}),
-      });
-      if(detail?.invoice)await openInvoiceDetail(detail.invoice);
-      setMessage('Request approved.');
-    }catch(err:any){setMessage(err.message||'Could not approve request.')}
-    finally{setBusy('')}
+    setMessage("");
+    try {
+      await apiFetch(
+        `/billing/adjustment-requests/${row.id}/approve`,
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            reason: reason || null,
+            actor_user_id: apiSession.user?.id,
+          }),
+        },
+      );
+      if (detail?.invoice) await openInvoiceDetail(detail.invoice);
+      setMessage("Request approved.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not approve request.");
+    } finally {
+      setBusy("");
+    }
   }
 
-  async function rejectAdjustment(row:any){
-    if(!apiSession)return;
-    const reason=window.prompt('Reject reason');
-    if(!reason)return;
+  async function rejectAdjustment(row: any) {
+    if (!apiSession) return;
+    const reason = window.prompt("Reject reason");
+    if (!reason) return;
     setBusy(`reject-${row.id}`);
-    setMessage('');
-    try{
-      await apiFetch(`/billing/adjustment-requests/${row.id}/reject`,apiSession,{
-        method:'POST',
-        body:JSON.stringify({reason,actor_user_id:apiSession.user?.id}),
-      });
-      if(detail?.invoice)await openInvoiceDetail(detail.invoice);
-      setMessage('Request rejected.');
-    }catch(err:any){setMessage(err.message||'Could not reject request.')}
-    finally{setBusy('')}
+    setMessage("");
+    try {
+      await apiFetch(
+        `/billing/adjustment-requests/${row.id}/reject`,
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason, actor_user_id: apiSession.user?.id }),
+        },
+      );
+      if (detail?.invoice) await openInvoiceDetail(detail.invoice);
+      setMessage("Request rejected.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not reject request.");
+    } finally {
+      setBusy("");
+    }
   }
 
-  async function executeAdjustment(row:any){
-    if(!apiSession)return;
-    if(!window.confirm(`Execute ${String(row.request_type).replaceAll('_',' ')} request?`))return;
+  async function executeAdjustment(row: any) {
+    if (!apiSession) return;
+    if (
+      !window.confirm(
+        `Execute ${String(row.request_type).replaceAll("_", " ")} request?`,
+      )
+    )
+      return;
     setBusy(`execute-${row.id}`);
-    setMessage('');
-    try{
-      const next=await apiFetch(`/billing/adjustment-requests/${row.id}/execute`,apiSession,{
-        method:'POST',
-        body:JSON.stringify({actor_user_id:apiSession.user?.id}),
-      });
+    setMessage("");
+    try {
+      const next = await apiFetch(
+        `/billing/adjustment-requests/${row.id}/execute`,
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({ actor_user_id: apiSession.user?.id }),
+        },
+      );
       setDetail(next);
       await loadLiveData(apiSession);
       await loadReports();
-      setMessage('Request executed and ledger updated.');
-    }catch(err:any){setMessage(err.message||'Could not execute request.')}
-    finally{setBusy('')}
+      setMessage("Request executed and ledger updated.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not execute request.");
+    } finally {
+      setBusy("");
+    }
   }
 
-  async function amendInvoice(invoice:any){
-    if(!apiSession)return;
-    const reason=window.prompt(`Amend reason for ${invoice.invoice_number}`);
-    if(!reason)return;
+  async function amendInvoice(invoice: any) {
+    if (!apiSession) return;
+    const reason = window.prompt(`Amend reason for ${invoice.invoice_number}`);
+    if (!reason) return;
     setBusy(`amend-${invoice.id}`);
-    setMessage('');
-    try{
-      const row=await apiFetch(`/billing/invoices/${invoice.id}/amend`,apiSession,{
-        method:'POST',
-        body:JSON.stringify({reason,actor_user_id:apiSession.user?.id}),
-      });
+    setMessage("");
+    try {
+      const row = await apiFetch(
+        `/billing/invoices/${invoice.id}/amend`,
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({ reason, actor_user_id: apiSession.user?.id }),
+        },
+      );
       setDetail(row);
       await loadLiveData(apiSession);
       await loadReports();
       setMessage(`Invoice ${invoice.invoice_number} amended and reopened.`);
-    }catch(err:any){setMessage(err.message||'Could not amend invoice.')}
-    finally{setBusy('')}
+    } catch (err: any) {
+      setMessage(err.message || "Could not amend invoice.");
+    } finally {
+      setBusy("");
+    }
   }
 
-  async function finalizeSettlement(){
-    if(!apiSession)return;
-    setBusy('settlement');
-    try{
-      const saved=await apiFetch('/billing/doctor-settlements/finalize',apiSession,{
-        method:'POST',
-        body:JSON.stringify({finalized_by_user_id:apiSession.user?.id}),
-      });
+  async function finalizeSettlement() {
+    if (!apiSession) return;
+    setBusy("settlement");
+    try {
+      const saved = await apiFetch(
+        "/billing/doctor-settlements/finalize",
+        apiSession,
+        {
+          method: "POST",
+          body: JSON.stringify({ finalized_by_user_id: apiSession.user?.id }),
+        },
+      );
       setSettlement(saved);
       await loadReports();
       setMessage(
@@ -671,6 +807,107 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       setBusy("");
     }
   }
+
+  const invoiceColumns: Column<any>[] = [
+    {
+      key: "index",
+      header: "#",
+      width: "60px",
+      render: (_, index) => (safePage - 1) * pageSize + index + 1,
+      cellClassName: "font-semibold text-slate-500",
+    },
+    {
+      key: "invoice_number",
+      header: "Invoice",
+      width:"200px",
+      render: (invoice) => (
+        <>
+          <b>{invoice.invoice_number}</b>
+          <p className="mt-1 text-sm font-semibold text-slate-400">
+            {formatInvoiceDate(invoice)}
+          </p>
+        </>
+      ),
+    },
+    {
+      key: "source",
+      header: "Source",
+      width: "150px",
+      render: (invoice) => {
+        const source = invoiceSource(invoice);
+
+        return (
+          <Badge
+            tone={source.tone as any}
+            className="table-status text-sm text-center "
+          >
+            {source.label =='Direct' ?'Membership': source.label}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: "patient",
+      header: "Patient",
+      render: (invoice) => {
+        const p:any = patientMap.get(invoice.patient_id);
+
+        return p?.name || p?.full_name || "Patient";
+      },
+      cellClassName: "font-medium",
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "text-center",
+      render: (invoice) => (
+        <Badge
+          tone={
+            invoice.status === "paid"
+              ? "green"
+              : invoice.status === "partially_refunded" ||
+                  invoice.status === "refunded"
+                ? "blue"
+                : invoice.status === "partially_paid"
+                  ? "amber"
+                  : "slate"
+          }
+          className="table-status text-sm text-center"
+        >
+          {invoice.status === "partially_paid"
+            ? "partially paid"
+            : invoice.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "total_amount",
+      header: "Total",
+      width:'100px',
+      render: (invoice) => money(invoice.total_amount),
+      cellClassName: "font-semibold tabular-nums",
+    },
+    {
+      key: "paid_amount",
+      header: "Paid",
+      width:'100px',
+      render: (invoice) => money(invoice.paid_amount),
+      cellClassName: "tabular-nums",
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      disableRowClick: true,
+      render: (invoice) => (
+        <ActionButton
+          onClick={() => openInvoiceDetail(invoice)}
+          disabled={detailLoading === invoice.id}
+        >
+          {detailLoading === invoice.id ? "Loading..." : "View"}
+        </ActionButton>
+      ),
+    },
+  ];
 
   if (!apiSession) {
     return (
@@ -717,7 +954,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         approveAdjustment={approveAdjustment}
         rejectAdjustment={rejectAdjustment}
         executeAdjustment={executeAdjustment}
-        userPermissions={apiSession.user?.permissions||[]}
+        userPermissions={apiSession.user?.permissions || []}
         currentUser={apiSession.user}
         supplierOptions={supplierOptions}
         updateInvoiceItemSupplier={updateInvoiceItemSupplier}
@@ -743,7 +980,9 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
           <p className="mt-1 text-xl lg:text-2xl font-bold">
             {money(revenueReport?.total_invoice_amount)}
           </p>
-          <p className="text-[10px] lg:text-xs text-slate-500">Collected invoice value</p>
+          <p className="text-[10px] lg:text-xs text-slate-500">
+            Collected invoice value
+          </p>
         </Card>
         <Card>
           <p className="text-xs lg:text-sm text-slate-500">Paid</p>
@@ -756,7 +995,9 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
         </Card>
         <Card>
           <p className="text-xs lg:text-sm text-slate-500">Settlement</p>
-          <p className="mt-1 text-xl lg:text-2xl   font-bold">{money(payableSettlement)}</p>
+          <p className="mt-1 text-xl lg:text-2xl   font-bold">
+            {money(payableSettlement)}
+          </p>
           <p className="text-[10px] lg:text-xs text-slate-500">
             {finalizedSettlement > 0
               ? `Finalized ${money(finalizedSettlement)}`
@@ -772,15 +1013,18 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
               {busy === "settlement" ? "Finalizing..." : "Finalize"}
             </button>
           ) : (
-            <Badge tone="green" className="inline table-status rounded-lg text-[11px] lg:text-sm w-2/3">Finalized</Badge>
+            <Badge
+              tone="green"
+              className="inline table-status rounded-lg text-[11px] lg:text-sm w-2/3"
+            >
+              Finalized
+            </Badge>
           )}
         </Card>
       </div>
 
       <Card>
-        <h3 className="card-title font-bold">
-          Pending Consultation Invoices
-        </h3>
+        <h3 className="card-title font-bold">Pending Consultation Invoices</h3>
         <p className="card-desc text-slate-500">
           Reception can generate the consultation-fee invoice after the doctor
           signs the consultation. Lab, pharmacy, IP, and physiotherapy each have
@@ -828,9 +1072,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
       <Card>
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
           <div>
-            <h3 className="card-title font-bold">
-              Invoices & Payments
-            </h3>
+            <h3 className="card-title font-bold">Invoices & Payments</h3>
             <p className="card-desc text-slate-500">
               Track invoice source, patient dues, settlement share, and payment
               collection in one list.
@@ -843,7 +1085,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
             </Badge>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 grid-cols-6 xl:grid-cols-[1.2fr_.85fr_.85fr_.75fr_.75fr_auto] xl:items-end items-end">
+        <div className="mt-4 grid gap-3 grid-cols-6 xl:grid-cols-[1.4fr_.85fr_.85fr_.65fr_.65fr_auto] xl:items-end items-end">
           <TextField
             label="Search"
             value={filters.query}
@@ -877,7 +1119,7 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
               { value: "unpaid", label: "Unpaid" },
             ]}
           />
-            {/* <DateField
+          {/* <DateField
               label="From Date"
               value={filters.fromDate}
               onChange={(v) => updateFilter("fromDate", v)}
@@ -896,104 +1138,16 @@ export function Billing({apiSession,loadLiveData,appointments,patients,liveInvoi
           </button>
         </div>
         <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
-          <table className="w-full min-w-[920px] table-fixed text-left text-sm">
-            {/* <colgroup>
-              <col className="w-[80px]" />
-              <col className="w-[190px]" />
-              <col className="w-[170px]" />
-              <col className="w-[170px]" />
-              <col className="w-[120px]" />
-              <col className="w-[105px]" />
-              <col className="w-[105px]" />
-              <col className="w-[130px]" />
-            </colgroup> */}
-            <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3 w-[60px]">#</th>
-                <th className="px-4 py-3 text-sm">Invoice</th>
-                <th className="px-3 py-3 text-sm w-[150px]">Source</th>
-                <th className="px-3 py-3 text-sm">Patient</th>
-                <th className="px-3 py-3 text-sm text-center">Status</th>
-                <th className="px-3 py-3 text-sm">Total</th>
-                <th className="px-3 py-3 text-sm">Paid</th>
-                <th className="px-4 py-3 text-sm">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredInvoices.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-4 text-slate-500">
-                    {invoices.length === 0
-                      ? "No invoices yet."
-                      : "No invoices match the selected filters."}
-                  </td>
-                </tr>
-              )}
-              {invoicePageRows.map((invoice: any, index: number) => {
-                const p: any = patientMap.get(invoice.patient_id);
-                const source = invoiceSource(invoice);
-                const rowNumber = (safePage - 1) * pageSize + index + 1;
-                return (
-                  <tr
-                    key={invoice.id}
-                    onClick={() => openInvoiceDetail(invoice)}
-                    className="group cursor-pointer align-middle hover:bg-slate-50"
-                  >
-                    <td className="px-4 py-4 font-semibold text-slate-500">
-                      {rowNumber}
-                    </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-sm">
-                      <b>{invoice.invoice_number}</b>
-                      <p className="mt-1 text-sm font-semibold text-slate-400">
-                        {formatInvoiceDate(invoice)}
-                      </p>
-                    </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-sm">
-                      <div className="flex flex-col items-start gap-1 w-full">
-                        <Badge tone={source.tone as any} className="table-status text-sm text-center">{source.label}</Badge>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-sm font-medium">
-                      {p?.name || p?.full_name || "Patient"}
-                    </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-sm">
-                      <Badge
-                        tone={
-                          invoice.status === "paid"
-                            ? "green"
-                            : invoice.status === "partially_refunded" || invoice.status === "refunded"
-                              ? "blue"
-                            : invoice.status === "partially_paid"
-                              ? "amber"
-                              : "slate"
-                        }
-                        className="table-status text-sm text-center"
-                      >
-                        {invoice.status =='partially_paid'?'partially paid': invoice.status}
-                      </Badge>
-                    </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4 text-sm text-start font-semibold tabular-nums">
-                      {money(invoice.total_amount)}
-                    </td>
-                    <td className="px-2 py-2 lg:px-4 lg:py-4  text-sm text-start tabular-nums">
-                      {money(invoice.paid_amount)}
-                    </td>
-                    <td
-                      className="px-2 py-2 lg:px-4 lg:py-4  text-sm text-start"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <ActionButton
-                        onClick={() => openInvoiceDetail(invoice)}
-                        disabled={detailLoading === invoice.id}
-                      >
-                        {detailLoading === invoice.id ? "Loading..." : "View"}
-                      </ActionButton>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <DataTable
+            columns={invoiceColumns}
+            data={invoicePageRows}
+            emptyMessage={
+              invoices.length === 0
+                ? "No invoices yet."
+                : "No invoices match the selected filters."
+            }
+            onRowClick={openInvoiceDetail}
+          />
         </div>
         <Pagination
           page={safePage}

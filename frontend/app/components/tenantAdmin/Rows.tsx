@@ -10,7 +10,6 @@ import { ClickableRow, RoleList, RowActions } from "./Shared";
 import { Badge } from "../common/ui";
 import { Column } from "@/utils/tenantAdmin/types";
 
-
 export type Role = {
   id: string;
   name: string;
@@ -20,7 +19,6 @@ export type Role = {
   updated_at?: string;
 };
 
-
 export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
   const branch = branches.find((row: any) => row.id === user.branch_id);
   const roleLabels = userRoleLabels(user);
@@ -28,23 +26,28 @@ export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
   return (
     <ClickableRow onClick={onEdit} className="flex w-max border">
       {/* Name */}
-      <div className="min-w-[200px] px-2 flex items-center text-xs">
-        <b>{user.name}</b>
+      <div className="w-[180px] table-cell-ellipsis">
+        <span className="table-text font-bold" title={user.name}>
+          {user.name}
+        </span>
       </div>
 
-      {/* Email */}
-      <div className="min-w-[220px] px-2 flex items-center text-xs">
-        <span className="break-all">{user.email}</span>
+      <div className="w-[220px] table-cell-ellipsis">
+        <span className="table-text" title={user.email}>
+          {user.email}
+        </span>
       </div>
 
-      {/* Roles */}
-      <div className="min-w-[200px] px-2 flex items-center text-xs">
-        <RoleList labels={roleLabels} />
+      <div className="w-[200px] table-cell-ellipsis">
+        <span className="table-text">
+          <RoleList labels={roleLabels} />
+        </span>
       </div>
 
-      {/* Branch */}
-      <div className="min-w-[180px] px-2 flex items-center text-xs">
-        {branch?.name || "All branches"}
+      <div className="w-[180px] table-cell-ellipsis">
+        <span className="table-text" title={branch?.name}>
+          {branch?.name || "All branches"}
+        </span>
       </div>
 
       {/* Status */}
@@ -75,18 +78,13 @@ export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
   );
 }
 
-export function RoleRow({
-  role,
-  onEdit,
-  onStatus,
-  onDelete,
-}: any) {
+export function RoleRow({ role, onEdit, onStatus, onDelete }: any) {
   const locked = isLocked(role);
 
   return (
     <ClickableRow onClick={onEdit} className="flex w-full border">
       {/* Role Name */}
-      <div className="min-w-[220px] px-2 flex items-center text-xs">
+      <div className="min-w-[200px] px-2 flex items-center text-xs">
         <div className="flex items-center gap-2 min-w-0">
           <b className="truncate">{role.name}</b>
 
@@ -140,7 +138,6 @@ export function RoleRow({
 export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
   return (
     <ClickableRow onClick={onEdit} className="flex w-max border">
-
       <div className="min-w-[200px] px-2 flex items-center text-xs">
         <span className="font-bold">{department.name}</span>
 
@@ -184,8 +181,7 @@ export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
 export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
   return (
     <ClickableRow onClick={onEdit} className="flex w-max border">
-
-      <div className="min-w-[220px] px-2 flex items-center text-xs">
+      <div className="min-w-[200px] px-2 flex items-center text-xs">
         <b>{branch.name}</b>
 
         {isLocked(branch) && (
@@ -195,16 +191,20 @@ export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
         )}
       </div>
 
-      <div className="min-w-[140px] px-2 flex items-center text-xs">
+      <div className="min-w-[100px] px-2 flex items-center text-xs">
         {branch.code}
       </div>
 
       <div className="min-w-[260px] px-2 flex items-center text-xs">
-        {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") || "-"}
+        {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") ||
+          "-"}
       </div>
 
       <div className="min-w-[120px] px-2 flex items-center text-xs">
-        <Badge tone={branch.is_active ? "green" : "red"} className="rounded-full py-1 text-xs">
+        <Badge
+          tone={branch.is_active ? "green" : "red"}
+          className="rounded-full py-1 text-xs"
+        >
           {branch.is_active ? "Active" : "Inactive"}
         </Badge>
       </div>
@@ -224,8 +224,7 @@ export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
 
 export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
   return (
-    <ClickableRow onClick={onEdit} className="flex w-max border">
-
+    <ClickableRow onClick={onEdit} className="flex border min-w-max">
       <div className="min-w-[220px] px-2 flex items-center text-xs">
         <b>{supplier.name}</b>
       </div>
@@ -244,7 +243,10 @@ export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
       </div>
 
       <div className="min-w-[120px] px-2 flex items-center text-xs">
-        <Badge tone={supplier.is_active ? "green" : "red"} className="rounded-full py-1 text-xs">
+        <Badge
+          tone={supplier.is_active ? "green" : "red"}
+          className="rounded-full py-1 text-xs"
+        >
           {supplier.is_active ? "Active" : "Inactive"}
         </Badge>
       </div>
@@ -261,13 +263,18 @@ export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
   );
 }
 
-export function TaxRuleRow({ rule, branches, onEdit, onStatus, onDelete }: any) {
+export function TaxRuleRow({
+  rule,
+  branches,
+  onEdit,
+  onStatus,
+  onDelete,
+}: any) {
   const branch = branches.find((row: any) => row.id === rule.branch_id);
 
   return (
     <ClickableRow onClick={onEdit} className="flex w-max border">
-
-      <div className="min-w-[220px] px-2 flex items-center text-xs">
+      <div className="min-w-[180px] px-2 flex items-center text-xs">
         <b>{rule.name}</b>
       </div>
 
@@ -275,7 +282,7 @@ export function TaxRuleRow({ rule, branches, onEdit, onStatus, onDelete }: any) 
         {scopeLabel(rule.service_scope)} · {branch?.name || "All branches"}
       </div>
 
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
+      <div className="min-w-[140px] px-2 flex items-center text-xs">
         <div>
           <b>{rule.tax_percentage}%</b>
           <p className="text-slate-500 text-xs">{rule.tax_label || "GST"}</p>
@@ -283,7 +290,10 @@ export function TaxRuleRow({ rule, branches, onEdit, onStatus, onDelete }: any) 
       </div>
 
       <div className="min-w-[120px] px-2 flex items-center text-xs">
-        <Badge tone={rule.is_active ? "green" : "red"} className="rounded-full py-1 text-xs">
+        <Badge
+          tone={rule.is_active ? "green" : "red"}
+          className="rounded-full py-1 text-xs"
+        >
           {rule.is_active ? "Active" : "Inactive"}
         </Badge>
       </div>
@@ -320,8 +330,7 @@ export function DiscountOfferRow({
 
   return (
     <ClickableRow onClick={onEdit} className="flex w-max border">
-
-      <div className="min-w-[220px] px-2 flex items-center text-xs">
+      <div className="min-w-[140px] px-2 flex items-center text-xs">
         <div>
           <b>{offer.name}</b>
         </div>
@@ -337,7 +346,8 @@ export function DiscountOfferRow({
           <p className="text-slate-500 text-xs">
             {minimum > 0
               ? `Min ₹${minimum.toLocaleString("en-IN")}`
-              : "No minimum"} ·{" "}
+              : "No minimum"}{" "}
+            ·{" "}
             {offer.max_discount_amount
               ? `Max ₹${Number(offer.max_discount_amount).toLocaleString("en-IN")}`
               : "No cap"}
@@ -345,8 +355,11 @@ export function DiscountOfferRow({
         </div>
       </div>
 
-      <div className="min-w-[120px] px-2 flex items-center text-xs">
-        <Badge tone={offer.is_active ? "green" : "red"} className="rounded-full py-1 text-xs">
+      <div className="min-w-[100px] px-2 flex items-center text-xs">
+        <Badge
+          tone={offer.is_active ? "green" : "red"}
+          className="rounded-full py-1 text-xs"
+        >
           {offer.is_active ? "Active" : "Inactive"}
         </Badge>
       </div>

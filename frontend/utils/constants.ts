@@ -4,22 +4,22 @@ export const pageSize = 10;
 
 
 export const USER_COLUMNS: Column[] = [
-  { label: "Name", width: "min-w-[200px]" },
-  { label: "Email", width: "min-w-[220px]" },
-  { label: "Roles", width: "min-w-[200px]" },
+  { label: "Name", width: "min-w-[180px]" },
+  { label: "Email", width: "min-w-[230px]" },
+  { label: "Roles", width: "min-w-[190px]" },
   { label: "Branch", width: "min-w-[180px]" },
   { label: "Status", width: "min-w-[120px]" },
   { label: "Created", width: "min-w-[100px]" },
-  { label: "Actions", width: "min-w-[140px]" },
+  { label: "Actions", width: "min-w-[240px]" },
 ];
 
 
 export const ROLE_COLUMNS: Column[] = [
-  { label: "Role", width: "min-w-[220px]" },
+  { label: "Role", width: "min-w-[200px]" },
   { label: "Key", width: "min-w-[180px]" },
   { label: "Status", width: "min-w-[140px]" },
   { label: "Modified", width: "min-w-[140px]" },
-  { label: "Actions", width: "min-w-[160px]" },
+  { label: "Actions", width: "min-w-[260px]" },
 ];
 
 export const DEPARTMENT_COLUMNS = [
@@ -32,8 +32,8 @@ export const DEPARTMENT_COLUMNS = [
 
 // Branch
 export const BRANCH_COLUMNS: Column[] = [
-  { label: "Name", width: "min-w-[220px]" },
-  { label: "Code", width: "min-w-[140px]" },
+  { label: "Name", width: "min-w-[200px]" },
+  { label: "Code", width: "min-w-[100px]" },
   { label: "Location", width: "min-w-[260px]" },
   { label: "Status", width: "min-w-[120px]" },
   { label: "Actions", width: "min-w-[160px]" },
@@ -50,19 +50,19 @@ export const SUPPLIER_COLUMNS: Column[] = [
 
 // Tax Rules
 export const TAX_RULE_COLUMNS: Column[] = [
-  { label: "Name", width: "min-w-[220px]" },
+  { label: "Name", width: "min-w-[180px]" },
   { label: "Scope", width: "min-w-[260px]" },
-  { label: "Tax", width: "min-w-[160px]" },
+  { label: "Tax", width: "min-w-[140px]" },
   { label: "Status", width: "min-w-[120px]" },
   { label: "Actions", width: "min-w-[160px]" },
 ];
 
 // Discount Offers
 export const DISCOUNT_OFFER_COLUMNS: Column[] = [
-  { label: "Offer", width: "min-w-[220px]" },
+  { label: "Offer", width: "min-w-[140px]" },
   { label: "Scope", width: "min-w-[260px]" },
   { label: "Value", width: "min-w-[200px]" },
-  { label: "Status", width: "min-w-[120px]" },
+  { label: "Status", width: "min-w-[100px]" },
   { label: "Actions", width: "min-w-[160px]" },
 ];
 

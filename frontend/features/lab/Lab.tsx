@@ -924,7 +924,7 @@ export function Lab({
                   <tr
                     key={o.id}
                     onClick={() => setSelectedOrder(o)}
-                    className={`cursor-pointer transition hover:bg-slate-50 ${selected ? "bg-slate-50" : ""}`}
+                    className={`cursor-pointer transition hover:bg-slate-50 ${selected ? "bg-slate-50" : ""} h-20`}
                   >
                     <td className="px-4 py-4">
                       <b>{(safePage - 1) * pageSize + index + 1}</b>

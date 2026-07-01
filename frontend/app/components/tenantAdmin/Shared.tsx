@@ -369,15 +369,15 @@ export function ListCard({
       </div>
 
       {/* TABLE */}
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
-        <div className="min-w-full">
+      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 ">
+        <div className="min-w-max w-full">
 
           {/* HEADER */}
-          <div className="flex w-full bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+          <div className="flex bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
             {columns.map((col: any) => (
               <div
                 key={col.label}
-                className={`${col?.width ?? "min-w-[160px]"} px-2 flex-shrink-0`}
+                className={`${col?.width ?? "w-[160px]"} px-2 flex-shrink-0 `}
               >
                 {col.label}
               </div>

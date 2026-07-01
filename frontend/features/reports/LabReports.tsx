@@ -23,7 +23,8 @@ const LabReports = ({
     },
     {
       key: "item",
-      header: "Lab Test / Package",
+      header: "Lab / Package",
+      width: '160px'
     },
     {
       key: "orderCount",
@@ -41,6 +42,7 @@ const LabReports = ({
     {
       key: "purchaseCost",
       header: "Purchase Cost",
+      width: '160px',
       render: (row: any) => money(row.purchaseCost),
     },
     {
