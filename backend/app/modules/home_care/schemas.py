@@ -97,8 +97,8 @@ class HomeCareVisitLogRead(HomeCareVisitLogCreate):
 
 
 class HomeCareBookingCreate(BaseModel):
-    branch_id: str
-    patient_id: str
+    branch_id: str = Field(min_length=1)
+    patient_id: str = Field(min_length=1)
     assigned_staff_user_id: str | None = None
     assigned_staff_name: str | None = Field(default=None, max_length=160)
     staff_type: str | None = Field(default=None, max_length=80)
