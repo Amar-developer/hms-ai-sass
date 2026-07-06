@@ -1238,7 +1238,7 @@ export function DoctorConsultation({
         body: JSON.stringify({ signed_by_user_id: apiSession.user?.id }),
       });
       await loadLiveData(apiSession);
-      setMessage("Consultation signed and locked in backend.");
+      setMessage("Consultation Completed and locked in backend.");
     } catch (err: any) {
       setMessage(err.message || "Could not sign consultation.");
     } finally {

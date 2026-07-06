@@ -1,5 +1,13 @@
 import React from "react";
-import { Card, Badge, Field, Input, RefreshButton, Select } from "../common/ui";
+import {
+  Card,
+  Badge,
+  Field,
+  Input,
+  RefreshButton,
+  Select,
+  SearchableSelect,
+} from "../common/ui";
 import { Download, Mail } from "lucide-react";
 
 type HeaderProps = {
@@ -328,16 +336,18 @@ const Header = ({
       {/* Reports Page */}
       <div className="mt-4 grid gap-3 md:grid-cols-6">
         <Field label="Period">
-          <Select
+          <SearchableSelect
             value={period}
-            onChange={(event: any) => changePeriod(event.target.value)}
-            className="select-filter"
-          >
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-            <option value="custom">Custom</option>
-          </Select>
+            onChange={(value) => changePeriod(value)}
+            options={[
+              { value: "daily", label: "Daily" },
+              { value: "weekly", label: "Weekly" },
+              { value: "monthly", label: "Monthly" },
+              { value: "custom", label: "Custom" },
+            ]}
+            placeholder="Select period"
+            searchable={false}
+          />
         </Field>
         <Field label="From Date">
           <Input
@@ -347,7 +357,7 @@ const Header = ({
               setPeriod("custom");
               setFromDate(event.target.value);
             }}
-            className="date-filter"
+            // className="date-filter"
           />
         </Field>
         <Field label="To Date">
@@ -358,49 +368,55 @@ const Header = ({
               setPeriod("custom");
               setToDate(event.target.value);
             }}
-            className="date-filter"
+            // className="date-filter"
           />
         </Field>
         <Field label="Doctor">
-          <Select
+          <SearchableSelect
             value={doctorId}
-            onChange={(event: any) => setDoctorId(event.target.value)}
-            className="select-filter"
-          >
-            <option value="all">All doctors</option>
-            {doctorOptions.map(([id, label]: any) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </Select>
+            onChange={(value) => setDoctorId(value)}
+            options={[
+              { value: "all", label: "All doctors" },
+              ...doctorOptions.map(([id, label]: any) => ({
+                value: id,
+                label,
+              })),
+            ]}
+            placeholder="All doctors"
+            searchable={false}
+          />
         </Field>
+
         <Field label="Type">
-          <Select
+          <SearchableSelect
             value={typeFilter}
-            onChange={(event: any) => setTypeFilter(event.target.value)}
-            className="select-filter"
-          >
-            <option value="overall">Overall</option>
-            <option value="consultation">Consultation</option>
-            <option value="lab">Lab</option>
-            <option value="pharmacy">Pharmacy</option>
-          </Select>
+            onChange={(value) => setTypeFilter(value)}
+            options={[
+              { value: "overall", label: "Overall" },
+              { value: "consultation", label: "Consultation" },
+              { value: "lab", label: "Lab" },
+              { value: "pharmacy", label: "Pharmacy" },
+            ]}
+            placeholder="Select type"
+            searchable={false}
+          />
         </Field>
+
         <Field label="Supplier">
-          <Select
+          <SearchableSelect
             value={supplierFilter}
-            onChange={(event: any) => setSupplierFilter(event.target.value)}
-            className="select-filter"
-          >
-            <option value="all">All suppliers</option>
-            <option value="none">Tenant Hospital / In-house</option>
-            {suppliers.map((supplier: any) => (
-              <option key={supplier.id} value={supplier.id}>
-                {supplier.name}
-              </option>
-            ))}
-          </Select>
+            onChange={(value) => setSupplierFilter(value)}
+            options={[
+              { value: "all", label: "All suppliers" },
+              { value: "none", label: "Tenant Hospital / In-house" },
+              ...suppliers.map((supplier: any) => ({
+                value: supplier.id,
+                label: supplier.name,
+              })),
+            ]}
+            placeholder="All suppliers"
+            searchable={false}
+          />
         </Field>
       </div>
     </Card>

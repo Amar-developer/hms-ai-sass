@@ -119,6 +119,11 @@ export function PatientFormFields({
   });
   const [status, setStatus] = useState(patient?.status || "active");
   const [mobile, setMobile] = useState(patientField(patient, "mobile") || "");
+  const [gender, setGender] = useState(patientField(patient, "gender") || "");
+
+  const [bloodGroup, setBloodGroup] = useState(
+    patientField(patient, "blood_group", "bloodGroup") || "",
+  );
   const branchOptions = [...branches];
   if (
     selectedBranchId &&
@@ -144,6 +149,8 @@ export function PatientFormFields({
         : String(patientField(patient, "age_years", "ageYears") || ""),
     );
     setStatus(patient?.status || "active");
+    setGender(patientField(patient, "gender") || "");
+    setBloodGroup(patientField(patient, "blood_group", "bloodGroup") || "");
   }, [patient?.id, patient?.updated_at, defaultBranchId]);
   useEffect(() => {
     if (selectedBranchId || !branchOptions.length) return;
@@ -194,17 +201,18 @@ export function PatientFormFields({
           }
         />
       </FormField>
-      <Field label="Gender">
+      <FormField label="Gender">
         <SearchableSelect
           name="gender"
-          value={patientField(patient, "gender")}
+          value={gender}
           searchable={false}
           options={genders.map(([value, label]) => ({
             value,
             label,
           }))}
+          onChange={setGender}
         />
-      </Field>
+      </FormField>
       <Field label="Date of Birth">
         <Input
           name="dateOfBirth"
@@ -216,7 +224,7 @@ export function PatientFormFields({
             setDateOfBirth(nextDate);
             setAgeYears(nextDate ? calculateAgeYears(nextDate) : "");
           }}
-          className="search-input"
+          // className="search-input"
         />
       </Field>
       <Field label="Age Years">
@@ -283,12 +291,13 @@ export function PatientFormFields({
       <Field label="Blood Group">
         <SearchableSelect
           name="bloodGroup"
-          value={patientField(patient, "blood_group", "bloodGroup")}
+          value={bloodGroup}
           searchable={false}
           options={bloodGroups.map(([value, label]) => ({
             value,
             label,
           }))}
+          onChange={setBloodGroup}
         />
       </Field>
       {includeStatus && (

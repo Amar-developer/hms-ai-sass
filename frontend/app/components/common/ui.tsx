@@ -10,7 +10,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { displayToIsoDate, isoToDisplayDate } from "@/utils/helper";
+import { capitalizeFirst, displayToIsoDate, isoToDisplayDate } from "@/utils/helper";
 import { useDropdown } from "@/hooks/useDropdown";
 
 export function Card({
@@ -534,7 +534,7 @@ export function DateInput({
 }
 
 export function Input({
-  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
+  className = "rounded-lg px-2 py-2 lg:px-2 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
   mobileNumber = false,
   ...props
 }: any) {
@@ -609,7 +609,7 @@ export function SuggestionInput({
           setOpen(true);
         }}
         autoComplete="off"
-        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-4 lg:py-2 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-2 lg:py-2 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
       {open && !disabled && filtered.length > 0 && (
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
@@ -727,7 +727,7 @@ export function SearchableSelect({
         <input
           type="hidden"
           name={name}
-          value={value || ""}
+          value={capitalizeFirst(value) || ""}
           required={required}
         />
       ) : null}
@@ -738,7 +738,7 @@ export function SearchableSelect({
         className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white py-2 px-2 lg:px-2 lg:py-2 text-left text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
       >
         <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
-          {displayLabel || placeholder}
+          {capitalizeFirst(displayLabel) || placeholder}
         </span>
         <ChevronDown
           className={`${open ? "rotate-180" : ""} h-4 w-4 text-black font-bold`}
@@ -747,11 +747,11 @@ export function SearchableSelect({
       {open && (
         <div className="absolute z-30 mt-1 max-h-72 w-full scrollbar-thin  overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
           {searchable && (
-            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2">
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2 pr-4">
               <input
                 autoFocus
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) => setQuery(capitalizeFirst(event.target.value))}
                 placeholder={searchPlaceholder}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
               />
@@ -785,7 +785,7 @@ export function SearchableSelect({
               onClick={() => commit(option.value)}
               className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${option.value === value ? "bg-slate-50 font-bold" : ""}`}
             >
-              <span className="block truncate">{option.label}</span>
+              <span className="block truncate">{capitalizeFirst(option.label)}</span>
               {option.sublabel ? (
                 <span className="block truncate text-xs text-slate-500">
                   {option.sublabel}

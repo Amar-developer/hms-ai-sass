@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   RefreshButton,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
@@ -23,9 +24,19 @@ import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { Column, DataTable } from "@/app/components/reports/DataTable";
 import { displayDate, displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
-import { isBilledIssue, isCancelledIssue, isDispensed } from "@/utils/pharmacy/helpers";
-import { ConsultPrescriptionModal, MedicineDetailModal } from "@/app/components/pharmacy/Shared";
-import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
+import {
+  isBilledIssue,
+  isCancelledIssue,
+  isDispensed,
+} from "@/utils/pharmacy/helpers";
+import {
+  ConsultPrescriptionModal,
+  MedicineDetailModal,
+} from "@/app/components/pharmacy/Shared";
+import {
+  isActivePatientRecord,
+  patientPickerLabel,
+} from "@/utils/patient/helpers";
 
 const pageSize = 10;
 
@@ -617,13 +628,13 @@ export function Pharmacy({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <Card>
-        <h3 className="card-desc font-bold">Create Pharmacy Issue</h3>
+        <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
         <form
           onSubmit={createDirect}
           className="mt-4 grid gap-3 md:grid-cols-4"
         >
-          <SearchableSelectField
-            label="Patient"
+          <FormField label="Patient">
+            <SearchableSelect
             value={patientId}
             onChange={setPatientId}
             options={activePatients.map((p: any) => ({
@@ -634,18 +645,25 @@ export function Pharmacy({
             placeholder="Select patient"
             searchPlaceholder="Search patient by name, mobile, or number"
           />
-          <SelectField
-            label="Source"
-            value={source}
-            onChange={setSource}
-            options={[
-              { value: "op_direct", label: "OP Direct" },
-              {
-                value: "external_prescription",
-                label: "External Prescription",
-              },
-            ]}
-          />
+          </FormField>
+
+
+          <FormField label="Source">
+            <SearchableSelect
+              name="source"
+              value={source}
+              onChange={setSource}
+              options={[
+                { value: "op_direct", label: "OP Direct" },
+                {
+                  value: "external_prescription",
+                  label: "External Prescription",
+                },
+              ]}
+              placeholder="Select source"
+              searchable={false}
+            />
+          </FormField>
           <FormField label="Medicine">
             <SearchPicker
               value={selectedMedicineId}
@@ -695,10 +713,17 @@ export function Pharmacy({
             />
           </div> */}
           <div className="flex items-end gap-2 w-full lg:w-[80%]">
-            <button type="button" onClick={addIssueItem} className='close-button font-bold'>
+            <button
+              type="button"
+              onClick={addIssueItem}
+              className="close-button font-bold"
+            >
               Add
             </button>
-            <Button disabled={busy === "create"} className='w-[130px] px-1 py-3 lg:px-2 py-2.5'>
+            <Button
+              disabled={busy === "create"}
+              className="w-[130px] px-1 py-3 lg:px-2 py-2.5"
+            >
               {busy === "create" ? "Saving..." : "Create Issue"}
             </Button>
           </div>
@@ -755,13 +780,16 @@ export function Pharmacy({
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <ActionButton onClick={() => loadConsultDetail(a)} className='close-button'>
+                      <ActionButton
+                        onClick={() => loadConsultDetail(a)}
+                        className="close-button"
+                      >
                         View Rx
                       </ActionButton>
                       <Button
                         disabled={busy === a.consultationId}
                         onClick={() => createFromConsultation(a)}
-                        className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs'
+                        className="rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs"
                       >
                         {busy === a.consultationId
                           ? "Creating..."
@@ -774,7 +802,7 @@ export function Pharmacy({
                             a.consultationId,
                           ])
                         }
-                        className='close-button'
+                        className="close-button"
                       >
                         Remove
                       </ActionButton>
@@ -807,7 +835,10 @@ export function Pharmacy({
             <tbody className="divide-y">
               {issues.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="card-desc px-4 py-4 text-slate-500">
+                  <td
+                    colSpan={7}
+                    className="card-desc px-4 py-4 text-slate-500"
+                  >
                     No pharmacy issues yet.
                   </td>
                 </tr>
@@ -855,10 +886,17 @@ export function Pharmacy({
                         publicDisplayValue(issue.patient_id, "Patient")}
                     </td>
                     <td>
-                      <Badge className="table-status w-[70%] text-xs px-2">{humanizeOptionLabel(issue.source)}</Badge>
+                      <Badge className="table-status w-[70%] text-xs px-2">
+                        {humanizeOptionLabel(issue.source)}
+                      </Badge>
                     </td>
                     <td>
-                      <Badge tone={statusTone as any} className="table-status w-[60%] text-xs">{statusLabel}</Badge>
+                      <Badge
+                        tone={statusTone as any}
+                        className="table-status w-[60%] text-xs"
+                      >
+                        {statusLabel}
+                      </Badge>
                     </td>
                     <td onClick={(event) => event.stopPropagation()}>
                       {editingAmountId === issue.id ? (
@@ -920,7 +958,9 @@ export function Pharmacy({
                       <div className="ml-auto w-[190px]">
                         <select
                           value=""
-                          disabled={rowBusy || invoiceBusy || cancelled || invoiced}
+                          disabled={
+                            rowBusy || invoiceBusy || cancelled || invoiced
+                          }
                           onChange={(event: any) =>
                             handleIssueAction(issue, event.target.value)
                           }

@@ -1,6 +1,7 @@
-import { Badge,ActionGroup,ActionButton } from "../common/ui";
+import { capitalizeFirst } from "@/utils/helper";
+import { Badge, ActionGroup, ActionButton } from "../common/ui";
 import { displayPatientGender } from "@/utils/patient/helpers";
-
+import { RowActions } from "../tenantAdmin/Shared";
 
 export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
   const branch = branches.find((item: any) => item.id === row.branch_id);
@@ -22,9 +23,11 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
       }}
       className="w-full cursor-pointer text-left transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none"
     >
-      <div className="grid gap-4 px-5 py-4 text-sm md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] xl:items-center">
+      <div className="grid gap-4 px-5 py-4 text-sm md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr] xl:items-center">
         <div className="min-w-0">
-          <b className="block text-sm truncate text-slate-950">{row.full_name}</b>
+          <b className="block text-sm truncate text-slate-950">
+            {capitalizeFirst(row.full_name)}
+          </b>
           <p className="mt-0.5 text-sm  font-medium text-slate-500">
             {row.patient_number}
           </p>
@@ -93,13 +96,26 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
             {row.status}
           </Badge>
         </div>
-        <ActionGroup className="justify-start md:justify-end">
-          <ActionButton onClick={stop(onView)}>View</ActionButton>
-          <ActionButton onClick={stop(onEdit)}>Edit</ActionButton>
-          <ActionButton tone="danger" onClick={stop(onDelete)}>
-            Delete
-          </ActionButton>
-        </ActionGroup>
+        <div className="flex justify-center items-center">
+          <RowActions
+            actions={[
+              {
+                label: "View",
+                onClick: onView,
+              },
+              {
+                label: "Edit",
+                onClick: onEdit,
+              },
+              {
+                label: "Delete",
+                onClick: onDelete,
+                danger: true,
+              },
+            ]}
+            className="right-7 -bottom-5"
+          />
+        </div>
       </div>
     </div>
   );

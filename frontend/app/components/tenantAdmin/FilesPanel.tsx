@@ -17,7 +17,7 @@ import { FormField } from "../FormElements";
 import { asOptionList, patientLabel } from "@/utils/tenantAdmin/helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { UPLOADS_BASE } from "@/lib/api";
-import { displayDateTime } from "@/utils/helper";
+import { capitalizeFirst, displayDateTime } from "@/utils/helper";
 import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
 export function FilesPanel({
@@ -447,13 +447,13 @@ export function FilesPanel({
               )}
               {visible.map((file: any) => (
                 <tr key={file.id} className="align-top">
-                  <td className="px-4 py-4">
+                  <td className="px-2 py-2">
                     <div className="max-w-[200px]">
                       <p
                         className="font-bold truncate text-xs"
                         title={file?.file_name}
                       >
-                        {file.file_name}
+                        {capitalizeFirst(file.file_name)}
                       </p>
                     </div>
                     {/* <div className="max-w-[200px]">
@@ -472,27 +472,23 @@ export function FilesPanel({
                     >
                       {humanizeOptionLabel(file.category)}
                     </Badge>
-                    {/* <p className="mt-1 text-xs pl-2 lg:text-sm text-slate-500">
-                      {file.source_module || "-"}
-                    </p> */}
                   </td>
-                  <td>
-                    <b className="text-xs ">
+                  <td className="flex justify-start items-start">
+                    <div className="text-xs  mt-2">
                       {file.attached_to_doctype || "-"}
-                    </b>
-                    {/* <p className="break-all text-xs text-slate-500">
-                      {[file.attached_to_name, file.attached_to_field]
-                        .filter(Boolean)
-                        .join(" / ") || "-"}
-                    </p> */}
+                    </div>
                   </td>
                   <td className="text-xs">
-                    {patientLabel(patients, file.patient_id)}
+                    <div className="text-xs mt-2">
+                      {patientLabel(patients, file.patient_id)}
+                    </div>
                   </td>
                   <td className="text-xs">
-                    {file.created_at ? displayDateTime(file.created_at) : "-"}
+                    <div className="text-xs mt-2">
+                      {file.created_at ? displayDateTime(file.created_at) : "-"}
+                    </div>
                   </td>
-                  <td className="pr-4">
+                  <td className="pr-4 flex items-center">
                     <a
                       href={
                         file.file_url?.startsWith("/uploads/")
@@ -506,12 +502,12 @@ export function FilesPanel({
                       Open
                     </a>
                   </td>
-                  <td className="pr-4">
+                  <td className="pr-4 ">
                     <button
                       type="button"
                       onClick={() => deleteFile(file)}
                       disabled={busy}
-                      className="font-semibold text-xs text-red-600 underline disabled:text-slate-300"
+                      className="font-semibold text-xs  mt-2 text-red-600 underline disabled:text-slate-300"
                     >
                       Delete
                     </button>

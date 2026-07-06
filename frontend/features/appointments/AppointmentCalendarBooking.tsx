@@ -796,6 +796,18 @@ export function AppointmentCalendarBooking(props: Props) {
     }
   }
 
+  const normalizedDepartmentOptions = departmentOptions.map((d: any) => ({
+    value: d.id,
+    label: d.name,
+  }));
+
+  const normalizedPlatformDepartmentOptions = platformDepartmentOptions.map(
+    (d: string) => ({
+      value: d,
+      label: d,
+    }),
+  );
+
   if (mode === "book") {
     return (
       <div className="space-y-5">
@@ -823,12 +835,12 @@ export function AppointmentCalendarBooking(props: Props) {
           <Card>
             <h4 className="card-title font-bold">Appointment Details</h4>
             <div className="mt-4">
-              <div>
+              <div className=" w-1/2">
                 <span className="mb-1 block text-sm font-bold uppercase tracking-wide text-slate-500 lg:text-xs">
                   Patient
                 </span>
                 {selectedPatient ? (
-                  <div className="flex flex-col justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center">
+                  <div className="flex flex-col justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center ">
                     <div>
                       <b className="text-xs text-slate-900">
                         {selectedPatient.full_name}
@@ -1019,7 +1031,9 @@ export function AppointmentCalendarBooking(props: Props) {
                   <Field label="Visit Type">
                     <SearchableSelect
                       value={appointmentType}
-                      onChange={()=>{setAppointmentType}}
+                      onChange={() => {
+                        setAppointmentType;
+                      }}
                       // className="select-filter"
                       searchable={false}
                       options={[
@@ -1295,7 +1309,7 @@ export function AppointmentCalendarBooking(props: Props) {
           onClick={openBooking}
           className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-48 text-xs  px-3 py-2 lg:px-4 lg:py-3"
         >
-          <div className="flex justify-between">
+          <div className="flex justify-center">
             <CalendarPlus size={16} />
             <p className="pl-2">New Appointment </p>
           </div>
@@ -1328,64 +1342,53 @@ export function AppointmentCalendarBooking(props: Props) {
             type="date"
             value={filterDate}
             onChange={(e: any) => setFilterDate(e.target.value)}
-            className="search-input"
           />
         </Field>
-        <Field
-          label="
-        Department"
-        >
+        <Field label="Department">
           {isSuperAdmin ? (
-            <Select
+            <SearchableSelect
               value={platformDepartment}
-              onChange={(e: any) => setPlatformDepartment(e.target.value)}
-              className="select-filter"
-            >
-              <option value="all">All Departments</option>
-              {platformDepartmentOptions.map((department: string) => (
-                <option key={department} value={department}>
-                  {department}
-                </option>
-              ))}
-            </Select>
+              onChange={(val: string) => setPlatformDepartment(val)}
+              options={normalizedPlatformDepartmentOptions}
+              placeholder="All Departments"
+              searchable={false}
+            />
           ) : (
-            <Select
+            <SearchableSelect
               value={filterDepartment}
-              onChange={(e: any) => setFilterDepartment(e.target.value)}
-              className="select-filter"
-            >
-              <option value="all">All Departments</option>
-              {departmentOptions.map((department: any) => (
-                <option key={department.id} value={department.id}>
-                  {department.name}
-                </option>
-              ))}
-            </Select>
+              onChange={(val: string) => setFilterDepartment(val)}
+              options={[
+                { value: "all", label: "All Departments" },
+                ...normalizedDepartmentOptions,
+              ]}
+              placeholder="All Departments"
+              searchable={false}
+            />
           )}
         </Field>
         {!isSuperAdmin && (
           <Field label="Status">
-            <Select
+            <SearchableSelect
               value={filterStatus}
-              onChange={(e: any) => setFilterStatus(e.target.value)}
-              className="select-filter"
-            >
-              {STATUS_FILTER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </Select>
+              onChange={(val: string) => setFilterStatus(val)}
+              options={STATUS_FILTER_OPTIONS.map((o) => ({
+                value: o.value,
+                label: o.label,
+              }))}
+              placeholder="Select status"
+              searchable={false}
+            />
           </Field>
         )}
       </div>
       <div className="mt-4 rounded-lg border border-slate-200 overflow-x-auto">
         <div className="min-w-[1300px]">
           <div
-            className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[220px_220px_140px_180px_180px_180px_120px]" : "grid-cols-[120px_140px_140px_180px_180px_120px_320px]"}`}
+            className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[220px_100px_220px_140px_180px_180px_180px_120px]" : "grid-cols-[120px_100px_140px_140px_180px_180px_120px_320px]"}`}
           >
             {isSuperAdmin && <span>Tenant</span>}
             <span className="text-sm">Patient</span>
+            <span className="text-sm">ID</span>
             <span className="text-sm">Mobile</span>
             <span className="text-sm">Department</span>
             <span className="text-sm">Doctor</span>
@@ -1418,6 +1421,8 @@ export function AppointmentCalendarBooking(props: Props) {
                     </div>
                     <div>
                       <b className="table-data">{appointment.patient_name}</b>
+                    </div>
+                    <div>
                       <p className="text-xs text-slate-500">
                         {appointment.token_number || appointment.id}
                       </p>
@@ -1459,12 +1464,14 @@ export function AppointmentCalendarBooking(props: Props) {
                       openConsultation(appointment);
                     }
                   }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_140px_140px_180px_180px_120px_320px] md:items-center"
+                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_100px_140px_140px_180px_180px_120px_320px] md:items-center"
                 >
                   <div>
                     <p className="text-sm lg:text-xs break-all">
                       {appointment.patient}
                     </p>
+                  </div>
+                  <div>
                     <p className="text-sm lg:text-xs text-slate-500">
                       {appointment.token ||
                         publicDisplayValue(appointment.id, "-")}

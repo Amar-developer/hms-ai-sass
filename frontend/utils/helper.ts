@@ -7,6 +7,11 @@ export function userInitials(user: any, email: string) {
   );
 }
 
+export function capitalizeFirst(str: string): string {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 export function displayDate(value: any, fallback = "-") {
   if (!value) return fallback;
   const raw = String(value);

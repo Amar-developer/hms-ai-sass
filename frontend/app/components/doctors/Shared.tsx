@@ -1,6 +1,11 @@
 import { doctorTypes } from "@/utils/doctors/constants";
-import { ActionButton,ActionGroup,Badge,Card,Button } from "../common/ui";
-import { activeDoctorDepartmentFeeRules, activeDoctorFeeRule, formatPractitionerName } from "@/utils/doctors/helpers";
+import { ActionButton, ActionGroup, Badge, Card, Button } from "../common/ui";
+import {
+  activeDoctorDepartmentFeeRules,
+  activeDoctorFeeRule,
+  formatPractitionerName,
+} from "@/utils/doctors/helpers";
+import { RowActions } from "../tenantAdmin/Shared";
 
 export function DoctorRow({
   row,
@@ -20,19 +25,37 @@ export function DoctorRow({
     row.practitioner_type;
   const departmentFeeRules = activeDoctorDepartmentFeeRules(feeRules, row);
   const fallbackFeeRule = activeDoctorFeeRule(feeRules, row);
-  const specialties = (row.department_ids || []).map((departmentId: string) => ({
-    departmentId,
-    departmentName:
-      departments.find((department: any) => department.id === departmentId)
-        ?.name || departmentId,
-    feeRule: departmentFeeRules.find(
-      (rule: any) => rule.department_id === departmentId,
-    ) || fallbackFeeRule,
-  }));
+  const specialties = (row.department_ids || []).map(
+    (departmentId: string) => ({
+      departmentId,
+      departmentName:
+        departments.find((department: any) => department.id === departmentId)
+          ?.name || departmentId,
+      feeRule:
+        departmentFeeRules.find(
+          (rule: any) => rule.department_id === departmentId,
+        ) || fallbackFeeRule,
+    }),
+  );
   const stop = (handler: any) => (event: any) => {
     event.stopPropagation();
     handler();
   };
+  const actions = [
+  {
+    label: "Edit",
+    onClick: onEdit,
+  },
+  {
+    label: row.status === "active" ? "Inactive" : "Active",
+    onClick: onStatus,
+  },
+  {
+    label: "Delete",
+    onClick: onDelete,
+    danger: true,
+  },
+];
   return (
     <div
       role="button"
@@ -44,7 +67,7 @@ export function DoctorRow({
           onEdit();
         }
       }}
-      className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_1.45fr] xl:items-center"
+      className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_.65fr] xl:items-center"
     >
       <div>
         <b className="text-sm">{formatPractitionerName(row)}</b>
@@ -62,7 +85,9 @@ export function DoctorRow({
             ))
           : "-"}
       </div>
-      <span className="break-all text-sm">{row.mobile || row.email || "-"}</span>
+      <span className="break-all text-sm">
+        {row.mobile || row.email || "-"}
+      </span>
       <div className="grid gap-1 text-sm">
         {specialties.length
           ? specialties.map((specialty: any) => (
@@ -76,22 +101,18 @@ export function DoctorRow({
             ))
           : "-"}
       </div>
-      <Badge tone={row.status === "active" ? "green" : "red"} className="table-status text-sm">
+      <Badge
+        tone={row.status === "active" ? "green" : "red"}
+        className="table-status text-sm"
+      >
         {row.status === "active" ? "Active" : "Inactive"}
       </Badge>
-      <ActionGroup className="justify-start xl:justify-end">
-        <ActionButton onClick={stop(onEdit)} className='rounded-lg border px-3 text-xs'>Edit</ActionButton>
-        <ActionButton onClick={stop(onStatus)} className='rounded-lg border px-3 text-xs'>
-          {row.status === "active" ? "Inactive" : "Active"}
-        </ActionButton>
-        <ActionButton tone="danger" onClick={stop(onDelete)} className='rounded-lg border px-3 text-xs'>
-          Delete
-        </ActionButton>
-      </ActionGroup>
+      <div className="flex justify-center item-scenter ">
+        <RowActions actions={actions}/>
+      </div>
     </div>
   );
 }
-
 
 export function Pagination({ page, totalPages, total, onPage }: any) {
   return (
@@ -158,9 +179,18 @@ export function ConfirmModal({ confirm, busy, onClose, onConfirm }: any) {
   );
 }
 
-export function CheckboxGroup({ title, name, rows, selected, onChange, empty, allLabel }: any) {
+export function CheckboxGroup({
+  title,
+  name,
+  rows,
+  selected,
+  onChange,
+  empty,
+  allLabel,
+}: any) {
   const selectedSet = new Set(selected || []);
-  const allSelected = rows.length > 0 && rows.every((row: any) => selectedSet.has(row.id));
+  const allSelected =
+    rows.length > 0 && rows.every((row: any) => selectedSet.has(row.id));
   function toggle(rowId: string, checked: boolean) {
     if (!onChange) return;
     const next = new Set(selectedSet);

@@ -462,6 +462,7 @@ export function SettingsPanel(props: any) {
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">Job</th>
+                <th className="">Time</th>
                 <th className="w-[100px]">Status</th>
                 <th>Period</th>
                 <th>Recipients</th>
@@ -481,6 +482,9 @@ export function SettingsPanel(props: any) {
                 <tr key={job.id}>
                   <td className="px-4 py-4 text-sm">
                     <b>Report {index + 1}</b>
+
+                  </td>
+                  <td>
                     <p className="text-xs text-slate-500">
                       {displayDateTime(job.created_at)}
                     </p>

@@ -80,12 +80,12 @@ type Action = {
 
 type RowActionsProps = {
   actions: Action[];
+  className?:string
 };
 
-export function RowActions({ actions }: RowActionsProps) {
+export function RowActions({ actions,className="right-7 -bottom-5" }: RowActionsProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
@@ -112,7 +112,7 @@ export function RowActions({ actions }: RowActionsProps) {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-40 rounded-lg border bg-white shadow-lg z-50">
+        <div className={`absolute ${className}  mb-2 w-24 rounded-lg border bg-white shadow-lg z-50`}>
           {actions
             .filter((a) => !a.hidden)
             .map((action) => (
@@ -124,7 +124,7 @@ export function RowActions({ actions }: RowActionsProps) {
                   action.onClick();
                   setOpen(false);
                 }}
-                className={`block w-full px-4 py-2 text-left hover:bg-slate-100 ${
+                className={`block w-full px-4 py-1.5 text-left hover:bg-slate-100 ${
                   action.danger ? "text-red-600 hover:bg-red-50" : ""
                 }`}
               >
@@ -308,7 +308,7 @@ export function CheckboxList({
               }}
               className={`flex items-start gap-2 rounded-2xl border border-slate-200 p-3 text-xs ${
                 onRowOpen
-                  ? "cursor-pointer transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  ? "cursor-pointer transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300  border-red-400"
                   : ""
               }`}
             >
@@ -326,9 +326,9 @@ export function CheckboxList({
                       : (selected || []).filter((item: any) => item !== value),
                   );
                 }}
-                className="mt-1 lg:h-4 lg:w-4 h-5 w-5"
+                className=" lg:h-4 lg:w-4 h-5 w-5"
               />
-              <span className="flex items-center h-full">
+              <span className="flex items-center gap-1 h-full">
                 <b className="md:text-sm lg:text-xs">{row[labelKey]}</b>
                 {row.branchLabel && (
                   <span className="block text-xs text-slate-500">
@@ -336,7 +336,7 @@ export function CheckboxList({
                   </span>
                 )}
                 {isLocked(row) && (
-                  <span className="mt-1 inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700">
+                  <span className=" inline-block rounded-full bg-purple-100 px-2 py-0.5 text-xs font-bold text-purple-700">
                     Template
                   </span>
                 )}

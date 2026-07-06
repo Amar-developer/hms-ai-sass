@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
+import { FormField } from "@/app/components/FormElements";
 import {
   ActionButton,
   ActionGroup,
@@ -11,17 +12,21 @@ import {
   Field,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import { uniqueDepartmentRows } from "@/lib/options";
-import { activeTenantOptions, groupSchedules, selectedSchedulePayloads } from "@/utils/schedule/helpers";
+import {
+  activeTenantOptions,
+  groupSchedules,
+  selectedSchedulePayloads,
+} from "@/utils/schedule/helpers";
 import { ScheduleForm } from "@/app/components/schedule/Forms";
 import { pageSize, weekdays } from "@/utils/schedule/constants";
 import { ConfirmModal, Empty, ScheduleRow } from "./Shared";
 import { Pagination } from "@/app/components/common/Pagination";
-
 
 export function Scheduling({ apiSession, branchId }: any) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
@@ -50,7 +55,9 @@ export function Scheduling({ apiSession, branchId }: any) {
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
-    const tenantRows = activeTenantOptions(await apiFetch("/tenants", apiSession));
+    const tenantRows = activeTenantOptions(
+      await apiFetch("/tenants", apiSession),
+    );
     setTenants(tenantRows);
     if (!tenantId || !tenantRows.some((tenant: any) => tenant.id === tenantId))
       setTenantId(
@@ -231,13 +238,11 @@ export function Scheduling({ apiSession, branchId }: any) {
       );
       // Remove every other active row we just replaced.
       await Promise.all(
-        existingRows
-          .slice(1)
-          .map((row: any) =>
-            apiFetch(`/practitioners/schedules/${row.id}`, scopedSession, {
-              method: "DELETE",
-            }),
-          ),
+        existingRows.slice(1).map((row: any) =>
+          apiFetch(`/practitioners/schedules/${row.id}`, scopedSession, {
+            method: "DELETE",
+          }),
+        ),
       );
       setRows((previous: any[]) => [
         updated,
@@ -336,7 +341,12 @@ export function Scheduling({ apiSession, branchId }: any) {
       const department = departments.find(
         (item: any) => item.id === row.department_id,
       );
-      const text = [doctor?.full_name, row.room_number, department?.name, row.id]
+      const text = [
+        doctor?.full_name,
+        row.room_number,
+        department?.name,
+        row.id,
+      ]
         .join(" ")
         .toLowerCase();
       return (
@@ -398,20 +408,19 @@ export function Scheduling({ apiSession, branchId }: any) {
       <div className="mt-4 grid gap-3 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5">
         {isSuperAdmin && (
           <Field label="Tenant">
-            <Select
+            <SearchableSelect
               value={tenantId}
-              onChange={(e: any) => setTenantId(e.target.value)}
-
-            >
-              {tenants.map((tenant: any) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name}
-                </option>
-              ))}
-            </Select>
+              onChange={setTenantId}
+              options={tenants.map((tenant: any) => ({
+                value: tenant.id,
+                label: tenant.name,
+              }))}
+              placeholder="Select Tenant"
+              searchable
+            />
           </Field>
         )}
-        <Field label="Search">
+        <FormField label="Search">
           <Input
             value={query}
             onChange={(e: any) => {
@@ -419,73 +428,81 @@ export function Scheduling({ apiSession, branchId }: any) {
               setPage(1);
             }}
             placeholder="Doctor, room, medical department"
-            // className='search-filter'
+            className='search-input'
+          />
+        </FormField>
+        <Field label="Branch">
+          <SearchableSelect
+            value={filterBranch}
+            onChange={(value) => {
+              setFilterBranch(value);
+              setPage(1);
+            }}
+            options={[
+              { value: "all", label: "All branches" },
+              ...branches.map((branch: any) => ({
+                value: branch.id,
+                label: branch.name,
+              })),
+            ]}
+            placeholder="All branches"
+            searchable={false}
           />
         </Field>
-        <Field label="Branch">
-          <Select
-            value={filterBranch}
-            onChange={(e: any) => {
-              setFilterBranch(e.target.value);
-              setPage(1);
-            }}
-            className='select-filter'
-          >
-            <option value="all">All branches</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+
         <Field label="Department">
-          <Select
+          <SearchableSelect
             value={filterDepartment}
-            onChange={(e: any) => {
-              setFilterDepartment(e.target.value);
+            onChange={(value) => {
+              setFilterDepartment(value);
               setPage(1);
             }}
-            className='select-filter'
-          >
-            <option value="all">All Departments</option>
-            {departments.map((department: any) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "all", label: "All Departments" },
+              ...departments.map((department: any) => ({
+                value: department.id,
+                label: department.name,
+              })),
+            ]}
+            placeholder="All Departments"
+            searchable={false}
+          />
         </Field>
+
         <Field label="Weekday">
-          <Select
+          <SearchableSelect
             value={filterWeekday}
-            onChange={(e: any) => {
-              setFilterWeekday(e.target.value);
+            onChange={(value) => {
+              setFilterWeekday(value);
               setPage(1);
             }}
-            className='select-filter'
-          >
-            <option value="all">All days</option>
-            {weekdays.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "all", label: "All days" },
+              ...weekdays.map(([value, label]) => ({
+                value,
+                label,
+              })),
+            ]}
+            placeholder="All days"
+            searchable={false}
+          />
         </Field>
+
         <Field label="Status">
-          <Select
+          <SearchableSelect
             value={filterStatus}
-            onChange={(e: any) => {
-              setFilterStatus(e.target.value);
+            onChange={(value) => {
+              setFilterStatus(value);
               setPage(1);
             }}
-            className='select-filter'
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="all">All</option>
-          </Select>
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+              { value: "all", label: "All" },
+            ]}
+            searchable={false}
+            placeholder="Status"
+          />
         </Field>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">

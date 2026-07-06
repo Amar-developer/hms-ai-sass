@@ -598,14 +598,6 @@ export function Items({ apiSession, branchId }: any) {
             />
           </FormField>
           <TextField
-            label="Code / Serial"
-            value={autoCode}
-            onChange={() => {}}
-            disabled
-            placeholder="Auto generated from item type"
-            className="search-input "
-          />
-          <TextField
             label={
               serviceItemTypes.includes(type) ? "Service Name" : "Item Name"
             }
@@ -615,8 +607,17 @@ export function Items({ apiSession, branchId }: any) {
             placeholder={`please enter ${serviceItemTypes.includes(type) ? "Service Name" : "Item Name"}`}
             className="search-input placeholder:text-xs"
           />
+          <TextField
+            label="Code / Serial"
+            value={autoCode}
+            onChange={() => {}}
+            disabled
+            placeholder="Auto generated from item type"
+            className="search-input "
+          />
+
           <NumberField
-            label="MRP Price"
+            label="MRP Price  (₹)"
             value={form.mrp_price}
             onChange={(v) => setField("mrp_price", v)}
             placeholder="Enter the MRP price"
@@ -625,7 +626,9 @@ export function Items({ apiSession, branchId }: any) {
           {type !== "physio_equipment" && (
             <NumberField
               label={
-                serviceItemTypes.includes(type) ? "Service Price" : "Price"
+                serviceItemTypes.includes(type)
+                  ? "Service Price  (₹)"
+                  : "Price  (₹)"
               }
               value={form.price}
               onChange={(v) => setField("price", v)}
@@ -651,7 +654,7 @@ export function Items({ apiSession, branchId }: any) {
                 />
               </FormField>
               <NumberField
-                label="Purchase Price"
+                label="Purchase Price (₹)"
                 value={form.purchase_price}
                 onChange={(v) => setField("purchase_price", v)}
                 min={0}
@@ -765,7 +768,7 @@ export function Items({ apiSession, branchId }: any) {
               value={filters.query}
               onChange={(v) => setFiltersAndReset({ ...filters, query: v })}
               placeholder="Name, code, type"
-              className="search-filter placeholder:text-xs"
+              className="search-input placeholder:text-xs"
             />
             <FormField label="Type">
               <SearchableSelect

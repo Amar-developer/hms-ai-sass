@@ -715,9 +715,9 @@ export function Lab({
         <h3 className="card-title font-bold">Create Lab / Service Order</h3>
         <form
           onSubmit={createDirect}
-          className="mt-4 grid gap-3 md:grid-cols-[1.5fr_1fr_2fr_1fr_1fr_1fr]"
+          className="mt-4 grid gap-3 md:grid-cols-5 lg:grid-cols-6"
         >
-          <FormField label="Patient">
+          <FormField label="Patient" className="md:col-span-2">
             <SearchableSelect
               value={patientId}
               onChange={setPatientId}
@@ -806,7 +806,7 @@ export function Lab({
             disabled
             className="search-input bg-slate-50"
           />
-          <div className="flex items-end gap-2  rounded-lg w-fit">
+          <div className="flex items-end gap-2  rounded-lg w-fit col-span-2">
             <ActionButton
               type="button"
               onClick={addOrderTest}
@@ -825,7 +825,7 @@ export function Lab({
           </div>
 
           {orderTests.length > 0 && (
-            <div className="md:col-span-8 flex flex-wrap gap-2">
+            <div className="md:col-span-5 lg:col-span-6 flex flex-wrap gap-2">
               {orderTests.map((test: any, index: number) => (
                 <button
                   key={`${test.name}-${index}`}

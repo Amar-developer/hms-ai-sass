@@ -1086,7 +1086,10 @@ function PlanForm({
   const [pharmacySlabs, setPharmacySlabs] = useState<any[]>(() =>
     normalizePharmacySlabs(plan?.pharmacy_discount_slabs || []),
   );
-
+  const departmentOptions = (departments || []).map((d: any) => ({
+    value: d.id,
+    label: d.name,
+  }));
   useEffect(() => {
     setPharmacySlabs(
       normalizePharmacySlabs(plan?.pharmacy_discount_slabs || []),
@@ -1166,41 +1169,79 @@ function PlanForm({
         </FormField>
         <div className="md:col-span-2">
           <FormField label="Free Consultation Departments">
-            <div className="flex flex-wrap gap-2">
-              {(departments || []).length === 0 && (
-                <span className="text-xs text-slate-400">
-                  No medical departments available.
-                </span>
-              )}
-              {(departments || []).map((dept: any) => {
-                const selected = (freeConsultDeptIds || []).includes(dept.id);
-                return (
-                  <button
-                    key={dept.id}
-                    type="button"
-                    onClick={() =>
-                      setFreeConsultDeptIds((prev: string[]) =>
-                        (prev || []).includes(dept.id)
-                          ? prev.filter((id: string) => id !== dept.id)
-                          : [...(prev || []), dept.id],
-                      )
-                    }
-                    className={`rounded-lg border px-3 py-2 text-xs font-bold ${
-                      selected
-                        ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-white text-slate-700"
-                    }`}
-                  >
-                    {dept.name}
-                  </button>
-                );
-              })}
+            <div className="flex gap-4">
+              {/* LEFT: Dropdown */}
+              <div className="w-1/2">
+                <select
+                  className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white py-2 px-2 lg:px-2 lg:py-2 text-left text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    if (!id) return;
+
+                    setFreeConsultDeptIds((prev: string[]) =>
+                      prev.includes(id) ? prev : [...prev, id],
+                    );
+                  }}
+                  defaultValue=""
+                >
+                  <option value="" disabled>
+                    Select department
+                  </option>
+
+                  {(departments || []).map((dept: any) => (
+                    <option
+                      key={dept.id}
+                      value={dept.id}
+                      className="block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 bg-slate-50 font-bold"
+                    >
+                      {dept.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* RIGHT: Selected departments */}
+              <div className="w-1/2">
+                <div className="flex flex-wrap gap-2">
+                  {freeConsultDeptIds.length === 0 && (
+                    <span className="text-xs text-slate-400">
+                      No departments selected
+                    </span>
+                  )}
+
+                  {freeConsultDeptIds.map((id) => {
+                    const dept = departments?.find((d: any) => d.id === id);
+                    if (!dept) return null;
+
+                    return (
+                      <span
+                        key={id}
+                        className="flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-1 text-xs text-white"
+                      >
+                        {dept.name}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFreeConsultDeptIds((prev: string[]) =>
+                              prev.filter((x) => x !== id),
+                            )
+                          }
+                          className="text-white/70 hover:text-white"
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           </FormField>
+
           <p className="mt-1 text-xs text-slate-500">
             Leave empty to allow free consultations in any department. Select
-            one or more (e.g. General Medicine) to restrict the free
-            consultation benefit to those departments only.
+            one or more to restrict eligibility.
           </p>
         </div>
         <FormField label="Lab Discount %">
@@ -1221,7 +1262,7 @@ function PlanForm({
             defaultValue={plan?.pharmacy_discount_percentage ?? 0}
           />
         </FormField>
-        <FormField label="Min Bill for % Discount (₹)">
+        <FormField label="Min Bill Amount for Discount">
           <Input
             name="minDiscountAmount"
             type="number"
@@ -1327,11 +1368,32 @@ function PharmacySlabEditor({ slabs, onChange }: any) {
     );
     onChange(next);
   }
+  function isSlabComplete(slab: any) {
+    return (
+      slab.min_amount !== "" &&
+      slab.min_amount !== null &&
+      slab.min_amount !== undefined &&
+      slab.discount_percentage !== "" &&
+      slab.discount_percentage !== null &&
+      slab.discount_percentage !== undefined
+    );
+  }
 
   function addRow() {
+    const lastSlab = slabs[slabs.length - 1];
+
+    if (lastSlab && !isSlabComplete(lastSlab)) {
+      alert("Please complete the current slab before adding a new one");
+      return;
+    }
+
     onChange([
       ...slabs,
-      { min_amount: 0, max_amount: null, discount_percentage: 0 },
+      {
+        min_amount: "",
+        max_amount: "",
+        discount_percentage: "",
+      },
     ]);
   }
 
@@ -1400,14 +1462,16 @@ function PharmacySlabEditor({ slabs, onChange }: any) {
                 }
               />
             </FormField>
-            <div className="flex items-end">
-              <ActionButton
-                tone="danger"
-                className="close-button"
-                onClick={() => removeRow(index)}
-              >
-                Remove
-              </ActionButton>
+            <div className="flex items-end justify-center">
+              {slabs.length > 1 && (
+                <ActionButton
+                  tone="danger"
+                  className="close-button"
+                  onClick={() => removeRow(index)}
+                >
+                  Remove
+                </ActionButton>
+              )}
             </div>
           </div>
         ))}
@@ -1484,6 +1548,7 @@ function PlanTableRow({
             togglePlanActive={togglePlanActive}
             requestDeletePlan={requestDeletePlan}
             canDeletePlans={canDeletePlans}
+            className='right-10 -bottom-2'
           />
         </td>
       </tr>
@@ -1511,6 +1576,7 @@ export function PlanRowActions({
   togglePlanActive,
   requestDeletePlan,
   canDeletePlans,
+  className='right-0 top-0',
 }: any) {
   const { open, setOpen, ref, buttonRef } = useDropdown();
 
@@ -1528,22 +1594,22 @@ export function PlanRowActions({
         onClick={() => setOpen((v) => !v)}
         className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100"
       >
-        <MoreHorizontal className="h-5 w-5"/>
+        <MoreHorizontal className="h-5 w-5" />
       </button>
 
       {/* dropdown */}
       {open && (
-        <div className="absolute right-0 top-0 z-50 mt-2 w-22 text-xs rounded-lg border bg-white shadow-lg">
+      <div className={`absolute ${className} z-50 mt-2 w-22 text-xs rounded-lg border bg-white shadow-lg`}>
           <button
             onClick={stop(openDetail)}
-            className="block w-full px-4 py-2 text-left hover:bg-slate-100"
+            className="block w-full px-4 py-1 text-left hover:bg-slate-100"
           >
             View
           </button>
 
           <button
             onClick={stop(() => startEdit(plan))}
-            className="block w-full px-4 py-2 text-left hover:bg-slate-100"
+            className="block w-full px-4 py-1 text-left hover:bg-slate-100"
           >
             Edit
           </button>
@@ -1551,7 +1617,7 @@ export function PlanRowActions({
           <button
             disabled={busy === `toggle-${plan.id}`}
             onClick={stop(() => togglePlanActive(plan))}
-            className="block w-full px-4 py-2 text-left hover:bg-slate-100"
+            className="block w-full px-4 py-1 text-left hover:bg-slate-100"
           >
             {plan.is_active ? "Pause" : "Activate"}
           </button>
@@ -1559,7 +1625,7 @@ export function PlanRowActions({
           {canDeletePlans && (
             <button
               onClick={stop(() => requestDeletePlan(plan))}
-              className="block w-full px-4 py-2 text-left text-red-600 hover:bg-red-50"
+              className="block w-full px-4 py-1 text-left text-red-600 hover:bg-red-50"
             >
               Deactivate
             </button>
@@ -1988,14 +2054,15 @@ function ActiveEnrollmentsTable({
                   <td className="text-xs lg:text-sm">
                     {isEditing ? (
                       <div className="grid gap-1">
+                        {/* READ ONLY START DATE */}
                         <input
                           type="date"
                           value={editing.starts_on}
-                          onChange={(event: any) =>
-                            editValue("starts_on", event.target.value)
-                          }
-                          className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                          disabled
+                          className="rounded-lg border border-slate-200 bg-slate-100 px-2 py-1.5 text-xs text-slate-500"
                         />
+
+                        {/* EDITABLE END DATE */}
                         <input
                           type="date"
                           value={editing.ends_on}

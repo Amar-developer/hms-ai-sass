@@ -68,7 +68,7 @@
 }
 @layer components {
   .close-button {
-    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-base lg:text-xs border;
+    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-2.5 md:text-base lg:text-xs border;
   }
 }
 @layer components {
@@ -79,7 +79,7 @@
 
 @layer components {
   .save-button {
-    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-sm lg:text-xs
+    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-2.5 md:text-sm lg:text-xs
   }
 }
 

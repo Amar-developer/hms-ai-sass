@@ -57,7 +57,7 @@ export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
       <td className="px-4 py-3">{branch?.name ?? "All branches"}</td>
 
       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-        <RowActions actions={actions} />
+        <RowActions actions={actions} className="right-16 -bottom-5" />
       </td>
     </tr>
   );
@@ -119,7 +119,7 @@ export function RoleRow({ role, onEdit, onStatus, onDelete }: any) {
       </td>
 
       <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
-        <RowActions actions={actions} />
+        <RowActions actions={actions} className="right-28 -bottom-5"/>
       </td>
     </tr>
   );
@@ -169,7 +169,7 @@ export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
       </td>
 
       <td className="px-4 py-3 text-xs">
-        <RowActions actions={actions} />
+        <RowActions actions={actions} className="right-28 -bottom-5"/>
       </td>
     </tr>
   );
@@ -218,7 +218,7 @@ export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
       </td>
 
       <td className="px-4 py-3 text-xs">
-        <RowActions actions={actions} />
+        <RowActions actions={actions}  className="right-24 -bottom-5"/>
       </td>
     </tr>
   );
@@ -269,7 +269,7 @@ export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
       </td>
 
       <td className="px-4 py-3 text-xs">
-        <RowActions actions={actions} />
+        <RowActions actions={actions} className="right-28 -bottom-5"/>
       </td>
     </tr>
   );
@@ -325,7 +325,7 @@ export function TaxRuleRow({
       </td>
 
       <td className="px-4 py-3 text-xs">
-        <RowActions actions={actions} />
+        <RowActions actions={actions} className="right-28 -bottom-5"/>
       </td>
     </tr>
   );
@@ -401,6 +401,7 @@ export function DiscountOfferRow({
       <td className="px-4 py-3 text-xs">
         <RowActions
           actions={actions}
+          className="right-24 -bottom-5"
         />
       </td>
     </tr>

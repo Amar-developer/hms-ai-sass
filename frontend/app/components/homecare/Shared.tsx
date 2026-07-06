@@ -6,6 +6,7 @@ import {
   RefreshButton,
   ActionButton,
   ActionGroup,
+  SearchableSelect,
 } from "../common/ui";
 import {
   DateField,
@@ -14,6 +15,7 @@ import {
   SearchableSelectField,
   NumberField,
   TextareaField,
+  FormField,
 } from "../FormElements";
 import {
   bookingTotal,
@@ -25,7 +27,7 @@ import {
   userName,
 } from "@/utils/homecare/helpers";
 import { humanizeOptionLabel } from "@/lib/options";
-import { displayDate } from "@/utils/helper";
+import { capitalizeFirst, displayDate } from "@/utils/helper";
 
 const homeCareHourPrices: Record<string, string> = {
   "2": "500",
@@ -142,19 +144,21 @@ export function BookingsList({
               setFilters({ ...filters, query: value })
             }
             placeholder="Booking, patient, staff, status"
-            className="search-filter text-xs placeholder:text-xs"
+            className="search-input text-xs placeholder:text-xs"
           />
-          <SelectField
-            label="Status"
-            value={filters.status}
-            onChange={(value: string) =>
-              setFilters({ ...filters, status: value })
-            }
-            options={[
-              { value: "all", label: "All statuses" },
-              ...statuses.map(([value, label]) => ({ value, label })),
-            ]}
-          />
+          <FormField label="Status">
+            <SearchableSelect
+              value={filters.status}
+              onChange={(value: string) =>
+                setFilters({ ...filters, status: value })
+              }
+              options={[
+                { value: "all", label: "All statuses" },
+                ...statuses.map(([value, label]) => ({ value, label })),
+              ]}
+              searchable={false}
+            />
+          </FormField>
         </div>
       </div>
 
@@ -189,7 +193,7 @@ export function BookingsList({
                       {booking.services?.length || 0} services
                     </p>
                   </td>
-                  <td className="card-desc">{patientName(patient)}</td>
+                  <td className="card-desc">{capitalizeFirst(patientName(patient))}</td>
                   <td className="card-desc">
                     {booking.assigned_staff_name ||
                       userName(staffMap.get(booking.assigned_staff_user_id))}
@@ -376,45 +380,53 @@ export function BookingDetail({
                 value={visitForm.visit_date}
                 onChange={(value: string) => setVisitField("visit_date", value)}
               />
-              <SelectField
-                label="Staff Type"
-                value={visitForm.staff_type}
-                onChange={(value: string) => setVisitField("staff_type", value)}
-                options={staffTypeOptions.map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-              />
-              <SelectField
-                label="Staff Went"
-                value={visitForm.assigned_staff_user_id}
-                onChange={(value: string) => {
-                  const selectedStaff = staffMap.get(value);
-                  setVisitField("assigned_staff_user_id", value);
-                  setVisitField(
-                    "assigned_staff_name",
-                    selectedStaff ? userName(selectedStaff) : "",
-                  );
-                }}
-                options={[
-                  {
-                    value: "",
-                    label: filteredVisitStaff.length
-                      ? "Select staff"
-                      : "No staff found",
-                  },
-                  ...filteredVisitStaff.map((user: any) => ({
-                    value: user.id,
-                    label: userName(user),
-                  })),
-                ]}
-              />
-              <SelectField
-                label="Status"
-                value={visitForm.status}
-                onChange={(value: string) => setVisitField("status", value)}
-                options={visitLogStatuses}
-              />
+              <FormField label="Staff Type">
+                <SearchableSelect
+                  value={visitForm.staff_type}
+                  onChange={(value: string) =>
+                    setVisitField("staff_type", value)
+                  }
+                  options={staffTypeOptions.map(([value, label]) => ({
+                    value,
+                    label,
+                  }))}
+                  searchable={false}
+                />
+              </FormField>
+              <FormField label="Staff Went">
+                <SearchableSelect
+                  value={visitForm.assigned_staff_user_id}
+                  onChange={(value: string) => {
+                    const selectedStaff = staffMap.get(value);
+                    setVisitField("assigned_staff_user_id", value);
+                    setVisitField(
+                      "assigned_staff_name",
+                      selectedStaff ? userName(selectedStaff) : "",
+                    );
+                  }}
+                  options={[
+                    {
+                      value: "",
+                      label: filteredVisitStaff.length
+                        ? "Select staff"
+                        : "No staff found",
+                    },
+                    ...filteredVisitStaff.map((user: any) => ({
+                      value: user.id,
+                      label: userName(user),
+                    })),
+                  ]}
+                  searchable={false}
+                />
+              </FormField>
+              <FormField label="Status">
+                <SearchableSelect
+                  value={visitForm.status}
+                  onChange={(value: string) => setVisitField("status", value)}
+                  options={visitLogStatuses}
+                  searchable={false}
+                />
+              </FormField>
               <div>
                 <p className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
                   Service Type

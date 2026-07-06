@@ -8,6 +8,7 @@ import {
   Card,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
@@ -350,25 +351,31 @@ export function TokenQueue({
             />
           </FormField>
           <FormField label="Display Mode">
-            <Select
+            <SearchableSelect
               value={displayMode}
-              onChange={(e: any) => setDisplayMode(e.target.value)}
-              className="select-filter"
-            >
-              <option value="reception">Reception Queue</option>
-              <option value="called_only">Called Tokens</option>
-            </Select>
+              onChange={(value: string) =>
+                setDisplayMode(value as "reception" | "called_only")
+              }
+              options={[
+                { value: "reception", label: "Reception Queue" },
+                { value: "called_only", label: "Called Tokens" },
+              ]}
+              placeholder="Select display mode"
+              searchable={false}
+            />
           </FormField>
           <FormField label="Call Language">
-            <Select
+            <SearchableSelect
               value={tokenLanguage}
-              onChange={(e: any) => setTokenLanguage(e.target.value)}
-              className="select-filter"
-            >
-              <option value="english">English</option>
-              <option value="tamil">Tamil</option>
-              <option value="both">English + Tamil</option>
-            </Select>
+              onChange={(value:string)=>setTokenLanguage(value as  "english" | "tamil" | "both")}
+              options={[
+                { value: "english", label: "English" },
+                { value: "tamil", label: "Tamil" },
+                { value: "both", label: "English + Tamil" },
+              ]}
+              placeholder="Select language"
+              searchable={false}
+            />
           </FormField>
           <FormField label="Day Close">
             <button
@@ -400,7 +407,7 @@ export function TokenQueue({
                   )}
                 </p> */}
                 <p className="text-xl font-black flex items-center">
-                  {item.token_number || item.token}{" "} -
+                  {item.token_number || item.token} -
                   <span className="mt-1 text-sm font-semibold text-white mb-1">
                     {appointment.patient ||
                       publicDisplayValue(item.patient_id, "Patient")}

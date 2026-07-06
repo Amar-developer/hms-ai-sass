@@ -8,8 +8,10 @@ import {
   Button,
   Card,
   RefreshButton,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
 import {
   DateField,
   NumberField,
@@ -95,8 +97,8 @@ export function HomeCare({
   // admins). Other roles can still view bookings and generate invoices.
   const canManageBooking = Boolean(
     apiSession?.user?.is_super_admin ||
-      apiSession?.user?.user_type === "tenant_admin" ||
-      apiSession?.user?.roles?.includes("tenant_admin"),
+    apiSession?.user?.user_type === "tenant_admin" ||
+    apiSession?.user?.roles?.includes("tenant_admin"),
   );
   const [visitForm, setVisitForm] = useState<any>(() => ({
     visit_date: today(),
@@ -127,7 +129,9 @@ export function HomeCare({
   const visitServices = useMemo(
     () =>
       services.filter((service: any) =>
-        String(service.code || "").toUpperCase().startsWith("HV"),
+        String(service.code || "")
+          .toUpperCase()
+          .startsWith("HV"),
       ),
     [services],
   );
@@ -180,7 +184,8 @@ export function HomeCare({
     const category = firstService.service_category || "home_care_service";
     setVisitForm((prev: any) => ({
       ...prev,
-      service_id: category === "home_visit_service" ? firstService.service_id || "" : "",
+      service_id:
+        category === "home_visit_service" ? firstService.service_id || "" : "",
       service_category: category,
       description: firstService.description || "",
       quantity:
@@ -522,7 +527,8 @@ export function HomeCare({
   }
 
   async function deleteVisitLog(visitId: string) {
-    if (!apiSession || !selected || !confirm("Delete this service log?")) return;
+    if (!apiSession || !selected || !confirm("Delete this service log?"))
+      return;
     setBusy(`delete-visit-${visitId}`);
     setMessage("");
     setError("");
@@ -543,17 +549,23 @@ export function HomeCare({
 
   async function cancelBooking() {
     if (!apiSession || !selected) return;
-    if (!confirm("Cancel this booking? This will stop further edits and billing.")) {
+    if (
+      !confirm("Cancel this booking? This will stop further edits and billing.")
+    ) {
       return;
     }
     setBusy("cancel-booking");
     setMessage("");
     setError("");
     try {
-      const saved = await apiFetch(`/home-care/bookings/${selected.id}`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({ status: "cancelled" }),
-      });
+      const saved = await apiFetch(
+        `/home-care/bookings/${selected.id}`,
+        apiSession,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status: "cancelled" }),
+        },
+      );
       await load();
       setSelectedId(saved.id);
       setMessage("Home care booking cancelled.");
@@ -581,7 +593,9 @@ export function HomeCare({
           const service = services.find(
             (item: any) => item.id === row.service_id,
           );
-          return String(service?.code || "").toUpperCase().startsWith("HV");
+          return String(service?.code || "")
+            .toUpperCase()
+            .startsWith("HV");
         });
     setForm({
       patient_id: booking.patient_id || "",
@@ -743,25 +757,35 @@ export function HomeCare({
               createDescription="Save this record to select the patient and continue the booking."
             />
           </div>
-          <form onSubmit={saveBooking} className="mt-3 grid gap-3 md:grid-cols-4">
-            <SelectField
-              label="Booking Type"
-              value={bookingType}
-              onChange={changeBookingType}
-              options={bookingTypeOptions.map(([value, label]) => ({
-                value,
-                label,
-              }))}
-            />
-            <SelectField
-              label="Recurrence"
-              value={form.recurrence}
-              onChange={(value) => setField("recurrence", value)}
-              options={recurrenceOptions.map(([value, label]) => ({
-                value,
-                label,
-              }))}
-            />
+          <form
+            onSubmit={saveBooking}
+            className="mt-3 grid gap-3 md:grid-cols-4"
+          >
+            <FormField label="Booking Type">
+              <SearchableSelect
+                value={bookingType}
+                onChange={changeBookingType}
+                options={bookingTypeOptions.map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                placeholder="Select booking type"
+                searchable={false}
+              />
+            </FormField>
+
+            <FormField label="Recurrence">
+              <SearchableSelect
+                value={form.recurrence}
+                onChange={(value) => setField("recurrence", value)}
+                options={recurrenceOptions.map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                placeholder="Select recurrence"
+                searchable={false}
+              />
+            </FormField>
             <DateField
               label="Start Date"
               value={form.start_date}
@@ -773,12 +797,19 @@ export function HomeCare({
               onChange={(value) => setField("end_date", value)}
               disabled={form.recurrence !== "custom"}
             />
-            <SelectField
-              label="Status"
-              value={form.status}
-              onChange={(value) => setField("status", value)}
-              options={statuses.map(([value, label]) => ({ value, label }))}
-            />
+
+            <FormField label="Status">
+              <SearchableSelect
+                value={form.status}
+                onChange={(value) => setField("status", value)}
+                options={statuses.map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+                placeholder="Select status"
+                searchable={false}
+              />
+            </FormField>
             <div className="grid gap-3 md:col-span-4 md:grid-cols-2">
               <TextareaField
                 label="Location"
@@ -797,7 +828,9 @@ export function HomeCare({
             <div className="md:col-span-4 rounded-2xl bg-slate-50 p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <p className="text-xs font-bold uppercase text-slate-500">
-                  {isHomeVisitBooking ? "Home Visit Service" : "Home Care Services"}
+                  {isHomeVisitBooking
+                    ? "Home Visit Service"
+                    : "Home Care Services"}
                   <span className="ml-2 normal-case text-slate-400">
                     {isHomeVisitBooking
                       ? serviceLoadError
@@ -829,7 +862,9 @@ export function HomeCare({
                       <SearchableSelectField
                         label="Visit Service"
                         value={line.service_id}
-                        onChange={(value) => setLine(index, "service_id", value)}
+                        onChange={(value) =>
+                          setLine(index, "service_id", value)
+                        }
                         options={[
                           { value: "", label: "Select home visit service" },
                           ...visitServices.map((service: any) => ({
@@ -851,22 +886,26 @@ export function HomeCare({
                       />
                     )}
                     {!isHomeVisitBooking && (
-                      <SelectField
-                        label="Hours/Day"
-                        value={line.quantity}
-                        onChange={(value) => setLine(index, "quantity", value)}
-                        options={[
-                          ...(homeCareHourPrices[String(line.quantity)]
-                            ? []
-                            : [
-                                {
-                                  value: String(line.quantity || ""),
-                                  label: `${line.quantity || 0} hours - custom`,
-                                },
-                              ]),
-                          ...homeCareHourOptions,
-                        ]}
-                      />
+                      <FormField label="Hours/Day">
+                        <SearchableSelect
+                          value={line.quantity}
+                          onChange={(value) =>
+                            setLine(index, "quantity", value)
+                          }
+                          options={[
+                            ...(homeCareHourPrices[String(line.quantity)]
+                              ? []
+                              : [
+                                  {
+                                    value: String(line.quantity || ""),
+                                    label: `${line.quantity || 0} hours - custom`,
+                                  },
+                                ]),
+                            ...homeCareHourOptions,
+                          ]}
+                          searchable={false}
+                        />
+                      </FormField>
                     )}
                     {isHomeVisitBooking && (
                       <NumberField
@@ -900,7 +939,8 @@ export function HomeCare({
                       {Number(line.quantity || 0)}{" "}
                       {isHomeVisitBooking ? "visit" : "hr"}
                       {Number(line.quantity || 0) === 1 ? "" : "s"}{" "}
-                      {isHomeVisitBooking ? "×" : "-"} {money(line.unit_amount)} × {days} day
+                      {isHomeVisitBooking ? "×" : "-"} {money(line.unit_amount)}{" "}
+                      × {days} day
                       {days > 1 ? "s" : ""} ={" "}
                       <b className="text-slate-700">
                         {money(
@@ -920,7 +960,7 @@ export function HomeCare({
               </div>
             </div>
             <div className="flex items-end gap-2 md:col-span-4">
-              <Button disabled={busy === "save"} className='save-button'>
+              <Button disabled={busy === "save"} className="save-button">
                 {busy === "save"
                   ? "Saving..."
                   : editing

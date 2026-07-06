@@ -2,16 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { ConfirmModal, Empty, Pagination } from "@/app/components/patient/Shared";
+import {
+  ConfirmModal,
+  Empty,
+  Pagination,
+} from "@/app/components/patient/Shared";
 import {
   Button,
   Card,
   RefreshButton,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import {apiFetch, apiUpload, type ApiSession } from "@/lib/api";
+import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
 import {
   DateField,
+  FormField,
   SelectField,
   TextField,
 } from "@/app/components/FormElements";
@@ -36,7 +42,12 @@ const genders = [
   ["unknown", "Unknown"],
 ] as const;
 
-export function Patient({ apiSession, branchId, loadLiveData, setActive }: PatientProps) {
+export function Patient({
+  apiSession,
+  branchId,
+  loadLiveData,
+  setActive,
+}: PatientProps) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
@@ -228,10 +239,9 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
         "alternate_mobile" in selectedDetail &&
         "address" in selectedDetail &&
         "blood_group" in selectedDetail;
-      const detail =
-        hasCompleteEditRecord
-          ? selectedDetail
-          : await apiFetch(`/patients/${id}`, scopedSession);
+      const detail = hasCompleteEditRecord
+        ? selectedDetail
+        : await apiFetch(`/patients/${id}`, scopedSession);
       setSelectedId(id);
       setSelectedDetail(detail);
       setView("edit");
@@ -522,15 +532,17 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
           className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "md:grid-cols-4 lg:grid-cols-4"}`}
         >
           {isSuperAdmin && (
-            <SelectField
-              label="Tenant"
-              value={tenantId}
-              onChange={setTenantId}
-              options={tenants.map((t: any) => ({
-                value: t.id,
-                label: t.name,
-              }))}
-            />
+            <FormField label="Tenant">
+              <SearchableSelect
+                searchable={false}
+                value={tenantId}
+                onChange={setTenantId}
+                options={tenants.map((t: any) => ({
+                  value: t.id,
+                  label: t.name,
+                }))}
+              />
+            </FormField>
           )}
           <TextField
             label="Patient / Mobile"
@@ -540,48 +552,43 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
               setPage(1);
             }}
             placeholder="Name, mobile, area"
-            className="text-xs search-filter placeholder:text-xs"
+            className="search-input"
           />
-          <SelectField
-            label="Branch"
-            value={branchFilter}
-            onChange={(v) => {
-              setBranchFilter(v);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All branches" },
-              ...branches.map((b: any) => ({ value: b.id, label: b.name })),
-            ]}
-
-          />
-          {/* <SelectField
-            label="Gender"
-            value={gender}
-            onChange={(v) => {
-              setGender(v);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All gender" },
-              ...genders.map(([value, label]) => ({ value, label })),
-            ]}
-          /> */}
-          <SelectField
-            label="Status"
-            value={status}
-            onChange={(v) => {
-              setStatus(v);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All status" },
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-              { value: "deceased", label: "Deceased" },
-            ]}
-            className="text-xs"
-          />
+          <FormField label="Branch">
+            <SearchableSelect
+              name="branch"
+              value={branchFilter}
+              onChange={(v: string) => {
+                setBranchFilter(v);
+                setPage(1);
+              }}
+              options={[
+                { value: "all", label: "All branches" },
+                ...branches.map((b: any) => ({
+                  value: b.id,
+                  label: b.name,
+                })),
+              ]}
+              placeholder="Select branch"
+              searchable={branches.length > 8}
+            />
+          </FormField>
+          <FormField label="Status">
+            <SearchableSelect
+              value={status}
+              onChange={(v) => {
+                setStatus(v);
+                setPage(1);
+              }}
+              options={[
+                { value: "all", label: "All status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+                { value: "deceased", label: "Deceased" },
+              ]}
+              searchable={false}
+            />
+          </FormField>
           {/* <DateField label="From" value={fromDate} onChange={setFromDate} />
           <DateField label="To" value={toDate} onChange={setToDate} /> */}
           <div className="flex items-end gap-2">
@@ -592,7 +599,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
                 loadData(tenantId);
               }}
               disabled={busy}
-              className='save-button'
+              className="rounded-lg px-4 py-2.5 lg:px-4 lg:py-2.5 md:text-sm lg:text-xs"
             >
               {busy ? "Searching..." : "Search"}
             </Button>
@@ -608,25 +615,25 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
                 setPage(1);
                 setTimeout(() => loadData(tenantId), 0);
               }}
-              className="close-button border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50"
+              className="rounded-lg px-4 py-2.5 lg:px-4 lg:py-2.5 md:text-base lg:text-xs border font-bold text-slate-700 hover:bg-slate-50"
             >
               Reset
             </button>
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin">
         <div className="min-w-[1120px]">
-          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr]  lg:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
+          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr]  lg:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span className="text-sm">Patient</span>
             <span className="text-sm">Mobile</span>
             <span className="text-sm">Branch</span>
             <span className="text-sm">Gender / Age</span>
             <span className="text-sm">Plan</span>
             <span className="text-sm text-center">Status</span>
-            <span className="text-sm text-right">Actions</span>
+            <span className="text-sm text-center">Actions</span>
           </div>
-          <div className="divide-y divide-slate-200">
+          <div className="divide-y divide-slate-200 z-0">
             {pageRows.length === 0 && (
               <Empty
                 text={

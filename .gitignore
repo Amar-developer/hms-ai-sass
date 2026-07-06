@@ -14,6 +14,7 @@ out/
 dist/
 build/
 tmp/
+.next-build/
 
 # Test and tool caches
 .pytest_cache/

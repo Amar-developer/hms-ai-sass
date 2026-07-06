@@ -9,11 +9,13 @@ import {
   Card,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
 import {
   DateField,
+  FormField,
   SelectField,
   TextField,
 } from "@/app/components/FormElements";
@@ -834,7 +836,7 @@ export function Billing({
     {
       key: "invoice_number",
       header: "Invoice",
-      width:"200px",
+      width: "200px",
       render: (invoice) => (
         <>
           <b>{invoice.invoice_number}</b>
@@ -856,7 +858,7 @@ export function Billing({
             tone={source.tone as any}
             className="table-status text-sm text-center "
           >
-            {source.label =='Direct' ?'Membership': source.label}
+            {source.label == "Direct" ? "Membership" : source.label}
           </Badge>
         );
       },
@@ -865,7 +867,7 @@ export function Billing({
       key: "patient",
       header: "Patient",
       render: (invoice) => {
-        const p:any = patientMap.get(invoice.patient_id);
+        const p: any = patientMap.get(invoice.patient_id);
 
         return p?.name || p?.full_name || "Patient";
       },
@@ -898,14 +900,14 @@ export function Billing({
     {
       key: "total_amount",
       header: "Total",
-      width:'100px',
+      width: "100px",
       render: (invoice) => money(invoice.total_amount),
       cellClassName: "font-semibold tabular-nums",
     },
     {
       key: "paid_amount",
       header: "Paid",
-      width:'100px',
+      width: "100px",
       render: (invoice) => money(invoice.paid_amount),
       cellClassName: "tabular-nums",
     },
@@ -1106,34 +1108,38 @@ export function Billing({
             value={filters.query}
             onChange={(v) => updateFilter("query", v)}
             placeholder="Invoice, patient, source"
-            className="search-filter"
+            className="search-input"
           />
-          <SelectField
-            label="Source"
-            value={filters.source}
-            onChange={(v) => updateFilter("source", v)}
-            options={[
-              { value: "all", label: "All sources" },
-              ...sourceOptions.map((s: any) => ({
-                value: s.key,
-                label: s.label,
-              })),
-            ]}
-          />
-          <SelectField
-            label="Paid Status"
-            value={filters.paidStatus}
-            onChange={(v) => updateFilter("paidStatus", v)}
-            options={[
-              { value: "all", label: "All payments" },
-              { value: "paid", label: "Paid" },
-              { value: "due", label: "Due" },
-              { value: "partially_paid", label: "Partially paid" },
-              { value: "partially_refunded", label: "Partially refunded" },
-              { value: "refunded", label: "Refunded" },
-              { value: "unpaid", label: "Unpaid" },
-            ]}
-          />
+          <FormField label="Source">
+            <SearchableSelect
+              value={filters.source}
+              onChange={(v) => updateFilter("source", v)}
+              options={[
+                { value: "all", label: "All sources" },
+                ...sourceOptions.map((s: any) => ({
+                  value: s.key,
+                  label: s.label,
+                })),
+              ]}
+              searchable={false}
+            />
+          </FormField>
+          <FormField label="Paid Status">
+            <SearchableSelect
+              value={filters.paidStatus}
+              onChange={(v) => updateFilter("paidStatus", v)}
+              options={[
+                { value: "all", label: "All payments" },
+                { value: "paid", label: "Paid" },
+                { value: "due", label: "Due" },
+                { value: "partially_paid", label: "Partially paid" },
+                { value: "partially_refunded", label: "Partially refunded" },
+                { value: "refunded", label: "Refunded" },
+                { value: "unpaid", label: "Unpaid" },
+              ]}
+              searchable={false}
+            />
+          </FormField>
           {/* <DateField
               label="From Date"
               value={filters.fromDate}
@@ -1147,7 +1153,7 @@ export function Billing({
           <button
             type="button"
             onClick={clearFilters}
-            className="rounded-lg border border-slate-200 py-2 px-2 lg:py-3 font-bold text-slate-700 hover:bg-slate-50"
+            className="close-button font-bold text-slate-700 hover:bg-slate-50"
           >
             Clear
           </button>

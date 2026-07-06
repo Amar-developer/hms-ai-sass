@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
-import { Card } from "@/app/components/common/ui";
+import { Card, SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
 import { TenantAdmin } from "@/features/admin/TenantAdmin";
@@ -252,21 +252,21 @@ export function AppShell(props: any) {
     };
   }, []);
 
-  useEffect(()=>{
-    function handleClickOutside(event: MouseEvent){
-      if(
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
         profileOpen &&
         profileOpenRef.current &&
         !profileOpenRef.current.contains(event.target as Node)
-      ){
-        setProfileOpen(false)
+      ) {
+        setProfileOpen(false);
       }
     }
-    document.addEventListener('mousedown',handleClickOutside)
-    return ()=>{
-      document.addEventListener('mousedown',handleClickOutside )
-    }
-  },[profileOpen])
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.addEventListener("mousedown", handleClickOutside);
+    };
+  }, [profileOpen]);
 
   function renderPage() {
     switch (activePage) {
@@ -579,18 +579,18 @@ export function AppShell(props: any) {
                   <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
                     Department
                   </span>
-                  <select
+                  <SearchableSelect
                     value={departmentId}
-                    onChange={(event) => setDepartmentId(event.target.value)}
+                    onChange={(value) => setDepartmentId(value)}
+                    options={departmentOptions.map((department: any) => ({
+                      value: department.id,
+                      label: department.name,
+                    }))}
                     disabled={!canChangeDepartment}
-                    className="h-9 min-w-[190px] rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    {departmentOptions.map((department: any) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
+                    className="h-9 min-w-[190px] rounded-lg  border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                    placeholder="Select department"
+                    searchable={false}
+                  />
                 </div>
               )}
             </div>

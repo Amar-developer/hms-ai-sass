@@ -7,14 +7,24 @@ import {
   Field,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch, apiUpload } from "@/lib/api";
-import { SelectField, TextField } from "@/app/components/FormElements";
+import {
+  FormField,
+  SelectField,
+  TextField,
+} from "@/app/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { doctorTypes } from "@/utils/doctors/constants";
-import { Empty,Pagination,ConfirmModal,DoctorRow } from "@/app/components/doctors/Shared";
+import {
+  Empty,
+  Pagination,
+  ConfirmModal,
+  DoctorRow,
+} from "@/app/components/doctors/Shared";
 import { activeTenantOptions } from "@/utils/doctors/helpers";
 import { DoctorForm } from "@/app/components/doctors/Forms";
 
@@ -456,37 +466,41 @@ export function Doctors({ apiSession, clinic }: any) {
             setPage(1);
           }}
           placeholder="Name, specialty, mobile, email"
-          className="search-filter text-xs placeholder:text-xs"
+          className="search-input text-xs placeholder:text-xs"
         />
-        <SelectField
-          label="Type"
-          value={type}
-          onChange={(v) => {
-            setType(v);
-            setPage(1);
-          }}
-          options={[
-            { value: "all", label: "All types" },
-            ...doctorTypes.map(([value, label]) => ({ value, label })),
-          ]}
-        />
-        <SelectField
-          label="Status"
-          value={status}
-          onChange={(v) => {
-            setStatus(v);
-            setPage(1);
-          }}
-          options={[
-            { value: "all", label: "All status" },
-            { value: "active", label: "Active" },
-            { value: "inactive", label: "Inactive" },
-          ]}
-        />
+        <FormField label="Type">
+          <SearchableSelect
+            value={type}
+            onChange={(v) => {
+              setType(v);
+              setPage(1);
+            }}
+            options={[
+              { value: "all", label: "All types" },
+              ...doctorTypes.map(([value, label]) => ({ value, label })),
+            ]}
+            searchable={false}
+          />
+        </FormField>
+        <FormField label="Status">
+          <SearchableSelect
+            value={status}
+            onChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
+            options={[
+              { value: "all", label: "All status" },
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+            searchable={false}
+          />
+        </FormField>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1280px]">
-          <div className="hidden md:grid grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
+          <div className="hidden md:grid grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_.65fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span className="text-sm">Doctor</span>
             <span className="text-sm">Type</span>
             <span className="text-sm">Branches</span>
@@ -494,7 +508,7 @@ export function Doctors({ apiSession, clinic }: any) {
             <span className="text-sm">Contact</span>
             <span className="text-sm">Fee</span>
             <span className="text-sm text-center">Status</span>
-            <span className="text-sm text-center lg:text-right">Actions</span>
+            <span className="text-sm text-center">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
