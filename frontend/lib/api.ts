@@ -24,11 +24,44 @@ function requestId() {
     : `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-function apiError(path: string, detail: string, response: Response) {
+export type ApiErrorLike = Error & {
+  status?: number;
+  path?: string;
+  detail?: string;
+  requestId?: string | null;
+  permissionDenied?: boolean;
+};
+
+const GENERIC_FORBIDDEN = /^(permission denied|forbidden|not allowed|access denied)\.?$/i;
+
+function friendlyMessage(status: number, detail: string): string {
+  // Permission problems get a clean, human sentence — never the raw route
+  // path or the correlation id, which read as scary "error" noise to staff.
+  if (status === 403) {
+    return GENERIC_FORBIDDEN.test(detail.trim())
+      ? "You do not have permission to perform this action. Ask a tenant admin to enable it for your role."
+      : detail;
+  }
+  if (status === 404) return detail;
+  return detail;
+}
+
+function apiError(path: string, detail: string, response: Response): ApiErrorLike {
   const correlationId = response.headers.get("x-request-id");
-  return new Error(
-    `${path}: ${detail}${correlationId ? ` [request ${correlationId}]` : ""}`,
-  );
+  const status = response.status;
+  // Keep the route path + request id on non-permission errors (developers rely
+  // on them for debugging); strip them from access errors shown to end users.
+  const message =
+    status === 403 || status === 401
+      ? friendlyMessage(status, detail)
+      : `${path}: ${detail}${correlationId ? ` [request ${correlationId}]` : ""}`;
+  const error = new Error(message) as ApiErrorLike;
+  error.status = status;
+  error.path = path;
+  error.detail = detail;
+  error.requestId = correlationId;
+  error.permissionDenied = status === 403;
+  return error;
 }
 
 function notifySessionExpired() {

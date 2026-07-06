@@ -73,9 +73,16 @@ INVOICES_CREATE = "invoices.create"
 INVOICES_READ = "invoices.read"
 INVOICES_EDIT = "invoices.edit"
 INVOICES_DELETE = "invoices.delete"
+INVOICES_CANCEL_REQUEST = "invoices.cancel_request"
+BILLING_REFUNDS_REQUEST = "billing.refunds.request"
 PAYMENTS_MANAGE = "payments.manage"
 PAYMENTS_CREATE = "payments.create"
 SETTLEMENTS_READ = "settlements.read"
+SERVICE_ITEMS_MANAGE = "service_items.manage"
+SERVICE_ITEMS_CREATE = "service_items.create"
+SERVICE_ITEMS_READ = "service_items.read"
+SERVICE_ITEMS_EDIT = "service_items.edit"
+SERVICE_ITEMS_DELETE = "service_items.delete"
 LAB_MANAGE = "lab.manage"
 LAB_CREATE = "lab.create"
 LAB_READ = "lab.read"
@@ -216,9 +223,16 @@ PERMISSION_CATALOG = [
     INVOICES_READ,
     INVOICES_EDIT,
     INVOICES_DELETE,
+    INVOICES_CANCEL_REQUEST,
+    BILLING_REFUNDS_REQUEST,
     PAYMENTS_MANAGE,
     PAYMENTS_CREATE,
     SETTLEMENTS_READ,
+    SERVICE_ITEMS_MANAGE,
+    SERVICE_ITEMS_CREATE,
+    SERVICE_ITEMS_READ,
+    SERVICE_ITEMS_EDIT,
+    SERVICE_ITEMS_DELETE,
     LAB_MANAGE,
     LAB_CREATE,
     LAB_READ,

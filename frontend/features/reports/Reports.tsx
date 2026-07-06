@@ -185,6 +185,10 @@ export function Reports({
   });
   const [invoicePage, setInvoicePage] = useState(1);
   const [monthlySnapshots, setMonthlySnapshots] = useState<any[]>([]);
+  const [recalculatingSnapshotId, setRecalculatingSnapshotId] = useState<
+    string | null
+  >(null);
+  const [snapshotMessage, setSnapshotMessage] = useState("");
   const [sendBusy, setSendBusy] = useState(false);
   const [sendMessage, setSendMessage] = useState("");
   const [sendError, setSendError] = useState("");
@@ -456,6 +460,28 @@ export function Reports({
       cancelled = true;
     };
   }, [apiSession?.tenantId, branchId, refreshTick]);
+
+  async function recalculateMonthlySnapshot(snapshot: any) {
+    if (!apiSession?.tenantId || !snapshot) return;
+    setSnapshotMessage("");
+    setRecalculatingSnapshotId(snapshot.id);
+    try {
+      await apiFetch("/reports/monthly-snapshots/archive", apiSession, {
+        method: "POST",
+        body: JSON.stringify({
+          year: snapshot.period_year,
+          month: snapshot.period_month,
+          overwrite: true,
+        }),
+      });
+      setSnapshotMessage(`${snapshot.period_label} recalculated`);
+      await refreshReports();
+    } catch (error: any) {
+      setSnapshotMessage(error?.message || "Recalculate failed");
+    } finally {
+      setRecalculatingSnapshotId(null);
+    }
+  }
 
   useEffect(() => {
     if (!apiSession?.tenantId) return;
@@ -1442,6 +1468,9 @@ export function Reports({
             labSettlementSummary={labSettlementSummary}
             membershipClaimRows={membershipClaimRows}
             snapshots={monthlySnapshots}
+            recalculatingSnapshotId={recalculatingSnapshotId}
+            snapshotMessage={snapshotMessage}
+            onRecalculateSnapshot={recalculateMonthlySnapshot}
             money={money}
             percent={percent}
           />

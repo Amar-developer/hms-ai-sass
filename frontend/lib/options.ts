@@ -14,7 +14,17 @@ export function humanizeOptionLabel(value:any,fallback='-'){
 }
 
 export function isInternalId(value:any){
-  return /^(user|patient|invoice|consult|labord|pharm|medcat|labtest|taxrule|supplier|reportjob|branch|role|ptplan|ptsub|physiocase|ipadmission|payment|invitem)_[a-z0-9]/i.test(String(value||''));
+  const text=String(value||'').trim();
+  if(!text)return false;
+  // Canonical new_id() output: "<prefix>_<12 hex chars>" (e.g. prac_1a2b3c4d5e6f).
+  if(/^[a-z]+_[0-9a-f]{12}$/i.test(text))return true;
+  // Known entity id prefixes, kept explicit for older/imported records.
+  if(/^(user|patient|invoice|consult|labord|pharm|medcat|labtest|taxrule|supplier|reportjob|branch|role|ptplan|ptsub|physiocase|ipadm|ipadmission|payment|invitem|prac|psch|dept|appt|queue|med|batch|file|setting|session|perm)_[a-z0-9]/i.test(text))return true;
+  // Slug-style codes with no spaces (e.g. sun_dr_gen1, snn_dr_ort2): a human or
+  // display name always has spaces/capitals, so a lowercase snake_case token is
+  // an internal identifier that must never surface in the UI.
+  if(/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(text))return true;
+  return false;
 }
 
 export function publicDisplayValue(value:any,fallback='-'){

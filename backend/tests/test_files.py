@@ -7,6 +7,14 @@ from app.modules.settings.models import AdminSetting, SettingKey
 from app.modules.settings.service import decode_value
 from app.modules.tenants.models import Tenant
 
+# Uploads are validated by magic bytes (app/core/uploads.py), so fixtures must
+# carry a real PNG signature — the client-supplied content-type is not trusted.
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def _png(payload: bytes = b"fake") -> BytesIO:
+    return BytesIO(PNG_SIGNATURE + payload)
+
 
 def create_file_tenant_and_branch(client):
     tenant = client.post("/api/v1/tenants", json={"name": "Files Clinic"}).json()
@@ -36,7 +44,7 @@ def test_file_upload_list_update_delete_and_audit(client, test_engine):
             "notes": "Initial document",
             "is_private": "true",
         },
-        files={"file": ("patient-photo.png", BytesIO(b"fake-png"), "image/png")},
+        files={"file": ("patient-photo.png", _png(), "image/png")},
     )
     assert upload.status_code == 201
     uploaded = upload.json()
@@ -90,7 +98,7 @@ def test_files_are_tenant_isolated(client):
         "/api/v1/files",
         headers=headers,
         data={"branch_id": branch["id"], "category": "clinical"},
-        files={"file": ("tenant-file.png", BytesIO(b"tenant only"), "image/png")},
+        files={"file": ("tenant-file.png", _png(b"tenant only"), "image/png")},
     )
     assert upload.status_code == 201
 
@@ -113,7 +121,7 @@ def test_tenant_logo_upload_persists_invoice_logo_setting(client, test_engine):
 
     upload = client.post(
         f"/api/v1/tenants/{tenant['id']}/logo",
-        files={"file": ("clinic-logo.png", BytesIO(b"fake-png"), "image/png")},
+        files={"file": ("clinic-logo.png", _png(), "image/png")},
     )
 
     assert upload.status_code == 200
@@ -147,7 +155,7 @@ def test_file_registry_invoice_logo_attachment_updates_invoice_logo_setting(
             "attached_to_field": "invoice.logo_url",
             "attached_to_label": "Invoice Logo",
         },
-        files={"file": ("invoice-logo.png", BytesIO(b"fake-png"), "image/png")},
+        files={"file": ("invoice-logo.png", _png(), "image/png")},
     )
 
     assert upload.status_code == 201

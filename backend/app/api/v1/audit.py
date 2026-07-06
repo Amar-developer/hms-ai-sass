@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select
 
-from app.core.auth import require_permission
+from app.core.auth import get_current_user, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
+from app.modules.identity.models import User
 from app.modules.audit.models import AuditEvent
 from app.modules.audit.schemas import AuditEventCreate, AuditEventRead
 
@@ -15,14 +16,21 @@ router = APIRouter(prefix="/audit-events")
     "",
     response_model=AuditEventRead,
     status_code=status.HTTP_201_CREATED,
+    summary="Create audit event",
     dependencies=[Depends(require_permission(permissions.AUDIT_READ))],
 )
 def create_audit_event(
     payload: AuditEventCreate,
     tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> AuditEvent:
-    event = AuditEvent.model_validate(payload, update={"tenant_id": tenant_id})
+    # The actor is always the authenticated caller — never a client-supplied
+    # value — so an audit event cannot be forged in another user's name.
+    event = AuditEvent.model_validate(
+        payload,
+        update={"tenant_id": tenant_id, "actor_user_id": current_user.id},
+    )
     session.add(event)
     session.commit()
     session.refresh(event)
@@ -32,6 +40,7 @@ def create_audit_event(
 @router.get(
     "",
     response_model=list[AuditEventRead],
+    summary="List audit events",
     dependencies=[Depends(require_permission(permissions.AUDIT_READ))],
 )
 def list_audit_events(
@@ -50,6 +59,7 @@ def list_audit_events(
 @router.get(
     "/{event_id}",
     response_model=AuditEventRead,
+    summary="Get audit event",
     dependencies=[Depends(require_permission(permissions.AUDIT_READ))],
 )
 def get_audit_event(

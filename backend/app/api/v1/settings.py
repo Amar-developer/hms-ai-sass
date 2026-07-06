@@ -45,6 +45,7 @@ def _read_setting(setting: AdminSetting) -> AdminSettingRead:
 @router.put(
     "",
     response_model=AdminSettingRead,
+    summary="Create or update setting",
     dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
 )
 def upsert_admin_setting(
@@ -83,6 +84,7 @@ def upsert_admin_setting(
 @router.get(
     "",
     response_model=list[AdminSettingRead],
+    summary="List settings",
     dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
 )
 def list_admin_settings(
@@ -103,7 +105,11 @@ def list_admin_settings(
     return [_read_setting(setting) for setting in settings]
 
 
-@router.get("/sidebar-modules", response_model=dict)
+@router.get(
+    "/sidebar-modules",
+    response_model=dict,
+    summary="Get sidebar modules",
+)
 def get_sidebar_role_modules(
     tenant_id: str = Depends(require_tenant_id),
     _current_user: User = Depends(get_current_user),
@@ -127,6 +133,7 @@ def get_sidebar_role_modules(
 @router.get(
     "/resolve",
     response_model=ResolvedSettingRead,
+    summary="Resolve setting",
     dependencies=[
         Depends(
             require_any_permission(
@@ -175,6 +182,7 @@ def resolve_admin_setting(
 @router.get(
     "/bundle",
     response_model=AdminSettingsBundle,
+    summary="Resolve settings bundle",
     dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
 )
 def resolve_settings_bundle(

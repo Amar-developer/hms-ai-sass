@@ -22,6 +22,9 @@ type MetrixProps = {
   labSettlementSummary: any;
   membershipClaimRows: any[];
   snapshots?: any[];
+  recalculatingSnapshotId?: string | null;
+  snapshotMessage?: string;
+  onRecalculateSnapshot?: (snapshot: any) => void;
   money: (value: number) => string;
   percent: (value: number, total: number) => string;
 };
@@ -344,6 +347,9 @@ const MetricsReport = ({
   labSettlementSummary,
   membershipClaimRows,
   snapshots = [],
+  recalculatingSnapshotId = null,
+  snapshotMessage = "",
+  onRecalculateSnapshot,
   money,
   percent,
 }: MetrixProps) => {
@@ -380,9 +386,28 @@ const MetricsReport = ({
           </h3>
         </div>
         {selected && (
-          <span className="rounded-lg bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700">
-            Frozen at month end
-          </span>
+          <div className="flex items-center gap-2">
+            {snapshotMessage && (
+              <span className="text-[11px] font-bold text-emerald-700">
+                {snapshotMessage}
+              </span>
+            )}
+            {onRecalculateSnapshot && (
+              <button
+                type="button"
+                onClick={() => onRecalculateSnapshot(selected)}
+                disabled={recalculatingSnapshotId === selected.id}
+                className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {recalculatingSnapshotId === selected.id
+                  ? "Recalculating..."
+                  : "Recalculate"}
+              </button>
+            )}
+            <span className="rounded-lg bg-amber-50 px-3 py-1 text-[11px] font-bold text-amber-700">
+              Frozen at month end
+            </span>
+          </div>
         )}
       </div>
 

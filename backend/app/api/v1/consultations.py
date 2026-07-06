@@ -296,7 +296,7 @@ def create_consultation(
         session,
         tenant_id=tenant_id,
         branch_id=consultation.branch_id,
-        actor_user_id=payload.created_by_user_id,
+        actor_user_id=current_user.id,
         action="consultation.created",
         resource_type="consultation",
         resource_id=consultation.id,
@@ -536,7 +536,7 @@ def sign_consultation(
 
     now = datetime.now(timezone.utc)
     consultation.status = ConsultationStatus.SIGNED
-    consultation.signed_by_user_id = payload.signed_by_user_id
+    consultation.signed_by_user_id = current_user.id
     consultation.signed_at = now
     consultation.updated_at = now
 
@@ -565,7 +565,7 @@ def sign_consultation(
         session,
         tenant_id=tenant_id,
         branch_id=consultation.branch_id,
-        actor_user_id=payload.signed_by_user_id,
+        actor_user_id=current_user.id,
         action="consultation.signed",
         resource_type="consultation",
         resource_id=consultation.id,
@@ -580,7 +580,7 @@ def sign_consultation(
             tenant_id=tenant_id,
             consultation=consultation,
             appointment=appointment,
-            actor_user_id=payload.signed_by_user_id,
+            actor_user_id=current_user.id,
         )
     except Exception:
         logger.warning(
@@ -603,7 +603,7 @@ def sign_consultation(
                 message=consultation.follow_up_advice,
                 resource_type="consultation",
                 resource_id=consultation.id,
-                queued_by_user_id=payload.signed_by_user_id,
+                queued_by_user_id=current_user.id,
             )
     return consultation
 
@@ -637,7 +637,7 @@ def create_addendum(
         tenant_id=tenant_id,
         consultation_id=consultation.id,
         note=payload.note,
-        created_by_user_id=payload.created_by_user_id,
+        created_by_user_id=current_user.id,
     )
     session.add(addendum)
     session.commit()
@@ -646,7 +646,7 @@ def create_addendum(
         session,
         tenant_id=tenant_id,
         branch_id=consultation.branch_id,
-        actor_user_id=payload.created_by_user_id,
+        actor_user_id=current_user.id,
         action="consultation.addendum.created",
         resource_type="consultation_addendum",
         resource_id=addendum.id,
@@ -674,7 +674,7 @@ def create_clinical_template(
         name=payload.name,
         template_type=payload.template_type,
         content_json=json.dumps(payload.content),
-        created_by_user_id=payload.created_by_user_id or current_user.id,
+        created_by_user_id=current_user.id,
     )
     session.add(template)
     session.commit()

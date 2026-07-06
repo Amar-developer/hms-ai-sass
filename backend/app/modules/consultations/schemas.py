@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.modules.consultations.models import ConsultationStatus
 
@@ -29,6 +29,15 @@ class MedicineRow(BaseModel):
     frequency: str | None = Field(default=None, max_length=120)
     duration: str | None = Field(default=None, max_length=120)
     instructions: str | None = Field(default=None, max_length=500)
+
+    @field_validator("dosage", "frequency")
+    @classmethod
+    def _no_blank_clinical_field(cls, value: str | None) -> str | None:
+        # A prescribed medicine must carry a real dosage and frequency — a blank
+        # string is a data-entry error that becomes immutable once signed.
+        if value is not None and not value.strip():
+            raise ValueError("must not be blank")
+        return value.strip() if value else value
 
 
 class ReferralRow(BaseModel):

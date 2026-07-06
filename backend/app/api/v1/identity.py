@@ -69,6 +69,89 @@ TENANT_ADMIN_DEFAULT_PERMISSION_KEYS = [
     if not permission_key.startswith("platform.")
 ]
 
+RECEPTIONIST_DEFAULT_PERMISSION_KEYS = [
+    permissions.PATIENTS_CREATE,
+    permissions.PATIENTS_EDIT,
+    permissions.PATIENTS_READ,
+    permissions.PATIENTS_WRITE,
+    permissions.APPOINTMENTS_CREATE,
+    permissions.APPOINTMENTS_EDIT,
+    permissions.APPOINTMENTS_READ,
+    permissions.QUEUE_MANAGE,
+    permissions.QUEUE_READ,
+    permissions.PRACTITIONERS_READ,
+    permissions.CONSULTATIONS_READ,
+    permissions.LAB_CREATE,
+    permissions.PHYSIOTHERAPY_CREATE,
+    permissions.HOME_CARE_MANAGE,
+    permissions.HOME_CARE_CREATE,
+    permissions.HOME_CARE_READ,
+    permissions.HOME_CARE_EDIT,
+    permissions.INVOICES_CREATE,
+    permissions.INVOICES_READ,
+    permissions.INVOICES_CANCEL_REQUEST,
+    permissions.PAYMENTS_CREATE,
+    permissions.BILLING_READ,
+    permissions.BILLING_REFUNDS_REQUEST,
+    permissions.SERVICE_ITEMS_MANAGE,
+    permissions.SERVICE_ITEMS_CREATE,
+    permissions.SERVICE_ITEMS_READ,
+    permissions.SERVICE_ITEMS_EDIT,
+    # NOTE: reports.read is intentionally NOT granted. In this codebase
+    # reports.read only unlocks financial surfaces (monthly revenue email
+    # reports, revenue snapshots, subscription billing/usage). Operational,
+    # clinical, lab, and pharmacy "reports" are served by the module read
+    # keys above, so non-admin roles must not receive reports.read.
+]
+
+DOCTOR_DEFAULT_PERMISSION_KEYS = [
+    permissions.APPOINTMENTS_READ,
+    permissions.APPOINTMENTS_EDIT,
+    permissions.CONSULTATIONS_READ,
+    permissions.CONSULTATIONS_WRITE,
+    permissions.CONSULTATIONS_CREATE,
+    permissions.CONSULTATIONS_EDIT,
+    permissions.CONSULTATIONS_SIGN,
+    permissions.LAB_CREATE,
+    permissions.LAB_READ,
+    permissions.HOME_CARE_CREATE,
+    permissions.HOME_CARE_READ,
+    permissions.BILLING_READ,
+    permissions.INVOICES_READ,
+    # reports.read withheld — see note on RECEPTIONIST_DEFAULT_PERMISSION_KEYS.
+]
+
+LAB_TECHNICIAN_DEFAULT_PERMISSION_KEYS = [
+    permissions.LAB_MANAGE,
+    permissions.LAB_CREATE,
+    permissions.LAB_READ,
+    permissions.LAB_EDIT,
+    permissions.LAB_RESULTS_MANAGE,
+    permissions.PATIENTS_READ,
+    permissions.APPOINTMENTS_READ,
+    # reports.read withheld — see note on RECEPTIONIST_DEFAULT_PERMISSION_KEYS.
+]
+
+PHARMACIST_DEFAULT_PERMISSION_KEYS = [
+    permissions.PHARMACY_MANAGE,
+    permissions.PHARMACY_CREATE,
+    permissions.PHARMACY_READ,
+    permissions.PHARMACY_EDIT,
+    permissions.PHARMACY_DISPENSE,
+    permissions.CONSULTATIONS_READ,
+    permissions.INVOICES_CREATE,
+    permissions.INVOICES_READ,
+    permissions.BILLING_READ,
+    # reports.read withheld — see note on RECEPTIONIST_DEFAULT_PERMISSION_KEYS.
+]
+
+CLINICAL_ROLE_TEMPLATES = [
+    ("receptionist", "Receptionist", RECEPTIONIST_DEFAULT_PERMISSION_KEYS),
+    ("doctor", "Doctor", DOCTOR_DEFAULT_PERMISSION_KEYS),
+    ("lab_technician", "Lab Technician", LAB_TECHNICIAN_DEFAULT_PERMISSION_KEYS),
+    ("pharmacist", "Pharmacist", PHARMACIST_DEFAULT_PERMISSION_KEYS),
+]
+
 
 def _normalize_email(email: str) -> str:
     return email.strip().lower()
@@ -125,6 +208,31 @@ def _has_tenant_admin_access(session: Session, user: User) -> bool:
     return user.user_type == "tenant_admin" or "tenant_admin" in user_role_keys(
         session, user
     )
+
+
+def _assert_can_target_user_for_management(
+    session: Session,
+    current_user: User,
+    target_user: User,
+    new_role_keys: list[str] | None = None,
+) -> None:
+    """Holding identity.users.manage/edit governs ordinary staff accounts only.
+    Modifying a Tenant Admin account, or granting the tenant_admin role to
+    anyone, requires actually being a tenant admin (or super admin) —
+    otherwise any role with users.edit could reset the admin's password or
+    promote itself to admin."""
+    if current_user.is_super_admin or _has_tenant_admin_access(session, current_user):
+        return
+    if _has_tenant_admin_access(session, target_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a tenant admin can modify another tenant admin account",
+        )
+    if new_role_keys is not None and "tenant_admin" in new_role_keys:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a tenant admin can grant the tenant admin role",
+        )
 
 
 def _is_primary_tenant(session: Session, tenant_id: str | None) -> bool:
@@ -282,6 +390,38 @@ def _ensure_primary_tenant_admin_role(
     return role
 
 
+def _ensure_clinical_role_templates(
+    session: Session, primary_tenant: Tenant, user: User
+) -> None:
+    """Seed the standard clinical role templates (Receptionist, Doctor, Lab
+    Technician, Pharmacist) as global templates on the primary tenant so new
+    tenants can clone them via `role_template_ids`."""
+    for key, name, permission_keys in CLINICAL_ROLE_TEMPLATES:
+        role = session.exec(
+            select(Role).where(Role.tenant_id == primary_tenant.id, Role.key == key)
+        ).first()
+        if not role:
+            role = Role(
+                tenant_id=primary_tenant.id,
+                name=name,
+                key=key,
+                is_global_template=True,
+                is_template_locked=False,
+                created_by_user_id=user.id,
+                updated_by_user_id=user.id,
+            )
+            session.add(role)
+            session.commit()
+            session.refresh(role)
+        else:
+            role.is_global_template = True
+            role.updated_by_user_id = user.id
+            role.updated_at = now_utc()
+            session.add(role)
+        _ensure_role_permissions(session, role, permission_keys)
+    session.commit()
+
+
 def _permission_read(key: str) -> PermissionRead:
     parts = key.split(".")
     module = ".".join(parts[:-1]) if len(parts) > 1 else parts[0]
@@ -334,6 +474,16 @@ def bootstrap_super_admin(
     payload: BootstrapSuperAdminRequest,
     session: Session = Depends(get_session),
 ) -> User:
+    # In production this highly-privileged, unauthenticated endpoint must be
+    # gated by a deploy-time secret, so it cannot be raced or re-triggered by
+    # anyone if the super-admin row is ever removed.
+    if ENV == "production":
+        expected = os.getenv("MEDIZINHUB_BOOTSTRAP_TOKEN")
+        if not expected or getattr(payload, "bootstrap_token", None) != expected:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bootstrap is disabled without a valid bootstrap token",
+            )
     existing = session.exec(select(User).where(User.is_super_admin == True)).first()  # noqa: E712
     if existing:
         raise HTTPException(
@@ -356,6 +506,7 @@ def bootstrap_super_admin(
     session.refresh(user)
     _ensure_super_admin_role(session, primary_tenant, user)
     _ensure_primary_tenant_admin_role(session, primary_tenant, user)
+    _ensure_clinical_role_templates(session, primary_tenant, user)
     return _user_read(session, user)
 
 
@@ -531,6 +682,7 @@ def create_role(
     session: Session = Depends(get_session),
 ) -> RoleRead:
     _assert_tenant_admin(session, current_user, tenant_id)
+    _assert_grantable_permission_keys(current_user, payload.permission_keys)
     role = Role(
         tenant_id=tenant_id,
         name=payload.name,
@@ -674,6 +826,30 @@ def _get_tenant_role_or_404(session: Session, tenant_id: str, role_id: str) -> R
     return role
 
 
+def _assert_grantable_permission_keys(
+    current_user: User, permission_keys: list[str]
+) -> None:
+    """Tenant admins may grant any cataloged non-platform permission to a
+    tenant role, but never platform.* (reserved for super admins) and never
+    an arbitrary client-supplied string — otherwise a tenant admin could
+    mint a role holding platform.tenants.manage and assign it to themselves."""
+    if current_user.is_super_admin:
+        return
+    catalog = set(permissions.PERMISSION_CATALOG)
+    disallowed = sorted(
+        {
+            key
+            for key in permission_keys
+            if key.startswith("platform.") or key not in catalog
+        }
+    )
+    if disallowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Cannot grant these permissions: {', '.join(disallowed)}",
+        )
+
+
 def _replace_role_permissions(
     session: Session, role: Role, permission_keys: list[str]
 ) -> None:
@@ -788,6 +964,7 @@ def update_role(
     if "is_active" in updates and updates["is_active"] is not None:
         role.is_active = updates["is_active"]
     if "permission_keys" in updates and updates["permission_keys"] is not None:
+        _assert_grantable_permission_keys(current_user, updates["permission_keys"])
         _replace_role_permissions(session, role, updates["permission_keys"])
     role.updated_by_user_id = current_user.id
     role.updated_at = now_utc()
@@ -886,6 +1063,18 @@ def create_user(
         permissions.IDENTITY_USERS_CREATE,
     )
     user_payload = _normalize_user_access(payload.model_dump())
+    if (
+        not current_user.is_super_admin
+        and not _has_tenant_admin_access(session, current_user)
+        and (
+            user_payload["user_type"] == "tenant_admin"
+            or "tenant_admin" in user_payload["role_keys"]
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only a tenant admin can create a tenant admin account",
+        )
     tenant = session.get(Tenant, tenant_id)
     if not tenant:
         raise HTTPException(
@@ -1025,6 +1214,9 @@ def update_user(
     )
     user = _get_tenant_user_or_404(session, tenant_id, user_id)
     updates = _normalize_user_access(payload.model_dump(exclude_unset=True))
+    _assert_can_target_user_for_management(
+        session, current_user, user, updates.get("role_keys")
+    )
     if "email" in updates and updates["email"]:
         email = _normalize_email(updates["email"])
         duplicate = session.exec(
@@ -1098,6 +1290,7 @@ def reset_user_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Use change password for your own login",
         )
+    _assert_can_target_user_for_management(session, current_user, user)
     if current_user.is_super_admin and (
         _is_primary_tenant(session, tenant_id)
         or not _has_tenant_admin_access(session, user)
@@ -1157,6 +1350,7 @@ def change_user_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot deactivate your own user",
         )
+    _assert_can_target_user_for_management(session, current_user, user)
     user.is_active = payload.is_active
     if payload.is_active:
         original_email = _original_user_email(user)
@@ -1213,6 +1407,7 @@ def delete_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="You cannot delete your own user",
         )
+    _assert_can_target_user_for_management(session, current_user, user)
     user.is_active = False
     if not user.email.startswith(f"deleted+{user.id}+"):
         user.email = f"deleted+{user.id}+{user.email}"

@@ -10,12 +10,14 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.auth import require_any_permission
 from app.core.database import get_session
+from app.core.model_update import apply_update_fields
 from app.core.tenant_context import require_tenant_id
 from app.core.uploads import UPLOADS_DIR, save_upload
 from app.modules.audit.service import record_audit_event
@@ -29,6 +31,7 @@ from app.modules.ip.models import IPAdmission
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient
 from app.modules.physiotherapy.models import PhysiotherapyCase
+from app.modules.practitioners.models import Practitioner
 from app.modules.settings.models import SettingKey, SettingScope
 from app.modules.settings.service import upsert_setting
 from app.modules.tenants.models import Tenant, now_utc
@@ -83,6 +86,18 @@ _UPLOAD_PREFIX_RULES: list[dict] = [
         "field": "logo_url",
         "label": "Tenant Logo",
         "folder": "Branding",
+        "patient_attr": None,
+        "branch_attr": None,
+    },
+    {
+        "prefix": "practitioner_signature_",
+        "model": Practitioner,
+        "category": "signature",
+        "source_module": "practitioners",
+        "doctype": "Practitioner",
+        "field": "signature_url",
+        "label": "Doctor Signature",
+        "folder": "Signatures",
         "patient_attr": None,
         "branch_attr": None,
     },
@@ -159,6 +174,64 @@ def _get_file(session: Session, tenant_id: str, file_id: str) -> FileDocument:
     return row
 
 
+@router.get("/{file_id}/download", summary="Download a file (authorized)")
+def download_file(
+    file_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.PATIENTS_READ,
+            permissions.LAB_READ,
+            permissions.IP_READ,
+            permissions.PHYSIOTHERAPY_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
+) -> FileResponse:
+    """Serve a stored file only after re-checking tenant + branch + permission —
+    the same authorization stack as every JSON route. Content-Type is forced
+    from the DB (server-verified at upload), and Content-Disposition is always
+    ``attachment`` so nothing is rendered inline in the browser (no stored-XSS).
+    """
+    row = _get_file(session, tenant_id, file_id)
+    require_user_branch_access(current_user, row.branch_id)
+    disk_path = UPLOADS_DIR / Path(row.file_url).name
+    # Reject any traversal attempt and confirm the resolved path stays inside
+    # the uploads directory before touching the filesystem.
+    try:
+        resolved = disk_path.resolve()
+        resolved.relative_to(UPLOADS_DIR.resolve())
+    except (ValueError, OSError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+        )
+    if not resolved.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+        )
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=row.branch_id,
+        actor_user_id=current_user.id,
+        action="file.downloaded",
+        resource_type="file",
+        resource_id=row.id,
+        purpose="file_access",
+    )
+    return FileResponse(
+        path=str(resolved),
+        media_type=row.content_type or "application/octet-stream",
+        filename=row.file_name or resolved.name,
+        content_disposition_type="attachment",
+    )
+
+
 def _sync_tenant_logo_attachment(
     session: Session,
     row: FileDocument,
@@ -196,7 +269,30 @@ def _sync_tenant_logo_attachment(
     )
 
 
-@router.get("", response_model=list[FileDocumentRead])
+def _sync_practitioner_signature_attachment(
+    session: Session,
+    row: FileDocument,
+    *,
+    actor_user_id: str | None,
+) -> None:
+    if row.attached_to_doctype != "Practitioner":
+        return
+    field = (row.attached_to_field or "").strip().lower()
+    if field != "signature_url" or not row.attached_to_name:
+        return
+    practitioner = session.get(Practitioner, row.attached_to_name)
+    if not practitioner or practitioner.tenant_id != row.tenant_id:
+        return
+    practitioner.signature_url = row.file_url
+    practitioner.updated_at = now_utc()
+    session.add(practitioner)
+
+
+@router.get(
+    "",
+    response_model=list[FileDocumentRead],
+    summary="List files",
+)
 def list_files(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
@@ -260,7 +356,12 @@ def list_files(
     return rows
 
 
-@router.post("", response_model=FileDocumentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=FileDocumentRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Upload file",
+)
 async def upload_file(
     file: UploadFile = File(...),
     branch_id: str | None = Form(default=None),
@@ -286,7 +387,9 @@ async def upload_file(
     ),
 ) -> FileDocument:
     require_user_branch_access(current_user, branch_id)
-    saved_filename, url_path = await save_upload(file, f"file_{tenant_id[:12]}")
+    saved_filename, url_path, verified_content_type = await save_upload(
+        file, f"file_{tenant_id[:12]}"
+    )
     row = record_file_document(
         session,
         tenant_id=tenant_id,
@@ -294,7 +397,8 @@ async def upload_file(
         patient_id=patient_id,
         file_name=file.filename or saved_filename,
         file_url=url_path,
-        content_type=file.content_type,
+        # Store the server-verified content type, never the client's header.
+        content_type=verified_content_type,
         category=(category or "general").strip().lower()[:80],
         source_module=source_module,
         attached_to_doctype=attached_to_doctype,
@@ -307,6 +411,7 @@ async def upload_file(
         is_private=is_private,
     )
     _sync_tenant_logo_attachment(session, row, actor_user_id=current_user.id)
+    _sync_practitioner_signature_attachment(session, row, actor_user_id=current_user.id)
     session.commit()
     session.refresh(row)
     record_audit_event(
@@ -322,7 +427,11 @@ async def upload_file(
     return row
 
 
-@router.post("/sync-uploads", response_model=list[FileDocumentRead])
+@router.post(
+    "/sync-uploads",
+    response_model=list[FileDocumentRead],
+    summary="Register uploaded files",
+)
 def sync_uploads_folder(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
@@ -398,6 +507,9 @@ def sync_uploads_folder(
             actor_user_id=current_user.id,
             overwrite_existing=False,
         )
+        _sync_practitioner_signature_attachment(
+            session, row, actor_user_id=current_user.id
+        )
         created_rows.append(row)
     if created_rows:
         session.commit()
@@ -416,7 +528,11 @@ def sync_uploads_folder(
     return created_rows
 
 
-@router.patch("/{file_id}", response_model=FileDocumentRead)
+@router.patch(
+    "/{file_id}",
+    response_model=FileDocumentRead,
+    summary="Update file metadata",
+)
 def update_file(
     file_id: str,
     payload: FileDocumentUpdate,
@@ -432,8 +548,7 @@ def update_file(
 ) -> FileDocument:
     row = _get_file(session, tenant_id, file_id)
     require_user_branch_access(current_user, row.branch_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(row, key, value)
+    apply_update_fields(row, payload)
     row.updated_at = now_utc()
     session.add(row)
     _sync_tenant_logo_attachment(session, row, actor_user_id=current_user.id)
@@ -452,7 +567,11 @@ def update_file(
     return row
 
 
-@router.delete("/{file_id}", response_model=FileDocumentRead)
+@router.delete(
+    "/{file_id}",
+    response_model=FileDocumentRead,
+    summary="Deactivate file",
+)
 def delete_file(
     file_id: str,
     tenant_id: str = Depends(require_tenant_id),

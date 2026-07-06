@@ -19,7 +19,11 @@ class ReadinessResponse(HealthResponse):
     dependencies: dict[str, str]
 
 
-@router.get("/health", response_model=HealthResponse)
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Check API health",
+)
 def health() -> HealthResponse:
     settings = get_settings()
     return HealthResponse(
@@ -30,7 +34,11 @@ def health() -> HealthResponse:
     )
 
 
-@router.get("/readiness", response_model=ReadinessResponse)
+@router.get(
+    "/readiness",
+    response_model=ReadinessResponse,
+    summary="Check API readiness",
+)
 def readiness() -> ReadinessResponse:
     settings = get_settings()
     return ReadinessResponse(

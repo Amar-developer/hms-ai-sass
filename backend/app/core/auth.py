@@ -166,7 +166,10 @@ def require_permission(permission_key: str):
                 status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended"
             )
         if permission_key not in user_permission_keys(session, current_user):
-            if permission_key == "settings.manage" and is_tenant_admin_user(
+            # Tenant admins implicitly hold every non-platform permission — same
+            # rule as require_any_permission, unified here so a future single-
+            # permission endpoint behaves consistently and never leaks platform.*.
+            if not permission_key.startswith("platform.") and is_tenant_admin_user(
                 session, current_user
             ):
                 return current_user

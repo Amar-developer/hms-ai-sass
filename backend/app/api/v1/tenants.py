@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 
 from app.core.uploads import save_upload
 from app.core.auth import (
+    get_current_user,
     require_any_permission,
     require_permission,
     require_super_admin,
@@ -48,6 +49,7 @@ from app.modules.tenants.schemas import (
     DepartmentCreate,
     DepartmentRead,
     DepartmentUpdate,
+    TenantBrandingRead,
     TenantCreate,
     TenantOnboardingCreate,
     TenantOnboardingRead,
@@ -697,6 +699,23 @@ def list_tenants(session: Session = Depends(get_session)) -> list[Tenant]:
     )
 
 
+@router.get("/current/branding", response_model=TenantBrandingRead)
+def get_current_tenant_branding(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Tenant:
+    # Printable-document letterhead info (name/address/phone/email/logo) for the
+    # caller's own tenant. Any authenticated user may read it — it's the same
+    # non-sensitive branding already shown on invoices, not gated behind
+    # platform.tenants.manage like the full tenant record.
+    tenant = session.get(Tenant, current_user.tenant_id)
+    if not tenant:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
+        )
+    return tenant
+
+
 @router.get(
     "/{tenant_id}",
     response_model=TenantRead,
@@ -820,7 +839,7 @@ async def upload_tenant_logo(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Upload an image logo"
         )
-    _filename, url_path = await save_upload(file, f"tenant_logo_{tenant.id}")
+    _filename, url_path, _ct = await save_upload(file, f"tenant_logo_{tenant.id}")
     tenant.logo_url = url_path
     tenant.updated_by_user_id = current_user.id
     tenant.updated_at = now_utc()

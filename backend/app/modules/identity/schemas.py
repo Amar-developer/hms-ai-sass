@@ -38,6 +38,8 @@ class BootstrapSuperAdminRequest(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     email: str = Field(min_length=5, max_length=220)
     password: str = Field(min_length=8, max_length=128)
+    # Required only in production (matched against MEDIZINHUB_BOOTSTRAP_TOKEN).
+    bootstrap_token: str | None = Field(default=None, max_length=200)
 
 
 class UserCreate(BaseModel):

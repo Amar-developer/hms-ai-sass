@@ -309,6 +309,9 @@ def search_patients(
     statement = select(Patient).where(Patient.tenant_id == tenant_id)
     if active_only:
         statement = statement.where(Patient.status == PatientStatus.ACTIVE)
+    # Patients are tenant-global for read: a patient can be seen at any branch,
+    # so any branch user must be able to look them up. An explicit branch_id is
+    # an optional filter, not a scope restriction.
     if branch_id:
         require_branch_in_tenant(session, tenant_id, branch_id)
         statement = statement.where(Patient.branch_id == branch_id)
@@ -418,6 +421,10 @@ def get_patient(
 ) -> Patient:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
+    # Patients are tenant-global for read (see search_patients): a branch user
+    # can open any patient in the tenant. Branch confinement applies to
+    # branch-owned records (appointments/queue/lab/pharmacy), not the patient
+    # master.
     user_permissions = set(user_permission_keys(session, current_user))
     has_patient_read = (
         current_user.is_super_admin or permissions.PATIENTS_READ in user_permissions
@@ -631,7 +638,7 @@ async def upload_patient_photo(
 ) -> Patient:
     enforce_entitlement(session, tenant_id, "patients")
     patient = _get_patient_or_404(session, tenant_id, patient_id)
-    _filename, url_path = await save_upload(file, f"patient_{patient_id[:12]}")
+    _filename, url_path, _ct = await save_upload(file, f"patient_{patient_id[:12]}")
     patient.photo_url = url_path
     patient.photo_file_name = file.filename or _filename
     patient.updated_at = now_utc()

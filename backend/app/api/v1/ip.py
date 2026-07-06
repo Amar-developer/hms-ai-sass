@@ -15,6 +15,7 @@ from sqlmodel import Session, delete, select
 
 from app.core.access_control import (
     require_branch_in_tenant,
+    require_doctor_practitioner_access,
     require_user_branch_access,
     scoped_branch_id,
 )
@@ -223,7 +224,12 @@ def _resolve_room_for_admission(
 ) -> tuple[IPRoom | None, dict[str, str | None]]:
     if not payload.room_id:
         return None, {}
-    room = session.get(IPRoom, payload.room_id)
+    # Lock the room row FOR UPDATE so two concurrent admissions to the same room
+    # serialize — the occupancy check + insert become atomic and a bed can't be
+    # double-booked in a race. (No-op on single-writer SQLite test DBs.)
+    room = session.exec(
+        select(IPRoom).where(IPRoom.id == payload.room_id).with_for_update()
+    ).first()
     if (
         not room
         or room.tenant_id != tenant_id
@@ -794,7 +800,7 @@ async def upload_admission_document(
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     _ensure_admission_open(admission)
-    saved_filename, url_path = await save_upload(
+    saved_filename, url_path, _ct = await save_upload(
         file, f"ip_admission_{admission_id[:12]}"
     )
     admission.admission_document_url = url_path
@@ -893,7 +899,7 @@ async def upload_admission_documents(
     for file in files:
         if not file.filename:
             continue
-        saved_filename, url_path = await save_upload(
+        saved_filename, url_path, _ct = await save_upload(
             file, f"ip_{normalized_type}_{admission_id[:12]}"
         )
         row = IPDocument(
@@ -1027,6 +1033,11 @@ def create_ip_consultation(
     _assert_ip_enabled(session, tenant_id)
     admission = _get_admission(session, tenant_id, admission_id, current_user)
     _ensure_admission_open(admission)
+    # A doctor may only record an IP consultation under their own practitioner
+    # profile — not another doctor's, matching outpatient consultation scoping.
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, payload.practitioner_id
+    )
     consultation = IPConsultation.model_validate(
         payload,
         update={
@@ -1070,6 +1081,10 @@ def sign_ip_consultation(
         session, tenant_id, consultation.admission_id, current_user
     )
     _ensure_admission_open(admission)
+    # A doctor can only sign their own IP consultation, not another doctor's.
+    require_doctor_practitioner_access(
+        session, tenant_id, current_user, consultation.practitioner_id
+    )
     consultation.status = "signed"
     signed_at = now_utc()
     consultation.signed_at = signed_at

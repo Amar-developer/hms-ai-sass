@@ -143,8 +143,13 @@ export function AppointmentCalendarBooking(props: Props) {
   const [billingNote, setBillingNote] = useState("");
   const [customFee, setCustomFee] = useState("");
   const [emergencyReason, setEmergencyReason] = useState("");
-  const [intakeVitals, setIntakeVitals] = useState("");
   const [intakeComplaints, setIntakeComplaints] = useState("");
+  const [intakeBp, setIntakeBp] = useState("");
+  const [intakePulse, setIntakePulse] = useState("");
+  const [intakeSpo2, setIntakeSpo2] = useState("");
+  const [intakeTemp, setIntakeTemp] = useState("");
+  const [intakeHeight, setIntakeHeight] = useState("");
+  const [intakeWeight, setIntakeWeight] = useState("");
   const [liveDoctors, setLiveDoctors] = useState<any[]>([]);
   const [doctorFeeRules, setDoctorFeeRules] = useState<any[]>([]);
   const [doctorId, setDoctorId] = useState("");
@@ -542,8 +547,13 @@ export function AppointmentCalendarBooking(props: Props) {
     setAppointmentType("op");
     setCustomFee("");
     setEmergencyReason("");
-    setIntakeVitals("");
     setIntakeComplaints("");
+    setIntakeBp("");
+    setIntakePulse("");
+    setIntakeSpo2("");
+    setIntakeTemp("");
+    setIntakeHeight("");
+    setIntakeWeight("");
   }
 
   async function refreshAppointmentList() {
@@ -666,6 +676,25 @@ export function AppointmentCalendarBooking(props: Props) {
     }
   }
 
+  // Temp/Height/Weight are captured as separate inputs for a cleaner form, but
+  // merged into the same free-text intake_vitals field the backend already
+  // stores (consistent with how BP/Pulse are already recorded there).
+  // Keys here must match the aliases the consultation page's vitals grid
+  // looks up (BP/Pulse/Spo2/Temp/Height/Weight) so everything filled in at
+  // booking actually shows up pre-filled on the consultation page.
+  function combinedIntakeVitals() {
+    return [
+      intakeBp.trim() && `BP=${intakeBp.trim()}`,
+      intakePulse.trim() && `Pulse=${intakePulse.trim()}`,
+      intakeSpo2.trim() && `Spo2=${intakeSpo2.trim()}`,
+      intakeTemp.trim() && `Temp=${intakeTemp.trim()}`,
+      intakeHeight.trim() && `Height=${intakeHeight.trim()}`,
+      intakeWeight.trim() && `Weight=${intakeWeight.trim()}`,
+    ]
+      .filter(Boolean)
+      .join(", ");
+  }
+
   async function bookAppointment() {
     if (bookingInFlightRef.current) return;
     if (!selectedPatient) return;
@@ -714,7 +743,7 @@ export function AppointmentCalendarBooking(props: Props) {
               appointmentType === "emergency"
                 ? emergencyReason || "Emergency override from reception"
                 : null,
-            intake_vitals: intakeVitals.trim() || null,
+            intake_vitals: combinedIntakeVitals() || null,
             intake_complaints: intakeComplaints.trim() || null,
             created_by_user_id: apiSession.user?.id || null,
           }),
@@ -1105,10 +1134,45 @@ export function AppointmentCalendarBooking(props: Props) {
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <TextField
-                      label="Vitals"
-                      value={intakeVitals}
-                      onChange={setIntakeVitals}
-                      placeholder="BP=120/80 mmHg, Pulse=78 bpm"
+                      label="BP"
+                      value={intakeBp}
+                      onChange={setIntakeBp}
+                      placeholder="120/80 mmHg"
+                      className="search-input placeholder:text-xs"
+                    />
+                    <TextField
+                      label="Pulse / PR"
+                      value={intakePulse}
+                      onChange={setIntakePulse}
+                      placeholder="78 bpm"
+                      className="search-input placeholder:text-xs"
+                    />
+                    <TextField
+                      label="SpO2"
+                      value={intakeSpo2}
+                      onChange={setIntakeSpo2}
+                      placeholder="98%"
+                      className="search-input placeholder:text-xs"
+                    />
+                    <TextField
+                      label="Temp"
+                      value={intakeTemp}
+                      onChange={setIntakeTemp}
+                      placeholder="98.6°F"
+                      className="search-input placeholder:text-xs"
+                    />
+                    <TextField
+                      label="Height"
+                      value={intakeHeight}
+                      onChange={setIntakeHeight}
+                      placeholder="170cm"
+                      className="search-input placeholder:text-xs"
+                    />
+                    <TextField
+                      label="Weight"
+                      value={intakeWeight}
+                      onChange={setIntakeWeight}
+                      placeholder="65kg"
                       className="search-input placeholder:text-xs"
                     />
                     <TextareaField

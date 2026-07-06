@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     report_scheduler_lock_key: str = Field(
         default="medizinhub:reports:monthly:scheduler"
     )
+    # A finished month is frozen into a snapshot once it ends. For this many days
+    # into the new month the snapshot is kept in sync with late same-period
+    # entries (payments collected a day into the new month, backdated invoices);
+    # after the window the month is final and later changes fall to the current
+    # month, as the accounting model intends.
+    report_snapshot_grace_days: int = Field(default=3, ge=0)
 
     smtp_host: str | None = Field(default=None)
     smtp_port: int = Field(default=587)
@@ -48,6 +54,19 @@ class Settings(BaseSettings):
             "http://127.0.0.1:3003",
         ]
     )
+
+    @field_validator("cors_origins")
+    @classmethod
+    def _reject_wildcard_origin(cls, value: list[str]) -> list[str]:
+        # The app sends CORS with allow_credentials=True. A "*" origin combined
+        # with credentials is a real cross-origin credential-leak, and browsers
+        # reject it anyway — fail fast instead of shipping an insecure config.
+        if any(origin.strip() == "*" for origin in value):
+            raise ValueError(
+                "cors_origins cannot contain '*' while credentials are enabled; "
+                "list explicit origins."
+            )
+        return value
 
     model_config = SettingsConfigDict(
         env_prefix="MEDIZINHUB_",

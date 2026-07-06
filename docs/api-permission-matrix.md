@@ -39,13 +39,21 @@ Current enforced guardrails:
 | `consultations.write` | Draft consultation edits and addendums |
 | `consultations.sign` | Sign/lock consultation |
 | `billing.manage` | Fee rules, invoice creation/listing/cancel |
+| `billing.discounts.approve` | Approve discount requests on invoices |
+| `billing.refunds.manage` | Full refund authority (approve/execute) |
+| `billing.refunds.request` | Raise a refund request for approval, without refund authority |
 | `invoices.create/read/edit/delete` | Granular invoice controls |
+| `invoices.cancel_request` | Request invoice cancellation for admin approval, without delete authority |
 | `payments.manage` | Payment collection and refund |
 | `settlements.read` | Doctor settlement reports |
 | `lab.manage` | Lab orders/results |
 | `lab.create/read/edit/delete` | Granular lab workflow controls |
+| `lab.results.manage` | Update and publish lab results |
 | `pharmacy.manage` | Pharmacy issues/status |
 | `pharmacy.create/read/edit/delete` | Granular pharmacy workflow controls |
+| `pharmacy.dispense` | Dispense medicines against a prescription/issue |
+| `service_items.manage` | Full control of shared service/item master data used on invoices |
+| `service_items.create/read/edit/delete` | Granular service/item master data controls |
 | `physiotherapy.manage` | Physiotherapy case, session, equipment, and billing workflow controls |
 | `physiotherapy.create/read/edit/delete` | Granular physiotherapy workflow controls |
 | `home_care.manage` | Home-care service catalog, booking, and billing workflow controls |
@@ -75,6 +83,7 @@ Current enforced guardrails:
 | `POST` | `/api/v1/tenants` | `platform.tenants.manage` |
 | `POST` | `/api/v1/tenants/onboard` | Super admin only; creates customer tenant, branches, subscription, and tenant admin |
 | `GET` | `/api/v1/tenants` | `platform.tenants.manage` |
+| `GET` | `/api/v1/tenants/current/branding` | Authenticated tenant user; own-tenant letterhead branding |
 | `GET` | `/api/v1/tenants/{tenant_id}` | `platform.tenants.manage` |
 | `PATCH` | `/api/v1/tenants/{tenant_id}` | `platform.tenants.manage` |
 | `DELETE` | `/api/v1/tenants/{tenant_id}` | `platform.tenants.manage` |
@@ -418,6 +427,7 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | --- | --- | --- |
 | `POST` | `/api/v1/files` | Authenticated tenant user |
 | `GET` | `/api/v1/files` | Authenticated tenant user |
+| `GET` | `/api/v1/files/{file_id}/download` | Authenticated tenant user |
 | `PATCH` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `DELETE` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `POST` | `/api/v1/files/sync-uploads` | Authenticated tenant user |
@@ -432,22 +442,27 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `GET` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events/{event_id}` | `audit.read` |
 
-## Suggested Default Role Bundles
-
-These are current practical role bundles for demo and team testing.
+## Default Clinical Role Templates
 
 The primary platform tenant is `MedizinHub HMS`. Users with `is_super_admin=true` belong to this primary tenant and bypass tenant-scoped permission checks so they can manage all customer tenants. The primary tenant record is protected: it cannot be deleted, suspended, renamed away from `MedizinHub HMS`, or changed to a customer tenant type.
 
-| Role | Suggested Permissions |
+Tenant isolation: every protected tenant API requires `X-Tenant-ID` and rejects requests where `current_user.tenant_id != X-Tenant-ID` (`app/core/auth.py`, `require_permission`/`require_any_permission`). Roles, users, and permission grants are always scoped to a single tenant row (`Role.tenant_id`, `UserRole.tenant_id`) — there is no cross-tenant permission bleed except for `is_super_admin` users and explicit template copy/assign endpoints, which are super-admin-only. Tenant Admins can edit role permission checkboxes only for roles belonging to their own tenant (`_assert_tenant_admin` in `app/api/v1/identity.py`).
+
+Five standard roles are seeded as global templates on the primary tenant (`app/api/v1/identity.py: CLINICAL_ROLE_TEMPLATES`, `_ensure_clinical_role_templates`) so a new tenant can clone them at onboarding via `role_template_ids`, and are backfilled onto matching existing tenant roles by migration `20260705_0068_clinical_role_permissions.py`. Tenant Admins remain free to add or remove individual checkboxes per tenant after cloning — these are starting defaults, not hard-coded restrictions.
+
+| Role | Permission keys granted |
 | --- | --- |
-| Primary Tenant Super Admin | All permissions through `is_super_admin`; tenant CRUD, subscription setup, department setup, role/user/branch management, platform reports |
-| Tenant Admin | All non-platform permissions |
-| Reception | `patients.read`, `patients.write`, `appointments.manage`, `queue.manage`, `notifications.manage` |
-| Doctor | `patients.read`, `queue.manage`, `consultations.read`, `consultations.write`, `consultations.sign`, `lab.manage`, `pharmacy.manage` as needed |
-| Lab Technician | `patients.read`, `lab.manage`, `notifications.manage` |
-| Pharmacy User | `patients.read`, `pharmacy.manage`, `billing.manage` |
-| Billing Staff | `patients.read`, `billing.manage`, `payments.manage`, `settlements.read` |
-| Back Office | `reports.read`, `audit.read`, `settlements.read`, `billing.manage` |
+| **Tenant Admin** | Every non-`platform.*` permission in `PERMISSION_CATALOG` (full control within own tenant: users, roles, branches, settings, appointments, billing, invoices, reports, doctors, pharmacy, lab, home care, queue, tax, membership, scheduling, notifications) |
+| **Receptionist** | `patients.create/edit/read/write`, `appointments.create/edit/read`, `queue.manage`, `queue.read`, `practitioners.read`, `consultations.read`, `lab.create`, `physiotherapy.create`, `home_care.manage/create/read/edit`, `invoices.create/read`, `invoices.cancel_request`, `payments.create`, `billing.read`, `billing.refunds.request`, `service_items.manage/create/read/edit`, `reports.read` |
+| **Doctor** | `appointments.read/edit`, `consultations.read/write/create/edit/sign`, `lab.create/read`, `home_care.create/read`, `billing.read`, `invoices.read`, `reports.read` |
+| **Lab Technician** | `lab.manage/create/read/edit`, `lab.results.manage`, `patients.read`, `appointments.read`, `reports.read` |
+| **Pharmacist** | `pharmacy.manage/create/read/edit/dispense`, `consultations.read` (view prescriptions), `invoices.create/read`, `billing.read`, `reports.read` |
+
+Notes on scoping decisions:
+- Doctor and Receptionist do not get `appointments.delete`/`appointments.cancel` or `invoices.delete`/`billing.refunds.manage` — cancellation and refunds route through the `*.cancel_request`/`*.refunds.request` approval permissions, with the Tenant Admin (or a Billing Staff role granted `billing.refunds.manage`) approving.
+- Doctor is further scoped in code to their own linked practitioner profile for appointment, queue, and consultation actions regardless of the permission keys held (see "Current enforced guardrails" above).
+- Lab Technician and Pharmacist get `reports.read` for their own operational reports, not `reports.revenue.read` or `reports.manage`.
+- "Manage service and item master data" (Receptionist) maps to the new `service_items.*` permission group, since the existing catalog had no dedicated key for shared billing service/item master data.
 
 ## Rules for Future APIs
 

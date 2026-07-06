@@ -106,7 +106,14 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
                 "files",
                 ("physio-consent.pdf", BytesIO(b"%PDF-1.4 consent"), "application/pdf"),
             ),
-            ("files", ("guardian-consent.png", BytesIO(b"fake-png"), "image/png")),
+            (
+                "files",
+                (
+                    "guardian-consent.png",
+                    BytesIO(b"\x89PNG\r\n\x1a\nfake"),
+                    "image/png",
+                ),
+            ),
         ],
     )
     assert consent.status_code == 200

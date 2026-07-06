@@ -7,6 +7,7 @@ from app.core.access_control import (
     enforce_entitlement,
     require_branch_in_tenant,
     require_user_branch_access,
+    scoped_branch_id,
 )
 from app.core.auth import require_any_permission, user_role_keys
 from app.core.database import get_session
@@ -520,6 +521,16 @@ def list_enrollments(
     statement = select(PatientSubscriptionEnrollment).where(
         PatientSubscriptionEnrollment.tenant_id == tenant_id
     )
+    # Confine a branch-scoped user to their branch; honor an explicit branch
+    # filter for tenant-wide users. Previously the branch_id param was ignored
+    # entirely, exposing every branch's enrollments.
+    if branch_id:
+        require_branch_in_tenant(session, tenant_id, branch_id)
+    effective_branch = scoped_branch_id(current_user, branch_id)
+    if effective_branch:
+        statement = statement.where(
+            PatientSubscriptionEnrollment.branch_id == effective_branch
+        )
     if patient_id:
         statement = statement.where(
             PatientSubscriptionEnrollment.patient_id == patient_id

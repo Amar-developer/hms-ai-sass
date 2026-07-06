@@ -26,6 +26,7 @@ router = APIRouter(prefix="/notifications")
     "",
     response_model=NotificationEventRead,
     status_code=status.HTTP_201_CREATED,
+    summary="Queue notification",
     dependencies=[Depends(require_permission(permissions.NOTIFICATIONS_MANAGE))],
 )
 def queue_notification(
@@ -63,6 +64,7 @@ def queue_notification(
 @router.get(
     "",
     response_model=list[NotificationEventRead],
+    summary="List notifications",
     dependencies=[Depends(require_permission(permissions.NOTIFICATIONS_MANAGE))],
 )
 def list_notifications(

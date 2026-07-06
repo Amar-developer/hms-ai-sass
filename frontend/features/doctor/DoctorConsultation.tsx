@@ -188,6 +188,8 @@ export function DoctorConsultation({
         departmentId: (practitioner.department_ids || [])[0] || departmentId,
         departmentIds: practitioner.department_ids || [],
         branchIds: practitioner.branch_ids || [],
+        registrationNumber: practitioner.registration_number || "",
+        signatureUrl: practitioner.signature_url || "",
       })),
       ...scopedAppointments,
     ].reduce((acc: any, appointment: any) => {
@@ -206,6 +208,10 @@ export function DoctorConsultation({
           existing.specialty ||
           appointment.departmentId ||
           "",
+        registrationNumber:
+          appointment.registrationNumber || existing.registrationNumber || "",
+        signatureUrl:
+          appointment.signatureUrl || existing.signatureUrl || "",
         departmentIds: Array.from(
           new Set(
             [

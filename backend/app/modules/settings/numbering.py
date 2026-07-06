@@ -21,6 +21,7 @@ DEFAULT_ENTITY_CODES: dict[str, str] = {
     "physiotherapy_case": "PHY",
     "home_care_booking": "HC",
     "supplier": "SUP",
+    "credit_note": "CN",
 }
 
 ENTITY_COLUMNS: dict[str, tuple[str, str, bool]] = {
@@ -35,6 +36,7 @@ ENTITY_COLUMNS: dict[str, tuple[str, str, bool]] = {
     "physiotherapy_case": ("physiotherapycase", "case_number", True),
     "home_care_booking": ("homecarebooking", "booking_number", True),
     "supplier": ("pharmacysupplier", "supplier_number", False),
+    "credit_note": ("creditnote", "credit_note_number", False),
 }
 
 
@@ -167,12 +169,19 @@ def next_document_number(
         digits = 6
     table_name, column_name, branch_scoped = ENTITY_COLUMNS[entity]
     sequence_branch_id = branch_id if branch_scoped and branch_id else ""
+    # Lock the sequence row so concurrent number generation is serialized —
+    # two invoices can never read the same current_value and mint a duplicate
+    # number. (FOR UPDATE is a no-op on SQLite test DBs, which are single-writer
+    # anyway.) The unique constraint on (tenant, branch, entity) covers the
+    # first-time creation race.
     sequence = session.exec(
-        select(DocumentSequence).where(
+        select(DocumentSequence)
+        .where(
             DocumentSequence.tenant_id == tenant_id,
             DocumentSequence.branch_id == sequence_branch_id,
             DocumentSequence.entity == entity,
         )
+        .with_for_update()
     ).first()
     if not sequence:
         sequence = DocumentSequence(

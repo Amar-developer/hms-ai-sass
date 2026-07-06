@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.modules.billing.models import Invoice, InvoiceStatus
 from app.modules.reports.models import MonthlyRevenueSnapshot
@@ -30,6 +30,16 @@ def _invoice(tenant_id: str, **kwargs) -> Invoice:
     )
     defaults.update(kwargs)
     return Invoice(**defaults)
+
+
+def _june_aggregate(session: Session) -> MonthlyRevenueSnapshot:
+    return session.exec(
+        select(MonthlyRevenueSnapshot).where(
+            MonthlyRevenueSnapshot.period_year == 2026,
+            MonthlyRevenueSnapshot.period_month == 6,
+            MonthlyRevenueSnapshot.branch_id.is_(None),
+        )
+    ).first()
 
 
 def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
@@ -113,18 +123,108 @@ def test_archive_month_freezes_and_is_idempotent(test_engine):
         assert len(rows) == 2
 
 
+def test_archive_month_overwrite_recomputes_stale_snapshot(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Overwrite Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        session.add(_invoice(tenant.id, invoice_number="INV-1"))
+        session.commit()
+
+        first = archive_month(session, tenant_id=tenant.id, year=2026, month=5)
+        aggregate = next(snap for snap in first if snap.branch_id is None)
+        assert aggregate.paid_revenue == 1000
+
+        session.add(_invoice(tenant.id, invoice_number="INV-2", paid_amount=500))
+        session.commit()
+
+        stale = archive_month(session, tenant_id=tenant.id, year=2026, month=5)
+        stale_aggregate = next(snap for snap in stale if snap.branch_id is None)
+        assert stale_aggregate.paid_revenue == 1000
+
+        refreshed = archive_month(
+            session, tenant_id=tenant.id, year=2026, month=5, overwrite=True
+        )
+        refreshed_aggregate = next(snap for snap in refreshed if snap.branch_id is None)
+        assert refreshed_aggregate.paid_revenue == 1500
+        assert refreshed_aggregate.invoice_count == 2
+
+
 def test_previous_calendar_month_rolls_over_january():
     assert previous_calendar_month(datetime(2026, 1, 15).date()) == (2025, 12)
     assert previous_calendar_month(datetime(2026, 6, 30).date()) == (2026, 5)
 
 
-def test_archive_due_months_skips_already_archived(test_engine):
+def test_archive_due_months_skips_already_archived_past_grace(test_engine):
     with Session(test_engine) as session:
         tenant = Tenant(name="Due Clinic")
         session.add(tenant)
         session.commit()
         session.refresh(tenant)
-        # First pass archives the previous calendar month; second is a no-op.
-        archive_due_months(session)
-        count = archive_due_months(session)
+        # Well past the grace window: first pass archives June, second is a no-op.
+        past_grace = date(2026, 7, 20)
+        archive_due_months(session, today=past_grace)
+        count = archive_due_months(session, today=past_grace)
         assert count == 0
+
+
+def test_archive_due_months_refreshes_late_payment_within_grace(test_engine):
+    """An invoice generated last month but paid a day into the new month must be
+    picked up while still inside the grace window, then frozen afterwards."""
+
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Grace Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        # Generated in June, still unpaid at the July 1 rollover.
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-JUN-1",
+                created_at=datetime(2026, 6, 5, 12, 0, 0),
+                paid_amount=0,
+                balance_amount=1000,
+                status=InvoiceStatus.ISSUED,
+            )
+        )
+        session.commit()
+
+        within_grace = date(2026, 7, 2)
+        archive_due_months(session, today=within_grace)
+        aggregate = _june_aggregate(session)
+        # Unpaid at freeze -> not yet counted.
+        assert aggregate.invoice_count == 0
+        assert aggregate.paid_revenue == 0
+
+        # Paid on July 2 (a June invoice paid in the new month). Still in grace.
+        invoice = session.exec(
+            select(Invoice).where(Invoice.invoice_number == "INV-JUN-1")
+        ).first()
+        invoice.paid_amount = 1000
+        invoice.balance_amount = 0
+        invoice.status = InvoiceStatus.PAID
+        session.add(invoice)
+        session.commit()
+
+        archive_due_months(session, today=within_grace)
+        session.expire_all()
+        aggregate = _june_aggregate(session)
+        assert aggregate.invoice_count == 1
+        assert aggregate.paid_revenue == 1000
+
+        # Past the grace window the month is final: later changes do not apply.
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-JUN-2",
+                created_at=datetime(2026, 6, 28, 12, 0, 0),
+            )
+        )
+        session.commit()
+        archive_due_months(session, today=date(2026, 7, 10))
+        session.expire_all()
+        aggregate = _june_aggregate(session)
+        assert aggregate.invoice_count == 1
+        assert aggregate.paid_revenue == 1000

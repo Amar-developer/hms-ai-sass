@@ -569,10 +569,15 @@ export function Lab({
 
   async function openReport(order: any) {
     setBusy(order.id);
+    // Open synchronously, in the same tick as the click, then navigate it once
+    // the report URL is known. Popup blockers (Brave in particular) drop new
+    // tabs opened after an awaited fetch, leaving a blank tab.
+    const win = window.open("", "_blank", "noopener,noreferrer");
     try {
       // 1. If user uploaded a file in this session, download it directly
       const localFile = reportFiles[order.id];
       if (localFile) {
+        win?.close();
         downloadBlob(localFile, localFile.name);
         return;
       }
@@ -583,19 +588,25 @@ export function Lab({
           (r: any) => r.report_url,
         );
         if (resultWithUrl?.report_url) {
-          window.open(resultWithUrl.report_url, "_blank");
+          if (win) {
+            win.location.href = resultWithUrl.report_url;
+          } else {
+            window.open(resultWithUrl.report_url, "_blank");
+          }
           return;
         }
       } catch (_) {
         /* fall through to generated PDF */
       }
       // 3. Fallback: download backend-generated PDF
+      win?.close();
       const blob = await apiBlob(
         `/lab/orders/${order.id}/report.pdf`,
         apiSession,
       );
       downloadBlob(blob, `lab-report-${order.id}.pdf`);
     } catch (err: any) {
+      win?.close();
       setMessage(err.message || "Could not download report.");
     } finally {
       setBusy("");

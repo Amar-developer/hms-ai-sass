@@ -22,12 +22,21 @@ class ClientLogCreate(BaseModel):
     stack: str | None = Field(default=None, max_length=4000)
 
 
-@router.post("", status_code=status.HTTP_202_ACCEPTED)
+class ClientLogAccepted(BaseModel):
+    accepted: bool
+
+
+@router.post(
+    "",
+    response_model=ClientLogAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Record frontend log",
+)
 def create_client_log(
     payload: ClientLogCreate,
     tenant_id: str = Depends(require_tenant_id),
     current_user: User = Depends(get_current_user),
-) -> dict[str, bool]:
+) -> ClientLogAccepted:
     if not current_user.is_super_admin and current_user.tenant_id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied"
@@ -45,4 +54,4 @@ def create_client_log(
             "client_stack": payload.stack,
         },
     )
-    return {"accepted": True}
+    return ClientLogAccepted(accepted=True)

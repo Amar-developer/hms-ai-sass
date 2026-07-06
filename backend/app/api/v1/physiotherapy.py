@@ -491,7 +491,7 @@ async def upload_consent_form(
         existing_files = []
     uploaded_files = []
     for upload_file in files:
-        saved_filename, url_path = await save_upload(
+        saved_filename, url_path, _ct = await save_upload(
             upload_file, f"physio_consent_{case_id[:12]}"
         )
         record_file_document(

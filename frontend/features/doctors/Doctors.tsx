@@ -10,7 +10,7 @@ import {
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { SelectField, TextField } from "@/app/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { doctorTypes } from "@/utils/doctors/constants";
@@ -257,6 +257,37 @@ export function Doctors({ apiSession, clinic }: any) {
     }
   }
 
+  async function uploadDoctorSignature(practitionerId: string, file: File) {
+    if (!scopedSession || !file) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const upload = new FormData();
+      upload.append("file", file);
+      upload.append("category", "signature");
+      upload.append("source_module", "practitioners");
+      upload.append("attached_to_doctype", "Practitioner");
+      upload.append("attached_to_name", practitionerId);
+      upload.append("attached_to_field", "signature_url");
+      upload.append("attached_to_label", "Doctor Signature");
+      upload.append("folder", "Signatures");
+      const created = await apiUpload("/files", scopedSession, upload);
+      setRows((previous: any[]) =>
+        previous.map((row: any) =>
+          row.id === practitionerId
+            ? { ...row, signature_url: created.file_url }
+            : row,
+        ),
+      );
+      await loadData(tenantId);
+      setMessage("Signature uploaded.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not upload signature.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function deactivate(row: any) {
     if (!scopedSession) return;
     setBusy(true);
@@ -348,6 +379,9 @@ export function Doctors({ apiSession, clinic }: any) {
         feeRules={feeRules}
         busy={busy}
         onSubmit={updateDoctor}
+        onUploadSignature={(file: File) =>
+          uploadDoctorSignature(selected.id, file)
+        }
         back={() => open("list")}
       />
     );

@@ -484,10 +484,16 @@ def _ensure_invoice_can_request_adjustment(
 
 
 def _apply_refund_to_payments(
-    session: Session, invoice: Invoice, amount: int, reason: str
+    session: Session,
+    invoice: Invoice,
+    amount: int,
+    reason: str,
+    target_payment_id: str | None = None,
 ) -> list[Payment]:
     remaining = amount
     changed: list[Payment] = []
+    # Lock the invoice's payment rows FOR UPDATE so two concurrent refunds can't
+    # both read the same available balance and over-refund.
     payments = list(
         session.exec(
             select(Payment)
@@ -495,8 +501,17 @@ def _apply_refund_to_payments(
                 Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id
             )
             .order_by(Payment.collected_at.desc())
+            .with_for_update()
         ).all()
     )
+    # When a specific payment is being refunded (POST /payments/{id}/refund),
+    # drain that payment FIRST — the caller validated the amount against *its*
+    # balance, so the money must come off it, not off whichever payment happens
+    # to be most recent. Otherwise a retried refund for the same payment_id
+    # (still marked un-refunded because a different row was touched) would
+    # double-refund the invoice.
+    if target_payment_id:
+        payments.sort(key=lambda p: 0 if p.id == target_payment_id else 1)
     for payment in payments:
         available = max(int(payment.amount or 0) - int(payment.refunded_amount or 0), 0)
         if available <= 0:
@@ -1148,6 +1163,25 @@ def _build_receipt_pdf(
     def center(x1: int, x2: int, y: int, value: object, size=8, bold=False) -> None:
         text((x1 + x2) // 2, y, value, size, bold, "center")
 
+    def paid_stamp(cx: int, cy: int) -> None:
+        # Rotated "PAID / THANK YOU" badge for fully settled invoices. Wraps a
+        # border + two text lines in a rotated coordinate space (cos/sin for a
+        # fixed 15 degree tilt, precomputed to avoid a math import) centered
+        # at (cx, cy); Tm-positioned text composes with the outer `cm` so it
+        # rotates along with the border.
+        cos_t, sin_t, neg_sin_t = "0.9659", "0.2588", "-0.2588"
+        # #37A94C, the exact stamp green from the source design file.
+        stamp_green = "0.216 0.663 0.298"
+        ops.append(f"q {cos_t} {sin_t} {neg_sin_t} {cos_t} {cx} {cy} cm")
+        ops.append(f"{stamp_green} RG 1.6 w 0 j -35 -14 70 28 re S")
+        # Both lines are x-centered on the local origin (align="center") so
+        # they stay centered inside the border regardless of its width. The
+        # border is sized close to the text (not a large card) so there's no
+        # empty margin left/right of "PAID"/"THANK YOU".
+        text(0, 2, "PAID", 14, True, "center", stamp_green)
+        text(0, -11, "THANK YOU", 6, True, "center", stamp_green)
+        ops.append("Q")
+
     def item_selling_amount(item: InvoiceItem) -> int:
         return int(item.selling_amount or item.unit_amount or 0)
 
@@ -1566,6 +1600,14 @@ def _build_receipt_pdf(
         text(cert_pad, right_col_top - 11 - offset * 11, cert_line, 7)
     # "For <legal name>" gets clear space above the divider line below it.
     text(cert_pad, top_divider_y + 9, f"For {legal_name}", 8, True)
+    # Fully settled invoices get a PAID stamp in the otherwise-empty middle
+    # band of this column, between the certification text and the signature
+    # line — same "fully paid" condition used elsewhere for invoice status.
+    if invoice.balance_amount <= 0 and invoice.total_amount > 0:
+        paid_stamp(
+            (mid_x + right_x) // 2,
+            (top_divider_y + (right_col_bottom + 38)) // 2,
+        )
     text(
         (mid_x + right_x) // 2,
         right_col_bottom + 15,
@@ -3388,6 +3430,7 @@ def _execute_billing_adjustment(
     actor_user_id: str | None,
     payment_method: PaymentMethod | None = None,
     payment_reference: str | None = None,
+    target_payment_id: str | None = None,
 ) -> Invoice:
     old_paid = int(invoice.paid_amount or 0)
     old_balance = int(invoice.balance_amount or 0)
@@ -3422,7 +3465,7 @@ def _execute_billing_adjustment(
 
     refund_amount = _validate_adjustment_amount(invoice, request_type, amount)
     changed_payments = _apply_refund_to_payments(
-        session, invoice, refund_amount, reason
+        session, invoice, refund_amount, reason, target_payment_id=target_payment_id
     )
     credit = CreditNote(
         tenant_id=invoice.tenant_id,
@@ -3523,13 +3566,31 @@ def create_billing_adjustment_request(
         request_type=payload.request_type,
         amount=amount,
         reason=payload.reason,
-        requested_by_user_id=payload.requested_by_user_id or current_user.id,
+        requested_by_user_id=current_user.id,
         payment_method=payload.payment_method,
         payment_reference=payload.payment_reference,
     )
     session.add(row)
     session.commit()
     session.refresh(row)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=invoice.branch_id,
+        actor_user_id=current_user.id,
+        action="billing.adjustment_request.created",
+        resource_type="billing_adjustment_request",
+        resource_id=row.id,
+        purpose="billing_adjustment",
+        metadata_json=json.dumps(
+            {
+                "invoice_id": invoice.id,
+                "request_type": str(payload.request_type),
+                "amount": amount,
+                "reason": payload.reason,
+            }
+        ),
+    )
     return _read_adjustment_request(session, row)
 
 
@@ -3555,12 +3616,29 @@ def approve_billing_adjustment_request(
             status_code=status.HTTP_409_CONFLICT, detail="Request already decided"
         )
     row.status = BillingAdjustmentStatus.APPROVED
-    row.approved_by_user_id = payload.actor_user_id or current_user.id
+    row.approved_by_user_id = current_user.id
     row.decision_reason = payload.reason
     row.decided_at = datetime.now(timezone.utc)
     session.add(row)
     session.commit()
     session.refresh(row)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=row.branch_id,
+        actor_user_id=current_user.id,
+        action="billing.adjustment_request.approved",
+        resource_type="billing_adjustment_request",
+        resource_id=row.id,
+        purpose="billing_adjustment",
+        metadata_json=json.dumps(
+            {
+                "invoice_id": row.invoice_id,
+                "amount": row.amount,
+                "reason": payload.reason,
+            }
+        ),
+    )
     return _read_adjustment_request(session, row)
 
 
@@ -3586,12 +3664,25 @@ def reject_billing_adjustment_request(
             status_code=status.HTTP_409_CONFLICT, detail="Request already decided"
         )
     row.status = BillingAdjustmentStatus.REJECTED
-    row.rejected_by_user_id = payload.actor_user_id or current_user.id
+    row.rejected_by_user_id = current_user.id
     row.decision_reason = payload.reason
     row.decided_at = datetime.now(timezone.utc)
     session.add(row)
     session.commit()
     session.refresh(row)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=row.branch_id,
+        actor_user_id=current_user.id,
+        action="billing.adjustment_request.rejected",
+        resource_type="billing_adjustment_request",
+        resource_id=row.id,
+        purpose="billing_adjustment",
+        metadata_json=json.dumps(
+            {"invoice_id": row.invoice_id, "reason": payload.reason}
+        ),
+    )
     return _read_adjustment_request(session, row)
 
 
@@ -3606,7 +3697,13 @@ def execute_billing_adjustment_request(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
-    row = session.get(BillingAdjustmentRequest, request_id)
+    # Lock the request row so two concurrent executions serialize — the second
+    # sees status=EXECUTED and is rejected instead of refunding twice.
+    row = session.exec(
+        select(BillingAdjustmentRequest)
+        .where(BillingAdjustmentRequest.id == request_id)
+        .with_for_update()
+    ).first()
     if not row or row.tenant_id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Request not found"
@@ -3661,7 +3758,11 @@ def refund_payment(
     current_user: User = Depends(require_permission(permissions.PAYMENTS_MANAGE)),
 ) -> InvoiceDetailRead:
     enforce_entitlement(session, tenant_id, "billing_basic")
-    payment = session.get(Payment, payment_id)
+    # Lock the payment row so a duplicate/concurrent refund of the same payment
+    # blocks and then sees status=REFUNDED (idempotency), instead of racing.
+    payment = session.exec(
+        select(Payment).where(Payment.id == payment_id).with_for_update()
+    ).first()
     if not payment or payment.tenant_id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Payment not found"
@@ -3691,9 +3792,10 @@ def refund_payment(
         else BillingAdjustmentType.PARTIAL_REFUND,
         amount=amount,
         reason=payload.reason,
-        actor_user_id=payload.actor_user_id or current_user.id,
+        actor_user_id=current_user.id,
         payment_method=payload.payment_method,
         payment_reference=payload.payment_reference,
+        target_payment_id=payment.id,
     )
     return _read_invoice_detail(session, invoice)
 
@@ -3708,7 +3810,11 @@ def cancel_invoice(
 ) -> InvoiceDetailRead:
     enforce_entitlement(session, tenant_id, "billing_basic")
     _require_direct_invoice_reversal_admin(session, current_user)
-    invoice = session.get(Invoice, invoice_id)
+    # Lock the invoice so a concurrent cancel/refund can't both pass the status
+    # guard and double-reverse it.
+    invoice = session.exec(
+        select(Invoice).where(Invoice.id == invoice_id).with_for_update()
+    ).first()
     if not invoice or invoice.tenant_id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"

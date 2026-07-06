@@ -1563,6 +1563,8 @@ def add_lab_result(
             "tenant_id": tenant_id,
             "branch_id": order.branch_id,
             "lab_order_id": order.id,
+            # The releasing user is the authenticated caller, not a client value.
+            "released_by_user_id": current_user.id,
         },
     )
     order.status = LabOrderStatus.RESULT_READY
@@ -1611,13 +1613,13 @@ def add_lab_result(
                 message=f"Your lab report for {order.tests} is ready.",
                 resource_type="lab_order",
                 resource_id=order.id,
-                queued_by_user_id=payload.released_by_user_id,
+                queued_by_user_id=current_user.id,
             )
     record_audit_event(
         session,
         tenant_id=tenant_id,
         branch_id=order.branch_id,
-        actor_user_id=payload.released_by_user_id,
+        actor_user_id=current_user.id,
         action="lab_result.released",
         resource_type="lab_order",
         resource_id=order.id,

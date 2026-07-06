@@ -13,6 +13,7 @@ from app.modules.audit.service import record_audit_event
 from app.modules.queue.models import QueueEntry, QueueEvent, QueuePriority
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
+from app.modules.tenants.models import Branch
 from app.modules.tenants.models import now_utc
 
 
@@ -34,6 +35,10 @@ def next_token_number(
     appointment_date,
     emergency: bool,
 ) -> str:
+    # Serialize token issuance within a branch by locking the branch row, so two
+    # concurrent bookings can't both read the same count and mint duplicate
+    # token numbers. (No-op on single-writer SQLite.)
+    session.exec(select(Branch).where(Branch.id == branch_id).with_for_update()).first()
     statement = (
         select(func.count())
         .select_from(QueueEntry)

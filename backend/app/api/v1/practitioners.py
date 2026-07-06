@@ -320,6 +320,56 @@ def list_practitioners(
     return [_read(session, practitioner) for practitioner in practitioners]
 
 
+def _enrich_schedules(
+    session: Session, schedules: list[PractitionerSchedule]
+) -> list[PractitionerScheduleRead]:
+    """Attach human-readable practitioner / branch / department names so the UI
+    never has to fall back to rendering a raw id or slug for these rows."""
+    if not schedules:
+        return []
+    prac_ids = {s.practitioner_id for s in schedules if s.practitioner_id}
+    branch_ids = {s.branch_id for s in schedules if s.branch_id}
+    dept_ids = {s.department_id for s in schedules if s.department_id}
+
+    prac_names = (
+        {
+            p.id: p.full_name
+            for p in session.exec(
+                select(Practitioner).where(Practitioner.id.in_(prac_ids))
+            ).all()
+        }
+        if prac_ids
+        else {}
+    )
+    branch_names = (
+        {
+            b.id: b.name
+            for b in session.exec(select(Branch).where(Branch.id.in_(branch_ids))).all()
+        }
+        if branch_ids
+        else {}
+    )
+    dept_names = (
+        {
+            d.id: d.name
+            for d in session.exec(
+                select(Department).where(Department.id.in_(dept_ids))
+            ).all()
+        }
+        if dept_ids
+        else {}
+    )
+
+    rows: list[PractitionerScheduleRead] = []
+    for schedule in schedules:
+        read = PractitionerScheduleRead.model_validate(schedule, from_attributes=True)
+        read.practitioner_full_name = prac_names.get(schedule.practitioner_id)
+        read.branch_name = branch_names.get(schedule.branch_id)
+        read.department_name = dept_names.get(schedule.department_id)
+        rows.append(read)
+    return rows
+
+
 @router.get("/schedules", response_model=list[PractitionerScheduleRead])
 def list_all_practitioner_schedules(
     tenant_id: str = Depends(require_tenant_id),
@@ -333,7 +383,7 @@ def list_all_practitioner_schedules(
             permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ
         )
     ),
-) -> list[PractitionerSchedule]:
+) -> list[PractitionerScheduleRead]:
     statement = select(PractitionerSchedule).where(
         PractitionerSchedule.tenant_id == tenant_id
     )
@@ -350,7 +400,7 @@ def list_all_practitioner_schedules(
         )
     if is_active is not None:
         statement = statement.where(PractitionerSchedule.is_active == is_active)
-    return list(
+    schedules = list(
         session.exec(
             statement.order_by(
                 PractitionerSchedule.updated_at.desc(),
@@ -358,6 +408,7 @@ def list_all_practitioner_schedules(
             )
         ).all()
     )
+    return _enrich_schedules(session, schedules)
 
 
 @router.patch("/schedules/{schedule_id}", response_model=PractitionerScheduleRead)
@@ -599,9 +650,9 @@ def list_practitioner_schedules(
             permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ
         )
     ),
-) -> list[PractitionerSchedule]:
+) -> list[PractitionerScheduleRead]:
     _get_practitioner(session, tenant_id, practitioner_id)
-    return list(
+    schedules = list(
         session.exec(
             select(PractitionerSchedule).where(
                 PractitionerSchedule.tenant_id == tenant_id,
@@ -609,6 +660,7 @@ def list_practitioner_schedules(
             )
         ).all()
     )
+    return _enrich_schedules(session, schedules)
 
 
 @router.post(

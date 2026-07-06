@@ -26,6 +26,7 @@ export function DoctorForm({
   feeRules,
   busy,
   onSubmit,
+  onUploadSignature,
   back,
 }: any) {
   const initialDepartmentIds = doctor?.department_ids || [];

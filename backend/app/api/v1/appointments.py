@@ -258,6 +258,14 @@ def _enforce_practitioner_slot_conflict(
         or not payload.appointment_time
     ):
         return
+    # Lock the practitioner row FOR UPDATE so concurrent bookings for the same
+    # doctor serialize — the slot check + insert become atomic and the same slot
+    # can't be double-booked in a race. (No-op on single-writer SQLite.)
+    session.exec(
+        select(Practitioner)
+        .where(Practitioner.id == payload.practitioner_id)
+        .with_for_update()
+    ).first()
     existing_rows = session.exec(
         select(Appointment).where(
             Appointment.tenant_id == tenant_id,
@@ -741,6 +749,13 @@ def list_platform_appointments(
     limit: int = Query(default=100, ge=1, le=500),
     session: Session = Depends(get_session),
 ) -> list[AppointmentGridRead]:
+    # Require at least one scoping filter so this cross-tenant, 8-table-join
+    # search can never run as an unbounded full-platform scan.
+    if not any([tenant_id, branch_id, department_id, appointment_date, q]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide at least one filter (tenant, branch, department, date, or search term)",
+        )
     statement = _appointment_grid_statement()
     if tenant_id:
         statement = statement.where(Appointment.tenant_id == tenant_id)

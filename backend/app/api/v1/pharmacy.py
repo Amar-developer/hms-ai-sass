@@ -308,13 +308,29 @@ def _add_issue_items(session: Session, issue: PharmacyIssue, payload_items) -> N
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Medicine name is required",
             )
-        unit_price = item.unit_price or (
+        reference_price = (
             batch.sale_price
             if batch
             else medicine.default_sale_price
             if medicine
             else 0
         )
+        # A client may pass a unit price, but it can never be below the catalog /
+        # batch reference — that would silently under-bill dispensed medicine.
+        # Discounts must go through the discount workflow, not an arbitrary price.
+        if (
+            item.unit_price is not None
+            and reference_price
+            and item.unit_price < reference_price
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Unit price for '{name}' cannot be below the catalog price "
+                    f"({reference_price}). Apply a discount instead."
+                ),
+            )
+        unit_price = item.unit_price or reference_price
         total += unit_price * item.quantity
         names.append(name)
         session.add(
@@ -851,7 +867,13 @@ def create_pharmacy_return(
     session.commit()
     session.refresh(return_record)
     for item in payload.items:
-        batch = session.get(MedicineBatch, item.batch_id)
+        # Lock the batch row so the read-then-decrement is atomic under
+        # concurrent returns/dispenses (no negative or lost stock updates).
+        batch = session.exec(
+            select(MedicineBatch)
+            .where(MedicineBatch.id == item.batch_id)
+            .with_for_update()
+        ).first()
         if (
             not batch
             or batch.tenant_id != tenant_id
@@ -1194,11 +1216,33 @@ def update_pharmacy_issue_status(
                     )
                 ).all()
             )
+        expiry_floor = datetime.utcnow()
         for item in items:
             if item.medicine_id:
-                batch = (
-                    session.get(MedicineBatch, item.batch_id) if item.batch_id else None
-                )
+                # Lock the chosen batch row FOR UPDATE so two concurrent
+                # dispenses can never both pass the stock check and drive
+                # quantity_on_hand negative. Expired batches are excluded.
+                batch = None
+                if item.batch_id:
+                    batch = session.exec(
+                        select(MedicineBatch)
+                        .where(MedicineBatch.id == item.batch_id)
+                        .with_for_update()
+                    ).first()
+                    if batch and (
+                        batch.tenant_id != tenant_id
+                        or batch.branch_id != issue.branch_id
+                    ):
+                        batch = None
+                    if (
+                        batch
+                        and batch.expiry_date is not None
+                        and batch.expiry_date < expiry_floor
+                    ):
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Batch for {item.medicine_name} has expired and cannot be dispensed",
+                        )
                 if not batch:
                     batch = session.exec(
                         select(MedicineBatch)
@@ -1207,8 +1251,11 @@ def update_pharmacy_issue_status(
                             MedicineBatch.branch_id == issue.branch_id,
                             MedicineBatch.medicine_id == item.medicine_id,
                             MedicineBatch.quantity_on_hand >= item.quantity,
+                            (MedicineBatch.expiry_date.is_(None))
+                            | (MedicineBatch.expiry_date >= expiry_floor),
                         )
                         .order_by(MedicineBatch.expiry_date)
+                        .with_for_update()
                     ).first()
                 if not batch or batch.quantity_on_hand < item.quantity:
                     raise HTTPException(

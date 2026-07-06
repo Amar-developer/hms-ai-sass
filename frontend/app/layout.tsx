@@ -12,7 +12,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en-GB">
-      <body className="font-sans">{children}</body>
+      <body className="font-sans">
+        <div id="app-shell">{children}</div>
+        <div id="prescription-print-root" />
+      </body>
     </html>
   );
 }

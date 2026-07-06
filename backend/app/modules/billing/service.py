@@ -52,14 +52,12 @@ def next_invoice_number(
 
 
 def next_credit_note_number(session: Session, tenant_id: str) -> str:
-    from app.modules.billing.models import CreditNote
+    # Use the shared atomic document-sequence generator (row-locked) instead of
+    # COUNT(*)+1, so concurrent refunds across invoices can't mint duplicate
+    # credit-note numbers.
+    from app.modules.settings.numbering import next_document_number
 
-    count = session.exec(
-        select(func.count())
-        .select_from(CreditNote)
-        .where(CreditNote.tenant_id == tenant_id)
-    ).one()
-    return f"CN-{count + 1:06d}"
+    return next_document_number(session, tenant_id=tenant_id, entity="credit_note")
 
 
 def find_fee_rule(

@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -16,7 +17,7 @@
   --brand-fg: #ffffff;
 
   /* Success */
-  --success-subtle: #ecfdf5; /* emerald-50  */
+  --success-subtle: #ecfdf5;
   --success-soft: #d1fae5;   /* emerald-100 */
   --success-border: #a7f3d0; /* emerald-200 */
   --success-solid: #10b981;  /* emerald-500 */
@@ -188,4 +189,31 @@ body {
 
 .table-text {
   @apply block truncate w-full;
+}
+
+/* Printable documents (e.g. the doctor consultation prescription) render into
+   this portal target instead of the app tree, so a print action shows only
+   the document and never the surrounding app chrome. */
+#prescription-print-root {
+  display: none;
+}
+
+@media print {
+  #app-shell {
+    display: none !important;
+  }
+  #prescription-print-root {
+    display: block !important;
+  }
+  #prescription-print-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* The prescription is laid out for A5 paper (148mm x 210mm), one page per
+   sheet, matching the PrescriptionDocument component's fixed mm dimensions. */
+@page {
+  size: 148mm 210mm;
+  margin: 0;
 }

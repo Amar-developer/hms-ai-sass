@@ -13,6 +13,7 @@ class PractitionerCreate(BaseModel):
     registration_number: str | None = Field(default=None, max_length=120)
     mobile: str | None = Field(default=None, max_length=20)
     email: str | None = Field(default=None, max_length=220)
+    signature_url: str | None = Field(default=None, max_length=500)
     branch_ids: list[str] = []
     department_ids: list[str] = []
     actor_user_id: str | None = None
@@ -26,6 +27,7 @@ class PractitionerUpdate(BaseModel):
     registration_number: str | None = Field(default=None, max_length=120)
     mobile: str | None = Field(default=None, max_length=20)
     email: str | None = Field(default=None, max_length=220)
+    signature_url: str | None = Field(default=None, max_length=500)
     status: PractitionerStatus | None = None
     branch_ids: list[str] | None = None
     department_ids: list[str] | None = None
@@ -43,6 +45,7 @@ class PractitionerRead(BaseModel):
     registration_number: str | None
     mobile: str | None
     email: str | None
+    signature_url: str | None = None
     status: PractitionerStatus
     created_at: datetime
     updated_at: datetime
@@ -89,8 +92,11 @@ class PractitionerScheduleRead(BaseModel):
     id: str
     tenant_id: str
     practitioner_id: str
+    practitioner_full_name: str | None = None
     branch_id: str
+    branch_name: str | None = None
     department_id: str | None
+    department_name: str | None = None
     weekday: int
     start_time: time
     end_time: time

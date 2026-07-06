@@ -14,6 +14,7 @@ from datetime import date, datetime
 
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.modules.billing.models import Invoice, InvoiceItem
 from app.modules.home_care.models import HomeCareBooking
 from app.modules.lab.models import LabOrderItem, LabTestCatalog
@@ -393,14 +394,24 @@ def archive_month(
     return saved
 
 
-def archive_due_months(session: Session) -> int:
-    """Archive the just-finished calendar month for every active tenant.
+def archive_due_months(session: Session, today: date | None = None) -> int:
+    """Archive the just-finished calendar month for every tenant.
 
-    Idempotent: tenants whose previous month is already frozen are skipped, so
-    this is safe to call from the per-second worker loop.
+    Safe to call from the worker loop. A month is frozen once it ends, but for
+    ``report_snapshot_grace_days`` days into the new month the snapshot is
+    re-frozen on each run so late same-period entries (an invoice generated last
+    month but paid a day into the new month, backdated invoices) are captured.
+    Historically this only archived once at the exact rollover instant, which
+    permanently missed any invoice created or paid afterwards. After the grace
+    window the frozen figures are left untouched.
     """
 
-    year, month = previous_calendar_month()
+    today = today or date.today()
+    year, month = previous_calendar_month(today)
+    _, period_end = month_range(year, month)
+    within_grace = (
+        today - period_end
+    ).days <= get_settings().report_snapshot_grace_days
     tenants = session.exec(select(Tenant)).all()
     archived = 0
     for tenant in tenants:
@@ -411,8 +422,16 @@ def archive_due_months(session: Session) -> int:
                 MonthlyRevenueSnapshot.period_month == month,
             )
         ).first()
-        if already:
+        # Once frozen and past the grace window the month is final; skip it.
+        if already and not within_grace:
             continue
-        archive_month(session, tenant_id=tenant.id, year=year, month=month)
+        # Inside the grace window overwrite so the frozen figures stay complete.
+        archive_month(
+            session,
+            tenant_id=tenant.id,
+            year=year,
+            month=month,
+            overwrite=within_grace,
+        )
         archived += 1
     return archived

@@ -43,6 +43,15 @@ class TenantRead(TenantCreate):
     updated_at: datetime
 
 
+class TenantBrandingRead(BaseModel):
+    name: str
+    legal_name: str | None = None
+    address: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    logo_url: str | None = None
+
+
 class BranchCreate(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     code: str = Field(min_length=2, max_length=40)

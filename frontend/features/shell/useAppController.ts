@@ -758,23 +758,13 @@ export function useAppController() {
       apiSession?.user?.roles?.includes("tenant_admin") ||
       apiSession?.user?.user_type === "tenant_admin"),
   );
-  const canOpenTenantAdmin = Boolean(
-    !isSuperAdmin &&
-    navHasAnyPermission(
-      "identity.users.manage",
-      "identity.users.create",
-      "identity.users.read",
-      "identity.users.edit",
-      "identity.users.delete",
-      "identity.roles.manage",
-      "identity.roles.read",
-      "settings.manage",
-      "branches.manage",
-      "branches.read",
-      "departments.manage",
-      "departments.read",
-    ),
-  );
+  // The Tenant Admin console (Users, Roles, Departments, Branches, Suppliers,
+  // Settings, …) is reserved for the tenant admin role itself — NOT merely for
+  // anyone who happens to hold an identity/settings permission. Gating on the
+  // role (rather than a permission) is what keeps a Doctor/Receptionist/Lab/
+  // Pharmacist out of the admin shell even if a stray admin permission is left
+  // on their role. The API is the real boundary; this keeps the menu honest.
+  const canOpenTenantAdmin = isTenantAdminUser;
   if (canOpenTenantAdmin) permissionModules.add("admin");
   if (
     navHasAnyPermission(

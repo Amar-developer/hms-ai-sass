@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Info,
+  Lock,
   RefreshCw,
   X,
   XCircle,
@@ -145,13 +146,27 @@ export function StatusToast({
       label: "Error",
     },
   };
-  const current = styles[resolvedTone];
+  // Access/permission problems read as a calm "you can't do this" alert with a
+  // lock, not an alarming red system error (ERPNext-style insufficient-permission notice).
+  const isPermission =
+    /permission|not allowed|forbidden|access denied|only a tenant admin|tenant admin access required/i.test(
+      String(message || ""),
+    );
+  const current = isPermission
+    ? {
+        icon: Lock,
+        iconClass: "fill-warning-solid text-white",
+        bar: "bg-warning-solid",
+        label: "Access denied",
+      }
+    : styles[resolvedTone];
   const Icon = current.icon;
 
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-[80] w-[calc(100vw-2rem)] max-w-sm">
       <div
-        role="status"
+        role={isPermission ? "alertdialog" : "status"}
+        aria-live={isPermission ? "assertive" : "polite"}
         className="pointer-events-auto overflow-hidden rounded bg-white text-slate-800 shadow-xl ring-1 ring-slate-900/10"
       >
         <div className="flex min-h-[58px] items-center gap-3 px-4 py-3">
