@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { displayToIsoDate, isoToDisplayDate } from "@/utils/helper";
+import { useDropdown } from "@/hooks/useDropdown";
 
 export function Card({
   children,
@@ -403,13 +404,13 @@ export function DateInput({
         disabled={disabled}
         placeholder={props.placeholder || "dd/mm/yyyy"}
         inputMode="numeric"
-        className={`w-full rounded-lg border border-slate-200 px-2 py-1.5 pr-10 lg:px-4 lg:py-2.5 text-[10px] lg:text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-lg border border-slate-200 px-2 py-1.5 pr-10 lg:px-4 lg:py-2 text-[10px] lg:text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
       <button
         type="button"
         onClick={openCalendar}
         disabled={disabled}
-        className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
+        className="absolute right-2 top-1/2 flex h-6 w-8 -translate-y-1/2 items-center justify-center rounded text-slate-500 hover:bg-slate-100 disabled:opacity-40"
         aria-label="Choose date"
       >
         <CalendarDays size={16} />
@@ -593,7 +594,7 @@ export function SuggestionInput({
           setOpen(true);
         }}
         autoComplete="off"
-        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-4 lg:py-2.5 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-4 lg:py-2 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
       {open && !disabled && filtered.length > 0 && (
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
@@ -635,10 +636,10 @@ export function Select({
 }
 
 type SearchableOption = { value: string; label: string; sublabel?: string };
-type SearchableSelectProps = {
+type SearchableSelectProps<T = string> = {
   name?: string;
-  value?: string;
-  onChange?: (value: string) => void;
+  value?: T;
+  onChange?: (value: T) => void;
   options: SearchableOption[];
   placeholder?: string;
   disabled?: boolean;
@@ -647,6 +648,8 @@ type SearchableSelectProps = {
   emptyText?: string;
   maxOptions?: number;
   className?: string;
+  searchable?: boolean;
+  required?: boolean;
 };
 
 export function SearchableSelect({
@@ -661,6 +664,8 @@ export function SearchableSelect({
   emptyText = "No matches.",
   maxOptions = 200,
   className = "",
+  searchable = true,
+  required = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -703,12 +708,19 @@ export function SearchableSelect({
 
   return (
     <div ref={wrapRef} className={`relative ${className}`}>
-      {name ? <input type="hidden" name={name} value={value || ""} /> : null}
+      {name ? (
+        <input
+          type="hidden"
+          name={name}
+          value={value || ""}
+          required={required}
+        />
+      ) : null}
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white py-2 px-2 lg:px-4 lg:py-3 text-left text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white py-2 px-2 lg:px-2 lg:py-2 text-left text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
       >
         <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
           {displayLabel || placeholder}
@@ -719,16 +731,18 @@ export function SearchableSelect({
       </button>
       {open && (
         <div className="absolute z-30 mt-1 max-h-72 w-full scrollbar-thin  overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
-          <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2">
-            <input
-              autoFocus
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={searchPlaceholder}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
-            />
-          </div>
-          {value && (
+          {searchable && (
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2">
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
+              />
+            </div>
+          )}
+          {value && searchable && (
             <button
               type="button"
               onClick={() => commit("")}
@@ -769,6 +783,102 @@ export function SearchableSelect({
     </div>
   );
 }
+
+// export function SearchableDropdown({
+//   value,
+//   options,
+//   onChange,
+//   placeholder = "Search...",
+// }: any) {
+//   const { open, setOpen, ref } = useDropdown();
+//   const [query, setQuery] = useState("");
+
+//   const filtered = useMemo(() => {
+//     const q = query.toLowerCase();
+//     return options.filter(
+//       (o: any) =>
+//         o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
+//     );
+//   }, [query, options]);
+
+//   const selected = options.find((o: any) => o.value === value);
+
+//   return (
+//     <div ref={ref} className="relative w-full">
+//       <button
+//         type="button"
+//         onClick={() => setOpen((p) => !p)}
+//         className="flex w-full justify-between rounded-lg border px-3 py-2"
+//       >
+//         <span>{selected?.label || "Select..."}</span>
+//         <ChevronDown className="h-4 w-4" />
+//       </button>
+
+//       {open && (
+//         <div className="absolute z-50 mt-1 w-full rounded-lg border bg-white shadow-lg">
+//           {/* Search */}
+//           <div className="p-2 border-b">
+//             <input
+//               autoFocus
+//               value={query}
+//               onChange={(e) => setQuery(e.target.value)}
+//               className="w-full rounded border px-2 py-1 text-sm"
+//               placeholder={placeholder}
+//             />
+//           </div>
+
+//           {/* Options */}
+//           {filtered.map((opt: any) => (
+//             <button
+//               key={opt.value}
+//               type="button"
+//               onClick={() => {
+//                 onChange(opt.value);
+//                 setOpen(false);
+//                 setQuery("");
+//               }}
+//               className="w-full px-3 py-2 text-left hover:bg-slate-50"
+//             >
+//               {opt.label}
+//             </button>
+//           ))}
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
+
+// type Option = {
+//   value: string;
+//   label: string;
+//   sublabel?: string;
+// };
+
+// export function Dropdown({
+//   open,
+//   setOpen,
+//   children,
+//   trigger,
+// }: {
+//   open: boolean;
+//   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
+//   trigger: React.ReactNode;
+//   children: React.ReactNode;
+// }) {
+//   const { ref } = useDropdown();
+
+//   return (
+//     <div ref={ref} className="relative w-full">
+//       <div onClick={() => setOpen((p) => !p)}>{trigger}</div>
+
+//       {open && (
+//         <div className="absolute z-50 mt-1 w-full rounded-lg border bg-white shadow-lg">
+//           {children}
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
 
 export function Button({
   children,
@@ -854,7 +964,7 @@ export function RefreshButton({
       disabled={busy}
       title={title}
       aria-label={title}
-      className={`inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className ? className:'h-8'}`}
+      className={`inline-flex h-12 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 lg:text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:text-slate-300 ${className ? className : "h-8"}`}
     >
       <RefreshCw className={`h-3.5 w-3.5  ${busy ? "animate-spin" : ""}`} />
       {label ? <span>{label}</span> : null}

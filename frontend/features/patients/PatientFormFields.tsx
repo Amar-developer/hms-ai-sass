@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Field, Input, Select } from "@/app/components/common/ui";
+import {
+  Field,
+  Input,
+  SearchableSelect,
+  Select,
+} from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
 import {
   calculateAgeYears,
   patientDateInputValue,
@@ -171,35 +177,33 @@ export function PatientFormFields({
           className="search-input"
         />
       </Field>
-      <Field label="Branch">
-        <Select
+      <FormField label="Branch">
+        <SearchableSelect
           name="branchId"
           value={selectedBranchId}
-          onChange={(event: any) => setSelectedBranchId(event.target.value)}
-          className="select-input"
-        >
-          {branchOptions.length === 0 && (
-            <option value="">No branches available</option>
-          )}
-          {branchOptions.map((branch) => (
-            <option key={branch.id} value={branch.id}>
-              {branch.name}
-            </option>
-          ))}
-        </Select>
-      </Field>
+          onChange={setSelectedBranchId}
+          searchable={branchOptions.length > 8}
+          placeholder="Select branch"
+          options={
+            branchOptions.length === 0
+              ? [{ value: "", label: "No branches available" }]
+              : branchOptions.map((branch) => ({
+                  value: branch.id,
+                  label: branch.name,
+                }))
+          }
+        />
+      </FormField>
       <Field label="Gender">
-        <Select
+        <SearchableSelect
           name="gender"
-          defaultValue={patientField(patient, "gender")}
-          className="select-input"
-        >
-          {genders.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Select>
+          value={patientField(patient, "gender")}
+          searchable={false}
+          options={genders.map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
       </Field>
       <Field label="Date of Birth">
         <Input
@@ -212,7 +216,7 @@ export function PatientFormFields({
             setDateOfBirth(nextDate);
             setAgeYears(nextDate ? calculateAgeYears(nextDate) : "");
           }}
-          className='search-input'
+          className="search-input"
         />
       </Field>
       <Field label="Age Years">
@@ -223,8 +227,8 @@ export function PatientFormFields({
           max="130"
           value={ageYears}
           onChange={(event: any) => setAgeYears(event.target.value)}
-          placeholder='Age'
-          className='search-input'
+          placeholder="Age"
+          className="search-input"
         />
       </Field>
       <Field label="Guardian Name">
@@ -232,7 +236,7 @@ export function PatientFormFields({
           name="guardianName"
           defaultValue={patientField(patient, "guardian_name", "guardianName")}
           placeholder="Enter guardian name"
-          className='search-input'
+          className="search-input"
         />
       </Field>
       <Field label="Guardian Mobile">
@@ -244,7 +248,7 @@ export function PatientFormFields({
             "guardianMobile",
           )}
           placeholder="Enter guardian mobile"
-          className='search-input'
+          className="search-input"
         />
       </Field>
       <Field label="Alternate Mobile">
@@ -256,7 +260,7 @@ export function PatientFormFields({
             "alternateMobile",
           )}
           placeholder="Enter guardian mobile number"
-          className='search-input'
+          className="search-input"
         />
       </Field>
       <Field label="Email">
@@ -265,7 +269,7 @@ export function PatientFormFields({
           type="email"
           defaultValue={patientField(patient, "email")}
           placeholder="Enter patient email"
-          className='search-input'
+          className="search-input"
         />
       </Field>
       <Field label="Area">
@@ -273,32 +277,33 @@ export function PatientFormFields({
           name="area"
           defaultValue={patientField(patient, "area")}
           placeholder="Enter patient area"
-          className='search-input'
+          className="search-input"
         />
       </Field>
       <Field label="Blood Group">
-        <Select
+        <SearchableSelect
           name="bloodGroup"
-          defaultValue={patientField(patient, "blood_group", "bloodGroup")}
-        >
-          {bloodGroups.map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </Select>
+          value={patientField(patient, "blood_group", "bloodGroup")}
+          searchable={false}
+          options={bloodGroups.map(([value, label]) => ({
+            value,
+            label,
+          }))}
+        />
       </Field>
       {includeStatus && (
         <Field label="Status">
-          <Select
+          <SearchableSelect
             name="status"
             value={status}
-            onChange={(event: any) => setStatus(event.target.value)}
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="deceased">Deceased</option>
-          </Select>
+            onChange={setStatus}
+            searchable={false}
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+              { value: "deceased", label: "Deceased" },
+            ]}
+          />
         </Field>
       )}
       <div className="md:col-span-2 xl:col-span-3">
@@ -307,7 +312,7 @@ export function PatientFormFields({
             name="address"
             defaultValue={patientField(patient, "address")}
             placeholder="Enter patient Address"
-            className='search-input'
+            className="search-input"
           />
         </Field>
       </div>

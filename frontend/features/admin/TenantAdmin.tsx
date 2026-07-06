@@ -14,6 +14,7 @@ import {
   title,
   dateInputToIso,
   groupDepartmentsByName,
+  userRoleLabels,
 } from "../../utils/tenantAdmin/helpers";
 import {
   UserRow,
@@ -41,7 +42,16 @@ import {
 } from "@/app/components/tenantAdmin/Forms";
 import { FilesPanel } from "@/app/components/tenantAdmin/FilesPanel";
 import { SettingsPanel } from "@/app/components/tenantAdmin/SettingsPanel";
-import { BRANCH_COLUMNS, DEPARTMENT_COLUMNS, DISCOUNT_OFFER_COLUMNS, ROLE_COLUMNS, SUPPLIER_COLUMNS, TAX_RULE_COLUMNS, USER_COLUMNS } from "@/utils/constants";
+import {
+  BRANCH_COLUMNS,
+  DEPARTMENT_COLUMNS,
+  DISCOUNT_OFFER_COLUMNS,
+  ROLE_COLUMNS,
+  SUPPLIER_COLUMNS,
+  TAX_RULE_COLUMNS,
+  USER_COLUMNS,
+} from "@/utils/constants";
+import { Key } from "lucide-react";
 
 export function TenantAdmin({
   apiSession,
@@ -98,6 +108,145 @@ export function TenantAdmin({
   });
   const [reportJobs, setReportJobs] = useState<any[]>([]);
   const [reportBusy, setReportBusy] = useState("");
+  const [userFilters, setUserFilters] = useState({
+    status: "all",
+    role: "all",
+    branch: "all",
+  });
+
+  const [roleFilter, setRoleFilters] = useState({
+    status: "all",
+  });
+
+  const [departmentFilters, setDepartmentFilters] = useState({
+    status: "all",
+    branch: "all",
+  });
+
+  const [branchFilter, setBranchFilter] = useState({
+    status: "all",
+  });
+  const [supplierFilter, setSupplierFilter] = useState({
+    status: "all",
+  });
+
+  const [taxFilter, setTaxFilter] = useState({
+    status: "all",
+  });
+  const [offerFilter, setOfferFilter] = useState({
+    status: "all",
+  });
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((user: any) => {
+      // Status
+      if (
+        userFilters.status !== "all" &&
+        (user.is_active ? "active" : "inactive") !== userFilters.status
+      ) {
+        return false;
+      }
+
+      // Branch
+      if (
+        userFilters.branch !== "all" &&
+        user.branch_id !== userFilters.branch
+      ) {
+        return false;
+      }
+
+      // Role
+      if (userFilters.role !== "all") {
+        const labels = userRoleLabels(user);
+
+        if (!labels.includes(userFilters.role)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [users, userFilters]);
+
+  const filterdRoles = useMemo(() => {
+    return roles.filter((role: any) => {
+      if (
+        roleFilter.status !== "all" &&
+        (role.is_active ? "active" : "inactive") !== roleFilter.status
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [roles, roleFilter]);
+
+  const filteredDepartments = useMemo(() => {
+    return departments.filter((department) => {
+      if (
+        departmentFilters.status !== "all" &&
+        (department.is_active ? "active" : "inactive") !==
+          departmentFilters.status
+      ) {
+        return false;
+      }
+      if (
+        departmentFilters.branch !== "all" &&
+        department.branch !== departmentFilters.branch
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [departmentFilters, departments]);
+
+  const filteredBranches = useMemo(() => {
+    return branches.filter((branch) => {
+      if (
+        branchFilter.status !== "all" &&
+        (branch.is_active ? "active" : "inactive") !== branchFilter.status
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [branches, branchFilter]);
+
+  const filteredSuppliers = useMemo(() => {
+    return suppliers.filter((supplier) => {
+      if (
+        supplierFilter.status !== "all" &&
+        (supplier.is_active ? "active" : "inactive") !== supplierFilter.status
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [suppliers, supplierFilter]);
+
+  const filteredTaxes = useMemo(() => {
+    return taxRules.filter((tax) => {
+      if (
+        taxFilter.status !== "all" &&
+        (tax.is_active ? "active" : "inactive") !== taxFilter.status
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [taxRules, taxFilter]);
+
+   const filteredOffers = useMemo(() => {
+    return discountOffers.filter((offer) => {
+      if (
+        offerFilter.status !== "all" &&
+        (offer.is_active ? "active" : "inactive") !== offerFilter.status
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [discountOffers, offerFilter]);
+
   const loadSequence = useRef(0);
   const selectedRole = roles.find((row: any) => row.id === selectedId);
   const selectedUser = users.find((row: any) => row.id === selectedId);
@@ -447,7 +596,6 @@ export function TenantAdmin({
       setBusy(false);
     }
   }
-  ``;
   async function updateUser(e: any) {
     e.preventDefault();
     if (!selectedUser) return;
@@ -1250,12 +1398,52 @@ export function TenantAdmin({
       {section === "users" && view === "list" && (
         <ListCard
           title="Users"
-          rows={users}
+          rows={filteredUsers}
           searchKeys={["name", "email", "mobile", "user_type", "roles", "id"]}
           createLabel="Create User"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
           columns={USER_COLUMNS}
+          filters={[
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                { value: "all", label: "All Status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ],
+            },
+            {
+              key: "role",
+              label: "Role",
+              options: [
+                { value: "all", label: "All Roles" },
+                ...roles.map((role: any) => ({
+                  value: role.name,
+                  label: role.name,
+                })),
+              ],
+            },
+            {
+              key: "branch",
+              label: "Branch",
+              options: [
+                { value: "all", label: "All Branches" },
+                ...branches.map((branch: any) => ({
+                  value: branch.id,
+                  label: branch.name,
+                })),
+              ],
+            },
+          ]}
+          onFilterChange={(key: string, value: string) =>
+            setUserFilters((prev) => ({
+              ...prev,
+              [key]: value,
+            }))
+          }
+          filterValues={userFilters}
           render={(user: any) => (
             <UserRow
               key={user.id}
@@ -1304,12 +1492,30 @@ export function TenantAdmin({
       {section === "roles" && view === "list" && (
         <ListCard
           title="Roles"
-          rows={roles}
+          rows={filterdRoles}
           searchKeys={["name", "key", "id"]}
           createLabel="Create Role"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
           columns={ROLE_COLUMNS}
+          filters={[
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                { value: "all", label: "All Status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ],
+            },
+          ]}
+          filterValues={roleFilter}
+          onFilterChange={(key: string, value: string) => {
+            setRoleFilters((prev) => ({
+              ...prev,
+              [key]: value,
+            }));
+          }}
           render={(role: Role) => (
             <RoleRow
               key={role.id}
@@ -1351,19 +1557,48 @@ export function TenantAdmin({
       {section === "departments" && view === "list" && (
         <ListCard
           title="Medical Departments"
-          rows={departmentGroups}
+          rows={filteredDepartments}
           searchKeys={["name", "code", "branch_names", "description", "id"]}
           createLabel="Create  Department"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
           columns={DEPARTMENT_COLUMNS}
+          filters={[
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                { value: "all", label: "All Status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ],
+            },
+            {
+              key: "branch",
+              label: "Branch",
+              options: [
+                { value: "all", label: "All Branches" },
+                ...branches.map((branch: any) => ({
+                  value: branch.id,
+                  label: branch.name,
+                })),
+              ],
+            },
+          ]}
+          onFilterChange={(key: number, value: string) =>
+            setDepartmentFilters((prev) => ({
+              ...prev,
+              [key]: value,
+            }))
+          }
+          filterValues={departmentFilters}
           render={(department: any) => (
             <DepartmentRow
               key={department.id}
               department={department}
               branches={branches}
               onEdit={() => {
-                setSelectedId(department.primary.id);
+                setSelectedId(department.id);
                 setView("edit");
               }}
               onStatus={() =>
@@ -1409,12 +1644,30 @@ export function TenantAdmin({
       {section === "branches" && view === "list" && (
         <ListCard
           title="Branches"
-          rows={branches}
+          rows={filteredBranches}
           searchKeys={["name", "code", "city", "state", "id"]}
           createLabel="Create Branch"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
           columns={BRANCH_COLUMNS}
+          filters={[
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                { value: "all", label: "All Status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ],
+            },
+          ]}
+          onFilterChange={(key: string, value: string) => {
+            setBranchFilter((prev) => ({
+              ...prev,
+              [key]: value,
+            }));
+          }}
+          filterValues={branchFilter}
           render={(branch: any) => (
             <BranchRow
               key={branch.id}
@@ -1458,12 +1711,30 @@ export function TenantAdmin({
       {section === "suppliers" && view === "list" && (
         <ListCard
           title="Suppliers"
-          rows={suppliers}
+          rows={filteredSuppliers}
           searchKeys={["name", "gstin", "phone", "email", "address", "id"]}
           createLabel="Create Supplier"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
           columns={SUPPLIER_COLUMNS}
+          filters={[
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                { value: "all", label: "All Status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ],
+            },
+          ]}
+          onFilterChange={(key: string, value: string) => {
+            setSupplierFilter((prev) => ({
+              ...prev,
+              [key]: value,
+            }));
+          }}
+          filterValues={supplierFilter}
           render={(supplier: any) => (
             <SupplierRow
               key={supplier.id}
@@ -1511,12 +1782,30 @@ export function TenantAdmin({
       {section === "tax" && view === "list" && (
         <ListCard
           title="Tax Rules"
-          rows={taxRules}
+          rows={filteredTaxes}
           searchKeys={["name", "tax_label", "service_scope", "id"]}
           createLabel="Create Tax Rule"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
           columns={TAX_RULE_COLUMNS}
+          filters={[
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                { value: "all", label: "All Status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ],
+            },
+          ]}
+          onFilterChange={(key: string, value: string) => {
+            setTaxFilter((prev) => ({
+              ...prev,
+              [key]: value,
+            }));
+          }}
+          filterValues={taxFilter}
           render={(rule: any) => (
             <TaxRuleRow
               key={rule.id}
@@ -1559,12 +1848,30 @@ export function TenantAdmin({
       {section === "offers" && view === "list" && (
         <ListCard
           title="Discounts & Offers"
-          rows={discountOffers}
+          rows={filteredOffers}
           searchKeys={["name", "code", "service_scope", "discount_type", "id"]}
           createLabel="Create Offer"
           onCreate={() => setView("create")}
           onRefresh={loadAdmin}
           columns={DISCOUNT_OFFER_COLUMNS}
+          filters={[
+            {
+              key: "status",
+              label: "Status",
+              options: [
+                { value: "all", label: "All Status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+              ],
+            },
+          ]}
+          onFilterChange={(key: string, value: string) => {
+            setOfferFilter((prev) => ({
+              ...prev,
+              [key]: value,
+            }));
+          }}
+          filterValues={offerFilter}
           render={(offer: any) => (
             <DiscountOfferRow
               key={offer.id}

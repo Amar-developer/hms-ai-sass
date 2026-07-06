@@ -419,7 +419,7 @@ export function Scheduling({ apiSession, branchId }: any) {
               setPage(1);
             }}
             placeholder="Doctor, room, medical department"
-            className='search-filter'
+            // className='search-filter'
           />
         </Field>
         <Field label="Branch">

@@ -16,6 +16,8 @@ import { FormField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
+import { useDropdown } from "@/hooks/useDropdown";
+import { MoreHorizontal } from "lucide-react";
 
 function money(value: any) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -68,7 +70,9 @@ function normalizePharmacySlabs(slabs: any[]) {
       discount_percentage: Number(slab?.discount_percentage || 0),
     }))
     .filter((slab) => slab.discount_percentage > 0);
-  return rows.length ? rows : [{ min_amount: 0, max_amount: null, discount_percentage: 0 }];
+  return rows.length
+    ? rows
+    : [{ min_amount: 0, max_amount: null, discount_percentage: 0 }];
 }
 
 function parsePharmacySlabs(fd: FormData) {
@@ -137,9 +141,9 @@ export function PatientSubscriptions({
   const [selectedPatient, setSelectedPatient] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
   const [freeConsultDeptIds, setFreeConsultDeptIds] = useState<string[]>([]);
-  const [editFreeConsultDeptIds, setEditFreeConsultDeptIds] = useState<string[]>(
-    [],
-  );
+  const [editFreeConsultDeptIds, setEditFreeConsultDeptIds] = useState<
+    string[]
+  >([]);
   const [freeLabTestIds, setFreeLabTestIds] = useState<string[]>([]);
   const [freeLabQuantities, setFreeLabQuantities] = useState<
     Record<string, number>
@@ -202,7 +206,9 @@ export function PatientSubscriptions({
       setMedicines(medicineRows);
       setDepartments(
         uniqueDepartmentRows(
-          (departmentRows || []).filter((dept: any) => dept?.is_active !== false),
+          (departmentRows || []).filter(
+            (dept: any) => dept?.is_active !== false,
+          ),
         ),
       );
       setDetailPlanId((current) =>
@@ -318,10 +324,22 @@ export function PatientSubscriptions({
         pharmacy_discount_slabs: parsePharmacySlabs(fd),
         created_by_user_id: apiSession.user?.id,
       };
-      const freeLabIds = await resolveLabBenefitIds(freeLabTestIds, branchId || "");
-      const discountedLabIds = await resolveLabBenefitIds(discountedLabTestIds, branchId || "");
-      const freeMedIds = await resolveMedicineBenefitIds(freeMedicineIds, branchId || "");
-      const discountedMedIds = await resolveMedicineBenefitIds(discountedMedicineIds, branchId || "");
+      const freeLabIds = await resolveLabBenefitIds(
+        freeLabTestIds,
+        branchId || "",
+      );
+      const discountedLabIds = await resolveLabBenefitIds(
+        discountedLabTestIds,
+        branchId || "",
+      );
+      const freeMedIds = await resolveMedicineBenefitIds(
+        freeMedicineIds,
+        branchId || "",
+      );
+      const discountedMedIds = await resolveMedicineBenefitIds(
+        discountedMedicineIds,
+        branchId || "",
+      );
       await apiFetch("/patient-subscriptions/plans", apiSession, {
         method: "POST",
         body: JSON.stringify({
@@ -535,17 +553,24 @@ export function PatientSubscriptions({
     setBusy(`enrollment-${row.id}`);
     setToast(null);
     try {
-      await apiFetch(`/patient-subscriptions/enrollments/${row.id}`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          ...updates,
-          updated_by_user_id: apiSession.user?.id,
-        }),
-      });
+      await apiFetch(
+        `/patient-subscriptions/enrollments/${row.id}`,
+        apiSession,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            ...updates,
+            updated_by_user_id: apiSession.user?.id,
+          }),
+        },
+      );
       await load();
       setToast({ kind: "success", text: "Enrollment updated." });
     } catch (err: any) {
-      setToast({ kind: "error", text: err.message || "Could not update enrollment." });
+      setToast({
+        kind: "error",
+        text: err.message || "Could not update enrollment.",
+      });
     } finally {
       setBusy("");
     }
@@ -777,7 +802,8 @@ export function PatientSubscriptions({
                           <th className="px-4 py-3">Consults</th>
                           {/* <th className="px-4 py-3">Scope</th> */}
                           <th className="px-4 py-3">Status</th>
-                          <th className="px-4 py-3 text-right">Actions</th>
+                          <th className="px-4 py-3">Enrolled</th>
+                          <th className="px-4 py-3 text-center">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -945,7 +971,10 @@ function BenefitPicker({
                     min={1}
                     value={Number(quantities?.[value]) || 1}
                     onChange={(e: any) =>
-                      onQuantityChange(value, Math.max(Number(e.target.value) || 1, 1))
+                      onQuantityChange(
+                        value,
+                        Math.max(Number(e.target.value) || 1, 1),
+                      )
                     }
                     className="w-12 rounded-lg border border-slate-200 px-1 py-0.5 text-center text-xs font-bold text-slate-700"
                   />
@@ -1169,9 +1198,9 @@ function PlanForm({
             </div>
           </FormField>
           <p className="mt-1 text-xs text-slate-500">
-            Leave empty to allow free consultations in any department. Select one
-            or more (e.g. General Medicine) to restrict the free consultation
-            benefit to those departments only.
+            Leave empty to allow free consultations in any department. Select
+            one or more (e.g. General Medicine) to restrict the free
+            consultation benefit to those departments only.
           </p>
         </div>
         <FormField label="Lab Discount %">
@@ -1245,7 +1274,10 @@ function PlanForm({
             onChange={setFreeMedicineIds}
             quantities={freeMedicineQuantities}
             onQuantityChange={(value: string, qty: number) =>
-              setFreeMedicineQuantities((prev: any) => ({ ...prev, [value]: qty }))
+              setFreeMedicineQuantities((prev: any) => ({
+                ...prev,
+                [value]: qty,
+              }))
             }
             priceKey="default_sale_price"
             apiSession={apiSession}
@@ -1297,12 +1329,21 @@ function PharmacySlabEditor({ slabs, onChange }: any) {
   }
 
   function addRow() {
-    onChange([...slabs, { min_amount: 0, max_amount: null, discount_percentage: 0 }]);
+    onChange([
+      ...slabs,
+      { min_amount: 0, max_amount: null, discount_percentage: 0 },
+    ]);
   }
 
   function removeRow(index: number) {
-    const next = slabs.filter((_row: any, rowIndex: number) => rowIndex !== index);
-    onChange(next.length ? next : [{ min_amount: 0, max_amount: null, discount_percentage: 0 }]);
+    const next = slabs.filter(
+      (_row: any, rowIndex: number) => rowIndex !== index,
+    );
+    onChange(
+      next.length
+        ? next
+        : [{ min_amount: 0, max_amount: null, discount_percentage: 0 }],
+    );
   }
 
   return (
@@ -1403,11 +1444,7 @@ function PlanTableRow({
     <>
       <tr className="bg-white align-middle hover:bg-slate-50">
         <td className="px-4 py-3">
-          <button
-            type="button"
-            onClick={openDetail}
-            className="text-left"
-          >
+          <button type="button" onClick={openDetail} className="text-left">
             <b className="block text-sm text-slate-950">{plan.name}</b>
             {/* <span className="text-xs font-semibold uppercase text-slate-500">
               {plan.code || "-"}
@@ -1428,14 +1465,16 @@ function PlanTableRow({
             >
               {plan.is_active ? "Active" : "Paused"}
             </Badge>
-            {activeEnrollmentCount > 0 && (
-              <span className="text-[11px] font-semibold text-slate-500">
-                {activeEnrollmentCount} enrolled
-              </span>
-            )}
           </div>
         </td>
         <td className="px-4 py-3">
+          {activeEnrollmentCount > 0 && (
+            <span className="text-[11px] font-semibold text-slate-500">
+              {activeEnrollmentCount} enrolled
+            </span>
+          )}
+        </td>
+        <td className="px-4 py-3 flex justify-center">
           <PlanRowActions
             plan={plan}
             activeEnrollmentCount={activeEnrollmentCount}
@@ -1464,11 +1503,8 @@ function PlanTableRow({
   );
 }
 
-
-
-function PlanRowActions({
+export function PlanRowActions({
   plan,
-  activeEnrollmentCount,
   busy,
   openDetail,
   startEdit,
@@ -1476,30 +1512,59 @@ function PlanRowActions({
   requestDeletePlan,
   canDeletePlans,
 }: any) {
+  const { open, setOpen, ref, buttonRef } = useDropdown();
+
+  const stop = (fn: any) => (e: any) => {
+    e.stopPropagation();
+    fn?.();
+    setOpen(false);
+  };
+
   return (
-    <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
-      <PlanIconButton title="View" onClick={openDetail}>
-        View
-      </PlanIconButton>
-      <PlanIconButton title="Edit" onClick={() => startEdit(plan)}>
-        Edit
-      </PlanIconButton>
-      <PlanIconButton
-        title={plan.is_active ? "Pause" : "Activate"}
-        disabled={busy === `toggle-${plan.id}`}
-        onClick={() => togglePlanActive(plan)}
-        tone={plan.is_active ? "amber" : "green"}
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      {/* 3-dot button */}
+      <button
+        ref={buttonRef}
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100"
       >
-        {plan.is_active ? "Pause" : "Activate"}
-      </PlanIconButton>
-      {canDeletePlans && (
-        <PlanIconButton
-          title="Deactivate (keeps patient records)"
-          onClick={() => requestDeletePlan(plan)}
-          tone="red"
-        >
-          Deactivate
-        </PlanIconButton>
+        <MoreHorizontal className="h-5 w-5"/>
+      </button>
+
+      {/* dropdown */}
+      {open && (
+        <div className="absolute right-0 top-0 z-50 mt-2 w-22 text-xs rounded-lg border bg-white shadow-lg">
+          <button
+            onClick={stop(openDetail)}
+            className="block w-full px-4 py-2 text-left hover:bg-slate-100"
+          >
+            View
+          </button>
+
+          <button
+            onClick={stop(() => startEdit(plan))}
+            className="block w-full px-4 py-2 text-left hover:bg-slate-100"
+          >
+            Edit
+          </button>
+
+          <button
+            disabled={busy === `toggle-${plan.id}`}
+            onClick={stop(() => togglePlanActive(plan))}
+            className="block w-full px-4 py-2 text-left hover:bg-slate-100"
+          >
+            {plan.is_active ? "Pause" : "Activate"}
+          </button>
+
+          {canDeletePlans && (
+            <button
+              onClick={stop(() => requestDeletePlan(plan))}
+              className="block w-full px-4 py-2 text-left text-red-600 hover:bg-red-50"
+            >
+              Deactivate
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -1532,8 +1597,8 @@ function DeleteConfirm({ plan, busy, deletePlan, onCancel }: any) {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
       <span className="flex-1 text-xs font-semibold text-red-700">
-        Deactivate <b>{plan.name}</b>? Existing patient records are kept and the plan
-        can be reactivated later.
+        Deactivate <b>{plan.name}</b>? Existing patient records are kept and the
+        plan can be reactivated later.
       </span>
       <button
         type="button"
@@ -1594,7 +1659,8 @@ function PlanDetailPage({
       : consultDeptIds
           .map(
             (id: string) =>
-              (departments || []).find((dept: any) => dept.id === id)?.name || id,
+              (departments || []).find((dept: any) => dept.id === id)?.name ||
+              id,
           )
           .join(", ");
   const benefitItemCount =
@@ -1653,20 +1719,17 @@ function PlanDetailPage({
             label="Lab Discount"
             value={`${plan.lab_discount_percentage}%`}
           />
-          <PlanMetric
-            label="Pharmacy"
-            value={pharmacyBenefitLabel(plan)}
-          />
+          <PlanMetric label="Pharmacy" value={pharmacyBenefitLabel(plan)} />
           <PlanMetric label="Scope" value="Tenant" />
-          <PlanMetric label="Benefit Items" value={`${benefitItemCount} items`} />
+          <PlanMetric
+            label="Benefit Items"
+            value={`${benefitItemCount} items`}
+          />
           <PlanMetric
             label="Min Bill"
             value={money(plan.min_discount_amount)}
           />
-          <PlanMetric
-            label="Enrollments"
-            value={activeEnrollmentCount}
-          />
+          <PlanMetric label="Enrollments" value={activeEnrollmentCount} />
         </div>
       </Card>
       <div className="grid gap-4 xl:grid-cols-2">
@@ -1707,7 +1770,9 @@ function PharmacySlabList({ slabs }: any) {
     <Card>
       <div className="flex items-center justify-between gap-3">
         <h4 className="card-title font-bold">Pharmacy Discount Slabs</h4>
-        <Badge tone="blue" className="normal-badge">{slabs.length}</Badge>
+        <Badge tone="blue" className="normal-badge">
+          {slabs.length}
+        </Badge>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
         {slabs.length === 0 ? (
@@ -1719,10 +1784,7 @@ function PharmacySlabList({ slabs }: any) {
                 key={`${slab.min_amount}-${slab.max_amount}-${index}`}
                 className="grid grid-cols-3 gap-3 px-4 py-3 text-sm"
               >
-                <PlanInlineDetail
-                  label="From"
-                  value={money(slab.min_amount)}
-                />
+                <PlanInlineDetail label="From" value={money(slab.min_amount)} />
                 <PlanInlineDetail
                   label="To"
                   value={
@@ -1762,7 +1824,9 @@ function BenefitList({ title, ids, rows, priceKey, quantities }: any) {
     <Card>
       <div className="flex items-center justify-between gap-3">
         <h4 className="card-title font-bold">{title}</h4>
-        <Badge tone="blue" className="normal-badge">{selected.length}</Badge>
+        <Badge tone="blue" className="normal-badge">
+          {selected.length}
+        </Badge>
       </div>
       <div className="mt-4 max-h-[420px] overflow-auto rounded-lg border border-slate-200">
         {selected.length === 0 && (
@@ -1786,7 +1850,11 @@ function BenefitList({ title, ids, rows, priceKey, quantities }: any) {
                 </p>
               </div>
               <span className="flex items-center justify-end gap-2 font-bold">
-                {qty !== null && <Badge tone="green" className="normal-badge">Free × {qty}</Badge>}
+                {qty !== null && (
+                  <Badge tone="green" className="normal-badge">
+                    Free × {qty}
+                  </Badge>
+                )}
                 {row[priceKey] !== undefined ? money(row[priceKey]) : "-"}
               </span>
             </div>
@@ -1878,13 +1946,16 @@ function ActiveEnrollmentsTable({
               <th>Validity</th>
               <th className="text-left">Paid</th>
               <th>Status</th>
-              {canManage && <th className="text-right pr-4">Actions</th>}
+              {canManage && <th className="text-center pr-4">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
               <tr>
-                <td colSpan={canManage ? 7 : 6} className="px-4 py-4 text-slate-500 text-xs lg:text-sm" >
+                <td
+                  colSpan={canManage ? 7 : 6}
+                  className="px-4 py-4 text-slate-500 text-xs lg:text-sm"
+                >
                   No active enrollments yet.
                 </td>
               </tr>
@@ -1907,7 +1978,9 @@ function ActiveEnrollmentsTable({
                     </p>
                   </td>
                   <td>
-                    <b className="text-xs lg:text-sm">{row.plan?.name || "Membership plan"}</b>
+                    <b className="text-xs lg:text-sm">
+                      {row.plan?.name || "Membership plan"}
+                    </b>
                     {/* {row.plan?.code && (
                       <p className="text-xs text-slate-500">{row.plan.code}</p>
                     )} */}
@@ -1918,19 +1991,24 @@ function ActiveEnrollmentsTable({
                         <input
                           type="date"
                           value={editing.starts_on}
-                          onChange={(event: any) => editValue("starts_on", event.target.value)}
+                          onChange={(event: any) =>
+                            editValue("starts_on", event.target.value)
+                          }
                           className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
                         />
                         <input
                           type="date"
                           value={editing.ends_on}
-                          onChange={(event: any) => editValue("ends_on", event.target.value)}
+                          onChange={(event: any) =>
+                            editValue("ends_on", event.target.value)
+                          }
                           className="rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
                         />
                       </div>
                     ) : (
                       <>
-                        {displayDate(row.starts_on)} to {displayDate(row.ends_on)}
+                        {displayDate(row.starts_on)} to{" "}
+                        {displayDate(row.ends_on)}
                       </>
                     )}
                   </td>
@@ -1940,7 +2018,9 @@ function ActiveEnrollmentsTable({
                         type="number"
                         min="0"
                         value={editing.paid_amount}
-                        onChange={(event: any) => editValue("paid_amount", event.target.value)}
+                        onChange={(event: any) =>
+                          editValue("paid_amount", event.target.value)
+                        }
                         className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
                       />
                     ) : (
@@ -1948,10 +2028,7 @@ function ActiveEnrollmentsTable({
                     )}
                   </td>
                   <td>
-                    <Badge
-                      tone="green"
-                      className="table-status w-[60%]"
-                    >
+                    <Badge tone="green" className="table-status w-[60%]">
                       {row.status}
                     </Badge>
                   </td>
@@ -1977,7 +2054,10 @@ function ActiveEnrollmentsTable({
                           </>
                         ) : (
                           <>
-                            <PlanIconButton title="Edit enrollment" onClick={() => startEdit(row)}>
+                            <PlanIconButton
+                              title="Edit enrollment"
+                              onClick={() => startEdit(row)}
+                            >
                               Edit
                             </PlanIconButton>
                             <PlanIconButton

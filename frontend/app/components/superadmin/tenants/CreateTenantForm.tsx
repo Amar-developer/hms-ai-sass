@@ -590,7 +590,7 @@ export function CreateTenantForm({
               name="logoFile"
               type="file"
               accept="image/*"
-              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm file:text-[10px] lg:file:text-xs"
+              className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm input-file"
             />
           </Field>
           <Field label="Email">

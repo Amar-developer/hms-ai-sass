@@ -99,7 +99,7 @@ export function GlobalSearch({ items }: GlobalSearchProps) {
             }
             if (event.key === "Escape") setOpen(false);
           }}
-          placeholder="Search or type a command (Ctrl + G)"
+          placeholder="Search a modules"
           className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:font-medium placeholder:text-slate-400 placeholder:text-xs"
         />
       </div>

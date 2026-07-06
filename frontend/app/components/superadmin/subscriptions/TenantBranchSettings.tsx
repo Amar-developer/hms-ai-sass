@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Button, Card, Field, Input, Select, StatusToast } from "@/app/components/common/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  Field,
+  Input,
+  Select,
+  StatusToast,
+} from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import {
@@ -19,7 +27,12 @@ import {
 import { Empty } from "@/app/components/admin/Empty";
 import { Info } from "../shared/Info";
 import { TenantPicker } from "../shared/TenantPicker";
-function CatalogPluginControl({ title, value, onChange, allowExternal = true }: any) {
+function CatalogPluginControl({
+  title,
+  value,
+  onChange,
+  allowExternal = true,
+}: any) {
   const enabled = Boolean(value?.enabled);
   const effectiveEnabled = allowExternal && enabled;
   return (
@@ -68,7 +81,9 @@ function CatalogPluginControl({ title, value, onChange, allowExternal = true }: 
           >
             <option value="local">MedizinHub Local</option>
             {allowExternal && (
-              <option value="external_catalog">External Catalog Provider</option>
+              <option value="external_catalog">
+                External Catalog Provider
+              </option>
             )}
           </Select>
         </FormField>
@@ -270,14 +285,11 @@ export function TenantBranchSettings({
       await loadTenantSettings();
       setSettingsMessage("Document numbering settings saved.");
     } catch (err: any) {
-      setSettingsMessage(
-        err.message || "Could not save numbering settings.",
-      );
+      setSettingsMessage(err.message || "Could not save numbering settings.");
     } finally {
       setSettingsLoading(false);
     }
   }
-
   function setCatalogPlugin(key: string, patch: any) {
     setCatalogIntegrations({
       ...catalogIntegrations,
@@ -357,13 +369,13 @@ export function TenantBranchSettings({
               providers.
             </p>
           </div>
-         <div className="w-[30%] lg:w-[25%]">
-           <TenantPicker
-            tenants={tenants}
-            selectedId={selectedId}
-            setSelectedId={setSelectedId}
-          />
-         </div>
+          <div className="w-[30%] lg:w-[25%]">
+            <TenantPicker
+              tenants={tenants}
+              selectedId={selectedId}
+              setSelectedId={setSelectedId}
+            />
+          </div>
         </div>
         {visibleSelected && (
           <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -389,7 +401,10 @@ export function TenantBranchSettings({
               Tenant bank account details shown in invoice receipt PDFs.
             </p>
           </div>
-          <Badge tone="blue" className="rounded-lg px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm">
+          <Badge
+            tone="blue"
+            className="rounded-lg px-2 py-2 text-xs lg:px-4 lg:py-3 lg:text-sm"
+          >
             Tenant scoped
           </Badge>
         </div>
@@ -465,13 +480,18 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">Document Numbering</h4>
+            <h4 className="text-base lg:text-lg font-bold">
+              Document Numbering
+            </h4>
             <p className="text-xs lg:text-sm text-slate-500">
               Set the tenant prefix, digit length, and module codes used for
               generated IDs.
             </p>
           </div>
-          <Badge tone="blue" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+          <Badge
+            tone="blue"
+            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
             {settingsLoading ? "Loading" : "Tenant scoped"}
           </Badge>
         </div>
@@ -531,13 +551,20 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">Catalog Plugin Controls</h4>
+            <h4 className="text-base lg:text-lg font-bold">
+              Catalog Plugin Controls
+            </h4>
             <p className="text-xs lg:text-sm text-slate-500">
               Tenant-specific catalog source routing for custom integrations.
               Disabled plugins use MedizinHub local catalog data.
             </p>
           </div>
-          <Badge tone="blue" className="rounded-lg w-[25%] lg:w-[15%] px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">Tenant scoped</Badge>
+          <Badge
+            tone="blue"
+            className="rounded-lg w-[25%] lg:w-[15%] px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          >
+            Tenant scoped
+          </Badge>
         </div>
         <StatusToast
           message={pluginMessage}
@@ -556,9 +583,7 @@ export function TenantBranchSettings({
           <CatalogPluginControl
             title="Medicine Item Catalog"
             value={catalogIntegrations.medicine_items}
-            onChange={(patch: any) =>
-              setCatalogPlugin("medicine_items", patch)
-            }
+            onChange={(patch: any) => setCatalogPlugin("medicine_items", patch)}
           />
           <div className="flex flex-wrap items-center gap-3 md:col-span-2">
             <Button disabled={pluginLoading || !visibleSelected}>
@@ -573,7 +598,9 @@ export function TenantBranchSettings({
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
-            <h4 className="text-base lg:text-lg font-bold">Plan Module Access</h4>
+            <h4 className="text-base lg:text-lg font-bold">
+              Plan Module Access
+            </h4>
             <p className="text-xs lg:text-sm text-slate-500">
               Modules are controlled by the active subscription plan. Upgrade
               the tenant plan from Subscription Management to change access.
@@ -582,11 +609,15 @@ export function TenantBranchSettings({
           <div className="text-right w-[30%] lg:w-[15%]">
             {activePlan ? (
               <>
-                <Badge tone="blue" className="normal-badge">{activePlan.name}</Badge>
+                <Badge tone="blue" className="normal-badge">
+                  {activePlan.name}
+                </Badge>
                 <p className="mt-1 text-xs text-slate-500">Current plan</p>
               </>
             ) : (
-              <Badge tone="amber" className="normal-badge">No active plan</Badge>
+              <Badge tone="amber" className="normal-badge">
+                No active plan
+              </Badge>
             )}
           </div>
         </div>
@@ -618,7 +649,9 @@ export function TenantBranchSettings({
                   <span className="flex flex-wrap items-center gap-2">
                     <b>{module.name}</b>
                     {key === "patient_subscriptions" && (
-                      <Badge tone="green" className="normal-badge">Patient Membership</Badge>
+                      <Badge tone="green" className="normal-badge">
+                        Patient Membership
+                      </Badge>
                     )}
                   </span>
                   <span className="mt-1 block text-xs text-slate-500">

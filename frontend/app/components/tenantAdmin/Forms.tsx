@@ -6,6 +6,7 @@ import {
   Field,
   SuggestionInput,
   Badge,
+  SearchableSelect,
 } from "../common/ui";
 import { FormField } from "../FormElements";
 import { useState, useEffect, useMemo } from "react";
@@ -18,10 +19,7 @@ import {
   permissionModuleTitle,
 } from "@/utils/tenantAdmin/helpers";
 import { canResetTenantUserPassword } from "@/utils/tenantAdmin/permissions";
-import {
-  userTypes,
-  serviceScopes,
-} from "@/utils/tenantAdmin/constants";
+import { userTypes, serviceScopes } from "@/utils/tenantAdmin/constants";
 import { KeyRound } from "lucide-react";
 import { basicMedicalDepartmentSuggestions } from "@/lib/options";
 
@@ -64,14 +62,16 @@ export function RoleForm({
         </div>
         {role && (
           <FormField label="Status">
-            <Select
+            <SearchableSelect
               name="isActive"
-              defaultValue={String(role.is_active)}
+              value={String(role.is_active)}
               disabled={isLocked(role)}
-            >
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
+              searchable={false}
+              options={[
+                { value: "true", label: "Active" },
+                { value: "false", label: "Inactive" },
+              ]}
+            />
           </FormField>
         )}
         <div className="md:col-span-2">
@@ -170,7 +170,7 @@ export function UserForm({
             defaultValue={user?.name || ""}
             placeholder="Enter user name"
             required
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Email">
@@ -180,21 +180,20 @@ export function UserForm({
             placeholder="Enter user email"
             defaultValue={user?.email || ""}
             required
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="User Type">
-          <Select
+          <SearchableSelect
             name="userType"
             value={userType}
-            onChange={(event: any) => changeUserType(event.target.value)}
-          >
-            {userTypes.map(([value, label]) => (
-              <option key={value} value={value} className="text-xs">
-                {label}
-              </option>
-            ))}
-          </Select>
+            onChange={changeUserType}
+            searchable={false}
+            options={userTypes.map(([value, label]) => ({
+              value,
+              label,
+            }))}
+          />
         </FormField>
         <Field label="Mobile">
           <Input
@@ -203,23 +202,26 @@ export function UserForm({
             value={mobile}
             onChange={(e: any) => setMobile(e.target.value)}
             placeholder="Enter patient mobile number"
-            className='search-input'
+            className="search-input"
           />
         </Field>
         <Field label="Branch Access">
-          <Select
+          <SearchableSelect
             name="branchId"
             value={selectedBranch}
-            onChange={(event: any) => setSelectedBranch(event.target.value)}
+            onChange={setSelectedBranch}
             disabled={hasTenantAdminAccess}
-          >
-            <option value="">All branches</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
+            searchable={branches.length > 8}
+            placeholder="All branches"
+            options={[
+              { value: "", label: "All branches" },
+              ...branches.map((branch: any) => ({
+                value: branch.id,
+                label: branch.name,
+              })),
+            ]}
+          />
+
           {hasTenantAdminAccess && (
             <p className="mt-1 text-xs font-semibold text-slate-500">
               Tenant Admin access covers every branch in this tenant.
@@ -233,25 +235,32 @@ export function UserForm({
               type="text"
               defaultValue="TempPass123"
               required
-              className='search-input'
+              className="search-input"
             />
           </FormField>
         )}
         <FormField label="Must Change Password">
-          <Select
+          <SearchableSelect
             name="mustChangePassword"
-            defaultValue={String(user?.must_change_password ?? true)}
-          >
-            <option value="true">Yes</option>
-            <option value="false">No</option>
-          </Select>
+            value={String(user?.must_change_password ?? true)}
+            searchable={false}
+            options={[
+              { value: "true", label: "Yes" },
+              { value: "false", label: "No" },
+            ]}
+          />
         </FormField>
         {user && (
           <FormField label="Status">
-            <Select name="isActive" defaultValue={String(user.is_active)}>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
+            <SearchableSelect
+              name="isActive"
+              value={String(user.is_active)}
+              searchable={false}
+              options={[
+                { value: "true", label: "Active" },
+                { value: "false", label: "Inactive" },
+              ]}
+            />
           </FormField>
         )}
         <div className="md:col-span-2">
@@ -326,7 +335,8 @@ export function DepartmentForm({
     (row: any) => row.branch_id,
   );
   const hasSameBranchDuplicate = matchingDepartments.some(
-    (row: any) => String(row.branch_id || "") === String(selectedBranchId || ""),
+    (row: any) =>
+      String(row.branch_id || "") === String(selectedBranchId || ""),
   );
   const scopeConflict =
     Boolean(normalKey(departmentName)) &&
@@ -366,19 +376,24 @@ export function DepartmentForm({
           />
         </Field>
         <FormField label="Branch">
-          <Select
+          <SearchableSelect
             name="branchId"
             value={selectedBranchId}
-            onChange={(event: any) => setSelectedBranchId(event.target.value)}
+            onChange={setSelectedBranchId}
             disabled={isLocked(department)}
-          >
-            <option value="" className="md:text-lg lg:text-xs">All branches</option>
-            {branches.map((branch: any) => (
-              <option className="md:text-lg lg:text-xs" key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
+            searchable={branches.length > 8}
+            placeholder="All branches"
+            options={[
+              {
+                value: "",
+                label: "All branches",
+              },
+              ...branches.map((branch: any) => ({
+                value: branch.id,
+                label: branch.name,
+              })),
+            ]}
+          />
         </FormField>
         {scopeConflict && (
           <div className="md:col-span-2 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
@@ -387,14 +402,16 @@ export function DepartmentForm({
         )}
         {department && (
           <FormField label="Status">
-            <Select
+            <SearchableSelect
               name="isActive"
-              defaultValue={String(department.is_active)}
+              value={String(department.is_active)}
               disabled={isLocked(department)}
-            >
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
+              searchable={false}
+              options={[
+                { value: "true", label: "Active" },
+                { value: "false", label: "Inactive" },
+              ]}
+            />
           </FormField>
         )}
         <div className="md:col-span-2">
@@ -431,7 +448,9 @@ export function BranchForm({
 }: any) {
   const activeBranchCount = Number(branchCount || 0);
   const planLimitReached =
-    !branch && Number.isFinite(Number(branchLimit)) && activeBranchCount >= Number(branchLimit);
+    !branch &&
+    Number.isFinite(Number(branchLimit)) &&
+    activeBranchCount >= Number(branchLimit);
   return (
     <Card>
       <Header
@@ -495,14 +514,16 @@ export function BranchForm({
         </Field>
         {branch && (
           <FormField label="Status">
-            <Select
+            <SearchableSelect
               name="isActive"
-              defaultValue={String(branch.is_active)}
+              value={String(branch.is_active)}
               disabled={isLocked(branch)}
-            >
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
+              searchable={false}
+              options={[
+                { value: "true", label: "Active" },
+                { value: "false", label: "Inactive" },
+              ]}
+            />
           </FormField>
         )}
         <div className="md:col-span-2">
@@ -573,10 +594,15 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
         </FormField>
         {supplier && (
           <FormField label="Status">
-            <Select name="isActive" defaultValue={String(supplier.is_active)}>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
+            <SearchableSelect
+              name="isActive"
+              value={String(supplier.is_active)}
+              searchable={false}
+              options={[
+                { value: "true", label: "Active" },
+                { value: "false", label: "Inactive" },
+              ]}
+            />
           </FormField>
         )}
         <div className="md:col-span-2">
@@ -620,37 +646,41 @@ export function TaxRuleForm({
             defaultValue={rule?.name || ""}
             required
             placeholder="Enter tax name"
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Branch">
-          <Select name="branchId" defaultValue={rule?.branch_id || ""}>
-            <option value="">All branches</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            name="branchId"
+            value={rule?.branch_id || ""}
+            searchable={branches.length > 8}
+            placeholder="All branches"
+            options={[
+              { value: "", label: "All branches" },
+              ...branches.map((branch: any) => ({
+                value: branch.id,
+                label: branch.name,
+              })),
+            ]}
+          />
         </FormField>
         <FormField label="Service Scope">
-          <Select
+          <SearchableSelect
             name="serviceScope"
-            defaultValue={rule?.service_scope || "all"}
-          >
-            {serviceScopes.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
+            value={rule?.service_scope || "all"}
+            searchable={false}
+            options={serviceScopes.map(([value, label]) => ({
+              value,
+              label,
+            }))}
+          />
         </FormField>
         <FormField label="Tax Label">
           <Input
             name="taxLabel"
             defaultValue={rule?.tax_label || "GST"}
             required
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Tax Percentage">
@@ -665,10 +695,15 @@ export function TaxRuleForm({
         </FormField>
         {rule && (
           <FormField label="Status">
-            <Select name="isActive" defaultValue={String(rule.is_active)}>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
+            <SearchableSelect
+              name="isActive"
+              value={String(rule.is_active)}
+              searchable={false}
+              options={[
+                { value: "true", label: "Active" },
+                { value: "false", label: "Inactive" },
+              ]}
+            />
           </FormField>
         )}
         <Actions
@@ -703,7 +738,7 @@ export function DiscountOfferForm({
             defaultValue={offer?.name || ""}
             required
             placeholder="Enter offer name"
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Code">
@@ -711,39 +746,51 @@ export function DiscountOfferForm({
             name="code"
             defaultValue={offer?.code || ""}
             placeholder="HEALTH10"
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Branch">
-          <Select name="branchId" defaultValue={offer?.branch_id || ""}>
-            <option value="">All branches</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
+          <SearchableSelect
+            name="branchId"
+            value={offer?.branch_id || ""}
+            searchable={branches.length > 8}
+            placeholder="All branches"
+            options={[
+              { value: "", label: "All branches" },
+              ...branches.map((branch: any) => ({
+                value: branch.id,
+                label: branch.name,
+              })),
+            ]}
+          />
         </FormField>
         <FormField label="Service Scope">
-          <Select
+          <SearchableSelect
             name="serviceScope"
-            defaultValue={offer?.service_scope || "all"}
-          >
-            {serviceScopes.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
+            value={offer?.service_scope || "all"}
+            searchable={false}
+            options={serviceScopes.map(([value, label]) => ({
+              value,
+              label,
+            }))}
+          />
         </FormField>
         <FormField label="Discount Type">
-          <Select
+          <SearchableSelect
             name="discountType"
-            defaultValue={offer?.discount_type || "percentage"}
-          >
-            <option value="percentage">Percentage</option>
-            <option value="fixed">Fixed amount</option>
-          </Select>
+            value={offer?.discount_type || "percentage"}
+            searchable={false}
+            options={[
+              {
+                value: "percentage",
+                label: "Percentage",
+              },
+              {
+                value: "fixed",
+                label: "Fixed amount",
+              },
+            ]}
+          />
         </FormField>
         <FormField label="Value">
           <Input
@@ -752,7 +799,7 @@ export function DiscountOfferForm({
             min="0"
             defaultValue={offer?.value ?? 0}
             required
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Minimum Bill Amount">
@@ -761,7 +808,7 @@ export function DiscountOfferForm({
             type="number"
             min="0"
             defaultValue={offer?.minimum_bill_amount ?? 0}
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Max Discount">
@@ -771,7 +818,7 @@ export function DiscountOfferForm({
             min="0"
             defaultValue={offer?.max_discount_amount ?? ""}
             placeholder="Enter maximum amount"
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Valid From">
@@ -779,7 +826,7 @@ export function DiscountOfferForm({
             name="validFrom"
             type="date"
             defaultValue={dateToInput(offer?.valid_from)}
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         <FormField label="Valid Until">
@@ -787,15 +834,20 @@ export function DiscountOfferForm({
             name="validUntil"
             type="date"
             defaultValue={dateToInput(offer?.valid_until)}
-            className='search-input'
+            className="search-input"
           />
         </FormField>
         {offer && (
           <FormField label="Status">
-            <Select name="isActive" defaultValue={String(offer.is_active)}>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
+            <SearchableSelect
+              name="isActive"
+              value={String(offer.is_active)}
+              searchable={false}
+              options={[
+                { value: "true", label: "Active" },
+                { value: "false", label: "Inactive" },
+              ]}
+            />
           </FormField>
         )}
         <Actions
@@ -844,7 +896,9 @@ export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
           >
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
               <div className="flex justify-between  w-full">
-                <h5 className="text-base lg:text-sm font-bold">{permissionModuleTitle(module)}</h5>
+                <h5 className="text-base lg:text-sm font-bold">
+                  {permissionModuleTitle(module)}
+                </h5>
                 <p className="text-xs text-slate-500">
                   {grouped[module].length} permissions
                 </p>

@@ -6,11 +6,11 @@ import {
   Field,
   Input,
   RefreshButton,
-  Select,
+  SearchableSelect,
 } from "../common/ui";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { FormField } from "../FormElements";
-import { Plus } from "lucide-react";
+import { MoreHorizontal, MoreVertical, Plus } from "lucide-react";
 import { isLocked } from "@/utils/tenantAdmin/helpers";
 import { Empty } from "../admin/Empty";
 import { Pagination } from "../common/Pagination";
@@ -59,7 +59,7 @@ export function ClickableRow({ children, onClick, className }: any) {
         }
       }}
       className={`
-        flex w-full cursor-pointer gap-0 px-4 py-4 text-sm transition
+        flex cursor-pointer gap-0 px-4 py-4 text-sm transition
         hover:bg-slate-50 focus:bg-slate-50 focus:outline-none
         items-center
         ${className ?? ""}
@@ -70,27 +70,70 @@ export function ClickableRow({ children, onClick, className }: any) {
   );
 }
 
-export function RowActions({ row, locked, onEdit, onStatus, onDelete }: any) {
-  const stop = (handler: any) => (event: any) => {
-    event.stopPropagation();
-    handler();
-  };
+type Action = {
+  label: string;
+  onClick: () => void;
+  hidden?: boolean;
+  disabled?: boolean;
+  danger?: boolean;
+};
+
+type RowActionsProps = {
+  actions: Action[];
+};
+
+export function RowActions({ actions }: RowActionsProps) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClick);
+
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
   return (
-    <ActionGroup className="justify-start xl:justify-end">
-      <ActionButton onClick={stop(onEdit)}>
-        {locked ? "View" : "Edit"}
-      </ActionButton>
-      {!locked && (
-        <ActionButton onClick={stop(onStatus)}>
-          {row.is_active ? "Inactive" : "Active"}
-        </ActionButton>
+    <div
+      ref={menuRef}
+      className="relative"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-slate-100"
+      >
+        <MoreHorizontal className="h-5 w-5" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-40 rounded-lg border bg-white shadow-lg z-50">
+          {actions
+            .filter((a) => !a.hidden)
+            .map((action) => (
+              <button
+                key={action.label}
+                disabled={action.disabled}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  action.onClick();
+                  setOpen(false);
+                }}
+                className={`block w-full px-4 py-2 text-left hover:bg-slate-100 ${
+                  action.danger ? "text-red-600 hover:bg-red-50" : ""
+                }`}
+              >
+                {action.label}
+              </button>
+            ))}
+        </div>
       )}
-      {!locked && (
-        <ActionButton tone="danger" onClick={stop(onDelete)}>
-          Delete
-        </ActionButton>
-      )}
-    </ActionGroup>
+    </div>
   );
 }
 
@@ -111,18 +154,26 @@ export function RoleList({ labels }: { labels: string[] }) {
   );
 }
 
+const MUST_CHANGE_OPTIONS = [
+  { value: "true", label: "Yes" },
+  { value: "false", label: "No" },
+];
+
 export function PasswordResetModal({ user, busy, onSubmit, onCancel }: any) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       <Card className="w-full max-w-md">
         <h3 className="text-lg font-bold">Reset Password</h3>
+
         <p className="mt-1 text-sm text-slate-500">
           {user.name} · {user.email}
         </p>
+
         <form onSubmit={onSubmit} className="mt-4 grid gap-3">
           <Field label="New Password">
             <Input name="newPassword" type="password" minLength={8} required />
           </Field>
+
           <Field label="Confirm Password">
             <Input
               name="confirmPassword"
@@ -131,16 +182,21 @@ export function PasswordResetModal({ user, busy, onSubmit, onCancel }: any) {
               required
             />
           </Field>
+
           <Field label="Must Change On Login">
-            <Select name="mustChangePassword" defaultValue="true">
-              <option value="true">Yes</option>
-              <option value="false">No</option>
-            </Select>
+            <SearchableSelect
+              name="mustChangePassword"
+              searchable={false}
+              options={MUST_CHANGE_OPTIONS}
+              value="true"
+            />
           </Field>
+
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy}>
               {busy ? "Saving..." : "Reset Password"}
             </Button>
+
             <button
               type="button"
               onClick={onCancel}
@@ -299,6 +355,9 @@ export function ListCard({
   searchKeys,
   createLabel,
   onCreate,
+  filters = [],
+  filterValues = {},
+  onFilterChange,
   onRefresh,
   columns,
   render,
@@ -307,17 +366,15 @@ export function ListCard({
   const [page, setPage] = useState(1);
   const pageSize = 8;
 
-  const filtered = useMemo(
-    () =>
-      rows.filter((row: any) =>
-        searchKeys.some((key: string) =>
-          String(row[key] || "")
-            .toLowerCase()
-            .includes(query.toLowerCase()),
-        ),
+  const filtered = useMemo(() => {
+    return rows.filter((row: any) =>
+      searchKeys.some((key: string) =>
+        String(row[key] ?? "")
+          .toLowerCase()
+          .includes(query.toLowerCase()),
       ),
-    [rows, query, searchKeys],
-  );
+    );
+  }, [rows, query, searchKeys]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -338,7 +395,8 @@ export function ListCard({
         <div>
           <h3 className="card-title font-bold">{title}</h3>
           <p className="card-desc text-slate-500">
-            Latest created or updated records appear first. Click a row to open it.
+            Latest created or updated records appear first. Click a row to open
+            it.
           </p>
         </div>
 
@@ -357,8 +415,10 @@ export function ListCard({
       </div>
 
       {/* SEARCH */}
-      <div className="mt-4 max-w-md">
-        <FormField label={`Search ${title}`}>
+      {/* SEARCH & FILTERS */}
+      <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+        {/* Search */}
+        <FormField label={`${title}`}>
           <Input
             value={query}
             onChange={(e: any) => setQuery(e.target.value)}
@@ -366,35 +426,48 @@ export function ListCard({
             className="search-filter"
           />
         </FormField>
+
+        {/* Dynamic Filters */}
+        {filters.map((filter: any) => (
+          <FormField key={filter.key} label={filter.label}>
+            <SearchableSelect
+              name={filter.key}
+              value={filterValues[filter.key] ?? "all"}
+              onChange={(value) => onFilterChange?.(filter.key, value)}
+              options={filter.options}
+              searchable={false}
+              placeholder={`Select ${filter.label}`}
+              className="w-full"
+            />
+          </FormField>
+        ))}
       </div>
 
       {/* TABLE */}
-      <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 ">
-        <div className="min-w-max w-full">
-
-          {/* HEADER */}
-          <div className="flex bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
-            {columns.map((col: any) => (
-              <div
-                key={col.label}
-                className={`${col?.width ?? "w-[160px]"} px-2 flex-shrink-0 `}
-              >
-                {col.label}
-              </div>
-            ))}
-          </div>
+      <div className="mt-4 overflow-x-auto w-lg rounded-2xl border border-slate-200 ">
+        <table className="w-max min-w-full">
+          <thead className="font-bold uppercase text-slate-500 ">
+            <tr className="bg-slate-50">
+              {columns.map((column: any) => (
+                <th
+                  key={column.label}
+                  className="whitespace-nowrap px-4 py-3 text-left text-xs font-bold uppercase text-slate-500"
+                >
+                  {column.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
 
           {/* ROWS */}
-          <div className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
               <Empty text="No records match your search." />
             )}
 
-            {pageRows.map((row: any, index: number) =>
-              render(row, index),
-            )}
-          </div>
-        </div>
+            {pageRows.map((row: any, index: number) => render(row, index))}
+          </tbody>
+        </table>
       </div>
 
       {/* PAGINATION */}

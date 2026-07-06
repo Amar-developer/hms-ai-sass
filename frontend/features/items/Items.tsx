@@ -1,9 +1,19 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ActionButton, ActionGroup, Badge, Button, Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
+import {
+  ActionButton,
+  ActionGroup,
+  Badge,
+  Button,
+  Card,
+  RefreshButton,
+  SearchableSelect,
+  StatusToast,
+} from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import {
+  FormField,
   NumberField,
   SelectField,
   TextField,
@@ -180,7 +190,9 @@ export function Items({ apiSession, branchId }: any) {
       })),
       ...homeCareServices.map((row: any) => {
         const isHomeVisit = String(row.code || "").startsWith("HV-");
-        const rowType = isHomeVisit ? "home_visit_service" : "home_care_service";
+        const rowType = isHomeVisit
+          ? "home_visit_service"
+          : "home_care_service";
         return {
           type: rowType,
           kind: isHomeVisit ? "Home Visit Service" : "Home Care Service",
@@ -253,7 +265,11 @@ export function Items({ apiSession, branchId }: any) {
   }
 
   function changeItemType(nextType: string) {
-    if (editing && homeServiceTypes.includes(type) && homeServiceTypes.includes(nextType)) {
+    if (
+      editing &&
+      homeServiceTypes.includes(type) &&
+      homeServiceTypes.includes(nextType)
+    ) {
       setType(nextType);
       setForm((prev: any) => ({
         ...prev,
@@ -311,7 +327,9 @@ export function Items({ apiSession, branchId }: any) {
       const purchasePrice = Number(form.purchase_price || 0);
       const itemCode = editing
         ? type === "physio_equipment"
-          ? form.serial_number || form.code || generatedItemCode(type, form.name)
+          ? form.serial_number ||
+            form.code ||
+            generatedItemCode(type, form.name)
           : form.code || generatedItemCode(type, form.name)
         : generatedItemCode(type, form.name);
       let savedHomeCareService: any = null;
@@ -546,10 +564,7 @@ export function Items({ apiSession, branchId }: any) {
   }
 
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
-  const pagedRows = sortedRows.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE,
-  );
+  const pagedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -564,18 +579,24 @@ export function Items({ apiSession, branchId }: any) {
           </div>
           <div className="flex items-center gap-2">
             <RefreshButton onRefresh={load} />
-            <Badge tone="blue" className="normal-badge">{sortedRows.length} items</Badge>
+            <Badge tone="blue" className="normal-badge">
+              {sortedRows.length} items
+            </Badge>
           </div>
         </div>
         <StatusToast message={message} onClose={() => setMessage("")} />
         <form onSubmit={createItem} className="mt-5 grid gap-3 md:grid-cols-4">
-          <SelectField
-            label="Item Type"
-            value={type}
-            onChange={changeItemType}
-            options={itemTypes.map(([value, label]) => ({ value, label }))}
-
-          />
+          <FormField label="Item Type">
+            <SearchableSelect
+              value={type}
+              onChange={changeItemType}
+              searchable={false}
+              options={itemTypes.map(([value, label]) => ({
+                value,
+                label,
+              }))}
+            />
+          </FormField>
           <TextField
             label="Code / Serial"
             value={autoCode}
@@ -585,7 +606,9 @@ export function Items({ apiSession, branchId }: any) {
             className="search-input "
           />
           <TextField
-            label={serviceItemTypes.includes(type) ? "Service Name" : "Item Name"}
+            label={
+              serviceItemTypes.includes(type) ? "Service Name" : "Item Name"
+            }
             value={form.name}
             onChange={(v) => setField("name", v)}
             required
@@ -602,9 +625,7 @@ export function Items({ apiSession, branchId }: any) {
           {type !== "physio_equipment" && (
             <NumberField
               label={
-                serviceItemTypes.includes(type)
-                  ? "Service Price"
-                  : "Price"
+                serviceItemTypes.includes(type) ? "Service Price" : "Price"
               }
               value={form.price}
               onChange={(v) => setField("price", v)}
@@ -615,18 +636,20 @@ export function Items({ apiSession, branchId }: any) {
           )}
           {!serviceItemTypes.includes(type) && (
             <>
-              <SelectField
-                label="Supplier"
-                value={form.supplier_id}
-                onChange={(v) => setField("supplier_id", v)}
-                options={[
-                  { value: "", label: "No supplier" },
-                  ...stockSuppliers.map((s: any) => ({
-                    value: s.id,
-                    label: s.name,
-                  })),
-                ]}
-              />
+              <FormField label="Supplier">
+                <SearchableSelect
+                  value={form.supplier_id}
+                  onChange={(v) => setField("supplier_id", v)}
+                  searchable={stockSuppliers.length > 8}
+                  options={[
+                    { value: "", label: "No supplier" },
+                    ...stockSuppliers.map((s: any) => ({
+                      value: s.id,
+                      label: s.name,
+                    })),
+                  ]}
+                />
+              </FormField>
               <NumberField
                 label="Purchase Price"
                 value={form.purchase_price}
@@ -676,12 +699,17 @@ export function Items({ apiSession, branchId }: any) {
           )}
           {type === "physio_equipment" && (
             <>
-              <SelectField
-                label="Modality"
-                value={form.modality_type}
-                onChange={(v) => setField("modality_type", v)}
-                options={modalities.map(([value, label]) => ({ value, label }))}
-              />
+              <FormField label="Modality">
+                <SearchableSelect
+                  value={form.modality_type}
+                  onChange={(v) => setField("modality_type", v)}
+                  searchable={false}
+                  options={modalities.map(([value, label]) => ({
+                    value,
+                    label,
+                  }))}
+                />
+              </FormField>
               <TextField
                 label="Manufacturer"
                 value={form.manufacturer}
@@ -696,19 +724,21 @@ export function Items({ apiSession, branchId }: any) {
                 className="search-input  placeholder:text-xs"
                 placeholder="Enter the model name"
               />
-              <SelectField
-                label="Portable"
-                value={form.is_portable}
-                onChange={(v) => setField("is_portable", v)}
-                options={[
-                  { value: "false", label: "No" },
-                  { value: "true", label: "Yes" },
-                ]}
-              />
+              <FormField label="Portable">
+                <SearchableSelect
+                  value={form.is_portable}
+                  onChange={(v) => setField("is_portable", v)}
+                  searchable={false}
+                  options={[
+                    { value: "false", label: "No" },
+                    { value: "true", label: "Yes" },
+                  ]}
+                />
+              </FormField>
             </>
           )}
           <div className="flex items-end gap-2">
-            <Button disabled={busy === "save"} className='save-button'>
+            <Button disabled={busy === "save"} className="save-button">
               {busy === "save"
                 ? "Saving..."
                 : editing
@@ -737,47 +767,49 @@ export function Items({ apiSession, branchId }: any) {
               placeholder="Name, code, type"
               className="search-filter placeholder:text-xs"
             />
-            <SelectField
-              label="Type"
-              value={filters.type}
-              onChange={(v) => setFiltersAndReset({ ...filters, type: v })}
-              options={[
-                { value: "all", label: "All item types" },
-                ...itemTypes.map(([value, label]) => ({ value, label })),
-              ]}
-            />
-            <SelectField
-              label="Sort By"
-              value={filters.sortBy}
-              onChange={(v) => setFiltersAndReset({ ...filters, sortBy: v })}
-              options={[
-                { value: "name", label: "Name" },
-                { value: "latest", label: "Latest" },
-                { value: "type", label: "Type" },
-                { value: "code", label: "Code" },
-                { value: "mrp", label: "MRP" },
-                { value: "price", label: "Sale Price" },
-              ]}
-            />
-            <SelectField
-              label="Price"
-              value={filters.priceBand}
-              onChange={(v) => setFiltersAndReset({ ...filters, priceBand: v })}
-              options={[
-                { value: "all", label: "All prices" },
-                { value: "priced", label: "Priced only" },
-                { value: "free", label: "Free / zero" },
-              ]}
-            />
-            {/* <SelectField
-              label="Lab Items"
-              value={filters.labOnly}
-              onChange={(v) => setFiltersAndReset({ ...filters, labOnly: v })}
-              options={[
-                { value: "all", label: "All items" },
-                { value: "lab", label: "Lab tests & packages" },
-              ]}
-            /> */}
+            <FormField label="Type">
+              <SearchableSelect
+                value={filters.type}
+                onChange={(v) => setFiltersAndReset({ ...filters, type: v })}
+                searchable={false}
+                options={[
+                  { value: "all", label: "All item types" },
+                  ...itemTypes.map(([value, label]) => ({
+                    value,
+                    label,
+                  })),
+                ]}
+              />
+            </FormField>
+            <FormField label="Sort By">
+              <SearchableSelect
+                value={filters.sortBy}
+                onChange={(v) => setFiltersAndReset({ ...filters, sortBy: v })}
+                searchable={false}
+                options={[
+                  { value: "name", label: "Name" },
+                  { value: "latest", label: "Latest" },
+                  { value: "type", label: "Type" },
+                  { value: "code", label: "Code" },
+                  { value: "mrp", label: "MRP" },
+                  { value: "price", label: "Sale Price" },
+                ]}
+              />
+            </FormField>
+            <FormField label="Price">
+              <SearchableSelect
+                value={filters.priceBand}
+                onChange={(v) =>
+                  setFiltersAndReset({ ...filters, priceBand: v })
+                }
+                searchable={false}
+                options={[
+                  { value: "all", label: "All prices" },
+                  { value: "priced", label: "Priced only" },
+                  { value: "free", label: "Free / zero" },
+                ]}
+              />
+            </FormField>
           </div>
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
@@ -806,7 +838,9 @@ export function Items({ apiSession, branchId }: any) {
               {pagedRows.map((row: any) => (
                 <tr key={`${row.kind}-${row.id}`}>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-bold">{humanizeOptionLabel(row.kind)}</p>
+                    <p className="text-xs font-bold">
+                      {humanizeOptionLabel(row.kind)}
+                    </p>
                   </td>
                   <td className="text-xs">
                     <b>{row.name}</b>

@@ -52,23 +52,13 @@ export function ConfirmModal({
       } ${name}. Continue?`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 ">
+      <Card className="w-full max-w-sm">
         <h3 className="text-lg font-bold">{title}</h3>
 
-        <p className="mt-3 text-sm text-slate-600">
-          {message}
-        </p>
+        <p className="mt-3 text-sm text-slate-600">{message}</p>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button onClick={onConfirm} disabled={busy}>
-            {busy
-              ? "Working..."
-              : isDelete && action.entity
-                ? `Delete ${label}`
-                : "Confirm"}
-          </Button>
-
+        <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
@@ -76,6 +66,13 @@ export function ConfirmModal({
           >
             Cancel
           </button>
+          <Button onClick={onConfirm} disabled={busy}>
+            {busy
+              ? "Working..."
+              : isDelete && action.entity
+                ? `Delete ${label}`
+                : "Confirm"}
+          </Button>
         </div>
       </Card>
     </div>

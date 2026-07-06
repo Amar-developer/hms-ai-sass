@@ -459,7 +459,7 @@ export function TokenQueue({
                   </button>
                 </td>
                 <td className="text-xs">{appointment.doctor}</td>
-                <td className="border px-2">
+                <td className="px-2">
                   <Badge className="normal-badge">
                     {humanizeOptionLabel(appointment.status)}
                   </Badge>

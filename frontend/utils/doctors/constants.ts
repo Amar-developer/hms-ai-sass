@@ -5,3 +5,8 @@ export const doctorTypes = [
   ["lab_specialist", "Lab Specialist"],
   ["technician", "Technician"],
 ] as const;
+
+
+// export const doctorDepartments = [
+//   ['general']
+// ]
