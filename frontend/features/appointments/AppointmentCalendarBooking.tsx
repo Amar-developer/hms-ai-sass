@@ -9,6 +9,7 @@ import {
   Card,
   Field,
   Input,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
@@ -949,63 +950,67 @@ export function AppointmentCalendarBooking(props: Props) {
               >
                 <div className="grid gap-3 md:grid-cols-4">
                   <Field label="Department">
-                    <Select
+                    <SearchableSelect
                       value={departmentId}
-                      onChange={(e: any) => setDepartmentId(e.target.value)}
-                      className="select-filter"
-                    >
-                      {departmentOptions.map((department: any) => (
-                        <option key={department.id} value={department.id}>
-                          {department.name}
-                        </option>
-                      ))}
-                    </Select>
+                      onChange={setDepartmentId}
+                      // className="select-filter"
+                      searchable={departmentOptions.length > 8}
+                      placeholder="Select department"
+                      options={departmentOptions.map((department: any) => ({
+                        value: department.id,
+                        label: department.name,
+                      }))}
+                    />
                   </Field>
                   <Field label="Doctor">
-                    <Select
+                    <SearchableSelect
                       value={doctorId}
-                      onChange={(e: any) => setDoctorId(e.target.value)}
+                      onChange={setDoctorId}
                       disabled={apiSession && doctors.length === 0}
-                      className="select-filter"
-                    >
-                      {doctors.length === 0 && (
-                        <option value="">No doctor available</option>
-                      )}
-                      {doctors.map((item: any) => {
-                        const departmentName =
-                          departmentOptions.find(
-                            (department: any) => department.id === departmentId,
-                          )?.name || "";
-                        return (
-                          <option key={item.id} value={item.id}>
-                            {item.full_name || item.name}
-                            {departmentName ? ` - ${departmentName}` : ""}
-                          </option>
-                        );
-                      })}
-                    </Select>
+                      // className="select-filter"
+                      searchable={doctors.length > 8}
+                      placeholder={
+                        doctors.length === 0
+                          ? "No doctor available"
+                          : "Select doctor"
+                      }
+                      options={
+                        doctors.length === 0
+                          ? [{ value: "", label: "No doctor available" }]
+                          : doctors.map((item: any) => ({
+                              value: item.id,
+                              label: item.full_name || item.name,
+                              sublabel: selectedDepartmentName
+                                ? selectedDepartmentName
+                                : undefined,
+                            }))
+                      }
+                    />
                   </Field>
                   <Field label="Visit Type">
-                    <Select
+                    <SearchableSelect
                       value={appointmentType}
-                      onChange={(e: any) => setAppointmentType(e.target.value)}
-                      className="select-filter"
-                    >
-                      <option value="op">OP</option>
-                      <option value="follow_up">Follow-up</option>
-                      <option value="doctor_review">Doctor Review</option>
-                      <option value="fitness_certificate">
-                        Fitness Certificate
-                      </option>
-                      <option value="emergency">Emergency</option>
-                    </Select>
+                      onChange={()=>{setAppointmentType}}
+                      // className="select-filter"
+                      searchable={false}
+                      options={[
+                        { value: "op", label: "OP" },
+                        { value: "follow_up", label: "Follow-up" },
+                        { value: "doctor_review", label: "Doctor Review" },
+                        {
+                          value: "fitness_certificate",
+                          label: "Fitness Certificate",
+                        },
+                        { value: "emergency", label: "Emergency" },
+                      ]}
+                    />
                   </Field>
                   <Field label="Appointment Date">
                     <Input
                       type="date"
                       value={appointmentDate}
                       onChange={(e: any) => setAppointmentDate(e.target.value)}
-                      className="date-filter"
+                      // className="date-filter"
                     />
                   </Field>
                   <div className="rounded-lg bg-slate-50 p-4">
@@ -1320,9 +1325,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <span className="text-sm">Mobile</span>
             <span className="text-sm">Department</span>
             <span className="text-sm">Doctor</span>
-            <span className="text-sm lg:text-left ">
-              Date
-            </span>
+            <span className="text-sm lg:text-left ">Date</span>
             <span className=" text-sm text-center">Status</span>
             {!isSuperAdmin && (
               <span className=" text-sm md:text-center lg:text-right pr-4">

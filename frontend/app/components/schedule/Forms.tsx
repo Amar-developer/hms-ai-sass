@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
-import { Button,Card,Select,Field } from "../common/ui";
-import { SelectField,TimeField,NumberField } from "../FormElements";
+import { Button, Card, Select, Field, SearchableSelect } from "../common/ui";
+import {
+  SelectField,
+  TimeField,
+  NumberField,
+  FormField,
+} from "../FormElements";
 import { PractitionerPicker } from "@/features/scheduling/Shared";
 import { ALL_BRANCHES, weekdays } from "@/utils/schedule/constants";
 import { Plus, X } from "lucide-react";
@@ -16,7 +21,9 @@ export function ScheduleForm({
   back,
 }: any) {
   const scheduleRows = (
-    schedule?.schedules?.length ? schedule.schedules : [schedule].filter(Boolean)
+    schedule?.schedules?.length
+      ? schedule.schedules
+      : [schedule].filter(Boolean)
   ).filter((row: any) => row && row.is_active !== false);
   const initialDays = Array.from(
     new Set(scheduleRows.map((row: any) => String(row.weekday ?? 0))),
@@ -122,14 +129,12 @@ export function ScheduleForm({
         <div>
           <h3 className="card-title font-bold">{title}</h3>
           <p className="card-desc text-slate-500">
-            {schedule ? "Update weekly consultation timing for this doctor." : "Create weekly consultation timing for a doctor."}
+            {schedule
+              ? "Update weekly consultation timing for this doctor."
+              : "Create weekly consultation timing for a doctor."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={back}
-          className="close-button font-bold"
-        >
+        <button type="button" onClick={back} className="close-button font-bold">
           Back to Schedules
         </button>
       </div>
@@ -138,7 +143,9 @@ export function ScheduleForm({
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
         <div className="block">
-          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">Doctor</span>
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
+            Doctor
+          </span>
           <input type="hidden" name="practitionerId" value={selectedDoctorId} />
           <PractitionerPicker
             doctors={doctors}
@@ -153,73 +160,77 @@ export function ScheduleForm({
           <Field label="Branch">
             {isSingleBranchDoctor ? (
               <>
-                {/* Single-branch doctor: branch is fixed, not selectable.
-                    Disabled selects are excluded from FormData, so mirror the
-                    value into a hidden input the submit handler reads. */}
-                <input
-                  type="hidden"
-                  name="branchId"
-                  value={selectedBranchId}
-                />
-                <Select value={selectedBranchId} disabled >
-                  {doctorBranches.map((branch: any) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
+                {/* keep form submission value */}
+                <input type="hidden" name="branchId" value={selectedBranchId} />
 
-                </Select>
+                <SearchableSelect
+                  value={selectedBranchId}
+                  onChange={() => {}}
+                  disabled
+                  searchable={false}
+                  options={doctorBranches.map((branch: any) => ({
+                    value: branch.id,
+                    label: branch.name,
+                  }))}
+                />
               </>
             ) : (
-              <Select
+              <SearchableSelect
                 name="branchId"
                 value={selectedBranchId}
-                onChange={(event: any) => setSelectedBranchId(event.target.value)}
+                onChange={setSelectedBranchId}
                 required
                 disabled={!selectedDoctorId}
-              >
-                <option value="">
-                  {selectedDoctorId ? "Select branch" : "Select doctor first"}
-                </option>
-                {doctorBranches.length > 1 && (
-                  <option value={ALL_BRANCHES}>All branches</option>
-                )}
-                {doctorBranches.map((branch: any) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </Select>
+                searchable={doctorBranches.length > 8}
+                placeholder={
+                  selectedDoctorId ? "Select branch" : "Select doctor first"
+                }
+                options={[
+                  ...(doctorBranches.length > 1
+                    ? [{ value: ALL_BRANCHES, label: "All branches" }]
+                    : []),
+                  ...doctorBranches.map((branch: any) => ({
+                    value: branch.id,
+                    label: branch.name,
+                  })),
+                ]}
+              />
             )}
           </Field>
         </div>
         <Field label="Medical Department">
-          <Select
+          <SearchableSelect
             name="departmentId"
             value={selectedDepartmentId}
-            onChange={(event: any) =>
-              setSelectedDepartmentId(event.target.value)
-            }
+            onChange={setSelectedDepartmentId}
             required
             disabled={!selectedDoctorId}
-          >
-            <option value="">
-              {selectedDoctorId
+            searchable={false}
+            placeholder={
+              selectedDoctorId
                 ? "Select medical department"
-                : "Select doctor first"}
-            </option>
-            {(doctors.find((item: any) => item.id === selectedDoctorId)
-              ?.department_ids || []).map((departmentId: string) => {
-                const department = departments.find(
-                  (item: any) => item.id === departmentId,
-                );
-                return department ? (
-                  <option key={department.id} value={department.id}>
-                    {department.name}
-                  </option>
-                ) : null;
-              })}
-          </Select>
+                : "Select doctor first"
+            }
+            options={[
+              ...(
+                doctors.find((d: any) => d.id === selectedDoctorId)
+                  ?.department_ids || []
+              )
+                .map((departmentId: string) => {
+                  const department = departments.find(
+                    (d: any) => d.id === departmentId,
+                  );
+
+                  return department
+                    ? {
+                        value: department.id,
+                        label: department.name,
+                      }
+                    : null;
+                })
+                .filter(Boolean),
+            ]}
+          />
         </Field>
         <div className="md:col-span-2 xl:col-span-3">
           <input type="hidden" name="weekday" value={selectedDays[0]} />
@@ -227,17 +238,22 @@ export function ScheduleForm({
             <input key={value} type="hidden" name="weekdays" value={value} />
           ))}
           <div className="grid gap-3 md:grid-cols-[260px_1fr] md:items-end">
-            <SelectField
-              label="Add Weekday"
-              value={dayToAdd}
-              onChange={addDay}
-              options={[
-                { value: "", label: "Select day" },
-                ...weekdays
-                  .filter(([value]) => !selectedDays.includes(value))
-                  .map(([value, label]) => ({ value, label })),
-              ]}
-            />
+            <FormField label="Add Weekday">
+              <SearchableSelect
+                value={dayToAdd}
+                onChange={addDay}
+                searchable={false}
+                options={[
+                  { value: "", label: "Select day" },
+                  ...weekdays
+                    .filter(([value]) => !selectedDays.includes(value))
+                    .map(([value, label]) => ({
+                      value,
+                      label,
+                    })),
+                ]}
+              />
+            </FormField>
             <div className="flex min-h-[40px] flex-wrap items-end gap-2">
               {selectedDays.map((value) => {
                 const label =
@@ -245,13 +261,13 @@ export function ScheduleForm({
                 return (
                   <span
                     key={value}
-                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white close-button font-bold text-slate-800"
+                    className="inline-flex items-center gap-2 border-slate-200 bg-white rounded-lg px-4 py-2.5 lg:px-3 lg:py-2.5 md:text-base lg:text-xs border font-bold text-slate-800"
                   >
                     {label}
                     <button
                       type="button"
                       onClick={() => removeDay(value)}
-                      className="rounded-full p-1 text-slate-500 hover:bg-white hover:text-red-600"
+                      className="rounded-full  text-slate-500 hover:bg-white hover:text-red-600"
                       aria-label={`Remove ${label}`}
                     >
                       <X size={14} />
@@ -290,7 +306,11 @@ export function ScheduleForm({
                     onChange={(v) => updateRange(index, "start", v)}
                     required
                   />
-                  <input type="hidden" name={`startTime_${index}`} value={range.start} />
+                  <input
+                    type="hidden"
+                    name={`startTime_${index}`}
+                    value={range.start}
+                  />
                 </div>
                 <div>
                   <TimeField
@@ -299,19 +319,31 @@ export function ScheduleForm({
                     onChange={(v) => updateRange(index, "end", v)}
                     required
                   />
-                  <input type="hidden" name={`endTime_${index}`} value={range.end} />
+                  <input
+                    type="hidden"
+                    name={`endTime_${index}`}
+                    value={range.end}
+                  />
                 </div>
                 <div>
-                  <SelectField
-                    label={`Status ${index + 1}`}
+                  <FormField label={`Status ${index + 1}`}>
+                    <SearchableSelect
+                      value={String(range.isActive)}
+                      onChange={(v) =>
+                        updateRange(index, "isActive", v === "true")
+                      }
+                      searchable={false}
+                      options={[
+                        { value: "true", label: "Active" },
+                        { value: "false", label: "Inactive" },
+                      ]}
+                    />
+                  </FormField>
+                  <input
+                    type="hidden"
+                    name={`isActive_${index}`}
                     value={String(range.isActive)}
-                    onChange={(v) => updateRange(index, "isActive", v === "true")}
-                    options={[
-                      { value: "true", label: "Active" },
-                      { value: "false", label: "Inactive" },
-                    ]}
                   />
-                  <input type="hidden" name={`isActive_${index}`} value={String(range.isActive)} />
                 </div>
                 <button
                   type="button"
@@ -348,7 +380,7 @@ export function ScheduleForm({
           <input type="hidden" name="roomNumber" value={roomNumber} />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-          <Button disabled={busy} className='save-button'>
+          <Button disabled={busy} className="save-button">
             {busy
               ? "Saving..."
               : schedule

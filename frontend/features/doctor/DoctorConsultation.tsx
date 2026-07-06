@@ -12,6 +12,7 @@ import {
   Badge,
   Button,
   Card,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
@@ -1066,30 +1067,30 @@ export function DoctorConsultation({
   }
 
   const resetConsultation = () => {
-  setComplaints("");
-  setDiagnosisRows("");
-  setNotes("");
-  setVitals("");
-  setRemarks("");
+    setComplaints("");
+    setDiagnosisRows("");
+    setNotes("");
+    setVitals("");
+    setRemarks("");
 
-  setMedicineItems([]);
-  setReferralItems([]);
+    setMedicineItems([]);
+    setReferralItems([]);
 
-  setScanNeeded(false);
-  setScanTests("");
+    setScanNeeded(false);
+    setScanTests("");
 
-  setReferDoctor(false);
-  setReferDoctorId("");
+    setReferDoctor(false);
+    setReferDoctorId("");
 
-  setAdmissionNeeded(false);
-};
+    setAdmissionNeeded(false);
+  };
   async function cancelAppointment() {
     if (!selected) return;
     if (isQueueActionLocked(selected)) return;
     if (apiSession && selected.queueEntryId) {
       setBusy(true);
       setMessage("");
-      resetConsultation()
+      resetConsultation();
 
       try {
         await apiFetch(`/queue/${selected.queueEntryId}/cancel`, apiSession, {
@@ -1276,23 +1277,24 @@ export function DoctorConsultation({
               </p>
             </div>
             <div className="flex items-center gap-3 w-[50%] lg:w-[40%]">
-              <Select
-                value={doctorId}
-                onChange={(e: any) => {
-                  setDoctorId(e.target.value);
-                  setSelectedAppointmentId("");
-                }}
-                disabled={isDoctorUser}
-                className="select-filter"
-              >
-                {doctorList.map((d: any) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} - {d.specialty}
-                  </option>
-                ))}
-              </Select>
+              <FormField label="Doctor">
+                <SearchableSelect
+                  value={doctorId}
+                  onChange={(value) => {
+                    setDoctorId(value);
+                    setSelectedAppointmentId("");
+                  }}
+                  disabled={isDoctorUser}
+                  // className="select-filter"
+                  searchable={doctorList.length > 8}
+                  options={doctorList.map((d: any) => ({
+                    value: d.id,
+                    label: `${d.name} - ${d.specialty}`,
+                  }))}
+                />
+              </FormField>
               <Badge className="normal-badge text-center w-[50%]" tone="blue">
-                {branch.name}
+                {branch.name} moses
               </Badge>
             </div>
           </div>
@@ -1332,7 +1334,7 @@ export function DoctorConsultation({
                       <button
                         type="button"
                         onClick={(e) => {
-                          e.stopPropagation()
+                          e.stopPropagation();
                           cancelAppointment();
                         }}
                         className="border text-[11px] w-5 h-5 flex justify-center items-center hover:font-bold border-black/50 font-bold rounded-full"
@@ -1549,20 +1551,21 @@ export function DoctorConsultation({
           <StatusToast message={message} onClose={() => setMessage("")} />
           <div className="mt-4 grid gap-3">
             <FormField label="Doctor">
-              <Select
+              <SearchableSelect
                 value={doctorId}
-                onChange={(e: any) => {
-                  setDoctorId(e.target.value);
+                onChange={(value) => {
+                  setDoctorId(value);
                   setSelectedAppointmentId("");
                 }}
                 disabled={isDoctorUser}
-              >
-                {doctorList.map((d: any) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} - {d.specialty}
-                  </option>
-                ))}
-              </Select>
+                searchable={doctorList.length > 8}
+                placeholder="Select doctor"
+                options={doctorList.map((d: any) => ({
+                  value: d.id,
+                  label: d.name,
+                  sublabel: d.specialty,
+                }))}
+              />
             </FormField>
             <div className="w-[20%] lg:w-full">
               <Button onClick={callNext} disabled={!current || busy}>

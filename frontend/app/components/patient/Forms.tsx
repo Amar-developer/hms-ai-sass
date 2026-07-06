@@ -1,11 +1,8 @@
 import { patientFormPayload } from "@/features/patients/PatientFormFields";
-import { Card, Button } from "../common/ui";
+import { Card, Button, SearchableSelect } from "../common/ui";
+import { FormField } from "../FormElements";
 import { PatientFormFields } from "@/features/patients/PatientFormFields";
-import {
-  NumberField,
-  SelectField,
-  DateField,
-} from "../FormElements";
+import { NumberField, SelectField, DateField } from "../FormElements";
 import { paymentMethodOptions } from "@/lib/options";
 import { useEffect, useMemo, useState } from "react";
 
@@ -47,7 +44,7 @@ export function PatientForm({
           includeStatus={Boolean(patient)}
         />
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-          <Button disabled={busy} className='save-button'>
+          <Button disabled={busy} className="save-button">
             {busy ? "Saving..." : patient ? "Save Patient" : "Create Patient"}
           </Button>
           <button
@@ -105,24 +102,29 @@ export function MembershipEnrollForm({
 
   return (
     <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-5">
-      <SelectField
-        label="Plan"
-        value={planId}
-        onChange={setPlanId}
-        options={[
-          { value: "", label: "Select plan" },
-          ...activePlans.map((plan: any) => ({
-            value: plan.id,
-            label: `${plan.name} · ₹${Number(plan.price_amount || 0).toLocaleString("en-IN")}`,
-          })),
-        ]}
-      />
-      <SelectField
-        label="Branch"
-        value={branchId}
-        onChange={setBranchId}
-        options={branchOptions}
-      />
+      <FormField label="Plan">
+        <SearchableSelect
+          value={planId}
+          onChange={setPlanId}
+          searchable={activePlans.length > 8}
+          placeholder="Select plan"
+          options={[
+            { value: "", label: "Select plan" },
+            ...activePlans.map((plan: any) => ({
+              value: plan.id,
+              label: `${plan.name} · ₹${Number(plan.price_amount || 0).toLocaleString("en-IN")}`,
+            })),
+          ]}
+        />
+      </FormField>
+      <FormField label="Branch">
+        <SearchableSelect
+          value={branchId}
+          onChange={setBranchId}
+          searchable={branchOptions.length > 8}
+          options={branchOptions}
+        />
+      </FormField>
       <DateField label="Starts On" value={startsOn} onChange={setStartsOn} />
       <NumberField
         label="Amount Paid Now"
@@ -131,12 +133,14 @@ export function MembershipEnrollForm({
         min={0}
         placeholder="Auto-filled from plan"
       />
-      <SelectField
-        label="Payment Method"
-        value={paymentMethod}
-        onChange={setPaymentMethod}
-        options={[...paymentMethodOptions]}
-      />
+      <FormField label="Payment Method">
+        <SearchableSelect
+          value={paymentMethod}
+          onChange={setPaymentMethod}
+          searchable={false}
+          options={[...paymentMethodOptions]}
+        />
+      </FormField>
       <div className="md:col-span-5">
         <Button disabled={loading || activePlans.length === 0}>
           {loading ? "Saving..." : "Enroll & Create Invoice"}

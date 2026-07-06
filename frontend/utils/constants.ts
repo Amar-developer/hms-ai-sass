@@ -5,11 +5,11 @@ export const pageSize = 10;
 
 export const USER_COLUMNS: Column[] = [
   { label: "Name", width: "min-w-[180px]" },
-  { label: "Email", width: "min-w-[230px]" },
-  { label: "Roles", width: "min-w-[190px]" },
-  { label: "Branch", width: "min-w-[180px]" },
   { label: "Status", width: "min-w-[120px]" },
-  { label: "Created", width: "min-w-[100px]" },
+  { label: "Roles", width: "min-w-[200px]" },
+  { label: "Email", width: "min-w-[230px]" },
+  { label: "Branch", width: "min-w-[180px]" },
+  // { label: "Created", width: "min-w-[100px]" },
   { label: "Actions", width: "min-w-[240px]" },
 ];
 
@@ -19,7 +19,7 @@ export const ROLE_COLUMNS: Column[] = [
   { label: "Key", width: "min-w-[180px]" },
   { label: "Status", width: "min-w-[140px]" },
   { label: "Modified", width: "min-w-[140px]" },
-  { label: "Actions", width: "min-w-[260px]" },
+  { label: "Actions", width: "min-w-[160px]" },
 ];
 
 export const DEPARTMENT_COLUMNS = [

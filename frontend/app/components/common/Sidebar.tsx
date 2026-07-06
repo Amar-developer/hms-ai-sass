@@ -64,8 +64,8 @@ export function Sidebar(props: SidebarProps) {
       if (!clickedSidebar && !clickedPopup) {
         setPopupMenu(null);
 
-        if (props.tabletCollapsed) {
-          props.setSidebarOpen(false);
+        if (!props.tabletCollapsed && window.innerWidth < 1024) {
+          props.setTabletCollapsed(true);
         }
       }
     };
@@ -257,9 +257,9 @@ export function Sidebar(props: SidebarProps) {
                   className={`relative flex w-full items-center rounded-2xl ${isActive ? "font-bold bg-slate-900 text-white w-full text-left py-2 px-4 rounded-full" : "py-3"}
 ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                 >
-                  <Icon size={18} />
+                  <Settings size={22} />
                   {!props.tabletCollapsed && (
-                    <span className="truncate text-xs">{label}</span>
+                    <span className="truncate text-xs">{label} Settings</span>
                   )}
                   {!props.tabletCollapsed && (
                     <ChevronDown
@@ -304,10 +304,10 @@ ${props.tabletCollapsed ? "justify-center px-0" : "gap-3 px-4"}`}
                   isActive &&
                   props.tenantAdminSettingsOpen && (
                     <div className="mt-2 grid gap-1 pl-5">
-                      <div className="mb-1 flex items-center gap-2 px-3 text-xs font-bold uppercase text-slate-400">
+                      {/* <div className="mb-1 flex items-center gap-2 px-3 text-xs font-bold uppercase text-slate-400">
                         <Settings size={13} />
                         Settings
-                      </div>
+                      </div> */}
                       {props.visibleTenantAdminSections.map(
                         ([sectionId, sectionLabel, SectionIcon]: any) => (
                           <button

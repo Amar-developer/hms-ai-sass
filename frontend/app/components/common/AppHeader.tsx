@@ -63,6 +63,7 @@ const AppHeader = ({
               <BrandBlock compact setSidebarOpen={setReportsOpen} />
             </div>
           )} */}
+
           {isSuperAdmin && apiSession ? (
             <CompactControl label="Tenant">
               <select
@@ -88,7 +89,7 @@ const AppHeader = ({
             </div>
           )}
         </div>
-
+        <GlobalSearch items={searchItems} />
         <CompactControl label="Branch" hideLabel>
           {canChangeBranch ? (
             <select
@@ -106,8 +107,6 @@ const AppHeader = ({
             <span className="truncate">{branchName}</span>
           )}
         </CompactControl>
-
-        <GlobalSearch items={searchItems} />
 
         <div className="flex shrink-0 items-start lg:items-center mt-3  gap-2">
           <button

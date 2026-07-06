@@ -1,7 +1,13 @@
-
 import { useState } from "react";
-import { Card,Field,Select,Input,Button } from "../common/ui";
-import { NumberField,SelectField } from "../FormElements";
+import {
+  Card,
+  Field,
+  Select,
+  Input,
+  Button,
+  SearchableSelect,
+} from "../common/ui";
+import { NumberField, SelectField } from "../FormElements";
 import { doctorTypes } from "@/utils/doctors/constants";
 import { CheckboxGroup } from "./Shared";
 import {
@@ -101,7 +107,8 @@ export function DoctorForm({
     setEmail(user.email || "");
     setMobile(user.mobile || "");
     if (user.branch_id) setSelectedBranches([user.branch_id]);
-    else if (branches.length) setSelectedBranches(branches.map((branch: any) => branch.id));
+    else if (branches.length)
+      setSelectedBranches(branches.map((branch: any) => branch.id));
   }
   const updateSpecialty = (index: number, key: string, value: string) =>
     setSpecialtyFees((current) =>
@@ -130,11 +137,7 @@ export function DoctorForm({
               "Map doctor to branch and medical department availability."}
           </p> */}
         </div>
-        <button
-          type="button"
-          onClick={back}
-          className="close-button font-bold"
-        >
+        <button type="button" onClick={back} className="close-button font-bold">
           Back to Doctors
         </button>
       </div>
@@ -155,9 +158,8 @@ export function DoctorForm({
             return;
           }
           if (
-            new Set(
-              configuredSpecialties.map((row) => row.departmentId),
-            ).size !== configuredSpecialties.length
+            new Set(configuredSpecialties.map((row) => row.departmentId))
+              .size !== configuredSpecialties.length
           ) {
             window.alert(
               "The same specialty cannot be added more than once for this doctor.",
@@ -169,7 +171,9 @@ export function DoctorForm({
               (row) => row.fee === "" || Number(row.fee) < 0,
             )
           ) {
-            window.alert("Enter a valid OP consultation fee for every specialty.");
+            window.alert(
+              "Enter a valid OP consultation fee for every specialty.",
+            );
             return;
           }
           if (
@@ -200,9 +204,7 @@ export function DoctorForm({
             email,
             status,
             branchIds: selectedBranches,
-            departmentIds: configuredSpecialties.map(
-              (row) => row.departmentId,
-            ),
+            departmentIds: configuredSpecialties.map((row) => row.departmentId),
             specialtyFees: configuredSpecialties,
             shareTaxWithDoctor,
           });
@@ -216,42 +218,43 @@ export function DoctorForm({
             onChange={(event: any) => setFullName(event.target.value)}
             required
             placeholder="Dr. Priya Raman"
-            className='search-input'
+            className="search-input"
           />
         </Field>
         <Field label="Doctor Type">
-          <Select
+          <SearchableSelect
             name="practitionerType"
             value={practitionerType}
-            onChange={(event: any) => setPractitionerType(event.target.value)}
-          >
-            {doctorTypes.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
+            onChange={setPractitionerType}
+            searchable={false}
+            options={doctorTypes.map(([value, label]: any) => ({
+              value,
+              label,
+            }))}
+          />
         </Field>
         <Field label="Linked Login User">
-          <Select
+          <SearchableSelect
             name="userId"
             value={selectedUserId}
-            onChange={(event: any) => applyLoginUser(event.target.value)}
-          >
-            <option value="">No login linked</option>
-            {doctorUsers.map((user: any) => (
-              <option key={user.id} value={user.id}>
-                {user.name} - {user.email}
-              </option>
-            ))}
-          </Select>
+            onChange={applyLoginUser}
+            searchable={doctorUsers.length > 8}
+            placeholder="No login linked"
+            options={[
+              { value: "", label: "No login linked" },
+              ...doctorUsers.map((user: any) => ({
+                value: user.id,
+                label: `${user.name} - ${user.email}`,
+              })),
+            ]}
+          />
         </Field>
         <Field label="Registration Number">
           <Input
             name="registrationNumber"
             defaultValue={doctor?.registration_number || ""}
             placeholder="TNMC12345"
-            className='search-input'
+            className="search-input"
           />
         </Field>
         <Field label="Mobile">
@@ -260,8 +263,8 @@ export function DoctorForm({
             value={mobile}
             mobileNumber
             onChange={(event: any) => setMobile(event.target.value)}
-            placeholder='Enter mobile'
-            className='search-input'
+            placeholder="Enter mobile"
+            className="search-input"
           />
         </Field>
         <Field label="Email">
@@ -270,25 +273,27 @@ export function DoctorForm({
             type="email"
             value={email}
             onChange={(event: any) => setEmail(event.target.value)}
-            placeholder='Enter email'
-            className='search-input'
+            placeholder="Enter email"
+            className="search-input"
           />
         </Field>
         {doctor && (
-          <SelectField
-            label="Status"
+          <SearchableSelect
+            name="status"
             value={status}
             onChange={setStatus}
+            searchable={false}
             options={[
               { value: "active", label: "Active" },
               { value: "inactive", label: "Inactive" },
             ]}
           />
         )}
-        <SelectField
-          label="Tax Sharing"
+        <SearchableSelect
+          name="shareTaxWithDoctor"
           value={shareTaxWithDoctor}
           onChange={setShareTaxWithDoctor}
+          searchable={false}
           options={[
             { value: "false", label: "Clinic keeps tax" },
             { value: "true", label: "Share tax by ratio" },
@@ -347,28 +352,23 @@ export function DoctorForm({
                           : `Additional Specialty ${index}`
                       }
                     >
-                      <Select
+                      <SearchableSelect
                         value={row.departmentId}
-                        onChange={(event: any) =>
-                          updateSpecialty(
-                            index,
-                            "departmentId",
-                            event.target.value,
-                          )
+                        onChange={(value) =>
+                          updateSpecialty(index, "departmentId", value)
                         }
                         required
-                      >
-                        <option value="">Select tenant department</option>
-                        {departments.map((department: any) => (
-                          <option
-                            key={department.id}
-                            value={department.id}
-                            disabled={selectedElsewhere.has(department.id)}
-                          >
-                            {department.name}
-                          </option>
-                        ))}
-                      </Select>
+                        searchable={departments.length > 8}
+                        placeholder="Select tenant department"
+                        options={[
+                          { value: "", label: "Select tenant department" },
+                          ...departments.map((department: any) => ({
+                            value: department.id,
+                            label: department.name,
+                            disabled: selectedElsewhere.has(department.id),
+                          })),
+                        ]}
+                      />
                     </Field>
                     <NumberField
                       label={
@@ -377,23 +377,16 @@ export function DoctorForm({
                           : "OP Consultation Fee"
                       }
                       value={row.fee}
-                      onChange={(value) =>
-                        updateSpecialty(index, "fee", value)
-                      }
+                      onChange={(value) => updateSpecialty(index, "fee", value)}
                       min={0}
                       required
                       placeholder="650"
-
                     />
                     <NumberField
                       label="Doctor Share %"
                       value={row.doctorSharePercentage}
                       onChange={(value) =>
-                        updateSpecialty(
-                          index,
-                          "doctorSharePercentage",
-                          value,
-                        )
+                        updateSpecialty(index, "doctorSharePercentage", value)
                       }
                       min={0}
                       max={100}
@@ -416,7 +409,7 @@ export function DoctorForm({
           </div>
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
-          <Button disabled={busy} className='save-button'>
+          <Button disabled={busy} className="save-button">
             {busy ? "Saving..." : doctor ? "Save Doctor" : "Create Doctor"}
           </Button>
           <button

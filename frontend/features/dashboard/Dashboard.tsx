@@ -70,6 +70,106 @@ const SHORTCUT_CATEGORIES = [
     ],
   },
   {
+    label: "Reports & Admin",
+    color: "bg-slate-50 border-slate-200",
+    headerColor: "text-slate-700",
+    iconColor: "text-slate-500",
+    modules: [
+      { id: "reports", label: "Reports Overview", icon: BarChart3 },
+      {
+        id: "report-metrics",
+        label: "Metrics Report",
+        icon: Activity,
+        target: { id: "reports", section: "metrix" },
+      },
+      {
+        id: "report-invoice",
+        label: "Invoice Report",
+        icon: Receipt,
+        target: { id: "reports", section: "invoice" },
+      },
+      {
+        id: "report-lab",
+        label: "Lab Report",
+        icon: FlaskConical,
+        target: { id: "reports", section: "lab" },
+      },
+      {
+        id: "report-appointments",
+        label: "Appointments Report",
+        icon: FileText,
+        target: { id: "reports", section: "appointments" },
+      },
+      {
+        id: "report-pharmacy",
+        label: "Pharmacy Report",
+        icon: Users,
+        target: { id: "reports", section: "pharmacy" },
+      },
+      { id: "admin", label: "Tenant Admin", icon: ShieldCheck },
+      {
+        id: "admin-users",
+        label: "Users / Create",
+        icon: Users,
+        target: { id: "admin", section: "users" },
+      },
+      {
+        id: "admin-roles",
+        label: "Roles",
+        icon: ShieldCheck,
+        target: { id: "admin", section: "roles" },
+      },
+      {
+        id: "admin-departments",
+        label: "Departments / Create",
+        icon: ClipboardList,
+        target: { id: "admin", section: "departments" },
+      },
+      {
+        id: "admin-branches",
+        label: "Branches",
+        icon: Building2,
+        target: { id: "admin", section: "branches" },
+      },
+      {
+        id: "admin-suppliers",
+        label: "Suppliers",
+        icon: Truck,
+        target: { id: "admin", section: "suppliers" },
+      },
+      {
+        id: "admin-tax",
+        label: "Tax",
+        icon: Percent,
+        target: { id: "admin", section: "tax" },
+      },
+      {
+        id: "admin-offers",
+        label: "Discounts & Offers",
+        icon: Tags,
+        target: { id: "admin", section: "offers" },
+      },
+      {
+        id: "admin-membership",
+        label: "Patient Membership",
+        icon: ShieldCheck,
+        target: { id: "admin", section: "membership" },
+      },
+      {
+        id: "admin-files",
+        label: "Files",
+        icon: FileText,
+        target: { id: "admin", section: "files" },
+      },
+      {
+        id: "admin-settings",
+        label: "Tenant Settings",
+        icon: Settings,
+        target: { id: "admin", section: "settings" },
+      },
+    ],
+  },
+  {
     label: "Inpatient & Rehab",
     color: "bg-amber-50 border-amber-100",
     headerColor: "text-amber-700",
@@ -86,31 +186,6 @@ const SHORTCUT_CATEGORIES = [
     iconColor: "text-rose-500",
     modules: [
       { id: "billing", label: "Invoices & Billing", icon: ReceiptIndianRupee },
-    ],
-  },
-  {
-    label: "Reports & Admin",
-    color: "bg-slate-50 border-slate-200",
-    headerColor: "text-slate-700",
-    iconColor: "text-slate-500",
-    modules: [
-      { id: "reports", label: "Reports Overview", icon: BarChart3 },
-      { id: "report-metrics", label: "Metrics Report", icon: Activity, target: { id: "reports", section: "metrix" } },
-      { id: "report-invoice", label: "Invoice Report", icon: Receipt, target: { id: "reports", section: "invoice" } },
-      { id: "report-lab", label: "Lab Report", icon: FlaskConical, target: { id: "reports", section: "lab" } },
-      { id: "report-appointments", label: "Appointments Report", icon: FileText, target: { id: "reports", section: "appointments" } },
-      { id: "report-pharmacy", label: "Pharmacy Report", icon: Users, target: { id: "reports", section: "pharmacy" } },
-      { id: "admin", label: "Tenant Admin", icon: ShieldCheck },
-      { id: "admin-users", label: "Users / Create", icon: Users, target: { id: "admin", section: "users" } },
-      { id: "admin-roles", label: "Roles", icon: ShieldCheck, target: { id: "admin", section: "roles" } },
-      { id: "admin-departments", label: "Departments / Create", icon: ClipboardList, target: { id: "admin", section: "departments" } },
-      { id: "admin-branches", label: "Branches", icon: Building2, target: { id: "admin", section: "branches" } },
-      { id: "admin-suppliers", label: "Suppliers", icon: Truck, target: { id: "admin", section: "suppliers" } },
-      { id: "admin-tax", label: "Tax", icon: Percent, target: { id: "admin", section: "tax" } },
-      { id: "admin-offers", label: "Discounts & Offers", icon: Tags, target: { id: "admin", section: "offers" } },
-      { id: "admin-membership", label: "Patient Membership", icon: ShieldCheck, target: { id: "admin", section: "membership" } },
-      { id: "admin-files", label: "Files", icon: FileText, target: { id: "admin", section: "files" } },
-      { id: "admin-settings", label: "Tenant Settings", icon: Settings, target: { id: "admin", section: "settings" } },
     ],
   },
 ];
@@ -156,7 +231,9 @@ function isCompletedAppointment(row: any) {
 }
 
 function invoiceAmount(row: any) {
-  return Number(row.paid_amount ?? row.total_amount ?? row.total ?? row.amount ?? 0);
+  return Number(
+    row.paid_amount ?? row.total_amount ?? row.total ?? row.amount ?? 0,
+  );
 }
 
 function invoiceBalance(row: any) {
@@ -164,7 +241,9 @@ function invoiceBalance(row: any) {
 }
 
 function invoiceItemTotal(row: any) {
-  return Number(row.subtotal_amount ?? row.total_amount ?? row.total ?? row.amount ?? 0);
+  return Number(
+    row.subtotal_amount ?? row.total_amount ?? row.total ?? row.amount ?? 0,
+  );
 }
 
 function invoiceMembershipBenefit(row: any) {
@@ -172,17 +251,28 @@ function invoiceMembershipBenefit(row: any) {
 }
 
 function invoiceOfferDiscount(row: any) {
-  return Math.max(Number(row.discount_amount || 0) - invoiceMembershipBenefit(row), 0);
+  return Math.max(
+    Number(row.discount_amount || 0) - invoiceMembershipBenefit(row),
+    0,
+  );
 }
 
-function topRows(rows: any[], keyGetter: (row: any) => string, labelGetter: (key: string) => string) {
+function topRows(
+  rows: any[],
+  keyGetter: (row: any) => string,
+  labelGetter: (key: string) => string,
+) {
   const buckets = rows.reduce((acc: Record<string, number>, row: any) => {
     const key = keyGetter(row) || "unassigned";
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
   return Object.entries(buckets)
-    .map(([key, count]) => ({ key, label: labelGetter(key), count: Number(count) }))
+    .map(([key, count]) => ({
+      key,
+      label: labelGetter(key),
+      count: Number(count),
+    }))
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
@@ -200,9 +290,12 @@ export function Dashboard({
   const today = new Date().toISOString().slice(0, 10);
   const currentMonth = today.slice(0, 7);
   const todayAppointments = scopedAppointments.filter(
-    (row: any) => dateKey(row.appointmentDate || row.appointment_date) === today,
+    (row: any) =>
+      dateKey(row.appointmentDate || row.appointment_date) === today,
   );
-  const completedAppointments = scopedAppointments.filter(isCompletedAppointment);
+  const completedAppointments = scopedAppointments.filter(
+    isCompletedAppointment,
+  );
   const completedToday = todayAppointments.filter(isCompletedAppointment);
   const monthlyInvoices = liveInvoices.filter((row: any) => {
     const sourceDate =
@@ -222,7 +315,9 @@ export function Dashboard({
     0,
   );
   const membershipPurchaseInvoices = monthlyInvoices.filter(
-    (row: any) => row.patient_subscription_enrollment_id || row.patient_subscription_plan_id,
+    (row: any) =>
+      row.patient_subscription_enrollment_id ||
+      row.patient_subscription_plan_id,
   );
   const membershipSavings = monthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceMembershipBenefit(row),
@@ -233,7 +328,10 @@ export function Dashboard({
     0,
   );
   const departmentById = new Map(
-    allowedDepartments.map((department: any) => [department.id, department.name]),
+    allowedDepartments.map((department: any) => [
+      department.id,
+      department.name,
+    ]),
   );
   const practitionerById = new Map(
     livePractitioners.map((practitioner: any) => [
@@ -252,10 +350,18 @@ export function Dashboard({
     (key) => String(practitionerById.get(key) || key),
   );
   const activeQueue = scopedAppointments.filter((row: any) => {
-    const status = normalized(row.queueStatus || row.queue_status || row.status);
+    const status = normalized(
+      row.queueStatus || row.queue_status || row.status,
+    );
     return (
       !isCompletedAppointment(row) &&
-      ["waiting", "called", "in_queue", "requeued", "patient_not_available"].includes(status)
+      [
+        "waiting",
+        "called",
+        "in_queue",
+        "requeued",
+        "patient_not_available",
+      ].includes(status)
     );
   });
   const cards = [
@@ -267,23 +373,23 @@ export function Dashboard({
       target: "appointments",
     },
     {
-      title: "Patients",
+      title: "Patients Count",
       value: liveSummary?.patients ?? patients.length,
       detail: `${patients.length} loaded records`,
       icon: Users,
       target: "patients",
     },
-    {
-      title: "Active Queue",
-      value: activeQueue.length,
-      detail: `${liveSummary?.queue ?? activeQueue.length} total queue entries`,
-      icon: Clock,
-      target: "queue",
-    },
+    // {
+    //   title: "Active Queue",
+    //   value: activeQueue.length,
+    //   detail: `${liveSummary?.queue ?? activeQueue.length} total queue entries`,
+    //   icon: Clock,
+    //   target: "queue",
+    // },
     {
       title: "Monthly Revenue",
       value: rupees(monthlyRevenue),
-      detail: `Collected from ${rupees(monthlyItemTotal)} billed value`,
+      detail: `Collected from ${rupees(monthlyItemTotal)}`,
       icon: IndianRupee,
       target: "billing",
     },
@@ -294,18 +400,18 @@ export function Dashboard({
       icon: ReceiptIndianRupee,
       target: "billing",
     },
-    {
-      title: "Membership Usage",
-      value: rupees(membershipSavings),
-      detail: `${membershipPurchaseInvoices.length} plan purchases · offers ${rupees(offerSavings)}`,
-      icon: ReceiptIndianRupee,
-      target: "patients",
-    },
+    // {
+    //   title: "Membership Usage",
+    //   value: rupees(membershipSavings),
+    //   detail: `${membershipPurchaseInvoices.length} plan purchases · offers ${rupees(offerSavings)}`,
+    //   icon: ReceiptIndianRupee,
+    //   target: "patients",
+    // },
   ];
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-4">
         {cards.map(({ title, value, detail, icon: Icon, target }: any) => (
           <button
             key={title}
@@ -313,31 +419,19 @@ export function Dashboard({
             onClick={() => setActive?.(target)}
             className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
           >
-            <Icon className="mb-3 text-slate-500" />
-            <p className="table-data text-slate-500">{title}</p>
+            <div className="flex items-center mb-3 h-10">
+              <Icon className="text-slate-500 mr-2" />
+              <p className="md:text-[10px] lg:text-sm text-slate-500 font-bold  ">
+                {title}
+              </p>
+            </div>
             <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
-            <p className="mt-2 text-[11px] lg:text-xs font-semibold text-slate-500">{detail}</p>
+            <p className="mt-2 text-[10px] font-semibold text-slate-500 h-5">
+              {detail}
+            </p>
           </button>
         ))}
       </div>
-
-      <QuickAccess enabled={enabled} setActive={setActive} />
-
-      <div className="grid gap-6 xl:grid-cols-2">
-        <AnalysisCard
-          title="Completed By Medical Department"
-          subtitle="Completed consultation count by medical department."
-          rows={departmentRows}
-          empty="No completed consultations yet."
-        />
-        <AnalysisCard
-          title="Completed By Practitioner"
-          subtitle="Completed consultation count by doctor."
-          rows={practitionerRows}
-          empty="No completed practitioner activity yet."
-        />
-      </div>
-
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
@@ -346,28 +440,26 @@ export function Dashboard({
               Today workload, collections, queue pressure, and module usage.
             </p>
           </div>
-          <Badge tone="blue" className="normal-badge">Tenant Admin Only</Badge>
+          <Badge tone="blue" className="normal-badge">
+            Tenant Admin Only
+          </Badge>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
           <Insight label="Booked Today" value={todayAppointments.length} />
           <Insight label="Completed Today" value={completedToday.length} />
           <Insight label="Waiting Queue" value={activeQueue.length} />
           <Insight label="Invoices This Month" value={monthlyInvoices.length} />
-          <Insight label="Membership Savings" value={rupees(membershipSavings)} />
-          <Insight label="Membership Purchases" value={membershipPurchaseInvoices.length} />
+          <Insight
+            label="Membership Savings"
+            value={rupees(membershipSavings)}
+          />
+          <Insight
+            label="Membership Purchases"
+            value={membershipPurchaseInvoices.length}
+          />
         </div>
       </Card>
-
-      <Card>
-        <h3 className="text-lg font-bold">Enabled Plug-and-Play Modules</h3>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {clinic.modules.map((module: string) => (
-            <Badge key={module} tone="green" className="normal-badge">
-              {module}
-            </Badge>
-          ))}
-        </div>
-      </Card>
+      <QuickAccess enabled={enabled} setActive={setActive} />
     </div>
   );
 }
@@ -406,33 +498,92 @@ function AnalysisCard({ title, subtitle, rows, empty }: any) {
 function Insight({ label, value }: any) {
   return (
     <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs font-bold uppercase text-slate-500">{label}</p>
+      <p className="text-xs font-bold uppercase text-slate-500 lg:h-8">
+        {label}
+      </p>
       <p className="mt-1 text-xl font-bold">{value}</p>
     </div>
   );
 }
 
-function QuickAccess({ enabled, setActive }: { enabled?: (id: string) => boolean; setActive?: (target: ShortcutTarget) => void }) {
+function QuickAccess({
+  enabled,
+  setActive,
+}: {
+  enabled?: (id: string) => boolean;
+  setActive?: (target: ShortcutTarget) => void;
+}) {
   const visibleCategories = SHORTCUT_CATEGORIES.map((cat) => ({
     ...cat,
-    modules: cat.modules.filter((mod) => !enabled || enabled(shortcutTargetId("target" in mod ? mod.target : mod.id))),
+    modules: cat.modules.filter(
+      (mod) =>
+        !enabled ||
+        enabled(shortcutTargetId("target" in mod ? mod.target : mod.id)),
+    ),
   })).filter((cat) => cat.modules.length > 0);
 
   if (visibleCategories.length === 0) return null;
+
+  const renderCard = (cat: any, index: number) => (
+    <div key={cat.label} className={`rounded-lg border p-4 ${cat.color}`}>
+      <p
+        className={`mb-3 text-xs font-bold uppercase tracking-wide ${cat.headerColor}`}
+      >
+        {cat.label}
+      </p>
+
+      <div
+        className={
+          index === 3
+            ? "grid grid-flow-col [grid-template-rows:repeat(9,minmax(0,auto))] gap-x-4 gap-y-1"
+            : "grid gap-1"
+        }
+      >
+        {cat.modules.map(({ id, label, icon: Icon, ...mod }: any) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActive?.("target" in mod ? mod.target : id)}
+            className="flex items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-white/70 active:scale-[0.98]"
+          >
+            <Icon size={16} className={cat.iconColor} />
+            <span className="flex-1 table-data font-semibold text-slate-800">
+              {label}
+            </span>
+            <ArrowRight size={13} className="text-slate-400" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div>
       <div className="mb-4">
         <h3 className="card-title font-bold">Quick Access</h3>
-        <p className="table-data text-slate-500">Jump to any module — grouped by function.</p>
+        <p className="table-data text-slate-500">
+          Jump to any module — grouped by function.
+        </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {visibleCategories.map((cat) => (
-          <div
-            key={cat.label}
-            className={`rounded-lg border p-4 ${cat.color}`}
-          >
-            <p className={`mb-3 text-xs font-bold uppercase tracking-wide ${cat.headerColor}`}>
+      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-3">
+        {visibleCategories
+          .slice(0, 3)
+          .map((cat, index) => renderCard(cat, index))}
+        {visibleCategories[3] && (
+          <div className=" md:col-span-2">
+            {renderCard(visibleCategories[3], 3)}
+          </div>
+        )}
+        <div className="grid gap-4">
+          {visibleCategories
+            .slice(4)
+            .map((cat, index) => renderCard(cat, index + 4))}
+        </div>
+        {/* {visibleCategories.map((cat) => (
+          <div key={cat.label} className={`rounded-lg border p-4 ${cat.color}`}>
+            <p
+              className={`mb-3 text-xs font-bold uppercase tracking-wide ${cat.headerColor}`}
+            >
               {cat.label}
             </p>
             <div className="grid gap-1">
@@ -444,13 +595,15 @@ function QuickAccess({ enabled, setActive }: { enabled?: (id: string) => boolean
                   className="flex items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-white/70 active:scale-[0.98]"
                 >
                   <Icon size={16} className={cat.iconColor} />
-                  <span className="flex-1 table-data font-semibold text-slate-800">{label}</span>
+                  <span className="flex-1 table-data font-semibold text-slate-800">
+                    {label}
+                  </span>
                   <ArrowRight size={13} className="text-slate-400" />
                 </button>
               ))}
             </div>
           </div>
-        ))}
+        ))} */}
       </div>
     </div>
   );

@@ -282,7 +282,7 @@ export function FilesPanel({
               name="file"
               type="file"
               required
-              className="search-input file:text-xs"
+              className="search-input input-file"
             />
           </FormField>
           <FormField label="Category">
@@ -292,7 +292,7 @@ export function FilesPanel({
               onChange={setCategory}
               options={fileCategoryOptions}
               searchPlaceholder="Search categories..."
-              className="select-input"
+              // className="select-input"
             />
           </FormField>
           <FormField label="Branch">

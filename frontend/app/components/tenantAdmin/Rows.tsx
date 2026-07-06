@@ -20,246 +20,258 @@ export type Role = {
 };
 
 export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
-  const branch = branches.find((row: any) => row.id === user.branch_id);
-  const roleLabels = userRoleLabels(user);
+  const branch = branches.find((b: any) => b.id === user.branch_id);
+
+  const actions = [
+    {
+      label: "Edit",
+      onClick: onEdit,
+    },
+    {
+      label: user.is_active ? "Inactive" : "Active",
+      onClick: onStatus,
+    },
+    {
+      label: "Delete",
+      onClick: onDelete,
+      danger: true,
+    },
+  ];
 
   return (
-    <ClickableRow onClick={onEdit} className="flex w-max border">
-      {/* Name */}
-      <div className="w-[180px] table-cell-ellipsis">
-        <span className="table-text font-bold" title={user.name}>
-          {user.name}
-        </span>
-      </div>
+    <tr className="border-b hover:bg-slate-50 cursor-pointer" onClick={onEdit}>
+      <td className="px-4 py-3 font-bold whitespace-nowrap">{user.name}</td>
 
-      <div className="w-[220px] table-cell-ellipsis">
-        <span className="table-text" title={user.email}>
-          {user.email}
-        </span>
-      </div>
-
-      <div className="w-[200px] table-cell-ellipsis">
-        <span className="table-text">
-          <RoleList labels={roleLabels} />
-        </span>
-      </div>
-
-      <div className="w-[180px] table-cell-ellipsis">
-        <span className="table-text" title={branch?.name}>
-          {branch?.name || "All branches"}
-        </span>
-      </div>
-
-      {/* Status */}
-      <div className="min-w-[120px] px-2 flex items-center text-xs">
-        <Badge
-          tone={user.is_active ? "green" : "red"}
-          className="rounded-full text-xs py-1 px-1"
-        >
+      <td className="px-4 py-3 whitespace-nowrap">
+        <Badge tone={user.is_active ? "green" : "red"} className="rounded-full">
           {user.is_active ? "Active" : "Inactive"}
         </Badge>
-      </div>
+      </td>
 
-      {/* Created */}
-      <div className="min-w-[100px] px-2 flex items-center text-xs">
-        {formatDate(user.created_at)}
-      </div>
+      <td className="px-4 py-3">
+        <RoleList labels={userRoleLabels(user)} />
+      </td>
 
-      {/* Actions */}
-      <div className="min-w-[140px] px-2 flex items-center text-xs">
-        <RowActions
-          row={user}
-          onEdit={onEdit}
-          onStatus={onStatus}
-          onDelete={onDelete}
-        />
-      </div>
-    </ClickableRow>
+      <td className="px-4 py-3">{user.email}</td>
+
+      <td className="px-4 py-3">{branch?.name ?? "All branches"}</td>
+
+      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+        <RowActions actions={actions} />
+      </td>
+    </tr>
   );
 }
 
 export function RoleRow({ role, onEdit, onStatus, onDelete }: any) {
   const locked = isLocked(role);
 
+  const actions = [
+    {
+      label: locked ? "View" : "Edit",
+      onClick: onEdit,
+    },
+    {
+      label: role.is_active ? "Inactive" : "Active",
+      onClick: onStatus,
+      hidden: locked,
+    },
+    {
+      label: "Delete",
+      onClick: onDelete,
+      hidden: locked,
+      danger: true,
+    },
+  ];
+
   return (
-    <ClickableRow onClick={onEdit} className="flex w-full border">
-      {/* Role Name */}
-      <div className="min-w-[200px] px-2 flex items-center text-xs">
-        <div className="flex items-center gap-2 min-w-0">
-          <b className="truncate">{role.name}</b>
+    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+      <td className="px-4 py-3 text-xs">
+        <div className="flex items-center gap-2">
+          <b>{role.name}</b>
 
           {locked && (
             <Badge
               tone="purple"
-              className="rounded-full text-[10px] px-2 py-[2px]"
+              className="rounded-full px-2 py-[2px] text-[10px]"
             >
               Locked
             </Badge>
           )}
         </div>
-      </div>
+      </td>
 
-      {/* Key */}
-      <div className="min-w-[180px] px-2 flex items-center text-xs">
-        <span>{roleKeyLabel(role.key)}</span>
-      </div>
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
+        {roleKeyLabel(role.key)}
+      </td>
 
-      {/* Status */}
-      <div className="min-w-[140px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         <Badge
           tone={role.is_active ? "green" : "red"}
-          className="rounded-full text-[10px] px-2 py-[2px]"
+          className="rounded-full px-2 py-[2px] text-[10px]"
         >
           {role.is_active ? "Active" : "Inactive"}
         </Badge>
-      </div>
+      </td>
 
-      {/* Modified */}
-      <div className="min-w-[140px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         {formatDate(role.updated_at || role.created_at)}
-      </div>
+      </td>
 
-      {/* Actions */}
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
-        <div onClick={(e) => e.stopPropagation()}>
-          <RowActions
-            row={role}
-            locked={locked}
-            onEdit={onEdit}
-            onStatus={onStatus}
-            onDelete={onDelete}
-          />
-        </div>
-      </div>
-    </ClickableRow>
+      <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
+        <RowActions actions={actions} />
+      </td>
+    </tr>
   );
 }
 
 export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
+  console.log(department, "department");
+  const actions = [
+    {
+      label: "Edit",
+      onClick: onEdit,
+    },
+    {
+      label: department.is_active ? "Inactive" : "Active",
+      onClick: onStatus,
+    },
+    {
+      label: "Delete",
+      onClick: onDelete,
+      danger: true,
+    },
+  ];
+
   return (
-    <ClickableRow onClick={onEdit} className="flex w-max border">
-      <div className="min-w-[200px] px-2 flex items-center text-xs">
-        <span className="font-bold">{department.name}</span>
+    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+      <td className="px-4 py-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-bold">{department.name}</span>
 
-        {department.locked && (
-          <span className="ml-2">
-            <Badge tone="purple">Locked</Badge>
-          </span>
-        )}
-      </div>
+          {department.locked && <Badge tone="purple">Locked</Badge>}
+        </div>
+      </td>
 
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
-        {department.code}
-      </div>
+      <td className="px-4 py-3 text-xs whitespace-nowrap">{department.code}</td>
 
-      <div className="min-w-[200px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs">
         {department.branch_names || "All branches"}
-      </div>
+      </td>
 
-      <div className="min-w-[120px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         <Badge
           tone={department.is_active ? "green" : "red"}
-          className="rounded-full py-1 text-xs"
+          className="rounded-full py-1"
         >
           {department.is_active ? "Active" : "Inactive"}
         </Badge>
-      </div>
+      </td>
 
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
-        <RowActions
-          row={department.primary || department}
-          locked={department.locked}
-          onEdit={onEdit}
-          onStatus={onStatus}
-          onDelete={onDelete}
-        />
-      </div>
-    </ClickableRow>
+      <td className="px-4 py-3 text-xs">
+        <RowActions actions={actions} />
+      </td>
+    </tr>
   );
 }
 
 export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
+  const actions = [
+    {
+      label: "Edit",
+      onClick: onEdit,
+    },
+    {
+      label: branch.is_active ? "Inactive" : "Active",
+      onClick: onStatus,
+    },
+    {
+      label: "Delete",
+      onClick: onDelete,
+      danger: true,
+    },
+  ];
   return (
-    <ClickableRow onClick={onEdit} className="flex w-max border">
-      <div className="min-w-[200px] px-2 flex items-center text-xs">
-        <b>{branch.name}</b>
+    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+      <td className="px-4 py-3 text-xs">
+        <div className="flex items-center gap-2">
+          <b>{branch.name}</b>
 
-        {isLocked(branch) && (
-          <span className="ml-2">
-            <Badge tone="purple">Locked</Badge>
-          </span>
-        )}
-      </div>
+          {isLocked(branch) && <Badge tone="purple">Locked</Badge>}
+        </div>
+      </td>
 
-      <div className="min-w-[100px] px-2 flex items-center text-xs">
-        {branch.code}
-      </div>
+      <td className="px-4 py-3 text-xs whitespace-nowrap">{branch.code}</td>
 
-      <div className="min-w-[260px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs">
         {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") ||
           "-"}
-      </div>
+      </td>
 
-      <div className="min-w-[120px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         <Badge
           tone={branch.is_active ? "green" : "red"}
-          className="rounded-full py-1 text-xs"
+          className="rounded-full py-1"
         >
           {branch.is_active ? "Active" : "Inactive"}
         </Badge>
-      </div>
+      </td>
 
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
-        <RowActions
-          row={branch}
-          locked={isLocked(branch)}
-          onEdit={onEdit}
-          onStatus={onStatus}
-          onDelete={onDelete}
-        />
-      </div>
-    </ClickableRow>
+      <td className="px-4 py-3 text-xs">
+        <RowActions actions={actions} />
+      </td>
+    </tr>
   );
 }
 
 export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
+  const actions = [
+    {
+      label: "Edit",
+      onClick: onEdit,
+    },
+    {
+      label: supplier.is_active ? "Inactive" : "Active",
+      onClick: onStatus,
+    },
+    {
+      label: "Delete",
+      onClick: onDelete,
+      danger: true,
+    },
+  ];
   return (
-    <ClickableRow onClick={onEdit} className="flex border min-w-max">
-      <div className="min-w-[220px] px-2 flex items-center text-xs">
+    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+      <td className="px-4 py-3 text-xs">
         <b>{supplier.name}</b>
-      </div>
+      </td>
 
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         {supplier.gstin || "-"}
-      </div>
+      </td>
 
-      <div className="min-w-[260px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs">
         <div>
           <b>{supplier.phone || "-"}</b>
-          <p className="text-slate-500 break-all text-xs">
+          <p className="text-slate-500">
             {supplier.email || supplier.address || "-"}
           </p>
         </div>
-      </div>
+      </td>
 
-      <div className="min-w-[120px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         <Badge
           tone={supplier.is_active ? "green" : "red"}
-          className="rounded-full py-1 text-xs"
+          className="rounded-full py-1"
         >
           {supplier.is_active ? "Active" : "Inactive"}
         </Badge>
-      </div>
+      </td>
 
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
-        <RowActions
-          row={supplier}
-          onEdit={onEdit}
-          onStatus={onStatus}
-          onDelete={onDelete}
-        />
-      </div>
-    </ClickableRow>
+      <td className="px-4 py-3 text-xs">
+        <RowActions actions={actions} />
+      </td>
+    </tr>
   );
 }
 
@@ -270,43 +282,52 @@ export function TaxRuleRow({
   onStatus,
   onDelete,
 }: any) {
-  const branch = branches.find((row: any) => row.id === rule.branch_id);
-
+  const branch = branches.find((b: any) => b.id === rule.branch_id);
+  const actions = [
+    {
+      label: "Edit",
+      onClick: onEdit,
+    },
+    {
+      label: rule.is_active ? "Inactive" : "Active",
+      onClick: onStatus,
+    },
+    {
+      label: "Delete",
+      onClick: onDelete,
+      danger: true,
+    },
+  ];
   return (
-    <ClickableRow onClick={onEdit} className="flex w-max border">
-      <div className="min-w-[180px] px-2 flex items-center text-xs">
+    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+      <td className="px-4 py-3 text-xs">
         <b>{rule.name}</b>
-      </div>
+      </td>
 
-      <div className="min-w-[260px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs">
         {scopeLabel(rule.service_scope)} · {branch?.name || "All branches"}
-      </div>
+      </td>
 
-      <div className="min-w-[140px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs">
         <div>
           <b>{rule.tax_percentage}%</b>
-          <p className="text-slate-500 text-xs">{rule.tax_label || "GST"}</p>
+          <p className="text-slate-500">{rule.tax_label || "GST"}</p>
         </div>
-      </div>
+      </td>
 
-      <div className="min-w-[120px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         <Badge
           tone={rule.is_active ? "green" : "red"}
-          className="rounded-full py-1 text-xs"
+          className="rounded-full py-1"
         >
           {rule.is_active ? "Active" : "Inactive"}
         </Badge>
-      </div>
+      </td>
 
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
-        <RowActions
-          row={rule}
-          onEdit={onEdit}
-          onStatus={onStatus}
-          onDelete={onDelete}
-        />
-      </div>
-    </ClickableRow>
+      <td className="px-4 py-3 text-xs">
+        <RowActions actions={actions} />
+      </td>
+    </tr>
   );
 }
 
@@ -317,61 +338,71 @@ export function DiscountOfferRow({
   onStatus,
   onDelete,
 }: any) {
-  const branch = branches.find((row: any) => row.id === offer.branch_id);
-
+  const branch = branches.find((b: any) => b.id === offer.branch_id);
+  const actions = [
+    {
+      label: "Edit",
+      onClick: onEdit,
+    },
+    {
+      label: offer.is_active ? "Inactive" : "Active",
+      onClick: onStatus,
+    },
+    {
+      label: "Delete",
+      onClick: onDelete,
+      danger: true,
+    },
+  ];
   const value =
     offer.discount_type === "fixed"
       ? `₹${Number(offer.value || 0).toLocaleString("en-IN")}`
       : `${offer.value}%`;
 
-  const code = publicDisplayValue(offer.code, "");
-
   const minimum = Number(offer.minimum_bill_amount || 0);
 
   return (
-    <ClickableRow onClick={onEdit} className="flex w-max border">
-      <div className="min-w-[140px] px-2 flex items-center text-xs">
-        <div>
-          <b>{offer.name}</b>
-        </div>
-      </div>
+    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+      <td className="px-4 py-3 text-xs">
+        <b>{offer.name}</b>
+      </td>
 
-      <div className="min-w-[260px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs">
         {scopeLabel(offer.service_scope)} · {branch?.name || "All branches"}
-      </div>
+      </td>
 
-      <div className="min-w-[200px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs">
         <div>
           <b>{value}</b>
-          <p className="text-slate-500 text-xs">
+
+          <p className="text-slate-500">
             {minimum > 0
               ? `Min ₹${minimum.toLocaleString("en-IN")}`
               : "No minimum"}{" "}
             ·{" "}
             {offer.max_discount_amount
-              ? `Max ₹${Number(offer.max_discount_amount).toLocaleString("en-IN")}`
+              ? `Max ₹${Number(offer.max_discount_amount).toLocaleString(
+                  "en-IN",
+                )}`
               : "No cap"}
           </p>
         </div>
-      </div>
+      </td>
 
-      <div className="min-w-[100px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         <Badge
           tone={offer.is_active ? "green" : "red"}
-          className="rounded-full py-1 text-xs"
+          className="rounded-full py-1"
         >
           {offer.is_active ? "Active" : "Inactive"}
         </Badge>
-      </div>
+      </td>
 
-      <div className="min-w-[160px] px-2 flex items-center text-xs">
+      <td className="px-4 py-3 text-xs">
         <RowActions
-          row={offer}
-          onEdit={onEdit}
-          onStatus={onStatus}
-          onDelete={onDelete}
+          actions={actions}
         />
-      </div>
-    </ClickableRow>
+      </td>
+    </tr>
   );
 }

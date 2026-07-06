@@ -128,6 +128,7 @@ export function AppShell(props: any) {
   const [sideBarOpen, setSidebarOpen] = useState(true);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
   const profileOpenRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
   const activeNavLabel =
     visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
 
@@ -250,6 +251,22 @@ export function AppShell(props: any) {
       window.removeEventListener("resize", handleResize);
     };
   }, []);
+
+  useEffect(()=>{
+    function handleClickOutside(event: MouseEvent){
+      if(
+        profileOpen &&
+        profileOpenRef.current &&
+        !profileOpenRef.current.contains(event.target as Node)
+      ){
+        setProfileOpen(false)
+      }
+    }
+    document.addEventListener('mousedown',handleClickOutside)
+    return ()=>{
+      document.addEventListener('mousedown',handleClickOutside )
+    }
+  },[profileOpen])
 
   function renderPage() {
     switch (activePage) {

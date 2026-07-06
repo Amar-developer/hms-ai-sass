@@ -7,10 +7,16 @@ import {
   Button,
   Card,
   RefreshButton,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiBlob, apiFetch } from "@/lib/api";
-import { FormField, SelectField, SearchableSelectField, TextField } from "@/app/components/FormElements";
+import {
+  FormField,
+  SelectField,
+  SearchableSelectField,
+  TextField,
+} from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
@@ -26,7 +32,10 @@ import {
   WorklistDetailModal,
 } from "@/app/components/lab/Shared";
 import { Pagination } from "@/app/components/common/Pagination";
-import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
+import {
+  isActivePatientRecord,
+  patientPickerLabel,
+} from "@/utils/patient/helpers";
 
 export function Lab({
   apiSession,
@@ -258,7 +267,8 @@ export function Lab({
       0,
   );
   const supplierById = useMemo(
-    () => new Map(suppliers.map((supplier: any) => [supplier.id, supplier.name])),
+    () =>
+      new Map(suppliers.map((supplier: any) => [supplier.id, supplier.name])),
     [suppliers],
   );
   const selectedSupplierId = selectedAvailableTest?.supplier_id || "";
@@ -287,15 +297,14 @@ export function Lab({
         packageRows,
         templateRows,
         supplierRows,
-      ] =
-        await Promise.all([
-          apiFetch("/lab/orders", apiSession),
-          apiFetch("/lab/consultation-referrals", apiSession).catch(() => []),
-          apiFetch("/lab/catalog/tests", apiSession),
-          apiFetch("/lab/catalog/packages", apiSession),
-          apiFetch("/lab/result-templates", apiSession),
-          apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
-        ]);
+      ] = await Promise.all([
+        apiFetch("/lab/orders", apiSession),
+        apiFetch("/lab/consultation-referrals", apiSession).catch(() => []),
+        apiFetch("/lab/catalog/tests", apiSession),
+        apiFetch("/lab/catalog/packages", apiSession),
+        apiFetch("/lab/result-templates", apiSession),
+        apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
+      ]);
       setOrders(orderRows);
       setConsultationReferrals(referralRows || []);
       setTests(testRows);
@@ -695,30 +704,34 @@ export function Lab({
         <h3 className="card-title font-bold">Create Lab / Service Order</h3>
         <form
           onSubmit={createDirect}
-          className="mt-4 grid gap-3 md:grid-cols-8"
+          className="mt-4 grid gap-3 md:grid-cols-[1.5fr_1fr_2fr_1fr_1fr_1fr]"
         >
-          <SearchableSelectField
-            label="Patient"
-            value={patientId}
-            onChange={setPatientId}
-            options={activePatients.map((p: any) => ({
-              value: p.id,
-              label: patientPickerLabel(p),
-              sublabel: p.mobile || p.patient_number || p.id,
-            }))}
-            placeholder="Select patient"
-            searchPlaceholder="Search patient by name, mobile, or number"
-            className="text-xs md:col-span-2"
-          />
-          <SelectField
-            label="Source"
-            value={source}
-            onChange={setSource}
-            options={[
-              { value: "op_direct", label: "OP Direct" },
-              { value: "external_referral", label: "External Referral" },
-            ]}
-          />
+          <FormField label="Patient">
+            <SearchableSelect
+              value={patientId}
+              onChange={setPatientId}
+              searchable={true}
+              placeholder="Select patient"
+              searchPlaceholder="Search patient by name, mobile, or number"
+              className="text-xs md:col-span-2"
+              options={activePatients.map((p: any) => ({
+                value: p.id,
+                label: patientPickerLabel(p),
+                sublabel: p.mobile || p.patient_number || p.id,
+              }))}
+            />
+          </FormField>
+          <FormField label="Source">
+            <SearchableSelect
+              value={source}
+              onChange={setSource}
+              searchable={false}
+              options={[
+                { value: "op_direct", label: "OP Direct" },
+                { value: "external_referral", label: "External Referral" },
+              ]}
+            />
+          </FormField>
           <FormField label="Lab Test / Service" className="md:col-span-2">
             <SearchPicker
               value={selectedAvailableTestId}
@@ -782,16 +795,24 @@ export function Lab({
             disabled
             className="search-input bg-slate-50"
           />
-          <div className="flex items-end lg:items-center lg:mt-3">
-            <ActionButton type="button" onClick={addOrderTest} className='close-button w-full !bg-black/90 !text-white hover:!bg-black'>
+          <div className="flex items-end gap-2  rounded-lg w-fit">
+            <ActionButton
+              type="button"
+              onClick={addOrderTest}
+              className="close-button"
+            >
               Add
             </ActionButton>
-          </div>
-          <div className="flex items-end w-[120px]">
-            <Button disabled={busy === "create"} className='px-2 py-2'>
+
+            <Button
+              type="submit"
+              disabled={busy === "create"}
+              className="save-button"
+            >
               {busy === "create" ? "Saving..." : "Create Order"}
             </Button>
           </div>
+
           {orderTests.length > 0 && (
             <div className="md:col-span-8 flex flex-wrap gap-2">
               {orderTests.map((test: any, index: number) => (
@@ -844,13 +865,16 @@ export function Lab({
                       </p>
                     </div>
                     <div className="flex gap-2">
-                      <ActionButton onClick={() => loadConsultDetail(a)} className='close-button'>
+                      <ActionButton
+                        onClick={() => loadConsultDetail(a)}
+                        className="close-button"
+                      >
                         View Tests
                       </ActionButton>
                       <Button
                         disabled={busy === a.consultationId}
                         onClick={() => createFromConsultation(a)}
-                        className='rounded-lg px-2 py-2 lg:px-4 lg:py-2 text-xs'
+                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-2 text-xs"
                       >
                         {busy === a.consultationId
                           ? "Creating..."
@@ -863,7 +887,7 @@ export function Lab({
                             a.consultationId,
                           ])
                         }
-                        className='close-button'
+                        className="close-button"
                       >
                         Remove
                       </ActionButton>
@@ -897,7 +921,10 @@ export function Lab({
             <tbody className="divide-y">
               {orders.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-4 card-desc text-slate-500">
+                  <td
+                    colSpan={8}
+                    className="px-4 py-4 card-desc text-slate-500"
+                  >
                     No lab orders yet.
                   </td>
                 </tr>
@@ -942,10 +969,17 @@ export function Lab({
                       {p?.name || publicDisplayValue(o.patient_id, "Patient")}
                     </td>
                     <td>
-                      <Badge className="normal-badge w-[70%]">{humanizeOptionLabel(o.source)}</Badge>
+                      <Badge className="normal-badge w-[70%]">
+                        {humanizeOptionLabel(o.source)}
+                      </Badge>
                     </td>
                     <td>
-                      <Badge tone={statusTone as any} className="normal-badge w-[70%]">{statusLabel}</Badge>
+                      <Badge
+                        tone={statusTone as any}
+                        className="normal-badge w-[70%]"
+                      >
+                        {statusLabel}
+                      </Badge>
                     </td>
                     <td>₹{o.amount}</td>
                     <td onClick={(event) => event.stopPropagation()}>
