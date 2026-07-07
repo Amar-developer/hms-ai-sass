@@ -39,7 +39,9 @@ def upgrade() -> None:
         op.execute(
             "UPDATE patientsubscriptionenrollment "
             "SET activated_on = starts_on "
-            "WHERE activated_on IS NULL AND status IN ('active', 'expired', 'cancelled')"
+            "WHERE activated_on IS NULL "
+            "AND status::text IN "
+            "('active', 'ACTIVE', 'expired', 'EXPIRED', 'cancelled', 'CANCELLED')"
         )
 
 
