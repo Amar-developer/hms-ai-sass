@@ -2,8 +2,8 @@ import json
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import func
-from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session
 
 from app.core.access_control import (
     require_branch_in_tenant,
@@ -14,14 +14,12 @@ from app.core.uploads import save_upload
 from app.core.auth import require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
-from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import (
     DoctorFeeRule,
     FeeShareType,
     Invoice,
     InvoiceItem,
-    Payment,
     TaxRule,
 )
 from app.modules.billing.schemas import (
@@ -34,12 +32,17 @@ from app.modules.billing.service import next_invoice_number
 from app.modules.files.service import record_file_document
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.ip.models import IPAdmission
-from app.modules.patients.models import Patient
 from app.modules.physiotherapy.models import (
     PhysiotherapyCase,
     PhysiotherapyEquipment,
     PhysiotherapySession,
+)
+from app.modules.physiotherapy.repositories import (
+    PhysiotherapyBillingRepository,
+    PhysiotherapyCaseRepository,
+    PhysiotherapyEquipmentRepository,
+    PhysiotherapyReferenceRepository,
+    PhysiotherapySessionRepository,
 )
 from app.modules.physiotherapy.schemas import (
     PhysiotherapyCaseCreate,
@@ -76,8 +79,8 @@ def _next_case_number(
 def _get_case(
     session: Session, tenant_id: str, case_id: str, current_user: User
 ) -> PhysiotherapyCase:
-    case = session.get(PhysiotherapyCase, case_id)
-    if not case or case.tenant_id != tenant_id:
+    case = PhysiotherapyCaseRepository(session).get_for_tenant(tenant_id, case_id)
+    if not case:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Physiotherapy case not found"
         )
@@ -86,25 +89,9 @@ def _get_case(
 
 
 def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
-    items = list(
-        session.exec(
-            select(InvoiceItem)
-            .where(
-                InvoiceItem.tenant_id == invoice.tenant_id,
-                InvoiceItem.invoice_id == invoice.id,
-            )
-            .order_by(InvoiceItem.created_at)
-        ).all()
-    )
-    payments = list(
-        session.exec(
-            select(Payment)
-            .where(
-                Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id
-            )
-            .order_by(Payment.collected_at)
-        ).all()
-    )
+    billing = PhysiotherapyBillingRepository(session)
+    items = billing.list_invoice_items(invoice)
+    payments = billing.list_invoice_payments(invoice)
     return InvoiceDetailRead(
         status=invoice.status,
         invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
@@ -121,7 +108,9 @@ def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
 def _resolve_tax_rule(
     session: Session, tenant_id: str, branch_id: str, tax_rule_id: str | None
 ) -> TaxRule | None:
-    tax_rule = session.get(TaxRule, tax_rule_id) if tax_rule_id else None
+    tax_rule = PhysiotherapyBillingRepository(session).get_active_tax_rule(
+        tenant_id=tenant_id, branch_id=branch_id, tax_rule_id=tax_rule_id
+    )
     if tax_rule:
         if (
             tax_rule.tenant_id != tenant_id
@@ -132,13 +121,7 @@ def _resolve_tax_rule(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tax rule"
             )
         return tax_rule
-    return session.exec(
-        select(TaxRule).where(
-            TaxRule.tenant_id == tenant_id,
-            TaxRule.is_active == True,  # noqa: E712
-            (TaxRule.branch_id == branch_id) | (TaxRule.branch_id.is_(None)),
-        )
-    ).first()
+    return None
 
 
 def _resolve_physiotherapist_fee_rule(
@@ -149,15 +132,8 @@ def _resolve_physiotherapist_fee_rule(
 ) -> DoctorFeeRule | None:
     if not physiotherapist_id:
         return None
-    rules = list(
-        session.exec(
-            select(DoctorFeeRule).where(
-                DoctorFeeRule.tenant_id == tenant_id,
-                DoctorFeeRule.appointment_type == AppointmentType.OP,
-                DoctorFeeRule.is_active == True,  # noqa: E712
-                DoctorFeeRule.practitioner_id == physiotherapist_id,
-            )
-        ).all()
+    rules = PhysiotherapyBillingRepository(session).list_physiotherapist_fee_rules(
+        tenant_id=tenant_id, physiotherapist_id=physiotherapist_id
     )
 
     def score(rule: DoctorFeeRule) -> int:
@@ -200,7 +176,7 @@ def _sync_case_status_from_invoice(
     if case.status != target_status:
         case.status = target_status
         case.updated_at = now_utc()
-        session.add(case)
+        PhysiotherapyCaseRepository(session).add(case)
         session.commit()
         session.refresh(case)
     return case
@@ -215,16 +191,9 @@ def list_equipment(
 ) -> list[PhysiotherapyEquipment]:
     _assert_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
-    statement = select(PhysiotherapyEquipment).where(
-        PhysiotherapyEquipment.tenant_id == tenant_id,
-        PhysiotherapyEquipment.is_active == True,  # noqa: E712
-    )  # noqa: E712
-    if branch_scope:
-        statement = statement.where(
-            (PhysiotherapyEquipment.branch_id == branch_scope)
-            | (PhysiotherapyEquipment.branch_id.is_(None))
-        )
-    return list(session.exec(statement.order_by(PhysiotherapyEquipment.name)).all())
+    return PhysiotherapyEquipmentRepository(session).list_active(
+        tenant_id=tenant_id, branch_id=branch_scope
+    )
 
 
 @router.post(
@@ -249,7 +218,7 @@ def create_equipment(
             "updated_by_user_id": current_user.id,
         },
     )
-    session.add(equipment)
+    PhysiotherapyEquipmentRepository(session).add(equipment)
     session.commit()
     session.refresh(equipment)
     record_audit_event(
@@ -274,8 +243,10 @@ def update_equipment(
     current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_EDIT)),
 ) -> PhysiotherapyEquipment:
     _assert_enabled(session, tenant_id)
-    equipment = session.get(PhysiotherapyEquipment, equipment_id)
-    if not equipment or equipment.tenant_id != tenant_id:
+    equipment = PhysiotherapyEquipmentRepository(session).get_for_tenant(
+        tenant_id, equipment_id
+    )
+    if not equipment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Physiotherapy equipment not found",
@@ -289,7 +260,7 @@ def update_equipment(
         setattr(equipment, key, value)
     equipment.updated_at = now_utc()
     equipment.updated_by_user_id = current_user.id
-    session.add(equipment)
+    PhysiotherapyEquipmentRepository(session).add(equipment)
     session.commit()
     session.refresh(equipment)
     record_audit_event(
@@ -313,8 +284,10 @@ def delete_equipment(
     current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_DELETE)),
 ) -> PhysiotherapyEquipment:
     _assert_enabled(session, tenant_id)
-    equipment = session.get(PhysiotherapyEquipment, equipment_id)
-    if not equipment or equipment.tenant_id != tenant_id:
+    equipment = PhysiotherapyEquipmentRepository(session).get_for_tenant(
+        tenant_id, equipment_id
+    )
+    if not equipment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Physiotherapy equipment not found",
@@ -323,7 +296,7 @@ def delete_equipment(
     equipment.is_active = False
     equipment.updated_at = now_utc()
     equipment.updated_by_user_id = current_user.id
-    session.add(equipment)
+    PhysiotherapyEquipmentRepository(session).add(equipment)
     session.commit()
     session.refresh(equipment)
     record_audit_event(
@@ -350,21 +323,11 @@ def list_cases(
 ) -> list[PhysiotherapyCase]:
     _assert_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
-    statement = select(PhysiotherapyCase).where(
-        PhysiotherapyCase.tenant_id == tenant_id
-    )
-    if branch_scope:
-        statement = statement.where(PhysiotherapyCase.branch_id == branch_scope)
-    if patient_id:
-        statement = statement.where(PhysiotherapyCase.patient_id == patient_id)
-    if care_context:
-        statement = statement.where(PhysiotherapyCase.care_context == care_context)
-    return list(
-        session.exec(
-            statement.order_by(
-                PhysiotherapyCase.updated_at.desc(), PhysiotherapyCase.created_at.desc()
-            )
-        ).all()
+    return PhysiotherapyCaseRepository(session).list_for_tenant(
+        tenant_id=tenant_id,
+        branch_id=branch_scope,
+        patient_id=patient_id,
+        care_context=care_context,
     )
 
 
@@ -378,34 +341,35 @@ def create_case(
     current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_CREATE)),
 ) -> PhysiotherapyCase:
     _assert_enabled(session, tenant_id)
+    references = PhysiotherapyReferenceRepository(session)
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
-    patient = session.get(Patient, payload.patient_id)
-    if not patient or patient.tenant_id != tenant_id:
+    patient = references.get_patient_for_tenant(tenant_id, payload.patient_id)
+    if not patient:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
         )
     if payload.source_appointment_id:
-        appointment = session.get(Appointment, payload.source_appointment_id)
-        if not appointment or appointment.tenant_id != tenant_id:
+        appointment = references.get_appointment_for_tenant(
+            tenant_id, payload.source_appointment_id
+        )
+        if not appointment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
             )
     if payload.ip_admission_id:
-        admission = session.get(IPAdmission, payload.ip_admission_id)
-        if not admission or admission.tenant_id != tenant_id:
+        admission = references.get_ip_admission_for_tenant(
+            tenant_id, payload.ip_admission_id
+        )
+        if not admission:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="IP admission not found"
             )
     if payload.physiotherapist_id:
-        from app.modules.practitioners.models import Practitioner, PractitionerType
-
-        practitioner = session.get(Practitioner, payload.physiotherapist_id)
-        if (
-            not practitioner
-            or practitioner.tenant_id != tenant_id
-            or practitioner.practitioner_type != PractitionerType.PHYSIOTHERAPIST
-        ):
+        practitioner = references.get_physiotherapist_for_tenant(
+            tenant_id, payload.physiotherapist_id
+        )
+        if not practitioner:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid physiotherapist",
@@ -421,7 +385,7 @@ def create_case(
             "updated_by_user_id": current_user.id,
         },
     )
-    session.add(case)
+    PhysiotherapyCaseRepository(session).add(case)
     session.commit()
     session.refresh(case)
     record_audit_event(
@@ -447,11 +411,16 @@ def update_case(
 ) -> PhysiotherapyCase:
     _assert_enabled(session, tenant_id)
     case = _get_case(session, tenant_id, case_id, current_user)
+    if case.status in {"completed", "paid"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Billed physiotherapy cases are immutable",
+        )
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(case, key, value)
     case.updated_at = now_utc()
     case.updated_by_user_id = current_user.id
-    session.add(case)
+    PhysiotherapyCaseRepository(session).add(case)
     session.commit()
     session.refresh(case)
     record_audit_event(
@@ -526,7 +495,7 @@ async def upload_consent_form(
     case.consent_submitted_at = now_utc()
     case.updated_at = now_utc()
     case.updated_by_user_id = current_user.id
-    session.add(case)
+    PhysiotherapyCaseRepository(session).add(case)
     session.commit()
     session.refresh(case)
     record_audit_event(
@@ -551,15 +520,8 @@ def list_sessions(
 ) -> list[PhysiotherapySession]:
     _assert_enabled(session, tenant_id)
     case = _get_case(session, tenant_id, case_id, current_user)
-    return list(
-        session.exec(
-            select(PhysiotherapySession)
-            .where(
-                PhysiotherapySession.tenant_id == tenant_id,
-                PhysiotherapySession.case_id == case.id,
-            )
-            .order_by(PhysiotherapySession.session_number)
-        ).all()
+    return PhysiotherapySessionRepository(session).list_for_case(
+        tenant_id=tenant_id, case_id=case.id
     )
 
 
@@ -577,19 +539,18 @@ def create_session(
 ) -> PhysiotherapySession:
     _assert_enabled(session, tenant_id)
     case = _get_case(session, tenant_id, case_id, current_user)
-    existing_invoice = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id, Invoice.physiotherapy_case_id == case.id
-        )
-    ).first()
+    billing = PhysiotherapyBillingRepository(session)
+    existing_invoice = billing.get_case_invoice(tenant_id=tenant_id, case_id=case.id)
     if existing_invoice:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot add sessions after physiotherapy invoice is generated",
         )
     if payload.equipment_id:
-        equipment = session.get(PhysiotherapyEquipment, payload.equipment_id)
-        if not equipment or equipment.tenant_id != tenant_id:
+        equipment = PhysiotherapyEquipmentRepository(session).get_for_tenant(
+            tenant_id, payload.equipment_id
+        )
+        if not equipment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Physiotherapy equipment not found",
@@ -597,26 +558,16 @@ def create_session(
         require_user_branch_access(current_user, equipment.branch_id)
     physiotherapist_id = payload.physiotherapist_id or case.physiotherapist_id
     if physiotherapist_id:
-        from app.modules.practitioners.models import Practitioner, PractitionerType
-
-        practitioner = session.get(Practitioner, physiotherapist_id)
-        if (
-            not practitioner
-            or practitioner.tenant_id != tenant_id
-            or practitioner.practitioner_type != PractitionerType.PHYSIOTHERAPIST
-        ):
+        practitioner = PhysiotherapyReferenceRepository(
+            session
+        ).get_physiotherapist_for_tenant(tenant_id, physiotherapist_id)
+        if not practitioner:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid physiotherapist",
             )
-    count = session.exec(
-        select(func.count())
-        .select_from(PhysiotherapySession)
-        .where(
-            PhysiotherapySession.tenant_id == tenant_id,
-            PhysiotherapySession.case_id == case.id,
-        )
-    ).one()
+    treatments = PhysiotherapySessionRepository(session)
+    count = treatments.count_for_case(tenant_id=tenant_id, case_id=case.id)
     treatment = PhysiotherapySession.model_validate(
         payload,
         update={
@@ -629,7 +580,7 @@ def create_session(
             "created_by_user_id": current_user.id,
         },
     )
-    session.add(treatment)
+    treatments.add(treatment)
     session.commit()
     session.refresh(treatment)
     record_audit_event(
@@ -654,11 +605,9 @@ def get_case_invoice(
 ) -> InvoiceDetailRead:
     _assert_enabled(session, tenant_id)
     case = _get_case(session, tenant_id, case_id, current_user)
-    invoice = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id, Invoice.physiotherapy_case_id == case.id
-        )
-    ).first()
+    invoice = PhysiotherapyBillingRepository(session).get_case_invoice(
+        tenant_id=tenant_id, case_id=case.id
+    )
     if not invoice:
         return None
     _sync_case_status_from_invoice(session, case, invoice)
@@ -680,22 +629,17 @@ def generate_invoice(
     _assert_enabled(session, tenant_id)
     payload = payload or PhysiotherapyInvoiceCreate()
     case = _get_case(session, tenant_id, case_id, current_user)
-    existing = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id, Invoice.physiotherapy_case_id == case.id
-        )
-    ).first()
+    billing = PhysiotherapyBillingRepository(session)
+    # Lock the case row so a concurrent generate-invoice request for the same
+    # case serializes on this check-then-insert; the unique index on
+    # Invoice.physiotherapy_case_id is the DB-level backstop below.
+    billing.lock_case(case.id)
+    existing = billing.get_case_invoice(tenant_id=tenant_id, case_id=case.id)
     if existing:
         _sync_case_status_from_invoice(session, case, existing)
         return _invoice_detail(session, existing)
-    rows = list(
-        session.exec(
-            select(PhysiotherapySession).where(
-                PhysiotherapySession.tenant_id == tenant_id,
-                PhysiotherapySession.case_id == case.id,
-                PhysiotherapySession.charge_amount > 0,
-            )
-        ).all()
+    rows = PhysiotherapySessionRepository(session).list_billable_for_case(
+        tenant_id=tenant_id, case_id=case.id
     )
     if not rows:
         raise HTTPException(
@@ -762,11 +706,21 @@ def generate_invoice(
         fee_rule_id=first_fee_rule_id,
         created_by_user_id=payload.created_by_user_id or current_user.id,
     )
-    session.add(invoice)
-    session.commit()
+    billing.add_invoice(invoice)
+    try:
+        session.commit()
+    except IntegrityError:
+        # A concurrent request already created the invoice for this case
+        # between our check above and this insert; return that one instead.
+        session.rollback()
+        existing = billing.get_case_invoice(tenant_id=tenant_id, case_id=case.id)
+        if existing:
+            _sync_case_status_from_invoice(session, case, existing)
+            return _invoice_detail(session, existing)
+        raise
     session.refresh(invoice)
     for row in rows:
-        session.add(
+        billing.add_invoice_item(
             InvoiceItem(
                 tenant_id=tenant_id,
                 invoice_id=invoice.id,

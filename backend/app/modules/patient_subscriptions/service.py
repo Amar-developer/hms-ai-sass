@@ -10,6 +10,10 @@ from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollmentStatus,
     PatientSubscriptionPlan,
 )
+from app.modules.patient_subscriptions.repositories import (
+    PatientSubscriptionEnrollmentRepository,
+    PatientSubscriptionPlanRepository,
+)
 from app.modules.tenants.models import Department
 
 
@@ -327,58 +331,115 @@ def plan_to_read_dict(plan: PatientSubscriptionPlan) -> dict:
     return data
 
 
+def enrollment_end_date(starts_on: date, plan: PatientSubscriptionPlan) -> date:
+    return starts_on + timedelta(days=max(plan.duration_days, 1) - 1)
+
+
+def resolve_current_enrollment(
+    session: Session, *, tenant_id: str, patient_id: str
+) -> PatientSubscriptionEnrollment | None:
+    """Return the patient's current occupying enrollment, promoting a queued
+    one first if the prior active plan has expired.
+
+    A patient can hold only one ACTIVE enrollment tenant-wide at a time. This
+    is the single lazy-activation trigger for the whole feature: it runs on
+    every read/benefit-check (mirroring the existing on-read usage-sync
+    pattern), so no background job is needed. Any ACTIVE row past its
+    ends_on is flipped to EXPIRED here, then the oldest QUEUED row (if any)
+    is promoted to ACTIVE with activated_on set to today — so its own
+    activation_after_days delay counts from the real activation date, not
+    the original purchase date.
+    """
+    repo = PatientSubscriptionEnrollmentRepository(session)
+    today = date.today()
+    active_rows = repo.status_rows_for_patient(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        enrollment_status=PatientSubscriptionEnrollmentStatus.ACTIVE,
+    )
+    current: PatientSubscriptionEnrollment | None = None
+    dirty = False
+    for row in active_rows:
+        if row.ends_on >= today:
+            if current is None:
+                current = row
+        else:
+            row.status = PatientSubscriptionEnrollmentStatus.EXPIRED
+            session.add(row)
+            dirty = True
+    if current:
+        if dirty:
+            session.commit()
+        return current
+
+    queued_rows = repo.status_rows_for_patient(
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        enrollment_status=PatientSubscriptionEnrollmentStatus.QUEUED,
+    )
+    if not queued_rows:
+        if dirty:
+            session.commit()
+        return None
+    next_enrollment = queued_rows[0]
+    plan = PatientSubscriptionPlanRepository(session).get_for_tenant(
+        tenant_id, next_enrollment.plan_id
+    )
+    if not plan:
+        if dirty:
+            session.commit()
+        return None
+    next_enrollment.activated_on = today
+    next_enrollment.ends_on = enrollment_end_date(today, plan)
+    next_enrollment.status = PatientSubscriptionEnrollmentStatus.ACTIVE
+    session.add(next_enrollment)
+    session.commit()
+    session.refresh(next_enrollment)
+    return next_enrollment
+
+
 def active_patient_enrollment(
     session: Session,
     *,
     tenant_id: str,
-    branch_id: str,
     patient_id: str,
 ) -> tuple[PatientSubscriptionEnrollment, PatientSubscriptionPlan] | None:
-    """Return the patient's active tenant-scoped membership.
+    """Return the patient's active tenant-wide membership, if benefit-eligible.
 
-    The branch_id argument is kept for callers that validate branch access before
-    asking for benefits. Membership benefits are tenant-scoped: a patient enrolled
-    from one branch can claim benefits from another branch in the same tenant.
+    Membership benefits and the one-active-plan-at-a-time rule are both
+    tenant-wide, not branch-scoped: a patient enrolled from one branch can
+    claim benefits from another branch in the same tenant, and can't hold two
+    simultaneous active plans across branches either.
     """
+    enrollment = resolve_current_enrollment(
+        session, tenant_id=tenant_id, patient_id=patient_id
+    )
+    if not enrollment:
+        return None
+    plan = PatientSubscriptionPlanRepository(session).get_for_tenant(
+        tenant_id, enrollment.plan_id
+    )
+    if not plan or plan.tenant_id != tenant_id or not plan.is_active:
+        return None
     today = date.today()
-    rows = session.exec(
-        select(PatientSubscriptionEnrollment)
-        .where(
-            PatientSubscriptionEnrollment.tenant_id == tenant_id,
-            PatientSubscriptionEnrollment.patient_id == patient_id,
-            PatientSubscriptionEnrollment.status
-            == PatientSubscriptionEnrollmentStatus.ACTIVE,
-            PatientSubscriptionEnrollment.starts_on <= today,
-            PatientSubscriptionEnrollment.ends_on >= today,
-        )
-        .order_by(PatientSubscriptionEnrollment.created_at.desc())
-    ).all()
-    for enrollment in rows:
-        plan = session.get(PatientSubscriptionPlan, enrollment.plan_id)
-        if not plan or plan.tenant_id != tenant_id or not plan.is_active:
-            continue
-        activation_date = enrollment.starts_on + timedelta(
-            days=max(plan.activation_after_days, 0)
-        )
-        if today < activation_date:
-            continue
-        if plan.price_amount > 0:
-            if enrollment.purchase_invoice_id:
-                invoice = session.get(Invoice, enrollment.purchase_invoice_id)
-                if (
-                    not invoice
-                    or invoice.tenant_id != tenant_id
-                    or invoice.balance_amount > 0
-                ):
-                    continue
-            elif enrollment.paid_amount < plan.price_amount:
-                continue
-        return enrollment, plan
-    return None
-
-
-def enrollment_end_date(starts_on: date, plan: PatientSubscriptionPlan) -> date:
-    return starts_on + timedelta(days=max(plan.duration_days, 1) - 1)
+    activation_anchor = enrollment.activated_on or enrollment.starts_on
+    activation_date = activation_anchor + timedelta(
+        days=max(plan.activation_after_days, 0)
+    )
+    if today < activation_date:
+        return None
+    if plan.price_amount > 0:
+        if enrollment.purchase_invoice_id:
+            invoice = session.get(Invoice, enrollment.purchase_invoice_id)
+            if (
+                not invoice
+                or invoice.tenant_id != tenant_id
+                or invoice.balance_amount > 0
+            ):
+                return None
+        elif enrollment.paid_amount < plan.price_amount:
+            return None
+    return enrollment, plan
 
 
 def consultation_department_id(

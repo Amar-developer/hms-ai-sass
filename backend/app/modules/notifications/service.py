@@ -7,6 +7,7 @@ from app.modules.notifications.models import (
     NotificationEventType,
     NotificationProvider,
 )
+from app.modules.notifications.repositories import NotificationEventRepository
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
 from app.modules.subscriptions.service import enforce_module_enabled
@@ -103,7 +104,7 @@ def queue_notification_if_allowed(
         resource_id=resource_id,
         queued_by_user_id=queued_by_user_id,
     )
-    session.add(event)
+    NotificationEventRepository(session).add(event)
     session.commit()
     session.refresh(event)
     record_audit_event(

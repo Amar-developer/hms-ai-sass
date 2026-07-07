@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
 
 from app.modules.appointments.models import AppointmentType
@@ -102,6 +103,16 @@ class DoctorFeeRule(SQLModel, table=True):
 
 
 class Invoice(SQLModel, table=True):
+    # NULL is not considered equal to NULL by a unique index in either
+    # SQLite or Postgres, so these still allow unlimited invoices with a
+    # NULL consultation_id/physiotherapy_case_id (lab, pharmacy, subscription,
+    # etc. invoices) while guaranteeing at most one invoice per consultation
+    # or physiotherapy case, closing the check-then-insert race in those flows.
+    __table_args__ = (
+        Index("uq_invoice_consultation_id", "consultation_id", unique=True),
+        Index("uq_invoice_physiotherapy_case_id", "physiotherapy_case_id", unique=True),
+    )
+
     id: str = Field(default_factory=lambda: new_id("invoice"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")

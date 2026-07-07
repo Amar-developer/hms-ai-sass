@@ -2,10 +2,11 @@ import json
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.modules.settings.models import AdminSetting, SettingKey, SettingScope
-from app.modules.tenants.models import Branch, now_utc
+from app.modules.settings.repositories import AdminSettingRepository
+from app.modules.tenants.models import now_utc
 
 
 DEFAULT_SETTING_VALUES: dict[SettingKey, Any] = {
@@ -79,7 +80,7 @@ def validate_scope(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="scope_id is required for branch settings",
         )
-    branch = session.get(Branch, scope_id)
+    branch = AdminSettingRepository(session).get_branch(scope_id)
     if not branch or branch.tenant_id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid branch scope"
@@ -98,15 +99,13 @@ def upsert_setting(
     value: Any,
     actor_user_id: str | None = None,
 ) -> AdminSetting:
-    existing = session.exec(
-        select(AdminSetting).where(
-            AdminSetting.tenant_id == tenant_id,
-            AdminSetting.scope == scope,
-            AdminSetting.scope_id == scope_id,
-            AdminSetting.module == module,
-            AdminSetting.key == key,
-        )
-    ).first()
+    existing = AdminSettingRepository(session).find_setting(
+        tenant_id=tenant_id,
+        scope=scope,
+        scope_id=scope_id,
+        module=module,
+        key=key,
+    )
     if existing:
         existing.value_json = encode_value(value)
         existing.updated_by_user_id = actor_user_id
@@ -140,16 +139,15 @@ def resolve_setting(
     key: SettingKey,
     branch_id: str | None = None,
 ) -> tuple[Any, SettingScope | None, str | None]:
+    repository = AdminSettingRepository(session)
     if branch_id:
-        branch_setting = session.exec(
-            select(AdminSetting).where(
-                AdminSetting.tenant_id == tenant_id,
-                AdminSetting.scope == SettingScope.BRANCH,
-                AdminSetting.scope_id == branch_id,
-                AdminSetting.module == module,
-                AdminSetting.key == key,
-            )
-        ).first()
+        branch_setting = repository.find_setting(
+            tenant_id=tenant_id,
+            scope=SettingScope.BRANCH,
+            scope_id=branch_id,
+            module=module,
+            key=key,
+        )
         if branch_setting:
             return (
                 decode_value(branch_setting.value_json),
@@ -157,15 +155,13 @@ def resolve_setting(
                 branch_setting.scope_id,
             )
 
-    tenant_setting = session.exec(
-        select(AdminSetting).where(
-            AdminSetting.tenant_id == tenant_id,
-            AdminSetting.scope == SettingScope.TENANT,
-            AdminSetting.scope_id == tenant_id,
-            AdminSetting.module == module,
-            AdminSetting.key == key,
-        )
-    ).first()
+    tenant_setting = repository.find_setting(
+        tenant_id=tenant_id,
+        scope=SettingScope.TENANT,
+        scope_id=tenant_id,
+        module=module,
+        key=key,
+    )
     if tenant_setting:
         return (
             decode_value(tenant_setting.value_json),

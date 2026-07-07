@@ -77,7 +77,6 @@ def test_patient_membership_respects_activation_delay(test_engine):
             active_patient_enrollment(
                 session,
                 tenant_id=tenant_id,
-                branch_id=branch_id,
                 patient_id=patient_id,
             )
             is None
@@ -85,7 +84,6 @@ def test_patient_membership_respects_activation_delay(test_engine):
         active = active_patient_enrollment(
             session,
             tenant_id=tenant_id,
-            branch_id=branch_id,
             patient_id=active_patient_id,
         )
 
@@ -283,7 +281,12 @@ def test_consultation_usage_reconciles_from_invoice_and_restores_on_cancel(
             tenant_id=enrollment.tenant_id,
             branch_id=enrollment.branch_id,
             patient_id=enrollment.patient_id,
-            consultation_id="consult_usage_1",
+            # Same clinical visit as `invoice` above (via appointment_id,
+            # since Invoice.consultation_id now carries a unique index and
+            # can't hold the same value twice) — this still exercises
+            # sync_free_item_usage_from_invoices' by-visit dedup, which
+            # falls back to appointment_id when consultation_id is unset.
+            appointment_id="consult_usage_1",
             patient_subscription_enrollment_id=enrollment.id,
             patient_subscription_plan_id=plan.id,
             invoice_number="MHB-INV-CONSULT-USAGE-DUP",

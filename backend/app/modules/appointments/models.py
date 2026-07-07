@@ -1,5 +1,6 @@
 from datetime import date, datetime, time
 from enum import Enum
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 from app.modules.tenants.models import new_id, now_utc
 
@@ -58,3 +59,23 @@ class Appointment(SQLModel, table=True):
     created_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
+
+
+class AppointmentIdempotencyKey(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "user_id",
+            "idempotency_key",
+            name="uq_appointment_idempotency_key_scope",
+        ),
+    )
+
+    id: str = Field(default_factory=lambda: new_id("apptidem"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    user_id: str = Field(index=True)
+    idempotency_key: str = Field(index=True, max_length=200)
+    request_hash: str = Field(max_length=64)
+    booking_json: str
+    appointment_id: str | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)

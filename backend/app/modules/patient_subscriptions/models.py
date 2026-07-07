@@ -13,6 +13,7 @@ class PatientSubscriptionStatus(str, Enum):
 
 class PatientSubscriptionEnrollmentStatus(str, Enum):
     ACTIVE = "active"
+    QUEUED = "queued"
     EXPIRED = "expired"
     CANCELLED = "cancelled"
 
@@ -51,6 +52,13 @@ class PatientSubscriptionEnrollment(SQLModel, table=True):
     plan_id: str = Field(index=True, foreign_key="patientsubscriptionplan.id")
     starts_on: date = Field(default_factory=date.today)
     ends_on: date
+    # Set when the enrollment actually starts granting benefits: immediately
+    # (equal to starts_on) for a plan bought while the patient has no other
+    # active plan, or later, when a QUEUED enrollment is promoted to ACTIVE
+    # after the prior plan expires. activation_after_days and ends_on are
+    # always computed from this date once it is known, not from starts_on
+    # (which keeps meaning "purchase date").
+    activated_on: date | None = Field(default=None)
     status: PatientSubscriptionEnrollmentStatus = Field(
         default=PatientSubscriptionEnrollmentStatus.ACTIVE, index=True
     )

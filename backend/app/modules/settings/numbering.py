@@ -1,10 +1,10 @@
 import re
 from typing import Any
 
-from sqlalchemy import text
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.modules.settings.models import DocumentSequence, SettingKey
+from app.modules.settings.repositories import DocumentSequenceRepository
 from app.modules.settings.service import resolve_setting
 from app.modules.tenants.models import now_utc
 
@@ -126,12 +126,13 @@ def _max_existing_number(
         )
     else:
         pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)$", re.IGNORECASE)
-    sql = f'select "{column_name}" from "{table_name}" where tenant_id = :tenant_id and "{column_name}" is not null'
-    params: dict[str, str] = {"tenant_id": tenant_id}
-    if branch_scoped and branch_id:
-        sql += ' and "branch_id" = :branch_id'
-        params["branch_id"] = branch_id
-    rows = session.exec(text(sql), params=params).all()
+    rows = DocumentSequenceRepository(session).max_existing_number(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        table_name=table_name,
+        column_name=column_name,
+        branch_scoped=branch_scoped,
+    )
     maximum = 0
     for row in rows:
         value = row[0] if isinstance(row, tuple) else row
@@ -174,15 +175,11 @@ def next_document_number(
     # number. (FOR UPDATE is a no-op on SQLite test DBs, which are single-writer
     # anyway.) The unique constraint on (tenant, branch, entity) covers the
     # first-time creation race.
-    sequence = session.exec(
-        select(DocumentSequence)
-        .where(
-            DocumentSequence.tenant_id == tenant_id,
-            DocumentSequence.branch_id == sequence_branch_id,
-            DocumentSequence.entity == entity,
-        )
-        .with_for_update()
-    ).first()
+    sequence = DocumentSequenceRepository(session).get_for_update(
+        tenant_id=tenant_id,
+        branch_id=sequence_branch_id,
+        entity=entity,
+    )
     if not sequence:
         sequence = DocumentSequence(
             tenant_id=tenant_id,

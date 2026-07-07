@@ -1,19 +1,20 @@
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-from app.modules.appointments.models import Appointment, AppointmentStatus
+from app.modules.appointments.models import AppointmentStatus
+from app.modules.practitioners.models import PractitionerStatus
 from app.modules.practitioners.models import (
-    Practitioner,
-    PractitionerBranch,
-    PractitionerDepartment,
-    PractitionerStatus,
-)
-from app.modules.practitioners.models import (
-    PractitionerLeave,
     PractitionerRoomAssignment,
-    PractitionerSchedule,
+)
+from app.modules.practitioners.repositories import (
+    PractitionerAppointmentRepository,
+    PractitionerLeaveRepository,
+    PractitionerLinkRepository,
+    PractitionerRepository,
+    PractitionerRoomAssignmentRepository,
+    PractitionerScheduleRepository,
 )
 
 
@@ -25,29 +26,26 @@ def practitioner_is_eligible(
     branch_id: str,
     department_id: str | None,
 ) -> bool:
-    practitioner = session.get(Practitioner, practitioner_id)
-    if (
-        not practitioner
-        or practitioner.tenant_id != tenant_id
-        or practitioner.status != PractitionerStatus.ACTIVE
-    ):
+    practitioner = PractitionerRepository(session).get_for_tenant(
+        tenant_id, practitioner_id
+    )
+    if not practitioner or practitioner.status != PractitionerStatus.ACTIVE:
         return False
-    branch_link = session.get(PractitionerBranch, (practitioner_id, branch_id))
-    if (
-        not branch_link
-        or branch_link.tenant_id != tenant_id
-        or not branch_link.is_active
-    ):
+    links = PractitionerLinkRepository(session)
+    branch_link = links.get_branch_link(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+    )
+    if not branch_link or not branch_link.is_active:
         return False
     if department_id:
-        department_link = session.get(
-            PractitionerDepartment, (practitioner_id, department_id)
+        department_link = links.get_department_link(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            department_id=department_id,
         )
-        if (
-            not department_link
-            or department_link.tenant_id != tenant_id
-            or not department_link.is_active
-        ):
+        if not department_link or not department_link.is_active:
             return False
     return True
 
@@ -55,31 +53,19 @@ def practitioner_is_eligible(
 def practitioner_branch_ids(
     session: Session, tenant_id: str, practitioner_id: str
 ) -> list[str]:
-    return [
-        row.branch_id
-        for row in session.exec(
-            select(PractitionerBranch).where(
-                PractitionerBranch.tenant_id == tenant_id,
-                PractitionerBranch.practitioner_id == practitioner_id,
-                PractitionerBranch.is_active == True,  # noqa: E712
-            )
-        ).all()
-    ]
+    return PractitionerLinkRepository(session).active_branch_ids(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+    )
 
 
 def practitioner_department_ids(
     session: Session, tenant_id: str, practitioner_id: str
 ) -> list[str]:
-    return [
-        row.department_id
-        for row in session.exec(
-            select(PractitionerDepartment).where(
-                PractitionerDepartment.tenant_id == tenant_id,
-                PractitionerDepartment.practitioner_id == practitioner_id,
-                PractitionerDepartment.is_active == True,  # noqa: E712
-            )
-        ).all()
-    ]
+    return PractitionerLinkRepository(session).active_department_ids(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+    )
 
 
 @dataclass(frozen=True)
@@ -161,14 +147,13 @@ def _matching_room_assignment(
     appointment_date: date,
     appointment_time: time,
 ) -> PractitionerRoomAssignment | None:
-    assignments = session.exec(
-        select(PractitionerRoomAssignment).where(
-            PractitionerRoomAssignment.tenant_id == tenant_id,
-            PractitionerRoomAssignment.practitioner_id == practitioner_id,
-            PractitionerRoomAssignment.branch_id == branch_id,
-            PractitionerRoomAssignment.is_active == True,  # noqa: E712
-        )
-    ).all()
+    assignments = PractitionerRoomAssignmentRepository(
+        session
+    ).active_for_practitioner_branch(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+    )
     matches = [
         assignment
         for assignment in assignments
@@ -211,15 +196,12 @@ def check_practitioner_availability(
             False, "Practitioner is not assigned to this branch and department"
         )
 
-    schedules = session.exec(
-        select(PractitionerSchedule).where(
-            PractitionerSchedule.tenant_id == tenant_id,
-            PractitionerSchedule.practitioner_id == practitioner_id,
-            PractitionerSchedule.branch_id == branch_id,
-            PractitionerSchedule.weekday == appointment_date.weekday(),
-            PractitionerSchedule.is_active == True,  # noqa: E712
-        )
-    ).all()
+    schedules = PractitionerScheduleRepository(session).active_for_weekday(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        weekday=appointment_date.weekday(),
+    )
     matching_schedules = [
         schedule
         for schedule in schedules
@@ -239,15 +221,11 @@ def check_practitioner_availability(
             False, "Appointment time does not match the practitioner slot interval"
         )
 
-    leave_rows = session.exec(
-        select(PractitionerLeave).where(
-            PractitionerLeave.tenant_id == tenant_id,
-            PractitionerLeave.practitioner_id == practitioner_id,
-            PractitionerLeave.start_date <= appointment_date,
-            PractitionerLeave.end_date >= appointment_date,
-            PractitionerLeave.is_active == True,  # noqa: E712
-        )
-    ).all()
+    leave_rows = PractitionerLeaveRepository(session).active_for_date(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        appointment_date=appointment_date,
+    )
     for leave in leave_rows:
         if leave.branch_id and leave.branch_id != branch_id:
             continue
@@ -264,14 +242,12 @@ def check_practitioner_availability(
                 False, "Practitioner is on leave at this time", schedule_id=schedule.id
             )
 
-    existing_rows = session.exec(
-        select(Appointment).where(
-            Appointment.tenant_id == tenant_id,
-            Appointment.practitioner_id == practitioner_id,
-            Appointment.appointment_date == appointment_date,
-            Appointment.appointment_time == appointment_time,
-        )
-    ).all()
+    existing_rows = PractitionerAppointmentRepository(session).appointments_at_time(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        appointment_date=appointment_date,
+        appointment_time=appointment_time,
+    )
     if any(
         row.status not in {AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW}
         for row in existing_rows
@@ -313,15 +289,12 @@ def check_practitioner_date_availability(
             False, "Practitioner is not assigned to this branch and department"
         )
 
-    schedules = session.exec(
-        select(PractitionerSchedule).where(
-            PractitionerSchedule.tenant_id == tenant_id,
-            PractitionerSchedule.practitioner_id == practitioner_id,
-            PractitionerSchedule.branch_id == branch_id,
-            PractitionerSchedule.weekday == appointment_date.weekday(),
-            PractitionerSchedule.is_active == True,  # noqa: E712
-        )
-    ).all()
+    schedules = PractitionerScheduleRepository(session).active_for_weekday(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        weekday=appointment_date.weekday(),
+    )
     matching_schedules = [
         schedule
         for schedule in schedules
@@ -332,15 +305,11 @@ def check_practitioner_date_availability(
             False, "Practitioner is not scheduled on this date"
         )
 
-    leave_rows = session.exec(
-        select(PractitionerLeave).where(
-            PractitionerLeave.tenant_id == tenant_id,
-            PractitionerLeave.practitioner_id == practitioner_id,
-            PractitionerLeave.start_date <= appointment_date,
-            PractitionerLeave.end_date >= appointment_date,
-            PractitionerLeave.is_active == True,  # noqa: E712
-        )
-    ).all()
+    leave_rows = PractitionerLeaveRepository(session).active_for_date(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        appointment_date=appointment_date,
+    )
     for leave in leave_rows:
         if leave.branch_id and leave.branch_id != branch_id:
             continue
@@ -366,13 +335,11 @@ def room_assignment_conflicts(
     start_time: time,
     end_time: time,
 ) -> bool:
-    statement = select(PractitionerRoomAssignment).where(
-        PractitionerRoomAssignment.tenant_id == tenant_id,
-        PractitionerRoomAssignment.branch_id == branch_id,
-        PractitionerRoomAssignment.room_name == room_name,
-        PractitionerRoomAssignment.is_active == True,  # noqa: E712
+    rows = PractitionerRoomAssignmentRepository(session).active_for_room(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        room_name=room_name,
     )
-    rows = session.exec(statement).all()
     for row in rows:
         if assignment_date is not None:
             same_scope = row.assignment_date == assignment_date or (
@@ -403,15 +370,12 @@ def generate_practitioner_calendar(
     days: list[PractitionerCalendarDay] = []
     current_date = start_date
     while current_date <= end_date:
-        schedules = session.exec(
-            select(PractitionerSchedule).where(
-                PractitionerSchedule.tenant_id == tenant_id,
-                PractitionerSchedule.practitioner_id == practitioner_id,
-                PractitionerSchedule.branch_id == branch_id,
-                PractitionerSchedule.weekday == current_date.weekday(),
-                PractitionerSchedule.is_active == True,  # noqa: E712
-            )
-        ).all()
+        schedules = PractitionerScheduleRepository(session).active_for_weekday(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            branch_id=branch_id,
+            weekday=current_date.weekday(),
+        )
         slots: list[PractitionerGeneratedSlot] = []
         for schedule in schedules:
             if not _department_matches(schedule.department_id, department_id):
