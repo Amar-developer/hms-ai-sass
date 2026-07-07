@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.auth import get_current_user, require_any_permission, require_permission
@@ -10,6 +10,7 @@ from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.audit.service import record_audit_event
 from app.modules.settings.models import AdminSetting, SettingKey
+from app.modules.settings.repositories import AdminSettingRepository
 from app.modules.settings.schemas import (
     AdminSettingRead,
     AdminSettingsBundle,
@@ -93,15 +94,14 @@ def list_admin_settings(
     current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> list[AdminSettingRead]:
-    statement = select(AdminSetting).where(AdminSetting.tenant_id == tenant_id)
+    scope_ids = None
     if current_user.branch_id and not current_user.is_super_admin:
-        statement = statement.where(
-            (AdminSetting.scope_id == tenant_id)
-            | (AdminSetting.scope_id == current_user.branch_id)
-        )
-    if module:
-        statement = statement.where(AdminSetting.module == module)
-    settings = list(session.exec(statement.order_by(AdminSetting.created_at)).all())
+        scope_ids = [tenant_id, current_user.branch_id]
+    settings = AdminSettingRepository(session).list_settings(
+        tenant_id=tenant_id,
+        module=module,
+        scope_ids=scope_ids,
+    )
     return [_read_setting(setting) for setting in settings]
 
 

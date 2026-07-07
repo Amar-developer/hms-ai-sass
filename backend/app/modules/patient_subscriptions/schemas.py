@@ -87,6 +87,7 @@ class PatientSubscriptionEnrollmentRead(BaseModel):
     patient_id: str
     plan_id: str
     starts_on: date
+    activated_on: date | None = None
     ends_on: date
     status: PatientSubscriptionEnrollmentStatus
     used_consultations: int

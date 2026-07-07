@@ -727,7 +727,6 @@ def _invoice_membership_benefit(
     membership = active_patient_enrollment(
         session,
         tenant_id=invoice.tenant_id,
-        branch_id=invoice.branch_id,
         patient_id=invoice.patient_id,
     )
     if not membership:
@@ -797,7 +796,6 @@ def _apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Inv
     membership = active_patient_enrollment(
         session,
         tenant_id=invoice.tenant_id,
-        branch_id=invoice.branch_id,
         patient_id=invoice.patient_id,
     )
     if not membership:
@@ -1837,7 +1835,6 @@ def _create_service_invoice(
         membership = active_patient_enrollment(
             session,
             tenant_id=tenant_id,
-            branch_id=branch_id,
             patient_id=patient_id,
         )
         if membership:

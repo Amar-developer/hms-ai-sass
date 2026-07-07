@@ -11,7 +11,6 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse
-from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
@@ -23,6 +22,7 @@ from app.core.uploads import UPLOADS_DIR, save_upload
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import Invoice
 from app.modules.files.models import FileDocument
+from app.modules.files.repositories import FileDocumentRepository
 from app.modules.files.schemas import FileDocumentRead, FileDocumentUpdate
 from app.modules.files.service import record_file_document
 from app.modules.identity import permissions
@@ -166,8 +166,8 @@ def _match_upload_to_entity(session: Session, tenant_id: str, filename: str):
 
 
 def _get_file(session: Session, tenant_id: str, file_id: str) -> FileDocument:
-    row = session.get(FileDocument, file_id)
-    if not row or row.tenant_id != tenant_id:
+    row = FileDocumentRepository(session).get_for_tenant(tenant_id, file_id)
+    if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
         )
@@ -319,41 +319,16 @@ def list_files(
     ),
 ) -> list[FileDocument]:
     branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(FileDocument).where(
-        FileDocument.tenant_id == tenant_id,
-        FileDocument.is_active == True,  # noqa: E712
-    )  # noqa: E712
-    if branch_id:
-        statement = statement.where(FileDocument.branch_id == branch_id)
-    if patient_id:
-        statement = statement.where(FileDocument.patient_id == patient_id)
-    if category:
-        statement = statement.where(FileDocument.category == category)
-    if attached_to_doctype:
-        statement = statement.where(
-            FileDocument.attached_to_doctype == attached_to_doctype
-        )
-    if attached_to_name:
-        statement = statement.where(FileDocument.attached_to_name == attached_to_name)
-    if q:
-        pattern = f"%{q.strip().lower()}%"
-        statement = statement.where(
-            or_(
-                FileDocument.file_name.ilike(pattern),
-                FileDocument.file_url.ilike(pattern),
-                FileDocument.category.ilike(pattern),
-                FileDocument.source_module.ilike(pattern),
-                FileDocument.attached_to_doctype.ilike(pattern),
-                FileDocument.attached_to_name.ilike(pattern),
-                FileDocument.notes.ilike(pattern),
-            )
-        )
-    rows = list(
-        session.exec(
-            statement.order_by(FileDocument.created_at.desc()).limit(limit)
-        ).all()
+    return FileDocumentRepository(session).list_active(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        category=category,
+        attached_to_doctype=attached_to_doctype,
+        attached_to_name=attached_to_name,
+        q=q,
+        limit=limit,
     )
-    return rows
 
 
 @router.post(
@@ -452,12 +427,10 @@ def sync_uploads_folder(
         if not path.is_file() or path.name.startswith("."):
             continue
         file_url = f"/uploads/{path.name}"
-        existing = session.exec(
-            select(FileDocument).where(
-                FileDocument.tenant_id == tenant_id,
-                FileDocument.file_url == file_url,
-            )
-        ).first()
+        existing = FileDocumentRepository(session).find_by_url(
+            tenant_id=tenant_id,
+            file_url=file_url,
+        )
         if existing:
             continue
         rule, entity = _match_upload_to_entity(session, tenant_id, path.name)
@@ -595,13 +568,10 @@ def delete_file(
     # points at it, so deleting one duplicate row never breaks another that
     # references the same upload.
     if row.file_url and row.file_url.startswith("/uploads/"):
-        still_referenced = session.exec(
-            select(FileDocument).where(
-                FileDocument.tenant_id == tenant_id,
-                FileDocument.file_url == row.file_url,
-                FileDocument.is_active == True,  # noqa: E712
-            )
-        ).first()
+        still_referenced = FileDocumentRepository(session).has_active_reference(
+            tenant_id=tenant_id,
+            file_url=row.file_url,
+        )
         if not still_referenced:
             disk_path = UPLOADS_DIR / Path(row.file_url).name
             try:

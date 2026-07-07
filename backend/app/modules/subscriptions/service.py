@@ -5,7 +5,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlmodel import Session, select
 
-from app.modules.patients.models import Patient
+from app.modules.patients.models import Patient, PatientStatus
 from app.modules.subscriptions.models import (
     CreditStatus,
     SubscriptionCredit,
@@ -316,7 +316,12 @@ def get_active_subscription(
 
 def current_patient_count(session: Session, tenant_id: str) -> int:
     return len(
-        session.exec(select(Patient.id).where(Patient.tenant_id == tenant_id)).all()
+        session.exec(
+            select(Patient.id).where(
+                Patient.tenant_id == tenant_id,
+                Patient.status != PatientStatus.INACTIVE,
+            )
+        ).all()
     )
 
 

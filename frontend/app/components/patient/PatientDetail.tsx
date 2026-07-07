@@ -174,6 +174,9 @@ export function PatientDetail({
   const pendingMembership = resolvedMembershipEnrollments.find(
     (row: any) => row.status === "active" && !isEnrollmentPaid(row),
   );
+  const queuedMembership = resolvedMembershipEnrollments.find(
+    (row: any) => row.status === "queued",
+  );
   const visibleMembership = activeMembership || pendingMembership;
   const freeConsultationsAllocated = Number(
     visibleMembership?.allocated_free_consultations ??
@@ -331,6 +334,12 @@ export function PatientDetail({
               {activeMembership ? "active" : pendingMembership ? "payment due" : "not enrolled"}
             </Badge>
           </div>
+          {queuedMembership && (
+            <p className="mt-2 text-xs font-semibold text-amber-700">
+              Next plan: {queuedMembership.plan?.name || "Membership plan"} —
+              activates automatically when the current plan ends.
+            </p>
+          )}
           {canCreateMembership && (
             <MembershipEnrollForm
               membershipPlans={membershipPlans}

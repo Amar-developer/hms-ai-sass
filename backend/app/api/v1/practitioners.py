@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.access_control import current_doctor_practitioner_id
 from app.core.auth import require_any_permission, require_permission
@@ -19,6 +19,14 @@ from app.modules.practitioners.models import (
     PractitionerLeave,
     PractitionerRoomAssignment,
     PractitionerSchedule,
+)
+from app.modules.practitioners.repositories import (
+    PractitionerLeaveRepository,
+    PractitionerLinkRepository,
+    PractitionerReferenceRepository,
+    PractitionerRepository,
+    PractitionerRoomAssignmentRepository,
+    PractitionerScheduleRepository,
 )
 from app.modules.practitioners.schemas import (
     PractitionerAvailabilityRead,
@@ -44,7 +52,7 @@ from app.modules.practitioners.service import (
     room_assignment_conflicts,
 )
 from app.modules.settings.numbering import next_document_number
-from app.modules.tenants.models import Branch, Department
+from app.modules.tenants.models import Department
 
 router = APIRouter(prefix="/practitioners")
 
@@ -65,9 +73,10 @@ def _read(session: Session, practitioner: Practitioner) -> PractitionerRead:
 def _validate_links(
     session: Session, tenant_id: str, branch_ids: list[str], department_ids: list[str]
 ) -> None:
+    links = PractitionerLinkRepository(session)
     for branch_id in branch_ids:
-        branch = session.get(Branch, branch_id)
-        if not branch or branch.tenant_id != tenant_id:
+        branch = links.get_branch_for_tenant(tenant_id, branch_id)
+        if not branch:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid branch: {branch_id}",
@@ -83,13 +92,12 @@ def _resolve_department(
 ) -> Department | None:
     if not department_id:
         return None
-    department = session.get(Department, department_id)
-    if department and department.tenant_id == tenant_id:
+    links = PractitionerLinkRepository(session)
+    department = links.get_department_for_tenant(tenant_id, department_id)
+    if department:
         return department
     requested = _normalize_department_lookup(department_id)
-    departments = session.exec(
-        select(Department).where(Department.tenant_id == tenant_id)
-    ).all()
+    departments = links.list_departments_for_tenant(tenant_id)
     for department in departments:
         department_keys = {
             _normalize_department_lookup(department.id),
@@ -119,8 +127,10 @@ def _department_filter_ids(
 def _get_practitioner(
     session: Session, tenant_id: str, practitioner_id: str
 ) -> Practitioner:
-    practitioner = session.get(Practitioner, practitioner_id)
-    if not practitioner or practitioner.tenant_id != tenant_id:
+    practitioner = PractitionerRepository(session).get_for_tenant(
+        tenant_id, practitioner_id
+    )
+    if not practitioner:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Practitioner not found"
         )
@@ -135,8 +145,9 @@ def _validate_doctor_login_user(
 ) -> None:
     if not user_id:
         return
-    user = session.get(User, user_id)
-    if not user or user.tenant_id != tenant_id:
+    links = PractitionerLinkRepository(session)
+    user = links.get_user_for_tenant(tenant_id, user_id)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid doctor login user"
         )
@@ -145,12 +156,10 @@ def _validate_doctor_login_user(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Linked login user must have Doctor user type",
         )
-    existing = session.exec(
-        select(Practitioner).where(
-            Practitioner.tenant_id == tenant_id,
-            Practitioner.user_id == user_id,
-        )
-    ).first()
+    existing = PractitionerRepository(session).find_by_user(
+        tenant_id=tenant_id,
+        user_id=user_id,
+    )
     if existing and existing.id != practitioner_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -161,8 +170,10 @@ def _validate_doctor_login_user(
 def _get_schedule(
     session: Session, tenant_id: str, schedule_id: str
 ) -> PractitionerSchedule:
-    schedule = session.get(PractitionerSchedule, schedule_id)
-    if not schedule or schedule.tenant_id != tenant_id:
+    schedule = PractitionerScheduleRepository(session).get_for_tenant(
+        tenant_id, schedule_id
+    )
+    if not schedule:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Practitioner schedule not found",
@@ -186,13 +197,12 @@ def _replace_links(
     branch_ids: list[str] | None,
     department_ids: list[str] | None,
 ) -> None:
+    links = PractitionerLinkRepository(session)
     if branch_ids is not None:
-        existing = session.exec(
-            select(PractitionerBranch).where(
-                PractitionerBranch.tenant_id == tenant_id,
-                PractitionerBranch.practitioner_id == practitioner_id,
-            )
-        ).all()
+        existing = links.branch_links(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+        )
         for row in existing:
             session.delete(row)
         for branch_id in sorted(set(branch_ids)):
@@ -204,12 +214,10 @@ def _replace_links(
                 )
             )
     if department_ids is not None:
-        existing = session.exec(
-            select(PractitionerDepartment).where(
-                PractitionerDepartment.tenant_id == tenant_id,
-                PractitionerDepartment.practitioner_id == practitioner_id,
-            )
-        ).all()
+        existing = links.department_links(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+        )
         for row in existing:
             session.delete(row)
         for department_id in sorted(set(department_ids)):
@@ -247,7 +255,7 @@ def create_practitioner(
             ),
         },
     )
-    session.add(practitioner)
+    PractitionerRepository(session).add(practitioner)
     session.commit()
     session.refresh(practitioner)
     _replace_links(
@@ -291,17 +299,13 @@ def list_practitioners(
         )
     ),
 ) -> list[PractitionerRead]:
-    statement = (
-        select(Practitioner)
-        .where(Practitioner.tenant_id == tenant_id)
-        .order_by(Practitioner.full_name)
-    )
     doctor_practitioner_id = current_doctor_practitioner_id(
         session, tenant_id, current_user
     )
-    if doctor_practitioner_id:
-        statement = statement.where(Practitioner.id == doctor_practitioner_id)
-    practitioners = list(session.exec(statement).all())
+    practitioners = PractitionerRepository(session).list_for_tenant(
+        tenant_id=tenant_id,
+        practitioner_id=doctor_practitioner_id,
+    )
     if branch_id:
         practitioners = [
             practitioner
@@ -331,34 +335,10 @@ def _enrich_schedules(
     branch_ids = {s.branch_id for s in schedules if s.branch_id}
     dept_ids = {s.department_id for s in schedules if s.department_id}
 
-    prac_names = (
-        {
-            p.id: p.full_name
-            for p in session.exec(
-                select(Practitioner).where(Practitioner.id.in_(prac_ids))
-            ).all()
-        }
-        if prac_ids
-        else {}
-    )
-    branch_names = (
-        {
-            b.id: b.name
-            for b in session.exec(select(Branch).where(Branch.id.in_(branch_ids))).all()
-        }
-        if branch_ids
-        else {}
-    )
-    dept_names = (
-        {
-            d.id: d.name
-            for d in session.exec(
-                select(Department).where(Department.id.in_(dept_ids))
-            ).all()
-        }
-        if dept_ids
-        else {}
-    )
+    references = PractitionerReferenceRepository(session)
+    prac_names = references.practitioner_names(prac_ids)
+    branch_names = references.branch_names(branch_ids)
+    dept_names = references.department_names(dept_ids)
 
     rows: list[PractitionerScheduleRead] = []
     for schedule in schedules:
@@ -384,29 +364,15 @@ def list_all_practitioner_schedules(
         )
     ),
 ) -> list[PractitionerScheduleRead]:
-    statement = select(PractitionerSchedule).where(
-        PractitionerSchedule.tenant_id == tenant_id
-    )
-    if practitioner_id:
-        statement = statement.where(
-            PractitionerSchedule.practitioner_id == practitioner_id
-        )
-    if branch_id:
-        statement = statement.where(PractitionerSchedule.branch_id == branch_id)
+    department_ids = None
     if department_id:
         department_ids = _department_filter_ids(session, tenant_id, department_id)
-        statement = statement.where(
-            PractitionerSchedule.department_id.in_(department_ids)
-        )
-    if is_active is not None:
-        statement = statement.where(PractitionerSchedule.is_active == is_active)
-    schedules = list(
-        session.exec(
-            statement.order_by(
-                PractitionerSchedule.updated_at.desc(),
-                PractitionerSchedule.created_at.desc(),
-            )
-        ).all()
+    schedules = PractitionerScheduleRepository(session).list_for_filters(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        branch_id=branch_id,
+        department_ids=department_ids,
+        is_active=is_active,
     )
     return _enrich_schedules(session, schedules)
 
@@ -452,7 +418,7 @@ def update_practitioner_schedule(
     for key, value in updates.items():
         setattr(schedule, key, value)
     schedule.updated_at = datetime.now(timezone.utc)
-    session.add(schedule)
+    PractitionerScheduleRepository(session).add(schedule)
     session.commit()
     session.refresh(schedule)
     record_audit_event(
@@ -483,7 +449,7 @@ def delete_practitioner_schedule(
     branch_id = schedule.branch_id
     schedule.is_active = False
     schedule.updated_at = datetime.now(timezone.utc)
-    session.add(schedule)
+    PractitionerScheduleRepository(session).add(schedule)
     session.commit()
     record_audit_event(
         session,
@@ -537,7 +503,7 @@ def update_practitioner(
     ).items():
         setattr(practitioner, key, value)
     practitioner.updated_at = datetime.now(timezone.utc)
-    session.add(practitioner)
+    PractitionerRepository(session).add(practitioner)
     session.commit()
     session.refresh(practitioner)
     _replace_links(
@@ -569,7 +535,7 @@ def delete_practitioner(
     practitioner = _get_practitioner(session, tenant_id, practitioner_id)
     practitioner.status = "inactive"
     practitioner.updated_at = datetime.now(timezone.utc)
-    session.add(practitioner)
+    PractitionerRepository(session).add(practitioner)
     session.commit()
     record_audit_event(
         session,
@@ -622,7 +588,7 @@ def create_practitioner_schedule(
     schedule = PractitionerSchedule.model_validate(
         payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id}
     )
-    session.add(schedule)
+    PractitionerScheduleRepository(session).add(schedule)
     session.commit()
     session.refresh(schedule)
     record_audit_event(
@@ -652,13 +618,9 @@ def list_practitioner_schedules(
     ),
 ) -> list[PractitionerScheduleRead]:
     _get_practitioner(session, tenant_id, practitioner_id)
-    schedules = list(
-        session.exec(
-            select(PractitionerSchedule).where(
-                PractitionerSchedule.tenant_id == tenant_id,
-                PractitionerSchedule.practitioner_id == practitioner_id,
-            )
-        ).all()
+    schedules = PractitionerScheduleRepository(session).list_for_filters(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
     )
     return _enrich_schedules(session, schedules)
 
@@ -693,7 +655,7 @@ def create_practitioner_leave(
     leave = PractitionerLeave.model_validate(
         payload, update={"tenant_id": tenant_id, "practitioner_id": practitioner_id}
     )
-    session.add(leave)
+    PractitionerLeaveRepository(session).add(leave)
     session.commit()
     session.refresh(leave)
     record_audit_event(
@@ -717,13 +679,9 @@ def list_practitioner_leaves(
     _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
 ) -> list[PractitionerLeave]:
     _get_practitioner(session, tenant_id, practitioner_id)
-    return list(
-        session.exec(
-            select(PractitionerLeave).where(
-                PractitionerLeave.tenant_id == tenant_id,
-                PractitionerLeave.practitioner_id == practitioner_id,
-            )
-        ).all()
+    return PractitionerLeaveRepository(session).list_for_practitioner(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
     )
 
 
@@ -765,7 +723,7 @@ def create_practitioner_room_assignment(
         payload,
         update={"tenant_id": tenant_id, "practitioner_id": practitioner_id},
     )
-    session.add(assignment)
+    PractitionerRoomAssignmentRepository(session).add(assignment)
     session.commit()
     session.refresh(assignment)
     record_audit_event(
@@ -792,13 +750,9 @@ def list_practitioner_room_assignments(
     _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
 ) -> list[PractitionerRoomAssignment]:
     _get_practitioner(session, tenant_id, practitioner_id)
-    return list(
-        session.exec(
-            select(PractitionerRoomAssignment).where(
-                PractitionerRoomAssignment.tenant_id == tenant_id,
-                PractitionerRoomAssignment.practitioner_id == practitioner_id,
-            )
-        ).all()
+    return PractitionerRoomAssignmentRepository(session).list_for_practitioner(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
     )
 
 

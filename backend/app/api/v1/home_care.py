@@ -1,7 +1,7 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.access_control import (
     require_branch_in_tenant,
@@ -16,7 +16,6 @@ from app.modules.billing.models import (
     Invoice,
     InvoiceItem,
     InvoiceStatus,
-    Payment,
     TaxRule,
 )
 from app.modules.billing.schemas import (
@@ -31,6 +30,14 @@ from app.modules.home_care.models import (
     HomeCareBookingItem,
     HomeCareService,
     HomeCareVisitLog,
+)
+from app.modules.home_care.repositories import (
+    HomeCareBillingRepository,
+    HomeCareBookingItemRepository,
+    HomeCareBookingRepository,
+    HomeCareReferenceRepository,
+    HomeCareServiceRepository,
+    HomeCareVisitLogRepository,
 )
 from app.modules.home_care.schemas import (
     HomeCareBookingCreate,
@@ -48,7 +55,6 @@ from app.modules.home_care.schemas import (
 )
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.patients.models import Patient
 from app.modules.settings.models import SettingKey
 from app.modules.settings.numbering import next_document_number
 from app.modules.settings.service import resolve_setting
@@ -79,15 +85,8 @@ def _service_code(name: str) -> str:
 
 
 def _read_booking(session: Session, booking: HomeCareBooking) -> HomeCareBookingRead:
-    items = list(
-        session.exec(
-            select(HomeCareBookingItem)
-            .where(
-                HomeCareBookingItem.tenant_id == booking.tenant_id,
-                HomeCareBookingItem.booking_id == booking.id,
-            )
-            .order_by(HomeCareBookingItem.created_at)
-        ).all()
+    items = HomeCareBookingItemRepository(session).list_for_booking(
+        tenant_id=booking.tenant_id, booking_id=booking.id
     )
     data = HomeCareBookingRead.model_validate(
         booking, from_attributes=True
@@ -96,15 +95,8 @@ def _read_booking(session: Session, booking: HomeCareBooking) -> HomeCareBooking
         HomeCareBookingItemRead.model_validate(item, from_attributes=True)
         for item in items
     ]
-    visit_logs = list(
-        session.exec(
-            select(HomeCareVisitLog)
-            .where(
-                HomeCareVisitLog.tenant_id == booking.tenant_id,
-                HomeCareVisitLog.booking_id == booking.id,
-            )
-            .order_by(HomeCareVisitLog.visit_date, HomeCareVisitLog.created_at)
-        ).all()
+    visit_logs = HomeCareVisitLogRepository(session).list_for_booking(
+        tenant_id=booking.tenant_id, booking_id=booking.id
     )
     data["visit_logs"] = [
         HomeCareVisitLogRead.model_validate(row, from_attributes=True)
@@ -116,8 +108,8 @@ def _read_booking(session: Session, booking: HomeCareBooking) -> HomeCareBooking
 def _get_booking(
     session: Session, tenant_id: str, booking_id: str, current_user: User
 ) -> HomeCareBooking:
-    booking = session.get(HomeCareBooking, booking_id)
-    if not booking or booking.tenant_id != tenant_id:
+    booking = HomeCareBookingRepository(session).get_for_tenant(tenant_id, booking_id)
+    if not booking:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Home care booking not found"
         )
@@ -126,25 +118,9 @@ def _get_booking(
 
 
 def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
-    items = list(
-        session.exec(
-            select(InvoiceItem)
-            .where(
-                InvoiceItem.tenant_id == invoice.tenant_id,
-                InvoiceItem.invoice_id == invoice.id,
-            )
-            .order_by(InvoiceItem.created_at)
-        ).all()
-    )
-    payments = list(
-        session.exec(
-            select(Payment)
-            .where(
-                Payment.tenant_id == invoice.tenant_id, Payment.invoice_id == invoice.id
-            )
-            .order_by(Payment.collected_at)
-        ).all()
-    )
+    billing = HomeCareBillingRepository(session)
+    items = billing.list_invoice_items(invoice)
+    payments = billing.list_invoice_payments(invoice)
     return InvoiceDetailRead(
         status=invoice.status,
         invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
@@ -161,7 +137,9 @@ def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
 def _resolve_tax_rule(
     session: Session, tenant_id: str, branch_id: str, tax_rule_id: str | None
 ) -> TaxRule | None:
-    tax_rule = session.get(TaxRule, tax_rule_id) if tax_rule_id else None
+    tax_rule = HomeCareBillingRepository(session).get_active_tax_rule(
+        tenant_id=tenant_id, branch_id=branch_id, tax_rule_id=tax_rule_id
+    )
     if tax_rule:
         if (
             tax_rule.tenant_id != tenant_id
@@ -172,13 +150,7 @@ def _resolve_tax_rule(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tax rule"
             )
         return tax_rule
-    return session.exec(
-        select(TaxRule).where(
-            TaxRule.tenant_id == tenant_id,
-            TaxRule.is_active == True,  # noqa: E712
-            (TaxRule.branch_id == branch_id) | (TaxRule.branch_id.is_(None)),
-        )
-    ).first()
+    return None
 
 
 def _sync_booking_status_from_invoice(
@@ -193,7 +165,7 @@ def _sync_booking_status_from_invoice(
     if booking.status != target:
         booking.status = target
         booking.updated_at = now_utc()
-        session.add(booking)
+        HomeCareBookingRepository(session).add(booking)
         session.commit()
 
 
@@ -203,6 +175,7 @@ def _validate_patient_and_staff(
     payload: HomeCareBookingCreate | HomeCareBookingUpdate,
 ) -> None:
     patient_id = getattr(payload, "patient_id", None)
+    references = HomeCareReferenceRepository(session)
     if patient_id is not None:
         patient_id = patient_id.strip()
         if not patient_id:
@@ -210,15 +183,15 @@ def _validate_patient_and_staff(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Patient is required",
             )
-        patient = session.get(Patient, patient_id)
-        if not patient or patient.tenant_id != tenant_id:
+        patient = references.get_patient_for_tenant(tenant_id, patient_id)
+        if not patient:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
             )
     staff_id = getattr(payload, "assigned_staff_user_id", None)
     if staff_id:
-        staff = session.get(User, staff_id)
-        if not staff or staff.tenant_id != tenant_id or not staff.is_active:
+        staff = references.get_active_staff_for_tenant(tenant_id, staff_id)
+        if not staff:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid assigned staff"
             )
@@ -230,23 +203,18 @@ def _replace_booking_items(
     booking: HomeCareBooking,
     services: list[HomeCareBookingItemCreate],
 ) -> None:
-    existing = list(
-        session.exec(
-            select(HomeCareBookingItem).where(
-                HomeCareBookingItem.tenant_id == tenant_id,
-                HomeCareBookingItem.booking_id == booking.id,
-            )
-        ).all()
-    )
+    items = HomeCareBookingItemRepository(session)
+    services_repo = HomeCareServiceRepository(session)
+    existing = items.list_for_booking(tenant_id=tenant_id, booking_id=booking.id)
     for row in existing:
-        session.delete(row)
+        items.delete(row)
     for row in services:
         service = (
-            session.get(HomeCareService, row.service_id) if row.service_id else None
+            services_repo.get_active_for_tenant(tenant_id, row.service_id)
+            if row.service_id
+            else None
         )
-        if row.service_id and (
-            not service or service.tenant_id != tenant_id or not service.is_active
-        ):
+        if row.service_id and not service:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid home care service",
@@ -263,7 +231,7 @@ def _replace_booking_items(
             else "home_care_service"
         )
         total_amount = row.quantity * unit_amount
-        session.add(
+        items.add(
             HomeCareBookingItem(
                 tenant_id=tenant_id,
                 booking_id=booking.id,
@@ -286,18 +254,21 @@ def _visit_log_from_payload(
     existing: HomeCareVisitLog | None = None,
 ) -> HomeCareVisitLog:
     staff_id = payload.assigned_staff_user_id
+    references = HomeCareReferenceRepository(session)
     if staff_id:
-        staff = session.get(User, staff_id)
-        if not staff or staff.tenant_id != tenant_id or not staff.is_active:
+        staff = references.get_active_staff_for_tenant(tenant_id, staff_id)
+        if not staff:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid assigned staff"
             )
     service = (
-        session.get(HomeCareService, payload.service_id) if payload.service_id else None
+        HomeCareServiceRepository(session).get_active_for_tenant(
+            tenant_id, payload.service_id
+        )
+        if payload.service_id
+        else None
     )
-    if payload.service_id and (
-        not service or service.tenant_id != tenant_id or not service.is_active
-    ):
+    if payload.service_id and not service:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid home care service",
@@ -390,11 +361,7 @@ def list_services(
 ) -> list[HomeCareService]:
     _assert_enabled(session, tenant_id)
     scoped_branch_id(current_user, branch_id)
-    statement = select(HomeCareService).where(
-        HomeCareService.tenant_id == tenant_id,
-        HomeCareService.is_active == True,  # noqa: E712
-    )  # noqa: E712
-    return list(session.exec(statement.order_by(HomeCareService.name)).all())
+    return HomeCareServiceRepository(session).list_active(tenant_id)
 
 
 @router.post(
@@ -422,7 +389,7 @@ def create_service(
             "updated_by_user_id": current_user.id,
         },
     )
-    session.add(service)
+    HomeCareServiceRepository(session).add(service)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -450,8 +417,8 @@ def update_service(
     ),
 ) -> HomeCareServiceRead:
     _assert_enabled(session, tenant_id)
-    service = session.get(HomeCareService, service_id)
-    if not service or service.tenant_id != tenant_id:
+    service = HomeCareServiceRepository(session).get_for_tenant(tenant_id, service_id)
+    if not service:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Home care service not found"
         )
@@ -464,7 +431,7 @@ def update_service(
         setattr(service, key, value)
     service.updated_by_user_id = current_user.id
     service.updated_at = now_utc()
-    session.add(service)
+    HomeCareServiceRepository(session).add(service)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -493,8 +460,8 @@ def delete_service(
     ),
 ) -> HomeCareServiceRead:
     _assert_enabled(session, tenant_id)
-    service = session.get(HomeCareService, service_id)
-    if not service or service.tenant_id != tenant_id:
+    service = HomeCareServiceRepository(session).get_for_tenant(tenant_id, service_id)
+    if not service:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Home care service not found"
         )
@@ -502,7 +469,7 @@ def delete_service(
     service.is_active = False
     service.updated_by_user_id = current_user.id
     service.updated_at = now_utc()
-    session.add(service)
+    HomeCareServiceRepository(session).add(service)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -532,19 +499,11 @@ def list_bookings(
 ) -> list[HomeCareBookingRead]:
     _assert_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
-    statement = select(HomeCareBooking).where(HomeCareBooking.tenant_id == tenant_id)
-    if branch_scope:
-        statement = statement.where(HomeCareBooking.branch_id == branch_scope)
-    if patient_id:
-        statement = statement.where(HomeCareBooking.patient_id == patient_id)
-    if status_filter:
-        statement = statement.where(HomeCareBooking.status == status_filter)
-    rows = list(
-        session.exec(
-            statement.order_by(
-                HomeCareBooking.updated_at.desc(), HomeCareBooking.created_at.desc()
-            )
-        ).all()
+    rows = HomeCareBookingRepository(session).list_for_tenant(
+        tenant_id=tenant_id,
+        branch_id=branch_scope,
+        patient_id=patient_id,
+        status_filter=status_filter,
     )
     return [_read_booking(session, row) for row in rows]
 
@@ -586,7 +545,7 @@ def create_booking(
             "updated_by_user_id": current_user.id,
         },
     )
-    session.add(booking)
+    HomeCareBookingRepository(session).add(booking)
     session.commit()
     session.refresh(booking)
     _replace_booking_items(session, tenant_id, booking, payload.services)
@@ -639,7 +598,7 @@ def update_booking(
         )
     booking.updated_at = now_utc()
     booking.updated_by_user_id = current_user.id
-    session.add(booking)
+    HomeCareBookingRepository(session).add(booking)
     if payload.services is not None:
         _replace_booking_items(session, tenant_id, booking, payload.services)
     session.commit()
@@ -681,10 +640,12 @@ def create_visit_log(
             detail=f"This booking is {booking.status} and cannot accept visit logs",
         )
     row = _visit_log_from_payload(session, tenant_id, booking, payload, current_user)
-    session.add(row)
+    visits = HomeCareVisitLogRepository(session)
+    bookings = HomeCareBookingRepository(session)
+    visits.add(row)
     booking.updated_at = now_utc()
     booking.updated_by_user_id = current_user.id
-    session.add(booking)
+    bookings.add(booking)
     session.commit()
     session.refresh(row)
     record_audit_event(
@@ -721,18 +682,22 @@ def update_visit_log(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"This booking is {booking.status} and can no longer be edited",
         )
-    row = session.get(HomeCareVisitLog, visit_id)
-    if not row or row.tenant_id != tenant_id or row.booking_id != booking.id:
+    visits = HomeCareVisitLogRepository(session)
+    bookings = HomeCareBookingRepository(session)
+    row = visits.get_for_booking(
+        tenant_id=tenant_id, booking_id=booking.id, visit_id=visit_id
+    )
+    if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Visit log not found"
         )
     row = _visit_log_from_payload(
         session, tenant_id, booking, payload, current_user, row
     )
-    session.add(row)
+    visits.add(row)
     booking.updated_at = now_utc()
     booking.updated_by_user_id = current_user.id
-    session.add(booking)
+    bookings.add(booking)
     session.commit()
     session.refresh(row)
     return HomeCareVisitLogRead.model_validate(row, from_attributes=True)
@@ -758,16 +723,20 @@ def delete_visit_log(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"This booking is {booking.status} and can no longer be edited",
         )
-    row = session.get(HomeCareVisitLog, visit_id)
-    if not row or row.tenant_id != tenant_id or row.booking_id != booking.id:
+    visits = HomeCareVisitLogRepository(session)
+    bookings = HomeCareBookingRepository(session)
+    row = visits.get_for_booking(
+        tenant_id=tenant_id, booking_id=booking.id, visit_id=visit_id
+    )
+    if not row:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Visit log not found"
         )
     data = HomeCareVisitLogRead.model_validate(row, from_attributes=True)
-    session.delete(row)
+    visits.delete(row)
     booking.updated_at = now_utc()
     booking.updated_by_user_id = current_user.id
-    session.add(booking)
+    bookings.add(booking)
     session.commit()
     return data
 
@@ -783,13 +752,9 @@ def get_booking_invoice(
     booking = _get_booking(session, tenant_id, booking_id, current_user)
     # Ignore voided invoices so a booking whose invoice was cancelled shows as
     # un-billed again (the UI then offers "Generate Invoice" instead of "View").
-    invoice = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id,
-            Invoice.home_care_booking_id == booking.id,
-            Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
-        )
-    ).first()
+    invoice = HomeCareBillingRepository(session).get_active_booking_invoice(
+        tenant_id=tenant_id, booking_id=booking.id
+    )
     if not invoice:
         return None
     _sync_booking_status_from_invoice(session, booking, invoice)
@@ -813,34 +778,18 @@ def generate_invoice(
     booking = _get_booking(session, tenant_id, booking_id, current_user)
     # Ignore voided invoices so a booking whose invoice was cancelled can be
     # re-billed instead of returning the dead invoice and re-locking it.
-    existing = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id,
-            Invoice.home_care_booking_id == booking.id,
-            Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
-        )
-    ).first()
+    billing = HomeCareBillingRepository(session)
+    existing = billing.get_active_booking_invoice(
+        tenant_id=tenant_id, booking_id=booking.id
+    )
     if existing:
         _sync_booking_status_from_invoice(session, booking, existing)
         return _invoice_detail(session, existing)
-    visit_rows = list(
-        session.exec(
-            select(HomeCareVisitLog).where(
-                HomeCareVisitLog.tenant_id == tenant_id,
-                HomeCareVisitLog.booking_id == booking.id,
-                HomeCareVisitLog.status == "completed",
-                HomeCareVisitLog.total_amount > 0,
-            )
-        ).all()
-    )
-    planned_rows = list(
-        session.exec(
-            select(HomeCareBookingItem).where(
-                HomeCareBookingItem.tenant_id == tenant_id,
-                HomeCareBookingItem.booking_id == booking.id,
-                HomeCareBookingItem.total_amount > 0,
-            )
-        ).all()
+    visit_rows = HomeCareVisitLogRepository(
+        session
+    ).list_completed_billable_for_booking(tenant_id=tenant_id, booking_id=booking.id)
+    planned_rows = HomeCareBookingItemRepository(session).list_billable_for_booking(
+        tenant_id=tenant_id, booking_id=booking.id
     )
     rows = visit_rows or planned_rows
     if not rows:
@@ -854,8 +803,10 @@ def generate_invoice(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Home care booking must be linked to a patient before generating invoice",
         )
-    patient = session.get(Patient, patient_id)
-    if not patient or patient.tenant_id != tenant_id:
+    patient = HomeCareReferenceRepository(session).get_patient_for_tenant(
+        tenant_id, patient_id
+    )
+    if not patient:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Home care booking patient is invalid",
@@ -893,19 +844,15 @@ def generate_invoice(
         clinic_share_amount=total,
         created_by_user_id=payload.created_by_user_id or current_user.id,
     )
-    session.add(invoice)
+    billing.add_invoice(invoice)
     session.commit()
     session.refresh(invoice)
     service_by_id = {
         service.id: service
-        for service in session.exec(
-            select(HomeCareService).where(
-                HomeCareService.tenant_id == tenant_id,
-                HomeCareService.id.in_(
-                    [row.service_id for row in rows if row.service_id]
-                ),
-            )
-        ).all()
+        for service in HomeCareServiceRepository(session).list_by_ids(
+            tenant_id=tenant_id,
+            service_ids=[row.service_id for row in rows if row.service_id],
+        )
     }
     for row in rows:
         service = service_by_id.get(row.service_id or "")
@@ -918,7 +865,7 @@ def generate_invoice(
         description = row.description
         if isinstance(row, HomeCareVisitLog):
             description = f"{row.description} ({row.visit_date.isoformat()})"
-        session.add(
+        billing.add_invoice_item(
             InvoiceItem(
                 tenant_id=tenant_id,
                 invoice_id=invoice.id,

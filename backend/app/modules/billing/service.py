@@ -315,7 +315,6 @@ def create_consultation_invoice(
     membership = active_patient_enrollment(
         session,
         tenant_id=appointment.tenant_id,
-        branch_id=appointment.branch_id,
         patient_id=appointment.patient_id,
     )
     if membership:

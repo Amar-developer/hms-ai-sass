@@ -1,6 +1,7 @@
 from sqlmodel import Session
 
 from app.modules.audit.models import AuditEvent
+from app.modules.audit.repositories import AuditEventRepository
 
 
 def record_audit_event(
@@ -28,7 +29,7 @@ def record_audit_event(
         purpose=purpose,
         metadata_json=metadata_json,
     )
-    session.add(event)
+    AuditEventRepository(session).add(event)
     if commit:
         session.commit()
         session.refresh(event)

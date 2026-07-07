@@ -1,11 +1,10 @@
 import hashlib
 import json
 from datetime import date, time
-from time import monotonic
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
-from sqlalchemy import func, or_
-from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session
 
 from app.core.access_control import (
     current_doctor_practitioner_id,
@@ -22,8 +21,15 @@ from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.appointments.models import (
     Appointment,
+    AppointmentIdempotencyKey,
     AppointmentStatus,
     AppointmentType,
+)
+from app.modules.appointments.repositories import (
+    AppointmentGridRepository,
+    AppointmentIdempotencyRepository,
+    AppointmentReferenceRepository,
+    AppointmentRepository,
 )
 from app.modules.appointments.schemas import (
     AppointmentBookingRead,
@@ -36,24 +42,17 @@ from app.modules.appointments.schemas import (
 from app.modules.audit.service import record_audit_event
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
-from app.modules.patients.models import Patient
-from app.modules.practitioners.models import Practitioner
 from app.modules.practitioners.service import (
     check_practitioner_availability,
     check_practitioner_date_availability,
     generate_practitioner_calendar,
     practitioner_is_eligible,
 )
-from app.modules.consultations.models import Consultation
-from app.modules.queue.models import QueueEntry
 from app.modules.queue.service import create_queue_entry_for_appointment
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
-from app.modules.tenants.models import Branch, Department, Tenant
 
 router = APIRouter(prefix="/appointments")
-IDEMPOTENCY_TTL_SECONDS = 300
-_appointment_idempotency_cache: dict[tuple[str, str, str], dict] = {}
 
 ACTIVE_APPOINTMENT_STATUSES = {
     AppointmentStatus.SCHEDULED,
@@ -74,17 +73,6 @@ def _appointment_payload_hash(payload: AppointmentCreate) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _cleanup_appointment_idempotency_cache() -> None:
-    now = monotonic()
-    expired = [
-        key
-        for key, value in _appointment_idempotency_cache.items()
-        if value["expires_at"] <= now
-    ]
-    for key in expired:
-        _appointment_idempotency_cache.pop(key, None)
-
-
 def _normalize_department_lookup(value: str | None) -> str:
     return "".join(char for char in str(value or "").lower() if char.isalnum())
 
@@ -94,13 +82,12 @@ def _resolve_department_id(
 ) -> str | None:
     if not department_id:
         return None
-    department = session.get(Department, department_id)
-    if department and department.tenant_id == tenant_id:
+    references = AppointmentReferenceRepository(session)
+    department = references.get_department_for_tenant(tenant_id, department_id)
+    if department:
         return department.id
     requested = _normalize_department_lookup(department_id)
-    departments = session.exec(
-        select(Department).where(Department.tenant_id == tenant_id)
-    ).all()
+    departments = references.list_departments_for_tenant(tenant_id)
     for department in departments:
         department_keys = {
             _normalize_department_lookup(department.id),
@@ -165,28 +152,6 @@ def _appointment_grid_row(row) -> AppointmentGridRead:
     )
 
 
-def _appointment_grid_statement():
-    return (
-        select(
-            Appointment,
-            Tenant,
-            Branch,
-            Patient,
-            Department,
-            Practitioner,
-            QueueEntry,
-            Consultation,
-        )
-        .join(Tenant, Tenant.id == Appointment.tenant_id)
-        .join(Branch, Branch.id == Appointment.branch_id)
-        .join(Patient, Patient.id == Appointment.patient_id)
-        .outerjoin(Department, Department.id == Appointment.department_id)
-        .outerjoin(Practitioner, Practitioner.id == Appointment.practitioner_id)
-        .outerjoin(QueueEntry, QueueEntry.appointment_id == Appointment.id)
-        .outerjoin(Consultation, Consultation.appointment_id == Appointment.id)
-    )
-
-
 def _slot_session(appointment_time: time | None) -> str:
     if appointment_time is None:
         return "unscheduled"
@@ -202,13 +167,16 @@ def _enforce_duplicate_booking_rules(
 ) -> None:
     if payload.appointment_type == AppointmentType.EMERGENCY:
         return
-    existing_rows = session.exec(
-        select(Appointment).where(
-            Appointment.tenant_id == tenant_id,
-            Appointment.patient_id == payload.patient_id,
-            Appointment.appointment_date == payload.appointment_date,
-        )
-    ).all()
+    # Lock the patient row FOR UPDATE so concurrent bookings for the same
+    # patient serialize — mirrors the practitioner-side lock in
+    # _enforce_practitioner_slot_conflict and closes the same double-booking
+    # race on the patient side. (No-op on single-writer SQLite.)
+    AppointmentReferenceRepository(session).lock_patient(payload.patient_id)
+    existing_rows = AppointmentRepository(session).for_patient_on_date(
+        tenant_id=tenant_id,
+        patient_id=payload.patient_id,
+        appointment_date=payload.appointment_date,
+    )
     active_rows = [
         row for row in existing_rows if row.status in ACTIVE_APPOINTMENT_STATUSES
     ]
@@ -261,19 +229,14 @@ def _enforce_practitioner_slot_conflict(
     # Lock the practitioner row FOR UPDATE so concurrent bookings for the same
     # doctor serialize — the slot check + insert become atomic and the same slot
     # can't be double-booked in a race. (No-op on single-writer SQLite.)
-    session.exec(
-        select(Practitioner)
-        .where(Practitioner.id == payload.practitioner_id)
-        .with_for_update()
-    ).first()
-    existing_rows = session.exec(
-        select(Appointment).where(
-            Appointment.tenant_id == tenant_id,
-            Appointment.practitioner_id == payload.practitioner_id,
-            Appointment.appointment_date == payload.appointment_date,
-            Appointment.appointment_time == payload.appointment_time,
-        )
-    ).all()
+    references = AppointmentReferenceRepository(session)
+    references.lock_practitioner(payload.practitioner_id)
+    existing_rows = AppointmentRepository(session).for_practitioner_slot(
+        tenant_id=tenant_id,
+        practitioner_id=payload.practitioner_id,
+        appointment_date=payload.appointment_date,
+        appointment_time=payload.appointment_time,
+    )
     if any(row.status in ACTIVE_APPOINTMENT_STATUSES for row in existing_rows):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -339,7 +302,9 @@ def _review_billing_defaults(
         return True, payload.billing_note
     if not payload.source_appointment_id:
         return True, payload.billing_note
-    source = session.get(Appointment, payload.source_appointment_id)
+    source = AppointmentRepository(session).get_for_tenant(
+        tenant_id, payload.source_appointment_id
+    )
     if not source or source.tenant_id != tenant_id:
         return True, payload.billing_note
     validity_days, _scope, _scope_id = resolve_setting(
@@ -390,11 +355,11 @@ def book_appointment(
     ),
     session: Session = Depends(get_session),
 ) -> AppointmentBookingRead:
-    _cleanup_appointment_idempotency_cache()
-    cache_key: tuple[str, str, str] | None = None
-
     enforce_entitlement(session, tenant_id, "appointments")
-    tenant = session.get(Tenant, tenant_id)
+    references = AppointmentReferenceRepository(session)
+    appointments = AppointmentRepository(session)
+    idempotency_repo = AppointmentIdempotencyRepository(session)
+    tenant = references.get_tenant(tenant_id)
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
@@ -406,16 +371,19 @@ def book_appointment(
         payload = payload.model_copy(update={"department_id": resolved_department_id})
     request_hash = _appointment_payload_hash(payload)
     if idempotency_key:
-        cache_key = (tenant_id, current_user.id, idempotency_key)
-        cached = _appointment_idempotency_cache.get(cache_key)
-        if cached:
-            if cached["request_hash"] != request_hash:
+        existing_key = idempotency_repo.get(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            idempotency_key=idempotency_key,
+        )
+        if existing_key:
+            if existing_key.request_hash != request_hash:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Idempotency key was reused with a different appointment request",
                 )
             response.headers["X-Idempotency-Replayed"] = "true"
-            return cached["booking"]
+            return AppointmentBookingRead.model_validate_json(existing_key.booking_json)
 
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
@@ -426,25 +394,23 @@ def book_appointment(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Doctor access denied"
         )
-    patient = session.get(Patient, payload.patient_id)
-    if not patient or patient.tenant_id != tenant_id:
+    patient = references.get_patient_for_tenant(tenant_id, payload.patient_id)
+    if not patient:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient"
         )
     if payload.source_appointment_id:
-        source_appointment = session.get(Appointment, payload.source_appointment_id)
-        if (
-            not source_appointment
-            or source_appointment.tenant_id != tenant_id
-            or source_appointment.patient_id != patient.id
-        ):
+        source_appointment = appointments.get_for_tenant(
+            tenant_id, payload.source_appointment_id
+        )
+        if not source_appointment or source_appointment.patient_id != patient.id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid source appointment",
             )
     practitioner_requires_schedule = False
     if payload.practitioner_id:
-        practitioner = session.get(Practitioner, payload.practitioner_id)
+        practitioner = references.get_practitioner(payload.practitioner_id)
         if practitioner:
             practitioner_requires_schedule = (
                 payload.appointment_type.value != "emergency"
@@ -514,7 +480,7 @@ def book_appointment(
             "custom_fee_amount": custom_fee_amount,
         },
     )
-    session.add(appointment)
+    appointments.add(appointment)
     session.commit()
     session.refresh(appointment)
     if appointment.appointment_type == AppointmentType.EMERGENCY:
@@ -580,12 +546,34 @@ def book_appointment(
         appointment=AppointmentRead.model_validate(appointment, from_attributes=True),
         queue_entry=QueueEntryRead.model_validate(queue_entry, from_attributes=True),
     )
-    if cache_key:
-        _appointment_idempotency_cache[cache_key] = {
-            "request_hash": request_hash,
-            "booking": booking,
-            "expires_at": monotonic() + IDEMPOTENCY_TTL_SECONDS,
-        }
+    if idempotency_key:
+        idempotency_repo.add(
+            AppointmentIdempotencyKey(
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                booking_json=booking.model_dump_json(),
+                appointment_id=appointment.id,
+            )
+        )
+        try:
+            session.commit()
+        except IntegrityError:
+            # Another concurrent request with the same key won the race and
+            # already recorded its own booking — replay that one instead of
+            # erroring, which is what an idempotency key promises the client.
+            session.rollback()
+            existing_key = idempotency_repo.get(
+                tenant_id=tenant_id,
+                user_id=current_user.id,
+                idempotency_key=idempotency_key,
+            )
+            if existing_key:
+                response.headers["X-Idempotency-Replayed"] = "true"
+                return AppointmentBookingRead.model_validate_json(
+                    existing_key.booking_json
+                )
     return booking
 
 
@@ -615,8 +603,9 @@ def book_follow_up_appointment(
     session: Session = Depends(get_session),
 ) -> AppointmentBookingRead:
     enforce_entitlement(session, tenant_id, "appointments")
-    source = session.get(Appointment, appointment_id)
-    if not source or source.tenant_id != tenant_id:
+    appointments = AppointmentRepository(session)
+    source = appointments.get_for_tenant(tenant_id, appointment_id)
+    if not source:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
         )
@@ -643,7 +632,7 @@ def book_follow_up_appointment(
     appointment = Appointment.model_validate(
         follow_up_payload, update={"tenant_id": tenant_id}
     )
-    session.add(appointment)
+    appointments.add(appointment)
     session.commit()
     session.refresh(appointment)
     record_audit_event(
@@ -700,36 +689,21 @@ def list_appointments(
     doctor_practitioner_id = current_doctor_practitioner_id(
         session, tenant_id, current_user
     )
-    statement = _appointment_grid_statement().where(Appointment.tenant_id == tenant_id)
-    if branch_id:
-        statement = statement.where(Appointment.branch_id == branch_id)
-    if department_id:
-        statement = statement.where(Appointment.department_id == department_id)
     if doctor_practitioner_id:
-        statement = statement.where(
-            Appointment.practitioner_id == doctor_practitioner_id
-        )
+        effective_practitioner_id = doctor_practitioner_id
     elif practitioner_id:
-        statement = statement.where(Appointment.practitioner_id == practitioner_id)
-    if appointment_date:
-        statement = statement.where(Appointment.appointment_date == appointment_date)
-    if q:
-        pattern = f"%{q.strip().lower()}%"
-        statement = statement.where(
-            or_(
-                func.lower(Patient.patient_number).like(pattern),
-                func.lower(Patient.full_name).like(pattern),
-                func.lower(Patient.mobile).like(pattern),
-                func.lower(Patient.guardian_mobile).like(pattern),
-                func.lower(QueueEntry.token_number).like(pattern),
-            )
-        )
-    rows = session.exec(
-        statement.order_by(
-            Appointment.appointment_date.desc(), Appointment.created_at.desc()
-        )
-        .offset(skip)
-        .limit(limit)
+        effective_practitioner_id = practitioner_id
+    else:
+        effective_practitioner_id = None
+    rows = AppointmentGridRepository(session).list_for_tenant(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        department_id=department_id,
+        practitioner_id=effective_practitioner_id,
+        appointment_date=appointment_date,
+        q=q,
+        skip=skip,
+        limit=limit,
     )
     return [_appointment_grid_row(row) for row in rows]
 
@@ -756,37 +730,15 @@ def list_platform_appointments(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Provide at least one filter (tenant, branch, department, date, or search term)",
         )
-    statement = _appointment_grid_statement()
-    if tenant_id:
-        statement = statement.where(Appointment.tenant_id == tenant_id)
-    if branch_id:
-        statement = statement.where(Appointment.branch_id == branch_id)
-    if department_id:
-        statement = statement.where(Appointment.department_id == department_id)
-    if appointment_date:
-        statement = statement.where(Appointment.appointment_date == appointment_date)
-    if q:
-        pattern = f"%{q.strip().lower()}%"
-        statement = statement.where(
-            or_(
-                func.lower(Tenant.name).like(pattern),
-                func.lower(Branch.name).like(pattern),
-                func.lower(Patient.patient_number).like(pattern),
-                func.lower(Patient.full_name).like(pattern),
-                func.lower(Patient.mobile).like(pattern),
-                func.lower(Patient.guardian_mobile).like(pattern),
-                func.lower(Department.name).like(pattern),
-                func.lower(Practitioner.full_name).like(pattern),
-                func.lower(QueueEntry.token_number).like(pattern),
-            )
-        )
-    rows = session.exec(
-        statement.order_by(
-            Appointment.appointment_date.desc(), Appointment.created_at.desc()
-        )
-        .offset(skip)
-        .limit(limit)
-    ).all()
+    rows = AppointmentGridRepository(session).list_platform(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        department_id=department_id,
+        appointment_date=appointment_date,
+        q=q,
+        skip=skip,
+        limit=limit,
+    )
     return [_appointment_grid_row(row) for row in rows]
 
 
@@ -814,8 +766,10 @@ def get_appointment(
     session: Session = Depends(get_session),
 ) -> Appointment:
     enforce_entitlement(session, tenant_id, "appointments")
-    appointment = session.get(Appointment, appointment_id)
-    if not appointment or appointment.tenant_id != tenant_id:
+    appointment = AppointmentRepository(session).get_for_tenant(
+        tenant_id, appointment_id
+    )
+    if not appointment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
         )

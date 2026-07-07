@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, status
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.access_control import (
     require_branch_in_tenant,
@@ -13,6 +13,7 @@ from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.audit.service import record_audit_event
 from app.modules.notifications.models import NotificationEvent
+from app.modules.notifications.repositories import NotificationEventRepository
 from app.modules.notifications.schemas import (
     NotificationEventCreate,
     NotificationEventRead,
@@ -44,7 +45,7 @@ def queue_notification(
         provider=payload.provider,
     )
     event = NotificationEvent.model_validate(payload, update={"tenant_id": tenant_id})
-    session.add(event)
+    NotificationEventRepository(session).add(event)
     session.commit()
     session.refresh(event)
     record_audit_event(
@@ -76,13 +77,9 @@ def list_notifications(
     session: Session = Depends(get_session),
 ) -> list[NotificationEvent]:
     branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(NotificationEvent).where(
-        NotificationEvent.tenant_id == tenant_id
+    return NotificationEventRepository(session).list_events(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        provider=provider,
+        status_filter=status_filter,
     )
-    if branch_id:
-        statement = statement.where(NotificationEvent.branch_id == branch_id)
-    if provider:
-        statement = statement.where(NotificationEvent.provider == provider)
-    if status_filter:
-        statement = statement.where(NotificationEvent.status == status_filter)
-    return list(session.exec(statement.order_by(NotificationEvent.created_at)).all())

@@ -3,7 +3,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.core.auth import (
     is_tenant_admin_user,
@@ -20,6 +20,10 @@ from app.modules.reports.models import (
     ReportJobStatus,
 )
 from app.modules.reports.queue import enqueue_monthly_report_job
+from app.modules.reports.repositories import (
+    MonthlyRevenueSnapshotRepository,
+    ReportJobRepository,
+)
 from app.modules.reports.service import (
     build_profit_report_email_attachments,
     build_monthly_revenue_report,
@@ -226,7 +230,7 @@ def send_monthly_report_now(
         filters_json=json.dumps(filters),
         queued_by_user_id=current_user.id,
     )
-    session.add(job)
+    ReportJobRepository(session).add(job)
     session.commit()
     session.refresh(job)
     try:
@@ -336,13 +340,9 @@ def list_monthly_report_jobs(
         )
     ),
 ) -> list[ReportJobRead]:
-    jobs = list(
-        session.exec(
-            select(ReportJob)
-            .where(ReportJob.tenant_id == tenant_id)
-            .order_by(ReportJob.created_at.desc())
-            .limit(limit)
-        ).all()
+    jobs = ReportJobRepository(session).list_for_tenant(
+        tenant_id=tenant_id,
+        limit=limit,
     )
     return [_read_job(job) for job in jobs]
 
@@ -360,8 +360,8 @@ def download_monthly_report_job(
         )
     ),
 ) -> Response:
-    job = session.get(ReportJob, job_id)
-    if not job or job.tenant_id != tenant_id:
+    job = ReportJobRepository(session).get_for_tenant(tenant_id, job_id)
+    if not job:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Report job not found"
         )
@@ -437,19 +437,12 @@ def list_monthly_snapshots(
 ) -> list[MonthlySnapshotRead]:
     # branch_id NULL is the all-branches aggregate; a specific branch returns
     # that branch's frozen figures.
-    statement = (
-        select(MonthlyRevenueSnapshot)
-        .where(
-            MonthlyRevenueSnapshot.tenant_id == tenant_id,
-            MonthlyRevenueSnapshot.branch_id == branch_id,
-        )
-        .order_by(
-            MonthlyRevenueSnapshot.period_year.desc(),
-            MonthlyRevenueSnapshot.period_month.desc(),
-        )
-        .limit(limit)
+    snapshots = MonthlyRevenueSnapshotRepository(session).list_for_tenant(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        limit=limit,
     )
-    return [_read_snapshot(row) for row in session.exec(statement).all()]
+    return [_read_snapshot(row) for row in snapshots]
 
 
 @router.get("/monthly-snapshots/{snapshot_id}", response_model=MonthlySnapshotRead)
@@ -465,8 +458,10 @@ def get_monthly_snapshot(
         )
     ),
 ) -> MonthlySnapshotRead:
-    snapshot = session.get(MonthlyRevenueSnapshot, snapshot_id)
-    if not snapshot or snapshot.tenant_id != tenant_id:
+    snapshot = MonthlyRevenueSnapshotRepository(session).get_for_tenant(
+        tenant_id, snapshot_id
+    )
+    if not snapshot:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Snapshot not found"
         )
