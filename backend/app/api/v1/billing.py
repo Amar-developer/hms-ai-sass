@@ -6,6 +6,7 @@ import zlib
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
 from app.core.access_control import (
@@ -96,6 +97,9 @@ from app.modules.billing.service import (
 )
 from app.modules.practitioners.models import Practitioner, PractitionerDepartment
 from app.modules.consultations.models import Consultation, ConsultationStatus
+from app.modules.consultations.repositories import (
+    ConsultationBillingReferenceRepository,
+)
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
@@ -2368,6 +2372,12 @@ def create_invoice_from_consultation(
             detail="Invoice can be generated only after consultation is signed",
         )
     require_user_branch_access(current_user, consultation.branch_id)
+    billing_refs = ConsultationBillingReferenceRepository(session)
+    # CHANGED: lock the consultation row so a concurrent generate-invoice
+    # request for the same consultation (double-submit) serializes on this
+    # check-then-insert instead of both passing the check; the unique index
+    # on Invoice.consultation_id is the DB-level backstop below.
+    billing_refs.lock_consultation(consultation.id)
     existing = session.exec(
         select(Invoice).where(
             Invoice.tenant_id == tenant_id,
@@ -2406,17 +2416,39 @@ def create_invoice_from_consultation(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid appointment"
         )
 
-    invoice, _item = create_consultation_invoice(
-        session,
-        appointment=appointment,
-        consultation_id=consultation.id,
-        discount_amount=payload.discount_amount,
-        discount_approval_id=payload.discount_approval_id,
-        discount_offer_id=payload.discount_offer_id,
-        tax_rule_id=payload.tax_rule_id,
-        created_by_user_id=payload.created_by_user_id,
-        treatment_type=consultation.treatment_type,
-    )
+    try:
+        invoice, _item = create_consultation_invoice(
+            session,
+            appointment=appointment,
+            consultation_id=consultation.id,
+            discount_amount=payload.discount_amount,
+            discount_approval_id=payload.discount_approval_id,
+            discount_offer_id=payload.discount_offer_id,
+            tax_rule_id=payload.tax_rule_id,
+            created_by_user_id=payload.created_by_user_id,
+            treatment_type=consultation.treatment_type,
+        )
+    except IntegrityError:
+        # CHANGED: a concurrent request already created the invoice for this
+        # consultation between our check above and this insert; the unique
+        # index on Invoice.consultation_id caught it. Return that row instead
+        # of erroring out.
+        session.rollback()
+        existing = session.exec(
+            select(Invoice).where(
+                Invoice.tenant_id == tenant_id,
+                Invoice.consultation_id == consultation.id,
+                Invoice.lab_order_id.is_(None),
+                Invoice.pharmacy_issue_id.is_(None),
+                Invoice.ip_admission_id.is_(None),
+                Invoice.physiotherapy_case_id.is_(None),
+            )
+        ).first()
+        if not existing:
+            raise
+        return _read_invoice_detail(
+            session, refresh_consultation_invoice(session, existing)
+        )
     invoice = refresh_consultation_invoice(session, invoice)
     _ensure_invoice_submit_ledger(session, invoice)
     record_audit_event(
