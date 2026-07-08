@@ -14,6 +14,7 @@ import { MoreHorizontal, MoreVertical, Plus } from "lucide-react";
 import { isLocked } from "@/utils/tenantAdmin/helpers";
 import { Empty } from "../admin/Empty";
 import { Pagination } from "../common/Pagination";
+import { FilterSection } from "../common/FilterSection";
 
 export function Header({ title, subtitle, back }: any) {
   return (
@@ -80,10 +81,13 @@ type Action = {
 
 type RowActionsProps = {
   actions: Action[];
-  className?:string
+  className?: string;
 };
 
-export function RowActions({ actions,className="right-7 -bottom-5" }: RowActionsProps) {
+export function RowActions({
+  actions,
+  className = "right-7 -bottom-5",
+}: RowActionsProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -112,7 +116,9 @@ export function RowActions({ actions,className="right-7 -bottom-5" }: RowActions
       </button>
 
       {open && (
-        <div className={`absolute ${className}  mb-2 w-24 rounded-lg border bg-white shadow-lg z-50`}>
+        <div
+          className={`absolute ${className}  mb-2 w-24 rounded-lg border bg-white shadow-lg z-50`}
+        >
           {actions
             .filter((a) => !a.hidden)
             .map((action) => (
@@ -416,32 +422,14 @@ export function ListCard({
 
       {/* SEARCH */}
       {/* SEARCH & FILTERS */}
-      <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-        {/* Search */}
-        <FormField label={`${title}`}>
-          <Input
-            value={query}
-            onChange={(e: any) => setQuery(e.target.value)}
-            placeholder={`Search ${title.toLowerCase()}`}
-            className="search-filter"
-          />
-        </FormField>
-
-        {/* Dynamic Filters */}
-        {filters.map((filter: any) => (
-          <FormField key={filter.key} label={filter.label}>
-            <SearchableSelect
-              name={filter.key}
-              value={filterValues[filter.key] ?? "all"}
-              onChange={(value) => onFilterChange?.(filter.key, value)}
-              options={filter.options}
-              searchable={false}
-              placeholder={`Select ${filter.label}`}
-              className="w-full"
-            />
-          </FormField>
-        ))}
-      </div>
+      <FilterSection
+        title="Doctors"
+        query={query}
+        setQuery={setQuery}
+        filters={filters}
+        filterValues={filterValues}
+        onFilterChange={onFilterChange}
+      />
 
       {/* TABLE */}
       <div className="mt-4 overflow-x-auto w-lg rounded-2xl border border-slate-200 ">

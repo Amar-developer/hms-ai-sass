@@ -42,20 +42,20 @@ export function DoctorRow({
     handler();
   };
   const actions = [
-  {
-    label: "Edit",
-    onClick: onEdit,
-  },
-  {
-    label: row.status === "active" ? "Inactive" : "Active",
-    onClick: onStatus,
-  },
-  {
-    label: "Delete",
-    onClick: onDelete,
-    danger: true,
-  },
-];
+    {
+      label: "Edit",
+      onClick: onEdit,
+    },
+    {
+      label: row.status === "active" ? "Inactive" : "Active",
+      onClick: onStatus,
+    },
+    {
+      label: "Delete",
+      onClick: onDelete,
+      danger: true,
+    },
+  ];
   return (
     <div
       role="button"
@@ -108,7 +108,7 @@ export function DoctorRow({
         {row.status === "active" ? "Active" : "Inactive"}
       </Badge>
       <div className="flex justify-center item-scenter ">
-        <RowActions actions={actions}/>
+        <RowActions actions={actions} />
       </div>
     </div>
   );
@@ -179,59 +179,76 @@ export function ConfirmModal({ confirm, busy, onClose, onConfirm }: any) {
   );
 }
 
+type CheckboxGroupProps = {
+  title: string;
+  rows: any[];
+  value: string[];
+  onChange: (value: string[]) => void;
+  empty?: string;
+  allLabel?: string;
+};
+
 export function CheckboxGroup({
   title,
-  name,
   rows,
-  selected,
+  value = [],
   onChange,
   empty,
   allLabel,
-}: any) {
-  const selectedSet = new Set(selected || []);
+}: CheckboxGroupProps) {
+  const selectedSet = new Set(value);
+
   const allSelected =
-    rows.length > 0 && rows.every((row: any) => selectedSet.has(row.id));
+    rows.length > 0 && rows.every((row) => selectedSet.has(row.id));
+
   function toggle(rowId: string, checked: boolean) {
-    if (!onChange) return;
     const next = new Set(selectedSet);
-    if (checked) next.add(rowId);
-    else next.delete(rowId);
+
+    if (checked) {
+      next.add(rowId);
+    } else {
+      next.delete(rowId);
+    }
+
     onChange(Array.from(next));
   }
+
   function toggleAll(checked: boolean) {
-    if (!onChange) return;
-    onChange(checked ? rows.map((row: any) => row.id) : []);
+    onChange(checked ? rows.map((row) => row.id) : []);
   }
+
   return (
     <div className="rounded-lg border border-slate-200 p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-bold uppercase text-slate-500">{title}</p>
-        {allLabel && onChange && rows.length > 0 && (
+
+        {allLabel && rows.length > 0 && (
           <label className="flex items-center gap-2 text-xs font-bold text-slate-600">
             <input
               type="checkbox"
               checked={allSelected}
-              onChange={(event: any) => toggleAll(event.target.checked)}
+              onChange={(e) => toggleAll(e.target.checked)}
             />
+
             <span>{allLabel}</span>
           </label>
         )}
       </div>
+
       <div className="mt-3 grid gap-2 md:grid-cols-2 md:grid-cols-3">
         {rows.length === 0 && <p className="text-sm text-slate-500">{empty}</p>}
-        {rows.map((row: any) => (
+
+        {rows.map((row) => (
           <label
             key={row.id}
             className="flex items-center gap-3 rounded-lg bg-slate-50 p-3 text-sm font-semibold"
           >
             <input
               type="checkbox"
-              name={name}
-              value={row.id}
-              checked={onChange ? selectedSet.has(row.id) : undefined}
-              defaultChecked={onChange ? undefined : selectedSet.has(row.id)}
-              onChange={(event: any) => toggle(row.id, event.target.checked)}
+              checked={selectedSet.has(row.id)}
+              onChange={(e) => toggle(row.id, e.target.checked)}
             />
+
             <span className="text-xs">{row.name}</span>
           </label>
         ))}

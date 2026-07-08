@@ -159,3 +159,60 @@ export function clinicalRecordsWithUniqueItems(
     })
     .filter(({ items }: any) => items.length > 0);
 }
+
+
+export type BranchOption = {
+  id: string;
+  name: string;
+};
+
+export type PatientFormPayload = {
+  branchId: string;
+  fullName: string;
+  mobile: string;
+  alternateMobile: string;
+  email: string;
+  gender: string;
+  dateOfBirth: string;
+  ageYears: string;
+  guardianName: string;
+  guardianMobile: string;
+  area: string;
+  address: string;
+  bloodGroup: string;
+  status: string;
+};
+
+export function formValue(fd: FormData, key: string) {
+  return String(fd.get(key) || "").trim();
+}
+
+export function patientFormPayload(fd: FormData): PatientFormPayload {
+  return {
+    branchId: formValue(fd, "branchId"),
+    fullName: formValue(fd, "fullName"),
+    mobile: formValue(fd, "mobile"),
+    alternateMobile: formValue(fd, "alternateMobile"),
+    email: formValue(fd, "email"),
+    gender: formValue(fd, "gender") || "unknown",
+    dateOfBirth: formValue(fd, "dateOfBirth"),
+    ageYears: formValue(fd, "ageYears"),
+    guardianName: formValue(fd, "guardianName"),
+    guardianMobile: formValue(fd, "guardianMobile"),
+    area: formValue(fd, "area"),
+    address: formValue(fd, "address"),
+    bloodGroup: formValue(fd, "bloodGroup"),
+    status: formValue(fd, "status") || "active",
+  };
+}
+
+export function patientField(patient: any, snakeKey: string, camelKey?: string) {
+  return patient?.[snakeKey] ?? patient?.[camelKey || snakeKey] ?? "";
+}
+
+export function todayInputValue() {
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${today.getFullYear()}-${month}-${day}`;
+}

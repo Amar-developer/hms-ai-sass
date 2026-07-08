@@ -105,7 +105,6 @@ export function SettingsPanel(props: any) {
                 setRule("prefix", e.target.value.toUpperCase());
               }}
               placeholder="SUN"
-              className='search-input'
             />
           </FormField>
           <FormField label="Number Digits">

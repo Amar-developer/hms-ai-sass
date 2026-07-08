@@ -75,3 +75,11 @@ export const PLAN_COLUMNS: Column[] = [
   { label: "Status", width: "min-w-[140px]" },
   { label: "Actions", width: "min-w-[180px]" },
 ];
+
+
+export const STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All Status" },
+  { value: "active", label: "Active" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];

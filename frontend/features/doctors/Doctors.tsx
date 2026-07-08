@@ -26,7 +26,7 @@ import {
   DoctorRow,
 } from "@/app/components/doctors/Shared";
 import { activeTenantOptions } from "@/utils/doctors/helpers";
-import { DoctorForm } from "@/app/components/doctors/Forms";
+import { DoctorForm } from "@/app/forms/DoctorForms";
 
 const pageSize = 10;
 
@@ -458,16 +458,16 @@ export function Doctors({ apiSession, clinic }: any) {
             options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
           />
         )}
-        <TextField
-          label="Search"
-          value={query}
-          onChange={(v) => {
-            setQuery(v);
-            setPage(1);
-          }}
-          placeholder="Name, specialty, mobile, email"
-          className="search-input text-xs placeholder:text-xs"
-        />
+        <FormField  label="Search">
+          <Input
+            value={query}
+            onChange={(v) => {
+              setQuery(v);
+              setPage(1);
+            }}
+            placeholder="Name, specialty, mobile, email"
+          />
+        </FormField>
         <FormField label="Type">
           <SearchableSelect
             value={type}

@@ -333,13 +333,14 @@ export function TokenQueue({
                 : "Emergency tokens appear first. Skipped patients can be requeued."}
             </p>
           </div>
-          <div className="">
+          <div className="flex justify-center items-center">
             {apiSession ? (
               <RefreshButton onRefresh={() => loadLiveData(apiSession)} />
             ) : null}
           </div>
         </div>
-        <div className="grid gap-2 grid-cols-[1.5fr_1.7fr_1.5fr_2fr] ">
+        <div className="grid gap-2 md:grid-cols-[1.6fr_1.7fr_1.5fr_2fr]
+         lg:grid-cols-[1.6fr_1.7fr_1.5fr_2fr]">
           <FormField label="Date">
             <Input
               type="date"
@@ -347,7 +348,6 @@ export function TokenQueue({
               onChange={(event: any) =>
                 setSelectedDate(event.target.value || today)
               }
-              className="text-xs"
             />
           </FormField>
           <FormField label="Display Mode">
@@ -367,7 +367,9 @@ export function TokenQueue({
           <FormField label="Call Language">
             <SearchableSelect
               value={tokenLanguage}
-              onChange={(value:string)=>setTokenLanguage(value as  "english" | "tamil" | "both")}
+              onChange={(value: string) =>
+                setTokenLanguage(value as "english" | "tamil" | "both")
+              }
               options={[
                 { value: "english", label: "English" },
                 { value: "tamil", label: "Tamil" },

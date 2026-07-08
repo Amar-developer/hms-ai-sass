@@ -9,9 +9,16 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { capitalizeFirst, displayToIsoDate, isoToDisplayDate } from "@/utils/helper";
-import { useDropdown } from "@/hooks/useDropdown";
+import { useEffect, useMemo, useRef, useState, forwardRef } from "react";
+import {
+  capitalizeFirst,
+  displayToIsoDate,
+  isoToDisplayDate,
+} from "@/utils/helper";
+import type {
+  NoticeTone,
+  SearchableSelectProps,
+} from "@/utils/tenantAdmin/types";
 
 export function Card({
   children,
@@ -53,8 +60,6 @@ export function Badge({
     </span>
   );
 }
-
-export type NoticeTone = "success" | "warning" | "delete" | "info" | "error";
 
 export function noticeTone(message: string): NoticeTone {
   const text = String(message || "").toLowerCase();
@@ -533,67 +538,81 @@ export function DateInput({
   );
 }
 
-export function Input({
-  className = "rounded-lg px-2 py-2 lg:px-2 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
-  mobileNumber = false,
-  ...props
-}: any) {
-  const [error, setError] = useState("");
+export const Input = forwardRef<HTMLInputElement, any>(
+  (
+    {
+      className = "rounded-lg px-2 py-2 lg:px-2 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
+      mobileNumber = false,
+      ...props
+    },
+    ref,
+  ) => {
+    if (props.type === "date") {
+      const { type: _type, ...dateProps } = props;
 
-  if (props.type === "date") {
-    const { type: _type, ...dateProps } = props;
-    return <DateInput {...dateProps} className={className} />;
-  }
+      return <DateInput {...dateProps} ref={ref} className={className} />;
+    }
 
-  return (
-    <>
-      <input
-        {...props}
-        onChange={(e) => {
-          let value = e.target.value;
+    return (
+      <>
+        <input
+          ref={ref}
+          {...props}
+          onChange={(e) => {
+            let value = e.target.value;
+            props.onChange?.(e);
+          }}
+          className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}
+        />
+      </>
+    );
+  },
+);
 
-          if (mobileNumber) {
-            value = value.replace(/\D/g, "").slice(0, 10);
-            e.target.value = value;
-
-            if (value.length > 0 && value.length < 10) {
-              setError("Mobile number must be 10 digits");
-            } else {
-              setError("");
-            }
-          }
-
-          props.onChange?.(e);
-        }}
-        className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}
-      />
-
-      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-    </>
-  );
-}
+Input.displayName = "Input";
 
 export function SuggestionInput({
   suggestions = [],
   className = "",
   defaultValue = "",
+  value,
   onChange,
   disabled,
   ...props
 }: any) {
-  const [value, setValue] = useState(String(defaultValue || props.value || ""));
+  const [internalValue, setInternalValue] = useState(
+    String(value ?? defaultValue ?? ""),
+  );
+
   const [open, setOpen] = useState(false);
-  const query = value.trim().toLowerCase();
+
+  useEffect(() => {
+    if (value !== undefined) {
+      setInternalValue(String(value ?? ""));
+    }
+  }, [value]);
+
+  const currentValue =
+    value !== undefined ? String(value ?? "") : internalValue;
+
+  const query = currentValue.trim().toLowerCase();
+
   const filtered = suggestions
     .filter((item: string) => {
       if (!query) return true;
+
       return item.toLowerCase().includes(query);
     })
     .slice(0, 8);
 
   function setNext(next: string) {
-    setValue(next);
-    onChange?.({ target: { value: next } });
+    setInternalValue(next);
+
+    onChange?.({
+      target: {
+        value: next,
+      },
+    });
   }
 
   return (
@@ -601,16 +620,18 @@ export function SuggestionInput({
       <input
         {...props}
         disabled={disabled}
-        value={value}
+        value={currentValue}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         onChange={(event: any) => {
           setNext(event.target.value);
+
           setOpen(true);
         }}
         autoComplete="off"
-        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-2 lg:py-2 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-2 lg:py-2 text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
+
       {open && !disabled && filtered.length > 0 && (
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
           {filtered.map((item: string) => (
@@ -619,7 +640,9 @@ export function SuggestionInput({
               type="button"
               onMouseDown={(event) => {
                 event.preventDefault();
+
                 setNext(item);
+
                 setOpen(false);
               }}
               className={`block w-full rounded-lg px-3 py-2 text-xs lg:text-sm text-left scrollbar-hidden hover:bg-slate-50 ${
@@ -650,26 +673,9 @@ export function Select({
   );
 }
 
-type SearchableOption = { value: string; label: string; sublabel?: string };
-type SearchableSelectProps<T = string> = {
-  name?: string;
-  value?: T;
-  onChange?: (value: T) => void;
-  options: SearchableOption[];
-  placeholder?: string;
-  disabled?: boolean;
-  allowCustom?: boolean;
-  searchPlaceholder?: string;
-  emptyText?: string;
-  maxOptions?: number;
-  className?: string;
-  searchable?: boolean;
-  required?: boolean;
-};
-
-export function SearchableSelect({
+export function SearchableSelect<T = string>({
   name,
-  value = "",
+  value = "" as T,
   onChange,
   options,
   placeholder = "Select...",
@@ -681,26 +687,35 @@ export function SearchableSelect({
   className = "",
   searchable = true,
   required = false,
-}: SearchableSelectProps) {
+  error,
+}: SearchableSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+
     function handleClick(event: MouseEvent) {
       if (!wrapRef.current?.contains(event.target as Node)) {
         setOpen(false);
         setQuery("");
       }
     }
+
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+    };
   }, [open]);
 
   const filtered = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
+
     if (!trimmed) return options;
+
     return options.filter(
       (option) =>
         option.label.toLowerCase().includes(trimmed) ||
@@ -709,54 +724,55 @@ export function SearchableSelect({
     );
   }, [options, query]);
 
-  const selected = options.find((option) => option.value === value);
-  const displayLabel = selected?.label || (value && allowCustom ? value : "");
+  const selected = options.find((option) => option.value === String(value));
+
+  const displayLabel =
+    selected?.label || (allowCustom && value ? String(value) : "");
+
   const matchesExisting = filtered.some(
     (option) => option.value === query.trim(),
   );
 
-  function commit(next: string) {
-    onChange?.(next);
+  function commit(nextValue: string) {
+    onChange?.(nextValue as T);
+
     setOpen(false);
     setQuery("");
   }
 
   return (
     <div ref={wrapRef} className={`relative ${className}`}>
-      {name ? (
-        <input
-          type="hidden"
-          name={name}
-          value={capitalizeFirst(value) || ""}
-          required={required}
-        />
-      ) : null}
       <button
         type="button"
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white py-2 px-2 lg:px-2 lg:py-2 text-left text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:text-sm"
       >
         <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
           {capitalizeFirst(displayLabel) || placeholder}
         </span>
+
         <ChevronDown
-          className={`${open ? "rotate-180" : ""} h-4 w-4 text-black font-bold`}
+          className={`${open ? "rotate-180" : ""} h-4 w-4 font-bold text-black`}
         />
       </button>
+
       {open && (
-        <div className="absolute z-30 mt-1 max-h-72 w-full scrollbar-thin  overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin">
           {searchable && (
             <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2 pr-4">
               <input
                 autoFocus
                 value={query}
-                onChange={(event) => setQuery(capitalizeFirst(event.target.value))}
+                onChange={(event) =>
+                  setQuery(capitalizeFirst(event.target.value))
+                }
                 placeholder={searchPlaceholder}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
               />
             </div>
           )}
+
           {value && searchable && (
             <button
               type="button"
@@ -766,134 +782,48 @@ export function SearchableSelect({
               Clear selection
             </button>
           )}
+
           {allowCustom && query.trim() && !matchesExisting && (
             <button
               type="button"
               onClick={() => commit(query.trim())}
               className="block w-full px-4 py-2 text-left text-sm font-bold text-blue-700 hover:bg-blue-50"
             >
-              Use “{query.trim()}”
+              Use "{query.trim()}"
             </button>
           )}
+
           {filtered.length === 0 && !allowCustom && (
             <div className="px-4 py-3 text-sm text-slate-500">{emptyText}</div>
           )}
+
           {filtered.slice(0, maxOptions).map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => commit(option.value)}
-              className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${option.value === value ? "bg-slate-50 font-bold" : ""}`}
+              className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                option.value === String(value) ? "bg-slate-50 font-bold" : ""
+              }`}
             >
-              <span className="block truncate">{capitalizeFirst(option.label)}</span>
-              {option.sublabel ? (
+              <span className="block truncate">
+                {capitalizeFirst(option.label)}
+              </span>
+
+              {option.sublabel && (
                 <span className="block truncate text-xs text-slate-500">
                   {option.sublabel}
                 </span>
-              ) : null}
+              )}
             </button>
           ))}
         </div>
       )}
+
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );
 }
-
-// export function SearchableDropdown({
-//   value,
-//   options,
-//   onChange,
-//   placeholder = "Search...",
-// }: any) {
-//   const { open, setOpen, ref } = useDropdown();
-//   const [query, setQuery] = useState("");
-
-//   const filtered = useMemo(() => {
-//     const q = query.toLowerCase();
-//     return options.filter(
-//       (o: any) =>
-//         o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
-//     );
-//   }, [query, options]);
-
-//   const selected = options.find((o: any) => o.value === value);
-
-//   return (
-//     <div ref={ref} className="relative w-full">
-//       <button
-//         type="button"
-//         onClick={() => setOpen((p) => !p)}
-//         className="flex w-full justify-between rounded-lg border px-3 py-2"
-//       >
-//         <span>{selected?.label || "Select..."}</span>
-//         <ChevronDown className="h-4 w-4" />
-//       </button>
-
-//       {open && (
-//         <div className="absolute z-50 mt-1 w-full rounded-lg border bg-white shadow-lg">
-//           {/* Search */}
-//           <div className="p-2 border-b">
-//             <input
-//               autoFocus
-//               value={query}
-//               onChange={(e) => setQuery(e.target.value)}
-//               className="w-full rounded border px-2 py-1 text-sm"
-//               placeholder={placeholder}
-//             />
-//           </div>
-
-//           {/* Options */}
-//           {filtered.map((opt: any) => (
-//             <button
-//               key={opt.value}
-//               type="button"
-//               onClick={() => {
-//                 onChange(opt.value);
-//                 setOpen(false);
-//                 setQuery("");
-//               }}
-//               className="w-full px-3 py-2 text-left hover:bg-slate-50"
-//             >
-//               {opt.label}
-//             </button>
-//           ))}
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
-
-// type Option = {
-//   value: string;
-//   label: string;
-//   sublabel?: string;
-// };
-
-// export function Dropdown({
-//   open,
-//   setOpen,
-//   children,
-//   trigger,
-// }: {
-//   open: boolean;
-//   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-//   trigger: React.ReactNode;
-//   children: React.ReactNode;
-// }) {
-//   const { ref } = useDropdown();
-
-//   return (
-//     <div ref={ref} className="relative w-full">
-//       <div onClick={() => setOpen((p) => !p)}>{trigger}</div>
-
-//       {open && (
-//         <div className="absolute z-50 mt-1 w-full rounded-lg border bg-white shadow-lg">
-//           {children}
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
 
 export function Button({
   children,

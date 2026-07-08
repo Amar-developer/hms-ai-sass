@@ -703,15 +703,6 @@ export function Pharmacy({
             onChange={setQuantity}
             min={1}
           />
-          {/* <div className="md:col-span-1">
-            <TextField
-              label="External Prescriber"
-              value={externalPrescriber}
-              onChange={setExternalPrescriber}
-              disabled={source !== "external_prescription"}
-              className="search-input"
-            />
-          </div> */}
           <div className="flex items-end gap-2 w-full lg:w-[80%]">
             <button
               type="button"

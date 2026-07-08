@@ -15,6 +15,7 @@ import {
 } from "@/app/components/common/ui";
 import { apiFetch, type ApiSession } from "@/lib/api";
 import {
+  FormField,
   SelectField,
   TextareaField,
   TextField,
@@ -29,11 +30,9 @@ import {
   publicDisplayValue,
   uniqueDepartmentRows,
 } from "@/lib/options";
-import {
-  PatientFormFields,
-  patientFormPayload,
-} from "@/features/patients/PatientFormFields";
 import { displayDate } from "@/utils/helper";
+import { STATUS_FILTER_OPTIONS } from "@/utils/constants";
+import { PatientForm } from "@/app/forms/PatientForms";
 
 type Props = {
   clinic: any;
@@ -101,13 +100,6 @@ function appointmentStatusInfo(appointment: any) {
     order: 0,
   };
 }
-
-const STATUS_FILTER_OPTIONS = [
-  { value: "all", label: "All Status" },
-  { value: "active", label: "Active" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-];
 
 export function AppointmentCalendarBooking(props: Props) {
   const {
@@ -891,7 +883,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       }}
                       placeholder="Search patient name, mobile, or patient ID"
                       autoComplete="off"
-                      className="rounded-lg py-3 pl-10 pr-10 text-xs"
+                      className="rounded-lg py-3 pl-10 pr-10 text-xs "
                     />
                     {patientSearch && (
                       <button
@@ -971,13 +963,13 @@ export function AppointmentCalendarBooking(props: Props) {
             </div>
 
             {bookingStep === "newPatient" && !selectedPatient && (
-              <NewPatientForm
+              <PatientForm
                 busy={busy}
                 branches={clinic?.branches || []}
                 defaultBranchId={branchId}
                 searchValue={patientSearch}
-                onSave={savePatient}
-                onCancel={() => setBookingStep("appointment")}
+                onSubmit={savePatient}
+                back={() => setBookingStep("appointment")}
               />
             )}
 
@@ -1122,13 +1114,13 @@ export function AppointmentCalendarBooking(props: Props) {
                         />
                       </Field>
                     )}
-                    <TextField
-                      label="Billing Note"
-                      value={billingNote}
-                      onChange={setBillingNote}
-                      placeholder="Within free review period, certificate request, etc."
-                      className="search-input"
-                    />
+                    <FormField label="Billing Note">
+                      <Input
+                        value={billingNote}
+                        onChange={setBillingNote}
+                        placeholder="Within free review period, certificate request, etc."
+                      />
+                    </FormField>
                   </div>
                 )}
                 {appointmentType !== "emergency" && (
@@ -1147,48 +1139,48 @@ export function AppointmentCalendarBooking(props: Props) {
                     </span>
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <TextField
-                      label="BP"
-                      value={intakeBp}
-                      onChange={setIntakeBp}
-                      placeholder="120/80 mmHg"
-                      className="search-input placeholder:text-xs"
-                    />
-                    <TextField
-                      label="Pulse / PR"
-                      value={intakePulse}
-                      onChange={setIntakePulse}
-                      placeholder="78 bpm"
-                      className="search-input placeholder:text-xs"
-                    />
-                    <TextField
-                      label="SpO2"
-                      value={intakeSpo2}
-                      onChange={setIntakeSpo2}
-                      placeholder="98%"
-                      className="search-input placeholder:text-xs"
-                    />
-                    <TextField
-                      label="Temp"
-                      value={intakeTemp}
-                      onChange={setIntakeTemp}
-                      placeholder="98.6°F"
-                      className="search-input placeholder:text-xs"
-                    />
-                    <TextField
-                      label="Height"
-                      value={intakeHeight}
-                      onChange={setIntakeHeight}
-                      placeholder="170cm"
-                      className="search-input placeholder:text-xs"
-                    />
-                    <TextField
-                      label="Weight"
-                      value={intakeWeight}
-                      onChange={setIntakeWeight}
-                      placeholder="65kg"
-                      className="search-input placeholder:text-xs"
-                    />
+                    <FormField label="BP">
+                      <Input
+                        value={intakeBp}
+                        onChange={setIntakeBp}
+                        placeholder="120/80 mmHg"
+                      />
+                    </FormField>
+                    <FormField label="Pulse / PR">
+                      <Input
+                        value={intakePulse}
+                        onChange={setIntakePulse}
+                        placeholder="78 bpm"
+                      />
+                    </FormField>
+                    <FormField label="SpO2">
+                      <Input
+                        value={intakeSpo2}
+                        onChange={setIntakeSpo2}
+                        placeholder="98%"
+                      />
+                    </FormField>
+                    <FormField label="Temp">
+                      <Input
+                        value={intakeTemp}
+                        onChange={setIntakeTemp}
+                        placeholder="98.6°F"
+                      />
+                    </FormField>
+                    <FormField label="Height">
+                      <Input
+                        value={intakeHeight}
+                        onChange={setIntakeHeight}
+                        placeholder="170cm"
+                      />
+                    </FormField>
+                    <FormField label="Weight">
+                      <Input
+                        value={intakeWeight}
+                        onChange={setIntakeWeight}
+                        placeholder="65kg"
+                      />
+                    </FormField>
                     <TextareaField
                       label="Complaint Rows"
                       value={intakeComplaints}
@@ -1307,7 +1299,7 @@ export function AppointmentCalendarBooking(props: Props) {
         </div>
         <Button
           onClick={openBooking}
-          className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-48 text-xs  px-3 py-2 lg:px-4 lg:py-3"
+          className="flex items-center justify-between rounded-lg gap-2 w-40 lg:w-44 text-xs  px-3 py-2 lg:px-4 lg:py-3"
         >
           <div className="flex justify-center">
             <CalendarPlus size={16} />
@@ -1334,7 +1326,6 @@ export function AppointmentCalendarBooking(props: Props) {
             value={query}
             onChange={(e: any) => setQuery(e.target.value)}
             placeholder="Search patient or mobile"
-            className="search-input"
           />
         </Field>
         <Field label="Select date">
@@ -1384,7 +1375,7 @@ export function AppointmentCalendarBooking(props: Props) {
       <div className="mt-4 rounded-lg border border-slate-200 overflow-x-auto">
         <div className="min-w-[1300px]">
           <div
-            className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[220px_100px_220px_140px_180px_180px_180px_120px]" : "grid-cols-[120px_100px_140px_140px_180px_180px_120px_320px]"}`}
+            className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[220px_70px_220px_140px_150px_180px_180px_120px]" : "grid-cols-[120px_70px_140px_140px_150px_180px_120px_280px]"}`}
           >
             {isSuperAdmin && <span>Tenant</span>}
             <span className="text-sm">Patient</span>
@@ -1395,9 +1386,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <span className="text-sm lg:text-left ">Date</span>
             <span className=" text-sm text-center">Status</span>
             {!isSuperAdmin && (
-              <span className=" text-sm md:text-center lg:text-right pr-4">
-                Links
-              </span>
+              <span className=" text-sm md:text-center pr-4">Links</span>
             )}
           </div>
           <div className="divide-y divide-slate-200">
@@ -1464,32 +1453,30 @@ export function AppointmentCalendarBooking(props: Props) {
                       openConsultation(appointment);
                     }
                   }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_100px_140px_140px_180px_180px_120px_320px] md:items-center"
+                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_70px_140px_140px_150px_180px_120px_280px] md:items-center"
                 >
                   <div>
-                    <p className="text-sm lg:text-xs break-all">
+                    <p className="text-sm font-semibold  break-all">
                       {appointment.patient}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm lg:text-xs text-slate-500">
+                    <p className="text-sm  text-slate-500">
                       {appointment.token ||
                         publicDisplayValue(appointment.id, "-")}
                     </p>
                   </div>
-                  <span className="text-sm lg:text-xs">
-                    {patient?.mobile || "-"}
-                  </span>
-                  <span className="text-sm lg:text-xs ">
+                  <span className="text-sm ">{patient?.mobile || "-"}</span>
+                  <span className="text-sm  ">
                     {departmentOptions.find(
                       (d: any) => d.id === appointment.departmentId,
                     )?.name || publicDisplayValue(appointment.departmentId)}
                   </span>
-                  <span className="text-sm lg:text-xs ">
+                  <span className="text-sm  ">
                     {appointment.doctor ||
                       publicDisplayValue(appointment.doctorId, "Doctor")}
                   </span>
-                  <span className="text-sm lg:text-xs ">
+                  <span className="text-sm  ">
                     {appointment.appointmentDate || "-"}
                     {appointment.appointmentTime || appointment.appointment_time
                       ? ` ${formatDisplayTime(
@@ -1500,25 +1487,25 @@ export function AppointmentCalendarBooking(props: Props) {
                   </span>
                   <Badge
                     tone={appointmentStatusInfo(appointment).tone}
-                    className="table-status text-sm lg:text-xs"
+                    className="table-status text-sm "
                   >
                     {appointmentStatusInfo(appointment).label}
                   </Badge>
                   <div
-                    className="flex flex-wrap lg:flex-nowrap items-center justify-center lg:justify-start gap-2 xl:justify-end"
+                    className="flex flex-wrap lg:flex-nowrap items-center justify-center gap-2"
                     onClick={(event) => event.stopPropagation()}
                   >
                     <button
                       type="button"
                       onClick={() => openConsultation(appointment)}
-                      className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-sm lg:text-xs font-bold hover:bg-slate-50"
+                      className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-xs  font-bold hover:bg-slate-50"
                     >
                       Consultation
                     </button>
                     <button
                       type="button"
                       onClick={() => openPatient(appointment)}
-                      className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-sm lg:text-xs font-bold hover:bg-slate-50"
+                      className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-xs font-bold hover:bg-slate-50"
                     >
                       Patient Details
                     </button>
@@ -1539,64 +1526,7 @@ export function AppointmentCalendarBooking(props: Props) {
   );
 }
 
-function NewPatientForm({
-  busy,
-  branches,
-  defaultBranchId,
-  searchValue,
-  onSave,
-  onCancel,
-}: any) {
-  const normalizedSearch = String(searchValue || "").trim();
-  const patientDefaults = normalizedSearch
-    ? /^[+\d][\d\s()-]*$/.test(normalizedSearch)
-      ? { mobile: normalizedSearch }
-      : { full_name: normalizedSearch }
-    : undefined;
 
-  function handleSubmit(e: any) {
-    e.preventDefault();
-    onSave(patientFormPayload(new FormData(e.currentTarget)));
-  }
-
-  return (
-    <div className="mt-5 rounded-lg border border-blue-100 bg-blue-50/40 p-4">
-      <div className="flex justify-between gap-3">
-        <div>
-          <h4 className="font-bold">Create New Patient</h4>
-          <p className="mt-1 table-data text-slate-500">
-            Save this record to select the patient and continue the appointment.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-xl border p-2"
-          title="Cancel"
-        >
-          <X size={16} />
-        </button>
-      </div>
-      <form onSubmit={handleSubmit} className="mt-4 grid gap-3 md:grid-cols-3">
-        <PatientFormFields
-          patient={patientDefaults}
-          branches={branches}
-          defaultBranchId={defaultBranchId}
-        />
-        <div className="flex flex-wrap gap-2 md:col-span-3">
-          <Button disabled={busy}>{busy ? "Saving..." : "Save Patient"}</Button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg border text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4 font-bold"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
 
 function Info({ label, value }: { label: string; value: any }) {
   return (

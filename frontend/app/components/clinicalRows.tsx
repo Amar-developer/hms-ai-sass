@@ -97,7 +97,6 @@ export function SearchPicker({
     <div className="relative">
       <Input
         disabled={disabled}
-        className={loading ? "search-input" : "search-input"}
         value={open ? visibleQuery : selected?.label || visibleQuery || ""}
         onFocus={() => {
           if (disabled) return;

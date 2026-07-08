@@ -1,8 +1,6 @@
 import { LOCKED_STATUSES } from "./constants";
 
-export function today() {
-  return new Date().toISOString().slice(0, 10);
-}
+
 
 export function addDays(value: string, days: number) {
   const date = new Date(`${value}T00:00:00`);

@@ -6,18 +6,16 @@ import {
   Badge,
   Button,
   Card,
+  Input,
   RefreshButton,
-  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiBlob, apiFetch } from "@/lib/api";
 import {
-  FormField,
   SelectField,
   SearchableSelectField,
   TextField,
 } from "@/app/components/FormElements";
-import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
 import { pageSize } from "@/utils/lab/constants";
@@ -36,6 +34,8 @@ import {
   isActivePatientRecord,
   patientPickerLabel,
 } from "@/utils/patient/helpers";
+import { LabOrderForm } from "@/app/forms/LabForms";
+import { LabOrderFormValues } from "@/app/validations/lab.schema";
 
 export function Lab({
   apiSession,
@@ -54,11 +54,6 @@ export function Lab({
   const [templates, setTemplates] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [patientId, setPatientId] = useState(
-    patients.find(isActivePatientRecord)?.id || "",
-  );
-  const [source, setSource] = useState("op_direct");
-  const [externalReferrer, setExternalReferrer] = useState("");
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
   const [availableTests, setAvailableTests] = useState<any[]>([]);
   const [testSearch, setTestSearch] = useState("");
@@ -145,6 +140,16 @@ export function Lab({
     () => patients.filter(isActivePatientRecord),
     [patients],
   );
+  const defaultPatientId = activePatients[0]?.id || "";
+  const patientOptions = useMemo(
+    () =>
+      activePatients.map((p: any) => ({
+        value: p.id,
+        label: patientPickerLabel(p),
+        sublabel: p.mobile || p.patient_number || p.id,
+      })),
+    [activePatients],
+  );
   const invoicedOrderIds = useMemo(
     () =>
       new Set([
@@ -156,14 +161,6 @@ export function Lab({
     [liveInvoices, localInvoicedOrderIds],
   );
 
-  useEffect(() => {
-    if (
-      (!patientId ||
-        !activePatients.some((patient: any) => patient.id === patientId)) &&
-      activePatients[0]?.id
-    )
-      setPatientId(activePatients[0].id);
-  }, [activePatients, patientId]);
   useEffect(() => {
     load();
   }, [apiSession?.tenantId]);
@@ -397,9 +394,8 @@ export function Lab({
     }
   }
 
-  async function createDirect(e: any) {
-    e.preventDefault();
-    if (!apiSession) return;
+  async function handleCreateOrder(data: LabOrderFormValues) {
+    if (!apiSession) return false;
     setBusy("create");
     setMessage("");
     const selectedNames = orderTests.map((t: any) => t.name).filter(Boolean);
@@ -413,21 +409,23 @@ export function Lab({
     if (!testsText) {
       setMessage("Select at least one lab test.");
       setBusy("");
-      return;
+      return false;
     }
     try {
       await apiFetch("/lab/orders", apiSession, {
         method: "POST",
         body: JSON.stringify({
           branch_id: branchId,
-          patient_id: patientId,
-          source,
+          patient_id: data.patient_id,
+          source: data.source,
           tests: testsText,
           test_ids: localTestIds,
           package_ids: packageIds,
           external_items: [],
           external_referrer:
-            source === "external_referral" ? externalReferrer : null,
+            data.source === "external_referral"
+              ? data.external_referrer
+              : null,
           amount: 0,
           ordered_by_user_id: apiSession.user?.id,
         }),
@@ -437,8 +435,10 @@ export function Lab({
       setTestSearch("");
       await load();
       setMessage("Lab / Service order created.");
+      return true;
     } catch (err: any) {
       setMessage(err.message || "Could not create lab / service order.");
+      return false;
     } finally {
       setBusy("");
     }
@@ -713,132 +713,49 @@ export function Lab({
       <StatusToast message={message} onClose={() => setMessage("")} />
       <Card>
         <h3 className="card-title font-bold">Create Lab / Service Order</h3>
-        <form
-          onSubmit={createDirect}
-          className="mt-4 grid gap-3 md:grid-cols-5 lg:grid-cols-6"
-        >
-          <FormField label="Patient" className="md:col-span-2">
-            <SearchableSelect
-              value={patientId}
-              onChange={setPatientId}
-              searchable={true}
-              placeholder="Select patient"
-              searchPlaceholder="Search patient by name, mobile, or number"
-              className="text-xs md:col-span-2"
-              options={activePatients.map((p: any) => ({
-                value: p.id,
-                label: patientPickerLabel(p),
-                sublabel: p.mobile || p.patient_number || p.id,
-              }))}
-            />
-          </FormField>
-          <FormField label="Source">
-            <SearchableSelect
-              value={source}
-              onChange={setSource}
-              searchable={false}
-              options={[
-                { value: "op_direct", label: "OP Direct" },
-                { value: "external_referral", label: "External Referral" },
-              ]}
-            />
-          </FormField>
-          <FormField label="Lab Test / Service" className="md:col-span-2">
-            <SearchPicker
-              value={selectedAvailableTestId}
-              inputValue={testSearch}
-              onInputValueChange={(text: string) => {
-                setTestSearch(text);
-                if (!text) setSelectedAvailableTestId("");
-              }}
-              onChange={(id: string, test: any) => {
-                setSelectedAvailableTestId(id);
-                setTestSearch(test?.item_name || test?.name || "");
-              }}
-              options={testOptions}
-              placeholder="Type lab test name"
-              onUseTyped={(text: string) => {
-                setSelectedAvailableTestId("");
-                setTestSearch(text);
-              }}
-              getSearchText={(test: any) =>
-                [
-                  test?.item_name,
-                  test?.name,
-                  test?.sample_type,
-                  test?.category,
-                  test?.kind,
-                  test?.description,
-                  test?.code,
-                  test?.slug,
-                ]
-                  .filter(Boolean)
-                  .join(" ")
-              }
-              loading={testLoading}
-            />
-          </FormField>
-          <TextField
-            label="Supplier"
-            value={selectedSupplierName}
-            onChange={() => undefined}
-            disabled
-            className="search-input bg-slate-50"
-          />
-          <TextField
-            label="Supplier Price"
-            value={formatPrice(selectedSupplierPrice)}
-            onChange={() => undefined}
-            disabled
-            className="search-input bg-slate-50"
-          />
-          <TextField
-            label="MRP"
-            value={formatPrice(selectedTestMrp)}
-            onChange={() => undefined}
-            disabled
-            className="search-input bg-slate-50"
-          />
-          <TextField
-            label="Rate"
-            value={formatPrice(selectedTestSelling)}
-            onChange={() => undefined}
-            disabled
-            className="search-input bg-slate-50"
-          />
-          <div className="flex items-end gap-2  rounded-lg w-fit col-span-2">
-            <ActionButton
-              type="button"
-              onClick={addOrderTest}
-              className="close-button"
-            >
-              Add
-            </ActionButton>
-
-            <Button
-              type="submit"
-              disabled={busy === "create"}
-              className="save-button"
-            >
-              {busy === "create" ? "Saving..." : "Create Order"}
-            </Button>
-          </div>
-
-          {orderTests.length > 0 && (
-            <div className="md:col-span-5 lg:col-span-6 flex flex-wrap gap-2">
-              {orderTests.map((test: any, index: number) => (
-                <button
-                  key={`${test.name}-${index}`}
-                  type="button"
-                  onClick={() => removeOrderTest(index)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
-                >
-                  {test.name} ×
-                </button>
-              ))}
-            </div>
-          )}
-        </form>
+        <LabOrderForm
+          patientOptions={patientOptions}
+          defaultPatientId={defaultPatientId}
+          busy={busy === "create"}
+          testOptions={testOptions}
+          testSearch={testSearch}
+          selectedAvailableTestId={selectedAvailableTestId}
+          onTestSearchChange={(text: string) => {
+            setTestSearch(text);
+            if (!text) setSelectedAvailableTestId("");
+          }}
+          onTestSelect={(id: string, test: any) => {
+            setSelectedAvailableTestId(id);
+            setTestSearch(test?.item_name || test?.name || "");
+          }}
+          onUseTypedTest={(text: string) => {
+            setSelectedAvailableTestId("");
+            setTestSearch(text);
+          }}
+          getTestSearchText={(test: any) =>
+            [
+              test?.item_name,
+              test?.name,
+              test?.sample_type,
+              test?.category,
+              test?.kind,
+              test?.description,
+              test?.code,
+              test?.slug,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          }
+          testLoading={testLoading}
+          selectedSupplierName={selectedSupplierName}
+          selectedSupplierPrice={formatPrice(selectedSupplierPrice)}
+          selectedTestMrp={formatPrice(selectedTestMrp)}
+          selectedTestSelling={formatPrice(selectedTestSelling)}
+          onAddTest={addOrderTest}
+          orderTests={orderTests}
+          onRemoveTest={removeOrderTest}
+          onSubmit={handleCreateOrder}
+        />
       </Card>
       <Card>
         <h3 className="card-title font-bold">Consultation Referrals</h3>

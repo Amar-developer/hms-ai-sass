@@ -10,6 +10,7 @@ import {
 import {
   Button,
   Card,
+  Input,
   RefreshButton,
   SearchableSelect,
   StatusToast,
@@ -22,7 +23,7 @@ import {
   TextField,
 } from "@/app/components/FormElements";
 import { patientSearchText, toRow } from "@/utils/patient/helpers";
-import { PatientForm } from "@/app/components/patient/Forms";
+import { PatientForm } from "@/app/forms/PatientForms";
 import { PatientDetail } from "@/app/components/patient/PatientDetail";
 import { activeTenantOptions } from "@/utils/doctors/helpers";
 import { PatientRow } from "@/app/components/patient/PatientRow";
@@ -544,16 +545,16 @@ export function Patient({
               />
             </FormField>
           )}
-          <TextField
-            label="Patient / Mobile"
-            value={query}
-            onChange={(value) => {
-              setQuery(value);
-              setPage(1);
-            }}
-            placeholder="Name, mobile, area"
-            className="search-input"
-          />
+          <FormField label="Patient / Mobile">
+            <Input
+              value={query}
+              onChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
+              placeholder="Name, mobile, area"
+            />
+          </FormField>
           <FormField label="Branch">
             <SearchableSelect
               name="branch"
@@ -589,8 +590,7 @@ export function Patient({
               searchable={false}
             />
           </FormField>
-          {/* <DateField label="From" value={fromDate} onChange={setFromDate} />
-          <DateField label="To" value={toDate} onChange={setToDate} /> */}
+
           <div className="flex items-end gap-2">
             <Button
               // className="min-h-[46px] px-5  rounded-lg text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
@@ -599,11 +599,11 @@ export function Patient({
                 loadData(tenantId);
               }}
               disabled={busy}
-              className="rounded-lg px-4 py-2.5 lg:px-4 lg:py-2.5 md:text-sm lg:text-xs"
+              className="save-button"
             >
               {busy ? "Searching..." : "Search"}
             </Button>
-            <button
+            <Button
               type="button"
               onClick={() => {
                 setQuery("");
@@ -615,16 +615,16 @@ export function Patient({
                 setPage(1);
                 setTimeout(() => loadData(tenantId), 0);
               }}
-              className="rounded-lg px-4 py-2.5 lg:px-4 lg:py-2.5 md:text-base lg:text-xs border font-bold text-slate-700 hover:bg-slate-50"
+              className="save-button"
             >
               Reset
-            </button>
+            </Button>
           </div>
         </div>
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin">
         <div className="min-w-[1120px]">
-          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr]  lg:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
+          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr]  lg:grid grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span className="text-sm">Patient</span>
             <span className="text-sm">Mobile</span>
             <span className="text-sm">Branch</span>

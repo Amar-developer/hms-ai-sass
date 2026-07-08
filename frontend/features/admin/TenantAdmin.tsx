@@ -51,7 +51,12 @@ import {
   TAX_RULE_COLUMNS,
   USER_COLUMNS,
 } from "@/utils/constants";
-import { Key } from "lucide-react";
+import {
+  UserFormValues,
+  DepartmentFormValues,
+  BranchFormValues,
+  SupplierFormValues,
+} from "@/app/validations/settings.schema";
 
 export function TenantAdmin({
   apiSession,
@@ -235,7 +240,7 @@ export function TenantAdmin({
     });
   }, [taxRules, taxFilter]);
 
-   const filteredOffers = useMemo(() => {
+  const filteredOffers = useMemo(() => {
     return discountOffers.filter((offer) => {
       if (
         offerFilter.status !== "all" &&
@@ -562,33 +567,34 @@ export function TenantAdmin({
     }
   }
 
-  async function createUser(e: any) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
+  async function createUser(data: UserFormValues) {
     setBusy(true);
     setMessage("");
+
     try {
       const created = await apiFetch("/identity/users", apiSession, {
         method: "POST",
         body: JSON.stringify({
-          name: fd.get("name"),
-          email: fd.get("email"),
-          password: fd.get("password"),
-          mobile: fd.get("mobile") || null,
-          user_type: fd.get("userType") || "staff",
-          branch_id: fd.get("branchId") || null,
-          role_keys: fd.getAll("roleKeys").map(String),
-          must_change_password: fd.get("mustChangePassword") === "true",
+          name: data.name,
+          email: data.email,
+          password: data.password,
+          mobile: data.mobile || null,
+          user_type: data.userType || "staff",
+          branch_id: data.branchId || null,
+          role_keys: data.roleKeys || [],
+          must_change_password: data.mustChangePassword === "true",
         }),
       });
-      form.reset();
+
       setUsers((previous) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
+
       open("users");
+
       await loadAdmin();
+
       setMessage(`User created: ${created.name}`);
     } catch (err: any) {
       setMessage(err.message || "Could not create user.");
@@ -596,12 +602,13 @@ export function TenantAdmin({
       setBusy(false);
     }
   }
-  async function updateUser(e: any) {
-    e.preventDefault();
+
+  async function updateUser(data: UserFormValues) {
     if (!selectedUser) return;
-    const fd = new FormData(e.currentTarget);
+
     setBusy(true);
     setMessage("");
+
     try {
       const updated = await apiFetch(
         `/identity/users/${selectedUser.id}`,
@@ -609,23 +616,27 @@ export function TenantAdmin({
         {
           method: "PATCH",
           body: JSON.stringify({
-            name: fd.get("name"),
-            email: fd.get("email"),
-            user_type: fd.get("userType") || "staff",
-            mobile: fd.get("mobile") || null,
-            branch_id: fd.get("branchId") || null,
-            role_keys: fd.getAll("roleKeys").map(String),
-            is_active: fd.get("isActive") === "true",
-            must_change_password: fd.get("mustChangePassword") === "true",
+            name: data.name,
+            email: data.email,
+            user_type: data.userType || "staff",
+            mobile: data.mobile || null,
+            branch_id: data.branchId || null,
+            role_keys: data.roleKeys || [],
+            is_active: data.isActive === "true",
+            must_change_password: data.mustChangePassword === "true",
           }),
         },
       );
+
       setUsers((previous) => [
         updated,
         ...previous.filter((row: any) => row.id !== updated.id),
       ]);
+
       open("users");
+
       await loadAdmin();
+
       setMessage("User updated.");
     } catch (err: any) {
       setMessage(err.message || "Could not update user.");
@@ -670,16 +681,7 @@ export function TenantAdmin({
     }
   }
 
-  async function createDepartment(e: any) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const name = String(fd.get("name") || "").trim();
-    const branchId = String(fd.get("branchId") || "");
-    if (name.length < 2) {
-      setMessage("Medical department name must contain at least 2 characters.");
-      return;
-    }
+  async function createDepartment(data: DepartmentFormValues) {
     setBusy(true);
     setMessage("");
     try {
@@ -689,13 +691,12 @@ export function TenantAdmin({
         {
           method: "POST",
           body: JSON.stringify({
-            name,
-            description: fd.get("description") || null,
-            branch_id: branchId || null,
+            name: data.name.trim(),
+            description: data.description || null,
+            branch_id: data.branchId || null,
           }),
         },
       );
-      form.reset();
       setDepartments((previous) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
@@ -710,15 +711,8 @@ export function TenantAdmin({
     }
   }
 
-  async function updateDepartment(e: any) {
-    e.preventDefault();
+  async function updateDepartment(data: DepartmentFormValues) {
     if (!selectedDepartment) return;
-    const fd = new FormData(e.currentTarget);
-    const name = String(fd.get("name") || "").trim();
-    if (name.length < 2) {
-      setMessage("Medical department name must contain at least 2 characters.");
-      return;
-    }
     setBusy(true);
     setMessage("");
     try {
@@ -728,10 +722,10 @@ export function TenantAdmin({
         {
           method: "PATCH",
           body: JSON.stringify({
-            name,
-            description: fd.get("description") || null,
-            branch_id: fd.get("branchId") || null,
-            is_active: fd.get("isActive") === "true",
+            name: data.name,
+            description: data.description || null,
+            branch_id: data.branchId || null,
+            is_active: data.isActive === "true",
           }),
         },
       );
@@ -749,10 +743,7 @@ export function TenantAdmin({
     }
   }
 
-  async function createBranch(e: any) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
+  async function createBranch(data: BranchFormValues) {
     setBusy(true);
     setMessage("");
     try {
@@ -762,16 +753,16 @@ export function TenantAdmin({
         {
           method: "POST",
           body: JSON.stringify({
-            name: fd.get("name"),
-            code: fd.get("code"),
-            area: fd.get("area") || null,
-            address: fd.get("address") || null,
-            city: fd.get("city") || null,
-            state: fd.get("state") || null,
+            name: data.name,
+            code: data.code,
+            area: data.area || null,
+            address: data.address || null,
+            city: data.city || null,
+            state: data.state || null,
           }),
         },
       );
-      form.reset();
+      // form.reset();
       setBranches((previous) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
@@ -786,10 +777,8 @@ export function TenantAdmin({
     }
   }
 
-  async function updateBranch(e: any) {
-    e.preventDefault();
+  async function updateBranch(data: any) {
     if (!selectedBranch) return;
-    const fd = new FormData(e.currentTarget);
     setBusy(true);
     setMessage("");
     try {
@@ -799,13 +788,13 @@ export function TenantAdmin({
         {
           method: "PATCH",
           body: JSON.stringify({
-            name: fd.get("name"),
-            code: fd.get("code"),
-            area: fd.get("area") || null,
-            address: fd.get("address") || null,
-            city: fd.get("city") || null,
-            state: fd.get("state") || null,
-            is_active: fd.get("isActive") === "true",
+            name: data.name,
+            code: data.code,
+            area: data.area || null,
+            address: data.address || null,
+            city: data.city || null,
+            state: data.state || null,
+            is_active: data.isActive === "true",
           }),
         },
       );
@@ -823,25 +812,21 @@ export function TenantAdmin({
     }
   }
 
-  async function createSupplier(e: any) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
+  async function createSupplier(data: SupplierFormValues) {
     setBusy(true);
     setMessage("");
     try {
       const created = await apiFetch("/pharmacy/suppliers", apiSession, {
         method: "POST",
         body: JSON.stringify({
-          name: fd.get("name"),
-          gstin: fd.get("gstin") || null,
-          phone: fd.get("phone") || null,
-          email: fd.get("email") || null,
-          address: fd.get("address") || null,
+          name: data.name,
+          gstin: data.gstin || null,
+          phone: data.phone|| null,
+          email: data.email|| null,
+          address: data.address|| null,
           created_by_user_id: apiSession.user?.id,
         }),
       });
-      form.reset();
       setSuppliers((previous) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
@@ -856,10 +841,8 @@ export function TenantAdmin({
     }
   }
 
-  async function updateSupplier(e: any) {
-    e.preventDefault();
+  async function updateSupplier(data: SupplierFormValues) {
     if (!selectedSupplier) return;
-    const fd = new FormData(e.currentTarget);
     setBusy(true);
     setMessage("");
     try {
@@ -869,12 +852,12 @@ export function TenantAdmin({
         {
           method: "PATCH",
           body: JSON.stringify({
-            name: fd.get("name"),
-            gstin: fd.get("gstin") || null,
-            phone: fd.get("phone") || null,
-            email: fd.get("email") || null,
-            address: fd.get("address") || null,
-            is_active: fd.get("isActive") === "true",
+            name: data.name,
+            gstin: data.gstin || null,
+            phone: data.phone || null,
+            email: data.email || null,
+            address: data.address || null,
+            is_active: data.isActive === "true",
           }),
         },
       );
@@ -892,25 +875,21 @@ export function TenantAdmin({
     }
   }
 
-  async function createTaxRule(e: any) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
+  async function createTaxRule(data: any) {
     setBusy(true);
     setMessage("");
     try {
       const created = await apiFetch("/billing/tax-rules", apiSession, {
         method: "POST",
         body: JSON.stringify({
-          branch_id: fd.get("branchId") || null,
-          name: fd.get("name"),
-          tax_percentage: Number(fd.get("taxPercentage") || 0),
-          tax_label: fd.get("taxLabel") || "GST",
-          service_scope: fd.get("serviceScope") || "all",
+          branch_id: data.branchId || null,
+          name: data.name,
+          tax_percentage: Number(data.taxPercentage || 0),
+          tax_label: data.taxLabel || "GST",
+          service_scope: data.serviceScope || "all",
           created_by_user_id: apiSession.user?.id,
         }),
       });
-      form.reset();
       setTaxRules((previous) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
@@ -925,10 +904,8 @@ export function TenantAdmin({
     }
   }
 
-  async function updateTaxRule(e: any) {
-    e.preventDefault();
+  async function updateTaxRule(data: any) {
     if (!selectedTaxRule) return;
-    const fd = new FormData(e.currentTarget);
     setBusy(true);
     setMessage("");
     try {
@@ -938,12 +915,12 @@ export function TenantAdmin({
         {
           method: "PATCH",
           body: JSON.stringify({
-            branch_id: fd.get("branchId") || null,
-            name: fd.get("name"),
-            tax_percentage: Number(fd.get("taxPercentage") || 0),
-            tax_label: fd.get("taxLabel") || "GST",
-            service_scope: fd.get("serviceScope") || "all",
-            is_active: fd.get("isActive") === "true",
+            branch_id: data.branchId || null,
+            name: data.name,
+            tax_percentage: Number(data.taxPercentage || 0),
+            tax_label: data.taxLabel || "GST",
+            service_scope: data.serviceScope || "all",
+            is_active: data.isActive === "true",
           }),
         },
       );
@@ -961,32 +938,28 @@ export function TenantAdmin({
     }
   }
 
-  async function createDiscountOffer(e: any) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
+  async function createDiscountOffer(data: any) {
     setBusy(true);
     setMessage("");
     try {
       const created = await apiFetch("/billing/discount-offers", apiSession, {
         method: "POST",
         body: JSON.stringify({
-          branch_id: fd.get("branchId") || null,
-          name: fd.get("name"),
-          code: fd.get("code") || null,
-          service_scope: fd.get("serviceScope") || "all",
-          discount_type: fd.get("discountType") || "percentage",
-          value: Number(fd.get("value") || 0),
-          minimum_bill_amount: Number(fd.get("minimumBillAmount") || 0),
-          max_discount_amount: fd.get("maxDiscountAmount")
-            ? Number(fd.get("maxDiscountAmount"))
+          branch_id: data.branchId || null,
+          name: data.name,
+          code: data.code || null,
+          service_scope: data.serviceScope || "all",
+          discount_type: data.discountType || "percentage",
+          value: Number(data.value || 0),
+          minimum_bill_amount: Number(data.minimumBillAmount || 0),
+          max_discount_amount: data.maxDiscountAmount
+            ? Number(data.maxDiscountAmount)
             : null,
-          valid_from: dateInputToIso(fd.get("validFrom")),
-          valid_until: dateInputToIso(fd.get("validUntil")),
+          valid_from: dateInputToIso(data.validFrom),
+          valid_until: dateInputToIso(data.validUntil),
           created_by_user_id: apiSession.user?.id,
         }),
       });
-      form.reset();
       setDiscountOffers((previous) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
@@ -1001,10 +974,8 @@ export function TenantAdmin({
     }
   }
 
-  async function updateDiscountOffer(e: any) {
-    e.preventDefault();
+  async function updateDiscountOffer(data: any) {
     if (!selectedOffer) return;
-    const fd = new FormData(e.currentTarget);
     setBusy(true);
     setMessage("");
     try {
@@ -1014,19 +985,19 @@ export function TenantAdmin({
         {
           method: "PATCH",
           body: JSON.stringify({
-            branch_id: fd.get("branchId") || null,
-            name: fd.get("name"),
-            code: fd.get("code") || null,
-            service_scope: fd.get("serviceScope") || "all",
-            discount_type: fd.get("discountType") || "percentage",
-            value: Number(fd.get("value") || 0),
-            minimum_bill_amount: Number(fd.get("minimumBillAmount") || 0),
-            max_discount_amount: fd.get("maxDiscountAmount")
-              ? Number(fd.get("maxDiscountAmount"))
+            branch_id: data.branchId || null,
+            name: data.name,
+            code: data.code || null,
+            service_scope: data.serviceScope || "all",
+            discount_type: data.discountType || "percentage",
+            value: Number(data.value || 0),
+            minimum_bill_amount: Number(data.minimumBillAmount || 0),
+            max_discount_amount: data.maxDiscountAmount
+              ? Number(data.maxDiscountAmount)
               : null,
-            valid_from: dateInputToIso(fd.get("validFrom")),
-            valid_until: dateInputToIso(fd.get("validUntil")),
-            is_active: fd.get("isActive") === "true",
+            valid_from: dateInputToIso(data.validFrom),
+            valid_until: dateInputToIso(data.validUntil),
+            is_active: data.isActive === "true",
           }),
         },
       );

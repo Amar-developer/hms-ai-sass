@@ -18,7 +18,16 @@ import { asOptionList, patientLabel } from "@/utils/tenantAdmin/helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { UPLOADS_BASE } from "@/lib/api";
 import { capitalizeFirst, displayDateTime } from "@/utils/helper";
-import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
+import {
+  isActivePatientRecord,
+  patientPickerLabel,
+} from "@/utils/patient/helpers";
+import { useForm } from "react-hook-form";
+import {
+  DocumentUploadFormValues,
+  documentUploadSchema,
+} from "@/app/validations/settings.schema";
+import { zodResolver } from "@hookform/resolvers/zod";
 
 export function FilesPanel({
   apiSession,
@@ -30,6 +39,29 @@ export function FilesPanel({
   busy,
   setBusy,
 }: any) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<DocumentUploadFormValues>({
+    resolver: zodResolver(documentUploadSchema),
+
+    defaultValues: {
+      category: "general",
+      branch_id: "",
+      patient_id: "",
+      source_module: "",
+      attached_to_doctype: "",
+      attached_to_name: "",
+      attached_to_field: "",
+      attached_to_label: "",
+      folder: "",
+      notes: "",
+    },
+  });
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("general");
   const [branchId, setBranchId] = useState("");
@@ -40,7 +72,6 @@ export function FilesPanel({
   const [fieldName, setFieldName] = useState("");
   const [labelValue, setLabelValue] = useState("");
   const [folder, setFolder] = useState("");
-  const [notes, setNotes] = useState("");
   const [recordOptions, setRecordOptions] = useState<any[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -57,13 +88,16 @@ export function FilesPanel({
 
   const patientOptions = useMemo(
     () =>
-      patients.filter(isActivePatientRecord).slice(0, 500).map((patient: any) => {
-        return {
-          value: patient.id,
-          label: patientPickerLabel(patient),
-          sublabel: patient.patient_number || patient.mobile || patient.id,
-        };
-      }),
+      patients
+        .filter(isActivePatientRecord)
+        .slice(0, 500)
+        .map((patient: any) => {
+          return {
+            value: patient.id,
+            label: patientPickerLabel(patient),
+            sublabel: patient.patient_number || patient.mobile || patient.id,
+          };
+        }),
     [patients],
   );
 
@@ -138,28 +172,45 @@ export function FilesPanel({
     ),
   );
 
-  function resetUploadForm(form?: HTMLFormElement) {
+  function resetUploadForm() {
     setCategory("general");
     setBranchId("");
     setPatientId("");
-    setNotes("");
-    if (form) form.reset();
+    setSourceModule("");
+    setDoctype("");
+    setRecordId("");
+    setFieldName("");
+    setLabelValue("");
+    setFolder("");
+
+    reset({
+      category: "general",
+      branch_id: "",
+      patient_id: "",
+      source_module: "",
+      attached_to_doctype: "",
+      attached_to_name: "",
+      attached_to_field: "",
+      attached_to_label: "",
+      folder: "",
+      notes: "",
+    });
   }
 
-  async function handleSubmit(event: any) {
-    event.preventDefault();
+  async function handlerSubmit(data: DocumentUploadFormValues) {
     if (!apiSession) return;
-    const form = event.currentTarget as HTMLFormElement;
-    const fileInput = form.elements.namedItem(
-      "file",
-    ) as HTMLInputElement | null;
-    const file = fileInput?.files?.[0] || null;
+
+    const file = data.file?.[0];
+
     if (!file) {
       setMessage("Choose a file to upload.");
       return;
     }
+
     const upload = new FormData();
+
     upload.append("file", file);
+
     const fields: Record<string, string> = {
       category,
       source_module: sourceModule,
@@ -168,23 +219,32 @@ export function FilesPanel({
       attached_to_field: fieldName,
       attached_to_label: labelValue,
       folder,
-      notes,
+      notes: data.notes || "",
       branch_id: branchId,
       patient_id: patientId,
     };
+
     Object.entries(fields).forEach(([key, value]) => {
       const trimmed = String(value || "").trim();
-      if (trimmed) upload.append(key, trimmed);
+
+      if (trimmed) {
+        upload.append(key, trimmed);
+      }
     });
+
     setBusy(true);
     setMessage("");
+
     try {
       const created = await apiUpload("/files", apiSession, upload);
+
       setFiles((previous: any[]) => [
         created,
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
-      resetUploadForm(form);
+
+      resetUploadForm();
+
       setMessage(`File uploaded: ${created.file_name}`);
     } catch (err: any) {
       setMessage(err.message || "Could not upload file.");
@@ -274,22 +334,23 @@ export function FilesPanel({
           </div>
         </div>
         <form
-          onSubmit={handleSubmit}
+          onSubmit={handleSubmit(handlerSubmit)}
           className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
         >
           <FormField label="Upload File">
-            <Input
-              name="file"
-              type="file"
-              required
-              className="search-input input-file"
-            />
+            <Input type="file" {...register("file")} />
+
+            {errors.file && (
+              <p className="text-xs text-red-500">
+                {errors.file.message as string}
+              </p>
+            )}
           </FormField>
           <FormField label="Category">
             <SearchableSelect
               name="category"
-              value={category}
-              onChange={setCategory}
+              value={watch("category")}
+              onChange={(value)=>setValue('category',value)}
               options={fileCategoryOptions}
               searchPlaceholder="Search categories..."
               // className="select-input"
@@ -297,9 +358,8 @@ export function FilesPanel({
           </FormField>
           <FormField label="Branch">
             <SearchableSelect
-              name="branch_id"
-              value={branchId}
-              onChange={setBranchId}
+              value={watch('branch_id')}
+              onChange={(value)=>setValue('branch_id',value)}
               placeholder="Tenant level"
               options={branches.map((branch: any) => ({
                 value: branch.id,
@@ -311,9 +371,8 @@ export function FilesPanel({
           </FormField>
           <FormField label="Patient">
             <SearchableSelect
-              name="patient_id"
-              value={patientId}
-              onChange={setPatientId}
+              value={watch('patient_id')}
+              onChange={(value)=>setValue('patient_id',value)}
               placeholder="No patient link"
               options={patientOptions}
               searchPlaceholder="Search patients..."
@@ -321,9 +380,8 @@ export function FilesPanel({
           </FormField>
           <FormField label="Source Module">
             <SearchableSelect
-              name="source_module"
-              value={sourceModule}
-              onChange={setSourceModule}
+              value={watch('source_module')}
+              onChange={(value)=>setValue('source_module',value)}
               options={asOptionList(rule.modules)}
               searchPlaceholder="Search modules..."
               allowCustom
@@ -331,9 +389,8 @@ export function FilesPanel({
           </FormField>
           <FormField label="Linked Doctype">
             <SearchableSelect
-              name="attached_to_doctype"
-              value={doctype}
-              onChange={setDoctype}
+              value={watch('attached_to_doctype')}
+              onChange={(value)=>setValue('attached_to_doctype',value)}
               options={asOptionList(rule.doctypes)}
               searchPlaceholder="Search doctypes..."
               allowCustom
@@ -341,9 +398,8 @@ export function FilesPanel({
           </FormField>
           <FormField label="Linked Record ID">
             <SearchableSelect
-              name="attached_to_name"
-              value={recordId}
-              onChange={setRecordId}
+              value={watch('attached_to_name')}
+              onChange={(value)=>setValue('attached_to_name',value)}
               options={recordOptions}
               placeholder={
                 recordsLoading
@@ -359,9 +415,8 @@ export function FilesPanel({
           </FormField>
           <FormField label="Linked Field">
             <SearchableSelect
-              name="attached_to_field"
-              value={fieldName}
-              onChange={setFieldName}
+              value={watch('attached_to_field')}
+              onChange={(value)=>setValue('attached_to_field',value)}
               options={asOptionList(rule.fields)}
               searchPlaceholder="Search fields..."
               allowCustom
@@ -369,9 +424,8 @@ export function FilesPanel({
           </FormField>
           <FormField label="Label">
             <SearchableSelect
-              name="attached_to_label"
-              value={labelValue}
-              onChange={setLabelValue}
+              value={watch('attached_to_label')}
+              onChange={(value)=>setValue('attached_to_label',value)}
               options={rule.labels.map((label) => ({ value: label, label }))}
               searchPlaceholder="Search labels..."
               allowCustom
@@ -379,9 +433,8 @@ export function FilesPanel({
           </FormField>
           <FormField label="Folder">
             <SearchableSelect
-              name="folder"
-              value={folder}
-              onChange={setFolder}
+              value={watch('folder')}
+              onChange={(value)=>setValue('folder',value)}
               options={rule.folders.map((name) => ({
                 value: name,
                 label: name,
@@ -392,12 +445,11 @@ export function FilesPanel({
           </FormField>
           <div className="md:col-span-2">
             <FormField label="Notes">
-              <Input
-                name="notes"
-                value={notes}
-                onChange={(e: any) => setNotes(e.target.value)}
-                placeholder="Optional notes"
-              />
+              <Input {...register("notes")} placeholder="Optional notes" />
+
+              {errors.notes && (
+                <p className="text-xs text-red-500">{errors.notes.message}</p>
+              )}
             </FormField>
           </div>
           <div className="flex items-end">

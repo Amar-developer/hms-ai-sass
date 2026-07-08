@@ -10,8 +10,8 @@ import {
   generatePhysiotherapyInvoice,
   getPhysiotherapyInvoice,
 } from "@/lib/api";
-import { displayDate } from "@/utils/helper";
-import { activePhysiotherapyFeeRule, consentFiles, formatPhysiotherapistName, inr, patientName, today } from "@/utils/physiotherapy/helpers";
+import { displayDate,today } from "@/utils/helper";
+import { activePhysiotherapyFeeRule, consentFiles, formatPhysiotherapistName, inr, patientName } from "@/utils/physiotherapy/helpers";
 import { Header, Info, SearchSelect } from "@/app/components/physiotherapy/Shared";
 import { modalities } from "@/utils/physiotherapy/constants";
 import { CaseForm, IPCaseForm } from "@/app/components/physiotherapy/Forms";

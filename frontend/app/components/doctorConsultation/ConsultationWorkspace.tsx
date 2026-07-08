@@ -871,7 +871,6 @@ export function ConsultationWorkspace(props: any) {
                         value={formatPrice(selectedLabMrp)}
                         readOnly
                         placeholder="MRP"
-                        className="search-input"
                       />
                     </FormField>
                     <FormField label="Rate">
@@ -879,10 +878,9 @@ export function ConsultationWorkspace(props: any) {
                         value={formatPrice(selectedLabSelling)}
                         readOnly
                         placeholder="Selling"
-                        className="search-input"
                       />
                     </FormField>
-                    <FormField label="Lab Priority">
+                    <FormField label="Priority">
                       <SearchableSelect
                         value={labPriority}
                         onChange={(value: string) => setLabPriority(value)}

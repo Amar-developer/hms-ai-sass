@@ -22,11 +22,13 @@ import {
   activeTenantOptions,
   groupSchedules,
   selectedSchedulePayloads,
+  selectedSchedulePayloadsFromRHF,
 } from "@/utils/schedule/helpers";
-import { ScheduleForm } from "@/app/components/schedule/Forms";
+import { ScheduleForm } from "@/app/forms/ScheduleForms";
 import { pageSize, weekdays } from "@/utils/schedule/constants";
 import { ConfirmModal, Empty, ScheduleRow } from "./Shared";
 import { Pagination } from "@/app/components/common/Pagination";
+import { ScheduleFormValues } from "@/app/validations/schedule.schema";
 
 export function Scheduling({ apiSession, branchId }: any) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
@@ -114,22 +116,32 @@ export function Scheduling({ apiSession, branchId }: any) {
     );
   }
 
-  async function createSchedule(e: any) {
-    e.preventDefault();
+  async function createSchedule(data: ScheduleFormValues) {
     if (!scopedSession) return;
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const practitionerId = String(fd.get("practitionerId") || "");
+
+    const practitionerId = data.practitionerId;
     const doctorBranchIds =
       doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
     const doctorDepartmentIds =
       doctors.find((item: any) => item.id === practitionerId)?.department_ids ||
       [];
-    const schedulePayloads = selectedSchedulePayloads(fd, doctorBranchIds);
-    if (!practitionerId || schedulePayloads.length === 0) {
+
+    if (!practitionerId) {
+      setMessage("Select a doctor.");
+      return;
+    }
+
+    // Convert RHF data to backend payloads
+    const schedulePayloads = selectedSchedulePayloadsFromRHF(
+      data,
+      doctorBranchIds,
+    );
+
+    if (schedulePayloads.length === 0) {
       setMessage("Select a doctor and medical department.");
       return;
     }
+
     if (
       schedulePayloads.some(
         (item) =>
@@ -140,25 +152,31 @@ export function Scheduling({ apiSession, branchId }: any) {
       setMessage("Select a medical department mapped to this doctor.");
       return;
     }
+
     setBusy(true);
     setMessage("");
+
     try {
       const createdRows = await Promise.all(
         schedulePayloads.map((item) =>
           apiFetch(
             `/practitioners/${practitionerId}/schedules`,
             scopedSession,
-            { method: "POST", body: JSON.stringify(item) },
+            {
+              method: "POST",
+              body: JSON.stringify(item),
+            },
           ),
         ),
       );
+
       setRows((previous: any[]) => [
         ...createdRows,
         ...previous.filter(
           (row: any) => !createdRows.some((item: any) => item.id === row.id),
         ),
       ]);
-      form.reset();
+
       open("list");
       await loadData(tenantId);
       setMessage(
@@ -171,21 +189,27 @@ export function Scheduling({ apiSession, branchId }: any) {
     }
   }
 
-  async function updateSchedule(e: any) {
-    e.preventDefault();
+  async function updateSchedule(data: ScheduleFormValues) {
     if (!scopedSession || !selected) return;
-    const fd = new FormData(e.currentTarget);
-    const practitionerId = String(
-      fd.get("practitionerId") || selected.practitioner_id || "",
-    );
+    console.log('updateSchedule')
+    const practitionerId = data.practitionerId || selected.practitioner_id;
     const doctorBranchIds =
       doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
     const doctorDepartmentIds =
       doctors.find((item: any) => item.id === practitionerId)?.department_ids ||
       [];
-    const schedulePayloads = selectedSchedulePayloads(fd, doctorBranchIds);
+
+    const schedulePayloads = selectedSchedulePayloadsFromRHF(
+      data,
+      doctorBranchIds,
+    );
+
+    if (schedulePayloads.length === 0) {
+      setMessage("Select a medical department mapped to this doctor.");
+      return;
+    }
+
     if (
-      schedulePayloads.length === 0 ||
       schedulePayloads.some(
         (item) =>
           !item.department_id ||
@@ -195,14 +219,15 @@ export function Scheduling({ apiSession, branchId }: any) {
       setMessage("Select a medical department mapped to this doctor.");
       return;
     }
+
     const [firstPayload, ...extraPayloads] = schedulePayloads;
-    // Only reuse active rows. Soft-deleted (is_active=false) rows are ghosts:
-    // patching or counting them resurfaces removed ranges in the editor.
     const existingRows = (selected.schedules || [selected]).filter(
       (row: any) => row && row.is_active !== false,
     );
+
     setBusy(true);
     setMessage("");
+
     try {
       const updated = existingRows[0]
         ? await apiFetch(
@@ -227,16 +252,21 @@ export function Scheduling({ apiSession, branchId }: any) {
               }),
             },
           );
+
       const createdRows = await Promise.all(
         extraPayloads.map((item) =>
           apiFetch(
             `/practitioners/${practitionerId}/schedules`,
             scopedSession,
-            { method: "POST", body: JSON.stringify(item) },
+            {
+              method: "POST",
+              body: JSON.stringify(item),
+            },
           ),
         ),
       );
-      // Remove every other active row we just replaced.
+
+      // Delete old extra rows
       await Promise.all(
         existingRows.slice(1).map((row: any) =>
           apiFetch(`/practitioners/schedules/${row.id}`, scopedSession, {
@@ -244,6 +274,7 @@ export function Scheduling({ apiSession, branchId }: any) {
           }),
         ),
       );
+
       setRows((previous: any[]) => [
         updated,
         ...createdRows,
@@ -253,8 +284,10 @@ export function Scheduling({ apiSession, branchId }: any) {
             !createdRows.some((item: any) => item.id === row.id),
         ),
       ]);
+
       open("list");
       await loadData(tenantId);
+
       setMessage(
         createdRows.length
           ? `Schedule updated and ${createdRows.length} extra ${createdRows.length === 1 ? "slot" : "slots"} created.`
@@ -428,7 +461,6 @@ export function Scheduling({ apiSession, branchId }: any) {
               setPage(1);
             }}
             placeholder="Doctor, room, medical department"
-            className='search-input'
           />
         </FormField>
         <Field label="Branch">

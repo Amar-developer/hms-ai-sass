@@ -30,10 +30,10 @@ export function activePhysiotherapyFeeRule(
   );
 }
 
-
 export function today() {
   return new Date().toISOString().slice(0, 10);
 }
+
 export function patientName(p: any) {
   return p?.name || p?.full_name || p?.patient_name || "Patient";
 }

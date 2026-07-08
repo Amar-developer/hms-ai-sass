@@ -18,6 +18,9 @@ import { uniqueDepartmentRows } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
 import { useDropdown } from "@/hooks/useDropdown";
 import { MoreHorizontal } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { PlanFormInput, PlanFormValues, planSchema } from "@/app/validations/settings.schema";
 
 function money(value: any) {
   return `₹${Number(value || 0).toLocaleString("en-IN")}`;
@@ -871,9 +874,7 @@ function QueuedEnrollmentsTable({ rows, patientMap }: any) {
     <Card>
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">
-            Queued Enrollments
-          </h3>
+          <h3 className="text-base lg:text-lg font-bold">Queued Enrollments</h3>
           <p className="card-desc text-slate-500">
             Purchased while another plan was active — these activate
             automatically once the patient's current plan ends.
@@ -1163,6 +1164,24 @@ function PlanForm({
   setDiscountedMedicineIds,
   apiSession,
 }: any) {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<PlanFormValues,PlanFormInput,any>({
+    resolver: zodResolver(planSchema),
+    defaultValues: {
+      name: plan?.name ?? "",
+      code: plan?.code ?? "",
+      priceAmount: plan?.price_amount ?? 0,
+      durationDays: plan?.duration_days ?? 1,
+      activationAfterDays: plan?.activation_after_days ?? 0,
+      freeConsultations: plan?.free_consultations ?? 0,
+      labDiscount: plan?.lab_discount_percentage ?? 0,
+      pharmacyDiscount: plan?.pharmacy_discount_percentage ?? 0,
+      minDiscountAmount: plan?.min_discount_amount ?? 0,
+    },
+  });
   const [pharmacySlabs, setPharmacySlabs] = useState<any[]>(() =>
     normalizePharmacySlabs(plan?.pharmacy_discount_slabs || []),
   );
@@ -1196,56 +1215,44 @@ function PlanForm({
         </button>
       </div>
       <form
-        onSubmit={onSubmit}
+        onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
       >
         <FormField label="Plan Name">
-          <Input
-            name="name"
-            defaultValue={plan?.name || ""}
-            placeholder="Membership plan name"
-            required
-          />
+          <Input {...register("name")} placeholder="Membership plan name" />
+
+          {errors.name && (
+            <p className="text-xs text-red-500">{errors.name.message}</p>
+          )}
         </FormField>
         <FormField label="Code">
-          <Input
-            name="code"
-            defaultValue={plan?.code || ""}
-            placeholder="Optional plan code"
-          />
+          <Input {...register("code")} placeholder="Optional plan code" />
+
+          {errors.code && (
+            <p className="text-xs text-red-500">{errors.code.message}</p>
+          )}
         </FormField>
         <FormField label="Price">
-          <Input
-            name="priceAmount"
-            type="number"
-            min="0"
-            defaultValue={plan?.price_amount ?? 0}
-          />
+          <Input {...register("priceAmount")} type="number" min="0" />
+
+          {errors.priceAmount && (
+            <p className="text-xs text-red-500">{errors.priceAmount.message}</p>
+          )}
         </FormField>
         <FormField label="Duration Days">
-          <Input
-            name="durationDays"
-            type="number"
-            min="1"
-            defaultValue={plan?.duration_days ?? ""}
-            required
-          />
+          <Input {...register("durationDays")} type="number" />
+
+          {errors.durationDays && (
+            <p className="text-xs text-red-500">
+              {errors.durationDays.message}
+            </p>
+          )}
         </FormField>
         <FormField label="Activation After Days">
-          <Input
-            name="activationAfterDays"
-            type="number"
-            min="0"
-            defaultValue={plan?.activation_after_days ?? 0}
-          />
+          <Input {...register("activationAfterDays")} type="number" />
         </FormField>
         <FormField label="Free Consultations">
-          <Input
-            name="freeConsultations"
-            type="number"
-            min="0"
-            defaultValue={plan?.free_consultations ?? 0}
-          />
+          <Input {...register("freeConsultations")} type="number" />
         </FormField>
         <div className="md:col-span-2">
           <FormField label="Free Consultation Departments">
@@ -1325,31 +1332,18 @@ function PlanForm({
           </p>
         </div>
         <FormField label="Lab Discount %">
-          <Input
-            name="labDiscount"
-            type="number"
-            min="0"
-            max="100"
-            defaultValue={plan?.lab_discount_percentage ?? 0}
-          />
+          <Input {...register("labDiscount")} type="number" min="0" max="100" />
         </FormField>
         <FormField label="Pharmacy Discount %">
           <Input
-            name="pharmacyDiscount"
+            {...register("pharmacyDiscount")}
             type="number"
             min="0"
             max="100"
-            defaultValue={plan?.pharmacy_discount_percentage ?? 0}
           />
         </FormField>
         <FormField label="Min Bill Amount for Discount">
-          <Input
-            name="minDiscountAmount"
-            type="number"
-            min="0"
-            defaultValue={plan?.min_discount_amount ?? 0}
-            placeholder="0 = no minimum"
-          />
+          <Input {...register("minDiscountAmount")} type="number" />
         </FormField>
         <div className="md:col-span-2 xl:col-span-4">
           <PharmacySlabEditor
@@ -1628,7 +1622,7 @@ function PlanTableRow({
             togglePlanActive={togglePlanActive}
             requestDeletePlan={requestDeletePlan}
             canDeletePlans={canDeletePlans}
-            className='right-10 -bottom-2'
+            className="right-10 -bottom-2"
           />
         </td>
       </tr>
@@ -1656,7 +1650,7 @@ export function PlanRowActions({
   togglePlanActive,
   requestDeletePlan,
   canDeletePlans,
-  className='right-0 top-0',
+  className = "right-0 top-0",
 }: any) {
   const { open, setOpen, ref, buttonRef } = useDropdown();
 
@@ -1679,7 +1673,9 @@ export function PlanRowActions({
 
       {/* dropdown */}
       {open && (
-      <div className={`absolute ${className} z-50 mt-2 w-22 text-xs rounded-lg border bg-white shadow-lg`}>
+        <div
+          className={`absolute ${className} z-50 mt-2 w-22 text-xs rounded-lg border bg-white shadow-lg`}
+        >
           <button
             onClick={stop(openDetail)}
             className="block w-full px-4 py-1 text-left hover:bg-slate-100"

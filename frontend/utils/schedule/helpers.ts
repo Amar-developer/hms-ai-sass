@@ -1,10 +1,13 @@
+import { ScheduleFormValues } from "@/app/validations/schedule.schema";
 import { ALL_BRANCHES } from "./constants";
 
 export function activeTenantOptions(tenants: any[]) {
   const seen = new Set<string>();
   return (tenants || []).filter((tenant: any) => {
     if (tenant.status === "suspended") return false;
-    const key = String(tenant.name || tenant.id || "").trim().toLowerCase();
+    const key = String(tenant.name || tenant.id || "")
+      .trim()
+      .toLowerCase();
     if (key && seen.has(key)) return false;
     if (key) seen.add(key);
     return true;
@@ -32,7 +35,10 @@ export function formatDisplayRange(start: any, end: any) {
   return `${formatDisplayTime(start)} - ${formatDisplayTime(end)}`;
 }
 
-export function selectedSchedulePayloads(fd: FormData, allBranchIds: string[] = []) {
+export function selectedSchedulePayloads(
+  fd: FormData,
+  allBranchIds: string[] = [],
+) {
   const weekdays = fd
     .getAll("weekdays")
     .map((value) => Number(value))
@@ -51,12 +57,12 @@ export function selectedSchedulePayloads(fd: FormData, allBranchIds: string[] = 
     }),
   ).filter((range) => range.start_time && range.end_time);
   const rawRoomNumber = String(fd.get("roomNumber") || "").replace(/\D/g, "");
-  const roomNumber = rawRoomNumber ? rawRoomNumber.padStart(3, "0").slice(0, 3) : null;
+  const roomNumber = rawRoomNumber
+    ? rawRoomNumber.padStart(3, "0").slice(0, 3)
+    : null;
   const branchValue = String(fd.get("branchId") || "");
   const branchIds =
-    branchValue === ALL_BRANCHES
-      ? allBranchIds.filter(Boolean)
-      : [branchValue];
+    branchValue === ALL_BRANCHES ? allBranchIds.filter(Boolean) : [branchValue];
   const departmentId = String(fd.get("departmentId") || "") || null;
   return branchIds.flatMap((branch_id) =>
     selectedWeekdays.flatMap((weekday) =>
@@ -121,4 +127,36 @@ export function groupSchedules(rows: any[]) {
         String(a.start_time).localeCompare(String(b.start_time)),
     ),
   }));
+}
+
+export function selectedSchedulePayloadsFromRHF(
+  data: ScheduleFormValues,
+  doctorBranchIds: string[]
+) {
+  const payloads: any[] = [];
+
+  data.ranges.forEach((range) => {
+    data.weekdays.forEach((weekday) => {
+      const payload: any = {
+        weekday: Number(weekday),
+        start_time: range.start,
+        end_time: range.end,
+        is_active: range.isActive,
+        slot_minutes: Number(data.slotMinutes),
+        department_id: data.departmentId,
+        // FIX: Send room_number as STRING or null
+        room_number: data.roomNumber ? String(data.roomNumber) : null,
+      };
+
+      if (data.branchId === ALL_BRANCHES) {
+        doctorBranchIds.forEach((branchId) => {
+          payloads.push({ ...payload, branch_id: branchId });
+        });
+      } else {
+        payloads.push({ ...payload, branch_id: data.branchId });
+      }
+    });
+  });
+
+  return payloads;
 }

@@ -7,6 +7,7 @@ import {
   ActionButton,
   ActionGroup,
   SearchableSelect,
+  Input,
 } from "../common/ui";
 import {
   DateField,
@@ -137,15 +138,15 @@ export function BookingsList({
         </div>
 
         <div className="grid gap-3 md:grid-cols-3 md:items-end justify-start w-full">
-          <TextField
-            label="Search"
-            value={filters.query}
-            onChange={(value: string) =>
-              setFilters({ ...filters, query: value })
-            }
-            placeholder="Booking, patient, staff, status"
-            className="search-input text-xs placeholder:text-xs"
-          />
+          <FormField label="Search">
+            <Input
+              value={filters.query}
+              onChange={(value: string) =>
+                setFilters({ ...filters, query: value })
+              }
+              placeholder="Booking, patient, staff, status"
+            />
+          </FormField>
           <FormField label="Status">
             <SearchableSelect
               value={filters.status}
@@ -193,7 +194,9 @@ export function BookingsList({
                       {booking.services?.length || 0} services
                     </p>
                   </td>
-                  <td className="card-desc">{capitalizeFirst(patientName(patient))}</td>
+                  <td className="card-desc">
+                    {capitalizeFirst(patientName(patient))}
+                  </td>
                   <td className="card-desc">
                     {booking.assigned_staff_name ||
                       userName(staffMap.get(booking.assigned_staff_user_id))}
@@ -454,14 +457,13 @@ export function BookingDetail({
                   ]}
                 />
               ) : (
-                <TextField
+                <Input
                   label="Service Name"
                   value={visitForm.description}
                   onChange={(value: string) =>
                     setVisitField("description", value)
                   }
                   placeholder="Type actual service done"
-                  className="search-input"
                 />
               )}
               {fixedServiceCategory === "home_care_service" ? (

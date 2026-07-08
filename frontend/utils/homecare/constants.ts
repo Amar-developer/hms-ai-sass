@@ -1,4 +1,4 @@
-import { today } from "../physiotherapy/helpers";
+import { today } from "../helper";
 
 export const statuses = [
   ["requested", "Requested"],

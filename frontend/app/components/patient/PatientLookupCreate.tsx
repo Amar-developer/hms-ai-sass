@@ -5,26 +5,29 @@ import { Search, X } from "lucide-react";
 
 import { Button, Input } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import {
-  PatientFormFields,
-  patientFormPayload,
-} from "@/features/patients/PatientFormFields";
+import { PatientFormFields } from "@/features/patients/PatientFormFields";
 import { searchPatients } from "@/lib/hmsLogic";
 import {
   isActivePatientRecord,
   patientDisplayMobile,
   patientDisplayName,
   patientDisplayNumber,
+  patientFormPayload,
 } from "@/utils/patient/helpers";
+import { PatientForm } from "@/app/forms/PatientForms";
 
 export function patientLookupLabel(patient: any) {
   if (!patient) return "";
-  return [patientDisplayName(patient), patientDisplayNumber(patient), patientDisplayMobile(patient)]
+  return [
+    patientDisplayName(patient),
+    patientDisplayNumber(patient),
+    patientDisplayMobile(patient),
+  ]
     .filter(Boolean)
     .join(" · ");
 }
 
-export function NewPatientForm({
+function NewPatientForm({
   busy,
   branches,
   defaultBranchId,
@@ -104,7 +107,9 @@ export function PatientLookupField({
   const query = String(searchValue || "").trim();
   const matches = useMemo(() => {
     if (!query || selectedPatient) return [];
-    return searchPatients(patients || [], query).filter(isActivePatientRecord).slice(0, 8);
+    return searchPatients(patients || [], query)
+      .filter(isActivePatientRecord)
+      .slice(0, 8);
   }, [patients, query, selectedPatient]);
 
   function selectPatient(patient: any) {
@@ -244,14 +249,14 @@ export function PatientLookupField({
         )}
       </FormField>
       {creating && !selectedPatient && (
-        <NewPatientForm
+        <PatientForm
+          title="Create New Patient"
           busy={busy}
-          branches={branches}
+          branches={branches || []}
           defaultBranchId={defaultBranchId}
           searchValue={searchValue}
-          onSave={savePatient}
-          onCancel={() => setCreating(false)}
-          description={createDescription}
+          onSubmit={savePatient}
+          back={() => setCreating(false)}
         />
       )}
     </div>

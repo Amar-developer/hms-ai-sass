@@ -1103,13 +1103,13 @@ export function Billing({
           </div>
         </div>
         <div className="mt-4 grid gap-3 grid-cols-6 xl:grid-cols-[1.4fr_.85fr_.85fr_.65fr_.65fr_auto] xl:items-end items-end">
-          <TextField
-            label="Search"
-            value={filters.query}
-            onChange={(v) => updateFilter("query", v)}
-            placeholder="Invoice, patient, source"
-            className="search-input"
-          />
+          <FormField label="Search">
+            <Input
+              value={filters.query}
+              onChange={(v) => updateFilter("query", v)}
+              placeholder="Invoice, patient, source"
+            />
+          </FormField>
           <FormField label="Source">
             <SearchableSelect
               value={filters.source}

@@ -9,85 +9,15 @@ import {
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import {
+  BranchOption,
   calculateAgeYears,
   patientDateInputValue,
+  patientField,
+  todayInputValue,
 } from "@/utils/patient/helpers";
+import { bloodGroups, genders } from "@/utils/patient/constants";
 
-type BranchOption = {
-  id: string;
-  name: string;
-};
 
-export type PatientFormPayload = {
-  branchId: string;
-  fullName: string;
-  mobile: string;
-  alternateMobile: string;
-  email: string;
-  gender: string;
-  dateOfBirth: string;
-  ageYears: string;
-  guardianName: string;
-  guardianMobile: string;
-  area: string;
-  address: string;
-  bloodGroup: string;
-  status: string;
-};
-
-const genders = [
-  ["", "Select gender"],
-  ["male", "Male"],
-  ["female", "Female"],
-  ["other", "Other"],
-  ["unknown", "Unknown"],
-] as const;
-
-const bloodGroups = [
-  ["", "Select blood group"],
-  ["A+", "A+"],
-  ["A-", "A-"],
-  ["B+", "B+"],
-  ["B-", "B-"],
-  ["AB+", "AB+"],
-  ["AB-", "AB-"],
-  ["O+", "O+"],
-  ["O-", "O-"],
-] as const;
-
-function formValue(fd: FormData, key: string) {
-  return String(fd.get(key) || "").trim();
-}
-
-export function patientFormPayload(fd: FormData): PatientFormPayload {
-  return {
-    branchId: formValue(fd, "branchId"),
-    fullName: formValue(fd, "fullName"),
-    mobile: formValue(fd, "mobile"),
-    alternateMobile: formValue(fd, "alternateMobile"),
-    email: formValue(fd, "email"),
-    gender: formValue(fd, "gender") || "unknown",
-    dateOfBirth: formValue(fd, "dateOfBirth"),
-    ageYears: formValue(fd, "ageYears"),
-    guardianName: formValue(fd, "guardianName"),
-    guardianMobile: formValue(fd, "guardianMobile"),
-    area: formValue(fd, "area"),
-    address: formValue(fd, "address"),
-    bloodGroup: formValue(fd, "bloodGroup"),
-    status: formValue(fd, "status") || "active",
-  };
-}
-
-function patientField(patient: any, snakeKey: string, camelKey?: string) {
-  return patient?.[snakeKey] ?? patient?.[camelKey || snakeKey] ?? "";
-}
-
-function todayInputValue() {
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  return `${today.getFullYear()}-${month}-${day}`;
-}
 
 export function PatientFormFields({
   patient,
@@ -171,7 +101,6 @@ export function PatientFormFields({
           defaultValue={patientField(patient, "full_name", "fullName")}
           required
           placeholder="Enter patient full name"
-          className="search-input"
         />
       </Field>
       <Field label="Mobile">
@@ -181,7 +110,7 @@ export function PatientFormFields({
           value={mobile}
           onChange={(e: any) => setMobile(e.target.value)}
           placeholder="Enter patient mobile number"
-          className="search-input"
+
         />
       </Field>
       <FormField label="Branch">
@@ -224,7 +153,7 @@ export function PatientFormFields({
             setDateOfBirth(nextDate);
             setAgeYears(nextDate ? calculateAgeYears(nextDate) : "");
           }}
-          // className="search-input"
+          //
         />
       </Field>
       <Field label="Age Years">
@@ -236,7 +165,7 @@ export function PatientFormFields({
           value={ageYears}
           onChange={(event: any) => setAgeYears(event.target.value)}
           placeholder="Age"
-          className="search-input"
+
         />
       </Field>
       <Field label="Guardian Name">
@@ -244,7 +173,7 @@ export function PatientFormFields({
           name="guardianName"
           defaultValue={patientField(patient, "guardian_name", "guardianName")}
           placeholder="Enter guardian name"
-          className="search-input"
+
         />
       </Field>
       <Field label="Guardian Mobile">
@@ -256,7 +185,7 @@ export function PatientFormFields({
             "guardianMobile",
           )}
           placeholder="Enter guardian mobile"
-          className="search-input"
+
         />
       </Field>
       <Field label="Alternate Mobile">
@@ -268,7 +197,7 @@ export function PatientFormFields({
             "alternateMobile",
           )}
           placeholder="Enter guardian mobile number"
-          className="search-input"
+
         />
       </Field>
       <Field label="Email">
@@ -277,7 +206,7 @@ export function PatientFormFields({
           type="email"
           defaultValue={patientField(patient, "email")}
           placeholder="Enter patient email"
-          className="search-input"
+
         />
       </Field>
       <Field label="Area">
@@ -285,7 +214,7 @@ export function PatientFormFields({
           name="area"
           defaultValue={patientField(patient, "area")}
           placeholder="Enter patient area"
-          className="search-input"
+
         />
       </Field>
       <Field label="Blood Group">
@@ -321,7 +250,6 @@ export function PatientFormFields({
             name="address"
             defaultValue={patientField(patient, "address")}
             placeholder="Enter patient Address"
-            className="search-input"
           />
         </Field>
       </div>

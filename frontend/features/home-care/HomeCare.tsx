@@ -1,47 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActionButton,
-  ActionGroup,
-  Badge,
-  Button,
-  Card,
-  RefreshButton,
-  SearchableSelect,
-  StatusToast,
-} from "@/app/components/common/ui";
-import { FormField } from "@/app/components/FormElements";
-import {
-  DateField,
-  NumberField,
-  SelectField,
-  SearchableSelectField,
-  TextField,
-  TextareaField,
-} from "@/app/components/FormElements";
-import { PatientLookupField } from "@/app/components/patient/PatientLookupCreate";
+import { Badge, RefreshButton, StatusToast } from "@/app/components/common/ui";
+import { SelectField, TextField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import { humanizeOptionLabel } from "@/lib/options";
-import { displayDate } from "@/utils/helper";
+import { today } from "@/utils/helper";
+import { emptyLine } from "@/utils/homecare/constants";
 import {
-  bookingTypeOptions,
-  emptyForm,
-  emptyLine,
-  recurrenceOptions,
-  statuses,
-} from "@/utils/homecare/constants";
-import {
-  dayCount,
   isBookingLocked,
   mergeServices,
-  money,
   patientCode,
   patientName,
-  patientSearchLabel,
-  recurrenceEndDate,
   serviceRowsFromResponse,
-  today,
   userName,
 } from "@/utils/homecare/helpers";
 import {
@@ -50,6 +21,8 @@ import {
   Header,
   InvoiceCard,
 } from "@/app/components/homecare/Shared";
+import { BookingForm } from "@/app/forms/HomeCareForms";
+import { BookingFormValues } from "@/app/validations/homecare.schema";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
 
@@ -61,13 +34,6 @@ const homeCareHourPrices: Record<string, string> = {
   "12": "1200",
   "24": "1500",
 };
-
-const homeCareHourOptions = Object.entries(homeCareHourPrices).map(
-  ([value, price]) => ({
-    value,
-    label: `${value} hours - ${money(price)}`,
-  }),
-);
 
 export function HomeCare({
   apiSession,
@@ -89,9 +55,6 @@ export function HomeCare({
   const [serviceLoadError, setServiceLoadError] = useState("");
   const [busy, setBusy] = useState("");
   const [filters, setFilters] = useState({ query: "", status: "all" });
-  const [patientSearch, setPatientSearch] = useState("");
-  const [lookupPatient, setLookupPatient] = useState<any>(null);
-  const [form, setForm] = useState<any>({ ...emptyForm });
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
   // Editing and cancelling bookings is restricted to tenant admins (and super
   // admins). Other roles can still view bookings and generate invoices.
@@ -122,10 +85,6 @@ export function HomeCare({
     () => new Map(staff.map((user: any) => [user.id, user])),
     [staff],
   );
-  const bookingType = form.booking_type || "home_care";
-  const isHomeVisitBooking = bookingType === "home_visit";
-  const selectedLookupPatient =
-    (form.patient_id && patientMap.get(form.patient_id)) || lookupPatient;
   const visitServices = useMemo(
     () =>
       services.filter((service: any) =>
@@ -195,18 +154,6 @@ export function HomeCare({
       unit_amount: String(firstService.unit_amount || 0),
     }));
   }, [selected?.id]);
-  useEffect(() => {
-    if (form.recurrence === "custom") return;
-    setForm((prev: any) => ({
-      ...prev,
-      end_date: recurrenceEndDate(prev.start_date, prev.recurrence),
-    }));
-  }, [form.start_date, form.recurrence]);
-
-  function setField(key: string, value: any) {
-    setForm((prev: any) => ({ ...prev, [key]: value }));
-  }
-
   function setVisitField(key: string, value: any) {
     setVisitForm((prev: any) => {
       const next = { ...prev, [key]: value };
@@ -235,31 +182,6 @@ export function HomeCare({
       }
       return next;
     });
-  }
-
-  function patientLocation(patient: any) {
-    return [
-      patient?.address,
-      patient?.area,
-      patient?.city,
-      patient?.district,
-      patient?.state,
-      patient?.pincode,
-      patient?.pin_code,
-    ]
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  function selectPatient(patient: any) {
-    const location = patientLocation(patient);
-    setLookupPatient(patient);
-    setForm((prev: any) => ({
-      ...prev,
-      patient_id: patient.id,
-      location: location || prev.location,
-    }));
-    setPatientSearch(patientSearchLabel(patient));
   }
 
   async function createPatient(data: any) {
@@ -291,7 +213,6 @@ export function HomeCare({
         full_name: saved.full_name || data.fullName,
         mobile: saved.mobile || data.mobile,
       };
-      selectPatient(patient);
       await loadLiveData?.(apiSession);
       setMessage("Patient created and selected.");
       return patient;
@@ -343,98 +264,40 @@ export function HomeCare({
     } catch {}
   }
 
-  function setLine(index: number, key: string, value: any) {
-    setLineItems((rows) =>
-      rows.map((row, i) => {
-        if (i !== index) return row;
-        const next = { ...row, [key]: value };
-        if (key === "service_id") {
-          const service = services.find((item: any) => item.id === value);
-          next.description = service?.name || "";
-          next.unit_amount = String(service?.default_price || 0);
-        }
-        if (
-          !isHomeVisitBooking &&
-          key === "quantity" &&
-          homeCareHourPrices[String(value)]
-        ) {
-          next.unit_amount = homeCareHourPrices[String(value)];
-        }
-        return next;
-      }),
-    );
-  }
-
-  function addLine() {
-    setLineItems((rows) => [...rows, { ...emptyLine }]);
-  }
-
-  function removeLine(index: number) {
-    setLineItems((rows) => rows.filter((_, i) => i !== index));
-  }
-
-  function changeBookingType(value: string) {
-    const isVisit = value === "home_visit";
-    setForm((prev: any) => ({
-      ...prev,
-      booking_type: value,
-      assigned_staff_user_id: "",
-      assigned_staff_name: "",
-    }));
-    const firstVisitService = visitServices[0];
-    setLineItems([
-      isVisit && firstVisitService
-        ? {
-            ...emptyLine,
-            quantity: "1",
-            service_id: firstVisitService.id,
-            description: firstVisitService.name,
-            unit_amount: String(firstVisitService.default_price || 0),
-          }
-        : isVisit
-          ? { ...emptyLine, quantity: "1", unit_amount: "0" }
-          : { ...emptyLine },
-    ]);
-  }
-
-  function payload() {
-    return {
-      branch_id: branchId,
-      patient_id: form.patient_id,
-      booking_type: bookingType,
-      location: form.location || null,
-      recurrence: form.recurrence,
-      start_date: form.start_date || today,
-      end_date: form.end_date || null,
-      status: form.status,
-      notes: form.notes || null,
-      services: lineItems
-        .filter((row) => row.service_id || row.description)
-        .map((row) => ({
-          service_id: row.service_id || null,
-          service_category: isHomeVisitBooking
-            ? "home_visit_service"
-            : "home_care_service",
-          description: row.description || null,
-          quantity: Number(row.quantity || 1),
-          unit_amount: Number(row.unit_amount || 0),
-        })),
-    };
-  }
-
-  async function saveBooking(e: any) {
-    e.preventDefault();
-    if (!apiSession) return;
+  async function handleSaveBooking(data: BookingFormValues) {
+    if (!apiSession) return false;
     setBusy("save");
     setMessage("");
     setError("");
+    const isHomeVisit = data.booking_type === "home_visit";
     try {
       const saved = await apiFetch(
         editing ? `/home-care/bookings/${editing.id}` : "/home-care/bookings",
         apiSession,
         {
           method: editing ? "PATCH" : "POST",
-          body: JSON.stringify(payload()),
+          body: JSON.stringify({
+            branch_id: branchId,
+            patient_id: data.patient_id,
+            booking_type: data.booking_type,
+            location: data.location || null,
+            recurrence: data.recurrence,
+            start_date: data.start_date || today(),
+            end_date: data.end_date || null,
+            status: data.status,
+            notes: data.notes || null,
+            services: lineItems
+              .filter((row) => row.service_id || row.description)
+              .map((row) => ({
+                service_id: row.service_id || null,
+                service_category: isHomeVisit
+                  ? "home_visit_service"
+                  : "home_care_service",
+                description: row.description || null,
+                quantity: Number(row.quantity || 1),
+                unit_amount: Number(row.unit_amount || 0),
+              })),
+          }),
         },
       );
       await load();
@@ -445,8 +308,10 @@ export function HomeCare({
       );
       setEditing(null);
       setView("view");
+      return true;
     } catch (err: any) {
       setError(err.message || "Unable to save home care booking.");
+      return false;
     } finally {
       setBusy("");
     }
@@ -587,33 +452,6 @@ export function HomeCare({
     }
     setEditing(booking);
     setSelectedId(booking.id);
-    const isVisitBooking = booking.booking_type
-      ? booking.booking_type === "home_visit"
-      : booking.services?.some((row: any) => {
-          const service = services.find(
-            (item: any) => item.id === row.service_id,
-          );
-          return String(service?.code || "")
-            .toUpperCase()
-            .startsWith("HV");
-        });
-    setForm({
-      patient_id: booking.patient_id || "",
-      assigned_staff_user_id: booking.assigned_staff_user_id || "",
-      assigned_staff_name: booking.assigned_staff_name || "",
-      staff_type: booking.staff_type || "nurse",
-      booking_type: isVisitBooking ? "home_visit" : "home_care",
-      recurrence: booking.recurrence || "daily",
-      start_date: booking.start_date || today(),
-      end_date: booking.end_date || "",
-      status: booking.status || "requested",
-      location: booking.location || "",
-      complaints: booking.complaints || "",
-      notes: booking.notes || "",
-    });
-    const bookingPatient = patientMap.get(booking.patient_id);
-    setLookupPatient(bookingPatient || null);
-    setPatientSearch(patientSearchLabel(bookingPatient));
     setLineItems(
       booking.services?.length
         ? booking.services.map((row: any) => ({
@@ -630,9 +468,6 @@ export function HomeCare({
 
   function resetForm() {
     setEditing(null);
-    setForm({ ...emptyForm });
-    setPatientSearch("");
-    setLookupPatient(null);
     setLineItems([{ ...emptyLine }]);
   }
 
@@ -669,17 +504,7 @@ export function HomeCare({
     }
   }
 
-  const days = dayCount(form.start_date, form.end_date);
-  const formLineTotal = lineItems.reduce(
-    (sum, row) =>
-      sum +
-      (isHomeVisitBooking
-        ? Number(row.quantity || 0) * Number(row.unit_amount || 0) * days
-        : Number(row.unit_amount || 0) * days),
-    0,
-  );
   const isFormView = view === "create" || view === "edit";
-  const visibleServices = isHomeVisitBooking ? visitServices : [];
 
   return (
     <div className="space-y-6">
@@ -714,265 +539,21 @@ export function HomeCare({
       )}
 
       {isFormView && (
-        <Card>
-          <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
-            <div>
-              <h3 className="card-title font-bold">
-                {editing ? "Edit Booking" : "New Booking"}
-              </h3>
-              <p className="card-desc text-slate-500">
-                Patient-linked home care / visit plan with location, service
-                lines, and schedule.
-              </p>
-            </div>
-            <ActionButton onClick={backToList}>Back to list</ActionButton>
-          </div>
-          <div className="mt-5">
-            <PatientLookupField
-              label="Patient Search"
-              patients={patients}
-              searchValue={patientSearch}
-              onSearchChange={(value: string) => {
-                setPatientSearch(value);
-                if (form.patient_id) {
-                  setForm((prev: any) => ({ ...prev, patient_id: "" }));
-                  setLookupPatient(null);
-                }
-              }}
-              selectedPatient={selectedLookupPatient}
-              onSelect={selectPatient}
-              onClear={() => {
-                setForm((prev: any) => ({ ...prev, patient_id: "" }));
-                setPatientSearch("");
-                setLookupPatient(null);
-              }}
-              onCreatePatient={createPatient}
-              branches={
-                branchId ? [{ id: branchId, name: "Current branch" }] : []
-              }
-              defaultBranchId={branchId}
-              busy={busy === "patient"}
-              required={!form.patient_id}
-              placeholder="Search patient name or mobile number"
-              createDescription="Save this record to select the patient and continue the booking."
-            />
-          </div>
-          <form
-            onSubmit={saveBooking}
-            className="mt-3 grid gap-3 md:grid-cols-4"
-          >
-            <FormField label="Booking Type">
-              <SearchableSelect
-                value={bookingType}
-                onChange={changeBookingType}
-                options={bookingTypeOptions.map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                placeholder="Select booking type"
-                searchable={false}
-              />
-            </FormField>
-
-            <FormField label="Recurrence">
-              <SearchableSelect
-                value={form.recurrence}
-                onChange={(value) => setField("recurrence", value)}
-                options={recurrenceOptions.map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                placeholder="Select recurrence"
-                searchable={false}
-              />
-            </FormField>
-            <DateField
-              label="Start Date"
-              value={form.start_date}
-              onChange={(value) => setField("start_date", value)}
-            />
-            <DateField
-              label="End Date"
-              value={form.end_date}
-              onChange={(value) => setField("end_date", value)}
-              disabled={form.recurrence !== "custom"}
-            />
-
-            <FormField label="Status">
-              <SearchableSelect
-                value={form.status}
-                onChange={(value) => setField("status", value)}
-                options={statuses.map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                placeholder="Select status"
-                searchable={false}
-              />
-            </FormField>
-            <div className="grid gap-3 md:col-span-4 md:grid-cols-2">
-              <TextareaField
-                label="Location"
-                value={form.location}
-                onChange={(value) => setField("location", value)}
-                placeholder="Patient address or manual location"
-                rows={3}
-              />
-              <TextareaField
-                label="Notes"
-                value={form.notes}
-                onChange={(value) => setField("notes", value)}
-                rows={3}
-              />
-            </div>
-            <div className="md:col-span-4 rounded-2xl bg-slate-50 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <p className="text-xs font-bold uppercase text-slate-500">
-                  {isHomeVisitBooking
-                    ? "Home Visit Service"
-                    : "Home Care Services"}
-                  <span className="ml-2 normal-case text-slate-400">
-                    {isHomeVisitBooking
-                      ? serviceLoadError
-                        ? serviceLoadError
-                        : visibleServices.length
-                          ? `${visibleServices.length} loaded: ${visibleServices
-                              .slice(0, 3)
-                              .map((service: any) => service.name)
-                              .join(", ")}`
-                          : "0 loaded"
-                      : "Manual hourly service entry"}
-                  </span>
-                </p>
-                {!isHomeVisitBooking && (
-                  <ActionButton onClick={addLine}>Add Service</ActionButton>
-                )}
-              </div>
-              <div className="space-y-3">
-                {lineItems.map((line, index) => (
-                  <div
-                    key={index}
-                    className={
-                      isHomeVisitBooking
-                        ? "grid gap-3 rounded-xl bg-white p-3 md:grid-cols-[1.4fr_.65fr_.75fr_auto]"
-                        : "grid gap-3 rounded-xl bg-white p-3 md:grid-cols-[1.6fr_.55fr_.75fr_auto]"
-                    }
-                  >
-                    {isHomeVisitBooking ? (
-                      <SearchableSelectField
-                        label="Visit Service"
-                        value={line.service_id}
-                        onChange={(value) =>
-                          setLine(index, "service_id", value)
-                        }
-                        options={[
-                          { value: "", label: "Select home visit service" },
-                          ...visitServices.map((service: any) => ({
-                            value: service.id,
-                            label: service.name,
-                            sublabel: money(service.default_price),
-                          })),
-                        ]}
-                      />
-                    ) : (
-                      <TextField
-                        label="Service Name"
-                        value={line.description}
-                        onChange={(value) =>
-                          setLine(index, "description", value)
-                        }
-                        placeholder="Type home care service name"
-                        className="search-input"
-                      />
-                    )}
-                    {!isHomeVisitBooking && (
-                      <FormField label="Hours/Day">
-                        <SearchableSelect
-                          value={line.quantity}
-                          onChange={(value) =>
-                            setLine(index, "quantity", value)
-                          }
-                          options={[
-                            ...(homeCareHourPrices[String(line.quantity)]
-                              ? []
-                              : [
-                                  {
-                                    value: String(line.quantity || ""),
-                                    label: `${line.quantity || 0} hours - custom`,
-                                  },
-                                ]),
-                            ...homeCareHourOptions,
-                          ]}
-                          searchable={false}
-                        />
-                      </FormField>
-                    )}
-                    {isHomeVisitBooking && (
-                      <NumberField
-                        label="Visits/Day"
-                        value={line.quantity}
-                        onChange={(value) => setLine(index, "quantity", value)}
-                        min={1}
-                      />
-                    )}
-                    <NumberField
-                      label={isHomeVisitBooking ? "Visit Price" : "Price"}
-                      value={line.unit_amount}
-                      onChange={(value) => setLine(index, "unit_amount", value)}
-                      min={0}
-                    />
-                    <div className="flex items-center">
-                      <ActionButton
-                        tone="danger"
-                        onClick={() => removeLine(index)}
-                        disabled={isHomeVisitBooking || lineItems.length === 1}
-                      >
-                        Remove
-                      </ActionButton>
-                    </div>
-                    <div className="text-right text-xs text-slate-500 md:col-span-4">
-                      <p className="mt-1 text-xs font-bold text-blue-600">
-                        × {days} day{days > 1 ? "s" : ""} (
-                        {displayDate(form.start_date)} →{" "}
-                        {displayDate(form.end_date || form.start_date)})
-                      </p>
-                      {Number(line.quantity || 0)}{" "}
-                      {isHomeVisitBooking ? "visit" : "hr"}
-                      {Number(line.quantity || 0) === 1 ? "" : "s"}{" "}
-                      {isHomeVisitBooking ? "×" : "-"} {money(line.unit_amount)}{" "}
-                      × {days} day
-                      {days > 1 ? "s" : ""} ={" "}
-                      <b className="text-slate-700">
-                        {money(
-                          isHomeVisitBooking
-                            ? Number(line.quantity || 0) *
-                                Number(line.unit_amount || 0) *
-                                days
-                            : Number(line.unit_amount || 0) * days,
-                        )}
-                      </b>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 flex justify-end text-sm font-bold text-slate-700">
-                Estimated total: {money(formLineTotal)}
-              </div>
-            </div>
-            <div className="flex items-end gap-2 md:col-span-4">
-              <Button disabled={busy === "save"} className="save-button">
-                {busy === "save"
-                  ? "Saving..."
-                  : editing
-                    ? "Update Booking"
-                    : "Create Booking"}
-              </Button>
-              <button onClick={backToList} className="close-button font-bold">
-                Cancel
-              </button>
-            </div>
-          </form>
-        </Card>
+        <BookingForm
+          patients={patients}
+          services={services}
+          visitServices={visitServices}
+          serviceLoadError={serviceLoadError}
+          editing={editing}
+          branchId={branchId}
+          busy={busy === "save"}
+          patientCreateBusy={busy === "patient"}
+          lineItems={lineItems}
+          setLineItems={setLineItems}
+          onCreatePatient={createPatient}
+          onSubmit={handleSaveBooking}
+          onCancel={backToList}
+        />
       )}
 
       {view === "view" && (

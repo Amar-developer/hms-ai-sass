@@ -287,7 +287,10 @@ export const fileCategoryRules: Record<string, FileCategoryRule> = {
   },
 };
 
-export const doctypeFetchPaths: Record<string,{ path: string; label: (row: any) => string; sublabel?: (row: any) => string }> = {
+export const doctypeFetchPaths: Record<
+  string,
+  { path: string; label: (row: any) => string; sublabel?: (row: any) => string }
+> = {
   IPAdmission: {
     path: "/ip/admissions",
     label: (row: any) => row.admission_number || row.id,
@@ -337,7 +340,6 @@ export const parseBankDetails = (value: any) => ({
   upi_id: String(value?.upi_id || value?.upi || ""),
   gstin: String(value?.gstin || "").toUpperCase(),
 });
-
 
 export const APPOINTMENT_GRID =
   "grid-cols-[180px_140px_180px_180px_180px_120px_320px]";

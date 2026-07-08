@@ -87,3 +87,7 @@ export function displayDateTime(value: any, fallback = "-") {
     minute: "2-digit",
   })}`;
 }
+
+export function today() {
+  return new Date().toISOString().slice(0, 10);
+}
