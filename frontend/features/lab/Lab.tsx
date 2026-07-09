@@ -695,6 +695,7 @@ export function Lab({
           createdAt={selectedOrder.created_at}
           items={splitList(selectedOrder.tests)}
           onClose={() => setSelectedOrder(null)}
+          apiSession={apiSession}
         />
       )}
       {viewConsult && (

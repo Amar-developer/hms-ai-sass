@@ -4,8 +4,18 @@ from typing import Any
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
+from app.core.access_control import require_user_branch_access
+from app.core.schema_repair import ensure_settingkey_enum_values
+from app.modules.audit.service import record_audit_event
+from app.modules.identity.models import User
 from app.modules.settings.models import AdminSetting, SettingKey, SettingScope
 from app.modules.settings.repositories import AdminSettingRepository
+from app.modules.settings.schemas import (
+    AdminSettingRead,
+    AdminSettingsBundle,
+    AdminSettingUpsert,
+    ResolvedSettingRead,
+)
 from app.modules.tenants.models import now_utc
 
 
@@ -170,3 +180,131 @@ def resolve_setting(
         )
 
     return DEFAULT_SETTING_VALUES.get(key), None, None
+
+
+def read_setting(setting: AdminSetting) -> AdminSettingRead:
+    return AdminSettingRead(
+        id=setting.id,
+        tenant_id=setting.tenant_id,
+        scope=setting.scope,
+        scope_id=setting.scope_id,
+        module=setting.module,
+        key=setting.key,
+        value=decode_value(setting.value_json),
+        created_by_user_id=setting.created_by_user_id,
+        updated_by_user_id=setting.updated_by_user_id,
+        created_at=setting.created_at,
+        updated_at=setting.updated_at,
+    )
+
+
+def upsert_admin_setting(
+    session: Session, *, tenant_id: str, payload: AdminSettingUpsert, actor: User
+) -> AdminSettingRead:
+    scope_id = validate_scope(session, tenant_id, payload.scope, payload.scope_id)
+    if payload.scope.value == "branch":
+        require_user_branch_access(actor, scope_id)
+    setting = upsert_setting(
+        session,
+        tenant_id=tenant_id,
+        scope=payload.scope,
+        scope_id=scope_id,
+        module=payload.module,
+        key=payload.key,
+        value=payload.value,
+        actor_user_id=payload.actor_user_id,
+    )
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=scope_id if payload.scope.value == "branch" else None,
+        actor_user_id=payload.actor_user_id,
+        action="setting.upserted",
+        resource_type="admin_setting",
+        resource_id=setting.id,
+        purpose="admin_configuration",
+        metadata_json=f'{{"key": "{payload.key.value}", "module": "{payload.module}"}}',
+    )
+    return read_setting(setting)
+
+
+def list_admin_settings(
+    session: Session, *, tenant_id: str, module: str | None, actor: User
+) -> list[AdminSettingRead]:
+    scope_ids = None
+    if actor.branch_id and not actor.is_super_admin:
+        scope_ids = [tenant_id, actor.branch_id]
+    settings = AdminSettingRepository(session).list_settings(
+        tenant_id=tenant_id,
+        module=module,
+        scope_ids=scope_ids,
+    )
+    return [read_setting(setting) for setting in settings]
+
+
+def get_sidebar_role_modules(session: Session, *, tenant_id: str) -> dict:
+    """Per-role sidebar module map (e.g. {"reception": ["appointments", ...]}).
+
+    Readable by any authenticated user so each user's sidebar can render. Empty
+    roles fall back to the frontend's built-in defaults.
+    """
+    ensure_settingkey_enum_values(session)
+    value, _scope, _scope_id = resolve_setting(
+        session,
+        tenant_id=tenant_id,
+        module="navigation",
+        key=SettingKey.SIDEBAR_ROLE_MODULES,
+    )
+    return value if isinstance(value, dict) else {}
+
+
+def resolve_admin_setting(
+    session: Session,
+    *,
+    tenant_id: str,
+    module: str,
+    key: SettingKey,
+    branch_id: str | None,
+) -> ResolvedSettingRead:
+    value, source_scope, source_scope_id = resolve_setting(
+        session,
+        tenant_id=tenant_id,
+        module=module,
+        key=key,
+        branch_id=branch_id,
+    )
+    return ResolvedSettingRead(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        module=module,
+        key=key,
+        value=value,
+        source_scope=source_scope,
+        source_scope_id=source_scope_id,
+    )
+
+
+def resolve_settings_bundle(
+    session: Session, *, tenant_id: str, module: str, branch_id: str | None
+) -> AdminSettingsBundle:
+    rows = []
+    for key in SettingKey:
+        value, source_scope, source_scope_id = resolve_setting(
+            session,
+            tenant_id=tenant_id,
+            module=module,
+            key=key,
+            branch_id=branch_id,
+        )
+        rows.append(
+            ResolvedSettingRead(
+                tenant_id=tenant_id,
+                branch_id=branch_id,
+                module=module,
+                key=key,
+                value=value,
+                source_scope=source_scope,
+                source_scope_id=source_scope_id,
+            )
+        )
+    return AdminSettingsBundle(settings=rows)

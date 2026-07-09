@@ -45,6 +45,20 @@ jobs:
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: medizinhub_hms
+          POSTGRES_USER: medizinhub
+          POSTGRES_PASSWORD: medizinhub_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medizinhub -d medizinhub_hms"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -64,6 +78,16 @@ jobs:
 
       - name: Lint
         run: ruff check backend/app backend/tests
+
+      - name: Check Alembic migrations on PostgreSQL
+        working-directory: backend
+        env:
+          MEDIZINHUB_DATABASE_URL: postgresql+psycopg://medizinhub:medizinhub_ci@127.0.0.1:5432/medizinhub_hms
+          # alembic/env.py imports `app.core.database`; unlike pytest (which
+          # auto-adds backend/ to sys.path via tests/conftest.py), the plain
+          # `alembic` console script needs PYTHONPATH set explicitly.
+          PYTHONPATH: .
+        run: alembic -c alembic/alembic.ini upgrade head
 
       - name: Test
         run: pytest backend/tests -q

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AuditEventCreate(BaseModel):
@@ -15,6 +15,34 @@ class AuditEventCreate(BaseModel):
 
 
 class AuditEventRead(AuditEventCreate):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     tenant_id: str
+    actor_name: str | None = None
+    actor_email: str | None = None
     created_at: datetime
+
+
+class CommentCreate(BaseModel):
+    body: str = Field(min_length=1, max_length=4000)
+
+
+class CommentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    tenant_id: str
+    resource_type: str
+    resource_id: str
+    author_user_id: str
+    author_name: str | None = None
+    author_email: str | None = None
+    body: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ActivityFeed(BaseModel):
+    events: list[AuditEventRead]
+    comments: list[CommentRead]

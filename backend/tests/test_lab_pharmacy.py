@@ -15,7 +15,7 @@ from app.modules.identity.models import User
 
 
 def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
-    from app.api.v1.lab import _package_read
+    from app.modules.lab.services.helpers import _package_read
     from app.modules.lab.models import LabTestPackage
 
     with Session(test_engine) as session:
@@ -39,7 +39,7 @@ def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
 
 
 def test_local_lab_price_uses_catalog_mrp_not_selling_price():
-    from app.api.v1.lab import _local_lab_price
+    from app.modules.lab.services.helpers import _local_lab_price
 
     test = LabTestCatalog(
         tenant_id="tenant_lab_price",
@@ -81,6 +81,7 @@ def test_lab_external_plugin_registry_is_empty(test_engine):
 
 def test_available_medicines_uses_external_graphql_catalog(test_engine, monkeypatch):
     from app.api.v1 import pharmacy as pharmacy_api
+    from app.modules.pharmacy.services import catalog as pharmacy_catalog
 
     class FakeMedicineClient:
         def get_products(self, search=None, page_size=10, current_page=1):
@@ -96,10 +97,10 @@ def test_available_medicines_uses_external_graphql_catalog(test_engine, monkeypa
             ]
 
     monkeypatch.setattr(
-        pharmacy_api, "enforce_module_enabled", lambda *_args, **_kwargs: None
+        pharmacy_catalog, "enforce_module_enabled", lambda *_args, **_kwargs: None
     )
     monkeypatch.setattr(
-        pharmacy_api, "_medicine_graphql_client", lambda: FakeMedicineClient()
+        pharmacy_catalog, "medicine_graphql_client", lambda: FakeMedicineClient()
     )
     current_user = User(
         tenant_id="tenant_medicine_search",
@@ -272,7 +273,7 @@ def test_create_lab_order_from_consultation_and_release_result(client):
 
 
 def test_zero_amount_lab_order_reprices_from_local_catalog(test_engine):
-    from app.api.v1 import lab as lab_api
+    from app.modules.lab.services import helpers as lab_api
 
     with Session(test_engine) as session:
         session.add(
@@ -314,7 +315,7 @@ def test_zero_amount_lab_order_reprices_from_local_catalog(test_engine):
 
 
 def test_text_only_lab_order_creates_priced_local_items(test_engine):
-    from app.api.v1 import lab as lab_api
+    from app.modules.lab.services import helpers as lab_api
 
     with Session(test_engine) as session:
         session.add(
@@ -352,7 +353,7 @@ def test_text_only_lab_order_creates_priced_local_items(test_engine):
 
 
 def test_selected_lab_item_uses_local_catalog_item(test_engine):
-    from app.api.v1 import lab as lab_api
+    from app.modules.lab.services import helpers as lab_api
 
     with Session(test_engine) as session:
         session.add(

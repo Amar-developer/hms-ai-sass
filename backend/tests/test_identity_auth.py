@@ -1,6 +1,8 @@
 from datetime import date
 
-from app.api.v1.identity import _normalize_user_access
+from app.modules.identity.services.helpers import (
+    normalize_user_access as _normalize_user_access,
+)
 
 
 def bootstrap_super_admin(client):

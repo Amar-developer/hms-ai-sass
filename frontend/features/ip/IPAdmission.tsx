@@ -20,6 +20,7 @@ import {
   rowTagLabel,
 } from "@/app/components/clinicalRows";
 import { UPLOADS_BASE, apiFetch, apiUpload } from "@/lib/api";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { displayDate } from "@/utils/helper";
 import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
 
@@ -991,6 +992,13 @@ export function IPAdmission({
           setLatestConsent={setLatestConsent}
           setLatestDischarge={setLatestDischarge}
           sign={sign}
+        />
+      )}
+      {selectedAdmission && (
+        <ActivityLog
+          resourceType="ip_admission"
+          resourceId={selectedAdmission?.id}
+          apiSession={apiSession}
         />
       )}
     </div>

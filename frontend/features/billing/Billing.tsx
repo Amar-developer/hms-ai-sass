@@ -976,6 +976,7 @@ export function Billing({
         supplierOptions={supplierOptions}
         updateInvoiceItemSupplier={updateInvoiceItemSupplier}
         updateInvoiceAmount={updateInvoiceAmount}
+        apiSession={apiSession}
       />
     );
   }

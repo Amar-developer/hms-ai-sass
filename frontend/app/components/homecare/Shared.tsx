@@ -29,6 +29,7 @@ import {
 } from "@/utils/homecare/helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { capitalizeFirst, displayDate } from "@/utils/helper";
+import { ActivityLog } from "../common/ActivityLog";
 
 const homeCareHourPrices: Record<string, string> = {
   "2": "500",
@@ -272,6 +273,7 @@ export function BookingDetail({
   onInvoice,
   onOpenInvoiceModule,
   canManage = false,
+  apiSession,
 }: any) {
   if (!booking) {
     return (
@@ -644,6 +646,11 @@ export function BookingDetail({
           </p>
         )}
       </Card>
+      <ActivityLog
+        resourceType="home_care_booking"
+        resourceId={booking?.id}
+        apiSession={apiSession}
+      />
     </div>
   );
 }

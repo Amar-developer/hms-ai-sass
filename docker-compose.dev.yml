@@ -41,6 +41,12 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    # The anonymous node_modules volume above can go stale after a rebuild
+    # (Compose reuses the old volume's contents instead of the freshly built
+    # image's node_modules). Installing here reconciles node_modules against
+    # the mounted package.json on every start, so newly added dependencies
+    # are always present without needing a manual `docker compose up -V`.
+    command: sh -c "npm install && npm run dev"
     depends_on:
       - postgres
       - redis

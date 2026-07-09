@@ -10,12 +10,12 @@ import {
   Badge,
   SearchableSelect,
 } from "../common/ui";
+import { ActivityLog } from "../common/ActivityLog";
 import { FormField, SearchableSelectField } from "../FormElements";
 import { displayDateTime } from "@/utils/helper";
 import { displayPatientGender } from "@/utils/patient/helpers";
 import {
   SearchPicker,
-  TagEntryBox,
   medicineFrequencyOptions,
   medicineDurationOptions,
   medicineInstructionOptions,
@@ -166,8 +166,6 @@ export function ConsultationWorkspace(props: any) {
     callNextInWorkspace,
     setActive,
   } = props;
-  const [medicineTagText, setMedicineTagText] = useState("");
-  const [labTagText, setLabTagText] = useState("");
   const [medicineDraftName, setMedicineDraftName] = useState("");
   const [labDraftName, setLabDraftName] = useState("");
   const [availableMedicineCatalog, setAvailableMedicineCatalog] =
@@ -298,17 +296,6 @@ export function ConsultationWorkspace(props: any) {
   const selectedLabTest = activeLabCatalog.find(
     (test: any) => (test.id || test.slug || test.name) === selectedLabTestId,
   );
-  const selectedLabMrp = Number(
-    selectedLabTest?.mrp_price || selectedLabTest?.mrp || 0,
-  );
-  const selectedLabSelling = Number(
-    selectedLabTest?.selling_price ||
-      selectedLabTest?.default_price ||
-      selectedLabTest?.price ||
-      0,
-  );
-  const formatPrice = (value: number) =>
-    value > 0 ? `₹${value.toLocaleString("en-IN")}` : "";
   useEffect(() => {
     setAvailableMedicineCatalog(
       Array.isArray(medicineCatalog) ? medicineCatalog : [],
@@ -576,7 +563,7 @@ export function ConsultationWorkspace(props: any) {
                   ))}
                 </div>
               )}
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 md:grid-cols-3">
                 <FormField label="Treatment Type">
                   <SearchableSelect
                     // label="Treatment Type"
@@ -613,6 +600,13 @@ export function ConsultationWorkspace(props: any) {
                     placeholder="Review after 3 days"
                   />
                 </FormField>
+                <FormField label="Complaints">
+                  <Input
+                    value={complaints}
+                    onChange={(e: any) => setComplaints(e.target.value)}
+                    placeholder="Fever | 2 days | medium"
+                  />
+                </FormField>
               </div>
               <div className="rounded-lg bg-slate-50 p-4">
                 <div className="mb-3 flex flex-col justify-between gap-1 sm:flex-row sm:items-center">
@@ -644,24 +638,14 @@ export function ConsultationWorkspace(props: any) {
                   ))}
                 </div>
               </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <FormField label="Complaints Rows">
-                  <textarea
-                    value={complaints}
-                    onChange={(e: any) => setComplaints(e.target.value)}
-                    className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
-                    placeholder="Fever | 2 days | medium"
-                  />
-                </FormField>
-                <FormField label="Doctor Notes">
-                  <textarea
-                    value={notes}
-                    onChange={(e: any) => setNotes(e.target.value)}
-                    className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
-                    placeholder="Clinical notes, advice..."
-                  />
-                </FormField>
-              </div>
+              <FormField label="Doctor Notes">
+                <textarea
+                  value={notes}
+                  onChange={(e: any) => setNotes(e.target.value)}
+                  className="min-h-28 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
+                  placeholder="Clinical notes, advice..."
+                />
+              </FormField>
 
               {/* Medicine */}
               <div className="rounded-lg bg-slate-50 p-4">
@@ -800,35 +784,50 @@ export function ConsultationWorkspace(props: any) {
                 </div>
                 <div className="mt-4">
                   <FormField label="Prescription Medicine Rows">
-                    <TagEntryBox
-                      tags={medicineItems}
-                      value={medicineTagText}
-                      onChange={setMedicineTagText}
-                      onSubmit={addMedicineFromText}
-                      onRemove={removeMedicineItem}
-                      hideInput
-                      emptyText="No medicines added yet."
-                      getLabel={(m: any) =>
-                        [
-                          m.name,
-                          m.dosage,
-                          m.frequency,
-                          m.duration,
-                          m.instructions,
-                        ]
-                          .map((part: any) => String(part || "").trim())
-                          .filter(Boolean)
-                          .join(" · ")
-                      }
-                    />
+                    <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                      {medicineItems.length === 0 ? (
+                        <p className="px-3 py-2 text-xs font-semibold text-slate-400">
+                          No medicines added yet.
+                        </p>
+                      ) : (
+                        medicineItems.map((medicine: any, index: number) => (
+                          <div
+                            key={`${medicine.name || "medicine"}-${index}`}
+                            className="flex items-center justify-between gap-2 px-3 py-2"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700">
+                              {[
+                                medicine.name,
+                                medicine.dosage,
+                                medicine.frequency,
+                                medicine.duration,
+                                medicine.instructions,
+                              ]
+                                .map((part: any) => String(part || "").trim())
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                            {!signed && (
+                              <button
+                                type="button"
+                                onClick={() => removeMedicineItem(index)}
+                                className="shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-red-500 hover:bg-red-50"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </FormField>
                 </div>
               </div>
               {/* Lab Service */}
               <div className="grid gap-3">
                 <div className="rounded-lg bg-slate-50 p-4">
-                  <div className="mt-3 grid gap-2 md:grid-cols-[2fr_0.8fr_0.8fr_1fr_1.5fr_auto] md:items-end">
-                    <FormField label="Lab/Service">
+                  <div className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.5fr_auto] md:items-end">
+                    <FormField label="Lab & Service">
                       <SearchPicker
                         value={selectedLabTestId}
                         inputValue={labDraftName}
@@ -866,21 +865,7 @@ export function ConsultationWorkspace(props: any) {
                         </p>
                       )}
                     </FormField>
-                    <FormField label="MRP">
-                      <Input
-                        value={formatPrice(selectedLabMrp)}
-                        readOnly
-                        placeholder="MRP"
-                      />
-                    </FormField>
-                    <FormField label="Rate">
-                      <Input
-                        value={formatPrice(selectedLabSelling)}
-                        readOnly
-                        placeholder="Selling"
-                      />
-                    </FormField>
-                    <FormField label="Priority">
+                    <FormField label="Lab Priority">
                       <SearchableSelect
                         value={labPriority}
                         onChange={(value: string) => setLabPriority(value)}
@@ -930,31 +915,46 @@ export function ConsultationWorkspace(props: any) {
                   </div>
 
                   <div className="mt-4">
-                    <Field label="Lab / Service">
-                      <TagEntryBox
-                        tags={referralItems.filter(
-                          (item: any) => item.type === "lab",
+                    <Field label="Prescried Lab / Service">
+                      <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                        {referralItems.filter((item: any) => item.type === "lab")
+                          .length === 0 ? (
+                          <p className="px-3 py-2 text-xs font-semibold text-slate-400">
+                            No lab tests added yet.
+                          </p>
+                        ) : (
+                          referralItems
+                            .map((item: any, index: number) => ({
+                              item,
+                              index,
+                            }))
+                            .filter(({ item }: any) => item.type === "lab")
+                            .map(({ item, index }: any) => (
+                              <div
+                                key={`${item.name || "lab"}-${index}`}
+                                className="flex items-center justify-between gap-2 px-3 py-2"
+                              >
+                                <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700">
+                                  {[item.name, item.priority, item.instructions]
+                                    .map((part: any) =>
+                                      String(part || "").trim(),
+                                    )
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </span>
+                                {!signed && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeReferralItem(index)}
+                                    className="shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-red-500 hover:bg-red-50"
+                                  >
+                                    Remove
+                                  </button>
+                                )}
+                              </div>
+                            ))
                         )}
-                        value={labTagText}
-                        onChange={setLabTagText}
-                        onSubmit={addLabFromText}
-                        onRemove={(labIndex: number) => {
-                          const indexes = referralItems
-                            .map((item: any, index: number) =>
-                              item.type === "lab" ? index : -1,
-                            )
-                            .filter((index: number) => index >= 0);
-                          removeReferralItem(indexes[labIndex]);
-                        }}
-                        hideInput
-                        emptyText="No lab tests added yet."
-                        getLabel={(r: any) =>
-                          [r.name, r.priority, r.instructions]
-                            .map((part: any) => String(part || "").trim())
-                            .filter(Boolean)
-                            .join(" · ")
-                        }
-                      />
+                      </div>
                     </Field>
                   </div>
                 </div>
@@ -1120,6 +1120,11 @@ export function ConsultationWorkspace(props: any) {
                 Call Next Patient
               </button>
             </div>
+            <ActivityLog
+              resourceType="consultation"
+              resourceId={selected?.consultationId}
+              apiSession={apiSession}
+            />
           </div>
         )}
       </Card>

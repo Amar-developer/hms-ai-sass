@@ -62,7 +62,7 @@ export function displayToIsoDate(value: any) {
 // local UTC offset. Treat a designator-less date-time as UTC so it converts to
 // the viewer's local time correctly. Values that already carry a Z/offset (or
 // are plain dates) are left untouched.
-function parseInstant(value: any) {
+export function parseInstant(value: any) {
   const raw = String(value).trim();
   if (
     /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(raw) &&

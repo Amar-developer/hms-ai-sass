@@ -10,26 +10,18 @@ from fastapi import (
     UploadFile,
     status,
 )
-from sqlalchemy.exc import OperationalError, ProgrammingError
-from sqlmodel import Session, delete, select
+from sqlmodel import Session
 
 from app.core.access_control import (
     require_branch_in_tenant,
-    require_doctor_practitioner_access,
     require_user_branch_access,
     scoped_branch_id,
 )
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
-from app.core.tenant_context import require_tenant_id
-from app.core.uploads import save_upload
 from app.core.schema_repair import ensure_upload_schema
-from app.modules.appointments.models import Appointment, AppointmentStatus
-from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
-from app.modules.billing.schemas import InvoiceDetailRead, InvoiceItemRead, InvoiceRead
-from app.modules.billing.service import next_invoice_number
-from app.modules.files.service import record_file_document
+from app.core.tenant_context import require_tenant_id
+from app.modules.billing.schemas import InvoiceDetailRead
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.ip.models import (
@@ -42,8 +34,13 @@ from app.modules.ip.models import (
     IPDocument,
     IPMedicationAdministration,
     IPMedicationOrder,
-    IPRoom,
     IPTreatment,
+)
+from app.modules.ip.repositories import (
+    IPAdmissionRepository,
+    IPBillingRepository,
+    IPClinicalRepository,
+    IPRoomRepository,
 )
 from app.modules.ip.schemas import (
     IPAdmissionCreate,
@@ -70,407 +67,50 @@ from app.modules.ip.schemas import (
     IPTreatmentCreate,
     IPTreatmentRead,
 )
-from app.modules.patients.models import Patient
-from app.modules.settings.models import SettingKey
-from app.modules.settings.numbering import next_document_number
-from app.modules.settings.service import resolve_setting
-from app.modules.subscriptions.service import enforce_module_enabled
-from app.modules.tenants.models import now_utc
+from app.modules.ip.services.admissions import (
+    convert_appointment_to_admission_record,
+    create_admission_record,
+    next_admission_number,
+    update_admission_record,
+)
+from app.modules.ip.services.billing import (
+    create_billing_item_record,
+    create_charge_record,
+    generate_ip_invoice_with_audit,
+    invoice_detail,
+)
+from app.modules.ip.services.clinical import (
+    create_consent_record,
+    create_discharge_summary_record,
+    create_ip_consultation_record,
+    create_treatment_record,
+    finalize_discharge_summary_record,
+    sign_consent_record,
+    sign_ip_consultation_record,
+)
+from app.modules.ip.services.documents import (
+    list_admission_documents_safe,
+    render_discharge_summary_pdf,
+    upload_admission_document_file,
+    upload_admission_document_rows,
+)
+from app.modules.ip.services.medication import (
+    administer_medication_record,
+    create_medication_order_record,
+)
+from app.modules.ip.services.rooms import (
+    create_room_record,
+    room_read,
+    update_room_record,
+)
+from app.modules.ip.services.validation import (
+    assert_ip_enabled,
+    ensure_admission_open,
+    get_admission,
+)
+from app.modules.audit.service import record_audit_event
 
 router = APIRouter(prefix="/ip")
-
-
-def _simple_pdf(lines: list[str]) -> bytes:
-    text = "\\n".join(lines).replace("(", "[").replace(")", "]")
-    stream = f"BT /F1 12 Tf 50 760 Td ({text}) Tj ET"
-    return (
-        b"%PDF-1.4\n"
-        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
-        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
-        b"3 0 obj << /Type /Page /Parent 2 0 R /Resources << /Font << /F1 4 0 R >> >> /MediaBox [0 0 612 792] /Contents 5 0 R >> endobj\n"
-        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n"
-        + f"5 0 obj << /Length {len(stream)} >> stream\n{stream}\nendstream endobj\n".encode()
-        + b"xref\n0 6\n0000000000 65535 f \ntrailer << /Root 1 0 R /Size 6 >>\nstartxref\n0\n%%EOF"
-    )
-
-
-def _assert_ip_enabled(session: Session, tenant_id: str) -> None:
-    enforce_module_enabled(session, tenant_id, "ip")
-
-
-def _next_admission_number(
-    session: Session, tenant_id: str, branch_id: str | None = None
-) -> str:
-    return next_document_number(
-        session, tenant_id=tenant_id, branch_id=branch_id, entity="ip_admission"
-    )
-
-
-def _get_admission(
-    session: Session, tenant_id: str, admission_id: str, current_user: User
-) -> IPAdmission:
-    admission = session.get(IPAdmission, admission_id)
-    if not admission or admission.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="IP admission not found"
-        )
-    require_user_branch_access(current_user, admission.branch_id)
-    return admission
-
-
-def _ensure_admission_open(admission: IPAdmission) -> None:
-    if admission.status in {"discharged", "cancelled"}:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="IP admission is closed; no more clinical or billing changes are allowed",
-        )
-
-
-def _active_admission_statuses() -> set[str]:
-    return {"admitted", "under_treatment", "discharge_initiated"}
-
-
-def _chargeable_days(start_date: date, end_date: date) -> int:
-    if end_date < start_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Discharge date cannot be before admission date",
-        )
-    return max((end_date - start_date).days + 1, 1)
-
-
-def _latest_discharge_date(session: Session, admission: IPAdmission) -> date | None:
-    summary = session.exec(
-        select(IPDischargeSummary)
-        .where(
-            IPDischargeSummary.tenant_id == admission.tenant_id,
-            IPDischargeSummary.admission_id == admission.id,
-        )
-        .order_by(
-            IPDischargeSummary.updated_at.desc(), IPDischargeSummary.created_at.desc()
-        )
-    ).first()
-    return summary.discharge_date if summary else None
-
-
-def _admission_end_date(session: Session, admission: IPAdmission) -> date:
-    return (
-        _latest_discharge_date(session, admission)
-        or admission.expected_discharge_date
-        or date.today()
-    )
-
-
-def _ranges_overlap(start: date, end: date, other_start: date, other_end: date) -> bool:
-    return start <= other_end and other_start <= end
-
-
-def _room_occupant(
-    session: Session,
-    *,
-    tenant_id: str,
-    room_id: str,
-    start_date: date,
-    end_date: date,
-    exclude_admission_id: str | None = None,
-) -> IPAdmission | None:
-    rows = session.exec(
-        select(IPAdmission).where(
-            IPAdmission.tenant_id == tenant_id,
-            IPAdmission.room_id == room_id,
-            IPAdmission.status.in_(_active_admission_statuses()),
-        )
-    ).all()
-    for row in rows:
-        if exclude_admission_id and row.id == exclude_admission_id:
-            continue
-        row_end = _admission_end_date(session, row)
-        if _ranges_overlap(start_date, end_date, row.admission_date, row_end):
-            return row
-    return None
-
-
-def _room_read(
-    session: Session,
-    room: IPRoom,
-    *,
-    available_from: date | None = None,
-    available_to: date | None = None,
-) -> IPRoomRead:
-    start_date = available_from or date.today()
-    end_date = available_to or start_date
-    occupant = _room_occupant(
-        session,
-        tenant_id=room.tenant_id,
-        room_id=room.id,
-        start_date=start_date,
-        end_date=end_date,
-    )
-    data = IPRoomRead.model_validate(room, from_attributes=True).model_dump()
-    data["available"] = room.is_active and occupant is None
-    data["occupied_admission_id"] = occupant.id if occupant else None
-    return IPRoomRead(**data)
-
-
-def _resolve_room_for_admission(
-    session: Session,
-    tenant_id: str,
-    branch_id: str,
-    payload: IPAdmissionCreate | IPAdmissionUpdate,
-    *,
-    admission_date: date,
-    expected_discharge_date: date | None,
-    exclude_admission_id: str | None = None,
-) -> tuple[IPRoom | None, dict[str, str | None]]:
-    if not payload.room_id:
-        return None, {}
-    # Lock the room row FOR UPDATE so two concurrent admissions to the same room
-    # serialize — the occupancy check + insert become atomic and a bed can't be
-    # double-booked in a race. (No-op on single-writer SQLite test DBs.)
-    room = session.exec(
-        select(IPRoom).where(IPRoom.id == payload.room_id).with_for_update()
-    ).first()
-    if (
-        not room
-        or room.tenant_id != tenant_id
-        or room.branch_id != branch_id
-        or not room.is_active
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or inactive IP room",
-        )
-    end_date = expected_discharge_date or admission_date
-    occupant = _room_occupant(
-        session,
-        tenant_id=tenant_id,
-        room_id=room.id,
-        start_date=admission_date,
-        end_date=end_date,
-        exclude_admission_id=exclude_admission_id,
-    )
-    if occupant:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Selected room/bed is not available for this date range",
-        )
-    return room, {
-        "ward": room.ward_name,
-        "room": room.room_number,
-        "bed": room.bed_number,
-    }
-
-
-def _invoice_detail(session: Session, invoice: Invoice) -> InvoiceDetailRead:
-    items = list(
-        session.exec(
-            select(InvoiceItem)
-            .where(
-                InvoiceItem.tenant_id == invoice.tenant_id,
-                InvoiceItem.invoice_id == invoice.id,
-            )
-            .order_by(InvoiceItem.created_at)
-        ).all()
-    )
-    return InvoiceDetailRead(
-        status=invoice.status,
-        invoice=InvoiceRead.model_validate(invoice, from_attributes=True),
-        items=[
-            InvoiceItemRead.model_validate(item, from_attributes=True) for item in items
-        ],
-        payments=[],
-    )
-
-
-def _create_billing_item(
-    session: Session,
-    admission: IPAdmission,
-    *,
-    source_type: str,
-    source_id: str | None,
-    description: str,
-    quantity: int,
-    unit_amount: int,
-    created_by_user_id: str | None,
-) -> IPBillingItem:
-    if source_id:
-        existing = session.exec(
-            select(IPBillingItem).where(
-                IPBillingItem.tenant_id == admission.tenant_id,
-                IPBillingItem.admission_id == admission.id,
-                IPBillingItem.source_type == source_type,
-                IPBillingItem.source_id == source_id,
-            )
-        ).first()
-        if existing:
-            return existing
-    item = IPBillingItem(
-        tenant_id=admission.tenant_id,
-        branch_id=admission.branch_id,
-        admission_id=admission.id,
-        source_type=source_type,
-        source_id=source_id,
-        description=description,
-        quantity=quantity,
-        unit_amount=unit_amount,
-        total_amount=quantity * unit_amount,
-        created_by_user_id=created_by_user_id,
-    )
-    session.add(item)
-    return item
-
-
-def _catalog_key(value: str | None) -> str:
-    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
-
-
-def _medicine_catalog_price(
-    session: Session, tenant_id: str, medicine_name: str
-) -> int:
-    from app.modules.pharmacy.models import MedicineCatalog
-
-    requested = _catalog_key(medicine_name)
-    if not requested:
-        return 0
-    medicines = list(
-        session.exec(
-            select(MedicineCatalog).where(MedicineCatalog.tenant_id == tenant_id)
-        ).all()
-    )
-    for medicine in medicines:
-        keys = [
-            _catalog_key(medicine.name),
-            _catalog_key(medicine.code),
-            _catalog_key(medicine.generic_name),
-        ]
-        if requested in keys or any(
-            requested and (requested in key or key in requested) for key in keys
-        ):
-            return int(medicine.default_sale_price or 0)
-    return 0
-
-
-def _lab_catalog_price(session: Session, tenant_id: str, test_name: str) -> int:
-    from app.modules.lab.models import LabTestCatalog
-
-    requested = _catalog_key(test_name)
-    if not requested:
-        return 0
-    tests = list(
-        session.exec(
-            select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id)
-        ).all()
-    )
-    for test in tests:
-        keys = [_catalog_key(test.name), _catalog_key(test.code)]
-        if requested in keys or any(
-            requested and (requested in key or key in requested) for key in keys
-        ):
-            return int(test.default_price or 0)
-    return 0
-
-
-def _ip_care_invoice_items(
-    session: Session, admission: IPAdmission, billing_items: list[IPBillingItem]
-) -> list[dict[str, int | str]]:
-    existing_sources = {
-        (item.source_type, item.source_id) for item in billing_items if item.source_id
-    }
-    existing_descriptions = {item.description for item in billing_items}
-    rows: list[dict[str, int | str]] = []
-
-    administrations = list(
-        session.exec(
-            select(IPMedicationAdministration, IPMedicationOrder)
-            .join(
-                IPMedicationOrder,
-                IPMedicationAdministration.medication_order_id == IPMedicationOrder.id,
-            )
-            .where(
-                IPMedicationAdministration.tenant_id == admission.tenant_id,
-                IPMedicationAdministration.admission_id == admission.id,
-                IPMedicationAdministration.status == "given",
-            )
-            .order_by(IPMedicationAdministration.administered_at)
-        ).all()
-    )
-    for administration, order in administrations:
-        if (
-            administration.billing_item_id
-            or ("medication_administration", administration.id) in existing_sources
-        ):
-            continue
-        unit_amount = int(order.unit_amount or 0) or _medicine_catalog_price(
-            session, admission.tenant_id, order.medicine_name
-        )
-        if unit_amount <= 0:
-            continue
-        description = f"Medicine given - {order.medicine_name}{f' {order.dosage}' if order.dosage else ''}"
-        rows.append(
-            {
-                "item_type": "ip_medication_administration",
-                "description": description,
-                "quantity": int(administration.quantity or 1),
-                "unit_amount": unit_amount,
-                "total_amount": int(administration.quantity or 1) * unit_amount,
-            }
-        )
-
-    treatments = list(
-        session.exec(
-            select(IPTreatment)
-            .where(
-                IPTreatment.tenant_id == admission.tenant_id,
-                IPTreatment.admission_id == admission.id,
-            )
-            .order_by(IPTreatment.treatment_date, IPTreatment.created_at)
-        ).all()
-    )
-    for treatment in treatments:
-        for line in (treatment.orders or "").splitlines():
-            parts = [part.strip() for part in line.split("|")]
-            if len(parts) < 2:
-                continue
-            source_type = parts[0] or "lab"
-            item_name = parts[1]
-            priority = parts[2] if len(parts) > 2 else ""
-            instructions = parts[3] if len(parts) > 3 else ""
-            amount_text = parts[4] if len(parts) > 4 else ""
-            if not item_name:
-                continue
-            normalized_type = (
-                "scan_referral" if source_type == "scan" else "lab_referral"
-            )
-            description = f"{source_type.upper()} - {item_name}{f' ({priority})' if priority else ''}{f' - {instructions}' if instructions else ''}"
-            if description in existing_descriptions:
-                continue
-            amount = int(
-                "".join(ch for ch in amount_text if ch.isdigit()) or 0
-            ) or _lab_catalog_price(session, admission.tenant_id, item_name)
-            if amount <= 0:
-                continue
-            rows.append(
-                {
-                    "item_type": f"ip_{normalized_type}",
-                    "description": description,
-                    "quantity": 1,
-                    "unit_amount": amount,
-                    "total_amount": amount,
-                }
-            )
-    return rows
-
-
-def _validate_aadhaar_number(value: str | None) -> str | None:
-    if value is None:
-        return None
-    normalized = "".join(ch for ch in value if ch.isdigit())
-    if len(normalized) != 12:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Aadhaar number must be exactly 12 digits",
-        )
-    return normalized
 
 
 @router.post("/rooms", response_model=IPRoomRead, status_code=status.HTTP_201_CREATED)
@@ -480,43 +120,10 @@ def create_room(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_CREATE)),
 ) -> IPRoomRead:
-    _assert_ip_enabled(session, tenant_id)
-    require_branch_in_tenant(session, tenant_id, payload.branch_id)
-    require_user_branch_access(current_user, payload.branch_id)
-    duplicate = session.exec(
-        select(IPRoom).where(
-            IPRoom.tenant_id == tenant_id,
-            IPRoom.branch_id == payload.branch_id,
-            IPRoom.room_number == payload.room_number,
-            IPRoom.bed_number == payload.bed_number,
-        )
-    ).first()
-    if duplicate:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Room and bed already exists"
-        )
-    room = IPRoom.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "created_by_user_id": current_user.id,
-            "updated_by_user_id": current_user.id,
-        },
+    assert_ip_enabled(session, tenant_id)
+    return create_room_record(
+        session, tenant_id=tenant_id, payload=payload, current_user=current_user
     )
-    session.add(room)
-    session.commit()
-    session.refresh(room)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=room.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_room.created",
-        resource_type="ip_room",
-        resource_id=room.id,
-        purpose="ip_room_master",
-    )
-    return _room_read(session, room)
 
 
 @router.get("/rooms", response_model=list[IPRoomRead])
@@ -533,20 +140,16 @@ def list_rooms(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPRoomRead]:
-    _assert_ip_enabled(session, tenant_id)
+    assert_ip_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
-    statement = select(IPRoom).where(IPRoom.tenant_id == tenant_id)
-    if branch_scope:
-        statement = statement.where(IPRoom.branch_id == branch_scope)
-    if ward_type:
-        statement = statement.where(IPRoom.ward_type == ward_type)
-    if room_type:
-        statement = statement.where(IPRoom.room_type == room_type)
-    rows = session.exec(
-        statement.order_by(IPRoom.ward_name, IPRoom.room_number, IPRoom.bed_number)
-    ).all()
+    rows = IPRoomRepository(session).list_rooms(
+        tenant_id=tenant_id,
+        branch_id=branch_scope,
+        ward_type=ward_type,
+        room_type=room_type,
+    )
     read_rows = [
-        _room_read(
+        room_read(
             session, row, available_from=available_from, available_to=available_to
         )
         for row in rows
@@ -564,21 +167,14 @@ def update_room(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPRoomRead:
-    _assert_ip_enabled(session, tenant_id)
-    room = session.get(IPRoom, room_id)
-    if not room or room.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="IP room not found"
-        )
-    require_user_branch_access(current_user, room.branch_id)
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(room, key, value)
-    room.updated_by_user_id = current_user.id
-    room.updated_at = now_utc()
-    session.add(room)
-    session.commit()
-    session.refresh(room)
-    return _room_read(session, room)
+    assert_ip_enabled(session, tenant_id)
+    return update_room_record(
+        session,
+        tenant_id=tenant_id,
+        room_id=room_id,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 @router.get("/admissions", response_model=list[IPAdmissionRead])
@@ -592,21 +188,13 @@ def list_admissions(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPAdmission]:
-    _assert_ip_enabled(session, tenant_id)
+    assert_ip_enabled(session, tenant_id)
     branch_scope = scoped_branch_id(current_user, branch_id)
-    statement = select(IPAdmission).where(IPAdmission.tenant_id == tenant_id)
-    if branch_scope:
-        statement = statement.where(IPAdmission.branch_id == branch_scope)
-    if patient_id:
-        statement = statement.where(IPAdmission.patient_id == patient_id)
-    if status_filter:
-        statement = statement.where(IPAdmission.status == status_filter)
-    return list(
-        session.exec(
-            statement.order_by(
-                IPAdmission.updated_at.desc(), IPAdmission.created_at.desc()
-            )
-        ).all()
+    return IPAdmissionRepository(session).list_admissions(
+        tenant_id=tenant_id,
+        branch_id=branch_scope,
+        patient_id=patient_id,
+        status_filter=status_filter,
     )
 
 
@@ -619,71 +207,16 @@ def create_admission(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_CREATE)),
 ) -> IPAdmission:
-    _assert_ip_enabled(session, tenant_id)
+    assert_ip_enabled(session, tenant_id)
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
-    patient = session.get(Patient, payload.patient_id)
-    if not patient or patient.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Patient not found"
-        )
-    appointment = (
-        session.get(Appointment, payload.source_appointment_id)
-        if payload.source_appointment_id
-        else None
-    )
-    if appointment and appointment.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Source appointment not found"
-        )
-    admission_date = payload.admission_date or date.today()
-    aadhaar_number = _validate_aadhaar_number(payload.aadhaar_number)
-    if (
-        payload.expected_discharge_date
-        and payload.expected_discharge_date < admission_date
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Expected discharge date cannot be before admission date",
-        )
-    room, room_updates = _resolve_room_for_admission(
-        session,
-        tenant_id,
-        payload.branch_id,
-        payload,
-        admission_date=admission_date,
-        expected_discharge_date=payload.expected_discharge_date,
-    )
-    admission = IPAdmission.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "admission_number": _next_admission_number(
-                session, tenant_id, payload.branch_id
-            ),
-            "admission_date": admission_date,
-            "aadhaar_number": aadhaar_number,
-            "room_id": room.id if room else payload.room_id,
-            **room_updates,
-            "created_by_user_id": current_user.id,
-            "updated_by_user_id": current_user.id,
-        },
-    )
-    session.add(admission)
-    session.commit()
-    session.refresh(admission)
-    record_audit_event(
+    return create_admission_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_admission.created",
-        resource_type="ip_admission",
-        resource_id=admission.id,
-        purpose="ip_management",
-        metadata_json=f'{{"source_appointment_id":"{admission.source_appointment_id or ""}"}}',
+        payload=payload,
+        admission_number=next_admission_number(session, tenant_id, payload.branch_id),
+        current_user=current_user,
     )
-    return admission
 
 
 @router.post(
@@ -698,37 +231,13 @@ def convert_op_to_ip(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_CREATE)),
 ) -> IPAdmission:
-    appointment = session.get(Appointment, appointment_id)
-    if not appointment or appointment.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found"
-        )
-    payload = payload.model_copy(
-        update={
-            "branch_id": appointment.branch_id,
-            "patient_id": appointment.patient_id,
-            "department_id": payload.department_id or appointment.department_id,
-            "admitting_practitioner_id": payload.admitting_practitioner_id
-            or appointment.practitioner_id,
-            "source_appointment_id": appointment.id,
-        }
-    )
-    admission = create_admission(payload, tenant_id, session, current_user)
-    appointment.status = AppointmentStatus.CONSULTATION_COMPLETED
-    session.add(appointment)
-    session.commit()
-    record_audit_event(
+    return convert_appointment_to_admission_record(
         session,
         tenant_id=tenant_id,
-        branch_id=appointment.branch_id,
-        actor_user_id=current_user.id,
-        action="appointment.converted_to_ip",
-        resource_type="appointment",
-        resource_id=appointment.id,
-        purpose="ip_conversion",
-        metadata_json=f'{{"ip_admission_id":"{admission.id}"}}',
+        appointment_id=appointment_id,
+        payload=payload,
+        current_user=current_user,
     )
-    return admission
 
 
 @router.patch("/admissions/{admission_id}", response_model=IPAdmissionRead)
@@ -739,54 +248,16 @@ def update_admission(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPAdmission:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    updates = payload.model_dump(exclude_unset=True)
-    if "aadhaar_number" in updates:
-        updates["aadhaar_number"] = _validate_aadhaar_number(updates["aadhaar_number"])
-    next_admission_date = admission.admission_date
-    next_expected_discharge_date = updates.get(
-        "expected_discharge_date", admission.expected_discharge_date
-    )
-    if (
-        next_expected_discharge_date
-        and next_expected_discharge_date < next_admission_date
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Expected discharge date cannot be before admission date",
-        )
-    if "room_id" in updates and updates["room_id"]:
-        room, room_updates = _resolve_room_for_admission(
-            session,
-            tenant_id,
-            admission.branch_id,
-            payload,
-            admission_date=next_admission_date,
-            expected_discharge_date=next_expected_discharge_date,
-            exclude_admission_id=admission.id,
-        )
-        updates.update(
-            {"room_id": room.id if room else updates["room_id"], **room_updates}
-        )
-    for key, value in updates.items():
-        setattr(admission, key, value)
-    admission.updated_by_user_id = current_user.id
-    session.add(admission)
-    session.commit()
-    session.refresh(admission)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return update_admission_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_admission.updated",
-        resource_type="ip_admission",
-        resource_id=admission.id,
-        purpose="ip_management",
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
     )
-    return admission
 
 
 @router.post("/admissions/{admission_id}/document", response_model=IPAdmissionRead)
@@ -797,33 +268,15 @@ async def upload_admission_document(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPAdmission:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    saved_filename, url_path, _ct = await save_upload(
-        file, f"ip_admission_{admission_id[:12]}"
-    )
-    admission.admission_document_url = url_path
-    admission.admission_document_name = file.filename or saved_filename
-    admission.admission_document_uploaded_at = now_utc()
-    admission.updated_at = now_utc()
-    admission.updated_by_user_id = current_user.id
-    session.add(admission)
-    record_file_document(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    admission = await upload_admission_document_file(
         session,
-        tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        patient_id=admission.patient_id,
-        file_name=admission.admission_document_name or saved_filename,
-        file_url=url_path,
-        content_type=file.content_type,
-        category="admission",
-        source_module="ip",
-        attached_to_doctype="IPAdmission",
-        attached_to_name=admission.id,
-        attached_to_field="admission_document_url",
-        attached_to_label="Admission Document",
-        uploaded_by_user_id=current_user.id,
+        admission=admission,
+        admission_id=admission_id,
+        file=file,
+        current_user=current_user,
     )
     session.commit()
     session.refresh(admission)
@@ -849,24 +302,11 @@ def list_admission_documents(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPDocument]:
-    _assert_ip_enabled(session, tenant_id)
-    ensure_upload_schema(session)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    try:
-        return list(
-            session.exec(
-                select(IPDocument)
-                .where(
-                    IPDocument.tenant_id == tenant_id,
-                    IPDocument.admission_id == admission.id,
-                )
-                .order_by(IPDocument.created_at.desc())
-            ).all()
-        )
-    except (OperationalError, ProgrammingError):
-        session.rollback()
-        ensure_upload_schema(session)
-        return []
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    return list_admission_documents_safe(
+        session, tenant_id=tenant_id, admission_id=admission.id
+    )
 
 
 @router.post(
@@ -882,58 +322,18 @@ async def upload_admission_documents(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> list[IPDocument]:
-    _assert_ip_enabled(session, tenant_id)
+    assert_ip_enabled(session, tenant_id)
     ensure_upload_schema(session)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    normalized_type = (document_type or "admission").strip().lower()[:80]
-    if normalized_type not in {
-        "admission",
-        "aadhaar",
-        "consent",
-        "discharge",
-        "clinical",
-    }:
-        normalized_type = "clinical"
-    rows: list[IPDocument] = []
-    for file in files:
-        if not file.filename:
-            continue
-        saved_filename, url_path, _ct = await save_upload(
-            file, f"ip_{normalized_type}_{admission_id[:12]}"
-        )
-        row = IPDocument(
-            tenant_id=tenant_id,
-            branch_id=admission.branch_id,
-            admission_id=admission.id,
-            document_type=normalized_type,
-            file_name=file.filename or saved_filename,
-            file_url=url_path,
-            content_type=file.content_type,
-            uploaded_by_user_id=current_user.id,
-        )
-        session.add(row)
-        record_file_document(
-            session,
-            tenant_id=tenant_id,
-            branch_id=admission.branch_id,
-            patient_id=admission.patient_id,
-            file_name=file.filename or saved_filename,
-            file_url=url_path,
-            content_type=file.content_type,
-            category=normalized_type,
-            source_module="ip",
-            attached_to_doctype="IPAdmission",
-            attached_to_name=admission.id,
-            attached_to_field=normalized_type,
-            attached_to_label=normalized_type.replace("_", " ").title(),
-            uploaded_by_user_id=current_user.id,
-        )
-        rows.append(row)
-    if not rows:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Upload at least one file"
-        )
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    rows = await upload_admission_document_rows(
+        session,
+        admission=admission,
+        admission_id=admission_id,
+        document_type=document_type,
+        files=files,
+        current_user=current_user,
+    )
     session.commit()
     for row in rows:
         session.refresh(row)
@@ -962,35 +362,16 @@ def add_treatment(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPTreatment:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    treatment = IPTreatment.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "branch_id": admission.branch_id,
-            "admission_id": admission.id,
-            "treatment_date": payload.treatment_date or date.today(),
-            "created_by_user_id": current_user.id,
-        },
-    )
-    admission.status = "under_treatment"
-    session.add(treatment)
-    session.add(admission)
-    session.commit()
-    session.refresh(treatment)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_treatment_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_treatment.created",
-        resource_type="ip_treatment",
-        resource_id=treatment.id,
-        purpose="ip_treatment",
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
     )
-    return treatment
 
 
 @router.get(
@@ -1004,17 +385,11 @@ def list_treatments(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPTreatment]:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    return list(
-        session.exec(
-            select(IPTreatment)
-            .where(
-                IPTreatment.tenant_id == tenant_id,
-                IPTreatment.admission_id == admission.id,
-            )
-            .order_by(IPTreatment.created_at.desc())
-        ).all()
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    return IPClinicalRepository(session).list_treatments(
+        tenant_id=tenant_id,
+        admission_id=admission.id,
     )
 
 
@@ -1030,39 +405,16 @@ def create_ip_consultation(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPConsultation:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    # A doctor may only record an IP consultation under their own practitioner
-    # profile — not another doctor's, matching outpatient consultation scoping.
-    require_doctor_practitioner_access(
-        session, tenant_id, current_user, payload.practitioner_id
-    )
-    consultation = IPConsultation.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "branch_id": admission.branch_id,
-            "admission_id": admission.id,
-            "consultation_date": payload.consultation_date or date.today(),
-            "created_by_user_id": current_user.id,
-            "updated_by_user_id": current_user.id,
-        },
-    )
-    session.add(consultation)
-    session.commit()
-    session.refresh(consultation)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_ip_consultation_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_consultation.created",
-        resource_type="ip_consultation",
-        resource_id=consultation.id,
-        purpose="ip_consultation",
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
     )
-    return consultation
 
 
 @router.post("/consultations/{consultation_id}/sign", response_model=IPConsultationRead)
@@ -1072,51 +424,25 @@ def sign_ip_consultation(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPConsultation:
-    consultation = session.get(IPConsultation, consultation_id)
-    if not consultation or consultation.tenant_id != tenant_id:
+    consultation = IPClinicalRepository(session).get_consultation(
+        tenant_id=tenant_id,
+        consultation_id=consultation_id,
+    )
+    if not consultation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="IP consultation not found"
         )
-    admission = _get_admission(
+    admission = get_admission(
         session, tenant_id, consultation.admission_id, current_user
     )
-    _ensure_admission_open(admission)
-    # A doctor can only sign their own IP consultation, not another doctor's.
-    require_doctor_practitioner_access(
-        session, tenant_id, current_user, consultation.practitioner_id
-    )
-    consultation.status = "signed"
-    signed_at = now_utc()
-    consultation.signed_at = signed_at
-    consultation.updated_at = signed_at
-    consultation.updated_by_user_id = current_user.id
-    if consultation.fee_amount > 0 and not consultation.billing_item_id:
-        billing_item = _create_billing_item(
-            session,
-            admission,
-            source_type="doctor_consultation",
-            source_id=consultation.id,
-            description=f"IP doctor consultation - {consultation.consultation_type.replace('_', ' ')}",
-            quantity=1,
-            unit_amount=consultation.fee_amount,
-            created_by_user_id=current_user.id,
-        )
-        session.flush()
-        consultation.billing_item_id = billing_item.id
-    session.add(consultation)
-    session.commit()
-    session.refresh(consultation)
-    record_audit_event(
+    ensure_admission_open(admission)
+    return sign_ip_consultation_record(
         session,
         tenant_id=tenant_id,
-        branch_id=consultation.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_consultation.signed",
-        resource_type="ip_consultation",
-        resource_id=consultation.id,
-        purpose="ip_consultation",
+        consultation=consultation,
+        admission=admission,
+        current_user=current_user,
     )
-    return consultation
 
 
 @router.post(
@@ -1131,33 +457,16 @@ def create_consent(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPConsentForm:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    consent = IPConsentForm.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "branch_id": admission.branch_id,
-            "admission_id": admission.id,
-            "created_by_user_id": current_user.id,
-            "updated_by_user_id": current_user.id,
-        },
-    )
-    session.add(consent)
-    session.commit()
-    session.refresh(consent)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_consent_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_consent.created",
-        resource_type="ip_consent",
-        resource_id=consent.id,
-        purpose="patient_consent",
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
     )
-    return consent
 
 
 @router.post("/consents/{consent_id}/sign", response_model=IPConsentFormRead)
@@ -1167,32 +476,21 @@ def sign_consent(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPConsentForm:
-    consent = session.get(IPConsentForm, consent_id)
-    if not consent or consent.tenant_id != tenant_id:
+    consent = IPClinicalRepository(session).get_consent(
+        tenant_id=tenant_id,
+        consent_id=consent_id,
+    )
+    if not consent:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Consent not found"
         )
-    admission = _get_admission(session, tenant_id, consent.admission_id, current_user)
-    _ensure_admission_open(admission)
-    consent.status = "signed"
-    signed_at = now_utc()
-    consent.signed_at = signed_at
-    consent.updated_at = signed_at
-    consent.updated_by_user_id = current_user.id
-    session.add(consent)
-    session.commit()
-    session.refresh(consent)
-    record_audit_event(
+    admission = get_admission(session, tenant_id, consent.admission_id, current_user)
+    ensure_admission_open(admission)
+    return sign_consent_record(
         session,
-        tenant_id=tenant_id,
-        branch_id=consent.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_consent.signed",
-        resource_type="ip_consent",
-        resource_id=consent.id,
-        purpose="patient_consent",
+        consent=consent,
+        current_user=current_user,
     )
-    return consent
 
 
 @router.post(
@@ -1207,38 +505,16 @@ def create_discharge_summary(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPDischargeSummary:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    discharge_date = payload.discharge_date or date.today()
-    _chargeable_days(admission.admission_date, discharge_date)
-    summary = IPDischargeSummary.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "branch_id": admission.branch_id,
-            "admission_id": admission.id,
-            "discharge_date": discharge_date,
-            "created_by_user_id": current_user.id,
-            "updated_by_user_id": current_user.id,
-        },
-    )
-    admission.status = "discharge_initiated"
-    session.add(summary)
-    session.add(admission)
-    session.commit()
-    session.refresh(summary)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_discharge_summary_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_discharge_summary.created",
-        resource_type="ip_discharge_summary",
-        resource_id=summary.id,
-        purpose="ip_discharge",
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
     )
-    return summary
 
 
 @router.post(
@@ -1250,45 +526,12 @@ def finalize_discharge_summary(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPDischargeSummary:
-    summary = session.get(IPDischargeSummary, summary_id)
-    if not summary or summary.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Discharge summary not found"
-        )
-    admission = _get_admission(session, tenant_id, summary.admission_id, current_user)
-    _ensure_admission_open(admission)
-    invoice = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id
-        )
-    ).first()
-    if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Generate IP invoice before finalizing discharge",
-        )
-    summary.status = "finalized"
-    finalized_at = now_utc()
-    summary.finalized_at = finalized_at
-    summary.updated_at = finalized_at
-    summary.updated_by_user_id = current_user.id
-    admission.status = "discharged"
-    admission.updated_by_user_id = current_user.id
-    session.add(summary)
-    session.add(admission)
-    session.commit()
-    session.refresh(summary)
-    record_audit_event(
+    return finalize_discharge_summary_record(
         session,
         tenant_id=tenant_id,
-        branch_id=summary.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_discharge_summary.finalized",
-        resource_type="ip_discharge_summary",
-        resource_id=summary.id,
-        purpose="ip_discharge",
+        summary_id=summary_id,
+        current_user=current_user,
     )
-    return summary
 
 
 @router.post(
@@ -1303,33 +546,16 @@ def add_charge(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPCharge:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    charge = IPCharge.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "branch_id": admission.branch_id,
-            "admission_id": admission.id,
-            "total_amount": payload.quantity * payload.unit_amount,
-            "created_by_user_id": current_user.id,
-        },
-    )
-    session.add(charge)
-    session.commit()
-    session.refresh(charge)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_charge_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_charge.created",
-        resource_type="ip_charge",
-        resource_id=charge.id,
-        purpose="ip_billing",
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
     )
-    return charge
 
 
 @router.get("/admissions/{admission_id}/charges", response_model=list[IPChargeRead])
@@ -1341,16 +567,11 @@ def list_charges(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPCharge]:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    return list(
-        session.exec(
-            select(IPCharge)
-            .where(
-                IPCharge.tenant_id == tenant_id, IPCharge.admission_id == admission.id
-            )
-            .order_by(IPCharge.created_at)
-        ).all()
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    return IPBillingRepository(session).list_charges(
+        tenant_id=tenant_id,
+        admission_id=admission.id,
     )
 
 
@@ -1366,34 +587,16 @@ def add_billing_item(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPBillingItem:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    item = _create_billing_item(
-        session,
-        admission,
-        source_type=payload.source_type,
-        source_id=payload.source_id,
-        description=payload.description,
-        quantity=payload.quantity,
-        unit_amount=payload.unit_amount,
-        created_by_user_id=current_user.id,
-    )
-    item.status = payload.status
-    session.add(item)
-    session.commit()
-    session.refresh(item)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_billing_item_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_billing_item.created",
-        resource_type="ip_billing_item",
-        resource_id=item.id,
-        purpose="ip_billing",
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
     )
-    return item
 
 
 @router.get(
@@ -1407,17 +610,11 @@ def list_billing_items(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPBillingItem]:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    return list(
-        session.exec(
-            select(IPBillingItem)
-            .where(
-                IPBillingItem.tenant_id == tenant_id,
-                IPBillingItem.admission_id == admission.id,
-            )
-            .order_by(IPBillingItem.created_at)
-        ).all()
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    return IPBillingRepository(session).list_billing_items(
+        tenant_id=tenant_id,
+        admission_id=admission.id,
     )
 
 
@@ -1433,33 +630,16 @@ def create_medication_order(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPMedicationOrder:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    order = IPMedicationOrder.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "branch_id": admission.branch_id,
-            "admission_id": admission.id,
-            "start_date": payload.start_date or date.today(),
-            "created_by_user_id": current_user.id,
-        },
-    )
-    session.add(order)
-    session.commit()
-    session.refresh(order)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_medication_order_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_medication_order.created",
-        resource_type="ip_medication_order",
-        resource_id=order.id,
-        purpose="ip_medication",
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
     )
-    return order
 
 
 @router.get(
@@ -1474,17 +654,11 @@ def list_medication_orders(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPMedicationOrder]:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    return list(
-        session.exec(
-            select(IPMedicationOrder)
-            .where(
-                IPMedicationOrder.tenant_id == tenant_id,
-                IPMedicationOrder.admission_id == admission.id,
-            )
-            .order_by(IPMedicationOrder.created_at.desc())
-        ).all()
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    return IPClinicalRepository(session).list_medication_orders(
+        tenant_id=tenant_id,
+        admission_id=admission.id,
     )
 
 
@@ -1501,52 +675,17 @@ def administer_medication(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPMedicationAdministration:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    order = session.get(IPMedicationOrder, order_id)
-    if not order or order.tenant_id != tenant_id or order.admission_id != admission.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Medication order not found"
-        )
-    administration = IPMedicationAdministration.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "branch_id": admission.branch_id,
-            "admission_id": admission.id,
-            "medication_order_id": order.id,
-            "administered_at": payload.administered_at or now_utc(),
-            "administered_by_user_id": current_user.id,
-        },
-    )
-    if administration.status == "given" and order.unit_amount > 0:
-        billing_item = _create_billing_item(
-            session,
-            admission,
-            source_type="medication_administration",
-            source_id=administration.id,
-            description=f"Medicine given - {order.medicine_name}{f' {order.dosage}' if order.dosage else ''}",
-            quantity=administration.quantity,
-            unit_amount=order.unit_amount,
-            created_by_user_id=current_user.id,
-        )
-        session.flush()
-        administration.billing_item_id = billing_item.id
-    session.add(administration)
-    session.commit()
-    session.refresh(administration)
-    record_audit_event(
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return administer_medication_record(
         session,
         tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_medication_administration.created",
-        resource_type="ip_medication_administration",
-        resource_id=administration.id,
-        purpose="ip_medication",
+        admission=admission,
+        order_id=order_id,
+        payload=payload,
+        current_user=current_user,
     )
-    return administration
 
 
 @router.get(
@@ -1561,17 +700,11 @@ def list_medication_administrations(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPMedicationAdministration]:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    return list(
-        session.exec(
-            select(IPMedicationAdministration)
-            .where(
-                IPMedicationAdministration.tenant_id == tenant_id,
-                IPMedicationAdministration.admission_id == admission.id,
-            )
-            .order_by(IPMedicationAdministration.administered_at.desc())
-        ).all()
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    return IPClinicalRepository(session).list_medication_administrations(
+        tenant_id=tenant_id,
+        admission_id=admission.id,
     )
 
 
@@ -1584,16 +717,15 @@ def get_ip_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead | None:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    invoice = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id
-        )
-    ).first()
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    invoice = IPBillingRepository(session).get_invoice_for_admission(
+        tenant_id=tenant_id,
+        admission_id=admission.id,
+    )
     if not invoice:
         return None
-    return _invoice_detail(session, invoice)
+    return invoice_detail(session, invoice)
 
 
 @router.post(
@@ -1607,178 +739,12 @@ def generate_ip_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
-    _assert_ip_enabled(session, tenant_id)
-    admission = _get_admission(session, tenant_id, admission_id, current_user)
-    _ensure_admission_open(admission)
-    charges = list(
-        session.exec(
-            select(IPCharge).where(
-                IPCharge.tenant_id == tenant_id, IPCharge.admission_id == admission.id
-            )
-        ).all()
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return generate_ip_invoice_with_audit(
+        session, tenant_id=tenant_id, admission=admission, current_user=current_user
     )
-    billing_items = list(
-        session.exec(
-            select(IPBillingItem).where(
-                IPBillingItem.tenant_id == tenant_id,
-                IPBillingItem.admission_id == admission.id,
-                IPBillingItem.status == "billable",
-            )
-        ).all()
-    )
-    # Persist any care items not yet in billing_items so the running bill stays in sync
-    computed_care_items = _ip_care_invoice_items(session, admission, billing_items)
-    if computed_care_items:
-        for item in computed_care_items:
-            source_type = str(item["item_type"]).removeprefix("ip_")
-            session.add(
-                IPBillingItem(
-                    tenant_id=tenant_id,
-                    branch_id=admission.branch_id,
-                    admission_id=admission.id,
-                    source_type=source_type,
-                    source_id=None,
-                    description=str(item["description"]),
-                    quantity=int(item["quantity"]),
-                    unit_amount=int(item["unit_amount"]),
-                    total_amount=int(item["total_amount"]),
-                    created_by_user_id=current_user.id,
-                )
-            )
-        session.flush()
-        billing_items = list(
-            session.exec(
-                select(IPBillingItem).where(
-                    IPBillingItem.tenant_id == tenant_id,
-                    IPBillingItem.admission_id == admission.id,
-                    IPBillingItem.status == "billable",
-                )
-            ).all()
-        )
-    existing = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == tenant_id, Invoice.ip_admission_id == admission.id
-        )
-    ).first()
-    room_charge: tuple[str, int, int, int] | None = None
-    if admission.room_id:
-        room = session.get(IPRoom, admission.room_id)
-        if room and room.tenant_id == tenant_id:
-            bill_until = _admission_end_date(session, admission)
-            days = _chargeable_days(admission.admission_date, bill_until)
-            room_charge = (
-                f"{room.ward_name} {room.room_number} Bed {room.bed_number} ({admission.admission_date} to {bill_until})",
-                days,
-                room.daily_rate,
-                days * room.daily_rate,
-            )
-    subtotal = (
-        sum(charge.total_amount for charge in charges)
-        + sum(item.total_amount for item in billing_items)
-        + (room_charge[3] if room_charge else 0)
-    )
-    if subtotal <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Add at least one IP charge, billable clinical event, or assign a chargeable room before generating invoice",
-        )
-    if existing:
-        invoice = existing
-        invoice.subtotal_amount = subtotal
-        invoice.taxable_amount = subtotal
-        invoice.total_amount = subtotal
-        invoice.clinic_share_amount = subtotal
-        invoice.balance_amount = max(subtotal - invoice.paid_amount, 0)
-        if invoice.paid_amount >= subtotal and subtotal > 0:
-            invoice.status = InvoiceStatus.PAID
-        elif invoice.paid_amount > 0:
-            invoice.status = InvoiceStatus.PARTIALLY_PAID
-        else:
-            invoice.status = InvoiceStatus.ISSUED
-        invoice.updated_at = now_utc()
-        session.exec(
-            delete(InvoiceItem).where(
-                InvoiceItem.tenant_id == tenant_id, InvoiceItem.invoice_id == invoice.id
-            )
-        )
-    else:
-        invoice_prefix, _scope, _scope_id = resolve_setting(
-            session,
-            tenant_id=tenant_id,
-            module="invoice",
-            key=SettingKey.INVOICE_PREFIX,
-            branch_id=admission.branch_id,
-        )
-        invoice = Invoice(
-            tenant_id=tenant_id,
-            branch_id=admission.branch_id,
-            patient_id=admission.patient_id,
-            appointment_id=admission.source_appointment_id,
-            ip_admission_id=admission.id,
-            invoice_number=next_invoice_number(
-                session, tenant_id, str(invoice_prefix or "INV"), admission.branch_id
-            ),
-            subtotal_amount=subtotal,
-            taxable_amount=subtotal,
-            total_amount=subtotal,
-            balance_amount=subtotal,
-            clinic_share_amount=subtotal,
-            created_by_user_id=current_user.id,
-        )
-    session.add(invoice)
-    session.commit()
-    session.refresh(invoice)
-    if room_charge:
-        description, quantity, unit_amount, total_amount = room_charge
-        session.add(
-            InvoiceItem(
-                tenant_id=tenant_id,
-                invoice_id=invoice.id,
-                item_type="ip_room",
-                description=description,
-                quantity=quantity,
-                unit_amount=unit_amount,
-                total_amount=total_amount,
-            )
-        )
-    for charge in charges:
-        session.add(
-            InvoiceItem(
-                tenant_id=tenant_id,
-                invoice_id=invoice.id,
-                item_type=f"ip_{charge.charge_type}",
-                description=charge.description,
-                quantity=charge.quantity,
-                unit_amount=charge.unit_amount,
-                total_amount=charge.total_amount,
-            )
-        )
-    for item in billing_items:
-        session.add(
-            InvoiceItem(
-                tenant_id=tenant_id,
-                invoice_id=invoice.id,
-                item_type=f"ip_{item.source_type}",
-                description=item.description,
-                quantity=item.quantity,
-                unit_amount=item.unit_amount,
-                total_amount=item.total_amount,
-            )
-        )
-    session.commit()
-    session.refresh(invoice)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_invoice.generated" if not existing else "ip_invoice.refreshed",
-        resource_type="invoice",
-        resource_id=invoice.id,
-        purpose="ip_billing",
-        metadata_json=f'{{"ip_admission_id":"{admission.id}","total_amount":{invoice.total_amount}}}',
-    )
-    return _invoice_detail(session, invoice)
 
 
 @router.get("/discharge-summaries/{summary_id}/pdf")
@@ -1790,32 +756,7 @@ def discharge_summary_pdf(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> Response:
-    summary = session.get(IPDischargeSummary, summary_id)
-    if not summary or summary.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Discharge summary not found"
-        )
-    admission = _get_admission(session, tenant_id, summary.admission_id, current_user)
-    patient = session.get(Patient, admission.patient_id)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_discharge_summary.exported",
-        resource_type="ip_discharge_summary",
-        resource_id=summary.id,
-        purpose="discharge_pdf",
-    )
-    pdf = _simple_pdf(
-        [
-            "MedizinHub HMS - Discharge Summary",
-            f"Admission: {admission.admission_number}",
-            f"Patient: {patient.full_name if patient else admission.patient_id}",
-            f"Discharge Date: {summary.discharge_date}",
-            f"Diagnosis: {summary.final_diagnosis}",
-            f"Course: {summary.course_in_hospital or ''}",
-            f"Advice: {summary.follow_up_advice or ''}",
-        ]
+    pdf = render_discharge_summary_pdf(
+        session, tenant_id=tenant_id, summary_id=summary_id, current_user=current_user
     )
     return Response(content=pdf, media_type="application/pdf")

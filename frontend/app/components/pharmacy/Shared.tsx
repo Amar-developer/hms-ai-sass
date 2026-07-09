@@ -3,6 +3,7 @@ import { displayDateTime } from "@/utils/helper";
 import { normalizeMedicineSchedule, parseMedicines } from "@/utils/pharmacy/helpers";
 import { useEffect, useState } from "react";
 import { Card,Button,ActionButton } from "../common/ui";
+import { ActivityLog } from "../common/ActivityLog";
 
 export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any) {
   const [consultMedicines, setConsultMedicines] = useState<any[]>([]);
@@ -91,6 +92,7 @@ export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any
             No medicines found.
           </p>
         )}
+        <ActivityLog resourceType="pharmacy_issue" resourceId={issue?.id} apiSession={apiSession} />
       </Card>
     </div>
   );

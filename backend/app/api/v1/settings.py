@@ -1,46 +1,22 @@
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from app.core.access_control import require_user_branch_access, scoped_branch_id
+from app.core.access_control import scoped_branch_id
 from app.core.auth import get_current_user, require_any_permission, require_permission
 from app.core.database import get_session
-from app.core.schema_repair import ensure_settingkey_enum_values
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.audit.service import record_audit_event
-from app.modules.settings.models import AdminSetting, SettingKey
-from app.modules.settings.repositories import AdminSettingRepository
+from app.modules.settings.models import SettingKey
 from app.modules.settings.schemas import (
     AdminSettingRead,
     AdminSettingsBundle,
     AdminSettingUpsert,
     ResolvedSettingRead,
 )
-from app.modules.settings.service import (
-    decode_value,
-    resolve_setting,
-    upsert_setting,
-    validate_scope,
-)
+from app.modules.settings import service as settings_service
 
 router = APIRouter(prefix="/settings")
-
-
-def _read_setting(setting: AdminSetting) -> AdminSettingRead:
-    return AdminSettingRead(
-        id=setting.id,
-        tenant_id=setting.tenant_id,
-        scope=setting.scope,
-        scope_id=setting.scope_id,
-        module=setting.module,
-        key=setting.key,
-        value=decode_value(setting.value_json),
-        created_by_user_id=setting.created_by_user_id,
-        updated_by_user_id=setting.updated_by_user_id,
-        created_at=setting.created_at,
-        updated_at=setting.updated_at,
-    )
 
 
 @router.put(
@@ -55,31 +31,9 @@ def upsert_admin_setting(
     current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> AdminSettingRead:
-    scope_id = validate_scope(session, tenant_id, payload.scope, payload.scope_id)
-    if payload.scope.value == "branch":
-        require_user_branch_access(current_user, scope_id)
-    setting = upsert_setting(
-        session,
-        tenant_id=tenant_id,
-        scope=payload.scope,
-        scope_id=scope_id,
-        module=payload.module,
-        key=payload.key,
-        value=payload.value,
-        actor_user_id=payload.actor_user_id,
+    return settings_service.upsert_admin_setting(
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
     )
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=scope_id if payload.scope.value == "branch" else None,
-        actor_user_id=payload.actor_user_id,
-        action="setting.upserted",
-        resource_type="admin_setting",
-        resource_id=setting.id,
-        purpose="admin_configuration",
-        metadata_json=f'{{"key": "{payload.key.value}", "module": "{payload.module}"}}',
-    )
-    return _read_setting(setting)
 
 
 @router.get(
@@ -94,15 +48,9 @@ def list_admin_settings(
     current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> list[AdminSettingRead]:
-    scope_ids = None
-    if current_user.branch_id and not current_user.is_super_admin:
-        scope_ids = [tenant_id, current_user.branch_id]
-    settings = AdminSettingRepository(session).list_settings(
-        tenant_id=tenant_id,
-        module=module,
-        scope_ids=scope_ids,
+    return settings_service.list_admin_settings(
+        session, tenant_id=tenant_id, module=module, actor=current_user
     )
-    return [_read_setting(setting) for setting in settings]
 
 
 @router.get(
@@ -115,19 +63,7 @@ def get_sidebar_role_modules(
     _current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict:
-    """Per-role sidebar module map (e.g. {"reception": ["appointments", ...]}).
-
-    Readable by any authenticated user so each user's sidebar can render. Empty
-    roles fall back to the frontend's built-in defaults.
-    """
-    ensure_settingkey_enum_values(session)
-    value, _scope, _scope_id = resolve_setting(
-        session,
-        tenant_id=tenant_id,
-        module="navigation",
-        key=SettingKey.SIDEBAR_ROLE_MODULES,
-    )
-    return value if isinstance(value, dict) else {}
+    return settings_service.get_sidebar_role_modules(session, tenant_id=tenant_id)
 
 
 @router.get(
@@ -161,21 +97,8 @@ def resolve_admin_setting(
     session: Session = Depends(get_session),
 ) -> ResolvedSettingRead:
     branch_id = scoped_branch_id(current_user, branch_id)
-    value, source_scope, source_scope_id = resolve_setting(
-        session,
-        tenant_id=tenant_id,
-        module=module,
-        key=key,
-        branch_id=branch_id,
-    )
-    return ResolvedSettingRead(
-        tenant_id=tenant_id,
-        branch_id=branch_id,
-        module=module,
-        key=key,
-        value=value,
-        source_scope=source_scope,
-        source_scope_id=source_scope_id,
+    return settings_service.resolve_admin_setting(
+        session, tenant_id=tenant_id, module=module, key=key, branch_id=branch_id
     )
 
 
@@ -193,24 +116,6 @@ def resolve_settings_bundle(
     session: Session = Depends(get_session),
 ) -> AdminSettingsBundle:
     branch_id = scoped_branch_id(current_user, branch_id)
-    rows = []
-    for key in SettingKey:
-        value, source_scope, source_scope_id = resolve_setting(
-            session,
-            tenant_id=tenant_id,
-            module=module,
-            key=key,
-            branch_id=branch_id,
-        )
-        rows.append(
-            ResolvedSettingRead(
-                tenant_id=tenant_id,
-                branch_id=branch_id,
-                module=module,
-                key=key,
-                value=value,
-                source_scope=source_scope,
-                source_scope_id=source_scope_id,
-            )
-        )
-    return AdminSettingsBundle(settings=rows)
+    return settings_service.resolve_settings_bundle(
+        session, tenant_id=tenant_id, module=module, branch_id=branch_id
+    )

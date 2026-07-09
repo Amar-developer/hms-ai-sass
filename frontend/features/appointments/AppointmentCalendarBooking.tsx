@@ -14,6 +14,7 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch, type ApiSession } from "@/lib/api";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
 import {
   FormField,
   SelectField,
@@ -1280,6 +1281,11 @@ export function AppointmentCalendarBooking(props: Props) {
               </button>
               <Button onClick={closeBooking}>Close</Button>
             </div>
+            <ActivityLog
+              resourceType="appointment"
+              resourceId={booked.appointment?.id}
+              apiSession={apiSession}
+            />
           </Card>
         )}
       </div>

@@ -7,10 +7,18 @@ from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.audit.models import AuditEvent
-from app.modules.audit.repositories import AuditEventRepository
-from app.modules.audit.schemas import AuditEventCreate, AuditEventRead
+from app.modules.audit.repositories import AuditEventRepository, CommentRepository
+from app.modules.audit.schemas import (
+    ActivityFeed,
+    AuditEventCreate,
+    AuditEventRead,
+    CommentCreate,
+    CommentRead,
+)
+from app.modules.audit.service import add_comment
 
 router = APIRouter(prefix="/audit-events")
+activity_router = APIRouter(prefix="/activity")
 
 
 @router.post(
@@ -68,3 +76,50 @@ def get_audit_event(
             status_code=status.HTTP_404_NOT_FOUND, detail="Audit event not found"
         )
     return event
+
+
+@activity_router.get(
+    "/{resource_type}/{resource_id}",
+    response_model=ActivityFeed,
+    summary="Get the activity feed (events + comments) for a document",
+)
+def get_activity_feed(
+    resource_type: str,
+    resource_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    _current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> ActivityFeed:
+    events = AuditEventRepository(session).list_for_resource(
+        tenant_id, resource_type, resource_id
+    )
+    comments = CommentRepository(session).list_for_resource(
+        tenant_id, resource_type, resource_id
+    )
+    return ActivityFeed(events=events, comments=comments)
+
+
+@activity_router.post(
+    "/{resource_type}/{resource_id}/comments",
+    response_model=CommentRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a comment to a document",
+)
+def create_comment(
+    resource_type: str,
+    resource_id: str,
+    payload: CommentCreate,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> CommentRead:
+    comment = add_comment(
+        session,
+        tenant_id=tenant_id,
+        branch_id=current_user.branch_id,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        author=current_user,
+        body=payload.body,
+    )
+    return comment

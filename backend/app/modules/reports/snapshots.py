@@ -19,7 +19,10 @@ from app.modules.billing.models import Invoice, InvoiceItem
 from app.modules.home_care.models import HomeCareBooking
 from app.modules.lab.models import LabOrderItem, LabTestCatalog
 from app.modules.reports.models import MonthlyRevenueSnapshot
-from app.modules.reports.service import is_paid_invoice, settlement_paid_basis
+from app.modules.reports.services.calculations import (
+    is_paid_invoice,
+    settlement_paid_basis,
+)
 from app.modules.tenants.models import Tenant, now_utc
 
 

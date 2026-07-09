@@ -17,6 +17,7 @@ import {
   Card,
   Input,
 } from "../common/ui";
+import { ActivityLog } from "../common/ActivityLog";
 import { displayDateTime } from "@/utils/helper";
 import { humanizeOptionLabel } from "@/lib/options";
 
@@ -51,6 +52,7 @@ export function InvoiceDetailPage({
   supplierOptions = {},
   updateInvoiceItemSupplier,
   updateInvoiceAmount,
+  apiSession,
 }: any) {
   const invoice = detail.invoice || {};
   const items = detail.items || [];
@@ -1154,6 +1156,7 @@ export function InvoiceDetailPage({
           )}
         </div>
       </Card>
+      <ActivityLog resourceType="invoice" resourceId={invoice?.id} apiSession={apiSession} />
     </div>
   );
 }

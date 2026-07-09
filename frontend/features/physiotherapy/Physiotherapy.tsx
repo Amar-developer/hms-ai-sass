@@ -15,6 +15,7 @@ import { activePhysiotherapyFeeRule, consentFiles, formatPhysiotherapistName, in
 import { Header, Info, SearchSelect } from "@/app/components/physiotherapy/Shared";
 import { modalities } from "@/utils/physiotherapy/constants";
 import { CaseForm, IPCaseForm } from "@/app/components/physiotherapy/Forms";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
 
 type View = "list" | "op" | "ip" | "detail";
 
@@ -740,6 +741,13 @@ export function Physiotherapy({
             </div>
           </Card>
         </div>
+      )}
+      {selected && view === "detail" && (
+        <ActivityLog
+          resourceType="physiotherapy_case"
+          resourceId={selected?.id}
+          apiSession={apiSession}
+        />
       )}
     </div>
   );

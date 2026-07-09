@@ -864,25 +864,43 @@ export function DoctorConsultation({
     addLabRow(test?.item_name || test?.name || value);
   }
   function removeMedicineItem(index: number) {
-    setMedicineItems((items: any[]) =>
-      items.filter((_: any, i: number) => i !== index),
-    );
+    setMedicineItems((items: any[]) => {
+      const next = items.filter((_: any, i: number) => i !== index);
+      setPrescription(
+        next
+          .map((row: any) =>
+            [
+              row.name,
+              row.dosage,
+              row.frequency,
+              row.duration,
+              row.instructions,
+            ]
+              .map((part: any) => String(part || "").trim())
+              .filter(Boolean)
+              .join(" | "),
+          )
+          .join("\n"),
+      );
+      return next;
+    });
   }
   function removeReferralItem(index: number) {
     setReferralItems((items: any[]) => {
       const removed = items[index];
       if (removed?.type === "lab") {
-        setLabTests((value: string) =>
-          labTestNames(value)
-            .filter(
-              (name: string) =>
-                name.toLowerCase() !==
-                String(removed.name || "")
-                  .trim()
-                  .toLowerCase(),
-            )
-            .join(", "),
-        );
+        setLabTests((value: string) => {
+          const names = labTestNames(value);
+          const removedName = String(removed.name || "")
+            .trim()
+            .toLowerCase();
+          const idx = names.findIndex(
+            (name: string) => name.toLowerCase() === removedName,
+          );
+          if (idx === -1) return value;
+          names.splice(idx, 1);
+          return names.join(", ");
+        });
       }
       return items.filter((_: any, i: number) => i !== index);
     });

@@ -34,7 +34,8 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine, monkeypa
             return "message-1"
 
         monkeypatch.setattr(
-            "app.modules.reports.service.send_report_email", fake_send_report_email
+            "app.modules.reports.services.job_service.send_report_email",
+            fake_send_report_email,
         )
 
         processed = process_report_job(session, job.id)

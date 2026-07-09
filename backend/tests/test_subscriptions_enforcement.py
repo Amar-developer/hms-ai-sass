@@ -3,9 +3,12 @@ from datetime import date, timedelta
 from sqlmodel import Session, select
 
 from app.core.database import get_session
-from app.api.v1.subscriptions import _plan_read
 from app.modules.subscriptions.models import SubscriptionPlan, TenantSubscription
-from app.modules.subscriptions.service import ensure_default_plans, modules_from_json
+from app.modules.subscriptions.service import (
+    ensure_default_plans,
+    modules_from_json,
+    read_plan as _plan_read,
+)
 
 
 def create_tenant(client, name: str = "Trial Clinic"):

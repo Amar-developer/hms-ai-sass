@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.appointments import router as appointments_router
-from app.api.v1.audit import router as audit_router
+from app.api.v1.audit import activity_router, router as audit_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.client_logs import router as client_logs_router
 from app.api.v1.consultations import router as consultations_router
@@ -33,6 +33,7 @@ api_router.include_router(client_logs_router, tags=["Client Logs"])
 api_router.include_router(tenants_router, tags=["tenants"])
 api_router.include_router(subscriptions_router, tags=["subscriptions"])
 api_router.include_router(audit_router, tags=["Audit"])
+api_router.include_router(activity_router, tags=["Activity"])
 api_router.include_router(patients_router, tags=["patients"])
 api_router.include_router(patient_subscriptions_router, tags=["patient-subscriptions"])
 api_router.include_router(practitioners_router, tags=["practitioners"])

@@ -4,8 +4,12 @@ from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceStatus
 from app.modules.billing.service import update_invoice_payment_status
-from app.api.v1.billing import _normalize_invoice_status
-from app.api.v1.patient_subscriptions import _read_enrollment
+from app.modules.billing.services.read_models import (
+    normalize_invoice_status as _normalize_invoice_status,
+)
+from app.modules.patient_subscriptions.service import (
+    read_enrollment as _read_enrollment,
+)
 from app.modules.lab.models import LabOrder, LabOrderItem
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,

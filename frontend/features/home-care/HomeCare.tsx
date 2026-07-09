@@ -574,6 +574,7 @@ export function HomeCare({
           onCancel={cancelBooking}
           onInvoice={() => selected && openInvoice(selected)}
           canManage={canManageBooking}
+          apiSession={apiSession}
           onOpenInvoiceModule={() =>
             invoiceDetail?.invoice &&
             goToInvoiceModule(invoiceDetail.invoice.id)

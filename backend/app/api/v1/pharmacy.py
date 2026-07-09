@@ -1,41 +1,21 @@
-import json
-import re
-from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, status
+from sqlmodel import Session
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
-from sqlmodel import Session, select
-
-from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.auth import require_any_permission, require_permission
-from app.core.config import get_settings
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
-from app.modules.audit.service import record_audit_event
-from app.modules.consultations.models import Consultation, ConsultationMedicine
 from app.modules.identity import permissions
 from app.modules.identity.models import User
-from app.modules.integrations.graphql_catalog import GraphQLCatalogClient
-from app.modules.patients.models import Patient
 from app.modules.pharmacy.models import (
-    MedicineBatch,
     MedicineCatalog,
     PharmacyIssue,
-    PharmacyIssueItem,
-    PharmacyIssueSource,
     PharmacyIssueStatus,
-    PharmacyPurchase,
-    PharmacyPurchaseItem,
     PharmacyReturn,
-    PharmacyReturnItem,
     PharmacyStockLedger,
     PharmacySupplier,
-    StockLedgerMovement,
 )
-from app.modules.pharmacy.dosing import prescription_quantity
 from app.modules.pharmacy.schemas import (
     LowStockRead,
-    MedicineBatchRead,
     MedicineCreate,
     MedicineRead,
     MedicineUpdate,
@@ -44,7 +24,6 @@ from app.modules.pharmacy.schemas import (
     PharmacyIssueCreate,
     PharmacyIssueDetailRead,
     PharmacyIssueFromConsultation,
-    PharmacyIssueItemRead,
     PharmacyIssueRead,
     PharmacyIssueStatusUpdate,
     PharmacyReturnCreate,
@@ -56,300 +35,40 @@ from app.modules.pharmacy.schemas import (
     SupplierRead,
     SupplierUpdate,
 )
-from app.modules.settings.numbering import next_document_number
-from app.modules.subscriptions.service import enforce_module_enabled
-from app.modules.tenants.models import Branch, now_utc
+from app.modules.pharmacy.repositories import PharmacySupplierRepository
+from app.modules.pharmacy.services.catalog import (
+    list_available_medicines_service,
+    list_medicines_service,
+    list_popular_medicines_service,
+)
+from app.modules.pharmacy.services.catalog_service import (
+    create_medicine_record,
+    create_supplier_record,
+    delete_medicine_record,
+    delete_supplier_record,
+    update_medicine_record,
+    update_supplier_record,
+)
+from app.modules.pharmacy.services.issues import (
+    create_pharmacy_issue_from_consultation_record,
+    create_pharmacy_issue_record,
+    get_pharmacy_issue_service,
+    link_pharmacy_billing_record,
+    list_pharmacy_issues_service,
+    update_pharmacy_issue_amount_record,
+    update_pharmacy_issue_status_record,
+)
+from app.modules.pharmacy.services.purchases import (
+    create_pharmacy_return_record,
+    create_purchase_record,
+)
+from app.modules.pharmacy.services.stock import (
+    list_batches_service,
+    list_low_stock_service,
+    list_stock_ledger_service,
+)
 
 router = APIRouter(prefix="/pharmacy")
-
-
-def _catalog_key(value: str | None) -> str:
-    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
-
-
-def _find_catalog_medicine(
-    session: Session, tenant_id: str, branch_id: str, medicine_name: str
-) -> MedicineCatalog | None:
-    requested = _catalog_key(medicine_name)
-    if not requested:
-        return None
-    medicines = list(
-        session.exec(
-            select(MedicineCatalog).where(
-                MedicineCatalog.tenant_id == tenant_id,
-                MedicineCatalog.is_active == True,  # noqa: E712
-            )
-        ).all()
-    )
-
-    def score(row: MedicineCatalog) -> int:
-        keys = [
-            _catalog_key(row.name),
-            _catalog_key(row.generic_name),
-            _catalog_key(row.strength),
-        ]
-        value = 0
-        for key in keys:
-            if not key:
-                continue
-            if key == requested:
-                value = max(value, 100)
-            elif requested in key or key in requested:
-                value = max(value, 70)
-        if row.branch_id == branch_id:
-            value += 10
-        elif row.branch_id is not None:
-            value -= 20
-        return value
-
-    matches = sorted(
-        ((score(row), row) for row in medicines), key=lambda item: item[0], reverse=True
-    )
-    return matches[0][1] if matches and matches[0][0] > 0 else None
-
-
-def _fallback_medicine_rows(text: str | None) -> list[dict[str, str | None]]:
-    rows = []
-    for line in re.split(r"\n+", text or ""):
-        parts = [part.strip() for part in line.split("|")]
-        if not parts or not parts[0]:
-            continue
-        rows.append(
-            {
-                "medicine_name": parts[0],
-                "dosage": parts[1] if len(parts) > 1 else None,
-                "frequency": parts[2] if len(parts) > 2 else None,
-                "duration": parts[3] if len(parts) > 3 else None,
-                "instructions": parts[4] if len(parts) > 4 else None,
-            }
-        )
-    return rows
-
-
-def _looks_like_frequency(value: str | None) -> bool:
-    text = (value or "").strip().lower()
-    return bool(re.match(r"^\d+\s*[-–]\s*\d+\s*[-–]\s*\d+$", text)) or text in {
-        "od",
-        "bd",
-        "tds",
-        "qid",
-        "hs",
-        "sos",
-        "daily",
-        "once daily",
-        "twice daily",
-    }
-
-
-def _looks_like_duration(value: str | None) -> bool:
-    return bool(
-        re.search(
-            r"\b\d+\s*(d|day|days|week|weeks|month|months)\b",
-            value or "",
-            flags=re.IGNORECASE,
-        )
-    )
-
-
-def _normalize_medicine_schedule(row: dict[str, str | None]) -> dict[str, str | None]:
-    if (
-        _looks_like_frequency(row.get("dosage"))
-        and _looks_like_duration(row.get("frequency"))
-        and not _looks_like_duration(row.get("duration"))
-    ):
-        return {
-            **row,
-            "dosage": None,
-            "frequency": row.get("dosage"),
-            "duration": row.get("frequency"),
-            "instructions": row.get("duration") or row.get("instructions"),
-        }
-    return row
-
-
-def _validate_patient_branch(
-    session: Session, tenant_id: str, patient_id: str, branch_id: str
-) -> None:
-    patient = session.get(Patient, patient_id)
-    branch = session.get(Branch, branch_id)
-    if not patient or patient.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid patient"
-        )
-    if not branch or branch.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid branch"
-        )
-
-
-def _get_issue_or_404(session: Session, tenant_id: str, issue_id: str) -> PharmacyIssue:
-    issue = session.get(PharmacyIssue, issue_id)
-    if not issue or issue.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Pharmacy issue not found"
-        )
-    return issue
-
-
-def _external_medicine_items_enabled(session: Session, tenant_id: str) -> bool:
-    return True
-
-
-def _medicine_graphql_client() -> GraphQLCatalogClient:
-    settings = get_settings()
-    if not settings.medicine_graphql_url:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Medicine catalog plugin is not configured",
-        )
-    return GraphQLCatalogClient(
-        graphql_url=settings.medicine_graphql_url,
-        timeout_seconds=settings.medicine_graphql_timeout_seconds,
-    )
-
-
-def _normalize_local_medicine(row: MedicineCatalog) -> dict[str, str]:
-    return {
-        "id": row.id,
-        "name": row.name,
-        "item_name": row.name,
-        "slug": row.code or row.id,
-        "generic_name": row.generic_name or "",
-        "strength": row.strength or "",
-        "source": "local",
-    }
-
-
-def _issue_detail(session: Session, issue: PharmacyIssue) -> PharmacyIssueDetailRead:
-    items = list(
-        session.exec(
-            select(PharmacyIssueItem)
-            .where(
-                PharmacyIssueItem.tenant_id == issue.tenant_id,
-                PharmacyIssueItem.pharmacy_issue_id == issue.id,
-            )
-            .order_by(PharmacyIssueItem.created_at)
-        ).all()
-    )
-    return PharmacyIssueDetailRead(
-        issue=PharmacyIssueRead.model_validate(issue, from_attributes=True),
-        items=[
-            PharmacyIssueItemRead.model_validate(item, from_attributes=True)
-            for item in items
-        ],
-    )
-
-
-def _stock_balance(
-    session: Session, tenant_id: str, branch_id: str, medicine_id: str
-) -> int:
-    batches = session.exec(
-        select(MedicineBatch).where(
-            MedicineBatch.tenant_id == tenant_id,
-            MedicineBatch.branch_id == branch_id,
-            MedicineBatch.medicine_id == medicine_id,
-        )
-    ).all()
-    return sum(batch.quantity_on_hand for batch in batches)
-
-
-def _record_stock(
-    session: Session,
-    *,
-    tenant_id: str,
-    branch_id: str,
-    medicine_id: str,
-    batch_id: str | None,
-    movement_type: StockLedgerMovement,
-    quantity_delta: int,
-    reference_type: str,
-    reference_id: str,
-    actor_user_id: str | None,
-) -> None:
-    session.add(
-        PharmacyStockLedger(
-            tenant_id=tenant_id,
-            branch_id=branch_id,
-            medicine_id=medicine_id,
-            batch_id=batch_id,
-            movement_type=movement_type,
-            quantity_delta=quantity_delta,
-            balance_after=_stock_balance(session, tenant_id, branch_id, medicine_id),
-            reference_type=reference_type,
-            reference_id=reference_id,
-            actor_user_id=actor_user_id,
-        )
-    )
-
-
-def _add_issue_items(session: Session, issue: PharmacyIssue, payload_items) -> None:
-    total = 0
-    names = []
-    for item in payload_items:
-        medicine = (
-            session.get(MedicineCatalog, item.medicine_id) if item.medicine_id else None
-        )
-        if item.medicine_id and (not medicine or medicine.tenant_id != issue.tenant_id):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid medicine"
-            )
-        batch = session.get(MedicineBatch, item.batch_id) if item.batch_id else None
-        if item.batch_id and (
-            not batch
-            or batch.tenant_id != issue.tenant_id
-            or batch.branch_id != issue.branch_id
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid medicine batch"
-            )
-        name = item.medicine_name or (medicine.name if medicine else None)
-        if not name:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Medicine name is required",
-            )
-        reference_price = (
-            batch.sale_price
-            if batch
-            else medicine.default_sale_price
-            if medicine
-            else 0
-        )
-        # A client may pass a unit price, but it can never be below the catalog /
-        # batch reference — that would silently under-bill dispensed medicine.
-        # Discounts must go through the discount workflow, not an arbitrary price.
-        if (
-            item.unit_price is not None
-            and reference_price
-            and item.unit_price < reference_price
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Unit price for '{name}' cannot be below the catalog price "
-                    f"({reference_price}). Apply a discount instead."
-                ),
-            )
-        unit_price = item.unit_price or reference_price
-        total += unit_price * item.quantity
-        names.append(name)
-        session.add(
-            PharmacyIssueItem(
-                tenant_id=issue.tenant_id,
-                branch_id=issue.branch_id,
-                pharmacy_issue_id=issue.id,
-                medicine_id=item.medicine_id,
-                substitute_for_medicine_id=item.substitute_for_medicine_id,
-                batch_id=item.batch_id,
-                medicine_name=name,
-                quantity=item.quantity,
-                unit_price=unit_price,
-            )
-        )
-    if names:
-        issue.medicine_text = ", ".join(names)
-    if total and issue.amount == 0:
-        issue.amount = total
 
 
 @router.post(
@@ -367,24 +86,9 @@ def create_medicine(
         )
     ),
 ) -> MedicineCatalog:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    if payload.branch_id:
-        require_user_branch_access(current_user, payload.branch_id)
-    medicine = MedicineCatalog.model_validate(payload, update={"tenant_id": tenant_id})
-    session.add(medicine)
-    session.commit()
-    session.refresh(medicine)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=medicine.branch_id,
-        actor_user_id=payload.created_by_user_id,
-        action="medicine.created",
-        resource_type="medicine_catalog",
-        resource_id=medicine.id,
-        purpose="pharmacy",
+    return create_medicine_record(
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
     )
-    return medicine
 
 
 @router.get("/medicines", response_model=list[MedicineRead])
@@ -402,25 +106,13 @@ def list_medicines(
         )
     ),
 ) -> list[MedicineCatalog]:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(MedicineCatalog).where(
-        MedicineCatalog.tenant_id == tenant_id,
-        MedicineCatalog.is_active == True,  # noqa: E712
-    )  # noqa: E712
-    if branch_id:
-        statement = statement.where(
-            (MedicineCatalog.branch_id == branch_id)
-            | (MedicineCatalog.branch_id.is_(None))
-        )
-    if search:
-        pattern = f"%{search}%"
-        statement = statement.where(
-            (MedicineCatalog.name.ilike(pattern))
-            | (MedicineCatalog.generic_name.ilike(pattern))
-            | (MedicineCatalog.code.ilike(pattern))
-        )
-    return list(session.exec(statement.order_by(MedicineCatalog.name)).all())
+    return list_medicines_service(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        search=search,
+        actor=current_user,
+    )
 
 
 @router.get("/catalog/available-medicines")
@@ -443,33 +135,15 @@ def list_available_medicines(
         )
     ),
 ) -> list[dict[str, str]]:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    if _external_medicine_items_enabled(session, tenant_id):
-        return _medicine_graphql_client().get_products(
-            search, page_size=page_size, current_page=current_page
-        )
-
-    branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(MedicineCatalog).where(
-        MedicineCatalog.tenant_id == tenant_id,
-        MedicineCatalog.is_active == True,  # noqa: E712
-    )  # noqa: E712
-    if branch_id:
-        statement = statement.where(
-            (MedicineCatalog.branch_id == branch_id)
-            | (MedicineCatalog.branch_id.is_(None))
-        )
-    if search:
-        pattern = f"%{search}%"
-        statement = statement.where(
-            (MedicineCatalog.name.ilike(pattern))
-            | (MedicineCatalog.generic_name.ilike(pattern))
-            | (MedicineCatalog.code.ilike(pattern))
-        )
-    return [
-        _normalize_local_medicine(row)
-        for row in session.exec(statement.order_by(MedicineCatalog.name)).all()
-    ]
+    return list_available_medicines_service(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        search=search,
+        page_size=page_size,
+        current_page=current_page,
+        actor=current_user,
+    )
 
 
 @router.get("/catalog/popular-medicines")
@@ -489,34 +163,7 @@ def list_popular_medicines(
         )
     ),
 ) -> list[dict[str, object]]:
-    """Most frequently prescribed medicines for this tenant.
-
-    Counts are derived from prescription history (ConsultationMedicine), so the
-    ranking works regardless of whether the tenant uses the external or local
-    medicine catalog — both record the prescribed name here.
-    """
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    limit = max(1, min(limit, 20))
-    rows = session.exec(
-        select(
-            ConsultationMedicine.medicine_name,
-            func.count().label("usage_count"),
-        )
-        .where(ConsultationMedicine.tenant_id == tenant_id)
-        .group_by(ConsultationMedicine.medicine_name)
-        .order_by(func.count().desc(), ConsultationMedicine.medicine_name)
-        .limit(limit)
-    ).all()
-    return [
-        {
-            "id": name,
-            "name": name,
-            "item_name": name,
-            "usage_count": int(count),
-            "source": "history",
-        }
-        for name, count in rows
-    ]
+    return list_popular_medicines_service(session, tenant_id=tenant_id, limit=limit)
 
 
 @router.patch("/medicines/{medicine_id}", response_model=MedicineRead)
@@ -527,36 +174,13 @@ def update_medicine(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> MedicineCatalog:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    medicine = session.get(MedicineCatalog, medicine_id)
-    if not medicine or medicine.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Medicine not found"
-        )
-    require_user_branch_access(current_user, medicine.branch_id)
-    data = payload.model_dump(exclude_unset=True)
-    next_branch_id = data.get("branch_id", medicine.branch_id)
-    if next_branch_id:
-        require_user_branch_access(current_user, next_branch_id)
-    for key, value in data.items():
-        setattr(medicine, key, value)
-    medicine.updated_at = now_utc()
-    if payload.updated_by_user_id:
-        medicine.updated_by_user_id = payload.updated_by_user_id
-    session.add(medicine)
-    session.commit()
-    session.refresh(medicine)
-    record_audit_event(
+    return update_medicine_record(
         session,
         tenant_id=tenant_id,
-        branch_id=medicine.branch_id,
-        actor_user_id=payload.updated_by_user_id,
-        action="medicine.updated",
-        resource_type="medicine_catalog",
-        resource_id=medicine.id,
-        purpose="pharmacy",
+        medicine_id=medicine_id,
+        payload=payload,
+        actor=current_user,
     )
-    return medicine
 
 
 @router.delete("/medicines/{medicine_id}", response_model=MedicineRead)
@@ -566,30 +190,9 @@ def delete_medicine(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> MedicineCatalog:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    medicine = session.get(MedicineCatalog, medicine_id)
-    if not medicine or medicine.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Medicine not found"
-        )
-    require_user_branch_access(current_user, medicine.branch_id)
-    medicine.is_active = False
-    medicine.updated_at = now_utc()
-    medicine.updated_by_user_id = current_user.id
-    session.add(medicine)
-    session.commit()
-    session.refresh(medicine)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=medicine.branch_id,
-        actor_user_id=current_user.id,
-        action="medicine.deleted",
-        resource_type="medicine_catalog",
-        resource_id=medicine.id,
-        purpose="pharmacy",
+    return delete_medicine_record(
+        session, tenant_id=tenant_id, medicine_id=medicine_id, actor=current_user
     )
-    return medicine
 
 
 @router.post(
@@ -608,19 +211,7 @@ def create_supplier(
         )
     ),
 ) -> PharmacySupplier:
-    supplier = PharmacySupplier.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "supplier_number": next_document_number(
-                session, tenant_id=tenant_id, entity="supplier"
-            ),
-        },
-    )
-    session.add(supplier)
-    session.commit()
-    session.refresh(supplier)
-    return supplier
+    return create_supplier_record(session, tenant_id=tenant_id, payload=payload)
 
 
 @router.get("/suppliers", response_model=list[SupplierRead])
@@ -638,10 +229,10 @@ def list_suppliers(
         )
     ),
 ) -> list[PharmacySupplier]:
-    statement = select(PharmacySupplier).where(PharmacySupplier.tenant_id == tenant_id)
-    if not include_inactive:
-        statement = statement.where(PharmacySupplier.is_active == True)  # noqa: E712
-    return list(session.exec(statement.order_by(PharmacySupplier.name)).all())
+    return PharmacySupplierRepository(session).list_for_tenant(
+        tenant_id=tenant_id,
+        include_inactive=include_inactive,
+    )
 
 
 @router.patch("/suppliers/{supplier_id}", response_model=SupplierRead)
@@ -659,18 +250,9 @@ def update_supplier(
         )
     ),
 ) -> PharmacySupplier:
-    supplier = session.get(PharmacySupplier, supplier_id)
-    if not supplier or supplier.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found"
-        )
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(supplier, key, value)
-    supplier.updated_at = datetime.now(timezone.utc)
-    session.add(supplier)
-    session.commit()
-    session.refresh(supplier)
-    return supplier
+    return update_supplier_record(
+        session, tenant_id=tenant_id, supplier_id=supplier_id, payload=payload
+    )
 
 
 @router.delete("/suppliers/{supplier_id}", response_model=SupplierRead)
@@ -687,17 +269,7 @@ def delete_supplier(
         )
     ),
 ) -> PharmacySupplier:
-    supplier = session.get(PharmacySupplier, supplier_id)
-    if not supplier or supplier.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found"
-        )
-    supplier.is_active = False
-    supplier.updated_at = datetime.now(timezone.utc)
-    session.add(supplier)
-    session.commit()
-    session.refresh(supplier)
-    return supplier
+    return delete_supplier_record(session, tenant_id=tenant_id, supplier_id=supplier_id)
 
 
 @router.post(
@@ -709,137 +281,8 @@ def create_purchase(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> PurchaseRead:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    require_user_branch_access(current_user, payload.branch_id)
-    purchase = PharmacyPurchase(
-        tenant_id=tenant_id,
-        branch_id=payload.branch_id,
-        supplier_id=payload.supplier_id,
-        purchase_order_id=payload.purchase_order_id,
-        invoice_number=payload.invoice_number,
-        purchase_date=payload.purchase_date or datetime.now(timezone.utc),
-        discount_percentage=payload.discount_percentage,
-        purchased_by_user_id=payload.purchased_by_user_id,
-    )
-    session.add(purchase)
-    session.commit()
-    session.refresh(purchase)
-    batches = []
-    line_discount_total = 0
-    taxable_total = 0
-    cgst_total = 0
-    sgst_total = 0
-    for item in payload.items:
-        medicine = session.get(MedicineCatalog, item.medicine_id)
-        if not medicine or medicine.tenant_id != tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid medicine"
-            )
-        gross_line = item.quantity * item.cost_price
-        line_discount = round(gross_line * item.discount_percentage / 100)
-        taxable_line = max(0, gross_line - line_discount)
-        cgst_amount = round(taxable_line * item.cgst_percentage / 100)
-        sgst_amount = round(taxable_line * item.sgst_percentage / 100)
-        gst_amount = cgst_amount + sgst_amount
-        line_total = taxable_line + gst_amount
-        line_discount_total += line_discount
-        taxable_total += taxable_line
-        cgst_total += cgst_amount
-        sgst_total += sgst_amount
-        batch = MedicineBatch(
-            tenant_id=tenant_id,
-            branch_id=payload.branch_id,
-            medicine_id=medicine.id,
-            purchase_id=purchase.id,
-            batch_number=item.batch_number,
-            expiry_date=item.expiry_date,
-            quantity_on_hand=item.quantity,
-            cost_price=item.cost_price,
-            sale_price=item.sale_price or medicine.default_sale_price,
-        )
-        session.add(batch)
-        session.commit()
-        session.refresh(batch)
-        batches.append(batch)
-        session.add(
-            PharmacyPurchaseItem(
-                tenant_id=tenant_id,
-                branch_id=payload.branch_id,
-                purchase_id=purchase.id,
-                medicine_id=medicine.id,
-                batch_id=batch.id,
-                quantity=item.quantity,
-                cost_price=item.cost_price,
-                sale_price=batch.sale_price,
-                discount_percentage=item.discount_percentage,
-                discount_amount=line_discount,
-                taxable_amount=taxable_line,
-                cgst_percentage=item.cgst_percentage,
-                sgst_percentage=item.sgst_percentage,
-                cgst_amount=cgst_amount,
-                sgst_amount=sgst_amount,
-                gst_amount=gst_amount,
-                line_total=line_total,
-            )
-        )
-        _record_stock(
-            session,
-            tenant_id=tenant_id,
-            branch_id=payload.branch_id,
-            medicine_id=medicine.id,
-            batch_id=batch.id,
-            movement_type=StockLedgerMovement.PURCHASE,
-            quantity_delta=item.quantity,
-            reference_type="pharmacy_purchase",
-            reference_id=purchase.id,
-            actor_user_id=payload.purchased_by_user_id,
-        )
-    purchase_discount = round(taxable_total * payload.discount_percentage / 100)
-    purchase.discount_amount = line_discount_total + purchase_discount
-    purchase.taxable_amount = max(0, taxable_total - purchase_discount)
-    if taxable_total and purchase_discount:
-        cgst_total = round(cgst_total * purchase.taxable_amount / taxable_total)
-        sgst_total = round(sgst_total * purchase.taxable_amount / taxable_total)
-    purchase.cgst_amount = cgst_total
-    purchase.sgst_amount = sgst_total
-    purchase.gst_amount = cgst_total + sgst_total
-    purchase.total_amount = purchase.taxable_amount + purchase.gst_amount
-    purchase.updated_at = datetime.now(timezone.utc)
-    session.add(purchase)
-    session.commit()
-    session.refresh(purchase)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=payload.branch_id,
-        actor_user_id=payload.purchased_by_user_id,
-        action="pharmacy_purchase.created",
-        resource_type="pharmacy_purchase",
-        resource_id=purchase.id,
-        purpose="pharmacy",
-    )
-    return PurchaseRead(
-        id=purchase.id,
-        tenant_id=purchase.tenant_id,
-        branch_id=purchase.branch_id,
-        supplier_id=purchase.supplier_id,
-        purchase_order_id=purchase.purchase_order_id,
-        invoice_number=purchase.invoice_number,
-        purchase_date=purchase.purchase_date,
-        discount_percentage=purchase.discount_percentage,
-        discount_amount=purchase.discount_amount,
-        taxable_amount=purchase.taxable_amount,
-        cgst_amount=purchase.cgst_amount,
-        sgst_amount=purchase.sgst_amount,
-        gst_amount=purchase.gst_amount,
-        total_amount=purchase.total_amount,
-        purchased_by_user_id=purchase.purchased_by_user_id,
-        created_at=purchase.created_at,
-        updated_at=purchase.updated_at,
-        batches=[
-            MedicineBatchRead.model_validate(batch, from_attributes=True)
-            for batch in batches
-        ],
+    return create_purchase_record(
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
     )
 
 
@@ -852,89 +295,9 @@ def create_pharmacy_return(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> PharmacyReturn:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    require_user_branch_access(current_user, payload.branch_id)
-    total = 0
-    return_record = PharmacyReturn(
-        tenant_id=tenant_id,
-        branch_id=payload.branch_id,
-        supplier_id=payload.supplier_id,
-        purchase_id=payload.purchase_id,
-        reason=payload.reason,
-        returned_by_user_id=payload.returned_by_user_id,
+    return create_pharmacy_return_record(
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
     )
-    session.add(return_record)
-    session.commit()
-    session.refresh(return_record)
-    for item in payload.items:
-        # Lock the batch row so the read-then-decrement is atomic under
-        # concurrent returns/dispenses (no negative or lost stock updates).
-        batch = session.exec(
-            select(MedicineBatch)
-            .where(MedicineBatch.id == item.batch_id)
-            .with_for_update()
-        ).first()
-        if (
-            not batch
-            or batch.tenant_id != tenant_id
-            or batch.branch_id != payload.branch_id
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid return batch"
-            )
-        if batch.medicine_id != item.medicine_id:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Medicine and batch do not match",
-            )
-        if batch.quantity_on_hand < item.quantity:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Return quantity exceeds stock",
-            )
-        amount = item.amount or item.quantity * batch.cost_price
-        total += amount
-        batch.quantity_on_hand -= item.quantity
-        batch.updated_at = datetime.now(timezone.utc)
-        session.add(batch)
-        session.add(
-            PharmacyReturnItem(
-                tenant_id=tenant_id,
-                branch_id=payload.branch_id,
-                return_id=return_record.id,
-                medicine_id=item.medicine_id,
-                batch_id=item.batch_id,
-                quantity=item.quantity,
-                amount=amount,
-            )
-        )
-        _record_stock(
-            session,
-            tenant_id=tenant_id,
-            branch_id=payload.branch_id,
-            medicine_id=item.medicine_id,
-            batch_id=item.batch_id,
-            movement_type=StockLedgerMovement.RETURN,
-            quantity_delta=-item.quantity,
-            reference_type="pharmacy_return",
-            reference_id=return_record.id,
-            actor_user_id=payload.returned_by_user_id,
-        )
-    return_record.total_amount = total
-    session.add(return_record)
-    session.commit()
-    session.refresh(return_record)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=payload.branch_id,
-        actor_user_id=payload.returned_by_user_id,
-        action="pharmacy_return.created",
-        resource_type="pharmacy_return",
-        resource_id=return_record.id,
-        purpose="pharmacy",
-    )
-    return return_record
 
 
 @router.get("/batches", response_model=list[dict])
@@ -945,17 +308,13 @@ def list_batches(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> list[dict]:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(MedicineBatch).where(MedicineBatch.tenant_id == tenant_id)
-    if branch_id:
-        statement = statement.where(MedicineBatch.branch_id == branch_id)
-    if medicine_id:
-        statement = statement.where(MedicineBatch.medicine_id == medicine_id)
-    return [
-        row.model_dump()
-        for row in session.exec(statement.order_by(MedicineBatch.expiry_date)).all()
-    ]
+    return list_batches_service(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        medicine_id=medicine_id,
+        actor=current_user,
+    )
 
 
 @router.post(
@@ -969,49 +328,9 @@ def create_pharmacy_issue(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> PharmacyIssue:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    _validate_patient_branch(session, tenant_id, payload.patient_id, payload.branch_id)
-    require_user_branch_access(current_user, payload.branch_id)
-    if payload.consultation_id:
-        consultation = session.get(Consultation, payload.consultation_id)
-        if (
-            not consultation
-            or consultation.tenant_id != tenant_id
-            or consultation.patient_id != payload.patient_id
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid consultation"
-            )
-    issue = PharmacyIssue.model_validate(
-        payload,
-        update={
-            "tenant_id": tenant_id,
-            "issue_number": next_document_number(
-                session,
-                tenant_id=tenant_id,
-                branch_id=payload.branch_id,
-                entity="pharmacy_issue",
-            ),
-        },
+    return create_pharmacy_issue_record(
+        session, tenant_id=tenant_id, payload=payload, actor=current_user
     )
-    session.add(issue)
-    session.commit()
-    session.refresh(issue)
-    _add_issue_items(session, issue, payload.items)
-    session.add(issue)
-    session.commit()
-    session.refresh(issue)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=issue.branch_id,
-        actor_user_id=payload.issued_by_user_id,
-        action="pharmacy_issue.created",
-        resource_type="pharmacy_issue",
-        resource_id=issue.id,
-        purpose="pharmacy",
-    )
-    return issue
 
 
 @router.post(
@@ -1026,126 +345,13 @@ def create_pharmacy_issue_from_consultation(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> PharmacyIssue:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    consultation = session.get(Consultation, consultation_id)
-    if not consultation or consultation.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Consultation not found"
-        )
-    if not consultation.prescription_text:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Consultation has no prescription",
-        )
-    require_user_branch_access(current_user, consultation.branch_id)
-    existing = session.exec(
-        select(PharmacyIssue).where(
-            PharmacyIssue.tenant_id == tenant_id,
-            PharmacyIssue.consultation_id == consultation.id,
-        )
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Pharmacy issue already exists"
-        )
-    issue = PharmacyIssue(
-        tenant_id=tenant_id,
-        branch_id=consultation.branch_id,
-        patient_id=consultation.patient_id,
-        consultation_id=consultation.id,
-        issue_number=next_document_number(
-            session,
-            tenant_id=tenant_id,
-            branch_id=consultation.branch_id,
-            entity="pharmacy_issue",
-        ),
-        source=PharmacyIssueSource.CONSULTATION,
-        medicine_text=consultation.prescription_text,
-        amount=payload.amount,
-        issued_by_user_id=payload.issued_by_user_id,
-    )
-    session.add(issue)
-    session.commit()
-    session.refresh(issue)
-    from app.modules.consultations.models import ConsultationMedicine
-
-    medicines = list(
-        session.exec(
-            select(ConsultationMedicine).where(
-                ConsultationMedicine.consultation_id == consultation.id
-            )
-        ).all()
-    )
-    rows = [
-        {
-            "medicine_name": med.medicine_name,
-            "dosage": med.dosage,
-            "frequency": med.frequency,
-            "duration": med.duration,
-            "instructions": med.instructions,
-        }
-        for med in medicines
-    ] or _fallback_medicine_rows(consultation.prescription_text)
-    rows = [_normalize_medicine_schedule(row) for row in rows]
-    total = 0
-    names = []
-    for med in rows:
-        medicine_name = str(med["medicine_name"] or "").strip()
-        if not medicine_name:
-            continue
-        catalog = _find_catalog_medicine(
-            session, tenant_id, consultation.branch_id, medicine_name
-        )
-        unit_price = catalog.default_sale_price if catalog else 0
-        quantity = prescription_quantity(
-            str(med.get("dosage") or ""),
-            str(med.get("frequency") or ""),
-            str(med.get("duration") or ""),
-        )
-        total += unit_price * quantity
-        names.append(catalog.name if catalog else medicine_name)
-        item = PharmacyIssueItem(
-            tenant_id=tenant_id,
-            branch_id=issue.branch_id,
-            pharmacy_issue_id=issue.id,
-            medicine_id=catalog.id if catalog else None,
-            medicine_name=catalog.name if catalog else medicine_name,
-            quantity=quantity,
-            unit_price=unit_price,
-        )
-        session.add(item)
-    if rows:
-        summary_lines = []
-        for row in rows:
-            parts = [
-                str(part or "").strip()
-                for part in (
-                    row.get("medicine_name"),
-                    row.get("dosage"),
-                    row.get("frequency"),
-                    row.get("duration"),
-                    row.get("instructions"),
-                )
-                if str(part or "").strip()
-            ]
-            if parts:
-                summary_lines.append(" | ".join(parts))
-        issue.medicine_text = "\n".join(summary_lines) or ", ".join(names)
-    if rows and issue.amount == 0:
-        issue.amount = total
-        session.add(issue)
-    session.commit()
-    record_audit_event(
+    return create_pharmacy_issue_from_consultation_record(
         session,
         tenant_id=tenant_id,
-        branch_id=issue.branch_id,
-        actor_user_id=payload.issued_by_user_id,
-        action="pharmacy_issue.created_from_consultation",
-        resource_type="pharmacy_issue",
-        resource_id=issue.id,
-        purpose="pharmacy",
+        consultation_id=consultation_id,
+        payload=payload,
+        actor=current_user,
     )
-    return issue
 
 
 @router.get("/issues", response_model=list[PharmacyIssueRead])
@@ -1157,16 +363,14 @@ def list_pharmacy_issues(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> list[PharmacyIssue]:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(PharmacyIssue).where(PharmacyIssue.tenant_id == tenant_id)
-    if branch_id:
-        statement = statement.where(PharmacyIssue.branch_id == branch_id)
-    if patient_id:
-        statement = statement.where(PharmacyIssue.patient_id == patient_id)
-    if status_filter:
-        statement = statement.where(PharmacyIssue.status == status_filter)
-    return list(session.exec(statement.order_by(PharmacyIssue.created_at.desc())).all())
+    return list_pharmacy_issues_service(
+        session,
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        status_filter=status_filter,
+        branch_id=branch_id,
+        actor=current_user,
+    )
 
 
 @router.get("/issues/{issue_id}", response_model=PharmacyIssueDetailRead)
@@ -1176,10 +380,9 @@ def get_pharmacy_issue(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> PharmacyIssueDetailRead:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    issue = _get_issue_or_404(session, tenant_id, issue_id)
-    require_user_branch_access(current_user, issue.branch_id)
-    return _issue_detail(session, issue)
+    return get_pharmacy_issue_service(
+        session, tenant_id=tenant_id, issue_id=issue_id, actor=current_user
+    )
 
 
 @router.patch("/issues/{issue_id}/status", response_model=PharmacyIssueRead)
@@ -1190,120 +393,13 @@ def update_pharmacy_issue_status(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> PharmacyIssue:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    issue = _get_issue_or_404(session, tenant_id, issue_id)
-    require_user_branch_access(current_user, issue.branch_id)
-    now = datetime.now(timezone.utc)
-    issue.status = payload.status
-    issue.updated_at = now
-    if payload.notes is not None:
-        issue.notes = payload.notes
-    if payload.status == PharmacyIssueStatus.DISPENSED:
-        items = list(
-            session.exec(
-                select(PharmacyIssueItem).where(
-                    PharmacyIssueItem.pharmacy_issue_id == issue.id
-                )
-            ).all()
-        )
-        if payload.items:
-            _add_issue_items(session, issue, payload.items)
-            session.flush()
-            items = list(
-                session.exec(
-                    select(PharmacyIssueItem).where(
-                        PharmacyIssueItem.pharmacy_issue_id == issue.id
-                    )
-                ).all()
-            )
-        expiry_floor = datetime.utcnow()
-        for item in items:
-            if item.medicine_id:
-                # Lock the chosen batch row FOR UPDATE so two concurrent
-                # dispenses can never both pass the stock check and drive
-                # quantity_on_hand negative. Expired batches are excluded.
-                batch = None
-                if item.batch_id:
-                    batch = session.exec(
-                        select(MedicineBatch)
-                        .where(MedicineBatch.id == item.batch_id)
-                        .with_for_update()
-                    ).first()
-                    if batch and (
-                        batch.tenant_id != tenant_id
-                        or batch.branch_id != issue.branch_id
-                    ):
-                        batch = None
-                    if (
-                        batch
-                        and batch.expiry_date is not None
-                        and batch.expiry_date < expiry_floor
-                    ):
-                        raise HTTPException(
-                            status_code=status.HTTP_400_BAD_REQUEST,
-                            detail=f"Batch for {item.medicine_name} has expired and cannot be dispensed",
-                        )
-                if not batch:
-                    batch = session.exec(
-                        select(MedicineBatch)
-                        .where(
-                            MedicineBatch.tenant_id == tenant_id,
-                            MedicineBatch.branch_id == issue.branch_id,
-                            MedicineBatch.medicine_id == item.medicine_id,
-                            MedicineBatch.quantity_on_hand >= item.quantity,
-                            (MedicineBatch.expiry_date.is_(None))
-                            | (MedicineBatch.expiry_date >= expiry_floor),
-                        )
-                        .order_by(MedicineBatch.expiry_date)
-                        .with_for_update()
-                    ).first()
-                if not batch or batch.quantity_on_hand < item.quantity:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail=f"Insufficient stock for {item.medicine_name}",
-                    )
-                batch.quantity_on_hand -= item.quantity
-                batch.updated_at = now
-                item.batch_id = batch.id
-                item.dispensed_quantity = item.quantity
-                item.updated_at = now
-                session.add(batch)
-                session.add(item)
-                _record_stock(
-                    session,
-                    tenant_id=tenant_id,
-                    branch_id=issue.branch_id,
-                    medicine_id=item.medicine_id,
-                    batch_id=batch.id,
-                    movement_type=StockLedgerMovement.DISPENSE,
-                    quantity_delta=-item.quantity,
-                    reference_type="pharmacy_issue",
-                    reference_id=issue.id,
-                    actor_user_id=payload.actor_user_id,
-                )
-        issue.dispensed_at = now
-        issue.dispensed_by_user_id = payload.actor_user_id
-    if payload.status == PharmacyIssueStatus.CANCELLED:
-        if not payload.reason:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cancellation reason is required",
-            )
-        issue.cancelled_reason = payload.reason
-    session.add(issue)
-    session.commit()
-    session.refresh(issue)
-    record_audit_event(
+    return update_pharmacy_issue_status_record(
         session,
         tenant_id=tenant_id,
-        branch_id=issue.branch_id,
-        actor_user_id=payload.actor_user_id,
-        action=f"pharmacy_issue.{payload.status.value}",
-        resource_type="pharmacy_issue",
-        resource_id=issue.id,
-        purpose="pharmacy",
+        issue_id=issue_id,
+        payload=payload,
+        actor=current_user,
     )
-    return issue
 
 
 @router.patch("/issues/{issue_id}/amount", response_model=PharmacyIssueRead)
@@ -1314,37 +410,13 @@ def update_pharmacy_issue_amount(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> PharmacyIssue:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    issue = _get_issue_or_404(session, tenant_id, issue_id)
-    require_user_branch_access(current_user, issue.branch_id)
-    previous_amount = issue.amount
-    issue.amount = payload.amount
-    issue.updated_at = datetime.now(timezone.utc)
-    note = f"Amount updated from Rs. {previous_amount} to Rs. {payload.amount}." + (
-        f" Reason: {payload.reason}" if payload.reason else ""
-    )
-    issue.notes = "\n".join([part for part in [issue.notes, note] if part])
-    session.add(issue)
-    session.commit()
-    session.refresh(issue)
-    record_audit_event(
+    return update_pharmacy_issue_amount_record(
         session,
         tenant_id=tenant_id,
-        branch_id=issue.branch_id,
-        actor_user_id=payload.actor_user_id,
-        action="pharmacy_issue.amount_updated",
-        resource_type="pharmacy_issue",
-        resource_id=issue.id,
-        purpose="pharmacy",
-        metadata_json=json.dumps(
-            {
-                "previous_amount": previous_amount,
-                "amount": payload.amount,
-                "reason": payload.reason,
-            }
-        ),
+        issue_id=issue_id,
+        payload=payload,
+        actor=current_user,
     )
-    return issue
 
 
 @router.post("/issues/{issue_id}/billing-link", response_model=PharmacyIssueRead)
@@ -1355,25 +427,13 @@ def link_pharmacy_billing(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> PharmacyIssue:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    issue = _get_issue_or_404(session, tenant_id, issue_id)
-    require_user_branch_access(current_user, issue.branch_id)
-    issue.billing_invoice_id = payload.billing_invoice_id
-    issue.updated_at = datetime.now(timezone.utc)
-    session.add(issue)
-    session.commit()
-    session.refresh(issue)
-    record_audit_event(
+    return link_pharmacy_billing_record(
         session,
         tenant_id=tenant_id,
-        branch_id=issue.branch_id,
-        actor_user_id=payload.actor_user_id,
-        action="pharmacy_issue.billing_linked",
-        resource_type="pharmacy_issue",
-        resource_id=issue.id,
-        purpose="pharmacy_billing",
+        issue_id=issue_id,
+        payload=payload,
+        actor=current_user,
     )
-    return issue
 
 
 @router.get("/stock-ledger", response_model=list[StockLedgerRead])
@@ -1384,17 +444,12 @@ def list_stock_ledger(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> list[PharmacyStockLedger]:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    statement = select(PharmacyStockLedger).where(
-        PharmacyStockLedger.tenant_id == tenant_id
-    )
-    if branch_id:
-        statement = statement.where(PharmacyStockLedger.branch_id == branch_id)
-    if medicine_id:
-        statement = statement.where(PharmacyStockLedger.medicine_id == medicine_id)
-    return list(
-        session.exec(statement.order_by(PharmacyStockLedger.created_at.desc())).all()
+    return list_stock_ledger_service(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        medicine_id=medicine_id,
+        actor=current_user,
     )
 
 
@@ -1405,32 +460,6 @@ def list_low_stock(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
 ) -> list[LowStockRead]:
-    enforce_module_enabled(session, tenant_id, "pharmacy")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    medicines = list(
-        session.exec(
-            select(MedicineCatalog).where(
-                MedicineCatalog.tenant_id == tenant_id,
-                MedicineCatalog.is_active == True,  # noqa: E712
-            )
-        ).all()
-    )  # noqa: E712
-    rows = []
-    for medicine in medicines:
-        if branch_id and medicine.branch_id not in {None, branch_id}:
-            continue
-        check_branch = branch_id or medicine.branch_id
-        if not check_branch:
-            continue
-        balance = _stock_balance(session, tenant_id, check_branch, medicine.id)
-        if balance <= medicine.reorder_level:
-            rows.append(
-                LowStockRead(
-                    medicine_id=medicine.id,
-                    medicine_name=medicine.name,
-                    branch_id=check_branch,
-                    quantity_on_hand=balance,
-                    reorder_level=medicine.reorder_level,
-                )
-            )
-    return rows
+    return list_low_stock_service(
+        session, tenant_id=tenant_id, branch_id=branch_id, actor=current_user
+    )

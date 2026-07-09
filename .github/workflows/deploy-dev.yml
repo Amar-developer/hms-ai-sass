@@ -64,9 +64,15 @@ jobs:
             docker system df
             docker compose -f docker-compose.dev.yml ps
 
-            # Wait for backend to start
-            sleep 15
-
             # Health checks (dev server uses port 8081)
-            curl -f http://127.0.0.1:8081/health
+            for i in {1..30}; do
+              if curl -f http://127.0.0.1:8081/health; then
+                break
+              fi
+              if [ "$i" -eq 30 ]; then
+                docker compose -f docker-compose.dev.yml logs backend --tail=200
+                exit 1
+              fi
+              sleep 5
+            done
             curl -f http://127.0.0.1:8081/api/v1/health

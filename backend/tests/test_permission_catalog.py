@@ -1,7 +1,7 @@
 import ast
 from pathlib import Path
 
-from app.api.v1.identity import _permission_read
+from app.modules.identity.services.helpers import permission_read as _permission_read
 from app.modules import manifest
 from app.modules.identity import permissions
 

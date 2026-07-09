@@ -1,5 +1,6 @@
 import { humanizeOptionLabel } from "@/lib/options";
 import { Card,ActionButton,Button } from "../common/ui";
+import { ActivityLog } from "../common/ActivityLog";
 import { displayDateTime } from "@/utils/helper";
 import { pageSize } from "@/utils/lab/constants";
 
@@ -11,6 +12,7 @@ export function WorklistDetailModal({
   createdAt,
   items,
   onClose,
+  apiSession,
 }: any) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
@@ -40,6 +42,9 @@ export function WorklistDetailModal({
               </div>
             ))
           )}
+        </div>
+        <div className="mt-5">
+          <ActivityLog resourceType="lab_order" resourceId={id} apiSession={apiSession} />
         </div>
       </Card>
     </div>

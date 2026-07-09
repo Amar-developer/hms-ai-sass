@@ -10,7 +10,16 @@ branch_labels = None
 depends_on = None
 
 
+def _tables() -> set[str]:
+    return set(sa.inspect(op.get_bind()).get_table_names())
+
+
 def upgrade() -> None:
+    # Migration 0001 creates every table from the *current* SQLModel
+    # definitions (SQLModel.metadata.create_all), so on a fresh database
+    # monthlyrevenuesnapshot already exists by the time this migration runs.
+    if "monthlyrevenuesnapshot" in _tables():
+        return
     op.create_table(
         "monthlyrevenuesnapshot",
         sa.Column("id", sa.String(), nullable=False),
@@ -61,6 +70,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    if "monthlyrevenuesnapshot" not in _tables():
+        return
     for column in (
         "created_by_user_id",
         "created_at",

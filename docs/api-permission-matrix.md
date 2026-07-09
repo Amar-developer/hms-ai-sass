@@ -441,6 +441,8 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `POST` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events/{event_id}` | `audit.read` |
+| `GET` | `/api/v1/activity/{resource_type}/{resource_id}` | Authenticated tenant user |
+| `POST` | `/api/v1/activity/{resource_type}/{resource_id}/comments` | Authenticated tenant user |
 
 ## Default Clinical Role Templates
 
