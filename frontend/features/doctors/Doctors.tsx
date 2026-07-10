@@ -18,15 +18,13 @@ import {
   TextField,
 } from "@/app/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
-import { doctorTypes } from "@/utils/doctors/constants";
-import {
-  Empty,
-  Pagination,
-  ConfirmModal,
-  DoctorRow,
-} from "@/app/components/doctors/Shared";
-import { activeTenantOptions } from "@/utils/doctors/helpers";
-import { DoctorForm } from "@/app/forms/DoctorForms";
+import { doctorTypes } from "./constants";
+import { Empty } from "@/app/components/common/Empty";
+import { DoctorRow } from "./components/DoctorRow";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { activeTenantOptions } from "@/utils/helper";
+import { DoctorForm } from "@/features/doctors/forms/DoctorForm";
+import { Pagination } from "@/app/components/common/Pagination";
 
 const pageSize = 10;
 
@@ -542,8 +540,8 @@ export function Doctors({ apiSession, clinic }: any) {
       {confirm && (
         <ConfirmModal
           busy={busy}
-          confirm={confirm}
-          onClose={() => setConfirm(null)}
+          action={confirm}
+          onCancel={() => setConfirm(null)}
           onConfirm={() =>
             confirm.kind === "delete"
               ? deleteDoctor(confirm.row)

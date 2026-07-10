@@ -83,3 +83,11 @@ export const STATUS_FILTER_OPTIONS = [
   { value: "completed", label: "Completed" },
   { value: "cancelled", label: "Cancelled" },
 ];
+
+
+export const ValidationMessages = {
+  required: "This field is required.",
+  email: "Please enter a valid email address.",
+  passwordRequired: "Password is required.",
+  passwordMin: "Password must be at least 8 characters.",
+};

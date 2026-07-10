@@ -73,7 +73,7 @@ const AppHeader = ({
               >
                 {tenantOptions.map((tenant: any) => (
                   <option key={tenant.id} value={tenant.id}>
-                    {tenant.name} moses
+                    {tenant.name}
                   </option>
                 ))}
               </select>

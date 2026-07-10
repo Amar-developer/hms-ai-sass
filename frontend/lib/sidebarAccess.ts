@@ -37,9 +37,7 @@ export function sidebarRolesForUser(
   const values = assignedRoles.length
     ? [...assignedRoles, fallbackRole]
     : [user?.user_type, fallbackRole];
-  return Array.from(
-    new Set(values.map(normalizeSidebarRole).filter(Boolean)),
-  );
+  return Array.from(new Set(values.map(normalizeSidebarRole).filter(Boolean)));
 }
 
 export function resolveSidebarModules({

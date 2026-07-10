@@ -1,0 +1,69 @@
+import React from "react";
+import { DataTableProps } from "../types";
+
+export function DataTable<T>({
+  columns,
+  data,
+  emptyMessage = "No data found",
+  className,
+  onRowClick,
+}: DataTableProps<T>) {
+  return (
+    <div className="overflow-auto rounded-lg border">
+      <table
+        className={`w-full min-w-[920px] table-fixed text-left text-sm ${className ?? ""}`}
+      >
+        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <tr>
+            {columns.map((column) => (
+              <th
+                key={String(column.key)}
+                style={column.width ? { width: column.width } : undefined}
+                className={`px-4 py-3 text-sm ${column.className ?? ""}`}
+              >
+                {column.header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody className="divide-y">
+          {data.length === 0 && (
+            <tr>
+              <td
+                colSpan={columns.length}
+                className="px-4 py-4 text-xs text-slate-500"
+              >
+                {emptyMessage}
+              </td>
+            </tr>
+          )}
+
+          {data.map((row, index) => (
+            <tr
+              key={index}
+              onClick={() => onRowClick?.(row)}
+              className={onRowClick ? "cursor-pointer hover:bg-slate-50" : ""}
+            >
+              {columns.map((column) => (
+                <td
+                  key={String(column.key)}
+                  className={`px-4 py-4 ${column.cellClassName ?? ""}`}
+                  onClick={
+                    column.disableRowClick
+                      ? (e) => e.stopPropagation()
+                      : undefined
+                  }
+                >
+                  {column.render
+                    ? column.render(row, index)
+                    : (row[column.key as keyof T] as React.ReactNode)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

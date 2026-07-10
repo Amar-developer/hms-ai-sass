@@ -16,74 +16,12 @@ import { FormField } from "@/app/components/FormElements";
 import { apiFetch, type ApiSession } from "@/lib/api";
 import { sortQueue } from "@/lib/hmsLogic";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
+import { QueueAction, TokenQueueProps } from "./types";
+import { dateKey, isActiveQueueAppointment, sortByTokenNumber, todayKey } from "./helpers";
 
-type TokenQueueProps = {
-  scopedAppointments: any[];
-  appointments: any[];
-  setAppointments: (value: any[]) => void;
-  apiSession: ApiSession | null;
-  loadLiveData: (session: ApiSession) => Promise<void>;
-  departmentId: string;
-  doctorScope?: any;
-  setActive?: (page: string) => void;
-};
 
-type QueueAction = "call" | "skip" | "requeue" | "cancel";
 
-function dateKey(value: any) {
-  return String(value || "").slice(0, 10);
-}
 
-function todayKey() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
-function tokenSortValue(row: any) {
-  return String(row.token_number || row.token || "").trim();
-}
-
-function sortByTokenNumber(rows: any[]) {
-  return [...rows].sort((a: any, b: any) =>
-    tokenSortValue(a).localeCompare(tokenSortValue(b), undefined, {
-      numeric: true,
-      sensitivity: "base",
-    }),
-  );
-}
-
-function isActiveQueueStatus(value: any) {
-  const status = String(value || "")
-    .trim()
-    .toLowerCase()
-    .replaceAll(" ", "_");
-  return ![
-    "cancelled",
-    "canceled",
-    "no_show",
-    "consultation_completed",
-    "billed",
-    "completed",
-    "done",
-  ].includes(status);
-}
-
-function isActiveQueueAppointment(appointment: any) {
-  return (
-    isActiveQueueStatus(appointment.queueStatus || appointment.queue_status) &&
-    isActiveQueueStatus(appointment.status) &&
-    isActiveQueueStatus(
-      appointment.consultationStatus || appointment.consultation_status,
-    ) &&
-    String(
-      appointment.consultationStatus || appointment.consultation_status || "",
-    )
-      .trim()
-      .toLowerCase() !== "signed"
-  );
-}
 
 export function TokenQueue({
   scopedAppointments,

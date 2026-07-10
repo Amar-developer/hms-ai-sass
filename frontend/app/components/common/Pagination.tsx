@@ -1,4 +1,4 @@
-import { pageSize } from "@/utils/lab/constants";
+import { pageSize } from "@/utils/constants";
 
 export function Pagination({ page, totalPages, total, onPage }: any) {
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;

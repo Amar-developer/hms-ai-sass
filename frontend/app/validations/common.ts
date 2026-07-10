@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ValidationMessages } from "@/utils/form/constants";
+import { ValidationMessages } from "@/utils/constants";
 
 export const emailSchema = z
   .string()

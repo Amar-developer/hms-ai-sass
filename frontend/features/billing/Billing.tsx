@@ -3,36 +3,29 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ActionButton,
-  ActionGroup,
   Badge,
   Button,
   Card,
   Input,
   RefreshButton,
   SearchableSelect,
-  Select,
   StatusToast,
 } from "@/app/components/common/ui";
 import {
-  DateField,
   FormField,
-  SelectField,
-  TextField,
 } from "@/app/components/FormElements";
 import { apiBlob, apiFetch } from "@/lib/api";
 import { paymentMethodOptions } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
-import {
-  formatInvoiceDate,
-  invoiceDateKey,
+import { formatInvoiceDate,invoiceDateKey,
   invoicePaidStatus,
   invoiceSource,
-  invoiceSourceKey,
-  money,
-} from "@/utils/billing/helpers";
+  invoiceSourceKey, } from "./helpers";
 import { pageSize } from "@/utils/constants";
-import { InvoiceDetailPage } from "@/app/components/billing/Shared";
-import { Column, DataTable } from "@/app/components/reports/DataTable";
+import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
+import { Column } from "../reports/types";
+import { DataTable } from "../reports/components/DataTable";
+import { money } from "@/utils/helper";
 
 export function Billing({
   apiSession,
@@ -1052,7 +1045,7 @@ export function Billing({
         <div className="mt-4 grid gap-3">
           {signedReady.length === 0 && (
             <div className="rounded-lg bg-slate-50 p-4 card-desc text-slate-500">
-              All signed consultations already have invoices.
+              All completed consultations already have invoices.
             </div>
           )}
           {signedReady.map((a: any) => (
@@ -1065,7 +1058,7 @@ export function Billing({
                   {a.token} · {a.patient}
                 </b>
                 <p className="text-xs lg:text-sm text-slate-500">
-                  Signed consultation ready for billing
+                  Completed consultation ready for billing
                   {a.doctor && a.doctor !== "Unassigned" ? (
                     <>
                       {" · Signed by "}
@@ -1141,16 +1134,6 @@ export function Billing({
               searchable={false}
             />
           </FormField>
-          {/* <DateField
-              label="From Date"
-              value={filters.fromDate}
-              onChange={(v) => updateFilter("fromDate", v)}
-            />
-            <DateField
-              label="To Date"
-              value={filters.toDate}
-              onChange={(v) => updateFilter("toDate", v)}
-            /> */}
           <button
             type="button"
             onClick={clearFilters}

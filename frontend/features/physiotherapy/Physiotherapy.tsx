@@ -10,11 +10,13 @@ import {
   generatePhysiotherapyInvoice,
   getPhysiotherapyInvoice,
 } from "@/lib/api";
-import { displayDate,today } from "@/utils/helper";
-import { activePhysiotherapyFeeRule, consentFiles, formatPhysiotherapistName, inr, patientName } from "@/utils/physiotherapy/helpers";
-import { Header, Info, SearchSelect } from "@/app/components/physiotherapy/Shared";
-import { modalities } from "@/utils/physiotherapy/constants";
-import { CaseForm, IPCaseForm } from "@/app/components/physiotherapy/Forms";
+import { displayDate,patientName,today,inr } from "@/utils/helper";
+import { activePhysiotherapyFeeRule,consentFiles,formatPhysiotherapistName } from "./helpers";
+import { Header } from "./components/Header";
+import { SearchSelect } from "./components/SearchSelect";
+import { modalities } from "./constants";
+import { CaseForm,IPCaseForm } from "@/features/physiotherapy/forms/PhysiotherapyForms";
+import { Info } from "@/app/components/common/Info";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 
 type View = "list" | "op" | "ip" | "detail";

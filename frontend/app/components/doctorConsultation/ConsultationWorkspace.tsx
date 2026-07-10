@@ -13,16 +13,17 @@ import {
 import { ActivityLog } from "../common/ActivityLog";
 import { FormField, SearchableSelectField } from "../FormElements";
 import { displayDateTime } from "@/utils/helper";
-import { displayPatientGender } from "@/utils/patient/helpers";
+import { displayPatientGender } from "@/features/patients/helpers";
 import {
   SearchPicker,
   medicineFrequencyOptions,
   medicineDurationOptions,
   medicineInstructionOptions,
 } from "../clinicalRows";
-import PrescriptionDocument, {
-  type PrescriptionReferral,
-} from "./PrescriptionDocument";
+import PrescriptionDocument, { PrescriptionReferral } from "@/features/consulation/components/PrescriptionDocument";
+// import PrescriptionDocument, {
+//   type PrescriptionReferral,
+// } from "./PrescriptionDocument";
 
 const vitalFields = [
   {
