@@ -1,4 +1,4 @@
-import { ScheduleFormValues } from "@/app/validations/schedule.schema";
+import { ScheduleFormValues } from "./schedule.schema";
 import { ALL_BRANCHES } from "./constants";
 
 

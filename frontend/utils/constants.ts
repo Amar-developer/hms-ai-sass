@@ -1,4 +1,4 @@
-import { Column } from "./tenantAdmin/types";
+import { Column } from "@/features/admin/types";
 
 export const pageSize = 10;
 

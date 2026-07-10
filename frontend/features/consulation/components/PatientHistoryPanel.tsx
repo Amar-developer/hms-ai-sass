@@ -1,5 +1,5 @@
-import { displayDate } from "@/utils/doctorConsultation/helpers";
-import { Badge } from "../common/ui";
+import { displayDate } from "@/utils/helper";
+import { Badge } from "@/app/components/common/ui";
 import { humanizeOptionLabel } from "@/lib/options";
 
 export function PatientHistoryPanel({ history, onOpenPatient }: any) {
