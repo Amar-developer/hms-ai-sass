@@ -11,14 +11,6 @@ from app.modules.lab.models import (
     LabOrderStatus,
     LabTestCatalog,
 )
-from app.modules.lab.repositories import (
-    LabCatalogRepository,
-    LabReferenceRepository,
-)
-from app.modules.lab.services.catalog import (
-    _normalize_local_lab_package,
-    _normalize_local_lab_test,
-)
 from app.modules.lab.services.catalog_service import (
     create_lab_package_record,
     create_lab_test_record,
@@ -28,15 +20,23 @@ from app.modules.lab.services.catalog_service import (
     update_lab_package_record,
     update_lab_test_record,
 )
+from app.modules.lab.services.catalog_queries import (
+    list_available_lab_tests_service,
+    list_lab_consultation_referrals_service,
+    list_lab_packages_service,
+    list_lab_tests_service,
+    list_popular_lab_tests_service,
+    list_result_templates_service,
+)
 from app.modules.lab.services.order_service import (
     create_lab_order_from_consultation_record,
     create_lab_order_record,
-    get_lab_order_detail,
-    list_lab_orders_records,
     update_lab_order_status_record,
 )
-from app.modules.lab.services.read_models import _package_read, _template_read
-from app.modules.lab.services.referrals import build_lab_consultation_referral_reads
+from app.modules.lab.services.order_queries import (
+    get_lab_order_detail,
+    list_lab_orders_records,
+)
 from app.modules.lab.services.report_service import render_lab_report_pdf
 from app.modules.lab.services.result_service import add_lab_result_record
 from app.modules.lab.services.sample_service import collect_lab_sample_record
@@ -58,7 +58,6 @@ from app.modules.lab.schemas import (
     LabTestPackageRead,
     LabTestPackageUpdate,
 )
-from app.modules.lab.repositories import LabResultTemplateRepository
 from app.core.access_control import scoped_branch_id
 from app.modules.subscriptions.service import enforce_module_enabled
 
@@ -82,17 +81,13 @@ def list_lab_consultation_referrals(
         )
     ),
 ) -> list[LabConsultationReferralRead]:
-    enforce_module_enabled(session, tenant_id, "lab")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    reference_repo = LabReferenceRepository(session)
-    rows = reference_repo.list_consultation_referrals(
-        tenant_id=tenant_id, branch_id=branch_id
+    return list_lab_consultation_referrals_service(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        current_user=current_user,
+        module_enabled_checker=enforce_module_enabled,
     )
-    consultation_ids = [consultation.id for consultation, *_rest in rows]
-    referral_rows = reference_repo.list_structured_referrals(
-        tenant_id=tenant_id, consultation_ids=consultation_ids
-    )
-    return build_lab_consultation_referral_reads(rows, referral_rows)
 
 
 @router.get("/catalog/available-tests")
@@ -113,19 +108,13 @@ def list_available_lab_tests(
         )
     ),
 ) -> list[dict[str, object]]:
-    enforce_module_enabled(session, tenant_id, "lab")
-    scoped_branch_id(current_user, branch_id)
-    catalog_repo = LabCatalogRepository(session)
-    rows = [
-        _normalize_local_lab_test(row)
-        for row in catalog_repo.list_active_tests(tenant_id=tenant_id, search=search)
-    ]
-    rows.extend(
-        _normalize_local_lab_package(row)
-        for row in catalog_repo.list_active_packages(tenant_id=tenant_id, search=search)
-    )
-    return sorted(
-        rows, key=lambda row: str(row.get("item_name") or row.get("name") or "")
+    return list_available_lab_tests_service(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        search=search,
+        current_user=current_user,
+        module_enabled_checker=enforce_module_enabled,
     )
 
 
@@ -151,21 +140,12 @@ def list_popular_lab_tests(
     Counts come from referral history (ConsultationReferral with type "lab"),
     so the ranking covers both external (ERPNext) and local catalog items.
     """
-    enforce_module_enabled(session, tenant_id, "lab")
-    limit = max(1, min(limit, 20))
-    rows = LabReferenceRepository(session).list_popular_referral_names(
-        tenant_id=tenant_id, limit=limit
+    return list_popular_lab_tests_service(
+        session,
+        tenant_id=tenant_id,
+        limit=limit,
+        module_enabled_checker=enforce_module_enabled,
     )
-    return [
-        {
-            "id": name,
-            "name": name,
-            "item_name": name,
-            "usage_count": int(count),
-            "source": "history",
-        }
-        for name, count in rows
-    ]
 
 
 @router.post(
@@ -203,11 +183,13 @@ def list_lab_tests(
         )
     ),
 ) -> list[LabTestCatalog]:
-    enforce_module_enabled(session, tenant_id, "lab")
-    scoped_branch_id(current_user, branch_id)
-    return LabCatalogRepository(session).list_active_tests(
+    return list_lab_tests_service(
+        session,
         tenant_id=tenant_id,
+        branch_id=branch_id,
         search=search,
+        current_user=current_user,
+        module_enabled_checker=enforce_module_enabled,
     )
 
 
@@ -261,10 +243,13 @@ def list_lab_packages(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
 ) -> list[LabTestPackageRead]:
-    enforce_module_enabled(session, tenant_id, "lab")
-    scoped_branch_id(current_user, branch_id)
-    packages = LabCatalogRepository(session).list_active_packages(tenant_id=tenant_id)
-    return [_package_read(session, package) for package in packages]
+    return list_lab_packages_service(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        current_user=current_user,
+        module_enabled_checker=enforce_module_enabled,
+    )
 
 
 @router.patch("/catalog/packages/{package_id}", response_model=LabTestPackageRead)
@@ -317,12 +302,12 @@ def list_result_templates(
     session: Session = Depends(get_session),
     _current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
 ) -> list[LabResultTemplateRead]:
-    enforce_module_enabled(session, tenant_id, "lab")
-    rows = LabResultTemplateRepository(session).list_active(
+    return list_result_templates_service(
+        session,
         tenant_id=tenant_id,
         test_id=test_id,
+        module_enabled_checker=enforce_module_enabled,
     )
-    return [_template_read(row) for row in rows]
 
 
 @router.post(

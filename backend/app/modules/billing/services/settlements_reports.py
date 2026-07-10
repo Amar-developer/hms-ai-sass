@@ -6,7 +6,9 @@ from sqlmodel import Session
 from app.core.access_control import enforce_entitlement, scoped_branch_id
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import DoctorSettlement
-from app.modules.billing.repositories import BillingSettlementReportRepository
+from app.modules.billing.repositories.settlement_report_repository import (
+    BillingSettlementReportRepository,
+)
 from app.modules.billing.schemas import (
     DoctorSettlementFinalize,
     DoctorSettlementRead,

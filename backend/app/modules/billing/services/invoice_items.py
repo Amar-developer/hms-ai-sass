@@ -6,8 +6,10 @@ from sqlmodel import Session
 from app.core.access_control import require_user_branch_access
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import Invoice, InvoiceItem
-from app.modules.billing.repositories import (
+from app.modules.billing.repositories.invoice_support_repository import (
     BillingInvoiceSupportRepository,
+)
+from app.modules.billing.repositories.reference_repository import (
     BillingReferenceRepository,
 )
 from app.modules.billing.schemas import (

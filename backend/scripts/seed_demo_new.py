@@ -76,7 +76,9 @@ from app.modules.billing.models import (
     SettlementStatus,
     TaxRule,
 )
-from app.modules.billing.service import create_consultation_invoice
+from app.modules.billing.services.consultation_invoice import (
+    create_consultation_invoice,
+)
 from app.modules.consultations.models import (
     ClinicalTemplate,
     Consultation,
@@ -1970,13 +1972,11 @@ def create_appointments(
 
     # Pick a primary doctor (General Medicine, Main branch)
     primary_doc = doctors.get("sun_gen_0")
-    cardio_doc = doctors.get("sun_ent_0")  # reuse for variety
     ped_doc = doctors.get("sun_ped_0")
     ortho_doc = doctors.get("sun_ortho_0")
 
     gen_dept = depts.get("sun_gen")
     ped_dept = depts.get("sun_ped")
-    ent_dept = depts.get("sun_ent")
     orth_dept = depts.get("sun_ortho")
 
     specs = [
@@ -2855,16 +2855,14 @@ def create_lab(
     diabetes_pkg = _pkg(
         "DIAB_PANEL", "Diabetes Monitoring Panel", "FBS + HbA1c", 500, [fbs, hba1c]
     )
-    renal_pkg = _pkg(
+    _pkg(
         "RENAL_PANEL",
         "Renal Function Panel",
         "Creatinine + Urine RE",
         240,
         [creatinine, urine_re],
     )
-    cardiac_pkg = _pkg(
-        "CARDIAC_SCR", "Cardiac Screening", "ECG + Chest X-Ray", 500, [ecg, xray]
-    )
+    _pkg("CARDIAC_SCR", "Cardiac Screening", "ECG + Chest X-Ray", 500, [ecg, xray])
 
     # ── Result templates ─────────────────────────────────────────────────────
     for tmpl_name, test_obj, fields in [
@@ -3303,7 +3301,7 @@ def create_pharmacy(
     b_met = _batch(metformin, pur2, "MET500-E2501", 180, 4, 7)
     b_aml = _batch(amlodipine, pur2, "AML5-F2501", 100, 4, 8)
     b_pant = _batch(pantop, pur2, "PAN40-G2501", 90, 5, 9)
-    b_az = _batch(azith, pur2, "AZ500-H2501", 60, 14, 28)
+    _batch(azith, pur2, "AZ500-H2501", 60, 14, 28)
 
     # Dispense ledger entries
     for med_obj, bat_obj, qty_disp in [
@@ -3632,7 +3630,7 @@ def seed(session: Session) -> dict:
 
         tenant = create_tenant(session, tdef, super_admin)
         plan = plans[tdef["plans"][0]]
-        sub = create_subscription(session, tenant, plan)
+        create_subscription(session, tenant, plan)
 
         tenant_summary: dict = {
             "name": tenant.name,

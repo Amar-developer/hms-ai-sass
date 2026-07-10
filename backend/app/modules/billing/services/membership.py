@@ -6,9 +6,12 @@ from sqlmodel import Session
 from app.core.access_control import enforce_entitlement, require_user_branch_access
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import Invoice
-from app.modules.billing.repositories import BillingInvoiceSupportRepository
+from app.modules.billing.repositories.invoice_support_repository import (
+    BillingInvoiceSupportRepository,
+)
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceMembershipBenefitRead
-from app.modules.billing.service import find_tax_rule, update_invoice_payment_status
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.rules import find_tax_rule
 from app.modules.identity.models import User
 
 InvoiceDetailReader = Callable[[Session, Invoice], InvoiceDetailRead]

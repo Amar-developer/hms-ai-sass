@@ -2,7 +2,6 @@ from datetime import date, timedelta
 
 from sqlmodel import Session
 
-from app.modules.billing.models import Invoice
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionEnrollmentStatus,
@@ -11,9 +10,9 @@ from app.modules.patient_subscriptions.models import (
 from app.modules.patient_subscriptions.repositories import (
     PatientSubscriptionEnrollmentRepository,
     PatientSubscriptionPlanRepository,
+    PatientSubscriptionSupportRepository,
 )
 from app.modules.patient_subscriptions.services.serialization import ids_from_json
-from app.modules.tenants.models import Department
 
 
 def _department_key(value: str | None) -> str:
@@ -42,15 +41,16 @@ def consultation_department_is_eligible(
     if session is None:
         return False
 
-    actual = session.get(Department, department_id)
-    if not actual or actual.tenant_id != plan.tenant_id:
+    support_repo = PatientSubscriptionSupportRepository(session)
+    actual = support_repo.get_department_for_tenant(plan.tenant_id, department_id)
+    if not actual:
         return False
     actual_template_ids = {actual.id, actual.source_template_department_id}
     actual_template_ids.discard(None)
     actual_name = _department_key(actual.name)
     for allowed_id in allowed_ids:
-        allowed = session.get(Department, allowed_id)
-        if not allowed or allowed.tenant_id != plan.tenant_id:
+        allowed = support_repo.get_department_for_tenant(plan.tenant_id, allowed_id)
+        if not allowed:
             continue
         allowed_template_ids = {allowed.id, allowed.source_template_department_id}
         allowed_template_ids.discard(None)
@@ -160,12 +160,10 @@ def active_patient_enrollment(
         return None
     if plan.price_amount > 0:
         if enrollment.purchase_invoice_id:
-            invoice = session.get(Invoice, enrollment.purchase_invoice_id)
-            if (
-                not invoice
-                or invoice.tenant_id != tenant_id
-                or invoice.balance_amount > 0
-            ):
+            invoice = PatientSubscriptionSupportRepository(
+                session
+            ).get_invoice_for_tenant(tenant_id, enrollment.purchase_invoice_id)
+            if not invoice or invoice.balance_amount > 0:
                 return None
         elif enrollment.paid_amount < plan.price_amount:
             return None
@@ -179,17 +177,15 @@ def consultation_department_id(
     consultation_id: str | None = None,
 ) -> str | None:
     """Resolve the medical department for a consultation, via its appointment."""
-    from app.modules.appointments.models import Appointment
-    from app.modules.consultations.models import Consultation
-
+    support_repo = PatientSubscriptionSupportRepository(session)
     if appointment_id:
-        appointment = session.get(Appointment, appointment_id)
+        appointment = support_repo.get_appointment(appointment_id)
         if appointment and appointment.department_id:
             return appointment.department_id
     if consultation_id:
-        consultation = session.get(Consultation, consultation_id)
+        consultation = support_repo.get_consultation(consultation_id)
         if consultation and consultation.appointment_id:
-            appointment = session.get(Appointment, consultation.appointment_id)
+            appointment = support_repo.get_appointment(consultation.appointment_id)
             if appointment and appointment.department_id:
                 return appointment.department_id
     return None

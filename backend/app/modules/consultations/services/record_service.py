@@ -6,11 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from app.core.access_control import (
-    current_doctor_practitioner_id,
     enforce_entitlement,
     require_doctor_practitioner_access,
     require_user_branch_access,
-    scoped_branch_id,
 )
 from app.modules.appointments.models import AppointmentStatus
 from app.modules.audit.service import diff_changes, record_audit_event
@@ -26,7 +24,6 @@ from app.modules.consultations.repositories import (
 from app.modules.consultations.schemas import (
     ConsultationAddendumCreate,
     ConsultationCreate,
-    ConsultationDetailRead,
     ConsultationSignRequest,
     ConsultationUpdate,
 )
@@ -35,7 +32,6 @@ from app.modules.consultations.services.billing_service import (
 )
 from app.modules.consultations.services.detail_builder import (
     STRUCTURED_FIELD_NAMES,
-    ConsultationDetailBuilder,
     StructuredRowWriter,
 )
 from app.modules.identity.models import User
@@ -54,7 +50,6 @@ class ConsultationRecordService:
         self.consultations = ConsultationRepository(session)
         self.references = ConsultationReferenceRepository(session)
         self.structured_rows = StructuredRowWriter(session)
-        self.detail_builder = ConsultationDetailBuilder(session)
         self.billing = ConsultationBillingService(session)
 
     def _get_or_404(self, tenant_id: str, consultation_id: str) -> Consultation:
@@ -124,48 +119,6 @@ class ConsultationRecordService:
             purpose="treatment",
         )
         return consultation
-
-    def list_consultations(
-        self,
-        *,
-        tenant_id: str,
-        patient_id: str | None,
-        appointment_id: str | None,
-        branch_id: str | None,
-        actor: User,
-    ) -> list[Consultation]:
-        enforce_entitlement(self.session, tenant_id, "consultations")
-        branch_id = scoped_branch_id(actor, branch_id)
-        doctor_practitioner_id = current_doctor_practitioner_id(
-            self.session, tenant_id, actor
-        )
-        return self.consultations.list_for_tenant(
-            tenant_id=tenant_id,
-            branch_id=branch_id,
-            practitioner_id=doctor_practitioner_id,
-            patient_id=patient_id,
-            appointment_id=appointment_id,
-        )
-
-    def get_consultation(
-        self, *, tenant_id: str, consultation_id: str, actor: User
-    ) -> ConsultationDetailRead:
-        enforce_entitlement(self.session, tenant_id, "consultations")
-        consultation = self._get_or_404(tenant_id, consultation_id)
-        require_user_branch_access(actor, consultation.branch_id)
-        require_doctor_practitioner_access(
-            self.session, tenant_id, actor, consultation.practitioner_id
-        )
-        record_audit_event(
-            self.session,
-            tenant_id=tenant_id,
-            branch_id=consultation.branch_id,
-            action="consultation.viewed",
-            resource_type="consultation",
-            resource_id=consultation.id,
-            purpose="treatment",
-        )
-        return self.detail_builder.build(consultation)
 
     def update_consultation(
         self,

@@ -1,0 +1,101 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: medizinhub-postgres-staging
+    env_file:
+      - .env.staging
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-medizinhub_hms}
+      POSTGRES_USER: ${POSTGRES_USER:-medizinhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medizinhub_dev}
+    ports:
+      - "5433:5432"
+    volumes:
+      - medizinhub_postgres_data_staging:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medizinhub} -d ${POSTGRES_DB:-medizinhub_hms}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: medizinhub-redis-staging
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Production Dockerfile (multi-stage `next build` + standalone server) —
+  # NOT Dockerfile.dev. Staging must run the same build shipped to
+  # production; only .env.staging differs (test DB, test URLs).
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8081/api/v1}
+        NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
+    container_name: medizinhub-frontend-staging
+    # Host ports 3000/8080 are already taken by another project on this EC2
+    # box — 3001/8081 keep this stack from colliding with it.
+    ports:
+      - "3001:3000"
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8081/api/v1}
+      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
+
+  # Production Dockerfile (installs deps once, no --reload, no bind mounts).
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medizinhub-backend-staging
+    # Host port 8080 is already taken by another project on this EC2 box.
+    ports:
+      - "8081:8080"
+    extra_hosts:
+      - "local.healthcare:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.staging
+    command: >
+      bash -c "
+      alembic -c alembic/alembic.ini upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8080
+      "
+    environment:
+      PYTHONPATH: /app
+      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+
+  report-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: medizinhub-report-worker-staging
+    extra_hosts:
+      - "local.healthcare:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.staging
+    command: python -m app.modules.reports.worker
+    environment:
+      PYTHONPATH: /app
+      MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+
+volumes:
+  medizinhub_postgres_data_staging:

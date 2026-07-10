@@ -18,10 +18,12 @@ from app.modules.home_care.schemas import (
     HomeCareVisitLogRead,
     HomeCareVisitLogUpdate,
 )
-from app.modules.home_care.services.home_care_service import (
-    HomeCareBookingService,
-    HomeCareCatalogService,
+from app.modules.home_care.services.billing_service import HomeCareBillingService
+from app.modules.home_care.services.booking_service import (
+    HomeCareBookingLifecycleService,
 )
+from app.modules.home_care.services.catalog_service import HomeCareCatalogService
+from app.modules.home_care.services.visit_service import HomeCareVisitService
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 
@@ -102,7 +104,7 @@ def list_bookings(
         require_any_permission(permissions.HOME_CARE_READ, permissions.HOME_CARE_MANAGE)
     ),
 ) -> list[HomeCareBookingRead]:
-    return HomeCareBookingService(session).list_bookings(
+    return HomeCareBookingLifecycleService(session).list_bookings(
         tenant_id=tenant_id,
         branch_id=branch_id,
         patient_id=patient_id,
@@ -124,7 +126,7 @@ def create_booking(
         )
     ),
 ) -> HomeCareBookingRead:
-    return HomeCareBookingService(session).create_booking(
+    return HomeCareBookingLifecycleService(session).create_booking(
         tenant_id=tenant_id, payload=payload, actor=current_user
     )
 
@@ -139,7 +141,7 @@ def update_booking(
         require_any_permission(permissions.HOME_CARE_EDIT, permissions.HOME_CARE_MANAGE)
     ),
 ) -> HomeCareBookingRead:
-    return HomeCareBookingService(session).update_booking(
+    return HomeCareBookingLifecycleService(session).update_booking(
         tenant_id=tenant_id,
         booking_id=booking_id,
         payload=payload,
@@ -163,7 +165,7 @@ def create_visit_log(
         )
     ),
 ) -> HomeCareVisitLogRead:
-    return HomeCareBookingService(session).create_visit_log(
+    return HomeCareVisitService(session).create_visit_log(
         tenant_id=tenant_id,
         booking_id=booking_id,
         payload=payload,
@@ -185,7 +187,7 @@ def update_visit_log(
         require_any_permission(permissions.HOME_CARE_EDIT, permissions.HOME_CARE_MANAGE)
     ),
 ) -> HomeCareVisitLogRead:
-    return HomeCareBookingService(session).update_visit_log(
+    return HomeCareVisitService(session).update_visit_log(
         tenant_id=tenant_id,
         booking_id=booking_id,
         visit_id=visit_id,
@@ -207,7 +209,7 @@ def delete_visit_log(
         require_any_permission(permissions.HOME_CARE_EDIT, permissions.HOME_CARE_MANAGE)
     ),
 ) -> HomeCareVisitLogRead:
-    return HomeCareBookingService(session).delete_visit_log(
+    return HomeCareVisitService(session).delete_visit_log(
         tenant_id=tenant_id,
         booking_id=booking_id,
         visit_id=visit_id,
@@ -222,7 +224,7 @@ def get_booking_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead | None:
-    return HomeCareBookingService(session).get_booking_invoice(
+    return HomeCareBillingService(session).get_booking_invoice(
         tenant_id=tenant_id, booking_id=booking_id, actor=current_user
     )
 
@@ -239,7 +241,7 @@ def generate_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
-    return HomeCareBookingService(session).generate_invoice(
+    return HomeCareBillingService(session).generate_invoice(
         tenant_id=tenant_id,
         booking_id=booking_id,
         payload=payload,

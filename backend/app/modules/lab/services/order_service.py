@@ -15,7 +15,6 @@ from app.modules.lab.models import (
 from app.modules.lab.repositories import LabOrderRepository, LabReferenceRepository
 from app.modules.lab.schemas import (
     LabOrderCreate,
-    LabOrderDetailRead,
     LabOrderFromConsultation,
     LabOrderStatusUpdate,
 )
@@ -25,7 +24,6 @@ from app.modules.lab.services.catalog import (
     _price_payload,
     _resolve_lab_price,
 )
-from app.modules.lab.services.detail_builder import read_order_detail
 from app.modules.lab.services.pricing import add_order_items, reprice_zero_order_items
 from app.modules.lab.services.referrals import _fallback_lab_referrals
 from app.modules.lab.services.validation import (
@@ -217,36 +215,6 @@ def create_lab_order_from_consultation_record(
         purpose="diagnostics",
     )
     return order
-
-
-def list_lab_orders_records(
-    session: Session,
-    *,
-    tenant_id: str,
-    branch_id: str | None,
-    patient_id: str | None,
-    status_filter: LabOrderStatus | None,
-) -> list[LabOrder]:
-    enforce_module_enabled(session, tenant_id, "lab")
-    rows = LabOrderRepository(session).list_orders(
-        tenant_id=tenant_id,
-        branch_id=branch_id,
-        patient_id=patient_id,
-        status_filter=status_filter,
-    )
-    for order in rows:
-        if int(order.amount or 0) <= 0:
-            reprice_zero_order_items(session, order)
-    return rows
-
-
-def get_lab_order_detail(
-    session: Session, *, tenant_id: str, order_id: str, current_user: User
-) -> LabOrderDetailRead:
-    enforce_module_enabled(session, tenant_id, "lab")
-    order = _get_order_or_404(session, tenant_id, order_id)
-    require_user_branch_access(current_user, order.branch_id)
-    return read_order_detail(session, order)
 
 
 def update_lab_order_status_record(

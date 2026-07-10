@@ -1,5 +1,3 @@
-from datetime import datetime, timezone
-
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
@@ -8,21 +6,17 @@ from app.modules.billing.models import (
     BillingAdjustmentType,
     BillingLedgerEntry,
     Invoice,
-    InvoiceStatus,
     PaymentMethod,
 )
-from app.modules.billing.repositories import (
-    BillingReadRepository,
-    BillingSourceSyncRepository,
-)
+from app.modules.billing.repositories.read_repository import BillingReadRepository
 from app.modules.billing.schemas import InvoiceDetailRead
 from app.modules.billing.services.adjustments import execute_billing_adjustment
 from app.modules.billing.services.read_models import read_invoice_detail
 from app.modules.billing.services.service_invoices import (
     create_service_invoice as _create_service_invoice_command,
 )
+from app.modules.billing.services.source_sync import sync_invoice_source_after_reversal
 from app.modules.identity.models import User
-from app.modules.tenants.models import now_utc
 
 
 def require_direct_invoice_reversal_admin(session: Session, current_user: User) -> None:
@@ -119,99 +113,6 @@ def ensure_invoice_membership_benefit_ledger(
         reason="Membership benefit settled by patient plan",
         actor_user_id=actor_user_id or invoice.created_by_user_id,
     )
-
-
-def sync_physiotherapy_case_status(session: Session, invoice: Invoice) -> None:
-    case = BillingSourceSyncRepository(session).get_physiotherapy_case_for_invoice(
-        invoice
-    )
-    if not case:
-        return
-    target_status = (
-        "paid"
-        if invoice.status not in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}
-        and invoice.balance_amount <= 0
-        and invoice.total_amount > 0
-        else "completed"
-    )
-    if case.status == target_status:
-        return
-    case.status = target_status
-    case.updated_at = now_utc()
-    session.add(case)
-    session.commit()
-
-
-def sync_home_care_booking_status(session: Session, invoice: Invoice) -> None:
-    booking = BillingSourceSyncRepository(session).get_home_care_booking_for_invoice(
-        invoice
-    )
-    if not booking:
-        return
-    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
-        # The invoice was voided, so reopen the booking (back to an editable,
-        # non-locked state) so it can be corrected and re-billed.
-        target_status = "scheduled"
-    elif invoice.balance_amount <= 0 and invoice.total_amount > 0:
-        target_status = "paid"
-    else:
-        target_status = "invoiced"
-    if booking.status == target_status:
-        return
-    booking.status = target_status
-    booking.updated_at = now_utc()
-    session.add(booking)
-    session.commit()
-
-
-def sync_patient_membership_payment(session: Session, invoice: Invoice) -> None:
-    enrollment = BillingSourceSyncRepository(
-        session
-    ).get_patient_subscription_enrollment_for_invoice(invoice)
-    if not enrollment:
-        return
-    # Only the plan-purchase invoice drives the membership's paid amount.
-    # Benefit-usage invoices (lab/pharmacy/consultation with the membership
-    # applied) also carry the enrollment id, but paying/refunding them must not
-    # overwrite the membership's paid status.
-    is_purchase_invoice = (
-        invoice.id == enrollment.purchase_invoice_id
-        if enrollment.purchase_invoice_id
-        else not (
-            invoice.lab_order_id
-            or invoice.pharmacy_issue_id
-            or invoice.consultation_id
-            or invoice.ip_admission_id
-            or invoice.physiotherapy_case_id
-            or invoice.home_care_booking_id
-        )
-    )
-    if not is_purchase_invoice:
-        return
-    paid_amount = max(
-        0, min(int(invoice.paid_amount or 0), int(invoice.total_amount or 0))
-    )
-    if enrollment.paid_amount == paid_amount:
-        return
-    enrollment.paid_amount = paid_amount
-    enrollment.updated_at = datetime.now(timezone.utc)
-    session.add(enrollment)
-    session.commit()
-
-
-def sync_invoice_source_after_reversal(session: Session, invoice: Invoice) -> None:
-    sync_physiotherapy_case_status(session, invoice)
-    sync_home_care_booking_status(session, invoice)
-    sync_patient_membership_payment(session, invoice)
-    issue = BillingSourceSyncRepository(session).get_pharmacy_issue_for_invoice(invoice)
-    if issue:
-        if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
-            issue.billing_invoice_id = None
-        else:
-            issue.billing_invoice_id = invoice.id
-        issue.updated_at = datetime.now(timezone.utc)
-        session.add(issue)
-        session.commit()
 
 
 def read_invoice_detail_full(session: Session, invoice: Invoice) -> InvoiceDetailRead:

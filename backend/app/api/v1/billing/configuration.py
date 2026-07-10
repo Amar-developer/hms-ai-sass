@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
-from app.core.access_control import enforce_entitlement, scoped_branch_id
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
@@ -29,9 +28,9 @@ from app.modules.billing.services.configuration import (
     create_doctor_fee_rule,
     create_tax_rule,
     decide_discount_approval,
-    list_discount_offers,
-    list_doctor_fee_rules,
-    list_tax_rules,
+    list_accessible_discount_offers,
+    list_accessible_doctor_fee_rules,
+    list_accessible_tax_rules,
     request_discount_approval,
     update_discount_offer,
     update_tax_rule,
@@ -81,9 +80,12 @@ def list_doctor_fee_rules_endpoint(
         )
     ),
 ) -> list[DoctorFeeRule]:
-    enforce_entitlement(session, tenant_id, "billing_basic", current_user=current_user)
-    branch_id = scoped_branch_id(current_user, branch_id)
-    return list_doctor_fee_rules(session, tenant_id=tenant_id, branch_id=branch_id)
+    return list_accessible_doctor_fee_rules(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        actor=current_user,
+    )
 
 
 @router.post(
@@ -115,9 +117,12 @@ def list_tax_rules_endpoint(
         )
     ),
 ) -> list[TaxRule]:
-    enforce_entitlement(session, tenant_id, "billing_basic")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    return list_tax_rules(session, tenant_id=tenant_id, branch_id=branch_id)
+    return list_accessible_tax_rules(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        actor=current_user,
+    )
 
 
 @router.patch("/tax-rules/{rule_id}", response_model=TaxRuleRead)
@@ -176,9 +181,12 @@ def list_discount_offers_endpoint(
         )
     ),
 ) -> list[DiscountOffer]:
-    enforce_entitlement(session, tenant_id, "billing_basic")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    return list_discount_offers(session, tenant_id=tenant_id, branch_id=branch_id)
+    return list_accessible_discount_offers(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        actor=current_user,
+    )
 
 
 @router.patch("/discount-offers/{offer_id}", response_model=DiscountOfferRead)

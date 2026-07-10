@@ -100,8 +100,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create CI env file
-        run: cp .env.example .env
+      - name: Create CI env files
+        run: |
+          cp .env.example .env
+          cp .env.staging.example .env.staging
 
-      - name: Validate compose file
-        run: docker compose config --quiet
+      - name: Validate compose files
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.local.yml config --quiet
+          docker compose -f docker-compose.staging.yml config --quiet

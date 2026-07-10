@@ -13,8 +13,9 @@ from app.modules.appointments.schemas import (
     AppointmentRead,
     FollowUpAppointmentCreate,
 )
-from app.modules.appointments.services.appointment_service import AppointmentService
 from app.modules.appointments.models import Appointment
+from app.modules.appointments.services.booking_service import AppointmentBookingService
+from app.modules.appointments.services.query_service import AppointmentQueryService
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 
@@ -47,7 +48,7 @@ def book_appointment(
     ),
     session: Session = Depends(get_session),
 ) -> AppointmentBookingRead:
-    return AppointmentService(session).book_appointment(
+    return AppointmentBookingService(session).book_appointment(
         tenant_id=tenant_id,
         payload=payload,
         idempotency_key=idempotency_key,
@@ -81,7 +82,7 @@ def book_follow_up_appointment(
     ),
     session: Session = Depends(get_session),
 ) -> AppointmentBookingRead:
-    return AppointmentService(session).book_follow_up_appointment(
+    return AppointmentBookingService(session).book_follow_up_appointment(
         tenant_id=tenant_id,
         appointment_id=appointment_id,
         payload=payload,
@@ -118,7 +119,7 @@ def list_appointments(
     ),
     session: Session = Depends(get_session),
 ) -> list[AppointmentGridRead]:
-    return AppointmentService(session).list_appointments(
+    return AppointmentQueryService(session).list_appointments(
         tenant_id=tenant_id,
         branch_id=branch_id,
         department_id=department_id,
@@ -146,7 +147,7 @@ def list_platform_appointments(
     limit: int = Query(default=100, ge=1, le=500),
     session: Session = Depends(get_session),
 ) -> list[AppointmentGridRead]:
-    return AppointmentService(session).list_platform_appointments(
+    return AppointmentQueryService(session).list_platform_appointments(
         tenant_id=tenant_id,
         branch_id=branch_id,
         department_id=department_id,
@@ -180,6 +181,6 @@ def get_appointment(
     ),
     session: Session = Depends(get_session),
 ) -> Appointment:
-    return AppointmentService(session).get_appointment(
+    return AppointmentQueryService(session).get_appointment(
         tenant_id=tenant_id, appointment_id=appointment_id, actor=current_user
     )

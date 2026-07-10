@@ -51,8 +51,10 @@ services:
     extra_hosts:
       - "local.healthcare:host-gateway"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
     - .env
     command: >
@@ -70,8 +72,10 @@ services:
     extra_hosts:
       - "local.healthcare:host-gateway"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     env_file:
     - .env
     command: python -m app.modules.reports.worker

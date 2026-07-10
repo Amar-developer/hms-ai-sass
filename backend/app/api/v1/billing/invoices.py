@@ -1,15 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlmodel import Session
 
-from app.core.access_control import (
-    enforce_entitlement,
-    require_user_branch_access,
-    scoped_branch_id,
-)
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
-from app.modules.billing.repositories import BillingReadRepository
 from app.modules.billing.schemas import (
     InvoiceAmountUpdate,
     InvoiceCreateFromConsultation,
@@ -27,6 +21,10 @@ from app.modules.billing.services.invoice_items import (
     list_invoice_item_supplier_options,
     update_invoice_item_supplier,
 )
+from app.modules.billing.services.invoice_queries import (
+    get_billing_invoice_detail,
+    list_billing_invoices,
+)
 from app.modules.billing.services.ledger import (
     create_service_invoice,
     ensure_invoice_membership_benefit_ledger,
@@ -34,10 +32,6 @@ from app.modules.billing.services.ledger import (
     read_invoice_detail_full,
 )
 from app.modules.billing.services.membership import apply_membership_benefit_to_invoice
-from app.modules.billing.services.read_models import (
-    invoice_read,
-    normalize_invoice_status,
-)
 from app.modules.billing.services.receipt_pdf import build_invoice_receipt_document
 from app.modules.billing.services.source_invoices import (
     create_invoice_from_consultation_source,
@@ -138,17 +132,13 @@ def list_invoices(
         )
     ),
 ) -> list[InvoiceRead]:
-    enforce_entitlement(session, tenant_id, "billing_basic")
-    branch_id = scoped_branch_id(current_user, branch_id)
-    invoices = BillingReadRepository(session).list_invoices(
+    return list_billing_invoices(
+        session,
         tenant_id=tenant_id,
         branch_id=branch_id,
         patient_id=patient_id,
+        current_user=current_user,
     )
-    return [
-        invoice_read(session, normalize_invoice_status(session, invoice))
-        for invoice in invoices
-    ]
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDetailRead)
@@ -158,17 +148,12 @@ def get_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
-    enforce_entitlement(session, tenant_id, "billing_basic")
-    invoice = BillingReadRepository(session).get_invoice_for_tenant(
+    return get_billing_invoice_detail(
+        session,
         tenant_id=tenant_id,
         invoice_id=invoice_id,
+        current_user=current_user,
     )
-    if not invoice:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
-        )
-    require_user_branch_access(current_user, invoice.branch_id)
-    return read_invoice_detail_full(session, invoice)
 
 
 @router.patch("/invoices/{invoice_id}/amount", response_model=InvoiceDetailRead)

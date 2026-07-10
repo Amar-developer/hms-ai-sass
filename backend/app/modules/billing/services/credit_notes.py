@@ -6,12 +6,10 @@ from sqlmodel import Session
 from app.core.access_control import require_user_branch_access
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import CreditNote, Invoice, InvoiceStatus
-from app.modules.billing.repositories import BillingPaymentRepository
+from app.modules.billing.repositories.payment_repository import BillingPaymentRepository
 from app.modules.billing.schemas import CreditNoteCreate
-from app.modules.billing.service import (
-    next_credit_note_number,
-    update_invoice_payment_status,
-)
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.numbering import next_credit_note_number
 from app.modules.identity.models import User
 
 LedgerRecorder = Callable[..., object]

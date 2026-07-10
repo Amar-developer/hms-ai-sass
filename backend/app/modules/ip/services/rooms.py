@@ -19,6 +19,7 @@ from app.modules.ip.services.validation import (
     _active_admission_statuses,
     _ranges_overlap,
     admission_end_date,
+    assert_ip_enabled,
 )
 from app.modules.tenants.models import now_utc
 
@@ -119,6 +120,7 @@ def create_room_record(
     payload: IPRoomCreate,
     current_user: User,
 ) -> IPRoomRead:
+    assert_ip_enabled(session, tenant_id)
     require_branch_in_tenant(session, tenant_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
     duplicate = IPRoomRepository(session).find_duplicate_bed(
@@ -163,6 +165,7 @@ def update_room_record(
     payload: IPRoomUpdate,
     current_user: User,
 ) -> IPRoomRead:
+    assert_ip_enabled(session, tenant_id)
     room = IPRoomRepository(session).get_for_tenant(
         tenant_id=tenant_id, room_id=room_id
     )

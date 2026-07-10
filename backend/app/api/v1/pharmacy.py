@@ -35,7 +35,6 @@ from app.modules.pharmacy.schemas import (
     SupplierRead,
     SupplierUpdate,
 )
-from app.modules.pharmacy.repositories import PharmacySupplierRepository
 from app.modules.pharmacy.services.catalog import (
     list_available_medicines_service,
     list_medicines_service,
@@ -46,23 +45,26 @@ from app.modules.pharmacy.services.catalog_service import (
     create_supplier_record,
     delete_medicine_record,
     delete_supplier_record,
+    list_supplier_records,
     update_medicine_record,
     update_supplier_record,
 )
 from app.modules.pharmacy.services.issues import (
     create_pharmacy_issue_from_consultation_record,
     create_pharmacy_issue_record,
-    get_pharmacy_issue_service,
     link_pharmacy_billing_record,
-    list_pharmacy_issues_service,
     update_pharmacy_issue_amount_record,
     update_pharmacy_issue_status_record,
+)
+from app.modules.pharmacy.services.issue_queries import (
+    get_pharmacy_issue_service,
+    list_pharmacy_issues_service,
 )
 from app.modules.pharmacy.services.purchases import (
     create_pharmacy_return_record,
     create_purchase_record,
 )
-from app.modules.pharmacy.services.stock import (
+from app.modules.pharmacy.services.stock_queries import (
     list_batches_service,
     list_low_stock_service,
     list_stock_ledger_service,
@@ -229,7 +231,8 @@ def list_suppliers(
         )
     ),
 ) -> list[PharmacySupplier]:
-    return PharmacySupplierRepository(session).list_for_tenant(
+    return list_supplier_records(
+        session,
         tenant_id=tenant_id,
         include_inactive=include_inactive,
     )

@@ -7,6 +7,7 @@ from app.core.access_control import (
     enforce_entitlement,
     require_branch_in_tenant,
     require_user_branch_access,
+    scoped_branch_id,
 )
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import (
@@ -15,7 +16,9 @@ from app.modules.billing.models import (
     DoctorFeeRule,
     TaxRule,
 )
-from app.modules.billing.repositories import BillingReferenceRepository
+from app.modules.billing.repositories.reference_repository import (
+    BillingReferenceRepository,
+)
 from app.modules.billing.schemas import (
     DiscountApprovalCreate,
     DiscountApprovalDecision,
@@ -118,6 +121,21 @@ def list_doctor_fee_rules(
     )
 
 
+def list_accessible_doctor_fee_rules(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    actor: User,
+) -> list[DoctorFeeRule]:
+    enforce_entitlement(session, tenant_id, "billing_basic", current_user=actor)
+    return list_doctor_fee_rules(
+        session,
+        tenant_id=tenant_id,
+        branch_id=scoped_branch_id(actor, branch_id),
+    )
+
+
 def create_tax_rule(
     session: Session, *, tenant_id: str, payload: TaxRuleCreate, actor: User
 ) -> TaxRule:
@@ -147,6 +165,21 @@ def list_tax_rules(
     return BillingReferenceRepository(session).list_tax_rules(
         tenant_id=tenant_id,
         branch_id=branch_id,
+    )
+
+
+def list_accessible_tax_rules(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    actor: User,
+) -> list[TaxRule]:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    return list_tax_rules(
+        session,
+        tenant_id=tenant_id,
+        branch_id=scoped_branch_id(actor, branch_id),
     )
 
 
@@ -220,6 +253,21 @@ def list_discount_offers(
     )
 
 
+def list_accessible_discount_offers(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    actor: User,
+) -> list[DiscountOffer]:
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    return list_discount_offers(
+        session,
+        tenant_id=tenant_id,
+        branch_id=scoped_branch_id(actor, branch_id),
+    )
+
+
 def update_discount_offer(
     session: Session,
     *,
@@ -289,7 +337,7 @@ def decide_discount_approval(
     payload: DiscountApprovalDecision,
     actor: User,
 ) -> DiscountApproval:
-    approval = session.get(DiscountApproval, approval_id)
+    approval = BillingReferenceRepository(session).get_discount_approval(approval_id)
     if not approval or approval.tenant_id != tenant_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Discount approval not found"

@@ -22,6 +22,7 @@ from app.modules.ip.schemas import (
 )
 from app.modules.ip.services.billing import create_billing_item
 from app.modules.ip.services.validation import (
+    assert_ip_enabled,
     chargeable_days,
     ensure_admission_open,
     get_admission,
@@ -65,6 +66,26 @@ def create_treatment_record(
     return treatment
 
 
+def create_treatment_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    payload: IPTreatmentCreate,
+    current_user: User,
+) -> IPTreatment:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_treatment_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
+    )
+
+
 def create_ip_consultation_record(
     session: Session,
     *,
@@ -103,6 +124,26 @@ def create_ip_consultation_record(
         purpose="ip_consultation",
     )
     return consultation
+
+
+def create_ip_consultation_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    payload: IPConsultationCreate,
+    current_user: User,
+) -> IPConsultation:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_ip_consultation_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 def sign_ip_consultation_record(
@@ -162,6 +203,34 @@ def sign_ip_consultation_record(
     return consultation
 
 
+def sign_ip_consultation_by_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    consultation_id: str,
+    current_user: User,
+) -> IPConsultation:
+    consultation = IPClinicalRepository(session).get_consultation(
+        tenant_id=tenant_id,
+        consultation_id=consultation_id,
+    )
+    if not consultation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="IP consultation not found"
+        )
+    admission = get_admission(
+        session, tenant_id, consultation.admission_id, current_user
+    )
+    ensure_admission_open(admission)
+    return sign_ip_consultation_record(
+        session,
+        tenant_id=tenant_id,
+        consultation=consultation,
+        admission=admission,
+        current_user=current_user,
+    )
+
+
 def create_consent_record(
     session: Session,
     *,
@@ -196,6 +265,26 @@ def create_consent_record(
     return consent
 
 
+def create_consent_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    payload: IPConsentFormCreate,
+    current_user: User,
+) -> IPConsentForm:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_consent_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
+    )
+
+
 def sign_consent_record(
     session: Session,
     *,
@@ -223,6 +312,30 @@ def sign_consent_record(
         changes=diff_changes(before, {"status": consent.status}),
     )
     return consent
+
+
+def sign_consent_by_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    consent_id: str,
+    current_user: User,
+) -> IPConsentForm:
+    consent = IPClinicalRepository(session).get_consent(
+        tenant_id=tenant_id,
+        consent_id=consent_id,
+    )
+    if not consent:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Consent not found"
+        )
+    admission = get_admission(session, tenant_id, consent.admission_id, current_user)
+    ensure_admission_open(admission)
+    return sign_consent_record(
+        session,
+        consent=consent,
+        current_user=current_user,
+    )
 
 
 def create_discharge_summary_record(
@@ -262,6 +375,26 @@ def create_discharge_summary_record(
         purpose="ip_discharge",
     )
     return summary
+
+
+def create_discharge_summary_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    payload: IPDischargeSummaryCreate,
+    current_user: User,
+) -> IPDischargeSummary:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_discharge_summary_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 def finalize_discharge_summary_record(

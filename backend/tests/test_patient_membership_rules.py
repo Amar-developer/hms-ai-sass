@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceStatus
-from app.modules.billing.service import update_invoice_payment_status
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.read_models import (
     normalize_invoice_status as _normalize_invoice_status,
 )

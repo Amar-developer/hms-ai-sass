@@ -157,8 +157,8 @@ http://localhost:8000/docs
 Monthly email reports use Redis plus SMTP. In Docker dev the worker service is:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d redis report-worker
-docker compose -f docker-compose.dev.yml logs -f report-worker
+docker compose -f docker-compose.local.yml up -d redis report-worker
+docker compose -f docker-compose.local.yml logs -f report-worker
 ```
 
 Required `.env` values:
@@ -178,7 +178,7 @@ MEDIZINHUB_SMTP_USE_TLS=true
 After editing `.env`, recreate backend and worker so Docker reloads env values:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d --force-recreate backend report-worker
+docker compose -f docker-compose.local.yml up -d --force-recreate backend report-worker
 ```
 
 ## Windows Setup

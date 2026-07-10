@@ -12,7 +12,9 @@ from app.modules.billing.models import (
     FeeShareType,
     TaxRule,
 )
-from app.modules.billing.repositories import BillingReferenceRepository
+from app.modules.billing.repositories.reference_repository import (
+    BillingReferenceRepository,
+)
 
 
 @dataclass(frozen=True)

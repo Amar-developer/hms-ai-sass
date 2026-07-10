@@ -13,10 +13,10 @@ from app.modules.billing.models import (
     InvoiceStatus,
     PaymentStatus,
 )
-from app.modules.billing.repositories import (
+from app.modules.billing.repositories.adjustment_repository import (
     BillingAdjustmentRepository,
-    BillingPaymentRepository,
 )
+from app.modules.billing.repositories.payment_repository import BillingPaymentRepository
 from app.modules.billing.schemas import (
     AmendInvoiceRequest,
     BillingAdjustmentDecision,
@@ -26,21 +26,23 @@ from app.modules.billing.schemas import (
     InvoiceDetailRead,
     RefundRequest,
 )
-from app.modules.billing.service import refundable_paid_total
 from app.modules.billing.services.adjustments import (
     ensure_invoice_can_request_adjustment,
     validate_adjustment_amount,
 )
+from app.modules.billing.services.invoice_status import refundable_paid_total
 from app.modules.billing.services.ledger import (
     execute_adjustment,
     read_invoice_detail_full,
     record_billing_ledger,
     require_direct_invoice_reversal_admin,
+)
+from app.modules.billing.services.read_models import read_adjustment_request
+from app.modules.billing.services.source_sync import (
     sync_home_care_booking_status,
     sync_patient_membership_payment,
     sync_physiotherapy_case_status,
 )
-from app.modules.billing.services.read_models import read_adjustment_request
 from app.modules.identity.models import User
 
 

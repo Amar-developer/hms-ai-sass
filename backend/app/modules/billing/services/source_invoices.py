@@ -8,16 +8,18 @@ from sqlalchemy.exc import IntegrityError
 from app.core.access_control import require_user_branch_access
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import ApprovalStatus, Invoice
-from app.modules.billing.repositories import BillingSourceRepository
+from app.modules.billing.repositories.source_repository import BillingSourceRepository
 from app.modules.billing.schemas import (
     InvoiceCreateFromConsultation,
     InvoiceCreateFromLabOrder,
     InvoiceCreateFromPharmacyIssue,
     InvoiceDetailRead,
 )
-from app.modules.billing.service import (
+from app.modules.billing.services.consultation_invoice import (
     create_consultation_invoice,
     refresh_consultation_invoice,
+)
+from app.modules.billing.services.invoice_status import (
     update_invoice_payment_status,
 )
 from app.modules.consultations.models import ConsultationStatus

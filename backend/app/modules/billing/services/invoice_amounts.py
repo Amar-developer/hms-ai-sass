@@ -8,13 +8,15 @@ from app.core.access_control import enforce_entitlement, require_user_branch_acc
 from app.modules.appointments.models import AppointmentType
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import Invoice, InvoiceStatus
-from app.modules.billing.repositories import BillingAdjustmentRepository
+from app.modules.billing.repositories.adjustment_repository import (
+    BillingAdjustmentRepository,
+)
 from app.modules.billing.schemas import InvoiceAmountUpdate, InvoiceDetailRead
-from app.modules.billing.service import (
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.rules import (
     calculate_fee_split,
     calculate_offer_discount,
     find_tax_rule,
-    update_invoice_payment_status,
 )
 from app.modules.identity.models import User
 

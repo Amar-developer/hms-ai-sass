@@ -33,8 +33,10 @@ class ConsultationBillingService:
         the benefit usage and billing trail are captured. Paid / partially-covered
         visits are left to the existing manual reception flow.
         """
-        # Local imports avoid any module-load import cycle with the billing service.
-        from app.modules.billing.service import create_consultation_invoice
+        # Local imports avoid module-load cycles between consultation and billing.
+        from app.modules.billing.services.consultation_invoice import (
+            create_consultation_invoice,
+        )
         from app.modules.patient_subscriptions.service import (
             active_patient_enrollment,
             benefit_preview,

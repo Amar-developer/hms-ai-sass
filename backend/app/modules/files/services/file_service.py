@@ -22,7 +22,7 @@ from app.modules.settings.models import SettingKey, SettingScope
 from app.modules.settings.service import upsert_setting
 from app.modules.tenants.models import Tenant, now_utc
 
-# Invoice PDF rendering (_local_logo_image in billing.py) only decodes PNG/JPEG.
+# Billing PDF rendering currently supports local PNG/JPEG logos only.
 # Any other image type (GIF/WEBP) uploads and previews fine in the browser but
 # is silently dropped from the printed invoice, so reject it up front instead.
 _LOGO_FIELDS = {"logo_url", "invoice.logo_url", "invoice_logo_url"}

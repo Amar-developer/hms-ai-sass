@@ -29,12 +29,14 @@ from app.modules.billing.services.credit_notes import create_credit_note_for_inv
 from app.modules.billing.services.ledger import (
     read_invoice_detail_full,
     record_billing_ledger,
+)
+from app.modules.billing.services.payments import record_invoice_payment
+from app.modules.billing.services.source_sync import (
     sync_home_care_booking_status,
     sync_invoice_source_after_reversal,
     sync_patient_membership_payment,
     sync_physiotherapy_case_status,
 )
-from app.modules.billing.services.payments import record_invoice_payment
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 

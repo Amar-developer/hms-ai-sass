@@ -1,7 +1,7 @@
 from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceStatus
-from app.modules.billing.repositories import BillingReadRepository
+from app.modules.billing.repositories.read_repository import BillingReadRepository
 
 
 def update_invoice_payment_status(session: Session, invoice: Invoice) -> Invoice:

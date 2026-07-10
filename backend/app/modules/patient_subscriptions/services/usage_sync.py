@@ -1,14 +1,19 @@
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceStatus
+from app.modules.lab.repositories import LabOrderRepository
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionPlan,
+)
+from app.modules.patient_subscriptions.repositories import (
+    PatientSubscriptionSupportRepository,
 )
 from app.modules.patient_subscriptions.services.serialization import (
     free_items_from_json,
     usage_to_json,
 )
+from app.modules.pharmacy.repositories import PharmacyIssueRepository
 
 
 def sync_free_item_usage_from_invoices(
@@ -27,13 +32,9 @@ def sync_free_item_usage_from_invoices(
     free_medicine = free_items_from_json(plan.free_medicine_ids_json)
     lab_usage: dict[str, int] = {}
     medicine_usage: dict[str, int] = {}
-    all_benefit_invoices = session.exec(
-        select(Invoice).where(
-            Invoice.tenant_id == enrollment.tenant_id,
-            Invoice.patient_subscription_enrollment_id == enrollment.id,
-            Invoice.membership_discount_amount > 0,
-        )
-    ).all()
+    all_benefit_invoices = PatientSubscriptionSupportRepository(
+        session
+    ).list_benefit_invoices(tenant_id=enrollment.tenant_id, enrollment_id=enrollment.id)
     invoices = [
         invoice
         for invoice in all_benefit_invoices
@@ -63,14 +64,10 @@ def sync_free_item_usage_from_invoices(
         if remaining_discount <= 0:
             continue
         if invoice.lab_order_id and free_lab:
-            from app.modules.lab.models import LabOrderItem
-
-            for item in session.exec(
-                select(LabOrderItem).where(
-                    LabOrderItem.tenant_id == invoice.tenant_id,
-                    LabOrderItem.lab_order_id == invoice.lab_order_id,
-                )
-            ).all():
+            items = LabOrderRepository(session).list_order_items(
+                tenant_id=invoice.tenant_id, order_id=invoice.lab_order_id
+            )
+            for item in items:
                 price = int(item.price or 0)
                 if (
                     not item.test_id
@@ -82,14 +79,10 @@ def sync_free_item_usage_from_invoices(
                 lab_usage[item.test_id] = lab_usage.get(item.test_id, 0) + 1
                 remaining_discount -= price
         elif invoice.pharmacy_issue_id and free_medicine:
-            from app.modules.pharmacy.models import PharmacyIssueItem
-
-            for item in session.exec(
-                select(PharmacyIssueItem).where(
-                    PharmacyIssueItem.tenant_id == invoice.tenant_id,
-                    PharmacyIssueItem.pharmacy_issue_id == invoice.pharmacy_issue_id,
-                )
-            ).all():
+            items = PharmacyIssueRepository(session).list_items(
+                tenant_id=invoice.tenant_id, issue_id=invoice.pharmacy_issue_id
+            )
+            for item in items:
                 amount = int(item.quantity * item.unit_price)
                 if (
                     not item.medicine_id

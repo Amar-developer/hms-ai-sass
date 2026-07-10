@@ -13,6 +13,8 @@ from app.modules.ip.schemas import IPAdmissionCreate, IPAdmissionUpdate
 from app.modules.ip.services.rooms import resolve_room_for_admission
 from app.modules.ip.services.validation import (
     assert_ip_enabled,
+    ensure_admission_open,
+    get_admission,
     validate_aadhaar_number,
 )
 from app.modules.settings.numbering import next_document_number
@@ -97,6 +99,25 @@ def create_admission_record(
     return admission
 
 
+def create_admission_command(
+    session: Session,
+    *,
+    tenant_id: str,
+    payload: IPAdmissionCreate,
+    current_user: User,
+) -> IPAdmission:
+    assert_ip_enabled(session, tenant_id)
+    require_branch_in_tenant(session, tenant_id, payload.branch_id)
+    require_user_branch_access(current_user, payload.branch_id)
+    return create_admission_record(
+        session,
+        tenant_id=tenant_id,
+        payload=payload,
+        admission_number=next_admission_number(session, tenant_id, payload.branch_id),
+        current_user=current_user,
+    )
+
+
 def update_admission_record(
     session: Session,
     *,
@@ -152,6 +173,26 @@ def update_admission_record(
         changes=diff_changes(before, updates),
     )
     return admission
+
+
+def update_admission_by_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    payload: IPAdmissionUpdate,
+    current_user: User,
+) -> IPAdmission:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return update_admission_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 def convert_appointment_to_admission_record(

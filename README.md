@@ -140,13 +140,13 @@ Tenant admins and staff must log in with their customer `tenant_id`. The primary
 
 # FOR DEVELOPMENT
 # First time or after requirements.txt / package.json changes
-docker compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.local.yml up --build
 
 # Normal start (after first build)
-docker compose -f docker-compose.dev.yml up
+docker compose -f docker-compose.local.yml up
 
 # Stop everything
-docker compose -f docker-compose.dev.yml down
+docker compose -f docker-compose.local.yml down
 
 # FOR PRODUCTION
 # 1. Build all images fresh
@@ -171,7 +171,7 @@ docker compose down
 docker compose down -v
 
 # 8. Migration cmd
-docker compose -f docker-compose.dev.yml exec backend alembic -c alembic/alembic.ini upgrade head
+docker compose -f docker-compose.local.yml exec backend alembic -c alembic/alembic.ini upgrade head
 
 # Live Docker disk cleanup when deployment fails with "no space left on device"
 # Safe for production data: this removes stopped containers, unused images, and build cache, not named volumes.

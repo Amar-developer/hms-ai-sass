@@ -57,7 +57,7 @@ Alembic migrations live in `backend/alembic`.
 Background report worker:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d redis report-worker
+docker compose -f docker-compose.local.yml up -d redis report-worker
 ```
 
 Monthly report email requires `MEDIZINHUB_SMTP_*` values in `.env`. Keep `.env.example` tracked as the template and never commit real credentials.

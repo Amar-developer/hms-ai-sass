@@ -140,6 +140,18 @@ def create_supplier_record(
     return supplier
 
 
+def list_supplier_records(
+    session: Session,
+    *,
+    tenant_id: str,
+    include_inactive: bool,
+) -> list[PharmacySupplier]:
+    return PharmacySupplierRepository(session).list_for_tenant(
+        tenant_id=tenant_id,
+        include_inactive=include_inactive,
+    )
+
+
 def update_supplier_record(
     session: Session, *, tenant_id: str, supplier_id: str, payload: SupplierUpdate
 ) -> PharmacySupplier:

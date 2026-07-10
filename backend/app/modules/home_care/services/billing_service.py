@@ -9,11 +9,12 @@ from app.modules.billing.schemas import (
     InvoiceRead,
     PaymentRead,
 )
-from app.modules.billing.service import next_invoice_number
+from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
 from app.modules.home_care.repositories import (
     HomeCareBillingRepository,
     HomeCareBookingItemRepository,
+    HomeCareBookingRepository,
     HomeCareReferenceRepository,
     HomeCareServiceRepository,
     HomeCareVisitLogRepository,
@@ -34,6 +35,7 @@ class HomeCareBillingService:
 
     def __init__(self, session: Session):
         self.session = session
+        self.bookings = HomeCareBookingRepository(session)
         self.items = HomeCareBookingItemRepository(session)
         self.visits = HomeCareVisitLogRepository(session)
         self.services = HomeCareServiceRepository(session)
@@ -87,7 +89,7 @@ class HomeCareBillingService:
         if booking.status != target:
             booking.status = target
             booking.updated_at = now_utc()
-            self.booking_support.bookings.add(booking)
+            self.bookings.add(booking)
             self.session.commit()
 
     def get_booking_invoice(

@@ -16,7 +16,9 @@ from app.modules.consultations.schemas import (
     ConsultationTemplateRead,
     ConsultationUpdate,
 )
-from app.modules.consultations.services.consultation_service import ConsultationService
+from app.modules.consultations.services.query_service import ConsultationQueryService
+from app.modules.consultations.services.record_service import ConsultationRecordService
+from app.modules.consultations.services.template_service import ClinicalTemplateService
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 
@@ -35,7 +37,7 @@ def create_consultation(
     current_user: User = Depends(require_permission(permissions.CONSULTATIONS_WRITE)),
     session: Session = Depends(get_session),
 ) -> Consultation:
-    return ConsultationService(session).create_consultation(
+    return ConsultationRecordService(session).create_consultation(
         tenant_id=tenant_id, payload=payload, actor=current_user
     )
 
@@ -53,7 +55,7 @@ def list_consultations(
     current_user: User = Depends(require_permission(permissions.CONSULTATIONS_READ)),
     session: Session = Depends(get_session),
 ) -> list[Consultation]:
-    return ConsultationService(session).list_consultations(
+    return ConsultationQueryService(session).list_consultations(
         tenant_id=tenant_id,
         patient_id=patient_id,
         appointment_id=appointment_id,
@@ -72,7 +74,7 @@ def list_department_clinical_templates(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
 ) -> list[ConsultationTemplateRead]:
-    return ConsultationService(session).list_department_clinical_templates(
+    return ClinicalTemplateService(session).list_department_clinical_templates(
         tenant_id=tenant_id, department_id=department_id
     )
 
@@ -88,7 +90,7 @@ def get_consultation(
     current_user: User = Depends(require_permission(permissions.CONSULTATIONS_READ)),
     session: Session = Depends(get_session),
 ) -> ConsultationDetailRead:
-    return ConsultationService(session).get_consultation(
+    return ConsultationQueryService(session).get_consultation(
         tenant_id=tenant_id, consultation_id=consultation_id, actor=current_user
     )
 
@@ -105,7 +107,7 @@ def update_consultation(
     current_user: User = Depends(require_permission(permissions.CONSULTATIONS_WRITE)),
     session: Session = Depends(get_session),
 ) -> Consultation:
-    return ConsultationService(session).update_consultation(
+    return ConsultationRecordService(session).update_consultation(
         tenant_id=tenant_id,
         consultation_id=consultation_id,
         payload=payload,
@@ -125,7 +127,7 @@ def sign_consultation(
     current_user: User = Depends(require_permission(permissions.CONSULTATIONS_SIGN)),
     session: Session = Depends(get_session),
 ) -> Consultation:
-    return ConsultationService(session).sign_consultation(
+    return ConsultationRecordService(session).sign_consultation(
         tenant_id=tenant_id,
         consultation_id=consultation_id,
         payload=payload,
@@ -146,7 +148,7 @@ def create_addendum(
     current_user: User = Depends(require_permission(permissions.CONSULTATIONS_WRITE)),
     session: Session = Depends(get_session),
 ) -> ConsultationAddendum:
-    return ConsultationService(session).create_addendum(
+    return ConsultationRecordService(session).create_addendum(
         tenant_id=tenant_id,
         consultation_id=consultation_id,
         payload=payload,
@@ -166,7 +168,7 @@ def create_clinical_template(
     current_user: User = Depends(require_permission(permissions.CONSULTATIONS_WRITE)),
     session: Session = Depends(get_session),
 ) -> ConsultationTemplateRead:
-    return ConsultationService(session).create_clinical_template(
+    return ClinicalTemplateService(session).create_clinical_template(
         tenant_id=tenant_id, payload=payload, actor=current_user
     )
 
@@ -181,6 +183,6 @@ def list_clinical_templates(
     department_id: str | None = None,
     session: Session = Depends(get_session),
 ) -> list[ConsultationTemplateRead]:
-    return ConsultationService(session).list_clinical_templates(
+    return ClinicalTemplateService(session).list_clinical_templates(
         tenant_id=tenant_id, department_id=department_id
     )

@@ -16,6 +16,11 @@ from app.modules.ip.schemas import (
     IPMedicationOrderCreate,
 )
 from app.modules.ip.services.billing import create_billing_item
+from app.modules.ip.services.validation import (
+    assert_ip_enabled,
+    ensure_admission_open,
+    get_admission,
+)
 from app.modules.tenants.models import now_utc
 
 
@@ -51,6 +56,26 @@ def create_medication_order_record(
         purpose="ip_medication",
     )
     return order
+
+
+def create_medication_order_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    payload: IPMedicationOrderCreate,
+    current_user: User,
+) -> IPMedicationOrder:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_medication_order_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 def administer_medication_record(
@@ -109,3 +134,25 @@ def administer_medication_record(
         purpose="ip_medication",
     )
     return administration
+
+
+def administer_medication_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    order_id: str,
+    payload: IPMedicationAdministrationCreate,
+    current_user: User,
+) -> IPMedicationAdministration:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return administer_medication_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        order_id=order_id,
+        payload=payload,
+        current_user=current_user,
+    )

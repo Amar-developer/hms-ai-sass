@@ -15,11 +15,9 @@ from app.modules.billing.models import (
     PaymentMethod,
     PaymentStatus,
 )
-from app.modules.billing.repositories import BillingReadRepository
-from app.modules.billing.service import (
-    next_credit_note_number,
-    update_invoice_payment_status,
-)
+from app.modules.billing.repositories.read_repository import BillingReadRepository
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.numbering import next_credit_note_number
 
 LedgerRecorder = Callable[..., object]
 SourceSyncer = Callable[[Session, Invoice], None]

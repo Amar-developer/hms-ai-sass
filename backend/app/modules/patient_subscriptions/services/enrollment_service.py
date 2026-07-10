@@ -45,12 +45,11 @@ def enroll_patient(
     payload: PatientSubscriptionEnrollmentCreate,
     actor: User,
 ) -> PatientSubscriptionEnrollmentRead:
-    # Local import avoids a module-load import cycle: billing/service.py
-    # imports from this module at top level.
-    from app.modules.billing.service import (
-        next_invoice_number,
+    # Local imports avoid module-load cycles between subscriptions and billing.
+    from app.modules.billing.services.invoice_status import (
         update_invoice_payment_status,
     )
+    from app.modules.billing.services.numbering import next_invoice_number
 
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=actor)
     patient = PatientSubscriptionSupportRepository(session).get_patient_for_tenant(

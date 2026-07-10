@@ -4,16 +4,19 @@ from sqlmodel import Session
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceItemRead, InvoiceRead
-from app.modules.billing.service import next_invoice_number
+from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.identity.models import User
 from app.modules.ip.models import IPAdmission, IPBillingItem, IPCharge
-from app.modules.ip.repositories import (
-    IPBillingRepository,
-    IPCatalogRepository,
-    IPRoomRepository,
-)
+from app.modules.ip.repositories import IPBillingRepository, IPRoomRepository
 from app.modules.ip.schemas import IPBillingItemCreate, IPChargeCreate
-from app.modules.ip.services.validation import admission_end_date, chargeable_days
+from app.modules.ip.services.pricing import lab_catalog_price, medicine_catalog_price
+from app.modules.ip.services.validation import (
+    admission_end_date,
+    assert_ip_enabled,
+    chargeable_days,
+    ensure_admission_open,
+    get_admission,
+)
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
 from app.modules.tenants.models import now_utc
@@ -55,44 +58,6 @@ def create_billing_item(
     return item
 
 
-def _catalog_key(value: str | None) -> str:
-    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
-
-
-def _medicine_catalog_price(
-    session: Session, tenant_id: str, medicine_name: str
-) -> int:
-    requested = _catalog_key(medicine_name)
-    if not requested:
-        return 0
-    medicines = IPCatalogRepository(session).list_medicines(tenant_id=tenant_id)
-    for medicine in medicines:
-        keys = [
-            _catalog_key(medicine.name),
-            _catalog_key(medicine.code),
-            _catalog_key(medicine.generic_name),
-        ]
-        if requested in keys or any(
-            requested and (requested in key or key in requested) for key in keys
-        ):
-            return int(medicine.default_sale_price or 0)
-    return 0
-
-
-def _lab_catalog_price(session: Session, tenant_id: str, test_name: str) -> int:
-    requested = _catalog_key(test_name)
-    if not requested:
-        return 0
-    tests = IPCatalogRepository(session).list_lab_tests(tenant_id=tenant_id)
-    for test in tests:
-        keys = [_catalog_key(test.name), _catalog_key(test.code)]
-        if requested in keys or any(
-            requested and (requested in key or key in requested) for key in keys
-        ):
-            return int(test.default_price or 0)
-    return 0
-
-
 def ip_care_invoice_items(
     session: Session, admission: IPAdmission, billing_items: list[IPBillingItem]
 ) -> list[dict[str, int | str]]:
@@ -114,7 +79,7 @@ def ip_care_invoice_items(
             or ("medication_administration", administration.id) in existing_sources
         ):
             continue
-        unit_amount = int(order.unit_amount or 0) or _medicine_catalog_price(
+        unit_amount = int(order.unit_amount or 0) or medicine_catalog_price(
             session, admission.tenant_id, order.medicine_name
         )
         if unit_amount <= 0:
@@ -154,7 +119,7 @@ def ip_care_invoice_items(
                 continue
             amount = int(
                 "".join(ch for ch in amount_text if ch.isdigit()) or 0
-            ) or _lab_catalog_price(session, admission.tenant_id, item_name)
+            ) or lab_catalog_price(session, admission.tenant_id, item_name)
             if amount <= 0:
                 continue
             rows.append(
@@ -362,6 +327,24 @@ def generate_ip_invoice_with_audit(
     return detail
 
 
+def generate_ip_invoice_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    current_user: User,
+) -> InvoiceDetailRead:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return generate_ip_invoice_with_audit(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        current_user=current_user,
+    )
+
+
 def create_charge_record(
     session: Session,
     *,
@@ -394,6 +377,26 @@ def create_charge_record(
         purpose="ip_billing",
     )
     return charge
+
+
+def create_charge_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    payload: IPChargeCreate,
+    current_user: User,
+) -> IPCharge:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_charge_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
+    )
 
 
 def create_billing_item_record(
@@ -429,3 +432,23 @@ def create_billing_item_record(
         purpose="ip_billing",
     )
     return item
+
+
+def create_billing_item_by_admission_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    payload: IPBillingItemCreate,
+    current_user: User,
+) -> IPBillingItem:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    return create_billing_item_record(
+        session,
+        tenant_id=tenant_id,
+        admission=admission,
+        payload=payload,
+        current_user=current_user,
+    )

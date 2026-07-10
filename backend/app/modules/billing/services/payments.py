@@ -6,9 +6,9 @@ from sqlmodel import Session
 from app.core.access_control import enforce_entitlement, require_user_branch_access
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import Invoice, InvoiceStatus, Payment
-from app.modules.billing.repositories import BillingPaymentRepository
+from app.modules.billing.repositories.payment_repository import BillingPaymentRepository
 from app.modules.billing.schemas import InvoiceDetailRead, PaymentCreate
-from app.modules.billing.service import update_invoice_payment_status
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed

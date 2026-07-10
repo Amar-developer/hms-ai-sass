@@ -5,21 +5,14 @@ from fastapi import (
     Depends,
     File,
     Form,
-    HTTPException,
     Response,
     UploadFile,
     status,
 )
 from sqlmodel import Session
 
-from app.core.access_control import (
-    require_branch_in_tenant,
-    require_user_branch_access,
-    scoped_branch_id,
-)
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
-from app.core.schema_repair import ensure_upload_schema
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import InvoiceDetailRead
 from app.modules.identity import permissions
@@ -35,12 +28,6 @@ from app.modules.ip.models import (
     IPMedicationAdministration,
     IPMedicationOrder,
     IPTreatment,
-)
-from app.modules.ip.repositories import (
-    IPAdmissionRepository,
-    IPBillingRepository,
-    IPClinicalRepository,
-    IPRoomRepository,
 )
 from app.modules.ip.schemas import (
     IPAdmissionCreate,
@@ -69,46 +56,49 @@ from app.modules.ip.schemas import (
 )
 from app.modules.ip.services.admissions import (
     convert_appointment_to_admission_record,
-    create_admission_record,
-    next_admission_number,
-    update_admission_record,
+    create_admission_command,
+    update_admission_by_id,
 )
+from app.modules.ip.services.admission_queries import list_ip_admissions
 from app.modules.ip.services.billing import (
-    create_billing_item_record,
-    create_charge_record,
-    generate_ip_invoice_with_audit,
-    invoice_detail,
+    create_billing_item_by_admission_id,
+    create_charge_by_admission_id,
+    generate_ip_invoice_by_admission_id,
+)
+from app.modules.ip.services.billing_queries import (
+    get_ip_invoice_detail,
+    list_ip_billing_items,
+    list_ip_charges,
 )
 from app.modules.ip.services.clinical import (
-    create_consent_record,
-    create_discharge_summary_record,
-    create_ip_consultation_record,
-    create_treatment_record,
+    create_consent_by_admission_id,
+    create_discharge_summary_by_admission_id,
+    create_ip_consultation_by_admission_id,
+    create_treatment_by_admission_id,
     finalize_discharge_summary_record,
-    sign_consent_record,
-    sign_ip_consultation_record,
+    sign_consent_by_id,
+    sign_ip_consultation_by_id,
+)
+from app.modules.ip.services.clinical_queries import (
+    list_ip_medication_administrations,
+    list_ip_medication_orders,
+    list_ip_treatments,
 )
 from app.modules.ip.services.documents import (
-    list_admission_documents_safe,
     render_discharge_summary_pdf,
-    upload_admission_document_file,
-    upload_admission_document_rows,
+    upload_admission_document_file_by_id,
+    upload_admission_document_rows_by_id,
 )
+from app.modules.ip.services.document_queries import list_ip_admission_documents
 from app.modules.ip.services.medication import (
-    administer_medication_record,
-    create_medication_order_record,
+    administer_medication_by_admission_id,
+    create_medication_order_by_admission_id,
 )
 from app.modules.ip.services.rooms import (
     create_room_record,
-    room_read,
     update_room_record,
 )
-from app.modules.ip.services.validation import (
-    assert_ip_enabled,
-    ensure_admission_open,
-    get_admission,
-)
-from app.modules.audit.service import record_audit_event
+from app.modules.ip.services.room_queries import list_ip_rooms
 
 router = APIRouter(prefix="/ip")
 
@@ -120,7 +110,6 @@ def create_room(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_CREATE)),
 ) -> IPRoomRead:
-    assert_ip_enabled(session, tenant_id)
     return create_room_record(
         session, tenant_id=tenant_id, payload=payload, current_user=current_user
     )
@@ -140,23 +129,17 @@ def list_rooms(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPRoomRead]:
-    assert_ip_enabled(session, tenant_id)
-    branch_scope = scoped_branch_id(current_user, branch_id)
-    rows = IPRoomRepository(session).list_rooms(
+    return list_ip_rooms(
+        session,
         tenant_id=tenant_id,
-        branch_id=branch_scope,
+        branch_id=branch_id,
         ward_type=ward_type,
         room_type=room_type,
+        available_from=available_from,
+        available_to=available_to,
+        include_occupied=include_occupied,
+        current_user=current_user,
     )
-    read_rows = [
-        room_read(
-            session, row, available_from=available_from, available_to=available_to
-        )
-        for row in rows
-    ]
-    if not include_occupied:
-        read_rows = [row for row in read_rows if row.available]
-    return read_rows
 
 
 @router.patch("/rooms/{room_id}", response_model=IPRoomRead)
@@ -167,7 +150,6 @@ def update_room(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPRoomRead:
-    assert_ip_enabled(session, tenant_id)
     return update_room_record(
         session,
         tenant_id=tenant_id,
@@ -188,13 +170,13 @@ def list_admissions(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPAdmission]:
-    assert_ip_enabled(session, tenant_id)
-    branch_scope = scoped_branch_id(current_user, branch_id)
-    return IPAdmissionRepository(session).list_admissions(
+    return list_ip_admissions(
+        session,
         tenant_id=tenant_id,
-        branch_id=branch_scope,
+        branch_id=branch_id,
         patient_id=patient_id,
         status_filter=status_filter,
+        current_user=current_user,
     )
 
 
@@ -207,14 +189,10 @@ def create_admission(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_CREATE)),
 ) -> IPAdmission:
-    assert_ip_enabled(session, tenant_id)
-    require_branch_in_tenant(session, tenant_id, payload.branch_id)
-    require_user_branch_access(current_user, payload.branch_id)
-    return create_admission_record(
+    return create_admission_command(
         session,
         tenant_id=tenant_id,
         payload=payload,
-        admission_number=next_admission_number(session, tenant_id, payload.branch_id),
         current_user=current_user,
     )
 
@@ -248,13 +226,10 @@ def update_admission(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPAdmission:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return update_admission_record(
+    return update_admission_by_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         payload=payload,
         current_user=current_user,
     )
@@ -268,29 +243,13 @@ async def upload_admission_document(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPAdmission:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    admission = await upload_admission_document_file(
+    return await upload_admission_document_file_by_id(
         session,
-        admission=admission,
+        tenant_id=tenant_id,
         admission_id=admission_id,
         file=file,
         current_user=current_user,
     )
-    session.commit()
-    session.refresh(admission)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_admission.document_uploaded",
-        resource_type="ip_admission",
-        resource_id=admission.id,
-        purpose="ip_management",
-    )
-    return admission
 
 
 @router.get("/admissions/{admission_id}/documents", response_model=list[IPDocumentRead])
@@ -302,10 +261,11 @@ def list_admission_documents(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPDocument]:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    return list_admission_documents_safe(
-        session, tenant_id=tenant_id, admission_id=admission.id
+    return list_ip_admission_documents(
+        session,
+        tenant_id=tenant_id,
+        admission_id=admission_id,
+        current_user=current_user,
     )
 
 
@@ -322,32 +282,14 @@ async def upload_admission_documents(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> list[IPDocument]:
-    assert_ip_enabled(session, tenant_id)
-    ensure_upload_schema(session)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    rows = await upload_admission_document_rows(
+    return await upload_admission_document_rows_by_id(
         session,
-        admission=admission,
+        tenant_id=tenant_id,
         admission_id=admission_id,
         document_type=document_type,
         files=files,
         current_user=current_user,
     )
-    session.commit()
-    for row in rows:
-        session.refresh(row)
-    record_audit_event(
-        session,
-        tenant_id=tenant_id,
-        branch_id=admission.branch_id,
-        actor_user_id=current_user.id,
-        action="ip_document.uploaded",
-        resource_type="ip_admission",
-        resource_id=admission.id,
-        purpose="ip_management",
-    )
-    return rows
 
 
 @router.post(
@@ -362,13 +304,10 @@ def add_treatment(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPTreatment:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return create_treatment_record(
+    return create_treatment_by_admission_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         payload=payload,
         current_user=current_user,
     )
@@ -385,11 +324,11 @@ def list_treatments(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPTreatment]:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    return IPClinicalRepository(session).list_treatments(
+    return list_ip_treatments(
+        session,
         tenant_id=tenant_id,
-        admission_id=admission.id,
+        admission_id=admission_id,
+        current_user=current_user,
     )
 
 
@@ -405,13 +344,10 @@ def create_ip_consultation(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPConsultation:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return create_ip_consultation_record(
+    return create_ip_consultation_by_admission_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         payload=payload,
         current_user=current_user,
     )
@@ -424,23 +360,10 @@ def sign_ip_consultation(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPConsultation:
-    consultation = IPClinicalRepository(session).get_consultation(
-        tenant_id=tenant_id,
-        consultation_id=consultation_id,
-    )
-    if not consultation:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="IP consultation not found"
-        )
-    admission = get_admission(
-        session, tenant_id, consultation.admission_id, current_user
-    )
-    ensure_admission_open(admission)
-    return sign_ip_consultation_record(
+    return sign_ip_consultation_by_id(
         session,
         tenant_id=tenant_id,
-        consultation=consultation,
-        admission=admission,
+        consultation_id=consultation_id,
         current_user=current_user,
     )
 
@@ -457,13 +380,10 @@ def create_consent(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPConsentForm:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return create_consent_record(
+    return create_consent_by_admission_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         payload=payload,
         current_user=current_user,
     )
@@ -476,19 +396,10 @@ def sign_consent(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPConsentForm:
-    consent = IPClinicalRepository(session).get_consent(
+    return sign_consent_by_id(
+        session,
         tenant_id=tenant_id,
         consent_id=consent_id,
-    )
-    if not consent:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Consent not found"
-        )
-    admission = get_admission(session, tenant_id, consent.admission_id, current_user)
-    ensure_admission_open(admission)
-    return sign_consent_record(
-        session,
-        consent=consent,
         current_user=current_user,
     )
 
@@ -505,13 +416,10 @@ def create_discharge_summary(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPDischargeSummary:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return create_discharge_summary_record(
+    return create_discharge_summary_by_admission_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         payload=payload,
         current_user=current_user,
     )
@@ -546,13 +454,10 @@ def add_charge(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPCharge:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return create_charge_record(
+    return create_charge_by_admission_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         payload=payload,
         current_user=current_user,
     )
@@ -567,11 +472,11 @@ def list_charges(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPCharge]:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    return IPBillingRepository(session).list_charges(
+    return list_ip_charges(
+        session,
         tenant_id=tenant_id,
-        admission_id=admission.id,
+        admission_id=admission_id,
+        current_user=current_user,
     )
 
 
@@ -587,13 +492,10 @@ def add_billing_item(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPBillingItem:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return create_billing_item_record(
+    return create_billing_item_by_admission_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         payload=payload,
         current_user=current_user,
     )
@@ -610,11 +512,11 @@ def list_billing_items(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPBillingItem]:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    return IPBillingRepository(session).list_billing_items(
+    return list_ip_billing_items(
+        session,
         tenant_id=tenant_id,
-        admission_id=admission.id,
+        admission_id=admission_id,
+        current_user=current_user,
     )
 
 
@@ -630,13 +532,10 @@ def create_medication_order(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPMedicationOrder:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return create_medication_order_record(
+    return create_medication_order_by_admission_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         payload=payload,
         current_user=current_user,
     )
@@ -654,11 +553,11 @@ def list_medication_orders(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPMedicationOrder]:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    return IPClinicalRepository(session).list_medication_orders(
+    return list_ip_medication_orders(
+        session,
         tenant_id=tenant_id,
-        admission_id=admission.id,
+        admission_id=admission_id,
+        current_user=current_user,
     )
 
 
@@ -675,13 +574,10 @@ def administer_medication(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),
 ) -> IPMedicationAdministration:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return administer_medication_record(
+    return administer_medication_by_admission_id(
         session,
         tenant_id=tenant_id,
-        admission=admission,
+        admission_id=admission_id,
         order_id=order_id,
         payload=payload,
         current_user=current_user,
@@ -700,11 +596,11 @@ def list_medication_administrations(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
 ) -> list[IPMedicationAdministration]:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    return IPClinicalRepository(session).list_medication_administrations(
+    return list_ip_medication_administrations(
+        session,
         tenant_id=tenant_id,
-        admission_id=admission.id,
+        admission_id=admission_id,
+        current_user=current_user,
     )
 
 
@@ -717,15 +613,12 @@ def get_ip_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead | None:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    invoice = IPBillingRepository(session).get_invoice_for_admission(
+    return get_ip_invoice_detail(
+        session,
         tenant_id=tenant_id,
-        admission_id=admission.id,
+        admission_id=admission_id,
+        current_user=current_user,
     )
-    if not invoice:
-        return None
-    return invoice_detail(session, invoice)
 
 
 @router.post(
@@ -739,11 +632,11 @@ def generate_ip_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
-    assert_ip_enabled(session, tenant_id)
-    admission = get_admission(session, tenant_id, admission_id, current_user)
-    ensure_admission_open(admission)
-    return generate_ip_invoice_with_audit(
-        session, tenant_id=tenant_id, admission=admission, current_user=current_user
+    return generate_ip_invoice_by_admission_id(
+        session,
+        tenant_id=tenant_id,
+        admission_id=admission_id,
+        current_user=current_user,
     )
 
 

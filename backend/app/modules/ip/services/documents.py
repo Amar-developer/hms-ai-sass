@@ -13,7 +13,11 @@ from app.modules.ip.repositories import (
     IPClinicalRepository,
     IPReferenceRepository,
 )
-from app.modules.ip.services.validation import get_admission
+from app.modules.ip.services.validation import (
+    assert_ip_enabled,
+    ensure_admission_open,
+    get_admission,
+)
 from app.modules.tenants.models import now_utc
 
 
@@ -63,6 +67,39 @@ async def upload_admission_document_file(
         attached_to_field="admission_document_url",
         attached_to_label="Admission Document",
         uploaded_by_user_id=current_user.id,
+    )
+    return admission
+
+
+async def upload_admission_document_file_by_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    file: UploadFile,
+    current_user: User,
+) -> IPAdmission:
+    assert_ip_enabled(session, tenant_id)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    admission = await upload_admission_document_file(
+        session,
+        admission=admission,
+        admission_id=admission_id,
+        file=file,
+        current_user=current_user,
+    )
+    session.commit()
+    session.refresh(admission)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_admission.document_uploaded",
+        resource_type="ip_admission",
+        resource_id=admission.id,
+        purpose="ip_management",
     )
     return admission
 
@@ -124,6 +161,43 @@ async def upload_admission_document_rows(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Upload at least one file"
         )
+    return rows
+
+
+async def upload_admission_document_rows_by_id(
+    session: Session,
+    *,
+    tenant_id: str,
+    admission_id: str,
+    document_type: str,
+    files: list[UploadFile],
+    current_user: User,
+) -> list[IPDocument]:
+    assert_ip_enabled(session, tenant_id)
+    ensure_upload_schema(session)
+    admission = get_admission(session, tenant_id, admission_id, current_user)
+    ensure_admission_open(admission)
+    rows = await upload_admission_document_rows(
+        session,
+        admission=admission,
+        admission_id=admission_id,
+        document_type=document_type,
+        files=files,
+        current_user=current_user,
+    )
+    session.commit()
+    for row in rows:
+        session.refresh(row)
+    record_audit_event(
+        session,
+        tenant_id=tenant_id,
+        branch_id=admission.branch_id,
+        actor_user_id=current_user.id,
+        action="ip_document.uploaded",
+        resource_type="ip_admission",
+        resource_id=admission.id,
+        purpose="ip_management",
+    )
     return rows
 
 

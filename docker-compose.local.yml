@@ -2,16 +2,18 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: medizinhub-postgres
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: medizinhub_hms
-      POSTGRES_USER: medizinhub
-      POSTGRES_PASSWORD: medizinhub_dev
+      POSTGRES_DB: ${POSTGRES_DB:-medizinhub_hms}
+      POSTGRES_USER: ${POSTGRES_USER:-medizinhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medizinhub_dev}
     ports:
       - "5433:5432"
     volumes:
       - medizinhub_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U medizinhub -d medizinhub_hms"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medizinhub} -d ${POSTGRES_DB:-medizinhub_hms}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -32,8 +34,8 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
       args:
-        NEXT_PUBLIC_MEDIZINHUB_API_URL: http://localhost:8080/api/v1
-        NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: "true"
+        NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
+        NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-true}
     container_name: medizinhub-frontend
     ports:
       - "3000:3000"
@@ -50,8 +52,8 @@ services:
       - postgres
       - redis
     environment:
-      NEXT_PUBLIC_MEDIZINHUB_API_URL: http://localhost:8080/api/v1
-      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: "true"
+      NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
+      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-true}
 
   backend:
     build:

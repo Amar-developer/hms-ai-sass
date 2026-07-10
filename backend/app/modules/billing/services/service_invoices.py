@@ -4,10 +4,10 @@ from fastapi import HTTPException
 from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
-from app.modules.billing.service import (
+from app.modules.billing.services.numbering import next_invoice_number
+from app.modules.billing.services.rules import (
     calculate_offer_discount,
     find_tax_rule,
-    next_invoice_number,
 )
 
 LedgerRecorder = Callable[..., object]

@@ -874,6 +874,323 @@ entered refactoring.
   reusable support logic to a focused service. Booking response shape, branch
   access enforcement, patient/staff validation errors, service item defaults,
   totals, and existing transaction boundaries remain unchanged.
+- Billing Architecture Slice 1: extracted billing rule, catalog, practitioner,
+  tax, discount, and supplier reference queries from the former monolithic
+  billing repository module into
+  `backend/app/modules/billing/repositories/reference_repository.py`.
+  Configuration, rule selection, and invoice item supplier services now depend
+  on the focused reference repository directly. Billing now uses one canonical
+  `repositories/` package with `__init__.py` re-exports for compatibility.
+  Fee-rule matching, tax-rule selection, discount lookup, supplier-name lookup,
+  and catalog reference behavior remain unchanged.
+- Billing Architecture Slice 2: extracted consultation, lab-order, pharmacy
+  issue, source-invoice, and source item lookups into
+  `backend/app/modules/billing/repositories/source_repository.py`.
+  Source invoice services now depend on the focused source repository directly,
+  while `billing.repositories` still re-exports the class. Consultation invoice
+  reuse, lab/pharmacy invoice lookup, item ordering, catalog lookups, and
+  source item matching behavior remain unchanged.
+- Billing Architecture Slice 3: extracted invoice, invoice item, tenant,
+  branch, patient, payment, lab item, and pharmacy item support reads into
+  `backend/app/modules/billing/repositories/invoice_support_repository.py`.
+  Receipt PDF, membership, and invoice item services now depend on the focused
+  support repository directly, while `billing.repositories` still re-exports
+  the class. Receipt detail reads, membership item lookups, invoice item update
+  lookups, payment ordering, and source item lists remain unchanged.
+- Billing Architecture Slice 4: extracted settlement, finalized-settlement,
+  due-collection, and revenue report query reads into
+  `backend/app/modules/billing/repositories/settlement_report_repository.py`.
+  Settlement/report services now depend on the focused reporting repository
+  directly, while `billing.repositories` still re-exports the class. Settlement
+  invoice joins, finalized settlement scoping, due collection ordering, revenue
+  date filtering, and cancelled/refunded invoice exclusions remain unchanged.
+- Billing Architecture Slice 5: split the remaining monolithic repository
+  repository classes into focused modules:
+  `read_repository.py`, `adjustment_repository.py`, `payment_repository.py`, and
+  `source_sync_repository.py`. Billing services now import these repositories
+  directly, while `billing.repositories` remains the package-level compatibility
+  facade. Invoice reads, payment totals, credit-note totals, ledger existence
+  checks, adjustment row locking, payment row locking, patient lookups, and
+  source sync lookups remain unchanged.
+- Cleanup Slice: removed unused facade-only helper files from IP and Pharmacy
+  service packages. Active helper modules in Identity, Tenants, and Lab remain
+  because current application code or tests still import them. No business
+  logic, route contract, or service behavior changed.
+- Cleanup Slice: removed the unused integrations schemas module. The active
+  integration model, service, and GraphQL catalog adapter remain because they
+  are still used by catalog integration settings and pharmacy/lab tests.
+- Billing Receipt PDF Slice 1: extracted PDF text, money, percentage, logo
+  image loading, JPEG size parsing, and PNG decoding primitives into
+  `backend/app/modules/billing/services/receipt_pdf_utils.py`. Receipt
+  layout, data loading, filename generation, logo fallback behavior, and PDF
+  response behavior remain unchanged.
+- Billing Receipt PDF Slice 2: moved receipt amount-in-words formatting into
+  `backend/app/modules/billing/services/receipt_pdf_utils.py`. Receipt total
+  wording and layout behavior remain unchanged.
+- Billing Receipt PDF Slice 3: moved receipt text width/wrapping helpers and
+  invoice item amount display helpers into
+  `backend/app/modules/billing/services/receipt_pdf_utils.py`. Receipt item
+  pricing, discount display, and PDF layout behavior remain unchanged.
+- Billing Invoice Query Slice: extracted invoice list/detail orchestration from
+  `backend/app/api/v1/billing/invoices.py` into
+  `backend/app/modules/billing/services/invoice_queries.py`. The router now
+  handles only HTTP concerns for those endpoints, while the service owns
+  entitlement checks, branch scoping/access, repository reads, status
+  normalization, and read-model assembly. API paths, response schemas, and
+  business behavior remain unchanged.
+- Billing Configuration Query Slice: moved doctor-fee, tax-rule, and
+  discount-offer list entitlement/scoping workflow from
+  `backend/app/api/v1/billing/configuration.py` into
+  `backend/app/modules/billing/services/configuration.py`. The router now
+  delegates configuration query orchestration to service methods while keeping
+  route contracts unchanged.
+- Billing Service Dependency Slice: replaced application and billing-service
+  imports from the legacy `app.modules.billing.service` facade with imports
+  from the owning service modules (`invoice_status`, `numbering`, `rules`, and
+  `consultation_invoice`). The facade remains as a compatibility layer, but
+  active code now follows direct module ownership and cleaner dependency flow.
+- Billing Source Sync Slice: extracted invoice source synchronization from
+  `backend/app/modules/billing/services/ledger.py` into
+  `backend/app/modules/billing/services/source_sync.py`. Ledger now focuses on
+  ledger entries, invoice read assembly, service invoice delegation, and
+  adjustment delegation, while source-status updates for physiotherapy, home
+  care, memberships, and pharmacy reversal live in a dedicated service module.
+- Billing Closure Slice: moved the discount-approval lookup behind
+  `BillingReferenceRepository.get_discount_approval()` so configuration
+  services no longer perform direct model reads for that workflow. This closes
+  the remaining quick repository-boundary cleanup before moving to other
+  modules.
+- Patient Subscriptions Eligibility Slice: moved department, purchase invoice,
+  appointment, and consultation lookups from
+  `backend/app/modules/patient_subscriptions/services/eligibility.py` into
+  `PatientSubscriptionSupportRepository`. Eligibility service now owns rules
+  and repository owns persistence reads.
+- Patient Subscriptions Usage Sync Slice: moved the direct benefit-invoice
+  query out of
+  `backend/app/modules/patient_subscriptions/services/usage_sync.py` into a
+  new `PatientSubscriptionSupportRepository.list_benefit_invoices()` method,
+  and replaced its inline `LabOrderItem`/`PharmacyIssueItem` queries with
+  calls to the owning modules' existing repositories
+  (`LabOrderRepository.list_order_items`,
+  `PharmacyIssueRepository.list_items`) instead of duplicating those queries
+  in patient_subscriptions. Usage-sync now contains only benefit-aggregation
+  business rules; each module keeps ownership of persistence reads for its
+  own entities. Note: the lab/pharmacy repository methods add an explicit
+  `ORDER BY created_at` that the prior ad hoc queries lacked; this only
+  affects tie-breaking among same-invoice items when a partial discount
+  can't cover all of them, and now matches the ordering already used by
+  those modules' own detail-read paths. `service.py` continues to re-export
+  `sync_free_item_usage_from_invoices` unchanged.
+- IP Billing Review: audited `backend/app/modules/ip/services/billing.py` for
+  repository-boundary and dependency-direction violations; found none. All
+  reads already go through `IPBillingRepository`/`IPCatalogRepository`/
+  `IPRoomRepository`, and `clinical.py`/`medication.py` correctly depend on
+  `billing.create_billing_item` rather than touching billing entities
+  directly. A full scan of `ip/services/*.py` found zero remaining direct
+  `session.exec`/`session.get` calls outside repositories.
+- IP Billing Pricing Slice: extracted the catalog fuzzy-match pricing helpers
+  (`_medicine_catalog_price`, `_lab_catalog_price`, `_catalog_key`) from
+  `backend/app/modules/ip/services/billing.py` into a new
+  `backend/app/modules/ip/services/pricing.py`, mirroring the earlier Lab
+  module `pricing.py` extraction. `billing.py` now owns only billing-item/
+  charge CRUD and invoice generation orchestration; catalog price resolution
+  is its own concern. No behavior change — same matching algorithm, same
+  call sites, only the module boundary moved. These helpers were private and
+  only used within `billing.py`, so no external import paths were affected.
+- Home Care Billing/Booking Ownership Slice: fixed
+  `backend/app/modules/home_care/services/billing_service.py`'s
+  `_sync_booking_status_from_invoice` reaching through
+  `booking_support.bookings` (another service's internal repository
+  attribute) to persist a booking status change. `HomeCareBillingService` now
+  holds its own `HomeCareBookingRepository` instance, matching the pattern
+  already used by its sibling `booking_service.py`/`visit_service.py`, so
+  each service owns the writes for the entities it mutates directly.
+  `booking_support` remains correctly used across all three services only for
+  its actual shared responsibility (`get_or_404`, `read_booking`,
+  `validate_patient_and_staff`, `replace_booking_items`). Confirmed zero raw
+  `session.exec`/`session.get` calls anywhere in `home_care/services/*.py`
+  outside repositories both before and after this change — no other
+  Router → Service → Repository violations found. No behavior change.
+- Physiotherapy Billing Ownership Slice: found and fixed the identical
+  reach-through pattern in
+  `backend/app/modules/physiotherapy/services/billing_service.py`'s
+  `_sync_case_status_from_invoice`, which called `self.lookup.cases.add(case)`
+  through `PhysiotherapyCaseLookup`'s internal repository attribute.
+  `PhysiotherapyBillingService` now holds its own `PhysiotherapyCaseRepository`
+  instance, matching `case_service.py`. `lookup` remains correctly used only
+  for `get_or_404`. Also reviewed `fee_strategies.py`: the Strategy pattern
+  (`FixedFeeShareStrategy`/`PercentageFeeShareStrategy` behind
+  `PhysiotherapistFeeResolver`) is cleanly encapsulated — `billing_service.py`
+  only calls the resolver's two public methods, never the individual
+  strategies, and the resolver itself has no direct DB access (delegates to
+  `PhysiotherapyBillingRepository`). No over-coupling found. No behavior
+  change.
+- Consultations Facade Removal Slice: removed
+  `backend/app/modules/consultations/services/consultation_service.py`. It
+  was a pure 1:1 delegating facade over `ConsultationRecordService` and
+  `ClinicalTemplateService` with no shared state or orchestration between the
+  two (they are independent domains — consultation notes/signing vs. clinical
+  note templates), and its only consumer was
+  `backend/app/api/v1/consultations.py`. The router now instantiates
+  `ConsultationRecordService`/`ClinicalTemplateService` directly per route,
+  matching exactly which service each endpoint already delegated to, one
+  fewer indirection layer. No test imported the facade class. Also reviewed
+  `record_service.py`'s billing integration: `sign_consultation` calls
+  `ConsultationBillingService.auto_invoice_membership_consultation` inside a
+  try/except so a membership-invoicing failure never fails the sign — this
+  ownership split (record_service orchestrates + handles errors,
+  billing_service owns the invoicing rule) was already correct and is
+  unchanged. Zero direct DB access found anywhere in
+  `consultations/services/*.py`. No behavior change; all routes, permissions,
+  and response models are unchanged.
+- Cross-Module Facade Cleanup Slice: extended the same pure-delegation
+  facade removal to two more modules discovered during the item 6 sweep:
+  `backend/app/modules/appointments/services/appointment_service.py`
+  (delegated to `AppointmentBookingService`/`AppointmentQueryService`, only
+  consumer was `api/v1/appointments.py`) and
+  `backend/app/modules/physiotherapy/services/physiotherapy_service.py`
+  (delegated to `PhysiotherapyCaseLifecycleService`/`PhysiotherapySessionService`/
+  `PhysiotherapyBillingService`, only consumer was `api/v1/physiotherapy.py`).
+  Both routers now instantiate the underlying services directly, one per
+  route, matching what each endpoint already delegated to. No test imported
+  either facade class. Kept-vs-removed facade decision for this refactor:
+  - **Kept** (wide external fan-in beyond their own router — removing would
+    break other modules or namespace-style imports):
+    `billing/service.py` (12 call sites across 6+ modules),
+    `reports/service.py` (imported as `reports_service` namespace by the API
+    layer and by `worker.py`), `identity/services/helpers.py` (imported by
+    `auth_service.py`/`role_service.py`/`user_service.py` and 2 test files),
+    `queue/service.py` (imported by `appointments/booking_service.py` and as
+    a namespace import by the API layer), `lab/services/helpers.py`
+    (imported by `test_lab_pharmacy.py`).
+  - **Removed** (pure 1:1 delegation, only consumer was the module's own
+    router, zero cross-service orchestration): `consultation_service.py`,
+    `home_care_service.py`, `appointment_service.py`,
+    `physiotherapy_service.py`.
+- Router Business-Logic Scan: swept `api/v1/*.py` for direct repository
+  construction and business-rule leakage. Most direct
+  `SomeRepository(session).method(...)` calls found in routers (several in
+  `api/v1/lab.py`, most list/get endpoints in `api/v1/ip.py`) are simple 1:1
+  read/translation pass-throughs with no conditional business rules and are
+  an existing, accepted convention in this codebase — left unchanged.
+  **One real violation found and later fixed by the IP CQRS Room Query Slice:**
+  `api/v1/ip.py::list_rooms` builds read-models via `room_read(...)` and then
+  applies a genuine business rule directly in the router
+  (`if not include_occupied: read_rows = [row for row in read_rows if
+  row.available]`), bypassing a service layer entirely for that filter.
+- Full backend suite run after this phase: 247/248 passed. The 1 failure
+  (`test_api_permission_matrix_lists_all_live_routes`) is a pre-existing,
+  unrelated docs/route-drift check (flags routes across many unrelated
+  modules — patients, tenants, queue, etc. — as undocumented) that has failed
+  identically since before this refactor pass began.
+- IP CQRS Room Query Slice: moved `api/v1/ip.py::list_rooms` read/filter
+  orchestration into `backend/app/modules/ip/services/room_queries.py`.
+  The router now keeps HTTP concerns only for room listing, while the query
+  service owns IP module entitlement, branch scoping, room repository reads,
+  `room_read` assembly, and the `include_occupied` availability filter. Same
+  database, route, request parameters, response model, and behavior.
+- IP CQRS Admission Query Slice: moved `api/v1/ip.py::list_admissions`
+  entitlement, branch scoping, and admission repository read into
+  `backend/app/modules/ip/services/admission_queries.py`. The admissions list
+  route now delegates to a query service while preserving the same filters,
+  response model, and tenant/branch behavior.
+- IP CQRS Clinical Query Slice: moved treatment, medication-order, and
+  medication-administration list workflows from `backend/app/api/v1/ip.py`
+  into `backend/app/modules/ip/services/clinical_queries.py`. The query
+  service now owns IP entitlement, admission access validation, and clinical
+  repository reads for these GET endpoints; route paths, permissions, response
+  models, and behavior remain unchanged.
+- IP CQRS Billing Query Slice: moved charge list, billing-item list, and
+  admission invoice detail lookup from `backend/app/api/v1/ip.py` into
+  `backend/app/modules/ip/services/billing_queries.py`. The query service now
+  owns IP entitlement, admission access validation, billing repository reads,
+  and invoice detail read-model assembly for these GET endpoints; write-side
+  invoice generation remains in the existing billing command service.
+- IP CQRS Document Query Slice: moved admission document list orchestration
+  from `backend/app/api/v1/ip.py` into
+  `backend/app/modules/ip/services/document_queries.py`. The query service now
+  owns IP entitlement, admission access validation, and delegation to the safe
+  document-list read path; upload and discharge PDF workflows remain unchanged.
+- IP Clinical Command Boundary Slice: moved sign-consultation and sign-consent
+  lookup/orchestration from `backend/app/api/v1/ip.py` into the existing
+  `backend/app/modules/ip/services/clinical.py` command service via
+  `sign_ip_consultation_by_id()` and `sign_consent_by_id()`. The router no
+  longer constructs `IPClinicalRepository` directly; 404 messages, admission
+  access checks, open-admission validation, signing audit behavior, and billing
+  item creation remain unchanged.
+- IP Room Command Boundary Slice: moved IP entitlement enforcement for room
+  create/update from `backend/app/api/v1/ip.py` into
+  `backend/app/modules/ip/services/rooms.py`. Room command services already
+  owned branch validation, branch access, duplicate checks, persistence, audit,
+  and read-model assembly; the router now only wires HTTP inputs/dependencies
+  for room command endpoints.
+- IP Command Router Cleanup Slice: moved the remaining admission-scoped write
+  preconditions out of `backend/app/api/v1/ip.py` and into existing IP command
+  services. Admission create/update now delegate to
+  `services/admissions.py`; document upload workflows delegate to
+  `services/documents.py`; treatment, consultation, consent, discharge-summary,
+  charge, billing-item, medication-order, medication-administration, and
+  invoice-generation commands now use by-admission-id service wrappers. The
+  router no longer performs IP entitlement checks, admission lookup, open-stay
+  validation, branch access checks, transaction commits, or audit logging for
+  these flows; route paths, permissions, request/response schemas, and
+  business outcomes remain unchanged.
+- Pharmacy Issue CQRS Slice: extracted pharmacy issue list/detail read-model
+  workflows from `backend/app/modules/pharmacy/services/issues.py` into
+  `backend/app/modules/pharmacy/services/issue_queries.py`. Issue commands
+  remain in `issues.py` for create, create-from-consultation, dispense/status,
+  amount adjustment, and billing-link workflows. The router now imports GET
+  issue workflows from the query service and POST/PATCH issue workflows from
+  the command service, preserving the same route paths, permissions,
+  response schemas, branch scoping, module entitlement checks, and detail item
+  assembly.
+- Pharmacy Stock CQRS Slice: extracted stock read/query workflows from
+  `backend/app/modules/pharmacy/services/stock.py` into
+  `backend/app/modules/pharmacy/services/stock_queries.py`. Batch listing,
+  stock-ledger listing, low-stock calculation, module entitlement checks, and
+  branch scoping now live on the query side. `stock.py` remains focused on
+  stock mutation support (`record_stock`) plus the balance helper needed to
+  write ledger `balance_after` values. The pharmacy router now imports stock
+  GET workflows from the query service while purchase/issue command services
+  continue to use `record_stock` unchanged.
+- Lab Catalog Query Slice: moved catalog/referral/template GET orchestration
+  out of `backend/app/api/v1/lab.py` into
+  `backend/app/modules/lab/services/catalog_queries.py`. Consultation
+  referral reads, available/popular lab catalog reads, active test/package
+  reads, package read-model assembly, result-template reads, module
+  entitlement checks, and branch scoping now live in the query service. Lab
+  router endpoints keep the same paths, permissions, response models, and
+  request parameters; catalog writes, order commands, sample collection,
+  result entry, and PDF report generation remain on their existing command
+  services.
+- Lab Order Query Slice: moved lab order list/detail GET workflows from
+  `backend/app/modules/lab/services/order_service.py` into
+  `backend/app/modules/lab/services/order_queries.py`. The order command
+  service now focuses on create, create-from-consultation, and status updates,
+  while the query service owns order list reads, detail assembly, entitlement
+  checks, branch access for detail reads, and zero-amount repricing already
+  present on read paths. Router paths, permissions, response models, branch
+  scoping, and order behavior remain unchanged.
+- Consultations Query Slice: moved consultation list/detail GET workflows from
+  `backend/app/modules/consultations/services/record_service.py` into
+  `backend/app/modules/consultations/services/query_service.py`.
+  `ConsultationRecordService` now focuses on create, update, sign, and
+  addendum command workflows, while `ConsultationQueryService` owns entitlement
+  checks, branch/doctor scoping, detail read-model assembly, and the existing
+  viewed audit event for detail reads. Router paths, permissions, response
+  models, and business behavior remain unchanged.
+- Final Priority CQRS Scan: reviewed priority modules (IP, Billing, Patient
+  Subscriptions, Pharmacy, Lab, Consultations) for obvious router/service
+  boundary leftovers after the lightweight CQRS slices. Found and fixed one
+  remaining router repository call in `backend/app/api/v1/pharmacy.py` by
+  moving supplier list access behind `list_supplier_records()` in
+  `backend/app/modules/pharmacy/services/catalog_service.py`. No API contract
+  or behavior change.
+- Billing Facade Cleanup: removed the unused
+  `backend/app/modules/billing/service.py` compatibility facade after scanning
+  for active imports. The remaining internal script imports were updated to
+  import `create_consultation_invoice` directly from
+  `backend/app/modules/billing/services/consultation_invoice.py`.
 
 ## Verification Commands
 

@@ -23,9 +23,15 @@ from app.modules.physiotherapy.schemas import (
     PhysiotherapySessionCreate,
     PhysiotherapySessionRead,
 )
-from app.modules.physiotherapy.services.physiotherapy_service import (
-    PhysiotherapyCaseService,
+from app.modules.physiotherapy.services.billing_service import (
+    PhysiotherapyBillingService,
+)
+from app.modules.physiotherapy.services.case_service import PhysiotherapyCaseService
+from app.modules.physiotherapy.services.equipment_service import (
     PhysiotherapyEquipmentService,
+)
+from app.modules.physiotherapy.services.session_service import (
+    PhysiotherapySessionService,
 )
 
 router = APIRouter(prefix="/physiotherapy")
@@ -157,7 +163,7 @@ def list_sessions(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_READ)),
 ) -> list[PhysiotherapySession]:
-    return PhysiotherapyCaseService(session).list_sessions(
+    return PhysiotherapySessionService(session).list_sessions(
         tenant_id=tenant_id, case_id=case_id, actor=current_user
     )
 
@@ -174,7 +180,7 @@ def create_session(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_EDIT)),
 ) -> PhysiotherapySession:
-    return PhysiotherapyCaseService(session).create_session(
+    return PhysiotherapySessionService(session).create_session(
         tenant_id=tenant_id, case_id=case_id, payload=payload, actor=current_user
     )
 
@@ -186,7 +192,7 @@ def get_case_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead | None:
-    return PhysiotherapyCaseService(session).get_case_invoice(
+    return PhysiotherapyBillingService(session).get_case_invoice(
         tenant_id=tenant_id, case_id=case_id, actor=current_user
     )
 
@@ -203,6 +209,6 @@ def generate_invoice(
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> InvoiceDetailRead:
-    return PhysiotherapyCaseService(session).generate_invoice(
+    return PhysiotherapyBillingService(session).generate_invoice(
         tenant_id=tenant_id, case_id=case_id, payload=payload, actor=current_user
     )

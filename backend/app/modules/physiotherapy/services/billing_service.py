@@ -10,11 +10,12 @@ from app.modules.billing.schemas import (
     InvoiceRead,
     PaymentRead,
 )
-from app.modules.billing.service import next_invoice_number
+from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.identity.models import User
 from app.modules.physiotherapy.models import PhysiotherapyCase
 from app.modules.physiotherapy.repositories import (
     PhysiotherapyBillingRepository,
+    PhysiotherapyCaseRepository,
     PhysiotherapySessionRepository,
 )
 from app.modules.physiotherapy.schemas import PhysiotherapyInvoiceCreate
@@ -32,6 +33,7 @@ class PhysiotherapyBillingService:
 
     def __init__(self, session: Session):
         self.session = session
+        self.cases = PhysiotherapyCaseRepository(session)
         self.sessions = PhysiotherapySessionRepository(session)
         self.billing = PhysiotherapyBillingRepository(session)
         self.lookup = PhysiotherapyCaseLookup(session)
@@ -82,7 +84,7 @@ class PhysiotherapyBillingService:
         if case.status != target_status:
             case.status = target_status
             case.updated_at = now_utc()
-            self.lookup.cases.add(case)
+            self.cases.add(case)
             self.session.commit()
             self.session.refresh(case)
         return case

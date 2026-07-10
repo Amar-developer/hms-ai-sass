@@ -56,21 +56,27 @@ jobs:
             docker image prune -f
             docker container prune -f
 
-            # Build and deploy using dev compose
-            docker compose -f docker-compose.dev.yml build --pull
-            docker compose -f docker-compose.dev.yml up -d --remove-orphans
+            # Build and deploy using the staging compose file.
+            # This is a public, testable EC2 site (devclinic.medizinhub.com),
+            # not a personal dev machine, so it must run the same production
+            # build as docker-compose.yml (Dockerfile, not Dockerfile.dev) —
+            # only .env.staging differs (test DB, demo creds off). See
+            # docker-compose.staging.yml / .env.staging.example.
+            docker compose -f docker-compose.staging.yml build --pull
+            docker compose -f docker-compose.staging.yml up -d --remove-orphans
 
             # Check disk after deploy
             docker system df
-            docker compose -f docker-compose.dev.yml ps
+            docker compose -f docker-compose.staging.yml ps
 
-            # Health checks (dev server uses port 8081)
+            # Health checks (host port 8081 — 8080 is taken by another
+            # project on this EC2 box; see docker-compose.staging.yml)
             for i in {1..30}; do
               if curl -f http://127.0.0.1:8081/health; then
                 break
               fi
               if [ "$i" -eq 30 ]; then
-                docker compose -f docker-compose.dev.yml logs backend --tail=200
+                docker compose -f docker-compose.staging.yml logs backend --tail=200
                 exit 1
               fi
               sleep 5

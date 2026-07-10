@@ -1,180 +1,39 @@
 from dataclasses import dataclass
-from pathlib import Path
 import re
-import zlib
 
 from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access
 from app.modules.billing.models import Invoice, InvoiceItem, Payment
-from app.modules.billing.repositories import BillingInvoiceSupportRepository
+from app.modules.billing.repositories.invoice_support_repository import (
+    BillingInvoiceSupportRepository,
+)
 from app.modules.identity.models import User
 from app.modules.patients.models import Patient
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
 from app.modules.tenants.models import Branch, Tenant
+from app.modules.billing.services.receipt_pdf_utils import (
+    amount_words,
+    item_discount_percent,
+    item_mrp_amount,
+    item_mrp_text,
+    item_selling_amount,
+    local_logo_image,
+    money_pdf,
+    pdf_text,
+    percent_pdf,
+    signed_money_pdf,
+    text_width,
+    wrap_text,
+)
 
 
 @dataclass(frozen=True)
 class ReceiptPdfDocument:
     content: bytes
     filename: str
-
-
-def _pdf_text(value: object) -> str:
-    return (
-        str(value or "")
-        .replace("\\", "\\\\")
-        .replace("(", "\\(")
-        .replace(")", "\\)")
-        .replace("\n", " ")
-        .encode("latin-1", "replace")
-        .decode("latin-1")
-    )
-
-
-def _money_pdf(value: object) -> str:
-    return f"Rs. {int(value or 0):,}"
-
-
-def _signed_money_pdf(value: object) -> str:
-    amount = int(value or 0)
-    if amount < 0:
-        return f"- Rs. {abs(amount):,}"
-    return _money_pdf(amount)
-
-
-def _percent_pdf(amount: int, base: int) -> str:
-    if amount <= 0 or base <= 0:
-        return "0%"
-    percent = amount * 100 / base
-    return f"{percent:.1f}".rstrip("0").rstrip(".") + "%"
-
-
-def _jpeg_size(data: bytes) -> tuple[int, int] | None:
-    index = 2
-    while index + 9 < len(data):
-        if data[index] != 0xFF:
-            index += 1
-            continue
-        marker = data[index + 1]
-        block_length = int.from_bytes(data[index + 2 : index + 4], "big")
-        if marker in {0xC0, 0xC1, 0xC2} and index + 8 < len(data):
-            height = int.from_bytes(data[index + 5 : index + 7], "big")
-            width = int.from_bytes(data[index + 7 : index + 9], "big")
-            return width, height
-        index += 2 + block_length
-    return None
-
-
-def _png_logo_image(data: bytes) -> dict[str, object] | None:
-    if not data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return None
-    offset = 8
-    width = height = color_type = bit_depth = interlace = None
-    compressed = bytearray()
-    while offset + 8 <= len(data):
-        length = int.from_bytes(data[offset : offset + 4], "big")
-        chunk_type = data[offset + 4 : offset + 8]
-        chunk_data = data[offset + 8 : offset + 8 + length]
-        offset += 12 + length
-        if chunk_type == b"IHDR":
-            width = int.from_bytes(chunk_data[0:4], "big")
-            height = int.from_bytes(chunk_data[4:8], "big")
-            bit_depth = chunk_data[8]
-            color_type = chunk_data[9]
-            interlace = chunk_data[12]
-        elif chunk_type == b"IDAT":
-            compressed.extend(chunk_data)
-        elif chunk_type == b"IEND":
-            break
-    if (
-        not width
-        or not height
-        or bit_depth != 8
-        or color_type not in {2, 6}
-        or interlace != 0
-    ):
-        return None
-    channels = 4 if color_type == 6 else 3
-    stride = width * channels
-    try:
-        raw = zlib.decompress(bytes(compressed))
-    except zlib.error:
-        return None
-    previous = [0] * stride
-    rows: list[bytes] = []
-    index = 0
-    for _row in range(height):
-        if index >= len(raw):
-            return None
-        filter_type = raw[index]
-        index += 1
-        scan = list(raw[index : index + stride])
-        index += stride
-        for i, value in enumerate(scan):
-            left = scan[i - channels] if i >= channels else 0
-            up = previous[i]
-            up_left = previous[i - channels] if i >= channels else 0
-            if filter_type == 1:
-                scan[i] = (value + left) & 0xFF
-            elif filter_type == 2:
-                scan[i] = (value + up) & 0xFF
-            elif filter_type == 3:
-                scan[i] = (value + ((left + up) // 2)) & 0xFF
-            elif filter_type == 4:
-                p = left + up - up_left
-                pa, pb, pc = abs(p - left), abs(p - up), abs(p - up_left)
-                predictor = (
-                    left if pa <= pb and pa <= pc else up if pb <= pc else up_left
-                )
-                scan[i] = (value + predictor) & 0xFF
-            elif filter_type != 0:
-                return None
-        previous = scan
-        if channels == 4:
-            composited = bytearray()
-            for pixel in range(0, len(scan), 4):
-                alpha = scan[pixel + 3]
-                for channel in scan[pixel : pixel + 3]:
-                    composited.append((channel * alpha + 255 * (255 - alpha)) // 255)
-            rows.append(bytes(composited))
-        else:
-            rows.append(bytes(scan))
-    image_data = zlib.compress(b"".join(rows))
-    return {
-        "data": image_data,
-        "width": width,
-        "height": height,
-        "filter": "FlateDecode",
-    }
-
-
-def _local_logo_image(logo_url: str | None) -> dict[str, object] | None:
-    if not logo_url:
-        return None
-    path: Path | None = None
-    if logo_url.startswith("/uploads/"):
-        path = Path("uploads") / Path(logo_url).name
-    elif logo_url.startswith("uploads/"):
-        path = Path(logo_url)
-    if not path or not path.exists():
-        return None
-    data = path.read_bytes()
-    if path.suffix.lower() in {".jpg", ".jpeg"}:
-        size = _jpeg_size(data)
-        if not size:
-            return None
-        return {
-            "data": data,
-            "width": size[0],
-            "height": size[1],
-            "filter": "DCTDecode",
-        }
-    if path.suffix.lower() == ".png":
-        return _png_logo_image(data)
-    return None
 
 
 def build_receipt_pdf(
@@ -194,7 +53,7 @@ def build_receipt_pdf(
     # source for receipts; fall back to the general tenant logo. Resolve at the
     # image level (not the string level) so a stale/missing file for one source
     # never blocks a valid file from the other.
-    logo = _local_logo_image(logo_url) or _local_logo_image(
+    logo = local_logo_image(logo_url) or local_logo_image(
         tenant.logo_url if tenant else None
     )
     green = "0.10 0.95 0.22"
@@ -248,67 +107,13 @@ def build_receipt_pdf(
         align: str = "left",
         fill: str = "0.02 0.03 0.08",
     ) -> None:
-        value = _pdf_text(value)
+        value = pdf_text(value)
         if align == "right":
             x -= int(len(value) * size * 0.48)
         elif align == "center":
             x -= int(len(value) * size * 0.24)
         font = "F2" if bold else "F1"
         ops.append(f"{fill} rg BT /{font} {size} Tf 1 0 0 1 {x} {y} Tm ({value}) Tj ET")
-
-    def text_width(value: object, size: int, bold: bool = False) -> int:
-        raw = _pdf_text(value)
-        if bold:
-            widths = {
-                " ": 0.278,
-                ".": 0.278,
-                ",": 0.278,
-                "-": 0.333,
-                "|": 0.280,
-                "#": 0.556,
-                "+": 0.584,
-                "/": 0.278,
-            }
-            total = 0.0
-            for char in raw:
-                if char.isupper():
-                    total += {
-                        "I": 0.278,
-                        "J": 0.389,
-                        "M": 0.833,
-                        "W": 0.944,
-                    }.get(char, 0.722)
-                elif char.islower():
-                    total += {
-                        "i": 0.278,
-                        "j": 0.278,
-                        "l": 0.278,
-                        "m": 0.833,
-                        "r": 0.389,
-                        "t": 0.333,
-                        "w": 0.722,
-                    }.get(char, 0.556)
-                elif char.isdigit():
-                    total += 0.556
-                else:
-                    total += widths.get(char, 0.556)
-            return int(total * size)
-        return int(len(raw) * size * 0.50)
-
-    def wrap_text(value: object, max_chars: int) -> list[str]:
-        words = str(value or "").split()
-        lines: list[str] = []
-        current = ""
-        for word in words:
-            next_value = f"{current} {word}".strip()
-            if len(next_value) > max_chars and current:
-                lines.append(current)
-                current = word
-            else:
-                current = next_value
-        if current:
-            lines.append(current)
-        return lines or [""]
 
     def center(x1: int, x2: int, y: int, value: object, size=8, bold=False) -> None:
         text((x1 + x2) // 2, y, value, size, bold, "center")
@@ -332,28 +137,6 @@ def build_receipt_pdf(
         text(0, -11, "THANK YOU", 6, True, "center", stamp_green)
         ops.append("Q")
 
-    def item_selling_amount(item: InvoiceItem) -> int:
-        return int(item.selling_amount or item.unit_amount or 0)
-
-    def item_mrp_amount(item: InvoiceItem) -> int | None:
-        mrp = int(item.mrp_amount or 0)
-        if mrp > 0:
-            return mrp
-        if item.item_type == "pharmacy":
-            return item_selling_amount(item) or None
-        return None
-
-    def item_mrp_text(item: InvoiceItem) -> str:
-        mrp = item_mrp_amount(item)
-        return _money_pdf(mrp) if mrp else "-"
-
-    def item_discount_percent(item: InvoiceItem) -> str:
-        mrp = item_mrp_amount(item)
-        selling = item_selling_amount(item)
-        if not mrp or selling >= mrp:
-            return "-"
-        return f"{((mrp - selling) * 100 / mrp):.2f}"
-
     def field_label(
         x: int, y: int, label: str, value: object = "", max_chars: int = 33
     ) -> int:
@@ -375,66 +158,6 @@ def build_receipt_pdf(
         if value in (None, ""):
             return 0
         return max(len(wrap_text(value, max_chars)[:3]) - 1, 0)
-
-    def amount_words(value: int) -> str:
-        ones = [
-            "zero",
-            "one",
-            "two",
-            "three",
-            "four",
-            "five",
-            "six",
-            "seven",
-            "eight",
-            "nine",
-            "ten",
-            "eleven",
-            "twelve",
-            "thirteen",
-            "fourteen",
-            "fifteen",
-            "sixteen",
-            "seventeen",
-            "eighteen",
-            "nineteen",
-        ]
-        tens = [
-            "",
-            "",
-            "twenty",
-            "thirty",
-            "forty",
-            "fifty",
-            "sixty",
-            "seventy",
-            "eighty",
-            "ninety",
-        ]
-
-        def small(number: int) -> str:
-            parts: list[str] = []
-            if number >= 100:
-                parts.append(f"{ones[number // 100]} hundred")
-                number %= 100
-            if number >= 20:
-                parts.append(tens[number // 10])
-                number %= 10
-            if number:
-                parts.append(ones[number])
-            return " ".join(parts)
-
-        value = max(int(value or 0), 0)
-        if value == 0:
-            return "Rupees Zero Only"
-        parts: list[str] = []
-        for scale, label in ((10000000, "crore"), (100000, "lakh"), (1000, "thousand")):
-            if value >= scale:
-                parts.append(f"{small(value // scale)} {label}")
-                value %= scale
-        if value:
-            parts.append(small(value))
-        return f"Rupees {' '.join(parts)} Only".title()
 
     tenant_name = (tenant.name if tenant and tenant.name else "").strip()
     legal_name = (
@@ -584,7 +307,7 @@ def build_receipt_pdf(
         text(396, row_y, item.quantity, 8, align="right")
         text(459, row_y, item_mrp_text(item), 8, align="right")
         text(505, row_y, item_discount_percent(item), 8, align="right")
-        text(570, row_y, _money_pdf(item.total_amount), 8, align="right")
+        text(570, row_y, money_pdf(item.total_amount), 8, align="right")
         row_y -= 18
     if len(items) > 10:
         text(45, row_y, f"+ {len(items) - 10} more item(s)", 8, True)
@@ -598,10 +321,10 @@ def build_receipt_pdf(
     if extra_discount > 0:
         summary_rows.append(("Extra Discount", -extra_discount))
     if tax > 0:
-        summary_rows.append((f"Tax ({_percent_pdf(tax, taxable)})", tax))
+        summary_rows.append((f"Tax ({percent_pdf(tax, taxable)})", tax))
     for label, amount in summary_rows:
         text(350, summary_y, label, 8, True, "right")
-        text(570, summary_y, _signed_money_pdf(amount), 8, amount >= 0, "right")
+        text(570, summary_y, signed_money_pdf(amount), 8, amount >= 0, "right")
         summary_y -= 16
 
     line(16, 264, 579, 264, green)
@@ -609,9 +332,9 @@ def build_receipt_pdf(
         line(x, 264, x, 280, green)
     text(406, 269, item_quantity_total, 8, True, "right")
     if total_discount > 0:
-        text(505, 269, _money_pdf(total_discount), 8, True, "right")
+        text(505, 269, money_pdf(total_discount), 8, True, "right")
     text(350, 269, "Total", 9, True, "right")
-    text(570, 269, _money_pdf(invoice.total_amount), 9, True, "right")
+    text(570, 269, money_pdf(invoice.total_amount), 9, True, "right")
 
     rect(16, 241, 563, 23)
     words_label = "Total in words: "

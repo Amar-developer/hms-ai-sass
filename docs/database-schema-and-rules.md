@@ -754,8 +754,8 @@ MEDIZINHUB_SMTP_USE_TLS=true
 Docker services:
 
 ```bash
-sudo docker compose -f docker-compose.dev.yml up -d --force-recreate backend report-worker
-sudo docker compose -f docker-compose.dev.yml logs -f report-worker
+sudo docker compose -f docker-compose.local.yml up -d --force-recreate backend report-worker
+sudo docker compose -f docker-compose.local.yml logs -f report-worker
 ```
 
 ## Source Control Hygiene

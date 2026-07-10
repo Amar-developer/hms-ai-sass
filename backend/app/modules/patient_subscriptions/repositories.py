@@ -1,13 +1,15 @@
 from sqlmodel import Session, select
 
+from app.modules.appointments.models import Appointment
 from app.modules.billing.models import Invoice
+from app.modules.consultations.models import Consultation
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionEnrollmentStatus,
     PatientSubscriptionPlan,
 )
 from app.modules.patients.models import Patient
-from app.modules.tenants.models import Branch
+from app.modules.tenants.models import Branch, Department
 
 
 class PatientSubscriptionPlanRepository:
@@ -125,6 +127,26 @@ class PatientSubscriptionSupportRepository:
             return None
         return patient
 
+    def get_department_for_tenant(
+        self, tenant_id: str, department_id: str
+    ) -> Department | None:
+        department = self.session.get(Department, department_id)
+        if not department or department.tenant_id != tenant_id:
+            return None
+        return department
+
+    def get_invoice_for_tenant(self, tenant_id: str, invoice_id: str) -> Invoice | None:
+        invoice = self.session.get(Invoice, invoice_id)
+        if not invoice or invoice.tenant_id != tenant_id:
+            return None
+        return invoice
+
+    def get_appointment(self, appointment_id: str) -> Appointment | None:
+        return self.session.get(Appointment, appointment_id)
+
+    def get_consultation(self, consultation_id: str) -> Consultation | None:
+        return self.session.get(Consultation, consultation_id)
+
     def first_active_branch_id(self, tenant_id: str) -> str | None:
         return self.session.exec(
             select(Branch.id)
@@ -142,3 +164,16 @@ class PatientSubscriptionSupportRepository:
                 Invoice.membership_discount_amount > 0,
             )
         ).first()
+
+    def list_benefit_invoices(
+        self, *, tenant_id: str, enrollment_id: str
+    ) -> list[Invoice]:
+        return list(
+            self.session.exec(
+                select(Invoice).where(
+                    Invoice.tenant_id == tenant_id,
+                    Invoice.patient_subscription_enrollment_id == enrollment_id,
+                    Invoice.membership_discount_amount > 0,
+                )
+            ).all()
+        )

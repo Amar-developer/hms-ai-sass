@@ -21,9 +21,11 @@ from app.modules.lab.services.detail_builder import read_order_detail  # noqa: F
 from app.modules.lab.services.order_service import (
     create_lab_order_from_consultation_record,  # noqa: F401
     create_lab_order_record,  # noqa: F401
+    update_lab_order_status_record,  # noqa: F401
+)
+from app.modules.lab.services.order_queries import (
     get_lab_order_detail,  # noqa: F401
     list_lab_orders_records,  # noqa: F401
-    update_lab_order_status_record,  # noqa: F401
 )
 from app.modules.lab.services.pricing import (
     add_order_items as _add_order_items,  # noqa: F401
