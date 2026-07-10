@@ -1,14 +1,13 @@
-name: Deploy to Dev
+name: Deploy to Dev (manual)
 
+# Automatic post-CI deploys happen inside ci.yml's deploy-dev job, not here —
+# see the comment on that job for why. This workflow is kept only for
+# on-demand re-deploys, e.g. re-running a deploy without a new push.
+# workflow_dispatch always uses the workflow file from the branch you select
+# when dispatching, so it isn't affected by the default-branch mismatch that
+# broke the old workflow_run-based version of this file.
 on:
   workflow_dispatch:
-  workflow_run:
-    workflows:
-      - CI
-    types:
-      - completed
-    branches:
-      - develop
 
 concurrency:
   group: dev-deploy
@@ -19,11 +18,6 @@ jobs:
     name: Deploy to Dev
     runs-on: ubuntu-latest
     environment: development
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'develop' &&
-       github.event.workflow_run.event == 'push')
 
     steps:
       - name: Deploy over SSH
