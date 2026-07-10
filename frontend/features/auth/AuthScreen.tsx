@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { authSchema, AuthFormValues } from "@/app/validations/auth.schema";
+import { authSchema, AuthFormValues } from "@/features/auth/auth.schema";
 import { Eye, EyeOff, HeartPulse, Lock, ShieldCheck } from "lucide-react";
 import { Button, Card, Field, Input } from "@/app/components/common/ui";
 

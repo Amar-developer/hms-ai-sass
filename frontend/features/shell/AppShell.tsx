@@ -6,11 +6,11 @@ import { Card, SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
 import { TenantAdmin } from "@/features/admin/TenantAdmin";
-import { canUseTenantAdminSection } from "@/utils/tenantAdmin/permissions";
-import { tenantAdminSections } from "@/utils/tenantAdmin/constants";
+import { canUseTenantAdminSection } from "../admin/permissions";
+import { tenantAdminSections } from "../admin/constants";
 import { Billing } from "@/features/billing/Billing";
 import { Dashboard } from "@/features/dashboard/Dashboard";
-import { DoctorConsultation } from "@/features/doctor/DoctorConsultation";
+import { DoctorConsultation } from "@/features/consulation/DoctorConsultation";
 import { IPAdmission } from "@/features/ip/IPAdmission";
 import { HomeCare } from "@/features/home-care/HomeCare";
 import { Items } from "@/features/items/Items";
@@ -21,15 +21,17 @@ import { Physiotherapy } from "@/features/physiotherapy/Physiotherapy";
 import {
   SuperAdminDashboard,
   superAdminSections,
-} from "@/features/platform/SuperAdminDashboard";
+} from "@/features/superAdmin/SuperAdminDashboard";
 import { Doctors } from "@/features/doctors/Doctors";
 import { TokenQueue } from "@/features/queue/TokenQueue";
-import { Reports, reportSections } from "@/features/reports/Reports";
+import { Reports } from "@/features/reports/Reports";
+import { reportSections } from "@/features/reports/constants";
 import { Scheduling } from "@/features/scheduling/Scheduling";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
+import { activeTenantOptions } from "@/utils/helper";
 
 export function AppShell(props: any) {
   const {
@@ -629,17 +631,4 @@ export function BrandBlock({
       </div>
     </div>
   );
-}
-
-function activeTenantOptions(tenants: any[]) {
-  const seen = new Set<string>();
-  return (tenants || []).filter((tenant: any) => {
-    if (tenant.status === "suspended") return false;
-    const key = String(tenant.name || tenant.id || "")
-      .trim()
-      .toLowerCase();
-    if (key && seen.has(key)) return false;
-    if (key) seen.add(key);
-    return true;
-  });
 }

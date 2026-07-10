@@ -1,39 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Badge, RefreshButton, StatusToast } from "@/app/components/common/ui";
-import { SelectField, TextField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import { humanizeOptionLabel } from "@/lib/options";
 import { today } from "@/utils/helper";
-import { emptyLine } from "@/utils/homecare/constants";
+import { emptyLine, homeCareHourPrices } from "./constants";
 import {
   isBookingLocked,
   mergeServices,
   patientCode,
-  patientName,
   serviceRowsFromResponse,
   userName,
-} from "@/utils/homecare/helpers";
-import {
-  BookingDetail,
-  BookingsList,
-  Header,
-  InvoiceCard,
-} from "@/app/components/homecare/Shared";
-import { BookingForm } from "@/app/forms/HomeCareForms";
-import { BookingFormValues } from "@/app/validations/homecare.schema";
+} from "./helpers";
+import { BookingsList } from "./components/BookingList";
+import { InvoiceCard } from "./components/InvoiceCard";
+import { BookingForm } from "@/features/home-care/forms/HomeCareForms";
+import { BookingFormValues } from "@/features/home-care/homecare.schema";
+import { patientName } from "@/utils/helper";
+import { StatusToast } from "@/app/components/common/ui";
+import { BookingDetail } from "./components/BookingDetail";
+import { Pagination } from "@/app/components/common/Pagination";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
-
-const homeCareHourPrices: Record<string, string> = {
-  "2": "500",
-  "4": "800",
-  "8": "1000",
-  "10": "1100",
-  "12": "1200",
-  "24": "1500",
-};
 
 export function HomeCare({
   apiSession,
@@ -598,6 +586,7 @@ export function HomeCare({
           }
         />
       )}
+
     </div>
   );
 }

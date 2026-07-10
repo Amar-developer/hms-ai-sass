@@ -24,9 +24,9 @@ import {
   itemTypes,
   modalities,
   serviceItemTypes,
-} from "@/utils/items/constants";
-import { ItemForm } from "@/app/forms/ItemForms";
-import { ItemFormValues, itemSchema } from "@/app/validations/items.schema";
+} from "@/features/items/constants";
+import { ItemForm } from "@/features/items/forms/ItemForms";
+import { ItemFormValues, itemSchema } from "@/features/items/items.schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 

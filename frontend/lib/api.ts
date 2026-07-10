@@ -32,7 +32,8 @@ export type ApiErrorLike = Error & {
   permissionDenied?: boolean;
 };
 
-const GENERIC_FORBIDDEN = /^(permission denied|forbidden|not allowed|access denied)\.?$/i;
+const GENERIC_FORBIDDEN =
+  /^(permission denied|forbidden|not allowed|access denied)\.?$/i;
 
 function friendlyMessage(status: number, detail: string): string {
   // Permission problems get a clean, human sentence — never the raw route
@@ -46,7 +47,11 @@ function friendlyMessage(status: number, detail: string): string {
   return detail;
 }
 
-function apiError(path: string, detail: string, response: Response): ApiErrorLike {
+function apiError(
+  path: string,
+  detail: string,
+  response: Response,
+): ApiErrorLike {
   const correlationId = response.headers.get("x-request-id");
   const status = response.status;
   // Keep the route path + request id on non-permission errors (developers rely
@@ -149,12 +154,12 @@ export async function apiFetch(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
-      credentials: 'include',
+      credentials: "include",
       headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': session.tenantId,
-        'X-Request-ID': correlationId,
-        ...(idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {}),
+        "Content-Type": "application/json",
+        "X-Tenant-ID": session.tenantId,
+        "X-Request-ID": correlationId,
+        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
         ...(options.headers || {}),
       },
     });
@@ -202,10 +207,10 @@ export async function apiBlob(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
-      credentials: 'include',
+      credentials: "include",
       headers: {
-        'X-Tenant-ID': session.tenantId,
-        'X-Request-ID': correlationId,
+        "X-Tenant-ID": session.tenantId,
+        "X-Request-ID": correlationId,
         ...(options.headers || {}),
       },
     });
@@ -250,11 +255,11 @@ export async function apiUpload(
   const correlationId = requestId();
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      credentials: 'include',
+      method: "POST",
+      credentials: "include",
       headers: {
-        'X-Tenant-ID': session.tenantId,
-        'X-Request-ID': correlationId,
+        "X-Tenant-ID": session.tenantId,
+        "X-Request-ID": correlationId,
       },
       body: formData,
     });

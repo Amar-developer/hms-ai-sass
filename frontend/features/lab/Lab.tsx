@@ -6,36 +6,27 @@ import {
   Badge,
   Button,
   Card,
-  Input,
   RefreshButton,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiBlob, apiFetch } from "@/lib/api";
-import {
-  SelectField,
-  SearchableSelectField,
-  TextField,
-} from "@/app/components/FormElements";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDate } from "@/utils/helper";
-import { pageSize } from "@/utils/lab/constants";
+import { displayDate, formatPrice } from "@/utils/helper";
+import { pageSize } from "./constants";
 import {
   downloadBlob,
   isCancelled,
   isReleased,
   splitList,
-} from "@/utils/lab/helpers";
-import {
-  ConsultReferralModal,
-  WorklistDetailModal,
-} from "@/app/components/lab/Shared";
+} from "@/features/lab/helpers";
+import { ConsultReferralModal } from "./components/ConsultReferralModal";
+import { WorklistDetailModal } from "./components/WorklistDetailModal";
 import { Pagination } from "@/app/components/common/Pagination";
-import {
-  isActivePatientRecord,
-  patientPickerLabel,
-} from "@/utils/patient/helpers";
-import { LabOrderForm } from "@/app/forms/LabForms";
-import { LabOrderFormValues } from "@/app/validations/lab.schema";
+import { isActivePatientRecord, patientPickerLabel, } from "../patients/helpers";
+import { LabOrderForm } from "@/features/lab/forms/LabForms";
+import { LabOrderFormValues } from "@/features/lab/lab.schema";
+import { DataTable } from "../reports/components/DataTable";
+import { Column } from "../reports/types";
 
 export function Lab({
   apiSession,
@@ -277,8 +268,6 @@ export function Lab({
       selectedAvailableTest?.purchase_price ||
       0,
   );
-  const formatPrice = (value: number) =>
-    value > 0 ? `₹${value.toLocaleString("en-IN")}` : "";
 
   async function load() {
     if (!apiSession) {
@@ -423,9 +412,7 @@ export function Lab({
           package_ids: packageIds,
           external_items: [],
           external_referrer:
-            data.source === "external_referral"
-              ? data.external_referrer
-              : null,
+            data.source === "external_referral" ? data.external_referrer : null,
           amount: 0,
           ordered_by_user_id: apiSession.user?.id,
         }),
@@ -434,7 +421,7 @@ export function Lab({
       setSelectedAvailableTestId("");
       setTestSearch("");
       await load();
-      setMessage("Lab / Service order created.");
+      setMessage("Lab & Service order created.");
       return true;
     } catch (err: any) {
       setMessage(err.message || "Could not create lab / service order.");
@@ -672,7 +659,163 @@ export function Lab({
       setLoadingDetail(false);
     }
   }
+  const worklistColumns: Column<any>[] = [
+    {
+      key: "index",
+      header: "#",
+      width: "80px",
+      render: (_, index) => <b>{(safePage - 1) * pageSize + index + 1}</b>,
+    },
 
+    {
+      key: "created_at",
+      header: "Date & Time",
+      width: "170px",
+      render: (o) => (
+        <>
+          <b>{displayDate(o.created_at)}</b>
+          <p className="text-xs text-slate-500">
+            {new Date(o.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </>
+      ),
+    },
+
+    {
+      key: "patient",
+      header: "Patient",
+      width: "130px",
+      render: (o) => {
+        const p: any = patientMap.get(o.patient_id);
+
+        return p?.name || publicDisplayValue(o.patient_id, "Patient");
+      },
+    },
+
+    {
+      key: "source",
+      header: "Source",
+      width: "150px",
+      render: (o) => (
+        <Badge className="normal-badge w-[70%]">
+          {humanizeOptionLabel(o.source)}
+        </Badge>
+      ),
+    },
+
+    {
+      key: "status",
+      header: "Status",
+      width: "150px",
+      render: (o) => {
+        const released = isReleased(o);
+        const cancelled = isCancelled(o);
+        const invoiced = invoicedOrderIds.has(o.id);
+
+        const statusLabel = invoiced ? "Billed" : humanizeOptionLabel(o.status);
+
+        const statusTone = invoiced
+          ? "green"
+          : released
+            ? "green"
+            : cancelled
+              ? "red"
+              : "amber";
+
+        return (
+          <Badge tone={statusTone as any} className="normal-badge w-[70%]">
+            {statusLabel}
+          </Badge>
+        );
+      },
+    },
+
+    {
+      key: "amount",
+      header: "Amount",
+      width: "90px",
+      render: (o) => <>₹{o.amount}</>,
+    },
+
+    {
+      key: "report",
+      header: "Report",
+      width: "170px",
+      disableRowClick: true,
+      render: (o) => {
+        const released = isReleased(o);
+        const cancelled = isCancelled(o);
+
+        return (
+          <label
+            className={`flex cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${
+              released || cancelled
+                ? "cursor-not-allowed bg-slate-50 text-slate-300"
+                : "bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <input
+              type="file"
+              className="hidden"
+              accept="application/pdf,image/*"
+              disabled={released || cancelled}
+              onChange={(e) =>
+                setReportFiles({
+                  ...reportFiles,
+                  [o.id]: e.target.files?.[0] || null,
+                })
+              }
+            />
+
+            {reportFiles[o.id]?.name || "Upload report"}
+          </label>
+        );
+      },
+    },
+
+    {
+      key: "action",
+      header: "Action",
+      width: "210px",
+      disableRowClick: true,
+      render: (o) => {
+        const released = isReleased(o);
+        const cancelled = isCancelled(o);
+        const invoiced = invoicedOrderIds.has(o.id);
+
+        const rowBusy = busy === o.id;
+        const invoiceBusy = busy === `invoice-${o.id}`;
+
+        return (
+          <select
+            value=""
+            disabled={rowBusy || invoiceBusy}
+            onChange={(e) => handleOrderAction(o, e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm"
+          >
+            <option value="">
+              {rowBusy || invoiceBusy ? "Updating..." : "Select action"}
+            </option>
+
+            <option value="invoice" disabled={cancelled || invoiced}>
+              Generate invoice
+            </option>
+
+            <option value="pdf" disabled={cancelled}>
+              Download PDF
+            </option>
+
+            <option value="cancel" disabled={cancelled || invoiced}>
+              Cancel order
+            </option>
+          </select>
+        );
+      },
+    },
+  ];
   if (!apiSession)
     return (
       <Card>
@@ -713,7 +856,7 @@ export function Lab({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <Card>
-        <h3 className="card-title font-bold">Create Lab / Service Order</h3>
+        <h3 className="card-title font-bold">Create Lab & Service Order</h3>
         <LabOrderForm
           patientOptions={patientOptions}
           defaultPatientId={defaultPatientId}
@@ -769,7 +912,7 @@ export function Lab({
               <>
                 {visible.length === 0 && (
                   <div className="rounded-lg  bg-slate-50 p-4 card-desc text-slate-500">
-                    No signed consultation referrals ready.
+                    No Completed consultation referrals ready.
                   </div>
                 )}
                 {visible.slice(0, 6).map((a: any) => (
@@ -782,7 +925,7 @@ export function Lab({
                         {a.token} · {a.patient}
                       </b>
                       <p className="text-xs text-slate-500">
-                        Signed consultation referral
+                        Completed consultation referral
                         {a.doctor && a.doctor !== "Unassigned" ? (
                           <>
                             {" · Signed by "}
@@ -807,7 +950,7 @@ export function Lab({
                       >
                         {busy === a.consultationId
                           ? "Creating..."
-                          : "Create Lab / Service Order"}
+                          : "Create Order"}
                       </Button>
                       <ActionButton
                         onClick={() =>
@@ -833,146 +976,13 @@ export function Lab({
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
-        <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="w-[80px] px-4 py-3">#</th>
-                <th className="w-[170px]">Date & Time</th>
-                <th className="w-[130px]">Patient</th>
-                <th className="w-[150px]">Source</th>
-                <th className="w-[150px]">Status</th>
-                <th className="w-[90px]">Amount</th>
-                <th className="w-[150px] text-center pr-4">Report</th>
-                <th className="w-[210px] pr-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {orders.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-4 py-4 card-desc text-slate-500"
-                  >
-                    No lab orders yet.
-                  </td>
-                </tr>
-              )}
-              {labPageRows.map((o: any, index: number) => {
-                const p: any = patientMap.get(o.patient_id);
-                const selected = selectedOrder?.id === o.id;
-                const released = isReleased(o);
-                const cancelled = isCancelled(o);
-                const invoiced = invoicedOrderIds.has(o.id);
-                const rowBusy = busy === o.id;
-                const invoiceBusy = busy === `invoice-${o.id}`;
-                const statusLabel = invoiced
-                  ? "Billed"
-                  : humanizeOptionLabel(o.status);
-                const statusTone = invoiced
-                  ? "green"
-                  : released
-                    ? "green"
-                    : cancelled
-                      ? "red"
-                      : "amber";
-                return (
-                  <tr
-                    key={o.id}
-                    onClick={() => setSelectedOrder(o)}
-                    className={`cursor-pointer transition hover:bg-slate-50 ${selected ? "bg-slate-50" : ""} h-20`}
-                  >
-                    <td className="px-4 py-4">
-                      <b>{(safePage - 1) * pageSize + index + 1}</b>
-                    </td>
-                    <td>
-                      <b>{displayDate(o.created_at)}</b>
-                      <p className="text-xs text-slate-500">
-                        {new Date(o.created_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </td>
-                    <td>
-                      {p?.name || publicDisplayValue(o.patient_id, "Patient")}
-                    </td>
-                    <td>
-                      <Badge className="normal-badge w-[70%]">
-                        {humanizeOptionLabel(o.source)}
-                      </Badge>
-                    </td>
-                    <td>
-                      <Badge
-                        tone={statusTone as any}
-                        className="normal-badge w-[70%]"
-                      >
-                        {statusLabel}
-                      </Badge>
-                    </td>
-                    <td>₹{o.amount}</td>
-                    <td onClick={(event) => event.stopPropagation()}>
-                      <div className="flex min-w-[230px] items-center gap-2">
-                        <label
-                          className={`flex min-w-[120px] cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${released || cancelled ? "cursor-not-allowed bg-slate-50 text-slate-300" : "bg-white text-slate-700 hover:bg-slate-50"}`}
-                        >
-                          <input
-                            type="file"
-                            accept="application/pdf,image/*"
-                            className="hidden file:rounded-lg "
-                            disabled={released || cancelled}
-                            onChange={(event: any) =>
-                              setReportFiles({
-                                ...reportFiles,
-                                [o.id]: event.target.files?.[0] || null,
-                              })
-                            }
-                          />
-                          {reportFiles[o.id]?.name || "Upload report"}
-                        </label>
-                      </div>
-                    </td>
-                    <td
-                      className="pr-4"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="ml-auto w-[190px]">
-                        <select
-                          value=""
-                          disabled={rowBusy || invoiceBusy}
-                          onChange={(event: any) =>
-                            handleOrderAction(o, event.target.value)
-                          }
-                          className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
-                        >
-                          <option value="">
-                            {rowBusy || invoiceBusy
-                              ? "Updating..."
-                              : "Select action"}
-                          </option>
-                          <option
-                            value="invoice"
-                            disabled={cancelled || invoiced}
-                          >
-                            Generate invoice
-                          </option>
-                          <option value="pdf" disabled={cancelled}>
-                            Download PDF
-                          </option>
-                          <option
-                            value="cancel"
-                            disabled={cancelled || invoiced}
-                          >
-                            Cancel order
-                          </option>
-                        </select>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <DataTable
+            columns={worklistColumns}
+            data={labPageRows}
+            emptyMessage="No lab orders yet."
+            onRowClick={setSelectedOrder}
+          />
         </div>
         <Pagination
           page={safePage}

@@ -17,6 +17,7 @@ import {
   normalizeSidebarModuleMap,
   resolveSidebarModules,
 } from "@/lib/sidebarAccess";
+import { activeTenantOptions } from "@/utils/helper";
 
 const allModuleIds = nav.map(([id]) => id);
 const defaultEntitlementModuleIds = Array.from(
@@ -959,17 +960,4 @@ export function useAppController() {
       liveSummary,
     },
   };
-}
-
-function activeTenantOptions(tenants: any[]) {
-  const seen = new Set<string>();
-  return (tenants || []).filter((tenant: any) => {
-    if (tenant.status === "suspended") return false;
-    const key = String(tenant.name || tenant.id || "")
-      .trim()
-      .toLowerCase();
-    if (key && seen.has(key)) return false;
-    if (key) seen.add(key);
-    return true;
-  });
 }

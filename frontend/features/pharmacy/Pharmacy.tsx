@@ -11,32 +11,19 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
-import {
-  FormField,
-  NumberField,
-  SelectField,
-  SearchableSelectField,
-  TextField,
-  DateField,
-} from "@/app/components/FormElements";
+import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { Column, DataTable } from "@/app/components/reports/DataTable";
-import { displayDate, displayDateTime } from "@/utils/helper";
+import { displayDate } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import {
   isBilledIssue,
   isCancelledIssue,
   isDispensed,
-} from "@/utils/pharmacy/helpers";
-import {
-  ConsultPrescriptionModal,
-  MedicineDetailModal,
-} from "@/app/components/pharmacy/Shared";
-import {
-  isActivePatientRecord,
-  patientPickerLabel,
-} from "@/utils/patient/helpers";
+} from "@/features/pharmacy/helpers";
+import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
+import { MedicineDetailModal } from "./components/MedicineDetailModal";
+import { isActivePatientRecord,patientPickerLabel, } from "../patients/helpers";
 
 const pageSize = 10;
 
@@ -635,18 +622,17 @@ export function Pharmacy({
         >
           <FormField label="Patient">
             <SearchableSelect
-            value={patientId}
-            onChange={setPatientId}
-            options={activePatients.map((p: any) => ({
-              value: p.id,
-              label: patientPickerLabel(p),
-              sublabel: p.mobile || p.patient_number || p.id,
-            }))}
-            placeholder="Select patient"
-            searchPlaceholder="Search patient by name, mobile, or number"
-          />
+              value={patientId}
+              onChange={setPatientId}
+              options={activePatients.map((p: any) => ({
+                value: p.id,
+                label: patientPickerLabel(p),
+                sublabel: p.mobile || p.patient_number || p.id,
+              }))}
+              placeholder="Select patient"
+              searchPlaceholder="Search patient by name, mobile, or number"
+            />
           </FormField>
-
 
           <FormField label="Source">
             <SearchableSelect
@@ -746,7 +732,7 @@ export function Pharmacy({
               <>
                 {visible.length === 0 && (
                   <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
-                    No signed prescriptions ready.
+                    No Completed prescriptions ready.
                   </div>
                 )}
                 {visible.slice(0, 6).map((a: any) => (
@@ -759,7 +745,7 @@ export function Pharmacy({
                         {a.token} · {a.patient}
                       </b>
                       <p className="card-desc text-slate-500">
-                        Signed prescription ready
+                        Completed prescription ready
                         {a.doctor && a.doctor !== "Unassigned" ? (
                           <>
                             {" · Signed by "}

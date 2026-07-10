@@ -1,21 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  sections,
-  parseBankDetails,
-  parseNumberingRules,
-} from "@/utils/tenantAdmin/constants";
-import { canUseTenantAdminSection } from "@/utils/tenantAdmin/permissions";
+import { useEffect, useMemo, useState } from "react";
+import { sections } from "./constants";
+import { canUseTenantAdminSection } from "./permissions";
 import { Card, StatusToast } from "@/app/components/common/ui";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
-import { apiBlob, apiFetch, apiUpload } from "@/lib/api";
-import {
-  title,
-  dateInputToIso,
-  groupDepartmentsByName,
-  userRoleLabels,
-} from "../../utils/tenantAdmin/helpers";
+import { groupDepartmentsByName, userRoleLabels } from "./helpers";
 import {
   UserRow,
   RoleRow,
@@ -24,24 +14,19 @@ import {
   SupplierRow,
   TaxRuleRow,
   DiscountOfferRow,
-  Role,
-} from "@/app/components/tenantAdmin/Rows";
-import {
-  ListCard,
-  PasswordResetModal,
-} from "@/app/components/tenantAdmin/Shared";
-import { ConfirmModal } from "@/app/components/admin/ConfirmModal";
-import {
-  BranchForm,
-  DepartmentForm,
-  DiscountOfferForm,
-  RoleForm,
-  SupplierForm,
-  TaxRuleForm,
-  UserForm,
-} from "@/app/components/tenantAdmin/Forms";
-import { FilesPanel } from "@/app/components/tenantAdmin/FilesPanel";
-import { SettingsPanel } from "@/app/components/tenantAdmin/SettingsPanel";
+} from "./components/Rows";
+import { ListCard } from "./components/ListCard";
+import { PasswordResetModal } from "./components/PasswordResetModal";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { UserForm } from "./forms/UserForm";
+import { RoleForm } from "./forms/RoleForm";
+import { BranchForm } from "./forms/BranchForm";
+import { TaxRuleForm } from "./forms/TaxRuleForm";
+import { DiscountOfferForm } from "./forms/DiscounOfferForm";
+import { DepartmentForm } from "./forms/DepartmentForm";
+import { SupplierForm } from "./forms/SupplierForm";
+import { FilesPanel } from "./components/FilesPanel";
+import { SettingsPanel } from "./components/SettingsPanel";
 import {
   BRANCH_COLUMNS,
   DEPARTMENT_COLUMNS,
@@ -51,12 +36,9 @@ import {
   TAX_RULE_COLUMNS,
   USER_COLUMNS,
 } from "@/utils/constants";
-import {
-  UserFormValues,
-  DepartmentFormValues,
-  BranchFormValues,
-  SupplierFormValues,
-} from "@/app/validations/settings.schema";
+import { useTenantAdminData } from "./api/useTenantAdminData";
+import { useTenantAdminActions } from "./api/useTenantAdminActions";
+import { Role } from "./types";
 
 export function TenantAdmin({
   apiSession,
@@ -70,49 +52,11 @@ export function TenantAdmin({
   const section = externalSection || localSection;
   const setSection = externalSetSection || setLocalSection;
   const [view, setView] = useState("list");
-  const [roles, setRoles] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [taxRules, setTaxRules] = useState<any[]>([]);
-  const [discountOffers, setDiscountOffers] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any[]>([]);
-  const [files, setFiles] = useState<any[]>([]);
-  const [permissions, setPermissions] = useState<any[]>([]);
-  const [subscriptionEntitlements, setSubscriptionEntitlements] =
-    useState<any>(null);
   const [selectedId, setSelectedId] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
-  const [invoicePrefix, setInvoicePrefix] = useState("MHD");
-  const [invoiceLogoUrl, setInvoiceLogoUrl] = useState("");
-  const [bankDetails, setBankDetails] = useState<any>(parseBankDetails(null));
-  const [numberingRules, setNumberingRules] = useState<any>(
-    parseNumberingRules(null, "MHD"),
-  );
-  const [requeueAfter, setRequeueAfter] = useState(2);
-  const [noShowAfter, setNoShowAfter] = useState(3);
-  const [slotIntervalsEnabled, setSlotIntervalsEnabled] = useState(false);
-  const [slotIntervalMinutes, setSlotIntervalMinutes] = useState(5);
-  const [payments, setPayments] = useState(
-    "cash,upi,gpay,paytm,credit_card,debit_card,bank_transfer",
-  );
-  const [providers, setProviders] = useState("whatsapp,sms,voice");
-  const [reportEnabled, setReportEnabled] = useState(false);
-  const [reportRecipients, setReportRecipients] = useState("");
-  const [reportCc, setReportCc] = useState("");
-  const [reportSendDay, setReportSendDay] = useState(1);
-  const [reportFilters, setReportFilters] = useState<any>({
-    overall: true,
-    doctor: true,
-    department: true,
-    invoice: true,
-  });
-  const [reportJobs, setReportJobs] = useState<any[]>([]);
   const [reportBusy, setReportBusy] = useState("");
+
   const [userFilters, setUserFilters] = useState({
     status: "all",
     role: "all",
@@ -142,8 +86,63 @@ export function TenantAdmin({
     status: "all",
   });
 
+  const data = useTenantAdminData(apiSession, clinic);
+
+  function open(nextSection: string, nextView = "list") {
+    setSection(nextSection);
+    setView(nextView);
+    setSelectedId("");
+    requestAnimationFrame(() =>
+      window.scrollTo({ top: 0, behavior: "smooth" }),
+    );
+  }
+
+  function openRolePermissions(role: any) {
+    setSection("roles");
+    setView("edit");
+    setSelectedId(role.id);
+    requestAnimationFrame(() =>
+      window.scrollTo({ top: 0, behavior: "smooth" }),
+    );
+  }
+
+  const actions = useTenantAdminActions({
+    apiSession,
+    branchId,
+    open,
+    reload: data.reload,
+    setBusy: data.setBusy,
+    setMessage: data.setMessage,
+    departments: data.departments,
+    setRoles: data.setRoles,
+    setUsers: data.setUsers,
+    setDepartments: data.setDepartments,
+    setBranches: data.setBranches,
+    setSuppliers: data.setSuppliers,
+    setTaxRules: data.setTaxRules,
+    setDiscountOffers: data.setDiscountOffers,
+    setPasswordUser,
+    invoicePrefix: data.invoicePrefix,
+    invoiceLogoUrl: data.invoiceLogoUrl,
+    setInvoiceLogoUrl: data.setInvoiceLogoUrl,
+    bankDetails: data.bankDetails,
+    numberingRules: data.numberingRules,
+    requeueAfter: data.requeueAfter,
+    noShowAfter: data.noShowAfter,
+    slotIntervalsEnabled: data.slotIntervalsEnabled,
+    slotIntervalMinutes: data.slotIntervalMinutes,
+    payments: data.payments,
+    providers: data.providers,
+    reportEnabled: data.reportEnabled,
+    reportRecipients: data.reportRecipients,
+    reportCc: data.reportCc,
+    reportSendDay: data.reportSendDay,
+    reportFilters: data.reportFilters,
+    setReportBusy,
+  });
+
   const filteredUsers = useMemo(() => {
-    return users.filter((user: any) => {
+    return data.users.filter((user: any) => {
       // Status
       if (
         userFilters.status !== "all" &&
@@ -171,10 +170,10 @@ export function TenantAdmin({
 
       return true;
     });
-  }, [users, userFilters]);
+  }, [data.users, userFilters]);
 
   const filterdRoles = useMemo(() => {
-    return roles.filter((role: any) => {
+    return data.roles.filter((role: any) => {
       if (
         roleFilter.status !== "all" &&
         (role.is_active ? "active" : "inactive") !== roleFilter.status
@@ -183,10 +182,10 @@ export function TenantAdmin({
       }
       return true;
     });
-  }, [roles, roleFilter]);
+  }, [data.roles, roleFilter]);
 
   const filteredDepartments = useMemo(() => {
-    return departments.filter((department) => {
+    return data.departments.filter((department) => {
       if (
         departmentFilters.status !== "all" &&
         (department.is_active ? "active" : "inactive") !==
@@ -202,10 +201,10 @@ export function TenantAdmin({
       }
       return true;
     });
-  }, [departmentFilters, departments]);
+  }, [departmentFilters, data.departments]);
 
   const filteredBranches = useMemo(() => {
-    return branches.filter((branch) => {
+    return data.branches.filter((branch) => {
       if (
         branchFilter.status !== "all" &&
         (branch.is_active ? "active" : "inactive") !== branchFilter.status
@@ -214,10 +213,10 @@ export function TenantAdmin({
       }
       return true;
     });
-  }, [branches, branchFilter]);
+  }, [data.branches, branchFilter]);
 
   const filteredSuppliers = useMemo(() => {
-    return suppliers.filter((supplier) => {
+    return data.suppliers.filter((supplier) => {
       if (
         supplierFilter.status !== "all" &&
         (supplier.is_active ? "active" : "inactive") !== supplierFilter.status
@@ -226,10 +225,10 @@ export function TenantAdmin({
       }
       return true;
     });
-  }, [suppliers, supplierFilter]);
+  }, [data.suppliers, supplierFilter]);
 
   const filteredTaxes = useMemo(() => {
-    return taxRules.filter((tax) => {
+    return data.taxRules.filter((tax) => {
       if (
         taxFilter.status !== "all" &&
         (tax.is_active ? "active" : "inactive") !== taxFilter.status
@@ -238,10 +237,10 @@ export function TenantAdmin({
       }
       return true;
     });
-  }, [taxRules, taxFilter]);
+  }, [data.taxRules, taxFilter]);
 
   const filteredOffers = useMemo(() => {
-    return discountOffers.filter((offer) => {
+    return data.discountOffers.filter((offer) => {
       if (
         offerFilter.status !== "all" &&
         (offer.is_active ? "active" : "inactive") !== offerFilter.status
@@ -250,190 +249,33 @@ export function TenantAdmin({
       }
       return true;
     });
-  }, [discountOffers, offerFilter]);
+  }, [data.discountOffers, offerFilter]);
 
-  const loadSequence = useRef(0);
-  const selectedRole = roles.find((row: any) => row.id === selectedId);
-  const selectedUser = users.find((row: any) => row.id === selectedId);
+  const selectedRole = data.roles.find((row: any) => row.id === selectedId);
+  const selectedUser = data.users.find((row: any) => row.id === selectedId);
   const departmentGroups = useMemo(
-    () => groupDepartmentsByName(departments, branches),
-    [departments, branches],
+    () => groupDepartmentsByName(data.departments, data.branches),
+    [data.departments, data.branches],
   );
-  const selectedDepartment = departments.find(
+  const selectedDepartment = data.departments.find(
     (row: any) => row.id === selectedId,
   );
-  const selectedBranch = branches.find((row: any) => row.id === selectedId);
-  const selectedSupplier = suppliers.find((row: any) => row.id === selectedId);
-  const selectedTaxRule = taxRules.find((row: any) => row.id === selectedId);
-  const selectedOffer = discountOffers.find(
+  const selectedBranch = data.branches.find(
+    (row: any) => row.id === selectedId,
+  );
+  const selectedSupplier = data.suppliers.find(
+    (row: any) => row.id === selectedId,
+  );
+  const selectedTaxRule = data.taxRules.find(
+    (row: any) => row.id === selectedId,
+  );
+  const selectedOffer = data.discountOffers.find(
     (row: any) => row.id === selectedId,
   );
   const visibleSections = sections.filter(([sectionId]) =>
     canUseTenantAdminSection(sectionId, apiSession?.user),
   );
 
-  function open(nextSection: string, nextView = "list") {
-    setSection(nextSection);
-    setView(nextView);
-    setSelectedId("");
-    requestAnimationFrame(() =>
-      window.scrollTo({ top: 0, behavior: "smooth" }),
-    );
-  }
-
-  function openRolePermissions(role: any) {
-    setSection("roles");
-    setView("edit");
-    setSelectedId(role.id);
-    requestAnimationFrame(() =>
-      window.scrollTo({ top: 0, behavior: "smooth" }),
-    );
-  }
-
-  async function loadAdmin() {
-    if (!apiSession) return;
-    const requestSequence = ++loadSequence.current;
-    setBusy(true);
-    setMessage("");
-    try {
-      const scoped = { ...apiSession, tenantId: apiSession.tenantId };
-      const canUsers = canUseTenantAdminSection("users", apiSession.user);
-      const canRoles =
-        canUseTenantAdminSection("roles", apiSession.user) || canUsers;
-      const canDepartments = canUseTenantAdminSection(
-        "departments",
-        apiSession.user,
-      );
-      const canBranches = canUseTenantAdminSection("branches", apiSession.user);
-      const canSuppliers = canUseTenantAdminSection(
-        "suppliers",
-        apiSession.user,
-      );
-      const canTax = canUseTenantAdminSection("tax", apiSession.user);
-      const canOffers = canUseTenantAdminSection("offers", apiSession.user);
-      const canSettings = canUseTenantAdminSection("settings", apiSession.user);
-      const canFiles = canUseTenantAdminSection("files", apiSession.user);
-      const safeFetch = async (path: string, enabled = true) =>
-        enabled ? apiFetch(path, scoped).catch(() => []) : Promise.resolve([]);
-      const [
-        roleRows,
-        userRows,
-        departmentRows,
-        branchRows,
-        supplierRows,
-        taxRows,
-        offerRows,
-        settingRows,
-        fileRows,
-        permissionRows,
-        reportConfig,
-        reportJobRows,
-        entitlements,
-      ] = await Promise.all([
-        safeFetch("/identity/roles", canRoles),
-        safeFetch("/identity/users", canUsers),
-        safeFetch(
-          `/tenants/${apiSession.tenantId}/departments`,
-          canDepartments,
-        ),
-        safeFetch(`/tenants/${apiSession.tenantId}/branches`, canBranches),
-        safeFetch("/pharmacy/suppliers?include_inactive=true", canSuppliers),
-        safeFetch("/billing/tax-rules", canTax),
-        safeFetch("/billing/discount-offers", canOffers),
-        safeFetch("/settings", canSettings),
-        safeFetch("/files?limit=200", canFiles),
-        apiFetch("/identity/permissions", scoped),
-        canSettings
-          ? apiFetch("/reports/monthly-email/config", scoped).catch(() => null)
-          : Promise.resolve(null),
-        canSettings
-          ? apiFetch("/reports/monthly-email/jobs?limit=5", scoped).catch(
-              () => [],
-            )
-          : Promise.resolve([]),
-        safeFetch("/subscription-plans/entitlements", canBranches),
-      ]);
-      if (requestSequence !== loadSequence.current) return;
-      setRoles(roleRows);
-      setUsers(userRows);
-      setDepartments(departmentRows);
-      setBranches(branchRows);
-      setSuppliers(supplierRows);
-      setTaxRules(taxRows);
-      setDiscountOffers(offerRows);
-      setSettings(settingRows);
-      setFiles(fileRows);
-      setPermissions(permissionRows);
-      setSubscriptionEntitlements(
-        entitlements && !Array.isArray(entitlements) ? entitlements : null,
-      );
-      const find = (key: string) => settingRows.find((x: any) => x.key === key);
-      const findTenant = (key: string) =>
-        settingRows.find((x: any) => x.key === key && x.scope === "tenant") ||
-        find(key);
-      if (find("invoice.prefix"))
-        setInvoicePrefix(find("invoice.prefix").value);
-      setInvoiceLogoUrl(
-        String(findTenant("invoice.logo_url")?.value || clinic?.logo_url || ""),
-      );
-      const bankRow =
-        settingRows.find(
-          (x: any) => x.key === "accounts.bank_details" && x.scope === "tenant",
-        ) || find("accounts.bank_details");
-      setBankDetails(parseBankDetails(bankRow?.value));
-      if (find("numbering.rules"))
-        setNumberingRules(
-          parseNumberingRules(
-            find("numbering.rules").value,
-            find("invoice.prefix")?.value || invoicePrefix,
-          ),
-        );
-      if (find("queue.requeue_after_patients"))
-        setRequeueAfter(Number(find("queue.requeue_after_patients").value));
-      if (find("queue.auto_no_show_after_missed_calls"))
-        setNoShowAfter(
-          Number(find("queue.auto_no_show_after_missed_calls").value),
-        );
-      if (find("appointment.slot_intervals_enabled"))
-        setSlotIntervalsEnabled(
-          Boolean(find("appointment.slot_intervals_enabled").value),
-        );
-      if (find("appointment.slot_interval_minutes"))
-        setSlotIntervalMinutes(
-          Number(find("appointment.slot_interval_minutes").value || 5),
-        );
-      if (find("payment.methods_enabled"))
-        setPayments((find("payment.methods_enabled").value || []).join(","));
-      if (find("communication.providers_enabled"))
-        setProviders(
-          (find("communication.providers_enabled").value || []).join(","),
-        );
-      if (reportConfig) {
-        setReportEnabled(Boolean(reportConfig.enabled));
-        setReportRecipients((reportConfig.recipients || []).join(","));
-        setReportCc((reportConfig.cc || []).join(","));
-        setReportSendDay(Number(reportConfig.send_day || 1));
-        setReportFilters(
-          reportConfig.filters || {
-            overall: true,
-            doctor: true,
-            department: true,
-            invoice: true,
-          },
-        );
-      }
-      setReportJobs(reportJobRows || []);
-    } catch (err: any) {
-      if (requestSequence !== loadSequence.current) return;
-      setMessage(err.message || "Could not load tenant admin data.");
-    } finally {
-      if (requestSequence === loadSequence.current) setBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    loadAdmin();
-  }, [apiSession?.tenantId]);
   useEffect(() => {
     setView("list");
     setSelectedId("");
@@ -479,871 +321,6 @@ export function TenantAdmin({
     visibleSections.map(([sectionId]) => sectionId).join(","),
   ]);
 
-  async function createRole(e: any) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const name = String(fd.get("name") || "").trim();
-    const branchId = String(fd.get("branchId") || "");
-    const normalKey = (value: any) =>
-      String(value || "")
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, " ")
-        .trim();
-    const matchingDepartments = departments.filter(
-      (row: any) =>
-        row.is_active !== false && normalKey(row.name) === normalKey(name),
-    );
-    const conflict = matchingDepartments.find(
-      (row: any) =>
-        String(row.branch_id || "") === branchId || !row.branch_id || !branchId,
-    );
-    if (conflict) {
-      setMessage(
-        branchId
-          ? "This medical department already exists for all branches or this branch. Edit the existing row instead."
-          : "This medical department already exists in one or more branches. Remove branch-specific mappings before creating an all-branches department.",
-      );
-      return;
-    }
-    setBusy(true);
-    setMessage("");
-    try {
-      const created = await apiFetch("/identity/roles", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          name: fd.get("name"),
-          key: fd.get("key"),
-          permission_keys: fd.getAll("permissionKeys").map(String),
-        }),
-      });
-      form.reset();
-      setRoles((previous) => [
-        created,
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-      open("roles");
-      await loadAdmin();
-      setMessage(`Role created: ${created.name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create role.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateRole(e: any) {
-    e.preventDefault();
-    if (!selectedRole) return;
-    const fd = new FormData(e.currentTarget);
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(
-        `/identity/roles/${selectedRole.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: fd.get("name"),
-            key: fd.get("key"),
-            is_active: fd.get("isActive") === "true",
-            permission_keys: fd.getAll("permissionKeys").map(String),
-          }),
-        },
-      );
-      setRoles((previous) => [
-        updated,
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      open("roles");
-      await loadAdmin();
-      setMessage("Role updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update role.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createUser(data: UserFormValues) {
-    setBusy(true);
-    setMessage("");
-
-    try {
-      const created = await apiFetch("/identity/users", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          name: data.name,
-          email: data.email,
-          password: data.password,
-          mobile: data.mobile || null,
-          user_type: data.userType || "staff",
-          branch_id: data.branchId || null,
-          role_keys: data.roleKeys || [],
-          must_change_password: data.mustChangePassword === "true",
-        }),
-      });
-
-      setUsers((previous) => [
-        created,
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-
-      open("users");
-
-      await loadAdmin();
-
-      setMessage(`User created: ${created.name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create user.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateUser(data: UserFormValues) {
-    if (!selectedUser) return;
-
-    setBusy(true);
-    setMessage("");
-
-    try {
-      const updated = await apiFetch(
-        `/identity/users/${selectedUser.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: data.name,
-            email: data.email,
-            user_type: data.userType || "staff",
-            mobile: data.mobile || null,
-            branch_id: data.branchId || null,
-            role_keys: data.roleKeys || [],
-            is_active: data.isActive === "true",
-            must_change_password: data.mustChangePassword === "true",
-          }),
-        },
-      );
-
-      setUsers((previous) => [
-        updated,
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-
-      open("users");
-
-      await loadAdmin();
-
-      setMessage("User updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update user.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function resetUserPassword(e: any) {
-    e.preventDefault();
-    if (!passwordUser) return;
-    const fd = new FormData(e.currentTarget);
-    const password = String(fd.get("newPassword") || "");
-    const confirmPassword = String(fd.get("confirmPassword") || "");
-    if (password !== confirmPassword) {
-      setMessage("Passwords do not match.");
-      return;
-    }
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(
-        `/identity/users/${passwordUser.id}/password-reset`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            new_password: password,
-            must_change_password: fd.get("mustChangePassword") === "true",
-          }),
-        },
-      );
-      setUsers((previous) =>
-        previous.map((user: any) => (user.id === updated.id ? updated : user)),
-      );
-      setPasswordUser(null);
-      setMessage(`Password reset for ${updated.name}.`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not reset password.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createDepartment(data: DepartmentFormValues) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const created = await apiFetch(
-        `/tenants/${apiSession.tenantId}/departments`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: data.name.trim(),
-            description: data.description || null,
-            branch_id: data.branchId || null,
-          }),
-        },
-      );
-      setDepartments((previous) => [
-        created,
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-      open("departments");
-      await loadAdmin();
-      setMessage(`Medical Department created: ${created.name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create department.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateDepartment(data: DepartmentFormValues) {
-    if (!selectedDepartment) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(
-        `/tenants/${apiSession.tenantId}/departments/${selectedDepartment.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: data.name,
-            description: data.description || null,
-            branch_id: data.branchId || null,
-            is_active: data.isActive === "true",
-          }),
-        },
-      );
-      setDepartments((previous) => [
-        updated,
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      open("departments");
-      await loadAdmin();
-      setMessage("Medical Department updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update department.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createBranch(data: BranchFormValues) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const created = await apiFetch(
-        `/tenants/${apiSession.tenantId}/branches`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            name: data.name,
-            code: data.code,
-            area: data.area || null,
-            address: data.address || null,
-            city: data.city || null,
-            state: data.state || null,
-          }),
-        },
-      );
-      // form.reset();
-      setBranches((previous) => [
-        created,
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-      open("branches");
-      await loadAdmin();
-      setMessage(`Branch created: ${created.name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create branch.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateBranch(data: any) {
-    if (!selectedBranch) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(
-        `/tenants/${apiSession.tenantId}/branches/${selectedBranch.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: data.name,
-            code: data.code,
-            area: data.area || null,
-            address: data.address || null,
-            city: data.city || null,
-            state: data.state || null,
-            is_active: data.isActive === "true",
-          }),
-        },
-      );
-      setBranches((previous) => [
-        updated,
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      open("branches");
-      await loadAdmin();
-      setMessage("Branch updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update branch.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createSupplier(data: SupplierFormValues) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const created = await apiFetch("/pharmacy/suppliers", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          name: data.name,
-          gstin: data.gstin || null,
-          phone: data.phone|| null,
-          email: data.email|| null,
-          address: data.address|| null,
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      setSuppliers((previous) => [
-        created,
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-      open("suppliers");
-      await loadAdmin();
-      setMessage(`Supplier created: ${created.name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create supplier.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateSupplier(data: SupplierFormValues) {
-    if (!selectedSupplier) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(
-        `/pharmacy/suppliers/${selectedSupplier.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: data.name,
-            gstin: data.gstin || null,
-            phone: data.phone || null,
-            email: data.email || null,
-            address: data.address || null,
-            is_active: data.isActive === "true",
-          }),
-        },
-      );
-      setSuppliers((previous) => [
-        updated,
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      open("suppliers");
-      await loadAdmin();
-      setMessage("Supplier updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update supplier.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createTaxRule(data: any) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const created = await apiFetch("/billing/tax-rules", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: data.branchId || null,
-          name: data.name,
-          tax_percentage: Number(data.taxPercentage || 0),
-          tax_label: data.taxLabel || "GST",
-          service_scope: data.serviceScope || "all",
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      setTaxRules((previous) => [
-        created,
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-      open("tax");
-      await loadAdmin();
-      setMessage(`Tax rule created: ${created.name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create tax rule.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateTaxRule(data: any) {
-    if (!selectedTaxRule) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(
-        `/billing/tax-rules/${selectedTaxRule.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            branch_id: data.branchId || null,
-            name: data.name,
-            tax_percentage: Number(data.taxPercentage || 0),
-            tax_label: data.taxLabel || "GST",
-            service_scope: data.serviceScope || "all",
-            is_active: data.isActive === "true",
-          }),
-        },
-      );
-      setTaxRules((previous) => [
-        updated,
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      open("tax");
-      await loadAdmin();
-      setMessage("Tax rule updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update tax rule.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function createDiscountOffer(data: any) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const created = await apiFetch("/billing/discount-offers", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: data.branchId || null,
-          name: data.name,
-          code: data.code || null,
-          service_scope: data.serviceScope || "all",
-          discount_type: data.discountType || "percentage",
-          value: Number(data.value || 0),
-          minimum_bill_amount: Number(data.minimumBillAmount || 0),
-          max_discount_amount: data.maxDiscountAmount
-            ? Number(data.maxDiscountAmount)
-            : null,
-          valid_from: dateInputToIso(data.validFrom),
-          valid_until: dateInputToIso(data.validUntil),
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      setDiscountOffers((previous) => [
-        created,
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
-      open("offers");
-      await loadAdmin();
-      setMessage(`Offer created: ${created.name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not create discount offer.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateDiscountOffer(data: any) {
-    if (!selectedOffer) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const updated = await apiFetch(
-        `/billing/discount-offers/${selectedOffer.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            branch_id: data.branchId || null,
-            name: data.name,
-            code: data.code || null,
-            service_scope: data.serviceScope || "all",
-            discount_type: data.discountType || "percentage",
-            value: Number(data.value || 0),
-            minimum_bill_amount: Number(data.minimumBillAmount || 0),
-            max_discount_amount: data.maxDiscountAmount
-              ? Number(data.maxDiscountAmount)
-              : null,
-            valid_from: dateInputToIso(data.validFrom),
-            valid_until: dateInputToIso(data.validUntil),
-            is_active: data.isActive === "true",
-          }),
-        },
-      );
-      setDiscountOffers((previous) => [
-        updated,
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
-      open("offers");
-      await loadAdmin();
-      setMessage("Discount offer updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update discount offer.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function changeStatus(entity: string, row: any) {
-    const paths: any = {
-      roles: `/identity/roles/${row.id}/status`,
-      users: `/identity/users/${row.id}/status`,
-      departments: `/tenants/${apiSession.tenantId}/departments/${row.id}/status`,
-      branches: `/tenants/${apiSession.tenantId}/branches/${row.id}/status`,
-    };
-    setBusy(true);
-    setMessage("");
-    try {
-      if (entity === "suppliers")
-        await apiFetch(`/pharmacy/suppliers/${row.id}`, apiSession, {
-          method: "PATCH",
-          body: JSON.stringify({ is_active: !row.is_active }),
-        });
-      else if (entity === "tax")
-        await apiFetch(`/billing/tax-rules/${row.id}`, apiSession, {
-          method: "PATCH",
-          body: JSON.stringify({ is_active: !row.is_active }),
-        });
-      else if (entity === "offers")
-        await apiFetch(`/billing/discount-offers/${row.id}`, apiSession, {
-          method: "PATCH",
-          body: JSON.stringify({ is_active: !row.is_active }),
-        });
-      else
-        await apiFetch(paths[entity], apiSession, {
-          method: "POST",
-          body: JSON.stringify({ is_active: !row.is_active }),
-        });
-      await loadAdmin();
-      setMessage(`${title(entity)} status updated.`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not change status.");
-    } finally {
-      setBusy(false);
-      setConfirm(null);
-    }
-  }
-
-  async function deleteRow(entity: string, row: any) {
-    const paths: any = {
-      roles: `/identity/roles/${row.id}`,
-      users: `/identity/users/${row.id}`,
-      departments: `/tenants/${apiSession.tenantId}/departments/${row.id}`,
-      branches: `/tenants/${apiSession.tenantId}/branches/${row.id}`,
-      suppliers: `/pharmacy/suppliers/${row.id}`,
-    };
-    setBusy(true);
-    setMessage("");
-    try {
-      await apiFetch(paths[entity], apiSession, { method: "DELETE" });
-      await loadAdmin();
-      setMessage(`${title(entity)} deactivated.`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not delete record.");
-    } finally {
-      setBusy(false);
-      setConfirm(null);
-    }
-  }
-
-  async function saveSettings() {
-    setMessage("");
-    setBusy(true);
-    const list = (v: string) =>
-      v
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
-    try {
-      await Promise.all([
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
-            module: "invoice",
-            key: "invoice.prefix",
-            value: numberingRules.prefix || invoicePrefix,
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
-            module: "numbering",
-            key: "numbering.rules",
-            value: numberingRules,
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "tenant",
-            module: "invoice",
-            key: "invoice.logo_url",
-            value: invoiceLogoUrl,
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
-            module: "queue",
-            key: "queue.requeue_after_patients",
-            value: Number(requeueAfter),
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
-            module: "queue",
-            key: "queue.auto_no_show_after_missed_calls",
-            value: Number(noShowAfter),
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
-            module: "appointments",
-            key: "appointment.slot_intervals_enabled",
-            value: slotIntervalsEnabled,
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "branch",
-            scope_id: branchId,
-            module: "appointments",
-            key: "appointment.slot_interval_minutes",
-            value: Number(slotIntervalMinutes),
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "tenant",
-            module: "payment",
-            key: "payment.methods_enabled",
-            value: list(payments),
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            // Tenant scoped so it stays in sync with the super admin screen and
-            // the receipt PDF, which read bank details at tenant scope.
-            scope: "tenant",
-            module: "accounts",
-            key: "accounts.bank_details",
-            value: bankDetails,
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-        apiFetch("/settings", apiSession, {
-          method: "PUT",
-          body: JSON.stringify({
-            scope: "tenant",
-            module: "communication",
-            key: "communication.providers_enabled",
-            value: list(providers),
-            actor_user_id: apiSession.user?.id,
-          }),
-        }),
-      ]);
-      await loadAdmin();
-      setMessage("Settings saved.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not save settings.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function uploadInvoiceLogo(file: File) {
-    if (!file) return;
-    setMessage("");
-    setBusy(true);
-    try {
-      const upload = new FormData();
-      upload.append("file", file);
-      upload.append("category", "logo");
-      upload.append("source_module", "settings");
-      upload.append("attached_to_doctype", "Tenant");
-      upload.append("attached_to_name", apiSession.tenantId);
-      upload.append("attached_to_field", "invoice.logo_url");
-      upload.append("attached_to_label", "Invoice Logo");
-      upload.append("folder", "Branding");
-      const created = await apiUpload("/files", apiSession, upload);
-      setInvoiceLogoUrl(created.file_url);
-      await apiFetch("/settings", apiSession, {
-        method: "PUT",
-        body: JSON.stringify({
-          scope: "tenant",
-          module: "invoice",
-          key: "invoice.logo_url",
-          value: created.file_url,
-          actor_user_id: apiSession.user?.id,
-        }),
-      });
-      await loadAdmin();
-      setMessage("Invoice logo uploaded and saved.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not upload invoice logo.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function saveReportSettings() {
-    const list = (v: string) =>
-      v
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
-    setReportBusy("save");
-    setMessage("");
-    try {
-      await apiFetch("/reports/monthly-email/config", apiSession, {
-        method: "PUT",
-        body: JSON.stringify({
-          enabled: reportEnabled,
-          recipients: list(reportRecipients),
-          cc: list(reportCc),
-          send_day: Number(reportSendDay || 1),
-          filters: reportFilters,
-        }),
-      });
-      await loadAdmin();
-      setMessage("Monthly report email settings saved.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not save monthly report settings.");
-    } finally {
-      setReportBusy("");
-    }
-  }
-
-  async function sendMonthlyReportNow() {
-    const list = (v: string) =>
-      v
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
-    setReportBusy("send");
-    setMessage("");
-    try {
-      const job = await apiFetch("/reports/monthly-email/send", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          recipients: list(reportRecipients),
-          cc: list(reportCc),
-          filters: reportFilters,
-        }),
-      });
-      await loadAdmin();
-      setMessage(
-        job.status === "failed"
-          ? `Report job failed to queue: ${job.failure_reason}`
-          : "Monthly report job queued.",
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not queue monthly report.");
-    } finally {
-      setReportBusy("");
-    }
-  }
-
-  async function resendMonthlyReport(job: any) {
-    setReportBusy(`resend-${job.id}`);
-    setMessage("");
-    try {
-      await apiFetch("/reports/monthly-email/send", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          recipients: job.recipients || [],
-          cc: job.cc || [],
-          from_date: job.period_start,
-          to_date: job.period_end,
-          filters: job.filters || reportFilters,
-        }),
-      });
-      await loadAdmin();
-      setMessage("Report queued again.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not resend report.");
-    } finally {
-      setReportBusy("");
-    }
-  }
-
-  async function downloadMonthlyReport(job: any) {
-    setReportBusy(`download-${job.id}`);
-    setMessage("");
-    try {
-      const blob = await apiBlob(
-        `/reports/monthly-email/jobs/${job.id}/download`,
-        apiSession,
-      );
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = `monthly-revenue-report-${job.period_start}-${job.period_end}.xls`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      setMessage(err.message || "Could not download report.");
-    } finally {
-      setReportBusy("");
-    }
-  }
-
   if (!apiSession)
     return (
       <Card>
@@ -1365,7 +342,7 @@ export function TenantAdmin({
 
   return (
     <div className="space-y-5">
-      <StatusToast message={message} onClose={() => setMessage("")} />
+      <StatusToast message={data.message} onClose={() => data.setMessage("")} />
       {section === "users" && view === "list" && (
         <ListCard
           title="Users"
@@ -1373,7 +350,7 @@ export function TenantAdmin({
           searchKeys={["name", "email", "mobile", "user_type", "roles", "id"]}
           createLabel="Create User"
           onCreate={() => setView("create")}
-          onRefresh={loadAdmin}
+          onRefresh={data.reload}
           columns={USER_COLUMNS}
           filters={[
             {
@@ -1390,7 +367,7 @@ export function TenantAdmin({
               label: "Role",
               options: [
                 { value: "all", label: "All Roles" },
-                ...roles.map((role: any) => ({
+                ...data.roles.map((role: any) => ({
                   value: role.name,
                   label: role.name,
                 })),
@@ -1401,7 +378,7 @@ export function TenantAdmin({
               label: "Branch",
               options: [
                 { value: "all", label: "All Branches" },
-                ...branches.map((branch: any) => ({
+                ...data.branches.map((branch: any) => ({
                   value: branch.id,
                   label: branch.name,
                 })),
@@ -1419,7 +396,7 @@ export function TenantAdmin({
             <UserRow
               key={user.id}
               user={user}
-              branches={branches}
+              branches={data.branches}
               onEdit={() => {
                 setSelectedId(user.id);
                 setView("edit");
@@ -1437,10 +414,10 @@ export function TenantAdmin({
       {section === "users" && view === "create" && (
         <UserForm
           title="Create User"
-          roles={roles}
-          branches={branches}
-          busy={busy}
-          onSubmit={createUser}
+          roles={data.roles}
+          branches={data.branches}
+          busy={data.busy}
+          onSubmit={actions.createUser}
           onRoleOpen={openRolePermissions}
           apiSession={apiSession}
           back={() => open("users")}
@@ -1450,10 +427,12 @@ export function TenantAdmin({
         <UserForm
           title="Edit User"
           user={selectedUser}
-          roles={roles}
-          branches={branches}
-          busy={busy}
-          onSubmit={updateUser}
+          roles={data.roles}
+          branches={data.branches}
+          busy={data.busy}
+          onSubmit={(formData: any) =>
+            actions.updateUser(formData, selectedUser)
+          }
           onRoleOpen={openRolePermissions}
           apiSession={apiSession}
           onResetPassword={setPasswordUser}
@@ -1467,7 +446,7 @@ export function TenantAdmin({
           searchKeys={["name", "key", "id"]}
           createLabel="Create Role"
           onCreate={() => setView("create")}
-          onRefresh={loadAdmin}
+          onRefresh={data.reload}
           columns={ROLE_COLUMNS}
           filters={[
             {
@@ -1508,9 +487,9 @@ export function TenantAdmin({
       {section === "roles" && view === "create" && (
         <RoleForm
           title="Create Role"
-          permissions={permissions}
-          busy={busy}
-          onSubmit={createRole}
+          permissions={data.permissions}
+          busy={data.busy}
+          onSubmit={actions.createRole}
           back={() => open("roles")}
         />
       )}
@@ -1518,9 +497,9 @@ export function TenantAdmin({
         <RoleForm
           title="Edit Role"
           role={selectedRole}
-          permissions={permissions}
-          busy={busy}
-          onSubmit={updateRole}
+          permissions={data.permissions}
+          busy={data.busy}
+          onSubmit={(e: any) => actions.updateRole(e, selectedRole)}
           back={() => open("roles")}
         />
       )}
@@ -1532,7 +511,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "branch_names", "description", "id"]}
           createLabel="Create  Department"
           onCreate={() => setView("create")}
-          onRefresh={loadAdmin}
+          onRefresh={data.reload}
           columns={DEPARTMENT_COLUMNS}
           filters={[
             {
@@ -1549,7 +528,7 @@ export function TenantAdmin({
               label: "Branch",
               options: [
                 { value: "all", label: "All Branches" },
-                ...branches.map((branch: any) => ({
+                ...data.branches.map((branch: any) => ({
                   value: branch.id,
                   label: branch.name,
                 })),
@@ -1567,7 +546,7 @@ export function TenantAdmin({
             <DepartmentRow
               key={department.id}
               department={department}
-              branches={branches}
+              branches={data.branches}
               onEdit={() => {
                 setSelectedId(department.id);
                 setView("edit");
@@ -1593,10 +572,10 @@ export function TenantAdmin({
       {section === "departments" && view === "create" && (
         <DepartmentForm
           title="Create Department"
-          departments={departments}
-          branches={branches}
-          busy={busy}
-          onSubmit={createDepartment}
+          departments={data.departments}
+          branches={data.branches}
+          busy={data.busy}
+          onSubmit={actions.createDepartment}
           back={() => open("departments")}
         />
       )}
@@ -1604,10 +583,12 @@ export function TenantAdmin({
         <DepartmentForm
           title="Edit Department"
           department={selectedDepartment}
-          departments={departments}
-          branches={branches}
-          busy={busy}
-          onSubmit={updateDepartment}
+          departments={data.departments}
+          branches={data.branches}
+          busy={data.busy}
+          onSubmit={(formData: any) =>
+            actions.updateDepartment(formData, selectedDepartment)
+          }
           back={() => open("departments")}
         />
       )}
@@ -1619,7 +600,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "city", "state", "id"]}
           createLabel="Create Branch"
           onCreate={() => setView("create")}
-          onRefresh={loadAdmin}
+          onRefresh={data.reload}
           columns={BRANCH_COLUMNS}
           filters={[
             {
@@ -1661,11 +642,12 @@ export function TenantAdmin({
         <BranchForm
           title="Create Branch"
           branchCount={
-            branches.filter((branch: any) => branch.is_active !== false).length
+            data.branches.filter((branch: any) => branch.is_active !== false)
+              .length
           }
-          branchLimit={subscriptionEntitlements?.included_branches}
-          busy={busy}
-          onSubmit={createBranch}
+          branchLimit={data.subscriptionEntitlements?.included_branches}
+          busy={data.busy}
+          onSubmit={actions.createBranch}
           back={() => open("branches")}
         />
       )}
@@ -1673,8 +655,10 @@ export function TenantAdmin({
         <BranchForm
           title="Edit Branch"
           branch={selectedBranch}
-          busy={busy}
-          onSubmit={updateBranch}
+          busy={data.busy}
+          onSubmit={(formData: any) =>
+            actions.updateBranch(formData, selectedBranch)
+          }
           back={() => open("branches")}
         />
       )}
@@ -1686,7 +670,7 @@ export function TenantAdmin({
           searchKeys={["name", "gstin", "phone", "email", "address", "id"]}
           createLabel="Create Supplier"
           onCreate={() => setView("create")}
-          onRefresh={loadAdmin}
+          onRefresh={data.reload}
           columns={SUPPLIER_COLUMNS}
           filters={[
             {
@@ -1735,8 +719,8 @@ export function TenantAdmin({
       {section === "suppliers" && view === "create" && (
         <SupplierForm
           title="Create Supplier"
-          busy={busy}
-          onSubmit={createSupplier}
+          busy={data.busy}
+          onSubmit={actions.createSupplier}
           back={() => open("suppliers")}
         />
       )}
@@ -1744,8 +728,10 @@ export function TenantAdmin({
         <SupplierForm
           title="Edit Supplier"
           supplier={selectedSupplier}
-          busy={busy}
-          onSubmit={updateSupplier}
+          busy={data.busy}
+          onSubmit={(formData: any) =>
+            actions.updateSupplier(formData, selectedSupplier)
+          }
           back={() => open("suppliers")}
         />
       )}
@@ -1757,7 +743,7 @@ export function TenantAdmin({
           searchKeys={["name", "tax_label", "service_scope", "id"]}
           createLabel="Create Tax Rule"
           onCreate={() => setView("create")}
-          onRefresh={loadAdmin}
+          onRefresh={data.reload}
           columns={TAX_RULE_COLUMNS}
           filters={[
             {
@@ -1781,7 +767,7 @@ export function TenantAdmin({
             <TaxRuleRow
               key={rule.id}
               rule={rule}
-              branches={branches}
+              branches={data.branches}
               onEdit={() => {
                 setSelectedId(rule.id);
                 setView("edit");
@@ -1799,9 +785,9 @@ export function TenantAdmin({
       {section === "tax" && view === "create" && (
         <TaxRuleForm
           title="Create Tax Rule"
-          branches={branches}
-          busy={busy}
-          onSubmit={createTaxRule}
+          branches={data.branches}
+          busy={data.busy}
+          onSubmit={actions.createTaxRule}
           back={() => open("tax")}
         />
       )}
@@ -1809,9 +795,11 @@ export function TenantAdmin({
         <TaxRuleForm
           title="Edit Tax Rule"
           rule={selectedTaxRule}
-          branches={branches}
-          busy={busy}
-          onSubmit={updateTaxRule}
+          branches={data.branches}
+          busy={data.busy}
+          onSubmit={(formData: any) =>
+            actions.updateTaxRule(formData, selectedTaxRule)
+          }
           back={() => open("tax")}
         />
       )}
@@ -1823,7 +811,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "service_scope", "discount_type", "id"]}
           createLabel="Create Offer"
           onCreate={() => setView("create")}
-          onRefresh={loadAdmin}
+          onRefresh={data.reload}
           columns={DISCOUNT_OFFER_COLUMNS}
           filters={[
             {
@@ -1847,7 +835,7 @@ export function TenantAdmin({
             <DiscountOfferRow
               key={offer.id}
               offer={offer}
-              branches={branches}
+              branches={data.branches}
               onEdit={() => {
                 setSelectedId(offer.id);
                 setView("edit");
@@ -1865,9 +853,9 @@ export function TenantAdmin({
       {section === "offers" && view === "create" && (
         <DiscountOfferForm
           title="Create Discount Offer"
-          branches={branches}
-          busy={busy}
-          onSubmit={createDiscountOffer}
+          branches={data.branches}
+          busy={data.busy}
+          onSubmit={actions.createDiscountOffer}
           back={() => open("offers")}
         />
       )}
@@ -1875,9 +863,11 @@ export function TenantAdmin({
         <DiscountOfferForm
           title="Edit Discount Offer"
           offer={selectedOffer}
-          branches={branches}
-          busy={busy}
-          onSubmit={updateDiscountOffer}
+          branches={data.branches}
+          busy={data.busy}
+          onSubmit={(formData: any) =>
+            actions.updateDiscountOffer(formData, selectedOffer)
+          }
           back={() => open("offers")}
         />
       )}
@@ -1886,7 +876,7 @@ export function TenantAdmin({
         <PatientSubscriptions
           apiSession={apiSession}
           branchId={branchId}
-          branches={branches}
+          branches={data.branches}
           patients={patients}
         />
       )}
@@ -1894,79 +884,81 @@ export function TenantAdmin({
       {section === "files" && (
         <FilesPanel
           apiSession={apiSession}
-          files={files}
-          setFiles={setFiles}
-          setMessage={setMessage}
-          branches={branches}
+          files={data.files}
+          setFiles={data.setFiles}
+          setMessage={data.setMessage}
+          branches={data.branches}
           patients={patients}
-          busy={busy}
-          setBusy={setBusy}
+          busy={data.busy}
+          setBusy={data.setBusy}
         />
       )}
 
       {section === "settings" && (
         <SettingsPanel
           apiSession={apiSession}
-          settings={settings}
-          invoicePrefix={invoicePrefix}
-          setInvoicePrefix={setInvoicePrefix}
-          numberingRules={numberingRules}
-          setNumberingRules={setNumberingRules}
-          invoiceLogoUrl={invoiceLogoUrl}
-          setInvoiceLogoUrl={setInvoiceLogoUrl}
-          bankDetails={bankDetails}
-          setBankDetails={setBankDetails}
+          settings={data.settings}
+          invoicePrefix={data.invoicePrefix}
+          setInvoicePrefix={data.setInvoicePrefix}
+          numberingRules={data.numberingRules}
+          setNumberingRules={data.setNumberingRules}
+          invoiceLogoUrl={data.invoiceLogoUrl}
+          setInvoiceLogoUrl={data.setInvoiceLogoUrl}
+          bankDetails={data.bankDetails}
+          setBankDetails={data.setBankDetails}
           tenantLogoUrl={clinic?.logo_url || ""}
-          uploadInvoiceLogo={uploadInvoiceLogo}
-          requeueAfter={requeueAfter}
-          setRequeueAfter={setRequeueAfter}
-          noShowAfter={noShowAfter}
-          setNoShowAfter={setNoShowAfter}
-          slotIntervalsEnabled={slotIntervalsEnabled}
-          setSlotIntervalsEnabled={setSlotIntervalsEnabled}
-          slotIntervalMinutes={slotIntervalMinutes}
-          setSlotIntervalMinutes={setSlotIntervalMinutes}
-          payments={payments}
-          setPayments={setPayments}
-          providers={providers}
-          setProviders={setProviders}
-          busy={busy}
-          saveSettings={saveSettings}
-          reportEnabled={reportEnabled}
-          setReportEnabled={setReportEnabled}
-          reportRecipients={reportRecipients}
-          setReportRecipients={setReportRecipients}
-          reportCc={reportCc}
-          setReportCc={setReportCc}
-          reportSendDay={reportSendDay}
-          setReportSendDay={setReportSendDay}
-          reportFilters={reportFilters}
-          setReportFilters={setReportFilters}
-          reportJobs={reportJobs}
+          uploadInvoiceLogo={actions.uploadInvoiceLogo}
+          requeueAfter={data.requeueAfter}
+          setRequeueAfter={data.setRequeueAfter}
+          noShowAfter={data.noShowAfter}
+          setNoShowAfter={data.setNoShowAfter}
+          slotIntervalsEnabled={data.slotIntervalsEnabled}
+          setSlotIntervalsEnabled={data.setSlotIntervalsEnabled}
+          slotIntervalMinutes={data.slotIntervalMinutes}
+          setSlotIntervalMinutes={data.setSlotIntervalMinutes}
+          payments={data.payments}
+          setPayments={data.setPayments}
+          providers={data.providers}
+          setProviders={data.setProviders}
+          busy={data.busy}
+          saveSettings={actions.saveSettings}
+          reportEnabled={data.reportEnabled}
+          setReportEnabled={data.setReportEnabled}
+          reportRecipients={data.reportRecipients}
+          setReportRecipients={data.setReportRecipients}
+          reportCc={data.reportCc}
+          setReportCc={data.setReportCc}
+          reportSendDay={data.reportSendDay}
+          setReportSendDay={data.setReportSendDay}
+          reportFilters={data.reportFilters}
+          setReportFilters={data.setReportFilters}
+          reportJobs={data.reportJobs}
           reportBusy={reportBusy}
-          saveReportSettings={saveReportSettings}
-          sendMonthlyReportNow={sendMonthlyReportNow}
-          resendMonthlyReport={resendMonthlyReport}
-          downloadMonthlyReport={downloadMonthlyReport}
+          saveReportSettings={actions.saveReportSettings}
+          sendMonthlyReportNow={actions.sendMonthlyReportNow}
+          resendMonthlyReport={actions.resendMonthlyReport}
+          downloadMonthlyReport={actions.downloadMonthlyReport}
         />
       )}
       {confirm && (
         <ConfirmModal
           action={confirm}
-          busy={busy}
+          busy={data.busy}
           onCancel={() => setConfirm(null)}
-          onConfirm={() =>
-            confirm.kind === "delete"
-              ? deleteRow(confirm.entity, confirm.row)
-              : changeStatus(confirm.entity, confirm.row)
-          }
+          onConfirm={() => {
+            const result =
+              confirm.kind === "delete"
+                ? actions.deleteRow(confirm.entity, confirm.row)
+                : actions.changeStatus(confirm.entity, confirm.row);
+            result.finally(() => setConfirm(null));
+          }}
         />
       )}
       {passwordUser && (
         <PasswordResetModal
           user={passwordUser}
-          busy={busy}
-          onSubmit={resetUserPassword}
+          busy={data.busy}
+          onSubmit={(e: any) => actions.resetUserPassword(e, passwordUser)}
           onCancel={() => setPasswordUser(null)}
         />
       )}

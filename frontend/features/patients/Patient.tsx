@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import {
-  ConfirmModal,
-  Empty,
-  Pagination,
-} from "@/app/components/patient/Shared";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { Empty } from "@/app/components/common/Empty";
+import { Pagination } from "@/app/components/common/Pagination";
 import {
   Button,
   Card,
@@ -17,16 +15,13 @@ import {
 } from "@/app/components/common/ui";
 import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
 import {
-  DateField,
   FormField,
-  SelectField,
-  TextField,
 } from "@/app/components/FormElements";
-import { patientSearchText, toRow } from "@/utils/patient/helpers";
-import { PatientForm } from "@/app/forms/PatientForms";
-import { PatientDetail } from "@/app/components/patient/PatientDetail";
-import { activeTenantOptions } from "@/utils/doctors/helpers";
-import { PatientRow } from "@/app/components/patient/PatientRow";
+import { patientSearchText,toRow } from "./helpers";
+import { PatientForm } from "@/features/patients/forms/PatientForms";
+import { PatientDetail } from "./components/PatientDetail";
+import { activeTenantOptions } from "@/utils/helper";
+import { PatientRow } from "./components/PatientRow";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -665,8 +660,8 @@ export function Patient({
       {confirm && (
         <ConfirmModal
           busy={busy}
-          row={confirm.row}
-          onClose={() => setConfirm(null)}
+          action={confirm.row}
+          onCancel={() => setConfirm(null)}
           onConfirm={() => deactivatePatient(confirm.row)}
         />
       )}

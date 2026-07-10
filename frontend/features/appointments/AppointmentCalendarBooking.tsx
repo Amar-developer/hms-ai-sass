@@ -21,11 +21,7 @@ import {
   TextareaField,
   TextField,
 } from "@/app/components/FormElements";
-import {
-  generatePatientId,
-  generateToken,
-  searchPatients,
-} from "@/lib/hmsLogic";
+import { searchPatients } from "@/lib/hmsLogic";
 import {
   humanizeOptionLabel,
   publicDisplayValue,
@@ -33,7 +29,11 @@ import {
 } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
 import { STATUS_FILTER_OPTIONS } from "@/utils/constants";
-import { PatientForm } from "@/app/forms/PatientForms";
+import { PatientForm } from "@/features/patients/forms/PatientForms";
+import { Info } from "@/app/components/common/Info";
+import { Pagination } from "@/app/components/common/Pagination";
+import { useAppointmentBookingData } from "./api/useAppointmentBookingData";
+import { useAppointmentBookingActions } from "./api/useAppointmentBookingActions";
 
 type Props = {
   clinic: any;
@@ -122,7 +122,6 @@ export function AppointmentCalendarBooking(props: Props) {
   const [filterDate, setFilterDate] = useState("");
   const [page, setPage] = useState(1);
   const [patientSearch, setPatientSearch] = useState("");
-  const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [patientLookupOpen, setPatientLookupOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState<BookingStep>("appointment");
@@ -143,17 +142,12 @@ export function AppointmentCalendarBooking(props: Props) {
   const [intakeTemp, setIntakeTemp] = useState("");
   const [intakeHeight, setIntakeHeight] = useState("");
   const [intakeWeight, setIntakeWeight] = useState("");
-  const [liveDoctors, setLiveDoctors] = useState<any[]>([]);
-  const [doctorFeeRules, setDoctorFeeRules] = useState<any[]>([]);
-  const [doctorId, setDoctorId] = useState("");
   const [booked, setBooked] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const bookingInFlightRef = useRef(false);
   const [message, setMessage] = useState("");
-  const [platformTenants, setPlatformTenants] = useState<any[]>([]);
   const [platformTenantId, setPlatformTenantId] = useState("");
   const [platformDepartment, setPlatformDepartment] = useState("all");
-  const [platformRows, setPlatformRows] = useState<any[]>([]);
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -167,6 +161,35 @@ export function AppointmentCalendarBooking(props: Props) {
     () => uniqueDepartmentRows(allowedDepartments, departmentId),
     [allowedDepartments, departmentId],
   );
+  const selectedDepartmentName =
+    departmentOptions.find((department: any) => department.id === departmentId)
+      ?.name || "selected department";
+
+  const {
+    liveMatches,
+    setLiveMatches,
+    liveDoctors,
+    doctorFeeRules,
+    doctorId,
+    setDoctorId,
+    platformTenants,
+    platformRows,
+  } = useAppointmentBookingData({
+    apiSession,
+    isSuperAdmin,
+    branchId,
+    departmentId,
+    appointmentDate,
+    selectedDepartmentName,
+    query,
+    filterDate,
+    platformTenantId,
+    setPlatformTenantId,
+    listRefreshKey,
+    patientSearch,
+    setMessage,
+  });
+
   const platformDepartmentOptions = Array.from(
     new Set(
       platformRows
@@ -269,9 +292,6 @@ export function AppointmentCalendarBooking(props: Props) {
 
   const doctors = liveDoctors;
   const doctor = doctors.find((item: any) => item.id === doctorId);
-  const selectedDepartmentName =
-    departmentOptions.find((department: any) => department.id === departmentId)
-      ?.name || "selected department";
   const hasAvailableDoctor =
     appointmentType === "emergency" || doctors.length > 0;
   const doctorAvailabilityMessage = hasAvailableDoctor
@@ -329,204 +349,6 @@ export function AppointmentCalendarBooking(props: Props) {
     () => setPage(1),
     [platformTenantId, platformDepartment, platformRows.length],
   );
-  useEffect(() => {
-    let alive = true;
-    async function loadPlatformGrid() {
-      if (!apiSession || !isSuperAdmin) return;
-      try {
-        const params = new URLSearchParams({ limit: "500" });
-        if (query) params.set("q", query);
-        if (filterDate) params.set("appointment_date", filterDate);
-        if (platformTenantId) params.set("tenant_id", platformTenantId);
-        const [tenantRows, appointmentRows] = await Promise.all([
-          apiFetch("/tenants", apiSession),
-          apiFetch(
-            `/appointments/platform/all?${params.toString()}`,
-            apiSession,
-          ),
-        ]);
-        if (!alive) return;
-        const selectableTenants = activeTenantOptions(tenantRows);
-        const selectableTenantIds = new Set(
-          selectableTenants.map((tenant: any) => tenant.id),
-        );
-        setPlatformTenants(selectableTenants);
-        if (
-          platformTenantId &&
-          !selectableTenants.some(
-            (tenant: any) => tenant.id === platformTenantId,
-          )
-        ) {
-          setPlatformTenantId("");
-        }
-        setPlatformRows(
-          appointmentRows.filter((row: any) =>
-            selectableTenantIds.has(row.tenant_id),
-          ),
-        );
-      } catch (err: any) {
-        if (alive)
-          setMessage(err.message || "Could not load all-tenant appointments.");
-      }
-    }
-    loadPlatformGrid();
-    return () => {
-      alive = false;
-    };
-  }, [
-    apiSession?.email,
-    apiSession?.tenantId,
-    isSuperAdmin,
-    query,
-    filterDate,
-    platformTenantId,
-    listRefreshKey,
-  ]);
-  useEffect(() => {
-    let alive = true;
-    async function runSearch() {
-      if (!apiSession || patientSearch.trim().length < 2) {
-        setLiveMatches([]);
-        return;
-      }
-      try {
-        const params = new URLSearchParams({
-          q: patientSearch.trim(),
-          limit: "10",
-        });
-        const rows = await apiFetch(
-          `/patients?${params.toString()}`,
-          apiSession,
-        );
-        if (alive) setLiveMatches(rows);
-      } catch (err: any) {
-        if (alive) setMessage(err.message || "Could not search patients.");
-      }
-    }
-    runSearch();
-    return () => {
-      alive = false;
-    };
-  }, [apiSession?.email, apiSession?.tenantId, patientSearch]);
-
-  useEffect(() => {
-    let alive = true;
-    async function loadFeeRules() {
-      if (!apiSession) {
-        setDoctorFeeRules([]);
-        return;
-      }
-      try {
-        const params = branchId
-          ? `?branch_id=${encodeURIComponent(branchId)}`
-          : "";
-        const rows = await apiFetch(
-          `/billing/doctor-fee-rules${params}`,
-          apiSession,
-        );
-        if (alive) setDoctorFeeRules(rows);
-      } catch {
-        if (alive) setDoctorFeeRules([]);
-      }
-    }
-    loadFeeRules();
-    return () => {
-      alive = false;
-    };
-  }, [apiSession?.email, apiSession?.tenantId, branchId]);
-
-  useEffect(() => {
-    let alive = true;
-    async function fetchDoctors(path: string) {
-      try {
-        return await apiFetch(path, apiSession as ApiSession);
-      } catch (err: any) {
-        if (
-          String(err.message || "").includes("403") ||
-          String(err.message || "")
-            .toLowerCase()
-            .includes("permission")
-        ) {
-          throw err;
-        }
-        return [];
-      }
-    }
-    async function loadDoctors() {
-      if (!apiSession) {
-        setDoctorId("");
-        return;
-      }
-      if (!branchId || !departmentId || !appointmentDate) {
-        setLiveDoctors([]);
-        setDoctorId("");
-        return;
-      }
-      try {
-        const params = new URLSearchParams({
-          branch_id: branchId,
-          department_id: departmentId,
-        });
-        const rows = await fetchDoctors(`/practitioners?${params.toString()}`);
-        const availabilityRows = await Promise.all(
-          rows.map(async (row: any) => {
-            try {
-              const calendarParams = new URLSearchParams({
-                branch_id: branchId,
-                department_id: departmentId,
-                start_date: appointmentDate,
-                end_date: appointmentDate,
-              });
-              const calendar = await apiFetch(
-                `/practitioners/${row.id}/calendar?${calendarParams.toString()}`,
-                apiSession,
-              );
-              const day = calendar?.days?.[0];
-              const hasAvailableSlot =
-                Number(day?.available_slots || 0) > 0 ||
-                (day?.slots || []).some((slot: any) => slot.available);
-              return hasAvailableSlot ? row : null;
-            } catch {
-              return null;
-            }
-          }),
-        );
-        const availableRows = availabilityRows.filter(Boolean);
-        if (!alive) return;
-        setLiveDoctors(availableRows);
-        setDoctorId((current) =>
-          availableRows.some((row: any) => row.id === current)
-            ? current
-            : availableRows[0]?.id || "",
-        );
-        if (availableRows.length === 0) {
-          setMessage(
-            `No doctor is available for ${selectedDepartmentName} on ${displayDate(appointmentDate)}. Check doctor mapping and scheduling timings.`,
-          );
-        }
-      } catch (err: any) {
-        if (alive) {
-          setLiveDoctors([]);
-          setDoctorId("");
-          setMessage(
-            err.message ||
-              "Your role cannot read doctors for appointment booking. Enable Appointments Create or Doctors Read permission for this role.",
-          );
-        }
-      }
-    }
-    loadDoctors();
-    return () => {
-      alive = false;
-    };
-  }, [
-    apiSession?.email,
-    apiSession?.tenantId,
-    branchId,
-    departmentId,
-    appointmentDate,
-    selectedDepartmentName,
-  ]);
 
   function openBooking() {
     setMode("book");
@@ -549,14 +371,48 @@ export function AppointmentCalendarBooking(props: Props) {
     setIntakeWeight("");
   }
 
-  async function refreshAppointmentList() {
-    if (!apiSession) return;
-    if (isSuperAdmin) {
-      setListRefreshKey((current) => current + 1);
-      return;
-    }
-    await loadLiveData(apiSession);
-  }
+  const { refreshAppointmentList, savePatient, bookAppointment } =
+    useAppointmentBookingActions({
+      apiSession,
+      isSuperAdmin,
+      clinic,
+      branchId,
+      departmentId,
+      doctorId,
+      doctor,
+      patients,
+      setPatients,
+      appointments,
+      setAppointments,
+      selectedPatient,
+      setSelectedPatient,
+      appointmentType,
+      appointmentDate,
+      isBillable,
+      customFee,
+      billingNote,
+      emergencyReason,
+      intakeComplaints,
+      vitals: {
+        intakeBp,
+        intakePulse,
+        intakeSpo2,
+        intakeTemp,
+        intakeHeight,
+        intakeWeight,
+      },
+      supportsCustomFee,
+      loadLiveData,
+      setListRefreshKey,
+      setMessage,
+      setBusy,
+      setBooked,
+      setBookingStep,
+      setPatientSearch,
+      setPatientLookupOpen,
+      setLiveMatches,
+      bookingInFlightRef,
+    });
 
   async function closeBooking() {
     setMode("list");
@@ -568,225 +424,6 @@ export function AppointmentCalendarBooking(props: Props) {
     setBooked(null);
     setMessage("");
     await refreshAppointmentList();
-  }
-
-  async function savePatient(data: any) {
-    setBusy(true);
-    setMessage("");
-    try {
-      const patientBranchId = data.branchId || branchId;
-      if (apiSession) {
-        const duplicateRows = await apiFetch(
-          "/patients/duplicates",
-          apiSession,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              branch_id: patientBranchId,
-              full_name: data.fullName,
-              date_of_birth: data.dateOfBirth || null,
-              gender: data.gender || "unknown",
-              mobile: data.mobile || null,
-              guardian_name: data.guardianName || null,
-              guardian_mobile: data.guardianMobile || null,
-              area: data.area || null,
-            }),
-          },
-        );
-        const highConfidenceDuplicates = duplicateRows.filter(
-          (row: any) => row.confidence === "high",
-        );
-        if (highConfidenceDuplicates.length > 0) {
-          setLiveMatches(highConfidenceDuplicates);
-          setPatientSearch(data.fullName || data.mobile || "");
-          setPatientLookupOpen(true);
-          setBookingStep("appointment");
-          setMessage(
-            "Possible duplicate patient found. Please select the existing patient or verify before creating a new record.",
-          );
-          return;
-        }
-        const saved = await apiFetch("/patients", apiSession, {
-          method: "POST",
-          body: JSON.stringify({
-            branch_id: patientBranchId,
-            full_name: data.fullName,
-            date_of_birth: data.dateOfBirth || null,
-            gender: data.gender || "unknown",
-            mobile: data.mobile || null,
-            alternate_mobile: data.alternateMobile || null,
-            email: data.email || null,
-            guardian_name: data.guardianName || null,
-            guardian_mobile: data.guardianMobile || null,
-            area: data.area || null,
-            address: data.address || null,
-            blood_group: data.bloodGroup || null,
-          }),
-        });
-        await loadLiveData(apiSession);
-        setSelectedPatient({
-          id: saved.id,
-          full_name: saved.full_name,
-          mobile: saved.mobile,
-          guardian_name: saved.guardian_name,
-          guardian_mobile: saved.guardian_mobile,
-          area: saved.area,
-          gender: saved.gender,
-        });
-      } else {
-        const patient = {
-          id: generatePatientId(patients.length),
-          name: data.fullName,
-          age: data.ageYears ? Number(data.ageYears) : 0,
-          gender: data.gender,
-          mobile: data.mobile,
-          guardian: data.guardianName,
-          guardianMobile: data.guardianMobile,
-          area: data.area,
-          blood: data.bloodGroup || "",
-          email: data.email,
-          alternateMobile: data.alternateMobile,
-          address: data.address,
-          allergies: "",
-          medicalHistory: "",
-          status: "Active",
-          patientType: "OP",
-        };
-        setPatients([...patients, patient]);
-        setSelectedPatient({
-          id: patient.id,
-          full_name: patient.name,
-          mobile: patient.mobile,
-        });
-      }
-      setPatientSearch("");
-      setPatientLookupOpen(false);
-      setBookingStep("appointment");
-    } catch (err: any) {
-      setMessage(err.message || "Could not save patient.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Temp/Height/Weight are captured as separate inputs for a cleaner form, but
-  // merged into the same free-text intake_vitals field the backend already
-  // stores (consistent with how BP/Pulse are already recorded there).
-  // Keys here must match the aliases the consultation page's vitals grid
-  // looks up (BP/Pulse/Spo2/Temp/Height/Weight) so everything filled in at
-  // booking actually shows up pre-filled on the consultation page.
-  function combinedIntakeVitals() {
-    return [
-      intakeBp.trim() && `BP=${intakeBp.trim()}`,
-      intakePulse.trim() && `Pulse=${intakePulse.trim()}`,
-      intakeSpo2.trim() && `Spo2=${intakeSpo2.trim()}`,
-      intakeTemp.trim() && `Temp=${intakeTemp.trim()}`,
-      intakeHeight.trim() && `Height=${intakeHeight.trim()}`,
-      intakeWeight.trim() && `Weight=${intakeWeight.trim()}`,
-    ]
-      .filter(Boolean)
-      .join(", ");
-  }
-
-  async function bookAppointment() {
-    if (bookingInFlightRef.current) return;
-    if (!selectedPatient) return;
-    if (!doctorId) {
-      setMessage(
-        "Select a doctor before booking. If the dropdown is empty, map a doctor to this tenant, branch, and department.",
-      );
-      return;
-    }
-    bookingInFlightRef.current = true;
-    setBusy(true);
-    setMessage("");
-    try {
-      if (apiSession) {
-        const result = await apiFetch("/appointments", apiSession, {
-          method: "POST",
-          body: JSON.stringify({
-            branch_id: branchId,
-            patient_id: selectedPatient.id,
-            department_id: departmentId,
-            practitioner_id: doctorId,
-            appointment_type: appointmentType,
-            appointment_date: appointmentDate,
-            appointment_time: null,
-            reason:
-              appointmentType === "follow_up" ||
-              appointmentType === "doctor_review"
-                ? "Doctor review appointment booked from MedizinHub HMS"
-                : appointmentType === "fitness_certificate"
-                  ? "Fitness certificate consultation booked from MedizinHub HMS"
-                  : "OP appointment booked from MedizinHub HMS",
-            visit_purpose:
-              appointmentType === "fitness_certificate"
-                ? "fitness_certificate"
-                : appointmentType === "doctor_review" ||
-                    appointmentType === "follow_up"
-                  ? "doctor_review"
-                  : "consultation",
-            is_billable: isBillable,
-            custom_fee_amount:
-              supportsCustomFee && isBillable && customFee !== ""
-                ? Number(customFee)
-                : null,
-            billing_note: billingNote || null,
-            emergency_reason:
-              appointmentType === "emergency"
-                ? emergencyReason || "Emergency override from reception"
-                : null,
-            intake_vitals: combinedIntakeVitals() || null,
-            intake_complaints: intakeComplaints.trim() || null,
-            created_by_user_id: apiSession.user?.id || null,
-          }),
-        });
-        await loadLiveData(apiSession);
-        if (isSuperAdmin) setListRefreshKey((current) => current + 1);
-        setBooked(result);
-      } else {
-        const dayCount = appointments.filter(
-          (item: any) =>
-            item.appointmentDate === appointmentDate &&
-            item.branchId === branchId,
-        ).length;
-        const token = generateToken(departmentId, "Normal", dayCount);
-        const appointment = {
-          id: `A${appointments.length + 1}`,
-          clinicId: clinic.id,
-          branchId,
-          token,
-          tokenType: "Normal",
-          priority: appointmentType === "emergency" ? 1 : 2,
-          patientId: selectedPatient.id,
-          patient: selectedPatient.full_name,
-          departmentId,
-          doctorId: doctor?.id,
-          doctor: doctor?.name,
-          appointmentDate,
-          time: appointmentType === "emergency" ? "Emergency" : appointmentDate,
-          status: "scheduled",
-          queueStatus: "waiting",
-          visitType:
-            appointmentType === "follow_up" ||
-            appointmentType === "doctor_review"
-              ? "Doctor Review"
-              : appointmentType === "fitness_certificate"
-                ? "Fitness Certificate"
-                : appointmentType === "emergency"
-                  ? "Emergency"
-                  : "OP",
-        };
-        setAppointments([...appointments, appointment]);
-        setBooked({ appointment, queue_entry: { token_number: token } });
-      }
-      setBookingStep("success");
-    } catch (err: any) {
-      setMessage(err.message || "Could not book appointment.");
-    } finally {
-      bookingInFlightRef.current = false;
-      setBusy(false);
-    }
   }
 
   const normalizedDepartmentOptions = departmentOptions.map((d: any) => ({
@@ -1529,62 +1166,5 @@ export function AppointmentCalendarBooking(props: Props) {
         onPage={setPage}
       />
     </Card>
-  );
-}
-
-
-
-function Info({ label, value }: { label: string; value: any }) {
-  return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs font-bold uppercase text-slate-500">{label}</p>
-      <p className="mt-1 font-bold">{value}</p>
-    </div>
-  );
-}
-
-function activeTenantOptions(tenants: any[]) {
-  const seen = new Set<string>();
-  return (tenants || []).filter((tenant: any) => {
-    if (tenant.status === "suspended") return false;
-    const key = String(tenant.name || tenant.id || "")
-      .trim()
-      .toLowerCase();
-    if (key && seen.has(key)) return false;
-    if (key) seen.add(key);
-    return true;
-  });
-}
-
-function Pagination({ page, totalPages, total, onPage }: any) {
-  const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
-  const end = Math.min(page * pageSize, total);
-  return (
-    <div className="mt-4 flex flex-col justify-between gap-3 table-data text-slate-500 sm:flex-row sm:items-center">
-      <span>
-        Showing {start}-{end} of {total}
-      </span>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onPage(Math.max(1, page - 1))}
-          disabled={page <= 1}
-          className="rounded-lg border px-3 py-2 table-data font-bold text-slate-700 disabled:text-slate-300"
-        >
-          Previous
-        </button>
-        <span className="rounded-lg bg-slate-50 table-data px-3 py-2 font-bold text-slate-700">
-          Page {page} / {totalPages}
-        </span>
-        <button
-          type="button"
-          onClick={() => onPage(Math.min(totalPages, page + 1))}
-          disabled={page >= totalPages}
-          className="rounded-lg table-data border px-3 py-2 font-bold text-slate-700 disabled:text-slate-300"
-        >
-          Next
-        </button>
-      </div>
-    </div>
   );
 }

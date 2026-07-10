@@ -1,34 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import {
-  ActionButton,
-  ActionGroup,
-  Badge,
-  Button,
   Card,
   Field,
   Input,
   RefreshButton,
   SearchableSelect,
-  Select,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import { uniqueDepartmentRows } from "@/lib/options";
 import {
-  activeTenantOptions,
   groupSchedules,
-  selectedSchedulePayloads,
   selectedSchedulePayloadsFromRHF,
-} from "@/utils/schedule/helpers";
-import { ScheduleForm } from "@/app/forms/ScheduleForms";
-import { pageSize, weekdays } from "@/utils/schedule/constants";
-import { ConfirmModal, Empty, ScheduleRow } from "./Shared";
+} from "@/features/scheduling/helpers";
+import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
+import { pageSize,weekdays } from "./constants";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { Empty } from "@/app/components/common/Empty";
+import { ScheduleRow } from "./components/ScheduleRow";
 import { Pagination } from "@/app/components/common/Pagination";
-import { ScheduleFormValues } from "@/app/validations/schedule.schema";
+import { ScheduleFormValues } from "./schedule.schema";
+import { activeTenantOptions } from "@/utils/helper";
 
 export function Scheduling({ apiSession, branchId }: any) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
@@ -582,8 +578,8 @@ export function Scheduling({ apiSession, branchId }: any) {
       {confirm && (
         <ConfirmModal
           busy={busy}
-          row={confirm.row}
-          onClose={() => setConfirm(null)}
+          action={confirm.row}
+          onCancel={() => setConfirm(null)}
           onConfirm={() => deleteSchedule(confirm.row)}
         />
       )}
