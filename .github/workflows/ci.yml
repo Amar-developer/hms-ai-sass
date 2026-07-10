@@ -93,7 +93,7 @@ jobs:
         run: pytest backend/tests -q
 
   docker:
-    name: Docker Compose Config
+    name: Docker Images
     runs-on: ubuntu-latest
 
     steps:
@@ -110,6 +110,16 @@ jobs:
           docker compose -f docker-compose.yml config --quiet
           docker compose -f docker-compose.local.yml config --quiet
           docker compose -f docker-compose.staging.yml config --quiet
+
+      - name: Build production images
+        run: docker compose -f docker-compose.yml build backend frontend
+        env:
+          NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: "false"
+
+      - name: Build local development images
+        run: |
+          docker build -f backend/Dockerfile.dev backend
+          docker build -f frontend/Dockerfile.dev frontend
 
   # Deploys to the EC2 dev/test box only after frontend, backend, and
   # docker checks all pass on develop. This runs as a job in this same

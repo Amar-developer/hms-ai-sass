@@ -6,26 +6,24 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-medizinhub_hms}
       POSTGRES_USER: ${POSTGRES_USER:-medizinhub}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medizinhub_dev}
-    ports:
-      - "5433:5432"
     volumes:
       - medizinhub_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U medizinhub -d medizinhub_hms"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medizinhub} -d ${POSTGRES_DB:-medizinhub_hms}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     container_name: medizinhub-redis
-    ports:
-      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   frontend:
     build:
@@ -37,11 +35,18 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - postgres
-      - redis
+      backend:
+        condition: service_healthy
     environment:
       NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
       NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
   backend:
     build: ./backend
@@ -56,7 +61,7 @@ services:
       redis:
         condition: service_healthy
     env_file:
-    - .env
+      - .env
     command: >
       bash -c "
       alembic -c alembic/alembic.ini upgrade head &&
@@ -65,6 +70,13 @@ services:
     environment:
       PYTHONPATH: /app
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
 
   report-worker:
     build: ./backend
@@ -72,16 +84,15 @@ services:
     extra_hosts:
       - "local.healthcare:host-gateway"
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
+      backend:
         condition: service_healthy
     env_file:
-    - .env
+      - .env
     command: python -m app.modules.reports.worker
     environment:
       PYTHONPATH: /app
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+    restart: unless-stopped
 
 volumes:
   medizinhub_postgres_data:
