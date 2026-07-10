@@ -15,10 +15,7 @@ import {
   displayToIsoDate,
   isoToDisplayDate,
 } from "@/utils/helper";
-import type {
-  NoticeTone,
-  SearchableSelectProps,
-} from "@/utils/tenantAdmin/types";
+import type { NoticeTone,SearchableSelectProps } from "@/features/admin/types";
 
 export function Card({
   children,
