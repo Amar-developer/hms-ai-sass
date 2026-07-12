@@ -1,12 +1,13 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from app.core.validation import BranchId, ConsultationId, PatientId, UserId
 from app.modules.lab.models import LabOrderPriority, LabOrderSource, LabOrderStatus
 
 
 class LabTestCatalogCreate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     code: str = Field(min_length=2, max_length=40)
     name: str = Field(min_length=2, max_length=220)
     department: str | None = Field(default=None, max_length=120)
@@ -17,11 +18,11 @@ class LabTestCatalogCreate(BaseModel):
     purchase_price: int = Field(default=0, ge=0)
     turnaround_minutes: int | None = Field(default=None, ge=0)
     instructions: str | None = Field(default=None, max_length=1000)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class LabTestCatalogUpdate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     code: str | None = Field(default=None, min_length=2, max_length=40)
     name: str | None = Field(default=None, min_length=2, max_length=220)
     department: str | None = Field(default=None, max_length=120)
@@ -33,7 +34,7 @@ class LabTestCatalogUpdate(BaseModel):
     turnaround_minutes: int | None = Field(default=None, ge=0)
     instructions: str | None = Field(default=None, max_length=1000)
     is_active: bool | None = None
-    updated_by_user_id: str | None = None
+    updated_by_user_id: UserId | None = None
 
 
 class LabTestCatalogRead(LabTestCatalogCreate):
@@ -46,7 +47,7 @@ class LabTestCatalogRead(LabTestCatalogCreate):
 
 
 class LabTestPackageCreate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     code: str = Field(min_length=2, max_length=40)
     name: str = Field(min_length=2, max_length=220)
     description: str | None = Field(default=None, max_length=1000)
@@ -55,11 +56,11 @@ class LabTestPackageCreate(BaseModel):
     supplier_id: str | None = None
     purchase_price: int = Field(default=0, ge=0)
     test_ids: list[str] = Field(default_factory=list)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class LabTestPackageUpdate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     code: str | None = Field(default=None, min_length=2, max_length=40)
     name: str | None = Field(default=None, min_length=2, max_length=220)
     description: str | None = Field(default=None, max_length=1000)
@@ -69,7 +70,7 @@ class LabTestPackageUpdate(BaseModel):
     purchase_price: int | None = Field(default=None, ge=0)
     test_ids: list[str] | None = None
     is_active: bool | None = None
-    updated_by_user_id: str | None = None
+    updated_by_user_id: UserId | None = None
 
 
 class LabTestPackageRead(BaseModel):
@@ -95,7 +96,7 @@ class LabResultTemplateCreate(BaseModel):
     test_id: str | None = None
     name: str = Field(min_length=2, max_length=220)
     content: dict = Field(default_factory=dict)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class LabResultTemplateRead(BaseModel):
@@ -117,9 +118,9 @@ class LabOrderExternalItem(BaseModel):
 
 
 class LabOrderCreate(BaseModel):
-    branch_id: str
-    patient_id: str
-    consultation_id: str | None = None
+    branch_id: BranchId
+    patient_id: PatientId
+    consultation_id: ConsultationId | None = None
     source: LabOrderSource = LabOrderSource.OP_DIRECT
     priority: LabOrderPriority = LabOrderPriority.ROUTINE
     tests: str = Field(min_length=2, max_length=2000)
@@ -129,13 +130,20 @@ class LabOrderCreate(BaseModel):
     notes: str | None = Field(default=None, max_length=2000)
     external_referrer: str | None = Field(default=None, max_length=220)
     amount: int = Field(default=0, ge=0)
-    ordered_by_user_id: str | None = None
+    ordered_by_user_id: UserId | None = None
+
+    @model_validator(mode="after")
+    def validate_source_requirements(self) -> "LabOrderCreate":
+        if self.source == LabOrderSource.EXTERNAL_REFERRAL:
+            if not self.external_referrer or not self.external_referrer.strip():
+                raise ValueError("External referrer is required")
+        return self
 
 
 class LabOrderFromConsultation(BaseModel):
     amount: int = Field(default=0, ge=0)
     priority: LabOrderPriority = LabOrderPriority.ROUTINE
-    ordered_by_user_id: str | None = None
+    ordered_by_user_id: UserId | None = None
 
 
 class LabConsultationReferralItemRead(BaseModel):
@@ -163,7 +171,7 @@ class LabOrderStatusUpdate(BaseModel):
     status: LabOrderStatus
     notes: str | None = Field(default=None, max_length=2000)
     reason: str | None = Field(default=None, max_length=500)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class LabResultCreate(BaseModel):
@@ -172,7 +180,7 @@ class LabResultCreate(BaseModel):
     abnormal_flag: bool = False
     report_url: str | None = Field(default=None, max_length=500)
     report_file_name: str | None = Field(default=None, max_length=220)
-    released_by_user_id: str | None = None
+    released_by_user_id: UserId | None = None
 
 
 class LabOrderItemRead(BaseModel):
@@ -200,7 +208,7 @@ class LabOrderItemRead(BaseModel):
 class LabSampleCreate(BaseModel):
     barcode: str | None = Field(default=None, max_length=120)
     sample_type: str | None = Field(default=None, max_length=120)
-    collected_by_user_id: str | None = None
+    collected_by_user_id: UserId | None = None
     notes: str | None = Field(default=None, max_length=1000)
 
 

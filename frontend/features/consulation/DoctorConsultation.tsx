@@ -1105,6 +1105,22 @@ export function DoctorConsultation({
     }
   }
   async function signBackendConsultation() {
+    const hasComplaints = splitRows(complaints).length > 0;
+    const hasDiagnosis = Boolean(diagnosis.trim()) || splitRows(diagnosisRows).length > 0;
+    const medicinesMissingDoseOrFrequency = splitRows(medicineRows).some((line: string) => {
+      const [_name, dosage, frequency] = line.split("|").map((part: string) => part.trim());
+      return !dosage || !frequency;
+    });
+    if (!treatmentType || !hasComplaints || !hasDiagnosis || !notes.trim()) {
+      setMessage(
+        "Add treatment type, complaints, diagnosis, and doctor notes before signing.",
+      );
+      return;
+    }
+    if (medicinesMissingDoseOrFrequency) {
+      setMessage("Every prescribed medicine needs dosage and frequency before signing.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     try {

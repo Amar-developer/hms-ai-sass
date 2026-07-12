@@ -1,0 +1,6061 @@
+[
+  {
+    "method": "GET",
+    "path": "/",
+    "summary": "Root",
+    "tags": [
+      "platform"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/activity/{resource_type}/{resource_id}",
+    "summary": "Get the activity feed (events + comments) for a document",
+    "tags": [
+      "Activity"
+    ],
+    "path_params": [
+      "resource_type",
+      "resource_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/activity/{resource_type}/{resource_id}/comments",
+    "summary": "Add a comment to a document",
+    "tags": [
+      "Activity"
+    ],
+    "path_params": [
+      "resource_type",
+      "resource_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "body"
+    ],
+    "body_field_count": 1,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/appointments",
+    "summary": "List Appointments",
+    "tags": [
+      "appointments"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "department_id",
+      "practitioner_id",
+      "appointment_date",
+      "q",
+      "skip",
+      "limit"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/appointments",
+    "summary": "Book Appointment",
+    "tags": [
+      "appointments"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Idempotency-Key",
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "patient_id",
+      "department_id",
+      "practitioner_id",
+      "appointment_date"
+    ],
+    "body_field_count": 17,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/appointments/platform/all",
+    "summary": "List Platform Appointments",
+    "tags": [
+      "appointments"
+    ],
+    "path_params": [],
+    "query_params": [
+      "tenant_id",
+      "branch_id",
+      "department_id",
+      "appointment_date",
+      "q",
+      "skip",
+      "limit"
+    ],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/appointments/{appointment_id}",
+    "summary": "Get Appointment",
+    "tags": [
+      "appointments"
+    ],
+    "path_params": [
+      "appointment_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/appointments/{appointment_id}/follow-up",
+    "summary": "Book Follow Up Appointment",
+    "tags": [
+      "appointments"
+    ],
+    "path_params": [
+      "appointment_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "appointment_date"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/audit-events",
+    "summary": "List audit events",
+    "tags": [
+      "Audit"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/audit-events",
+    "summary": "Create audit event",
+    "tags": [
+      "Audit"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "action",
+      "resource_type",
+      "resource_id"
+    ],
+    "body_field_count": 8,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/audit-events/{event_id}",
+    "summary": "Get audit event",
+    "tags": [
+      "Audit"
+    ],
+    "path_params": [
+      "event_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/bootstrap-super-admin",
+    "summary": "Bootstrap Super Admin",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name",
+      "email",
+      "password"
+    ],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/change-password",
+    "summary": "Change Password",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "current_password",
+      "new_password"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/login",
+    "summary": "Login",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "email",
+      "password"
+    ],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/auth/logout",
+    "summary": "Logout",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/auth/me",
+    "summary": "Me",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/adjustment-requests/{request_id}/approve",
+    "summary": "Approve Billing Adjustment Request Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "request_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/adjustment-requests/{request_id}/execute",
+    "summary": "Execute Billing Adjustment Request Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "request_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/adjustment-requests/{request_id}/reject",
+    "summary": "Reject Billing Adjustment Request Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "request_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/discount-approvals",
+    "summary": "Request Discount Approval Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "requested_amount",
+      "reason"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/discount-approvals/{approval_id}/decision",
+    "summary": "Decide Discount Approval Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "approval_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "status"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/discount-offers",
+    "summary": "List Discount Offers Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/discount-offers",
+    "summary": "Create Discount Offer Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name",
+      "value"
+    ],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/billing/discount-offers/{offer_id}",
+    "summary": "Update Discount Offer Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "offer_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/doctor-fee-rules",
+    "summary": "List Doctor Fee Rules Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/doctor-fee-rules",
+    "summary": "Create Doctor Fee Rule Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "appointment_type",
+      "fee_amount"
+    ],
+    "body_field_count": 10,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/doctor-settlements/finalize",
+    "summary": "Finalize Doctor Settlement Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/doctor-settlements/summary",
+    "summary": "Doctor Settlement Summary Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [
+      "practitioner_id",
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/invoices",
+    "summary": "List Invoices",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "patient_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/from-consultation",
+    "summary": "Create Invoice From Consultation",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "consultation_id"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/from-lab-order",
+    "summary": "Create Invoice From Lab Order",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "lab_order_id"
+    ],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/from-pharmacy-issue",
+    "summary": "Create Invoice From Pharmacy Issue",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "pharmacy_issue_id"
+    ],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/invoices/{invoice_id}",
+    "summary": "Get Invoice",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/{invoice_id}/adjustment-requests",
+    "summary": "Create Billing Adjustment Request Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "request_type",
+      "reason"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/{invoice_id}/amend",
+    "summary": "Amend Invoice Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "reason"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/billing/invoices/{invoice_id}/amount",
+    "summary": "Update Invoice Amount",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "amount"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/{invoice_id}/cancel",
+    "summary": "Cancel Invoice Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "reason"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/{invoice_id}/credit-notes",
+    "summary": "Create Credit Note",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "amount",
+      "reason"
+    ],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier",
+    "summary": "Update Invoice Item Supplier Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id",
+      "item_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 1,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier-options",
+    "summary": "List Invoice Item Supplier Options Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id",
+      "item_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply",
+    "summary": "Apply Invoice Membership Benefit",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/invoices/{invoice_id}/payments",
+    "summary": "Record Payment",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "method",
+      "amount"
+    ],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/invoices/{invoice_id}/receipt.pdf",
+    "summary": "Invoice Receipt Pdf",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/payments/{payment_id}/refund",
+    "summary": "Refund Payment Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "payment_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "reason"
+    ],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/reports/due-collection",
+    "summary": "Due Collection Report Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/reports/revenue",
+    "summary": "Revenue Report Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [
+      "group_by",
+      "branch_id",
+      "from_date",
+      "to_date"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/billing/tax-rules",
+    "summary": "List Tax Rules Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/billing/tax-rules",
+    "summary": "Create Tax Rule Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/billing/tax-rules/{rule_id}",
+    "summary": "Update Tax Rule Endpoint",
+    "tags": [
+      "billing"
+    ],
+    "path_params": [
+      "rule_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/client-logs",
+    "summary": "Record frontend log",
+    "tags": [
+      "Client Logs"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "event",
+      "message"
+    ],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/consultations",
+    "summary": "List Consultations",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [],
+    "query_params": [
+      "patient_id",
+      "appointment_id",
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/consultations",
+    "summary": "Create Consultation",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "appointment_id"
+    ],
+    "body_field_count": 16,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/consultations/by-department/{department_id}/clinical-templates",
+    "summary": "List Department Clinical Templates",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [
+      "department_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/consultations/clinical-templates",
+    "summary": "List Clinical Templates",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [],
+    "query_params": [
+      "department_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/consultations/clinical-templates",
+    "summary": "Create Clinical Template",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name"
+    ],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/consultations/{consultation_id}",
+    "summary": "Get Consultation",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [
+      "consultation_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/consultations/{consultation_id}",
+    "summary": "Update Consultation",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [
+      "consultation_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/consultations/{consultation_id}/addendums",
+    "summary": "Create Addendum",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [
+      "consultation_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "note"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/consultations/{consultation_id}/sign",
+    "summary": "Sign Consultation",
+    "tags": [
+      "consultations"
+    ],
+    "path_params": [
+      "consultation_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 1,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/files",
+    "summary": "List files",
+    "tags": [
+      "Files"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "patient_id",
+      "category",
+      "attached_to_doctype",
+      "attached_to_name",
+      "q",
+      "limit"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/files",
+    "summary": "Upload file",
+    "tags": [
+      "Files"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "multipart/form-data",
+    "body_required_fields": [
+      "file"
+    ],
+    "body_field_count": 12,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/files/sync-uploads",
+    "summary": "Register uploaded files",
+    "tags": [
+      "Files"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/files/{file_id}",
+    "summary": "Deactivate file",
+    "tags": [
+      "Files"
+    ],
+    "path_params": [
+      "file_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/files/{file_id}",
+    "summary": "Update file metadata",
+    "tags": [
+      "Files"
+    ],
+    "path_params": [
+      "file_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/files/{file_id}/download",
+    "summary": "Download a file (authorized)",
+    "tags": [
+      "Files"
+    ],
+    "path_params": [
+      "file_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/health",
+    "summary": "Check API health",
+    "tags": [
+      "Health"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/home-care/bookings",
+    "summary": "List Bookings",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "patient_id",
+      "status_filter"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/home-care/bookings",
+    "summary": "Create Booking",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "patient_id",
+      "booking_type",
+      "recurrence",
+      "start_date",
+      "end_date",
+      "location",
+      "services"
+    ],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/home-care/bookings/{booking_id}",
+    "summary": "Update Booking",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [
+      "booking_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 12,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/home-care/bookings/{booking_id}/invoice",
+    "summary": "Get Booking Invoice",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [
+      "booking_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/home-care/bookings/{booking_id}/invoice",
+    "summary": "Generate Invoice",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [
+      "booking_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": [
+      "request body is not marked required"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/home-care/bookings/{booking_id}/visits",
+    "summary": "Create Visit Log",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [
+      "booking_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/home-care/bookings/{booking_id}/visits/{visit_id}",
+    "summary": "Delete Visit Log",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [
+      "booking_id",
+      "visit_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/home-care/bookings/{booking_id}/visits/{visit_id}",
+    "summary": "Update Visit Log",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [
+      "booking_id",
+      "visit_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/home-care/services",
+    "summary": "List Services",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/home-care/services",
+    "summary": "Create Service",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/home-care/services/{service_id}",
+    "summary": "Delete Service",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [
+      "service_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/home-care/services/{service_id}",
+    "summary": "Update Service",
+    "tags": [
+      "home-care"
+    ],
+    "path_params": [
+      "service_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/identity/permissions",
+    "summary": "List Permission Catalog",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/identity/roles",
+    "summary": "List Roles",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/identity/roles",
+    "summary": "Create Role",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name",
+      "key"
+    ],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/identity/roles/{role_id}",
+    "summary": "Delete Role",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [
+      "role_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/identity/roles/{role_id}",
+    "summary": "Update Role",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [
+      "role_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/identity/roles/{role_id}/assign/{target_tenant_id}",
+    "summary": "Assign Role To Tenant",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [
+      "role_id",
+      "target_tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/identity/roles/{role_id}/status",
+    "summary": "Change Role Status",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [
+      "role_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/identity/users",
+    "summary": "List Users",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/identity/users",
+    "summary": "Create User",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name",
+      "email",
+      "password"
+    ],
+    "body_field_count": 8,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/identity/users/{user_id}",
+    "summary": "Delete User",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [
+      "user_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/identity/users/{user_id}",
+    "summary": "Update User",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [
+      "user_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 8,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/identity/users/{user_id}/password-reset",
+    "summary": "Reset User Password",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [
+      "user_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "new_password"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/identity/users/{user_id}/status",
+    "summary": "Change User Status",
+    "tags": [
+      "identity"
+    ],
+    "path_params": [
+      "user_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 8,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/admissions",
+    "summary": "List Admissions",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "patient_id",
+      "status_filter"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions",
+    "summary": "Create Admission",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "patient_id",
+      "ward",
+      "bed"
+    ],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/from-appointment/{appointment_id}",
+    "summary": "Convert Op To Ip",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "appointment_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "patient_id",
+      "ward",
+      "bed"
+    ],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/ip/admissions/{admission_id}",
+    "summary": "Update Admission",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/admissions/{admission_id}/billing-items",
+    "summary": "List Billing Items",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/billing-items",
+    "summary": "Add Billing Item",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "description",
+      "unit_amount"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/admissions/{admission_id}/charges",
+    "summary": "List Charges",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/charges",
+    "summary": "Add Charge",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "description",
+      "unit_amount"
+    ],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/consents",
+    "summary": "Create Consent",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "title",
+      "content"
+    ],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/consultations",
+    "summary": "Create Ip Consultation",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 9,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/discharge-summary",
+    "summary": "Create Discharge Summary",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "final_diagnosis"
+    ],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/document",
+    "summary": "Upload Admission Document",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "multipart/form-data",
+    "body_required_fields": [
+      "file"
+    ],
+    "body_field_count": 1,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/admissions/{admission_id}/documents",
+    "summary": "List Admission Documents",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/documents",
+    "summary": "Upload Admission Documents",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "multipart/form-data",
+    "body_required_fields": [
+      "files"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/admissions/{admission_id}/invoice",
+    "summary": "Get Ip Invoice",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/invoice",
+    "summary": "Generate Ip Invoice",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/admissions/{admission_id}/medication-administrations",
+    "summary": "List Medication Administrations",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/admissions/{admission_id}/medication-orders",
+    "summary": "List Medication Orders",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/medication-orders",
+    "summary": "Create Medication Order",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "medicine_name"
+    ],
+    "body_field_count": 8,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/medication-orders/{order_id}/administrations",
+    "summary": "Administer Medication",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id",
+      "order_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/admissions/{admission_id}/treatments",
+    "summary": "List Treatments",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/admissions/{admission_id}/treatments",
+    "summary": "Add Treatment",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "admission_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "notes"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/consents/{consent_id}/sign",
+    "summary": "Sign Consent",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "consent_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/consultations/{consultation_id}/sign",
+    "summary": "Sign Ip Consultation",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "consultation_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/discharge-summaries/{summary_id}/finalize",
+    "summary": "Finalize Discharge Summary",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "summary_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/discharge-summaries/{summary_id}/pdf",
+    "summary": "Discharge Summary Pdf",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "summary_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/ip/rooms",
+    "summary": "List Rooms",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "ward_type",
+      "room_type",
+      "available_from",
+      "available_to",
+      "include_occupied"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/ip/rooms",
+    "summary": "Create Room",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "ward_name",
+      "room_number",
+      "bed_number"
+    ],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/ip/rooms/{room_id}",
+    "summary": "Update Room",
+    "tags": [
+      "ip"
+    ],
+    "path_params": [
+      "room_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/catalog/available-tests",
+    "summary": "List Available Lab Tests",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "search"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/catalog/packages",
+    "summary": "List Lab Packages",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/lab/catalog/packages",
+    "summary": "Create Lab Package",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "code",
+      "name"
+    ],
+    "body_field_count": 10,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/lab/catalog/packages/{package_id}",
+    "summary": "Delete Lab Package",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "package_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/lab/catalog/packages/{package_id}",
+    "summary": "Update Lab Package",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "package_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/catalog/popular-tests",
+    "summary": "List Popular Lab Tests",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [
+      "limit"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/catalog/tests",
+    "summary": "List Lab Tests",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "search"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/lab/catalog/tests",
+    "summary": "Create Lab Test",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "code",
+      "name"
+    ],
+    "body_field_count": 12,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/lab/catalog/tests/{test_id}",
+    "summary": "Delete Lab Test",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "test_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/lab/catalog/tests/{test_id}",
+    "summary": "Update Lab Test",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "test_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 13,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/consultation-referrals",
+    "summary": "List Lab Consultation Referrals",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/orders",
+    "summary": "List Lab Orders",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [
+      "patient_id",
+      "status_filter",
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/lab/orders",
+    "summary": "Create Lab Order",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "patient_id",
+      "tests"
+    ],
+    "body_field_count": 13,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/lab/orders/from-consultation/{consultation_id}",
+    "summary": "Create Lab Order From Consultation",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "consultation_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/orders/{order_id}",
+    "summary": "Get Lab Order",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "order_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/orders/{order_id}/report.pdf",
+    "summary": "Lab Report Pdf",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "order_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/lab/orders/{order_id}/results",
+    "summary": "Add Lab Result",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "order_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "result_summary"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/lab/orders/{order_id}/samples",
+    "summary": "Collect Lab Sample",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "order_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/lab/orders/{order_id}/status",
+    "summary": "Update Lab Order Status",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [
+      "order_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "status"
+    ],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/lab/result-templates",
+    "summary": "List Result Templates",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [
+      "test_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/lab/result-templates",
+    "summary": "Create Result Template",
+    "tags": [
+      "lab"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name"
+    ],
+    "body_field_count": 4,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/modules",
+    "summary": "List product modules",
+    "tags": [
+      "Modules"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/notifications",
+    "summary": "List notifications",
+    "tags": [
+      "Notifications"
+    ],
+    "path_params": [],
+    "query_params": [
+      "provider",
+      "status_filter",
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/notifications",
+    "summary": "Queue notification",
+    "tags": [
+      "Notifications"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "provider",
+      "event_type",
+      "recipient",
+      "message"
+    ],
+    "body_field_count": 9,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/patient-subscriptions/benefits/preview",
+    "summary": "Preview Benefits",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "patient_id",
+      "branch_id",
+      "service_type"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/patient-subscriptions/enrollments",
+    "summary": "List Enrollments",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "patient_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/patient-subscriptions/enrollments",
+    "summary": "Enroll Patient",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "patient_id",
+      "plan_id"
+    ],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/patient-subscriptions/enrollments/{enrollment_id}",
+    "summary": "Delete Enrollment",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [
+      "enrollment_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/patient-subscriptions/enrollments/{enrollment_id}",
+    "summary": "Update Enrollment",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [
+      "enrollment_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/patient-subscriptions/plans",
+    "summary": "List Plans",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "include_inactive"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/patient-subscriptions/plans",
+    "summary": "Create Plan",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name",
+      "duration_days"
+    ],
+    "body_field_count": 19,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/patient-subscriptions/plans/{plan_id}",
+    "summary": "Delete Plan",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [
+      "plan_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/patient-subscriptions/plans/{plan_id}",
+    "summary": "Update Plan",
+    "tags": [
+      "patient-subscriptions"
+    ],
+    "path_params": [
+      "plan_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 20,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/patients",
+    "summary": "Search Patients",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [],
+    "query_params": [
+      "q",
+      "branch_id",
+      "active_only",
+      "limit"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/patients",
+    "summary": "Create Patient",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "full_name"
+    ],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/patients/duplicates",
+    "summary": "Detect Duplicate Patients",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "full_name"
+    ],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/patients/{patient_id}",
+    "summary": "Delete Patient",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [
+      "patient_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/patients/{patient_id}",
+    "summary": "Get Patient",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [
+      "patient_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/patients/{patient_id}",
+    "summary": "Update Patient",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [
+      "patient_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/patients/{patient_id}/alerts",
+    "summary": "List Patient Alerts",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [
+      "patient_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/patients/{patient_id}/alerts",
+    "summary": "Create Patient Alert",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [
+      "patient_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "alert_type",
+      "title"
+    ],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/patients/{patient_id}/photo",
+    "summary": "Upload Patient Photo",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [
+      "patient_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "multipart/form-data",
+    "body_required_fields": [
+      "file"
+    ],
+    "body_field_count": 1,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/patients/{patient_id}/summary",
+    "summary": "Get Patient Summary",
+    "tags": [
+      "patients"
+    ],
+    "path_params": [
+      "patient_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/batches",
+    "summary": "List Batches",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "medicine_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/catalog/available-medicines",
+    "summary": "List Available Medicines",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "search",
+      "page_size",
+      "current_page"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/catalog/popular-medicines",
+    "summary": "List Popular Medicines",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "limit"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/issues",
+    "summary": "List Pharmacy Issues",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "patient_id",
+      "status_filter",
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/pharmacy/issues",
+    "summary": "Create Pharmacy Issue",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "patient_id",
+      "medicine_text"
+    ],
+    "body_field_count": 10,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/pharmacy/issues/from-consultation/{consultation_id}",
+    "summary": "Create Pharmacy Issue From Consultation",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "consultation_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/issues/{issue_id}",
+    "summary": "Get Pharmacy Issue",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "issue_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/pharmacy/issues/{issue_id}/amount",
+    "summary": "Update Pharmacy Issue Amount",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "issue_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "amount"
+    ],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/pharmacy/issues/{issue_id}/billing-link",
+    "summary": "Link Pharmacy Billing",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "issue_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "billing_invoice_id"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/pharmacy/issues/{issue_id}/status",
+    "summary": "Update Pharmacy Issue Status",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "issue_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "status"
+    ],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/low-stock",
+    "summary": "List Low Stock",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/medicines",
+    "summary": "List Medicines",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "search"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/pharmacy/medicines",
+    "summary": "Create Medicine",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "code",
+      "name"
+    ],
+    "body_field_count": 13,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/pharmacy/medicines/{medicine_id}",
+    "summary": "Delete Medicine",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "medicine_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/pharmacy/medicines/{medicine_id}",
+    "summary": "Update Medicine",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "medicine_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/pharmacy/purchases",
+    "summary": "Create Purchase",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "items"
+    ],
+    "body_field_count": 8,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/pharmacy/returns",
+    "summary": "Create Pharmacy Return",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "reason",
+      "items"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/stock-ledger",
+    "summary": "List Stock Ledger",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "medicine_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/pharmacy/suppliers",
+    "summary": "List Suppliers",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "include_inactive"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/pharmacy/suppliers",
+    "summary": "Create Supplier",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/pharmacy/suppliers/{supplier_id}",
+    "summary": "Delete Supplier",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "supplier_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/pharmacy/suppliers/{supplier_id}",
+    "summary": "Update Supplier",
+    "tags": [
+      "pharmacy"
+    ],
+    "path_params": [
+      "supplier_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/physiotherapy/cases",
+    "summary": "List Cases",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "patient_id",
+      "care_context"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/physiotherapy/cases",
+    "summary": "Create Case",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "patient_id",
+      "assessment_date",
+      "body_region",
+      "condition",
+      "treatment_goal"
+    ],
+    "body_field_count": 16,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/physiotherapy/cases/{case_id}",
+    "summary": "Update Case",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [
+      "case_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 10,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/physiotherapy/cases/{case_id}/consent",
+    "summary": "Upload Consent Form",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [
+      "case_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "multipart/form-data",
+    "body_required_fields": [
+      "files"
+    ],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/physiotherapy/cases/{case_id}/invoice",
+    "summary": "Get Case Invoice",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [
+      "case_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/physiotherapy/cases/{case_id}/invoice",
+    "summary": "Generate Invoice",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [
+      "case_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": [
+      "request body is not marked required"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/physiotherapy/cases/{case_id}/sessions",
+    "summary": "List Sessions",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [
+      "case_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/physiotherapy/cases/{case_id}/sessions",
+    "summary": "Create Session",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [
+      "case_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "session_date",
+      "modality_type",
+      "treatment_area"
+    ],
+    "body_field_count": 13,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/physiotherapy/equipment",
+    "summary": "List Equipment",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/physiotherapy/equipment",
+    "summary": "Create Equipment",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name",
+      "modality_type"
+    ],
+    "body_field_count": 10,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/physiotherapy/equipment/{equipment_id}",
+    "summary": "Delete Equipment",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [
+      "equipment_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/physiotherapy/equipment/{equipment_id}",
+    "summary": "Update Equipment",
+    "tags": [
+      "physiotherapy"
+    ],
+    "path_params": [
+      "equipment_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners",
+    "summary": "List Practitioners",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "department_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/practitioners",
+    "summary": "Create Practitioner",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "full_name",
+      "branch_ids",
+      "department_ids"
+    ],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners/schedules",
+    "summary": "List All Practitioner Schedules",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [],
+    "query_params": [
+      "practitioner_id",
+      "branch_id",
+      "department_id",
+      "is_active"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/practitioners/schedules/{schedule_id}",
+    "summary": "Delete Practitioner Schedule",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "schedule_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/practitioners/schedules/{schedule_id}",
+    "summary": "Update Practitioner Schedule",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "schedule_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/practitioners/{practitioner_id}",
+    "summary": "Delete Practitioner",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners/{practitioner_id}",
+    "summary": "Get Practitioner",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/practitioners/{practitioner_id}",
+    "summary": "Update Practitioner",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 12,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners/{practitioner_id}/availability",
+    "summary": "Check Practitioner Schedule Availability",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [
+      "branch_id",
+      "appointment_date",
+      "appointment_time",
+      "department_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners/{practitioner_id}/calendar",
+    "summary": "Get Practitioner Calendar",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [
+      "branch_id",
+      "start_date",
+      "end_date",
+      "department_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners/{practitioner_id}/eligibility",
+    "summary": "Check Practitioner Eligibility",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [
+      "branch_id",
+      "department_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners/{practitioner_id}/leaves",
+    "summary": "List Practitioner Leaves",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/practitioners/{practitioner_id}/leaves",
+    "summary": "Create Practitioner Leave",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "start_date",
+      "end_date"
+    ],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners/{practitioner_id}/room-assignments",
+    "summary": "List Practitioner Room Assignments",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/practitioners/{practitioner_id}/room-assignments",
+    "summary": "Create Practitioner Room Assignment",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "room_name",
+      "start_time",
+      "end_time"
+    ],
+    "body_field_count": 8,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/practitioners/{practitioner_id}/schedules",
+    "summary": "List Practitioner Schedules",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/practitioners/{practitioner_id}/schedules",
+    "summary": "Create Practitioner Schedule",
+    "tags": [
+      "practitioners"
+    ],
+    "path_params": [
+      "practitioner_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "branch_id",
+      "department_id",
+      "weekday",
+      "start_time",
+      "end_time"
+    ],
+    "body_field_count": 10,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/queue",
+    "summary": "List Queue",
+    "tags": [
+      "queue"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "include_completed"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/queue/display",
+    "summary": "Queue Display",
+    "tags": [
+      "queue"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "display_mode"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/queue/{entry_id}/call",
+    "summary": "Call Token",
+    "tags": [
+      "queue"
+    ],
+    "path_params": [
+      "entry_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/queue/{entry_id}/cancel",
+    "summary": "Cancel",
+    "tags": [
+      "queue"
+    ],
+    "path_params": [
+      "entry_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/queue/{entry_id}/mark-not-available",
+    "summary": "Mark Not Available",
+    "tags": [
+      "queue"
+    ],
+    "path_params": [
+      "entry_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/queue/{entry_id}/no-show",
+    "summary": "Mark No Show",
+    "tags": [
+      "queue"
+    ],
+    "path_params": [
+      "entry_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/queue/{entry_id}/requeue",
+    "summary": "Requeue",
+    "tags": [
+      "queue"
+    ],
+    "path_params": [
+      "entry_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/queue/{entry_id}/start-consultation",
+    "summary": "Start Consultation",
+    "tags": [
+      "queue"
+    ],
+    "path_params": [
+      "entry_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/readiness",
+    "summary": "Check API readiness",
+    "tags": [
+      "Health"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/reports/monthly-email/config",
+    "summary": "Get Monthly Report Config",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/reports/monthly-email/config",
+    "summary": "Update Monthly Report Config",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/reports/monthly-email/jobs",
+    "summary": "List Monthly Report Jobs",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [],
+    "query_params": [
+      "limit"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/reports/monthly-email/jobs/{job_id}/download",
+    "summary": "Download Monthly Report Job",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [
+      "job_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/reports/monthly-email/send",
+    "summary": "Send Monthly Report Now",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/reports/monthly-snapshots",
+    "summary": "List Monthly Snapshots",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [],
+    "query_params": [
+      "branch_id",
+      "limit"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/reports/monthly-snapshots/archive",
+    "summary": "Archive Monthly Snapshot",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/reports/monthly-snapshots/{snapshot_id}",
+    "summary": "Get Monthly Snapshot",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [
+      "snapshot_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/reports/profit-email/send",
+    "summary": "Send Profit Report Now",
+    "tags": [
+      "reports"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "from_date",
+      "to_date"
+    ],
+    "body_field_count": 10,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/settings",
+    "summary": "List settings",
+    "tags": [
+      "Settings"
+    ],
+    "path_params": [],
+    "query_params": [
+      "module"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PUT",
+    "path": "/api/v1/settings",
+    "summary": "Create or update setting",
+    "tags": [
+      "Settings"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "module",
+      "key",
+      "value"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/settings/bundle",
+    "summary": "Resolve settings bundle",
+    "tags": [
+      "Settings"
+    ],
+    "path_params": [],
+    "query_params": [
+      "module",
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/settings/resolve",
+    "summary": "Resolve setting",
+    "tags": [
+      "Settings"
+    ],
+    "path_params": [],
+    "query_params": [
+      "key",
+      "module",
+      "branch_id"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/settings/sidebar-modules",
+    "summary": "Get sidebar modules",
+    "tags": [
+      "Settings"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans",
+    "summary": "List Plans",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/subscription-plans",
+    "summary": "Create Plan",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "key",
+      "name"
+    ],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/announcements",
+    "summary": "Get Subscription Announcements",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/credits",
+    "summary": "List Subscription Credits",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/subscription-plans/credits",
+    "summary": "Purchase Subscription Credit",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "quantity"
+    ],
+    "body_field_count": 8,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/entitlements",
+    "summary": "Get Entitlements",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/invoices",
+    "summary": "List Subscription Invoices",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/subscription-plans/invoices",
+    "summary": "Create Subscription Invoice",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/subscription-plans/invoices/{invoice_id}/payment-failed",
+    "summary": "Mark Subscription Payment Failed",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "failed_reason"
+    ],
+    "body_field_count": 3,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/subscription-plans/invoices/{invoice_id}/settle",
+    "summary": "Settle Subscription Invoice",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [
+      "invoice_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "amount"
+    ],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/platform/revenue-summary",
+    "summary": "Get Platform Revenue Summary",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/reports/revenue",
+    "summary": "Subscription Revenue Report",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [
+      "tenant_id",
+      "from_date",
+      "to_date",
+      "status",
+      "q",
+      "page",
+      "page_size",
+      "export"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/tenant-subscriptions",
+    "summary": "List Tenant Subscriptions",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/subscription-plans/tenant-subscriptions",
+    "summary": "Create Tenant Subscription",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "plan_id",
+      "starts_on"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/tenant-subscriptions/active",
+    "summary": "Get Active Tenant Subscription",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/subscription-plans/usage",
+    "summary": "Get Subscription Usage",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/subscription-plans/{plan_id}",
+    "summary": "Update Plan",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [
+      "plan_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/subscription-plans/{plan_id}/status",
+    "summary": "Change Plan Status",
+    "tags": [
+      "subscriptions"
+    ],
+    "path_params": [
+      "plan_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "is_active"
+    ],
+    "body_field_count": 1,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tenants",
+    "summary": "List Tenants",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants",
+    "summary": "Create Tenant",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name"
+    ],
+    "body_field_count": 12,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants/branches/{branch_id}/assign/{target_tenant_id}",
+    "summary": "Assign Branch To Tenant",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "branch_id",
+      "target_tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tenants/current/branding",
+    "summary": "Get Current Tenant Branding",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants/departments/{department_id}/assign/{target_tenant_id}",
+    "summary": "Assign Department To Tenant",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "department_id",
+      "target_tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants/onboard",
+    "summary": "Onboard Tenant",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "tenant"
+    ],
+    "body_field_count": 14,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/tenants/{tenant_id}",
+    "summary": "Delete Tenant",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tenants/{tenant_id}",
+    "summary": "Get Tenant",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/tenants/{tenant_id}",
+    "summary": "Update Tenant",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tenants/{tenant_id}/branches",
+    "summary": "List Branches",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants/{tenant_id}/branches",
+    "summary": "Create Branch",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name",
+      "code"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/tenants/{tenant_id}/branches/{branch_id}",
+    "summary": "Delete Branch",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id",
+      "branch_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/tenants/{tenant_id}/branches/{branch_id}",
+    "summary": "Update Branch",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id",
+      "branch_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants/{tenant_id}/branches/{branch_id}/status",
+    "summary": "Update Branch Status",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id",
+      "branch_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 7,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tenants/{tenant_id}/departments",
+    "summary": "List Departments",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants/{tenant_id}/departments",
+    "summary": "Create Department",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "name"
+    ],
+    "body_field_count": 6,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/tenants/{tenant_id}/departments/{department_id}",
+    "summary": "Delete Department",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id",
+      "department_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/tenants/{tenant_id}/departments/{department_id}",
+    "summary": "Get Department",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id",
+      "department_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/tenants/{tenant_id}/departments/{department_id}",
+    "summary": "Update Department",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id",
+      "department_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants/{tenant_id}/departments/{department_id}/status",
+    "summary": "Update Department Status",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id",
+      "department_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 5,
+    "weak_body_fields": [],
+    "issues": [
+      "request body has no required fields"
+    ]
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/tenants/{tenant_id}/logo",
+    "summary": "Upload Tenant Logo",
+    "tags": [
+      "tenants"
+    ],
+    "path_params": [
+      "tenant_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "multipart/form-data",
+    "body_required_fields": [
+      "file"
+    ],
+    "body_field_count": 1,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/health",
+    "summary": "Health",
+    "tags": [
+      "platform"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/readiness",
+    "summary": "Readiness",
+    "tags": [
+      "platform"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  }
+]

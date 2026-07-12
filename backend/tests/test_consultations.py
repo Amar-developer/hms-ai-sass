@@ -23,6 +23,7 @@ def setup_booking(client: TestClient) -> dict:
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
             "reason": "Fever",
+            "department_id": "general",
             "practitioner_id": "doctor_demo",
         },
     )
@@ -44,6 +45,8 @@ def create_consultation(
         json={
             "appointment_id": appointment_id,
             "chief_complaint": "Fever and body pain",
+            "diagnosis": "Viral fever",
+            "clinical_notes": "Hydration advised",
             "created_by_user_id": "doctor_demo",
         },
     )
@@ -87,6 +90,7 @@ def test_structured_consultation_rows_templates_and_signed_immutability(
         headers={"X-Tenant-ID": tenant_id},
         json={
             "appointment_id": appointment_id,
+            "clinical_notes": "Hydration advised",
             "vitals": [{"name": "BP", "value": "120/80", "unit": "mmHg"}],
             "complaints": [
                 {"complaint": "Fever", "duration": "2 days", "severity": "medium"}
@@ -137,6 +141,26 @@ def test_structured_consultation_rows_templates_and_signed_immutability(
     assert template.json()["content"]["diagnoses"] == ["Viral fever"]
     assert signed.json()["status"] == "signed"
     assert locked_update.status_code == 409
+
+
+def test_sign_requires_clinical_content(client: TestClient):
+    data = setup_booking(client)
+    tenant_id = data["tenant"]["id"]
+    appointment_id = data["booking"]["appointment"]["id"]
+    consultation = client.post(
+        "/api/v1/consultations",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"appointment_id": appointment_id},
+    ).json()
+
+    signed = client.post(
+        f"/api/v1/consultations/{consultation['id']}/sign",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+
+    assert signed.status_code == 400
+    assert "Missing:" in signed.json()["detail"]
 
 
 def test_sign_locks_consultation_and_marks_queue_completed(client: TestClient):

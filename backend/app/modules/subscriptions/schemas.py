@@ -3,6 +3,7 @@ from datetime import date
 
 from pydantic import BaseModel, Field
 
+from app.core.validation import PlanId, TenantId
 from app.modules.subscriptions.models import (
     CreditStatus,
     SubscriptionInvoiceStatus,
@@ -43,7 +44,7 @@ class SubscriptionPlanRead(SubscriptionPlanCreate):
 
 
 class TenantSubscriptionCreate(BaseModel):
-    plan_id: str
+    plan_id: PlanId
     starts_on: date
     ends_on: date | None = None
     is_trial: bool = False
@@ -63,7 +64,7 @@ class TenantSubscriptionRead(TenantSubscriptionCreate):
 
 
 class SubscriptionCreditCreate(BaseModel):
-    tenant_id: str | None = None
+    tenant_id: TenantId | None = None
     subscription_id: str | None = None
     credit_type: str = Field(default="patients", max_length=80)
     quantity: int = Field(ge=1)
@@ -85,7 +86,7 @@ class SubscriptionCreditRead(SubscriptionCreditCreate):
 
 
 class SubscriptionInvoiceCreate(BaseModel):
-    tenant_id: str | None = None
+    tenant_id: TenantId | None = None
     subscription_id: str | None = None
     credit_id: str | None = None
     description: str = Field(default="", max_length=500)

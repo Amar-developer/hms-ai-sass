@@ -1,4 +1,5 @@
 import { Card,ActionButton } from "@/app/components/common/ui";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { displayDateTime } from "@/utils/helper";
 
 export function WorklistDetailModal({
@@ -8,6 +9,7 @@ export function WorklistDetailModal({
   createdAt,
   items,
   onClose,
+  apiSession,
 }: any) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
@@ -38,6 +40,7 @@ export function WorklistDetailModal({
             ))
           )}
         </div>
+        <ActivityLog resourceType="lab_order" resourceId={id} apiSession={apiSession} />
       </Card>
     </div>
   );

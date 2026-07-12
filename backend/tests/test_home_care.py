@@ -92,7 +92,10 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
             "patient_id": patient_id,
             "assigned_staff_name": "Nurse Lakshmi",
             "staff_type": "nurse",
+            "booking_type": "home_care",
             "recurrence": "Daily",
+            "start_date": date.today().isoformat(),
+            "end_date": date.today().isoformat(),
             "location": "12 Home Street, Chennai",
             "complaints": "Post-discharge support",
             "services": [

@@ -141,7 +141,7 @@ def update_case(
 @router.post("/cases/{case_id}/consent", response_model=PhysiotherapyCaseRead)
 async def upload_consent_form(
     case_id: str,
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] = File(..., min_length=1),
     notes: str | None = Form(default=None),
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),

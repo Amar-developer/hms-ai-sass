@@ -7,6 +7,7 @@ from app.core.access_control import current_doctor_practitioner_id
 from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
+from app.core.validation import BranchId, DepartmentId, PractitionerId
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.practitioners.models import (
@@ -54,8 +55,8 @@ def create_practitioner(
 @router.get("", response_model=list[PractitionerRead])
 def list_practitioners(
     tenant_id: str = Depends(require_tenant_id),
-    branch_id: str | None = None,
-    department_id: str | None = None,
+    branch_id: BranchId | None = None,
+    department_id: DepartmentId | None = None,
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(
@@ -88,9 +89,9 @@ def list_practitioners(
 @router.get("/schedules", response_model=list[PractitionerScheduleRead])
 def list_all_practitioner_schedules(
     tenant_id: str = Depends(require_tenant_id),
-    practitioner_id: str | None = None,
-    branch_id: str | None = None,
-    department_id: str | None = None,
+    practitioner_id: PractitionerId | None = None,
+    branch_id: BranchId | None = None,
+    department_id: DepartmentId | None = None,
     is_active: bool | None = None,
     session: Session = Depends(get_session),
     _current_user=Depends(
@@ -310,9 +311,9 @@ def list_practitioner_room_assignments(
     "/{practitioner_id}/eligibility", response_model=PractitionerEligibilityRead
 )
 def check_practitioner_eligibility(
-    practitioner_id: str,
-    branch_id: str,
-    department_id: str | None = None,
+    practitioner_id: PractitionerId,
+    branch_id: BranchId,
+    department_id: DepartmentId | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     _current_user=Depends(
@@ -338,11 +339,11 @@ def check_practitioner_eligibility(
     "/{practitioner_id}/availability", response_model=PractitionerAvailabilityRead
 )
 def check_practitioner_schedule_availability(
-    practitioner_id: str,
-    branch_id: str,
+    practitioner_id: PractitionerId,
+    branch_id: BranchId,
     appointment_date: date,
     appointment_time: time,
-    department_id: str | None = None,
+    department_id: DepartmentId | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     _current_user=Depends(
@@ -368,11 +369,11 @@ def check_practitioner_schedule_availability(
 
 @router.get("/{practitioner_id}/calendar", response_model=PractitionerCalendarRead)
 def get_practitioner_calendar(
-    practitioner_id: str,
-    branch_id: str,
+    practitioner_id: PractitionerId,
+    branch_id: BranchId,
     start_date: date,
     end_date: date,
-    department_id: str | None = None,
+    department_id: DepartmentId | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     _current_user=Depends(

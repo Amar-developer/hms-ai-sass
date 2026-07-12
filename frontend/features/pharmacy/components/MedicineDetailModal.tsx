@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api";
 import { displayDateTime } from "@/utils/helper";
 import { useEffect, useState } from "react";
 import { Card, ActionButton } from "@/app/components/common/ui";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { normalizeMedicineSchedule, parseMedicines } from "../helpers";
 
 export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any) {
@@ -91,6 +92,7 @@ export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any
             No medicines found.
           </p>
         )}
+        <ActivityLog resourceType="pharmacy_issue" resourceId={issue?.id} apiSession={apiSession} />
       </Card>
     </div>
   );

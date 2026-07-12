@@ -277,7 +277,7 @@ def list_admission_documents(
 async def upload_admission_documents(
     admission_id: str,
     document_type: str = Form(default="admission"),
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] = File(..., min_length=1),
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.IP_EDIT)),

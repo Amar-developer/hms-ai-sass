@@ -10,6 +10,7 @@ import {
   Badge,
   SearchableSelect,
 } from "@/app/components/common/ui";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { FormField } from "@/app/components/FormElements";
 import { displayDateTime, formatPrice } from "@/utils/helper";
 import { displayPatientGender } from "@/features/patients/helpers";
@@ -1076,6 +1077,13 @@ export function ConsultationWorkspace(props: any) {
                 Call Next Patient
               </button>
             </div>
+            {selected?.consultationId && (
+              <ActivityLog
+                resourceType="consultation"
+                resourceId={selected.consultationId}
+                apiSession={apiSession}
+              />
+            )}
           </div>
         )}
       </Card>

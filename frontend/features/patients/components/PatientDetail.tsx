@@ -7,6 +7,7 @@ import { CompactMetric } from "./CompactMetric";
 import { invoiceSource } from "@/features/billing/helpers";
 import { StatusBadge } from "./StatusBadge";
 import { Card, StatusToast,Badge,Button } from "@/app/components/common/ui";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { Info } from "@/app/components/common/Info";
 import { Empty } from "@/app/components/common/Empty";
 import { DetailSection } from "./DetailSection";
@@ -803,29 +804,7 @@ export function PatientDetail({
         </DetailSection>
       )}
 
-      <div className="px-1 pb-2">
-        <h4 className="text-sm font-black text-slate-950">Timeline</h4>
-        <p className="mt-0.5 text-xs font-semibold text-slate-500">
-          Patient activity in date order.
-        </p>
-        {(!summary?.timeline || summary.timeline.length === 0) && (
-          <p className="mt-3 table-data text-slate-500">No timeline events.</p>
-        )}
-        <div className="mt-3 space-y-2">
-          {summary?.timeline?.map((event: any, index: number) => (
-            <p
-              key={`${event.type}-${index}`}
-              className="text-sm text-slate-700"
-            >
-              <span className="font-black text-slate-950">
-                {fmtDate(event.recorded_at)}
-              </span>
-              <span className="mx-2 text-slate-300">|</span>
-              <span>{event.title}</span>
-            </p>
-          ))}
-        </div>
-      </div>
+      <ActivityLog resourceType="patient" resourceId={patient?.id} apiSession={apiSession} />
     </div>
   );
 }
