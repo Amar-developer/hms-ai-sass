@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from app.core.access_control import scoped_branch_id
 from app.core.auth import get_current_user, require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
+from app.core.validation import BranchId
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 from app.modules.settings.models import SettingKey
@@ -44,7 +45,7 @@ def upsert_admin_setting(
 )
 def list_admin_settings(
     tenant_id: str = Depends(require_tenant_id),
-    module: str | None = None,
+    module: str | None = Query(default=None, min_length=2, max_length=80),
     current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),
 ) -> list[AdminSettingRead]:
@@ -82,9 +83,9 @@ def get_sidebar_role_modules(
     ],
 )
 def resolve_admin_setting(
-    module: str,
     key: SettingKey,
-    branch_id: str | None = None,
+    module: str = Query(min_length=2, max_length=80),
+    branch_id: BranchId | None = None,
     tenant_id: str = Depends(require_tenant_id),
     current_user: User = Depends(
         require_any_permission(
@@ -109,8 +110,8 @@ def resolve_admin_setting(
     dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
 )
 def resolve_settings_bundle(
-    module: str,
-    branch_id: str | None = None,
+    module: str = Query(min_length=2, max_length=80),
+    branch_id: BranchId | None = None,
     tenant_id: str = Depends(require_tenant_id),
     current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
     session: Session = Depends(get_session),

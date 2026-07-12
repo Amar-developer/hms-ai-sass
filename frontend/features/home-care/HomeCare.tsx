@@ -254,6 +254,29 @@ export function HomeCare({
 
   async function handleSaveBooking(data: BookingFormValues) {
     if (!apiSession) return false;
+    const serviceRows = lineItems.filter((row) => row.service_id || row.description);
+    if (serviceRows.length === 0) {
+      setError("At least one service is required.");
+      return false;
+    }
+    if (data.status !== "requested") {
+      setError("Create bookings as Requested, then assign staff before changing status.");
+      return false;
+    }
+    if (
+      data.booking_type === "home_visit" &&
+      serviceRows.some((row) => !row.service_id)
+    ) {
+      setError("Select a configured home visit service for every visit line.");
+      return false;
+    }
+    if (
+      data.booking_type === "home_care" &&
+      serviceRows.some((row) => !row.service_id && !String(row.description || "").trim())
+    ) {
+      setError("Enter a service name for every manual home care line.");
+      return false;
+    }
     setBusy("save");
     setMessage("");
     setError("");
@@ -274,8 +297,7 @@ export function HomeCare({
             end_date: data.end_date || null,
             status: data.status,
             notes: data.notes || null,
-            services: lineItems
-              .filter((row) => row.service_id || row.description)
+            services: serviceRows
               .map((row) => ({
                 service_id: row.service_id || null,
                 service_category: isHomeVisit

@@ -2,6 +2,7 @@ import { displayDate, money, patientName } from "@/utils/helper";
 import { bookingTotal, isBookingLocked, patientCode, userName, userTypeKey } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Info } from "@/app/components/common/Info";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { SearchableSelect,ActionButton,ActionGroup,Button,Card, Input,Badge } from "@/app/components/common/ui";
 import { homeCareHourPrices, staffTypeOptions, visitLogStatuses } from "../constants";
 import { DateField, FormField, NumberField, SearchableSelectField, SelectField, TextareaField } from "@/app/components/FormElements";
@@ -26,6 +27,7 @@ export function BookingDetail({
   onInvoice,
   onOpenInvoiceModule,
   canManage = false,
+  apiSession,
 }: any) {
   if (!booking) {
     return (
@@ -398,6 +400,7 @@ export function BookingDetail({
           </p>
         )}
       </Card>
+      <ActivityLog resourceType="home_care_booking" resourceId={booking?.id} apiSession={apiSession} />
     </div>
   );
 }

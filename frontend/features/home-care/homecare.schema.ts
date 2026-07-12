@@ -5,9 +5,9 @@ export const bookingSchema = z.object({
   booking_type: z.enum(["home_care", "home_visit"]),
   recurrence: z.string().min(1, "Recurrence is required"),
   start_date: z.string().min(1, "Start date is required"),
-  end_date: z.string().optional(),
+  end_date: z.string().min(1, "End date is required"),
   status: z.string().min(1, "Status is required"),
-  location: z.string().optional(),
+  location: z.string().min(1, "Location is required"),
   notes: z.string().optional(),
 });
 

@@ -22,13 +22,19 @@ def create_signed_consultation_on_trial(client):
             "patient_id": patient["id"],
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
+            "department_id": "general",
             "practitioner_id": "doctor_demo",
         },
     ).json()
     consultation = client.post(
         "/api/v1/consultations",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"appointment_id": booking["appointment"]["id"]},
+        json={
+            "appointment_id": booking["appointment"]["id"],
+            "chief_complaint": "Fever",
+            "diagnosis": "Viral fever",
+            "clinical_notes": "Hydration advised",
+        },
     ).json()
     signed = client.post(
         f"/api/v1/consultations/{consultation['id']}/sign",

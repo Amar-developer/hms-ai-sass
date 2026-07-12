@@ -71,6 +71,7 @@ def book_appointment(client, tenant_id, branch_id, patient_id):
             "patient_id": patient_id,
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
+            "department_id": "general",
             "practitioner_id": "doctor_demo",
         },
     )
@@ -141,7 +142,12 @@ def test_invoice_generation_and_partial_payment_auto_queue_payment_pending(clien
     consultation = client.post(
         "/api/v1/consultations",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"appointment_id": booking["appointment"]["id"]},
+        json={
+            "appointment_id": booking["appointment"]["id"],
+            "chief_complaint": "Fever",
+            "diagnosis": "Viral fever",
+            "clinical_notes": "Hydration advised",
+        },
     ).json()
     signed = client.post(
         f"/api/v1/consultations/{consultation['id']}/sign",
@@ -190,6 +196,9 @@ def test_sign_consultation_auto_queues_follow_up_due_when_advice_present(client)
         headers={"X-Tenant-ID": tenant["id"]},
         json={
             "appointment_id": booking["appointment"]["id"],
+            "chief_complaint": "Fever",
+            "diagnosis": "Viral fever",
+            "clinical_notes": "Hydration advised",
             "follow_up_advice": "Please come for follow-up after 7 days.",
         },
     ).json()

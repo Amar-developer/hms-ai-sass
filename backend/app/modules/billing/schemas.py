@@ -1,7 +1,16 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from app.core.validation import (
+    AppointmentId,
+    BranchId,
+    ConsultationId,
+    LabOrderId,
+    PharmacyIssueId,
+    PractitionerId,
+    UserId,
+)
 from app.modules.appointments.models import AppointmentType
 from app.modules.billing.models import (
     ApprovalStatus,
@@ -18,9 +27,9 @@ from app.modules.billing.models import SettlementStatus
 
 
 class DoctorFeeRuleCreate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     department_id: str | None = Field(default=None, max_length=80)
-    practitioner_id: str | None = None
+    practitioner_id: PractitionerId | None = None
     appointment_type: AppointmentType
     treatment_type: str | None = Field(default=None, max_length=80)
     fee_amount: int = Field(ge=0)
@@ -38,26 +47,26 @@ class DoctorFeeRuleRead(DoctorFeeRuleCreate):
 
 
 class InvoiceCreateFromConsultation(BaseModel):
-    consultation_id: str
+    consultation_id: ConsultationId
     discount_amount: int = Field(default=0, ge=0)
     discount_approval_id: str | None = None
     discount_offer_id: str | None = None
     tax_rule_id: str | None = None
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class InvoiceCreateFromLabOrder(BaseModel):
-    lab_order_id: str
+    lab_order_id: LabOrderId
     discount_offer_id: str | None = None
     tax_rule_id: str | None = None
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class InvoiceCreateFromPharmacyIssue(BaseModel):
-    pharmacy_issue_id: str
+    pharmacy_issue_id: PharmacyIssueId
     discount_offer_id: str | None = None
     tax_rule_id: str | None = None
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class InvoiceItemRead(BaseModel):
@@ -160,7 +169,7 @@ class PaymentCreate(BaseModel):
     method: PaymentMethod
     amount: int = Field(gt=0)
     reference_number: str | None = Field(default=None, max_length=120)
-    collected_by_user_id: str | None = None
+    collected_by_user_id: UserId | None = None
 
 
 class PaymentRead(BaseModel):
@@ -205,26 +214,26 @@ class RefundRequest(BaseModel):
     amount: int | None = Field(default=None, ge=1)
     payment_method: PaymentMethod | None = None
     payment_reference: str | None = Field(default=None, max_length=120)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class CancelInvoiceRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class BillingAdjustmentRequestCreate(BaseModel):
     request_type: BillingAdjustmentType
     amount: int | None = Field(default=None, ge=0)
     reason: str = Field(min_length=2, max_length=500)
-    requested_by_user_id: str | None = None
+    requested_by_user_id: UserId | None = None
     payment_method: PaymentMethod | None = None
     payment_reference: str | None = Field(default=None, max_length=120)
 
 
 class BillingAdjustmentDecision(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class BillingAdjustmentRequestRead(BaseModel):
@@ -253,7 +262,7 @@ class BillingAdjustmentRequestRead(BaseModel):
 
 class AmendInvoiceRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class DoctorSettlementSummary(BaseModel):
@@ -273,12 +282,12 @@ class DoctorSettlementSummary(BaseModel):
 
 
 class TaxRuleCreate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     name: str = Field(min_length=2, max_length=120)
     tax_percentage: int = Field(default=0, ge=0, le=100)
     tax_label: str = Field(default="GST", max_length=40)
     service_scope: str = Field(default="all", max_length=40)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class TaxRuleRead(TaxRuleCreate):
@@ -289,7 +298,7 @@ class TaxRuleRead(TaxRuleCreate):
 
 
 class TaxRuleUpdate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     name: str | None = Field(default=None, min_length=2, max_length=120)
     tax_percentage: int | None = Field(default=None, ge=0, le=100)
     tax_label: str | None = Field(default=None, max_length=40)
@@ -298,7 +307,7 @@ class TaxRuleUpdate(BaseModel):
 
 
 class DiscountOfferCreate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     name: str = Field(min_length=2, max_length=120)
     code: str | None = Field(default=None, max_length=40)
     service_scope: str = Field(default="all", max_length=40)
@@ -308,11 +317,11 @@ class DiscountOfferCreate(BaseModel):
     max_discount_amount: int | None = Field(default=None, ge=0)
     valid_from: datetime | None = None
     valid_until: datetime | None = None
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class DiscountOfferUpdate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     name: str | None = Field(default=None, min_length=2, max_length=120)
     code: str | None = Field(default=None, max_length=40)
     service_scope: str | None = Field(default=None, max_length=40)
@@ -333,17 +342,23 @@ class DiscountOfferRead(DiscountOfferCreate):
 
 
 class DiscountApprovalCreate(BaseModel):
-    branch_id: str
-    appointment_id: str | None = None
-    consultation_id: str | None = None
+    branch_id: BranchId
+    appointment_id: AppointmentId | None = None
+    consultation_id: ConsultationId | None = None
     requested_amount: int = Field(ge=1)
     reason: str = Field(min_length=2, max_length=500)
-    requested_by_user_id: str | None = None
+    requested_by_user_id: UserId | None = None
+
+    @model_validator(mode="after")
+    def validate_target_reference(self) -> "DiscountApprovalCreate":
+        if not self.appointment_id and not self.consultation_id:
+            raise ValueError("Appointment or consultation is required")
+        return self
 
 
 class DiscountApprovalDecision(BaseModel):
     status: ApprovalStatus
-    approved_by_user_id: str | None = None
+    approved_by_user_id: UserId | None = None
 
 
 class DiscountApprovalRead(DiscountApprovalCreate):
@@ -358,7 +373,7 @@ class DiscountApprovalRead(DiscountApprovalCreate):
 class CreditNoteCreate(BaseModel):
     amount: int = Field(gt=0)
     reason: str = Field(min_length=2, max_length=500)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class CreditNoteRead(BaseModel):
@@ -393,9 +408,9 @@ class RevenueReport(BaseModel):
 
 
 class DoctorSettlementFinalize(BaseModel):
-    practitioner_id: str | None = None
-    branch_id: str | None = None
-    finalized_by_user_id: str | None = None
+    practitioner_id: PractitionerId | None = None
+    branch_id: BranchId | None = None
+    finalized_by_user_id: UserId | None = None
 
 
 class DoctorSettlementRead(DoctorSettlementSummary):

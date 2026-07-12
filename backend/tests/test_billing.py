@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 def setup_signed_consultation(
     client: TestClient,
     appointment_type: str = "op",
-    department_id: str | None = None,
+    department_id: str | None = "general",
     treatment_type: str = "general_consultation",
     is_billable: bool = True,
     visit_purpose: str | None = None,
@@ -52,7 +52,9 @@ def setup_signed_consultation(
         json={
             "appointment_id": booking["appointment"]["id"],
             "treatment_type": treatment_type,
+            "chief_complaint": "Fever and body pain",
             "diagnosis": "Viral fever",
+            "clinical_notes": "Hydration advised",
             "prescription_text": "Paracetamol",
             "created_by_user_id": "doctor_demo",
         },
@@ -500,6 +502,8 @@ def test_invoice_requires_signed_consultation(client: TestClient):
             "patient_id": patient["id"],
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
+            "department_id": "general",
+            "practitioner_id": "doctor_demo",
         },
     ).json()
     consultation = client.post(

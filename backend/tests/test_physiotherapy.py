@@ -86,6 +86,7 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
             "branch_id": branch_id,
             "patient_id": patient_id,
             "care_context": "op",
+            "assessment_date": date.today().isoformat(),
             "body_region": "Knee",
             "condition": "Post injury stiffness",
             "pain_score": 7,
@@ -130,6 +131,7 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
         f"/api/v1/physiotherapy/cases/{case_body['id']}/sessions",
         headers=headers,
         json={
+            "session_date": date.today().isoformat(),
             "equipment_id": equipment.json()["id"],
             "modality_type": "muscle_stimulator",
             "treatment_area": "Knee",
@@ -160,7 +162,9 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
         f"/api/v1/physiotherapy/cases/{case_body['id']}/sessions",
         headers=headers,
         json={
+            "session_date": date.today().isoformat(),
             "modality_type": "exercise",
+            "treatment_area": "Knee",
             "duration_minutes": 15,
             "charge_amount": 200,
         },

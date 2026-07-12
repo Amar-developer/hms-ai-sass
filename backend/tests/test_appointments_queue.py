@@ -43,6 +43,8 @@ def book(
         json={
             "branch_id": branch_id,
             "patient_id": patient_id,
+            "department_id": "general",
+            "practitioner_id": "doctor_demo",
             "appointment_type": appointment_type,
             "appointment_date": date.today().isoformat(),
             "reason": "Fever",
@@ -69,6 +71,8 @@ def test_tokens_are_generated_per_selected_appointment_date(client: TestClient):
         json={
             "branch_id": branch["id"],
             "patient_id": future_patient["id"],
+            "department_id": "general",
+            "practitioner_id": "doctor_demo",
             "appointment_type": "op",
             "appointment_date": future_date.isoformat(),
             "reason": "Future appointment",
@@ -78,6 +82,30 @@ def test_tokens_are_generated_per_selected_appointment_date(client: TestClient):
     assert today["queue_entry"]["token_number"] == "N-001"
     assert future.status_code == 201
     assert future.json()["queue_entry"]["token_number"] == "N-001"
+
+
+def test_book_appointment_requires_department_and_doctor(client: TestClient):
+    tenant = create_tenant(client)
+    branch = create_branch(client, tenant["id"])
+    patient = create_patient(client, tenant["id"], "Required Doctor Patient")
+
+    response = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "appointment_date": date.today().isoformat(),
+        },
+    )
+
+    assert response.status_code == 422
+    missing_fields = {
+        ".".join(str(part) for part in error["loc"])
+        for error in response.json()["detail"]
+    }
+    assert "body.department_id" in missing_fields
+    assert "body.practitioner_id" in missing_fields
 
 
 def test_repeated_appointment_create_with_idempotency_key_replays_first_response(
@@ -90,6 +118,8 @@ def test_repeated_appointment_create_with_idempotency_key_replays_first_response
     payload = {
         "branch_id": branch["id"],
         "patient_id": patient["id"],
+        "department_id": "general",
+        "practitioner_id": "doctor_demo",
         "appointment_type": "op",
         "appointment_date": date.today().isoformat(),
         "reason": "Fever",
@@ -128,6 +158,7 @@ def test_list_appointments_supports_patient_search_date_and_department_filters(
             "branch_id": branch["id"],
             "patient_id": other_patient["id"],
             "department_id": "ortho",
+            "practitioner_id": "doctor_demo",
             "appointment_type": "op",
             "appointment_date": target_date.isoformat(),
         },
@@ -566,6 +597,8 @@ def test_booking_rejects_patient_from_other_tenant(client: TestClient):
         json={
             "branch_id": first_branch["id"],
             "patient_id": second_patient["id"],
+            "department_id": "general",
+            "practitioner_id": "doctor_demo",
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
         },
@@ -683,6 +716,7 @@ def test_duplicate_appointment_prevention_by_patient_doctor_and_slot(
     payload = {
         "branch_id": branch["id"],
         "patient_id": patient["id"],
+        "department_id": "general",
         "practitioner_id": "doctor_demo",
         "appointment_type": "op",
         "appointment_date": date.today().isoformat(),
@@ -755,6 +789,8 @@ def test_review_and_fitness_visits_capture_purpose_billing_and_audit(
         json={
             "branch_id": branch["id"],
             "patient_id": patient["id"],
+            "department_id": source["appointment"]["department_id"],
+            "practitioner_id": source["appointment"]["practitioner_id"],
             "appointment_type": "doctor_review",
             "appointment_date": (date.today() + timedelta(days=1)).isoformat(),
             "visit_purpose": "doctor_review",
@@ -769,6 +805,8 @@ def test_review_and_fitness_visits_capture_purpose_billing_and_audit(
         json={
             "branch_id": branch["id"],
             "patient_id": patient["id"],
+            "department_id": source["appointment"]["department_id"],
+            "practitioner_id": source["appointment"]["practitioner_id"],
             "appointment_type": "fitness_certificate",
             "appointment_date": (date.today() + timedelta(days=2)).isoformat(),
             "visit_purpose": "fitness_certificate",
@@ -815,6 +853,8 @@ def test_doctor_review_inside_configured_validity_is_auto_free(client: TestClien
         json={
             "branch_id": branch["id"],
             "patient_id": patient["id"],
+            "department_id": source["appointment"]["department_id"],
+            "practitioner_id": source["appointment"]["practitioner_id"],
             "appointment_type": "doctor_review",
             "appointment_date": (date.today() + timedelta(days=3)).isoformat(),
             "visit_purpose": "doctor_review",

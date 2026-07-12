@@ -2,9 +2,17 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
+from app.core.validation import (
+    AppointmentId,
+    BranchId,
+    DepartmentId,
+    PatientId,
+    PractitionerId,
+)
+
 
 class IPRoomCreate(BaseModel):
-    branch_id: str
+    branch_id: BranchId
     ward_type: str = Field(default="general", max_length=80)
     ward_name: str = Field(min_length=2, max_length=120)
     room_type: str = Field(default="shared", max_length=80)
@@ -36,11 +44,11 @@ class IPRoomRead(IPRoomCreate):
 
 
 class IPAdmissionCreate(BaseModel):
-    branch_id: str
-    patient_id: str
-    source_appointment_id: str | None = None
-    department_id: str | None = None
-    admitting_practitioner_id: str | None = None
+    branch_id: BranchId
+    patient_id: PatientId
+    source_appointment_id: AppointmentId | None = None
+    department_id: DepartmentId | None = None
+    admitting_practitioner_id: PractitionerId | None = None
     room_id: str | None = None
     ward: str = Field(min_length=2, max_length=120)
     room: str | None = Field(default=None, max_length=80)
@@ -59,8 +67,8 @@ class IPAdmissionUpdate(BaseModel):
     room_id: str | None = None
     expected_discharge_date: date | None = None
     aadhaar_number: str | None = Field(default=None, max_length=20)
-    department_id: str | None = None
-    admitting_practitioner_id: str | None = None
+    department_id: DepartmentId | None = None
+    admitting_practitioner_id: PractitionerId | None = None
     reason: str | None = Field(default=None, max_length=1000)
     provisional_diagnosis: str | None = Field(default=None, max_length=1000)
     status: str | None = Field(default=None, max_length=40)
@@ -96,7 +104,7 @@ class IPDocumentRead(BaseModel):
 
 class IPTreatmentCreate(BaseModel):
     treatment_date: date | None = None
-    practitioner_id: str | None = None
+    practitioner_id: PractitionerId | None = None
     treatment_type: str = Field(default="ward_round", max_length=80)
     notes: str = Field(min_length=2, max_length=2000)
     medication_summary: str | None = Field(default=None, max_length=2000)
@@ -114,7 +122,7 @@ class IPTreatmentRead(IPTreatmentCreate):
 
 
 class IPConsultationCreate(BaseModel):
-    practitioner_id: str | None = None
+    practitioner_id: PractitionerId | None = None
     consultation_date: date | None = None
     consultation_type: str = Field(default="ward_round", max_length=80)
     fee_amount: int = Field(default=0, ge=0)
@@ -222,7 +230,7 @@ class IPBillingItemRead(IPBillingItemCreate):
 
 
 class IPMedicationOrderCreate(BaseModel):
-    practitioner_id: str | None = None
+    practitioner_id: PractitionerId | None = None
     medicine_name: str = Field(min_length=2, max_length=180)
     dosage: str | None = Field(default=None, max_length=120)
     frequency: str | None = Field(default=None, max_length=120)

@@ -1,7 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from app.core.validation import BranchId, ConsultationId, PatientId, UserId
 from app.modules.pharmacy.models import (
     PharmacyIssueSource,
     PharmacyIssueStatus,
@@ -10,7 +11,7 @@ from app.modules.pharmacy.models import (
 
 
 class MedicineCreate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     code: str = Field(min_length=2, max_length=60)
     name: str = Field(min_length=2, max_length=220)
     generic_name: str | None = Field(default=None, max_length=220)
@@ -22,11 +23,11 @@ class MedicineCreate(BaseModel):
     purchase_price: int = Field(default=0, ge=0)
     default_sale_price: int = Field(default=0, ge=0)
     reorder_level: int = Field(default=0, ge=0)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class MedicineUpdate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     code: str | None = Field(default=None, min_length=2, max_length=60)
     name: str | None = Field(default=None, min_length=2, max_length=220)
     generic_name: str | None = Field(default=None, max_length=220)
@@ -39,7 +40,7 @@ class MedicineUpdate(BaseModel):
     default_sale_price: int | None = Field(default=None, ge=0)
     reorder_level: int | None = Field(default=None, ge=0)
     is_active: bool | None = None
-    updated_by_user_id: str | None = None
+    updated_by_user_id: UserId | None = None
 
 
 class MedicineRead(MedicineCreate):
@@ -91,14 +92,14 @@ class PurchaseItemCreate(BaseModel):
 
 
 class PurchaseCreate(BaseModel):
-    branch_id: str
+    branch_id: BranchId
     supplier_id: str | None = None
     purchase_order_id: str | None = Field(default=None, max_length=120)
     invoice_number: str | None = Field(default=None, max_length=120)
     purchase_date: datetime | None = None
     discount_percentage: int = Field(default=0, ge=0)
     items: list[PurchaseItemCreate] = Field(min_length=1)
-    purchased_by_user_id: str | None = None
+    purchased_by_user_id: UserId | None = None
 
 
 class MedicineBatchRead(BaseModel):
@@ -163,21 +164,28 @@ class PharmacyIssueItemRead(BaseModel):
 
 
 class PharmacyIssueCreate(BaseModel):
-    branch_id: str
-    patient_id: str
-    consultation_id: str | None = None
+    branch_id: BranchId
+    patient_id: PatientId
+    consultation_id: ConsultationId | None = None
     source: PharmacyIssueSource = PharmacyIssueSource.OP_DIRECT
     medicine_text: str = Field(min_length=2, max_length=5000)
     items: list[PharmacyIssueItemCreate] = Field(default_factory=list)
     notes: str | None = Field(default=None, max_length=2000)
     external_prescriber: str | None = Field(default=None, max_length=220)
     amount: int = Field(default=0, ge=0)
-    issued_by_user_id: str | None = None
+    issued_by_user_id: UserId | None = None
+
+    @model_validator(mode="after")
+    def validate_source_requirements(self) -> "PharmacyIssueCreate":
+        if self.source == PharmacyIssueSource.EXTERNAL_PRESCRIPTION:
+            if not self.external_prescriber or not self.external_prescriber.strip():
+                raise ValueError("External prescriber is required")
+        return self
 
 
 class PharmacyIssueFromConsultation(BaseModel):
     amount: int = Field(default=0, ge=0)
-    issued_by_user_id: str | None = None
+    issued_by_user_id: UserId | None = None
 
 
 class PharmacyIssueStatusUpdate(BaseModel):
@@ -185,13 +193,13 @@ class PharmacyIssueStatusUpdate(BaseModel):
     items: list[PharmacyIssueItemCreate] | None = None
     notes: str | None = Field(default=None, max_length=2000)
     reason: str | None = Field(default=None, max_length=500)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class PharmacyIssueAmountUpdate(BaseModel):
     amount: int = Field(ge=0)
     reason: str | None = Field(default=None, max_length=500)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class PharmacyIssueRead(BaseModel):
@@ -252,12 +260,12 @@ class PharmacyReturnItemCreate(BaseModel):
 
 
 class PharmacyReturnCreate(BaseModel):
-    branch_id: str
+    branch_id: BranchId
     supplier_id: str | None = None
     purchase_id: str | None = None
     reason: str = Field(min_length=2, max_length=500)
     items: list[PharmacyReturnItemCreate] = Field(min_length=1)
-    returned_by_user_id: str | None = None
+    returned_by_user_id: UserId | None = None
 
 
 class PharmacyReturnRead(BaseModel):

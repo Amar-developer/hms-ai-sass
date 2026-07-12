@@ -18,6 +18,7 @@ from app.modules.consultations.models import (
     ConsultationStatus,
 )
 from app.modules.consultations.repositories import (
+    ConsultationDetailRepository,
     ConsultationReferenceRepository,
     ConsultationRepository,
 )
@@ -48,6 +49,7 @@ class ConsultationRecordService:
     def __init__(self, session: Session):
         self.session = session
         self.consultations = ConsultationRepository(session)
+        self.details = ConsultationDetailRepository(session)
         self.references = ConsultationReferenceRepository(session)
         self.structured_rows = StructuredRowWriter(session)
         self.billing = ConsultationBillingService(session)
@@ -59,6 +61,45 @@ class ConsultationRecordService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Consultation not found"
             )
         return consultation
+
+    def _require_sign_ready(self, consultation: Consultation) -> None:
+        missing: list[str] = []
+        if not consultation.treatment_type or not consultation.treatment_type.strip():
+            missing.append("treatment_type")
+        complaints = self.details.list_complaints(consultation.id)
+        if not consultation.chief_complaint or not consultation.chief_complaint.strip():
+            has_complaint_text = False
+        else:
+            has_complaint_text = True
+        if not has_complaint_text and not complaints:
+            missing.append("complaints")
+        diagnoses = self.details.list_diagnoses(consultation.id)
+        if not consultation.diagnosis or not consultation.diagnosis.strip():
+            has_diagnosis_text = False
+        else:
+            has_diagnosis_text = True
+        if not has_diagnosis_text and not diagnoses:
+            missing.append("diagnosis")
+        if not consultation.clinical_notes or not consultation.clinical_notes.strip():
+            missing.append("clinical_notes")
+        medicines = self.details.list_medicines(consultation.id)
+        incomplete_medicines = [
+            row.medicine_name
+            for row in medicines
+            if (
+                not row.dosage
+                or not row.dosage.strip()
+                or not row.frequency
+                or not row.frequency.strip()
+            )
+        ]
+        if incomplete_medicines:
+            missing.append("medicine_dosage_frequency")
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Consultation is not ready to sign. Missing: {', '.join(missing)}",
+            )
 
     def create_consultation(
         self, *, tenant_id: str, payload: ConsultationCreate, actor: User
@@ -189,6 +230,7 @@ class ConsultationRecordService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Consultation already signed",
             )
+        self._require_sign_ready(consultation)
 
         before = {
             "status": consultation.status,

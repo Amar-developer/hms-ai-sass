@@ -194,6 +194,7 @@ def setup_signed_consultation(client):
             "patient_id": patient["id"],
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
+            "department_id": "general",
             "practitioner_id": "doctor_demo",
         },
     ).json()
@@ -206,7 +207,9 @@ def setup_signed_consultation(client):
         f"/api/v1/consultations/{consultation['id']}",
         headers={"X-Tenant-ID": tenant["id"]},
         json={
+            "chief_complaint": "Fever",
             "diagnosis": "Fever",
+            "clinical_notes": "Hydration advised",
             "prescription_text": "Paracetamol 500mg twice daily for 3 days",
             "lab_referral_text": "CBC, FBS",
         },
@@ -696,6 +699,7 @@ def test_consultation_invoice_excludes_lab_and_pharmacy_charges(client):
             "patient_id": patient["id"],
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
+            "department_id": "general",
             "practitioner_id": "doctor_demo",
         },
     ).json()
@@ -704,6 +708,9 @@ def test_consultation_invoice_excludes_lab_and_pharmacy_charges(client):
         headers={"X-Tenant-ID": tenant["id"]},
         json={
             "appointment_id": booking["appointment"]["id"],
+            "chief_complaint": "Fever",
+            "diagnosis": "Viral fever",
+            "clinical_notes": "Hydration advised",
             "prescription_text": "Paracetamol 500mg 1-0-1 for 3 days",
             "lab_referral_text": "Complete Blood Count",
             "medicines": [

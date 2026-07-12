@@ -2,28 +2,36 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, Field
 
+from app.core.validation import (
+    AppointmentId,
+    BranchId,
+    DepartmentId,
+    PatientId,
+    PractitionerId,
+    UserId,
+)
 from app.modules.appointments.models import AppointmentStatus, AppointmentType
 from app.modules.queue.models import QueuePriority
 
 
 class AppointmentCreate(BaseModel):
-    branch_id: str
-    patient_id: str
-    department_id: str | None = None
-    practitioner_id: str | None = None
+    branch_id: BranchId
+    patient_id: PatientId
+    department_id: DepartmentId
+    practitioner_id: PractitionerId
     appointment_type: AppointmentType = AppointmentType.OP
     appointment_date: date
     appointment_time: time | None = None
     reason: str | None = Field(default=None, max_length=500)
     visit_purpose: str | None = Field(default=None, max_length=120)
-    source_appointment_id: str | None = None
+    source_appointment_id: AppointmentId | None = None
     is_billable: bool | None = None
     custom_fee_amount: int | None = Field(default=None, ge=0)
     billing_note: str | None = Field(default=None, max_length=500)
     emergency_reason: str | None = Field(default=None, max_length=500)
     intake_vitals: str | None = Field(default=None, max_length=1000)
     intake_complaints: str | None = Field(default=None, max_length=2000)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class FollowUpAppointmentCreate(BaseModel):
@@ -32,7 +40,7 @@ class FollowUpAppointmentCreate(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
     is_billable: bool = True
     billing_note: str | None = Field(default=None, max_length=500)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class AppointmentRead(BaseModel):
@@ -121,7 +129,7 @@ class QueueEntryRead(BaseModel):
 
 class QueueTransitionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class RequeueRequest(QueueTransitionRequest):

@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.validation import AppointmentId, DepartmentId, UserId
 from app.modules.consultations.models import ConsultationStatus
 
 
@@ -48,7 +49,7 @@ class ReferralRow(BaseModel):
 
 
 class ConsultationCreate(BaseModel):
-    appointment_id: str
+    appointment_id: AppointmentId
     treatment_type: str | None = Field(default="general_consultation", max_length=80)
     chief_complaint: str | None = Field(default=None, max_length=1000)
     diagnosis: str | None = Field(default=None, max_length=1000)
@@ -63,7 +64,7 @@ class ConsultationCreate(BaseModel):
     diagnoses: list[DiagnosisRow] = Field(default_factory=list)
     medicines: list[MedicineRow] = Field(default_factory=list)
     referrals: list[ReferralRow] = Field(default_factory=list)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class ConsultationUpdate(BaseModel):
@@ -84,7 +85,7 @@ class ConsultationUpdate(BaseModel):
 
 
 class ConsultationSignRequest(BaseModel):
-    signed_by_user_id: str | None = None
+    signed_by_user_id: UserId | None = None
 
 
 class ConsultationRead(BaseModel):
@@ -113,7 +114,7 @@ class ConsultationRead(BaseModel):
 
 class ConsultationAddendumCreate(BaseModel):
     note: str = Field(min_length=2, max_length=5000)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class ConsultationAddendumRead(BaseModel):
@@ -126,11 +127,11 @@ class ConsultationAddendumRead(BaseModel):
 
 
 class ConsultationTemplateCreate(BaseModel):
-    department_id: str | None = None
+    department_id: DepartmentId | None = None
     name: str = Field(min_length=2, max_length=180)
     template_type: str = Field(default="consultation", max_length=80)
     content: dict = Field(default_factory=dict)
-    created_by_user_id: str | None = None
+    created_by_user_id: UserId | None = None
 
 
 class ConsultationTemplateRead(BaseModel):
