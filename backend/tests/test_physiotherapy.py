@@ -162,7 +162,9 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
         f"/api/v1/physiotherapy/cases/{case_body['id']}/sessions",
         headers=headers,
         json={
+            "session_date": date.today().isoformat(),
             "modality_type": "exercise",
+            "treatment_area": "Knee",
             "duration_minutes": 15,
             "charge_amount": 200,
         },

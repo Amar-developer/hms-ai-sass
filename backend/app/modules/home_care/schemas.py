@@ -132,7 +132,7 @@ class HomeCareBookingCreate(BaseModel):
             if not self.assigned_staff_user_id:
                 raise ValueError("Assigned staff is required for this booking status")
         for service in self.services:
-            if service.unit_amount is None:
+            if service.unit_amount is None and not service.service_id:
                 raise ValueError("Service price is required")
             if booking_type == "home_visit" and not service.service_id:
                 raise ValueError("Home visit service is required")

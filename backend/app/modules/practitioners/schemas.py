@@ -64,7 +64,7 @@ class PractitionerEligibilityRead(BaseModel):
 
 class PractitionerScheduleCreate(BaseModel):
     branch_id: BranchId
-    department_id: DepartmentId
+    department_id: DepartmentId | None = None
     weekday: int = Field(ge=0, le=6)
     start_time: time
     end_time: time
