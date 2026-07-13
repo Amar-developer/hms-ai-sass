@@ -1,6 +1,53 @@
 from datetime import date
 
 from fastapi.testclient import TestClient
+from sqlmodel import Session
+
+from app.modules.appointments.models import Appointment
+from app.modules.billing.services.consultation_invoice import (
+    consultation_item_description,
+)
+from app.modules.tenants.models import Department
+
+
+def test_consultation_item_description_uses_department_and_safe_fallback(test_engine):
+    with Session(test_engine) as session:
+        department = Department(
+            tenant_id="tenant_invoice_description",
+            name="General Surgery",
+            code="GENERAL_SURGERY",
+        )
+        session.add(department)
+        session.commit()
+        session.refresh(department)
+        appointment = Appointment(
+            tenant_id="tenant_invoice_description",
+            branch_id="branch_invoice_description",
+            patient_id="patient_invoice_description",
+            department_id=department.id,
+            appointment_date=date.today(),
+        )
+
+        assert (
+            consultation_item_description(session, appointment=appointment)
+            == "General Surgery Consultation"
+        )
+
+        department.name = "Gynecologist"
+        assert (
+            consultation_item_description(session, appointment=appointment)
+            == "Gynecologist Consultation"
+        )
+
+        appointment.department_id = "missing_department"
+        assert (
+            consultation_item_description(
+                session,
+                appointment=appointment,
+                treatment_type="general_consultation",
+            )
+            == "General Consultation"
+        )
 
 
 def setup_signed_consultation(
@@ -10,6 +57,7 @@ def setup_signed_consultation(
     treatment_type: str = "general_consultation",
     is_billable: bool = True,
     visit_purpose: str | None = None,
+    department_name: str | None = None,
 ) -> dict:
     tenant = client.post("/api/v1/tenants", json={"name": "Billing Clinic"}).json()
     plans = client.get("/api/v1/subscription-plans").json()
@@ -27,6 +75,14 @@ def setup_signed_consultation(
         f"/api/v1/tenants/{tenant['id']}/branches",
         json={"name": "Main Branch", "code": "MAIN"},
     ).json()
+    if department_name:
+        department = client.post(
+            f"/api/v1/tenants/{tenant['id']}/departments",
+            headers={"X-Tenant-ID": tenant["id"]},
+            json={"name": department_name},
+        )
+        assert department.status_code == 201
+        department_id = department.json()["id"]
     patient = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
@@ -109,6 +165,87 @@ def create_fee_rule(
     return response.json()
 
 
+def test_receptionist_can_list_create_and_open_consultation_invoices(
+    client: TestClient,
+):
+    data = setup_signed_consultation(client, "op")
+    tenant_id = data["tenant"]["id"]
+    branch_id = data["branch"]["id"]
+    create_fee_rule(
+        client,
+        tenant_id,
+        "op",
+        500,
+        practitioner_id="doctor_demo",
+    )
+
+    email = f"receptionist.invoice.{tenant_id}@test.local"
+    password = "Reception123"
+    role_key = "invoice_receptionist"
+    role = client.post(
+        "/api/v1/identity/roles",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": "Invoice Receptionist",
+            "key": role_key,
+            "permission_keys": [
+                "billing.read",
+                "invoices.read",
+                "invoices.create",
+                "payments.create",
+            ],
+        },
+    )
+    assert role.status_code == 201
+    created = client.post(
+        "/api/v1/identity/users",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "name": "Receptionist Invoice User",
+            "email": email,
+            "password": password,
+            "branch_id": branch_id,
+            "role_keys": [role_key],
+        },
+    )
+    assert created.status_code == 201
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": password, "tenant_id": tenant_id},
+    )
+    assert login.status_code == 200
+    assert "invoices.read" in login.json()["user"]["permissions"]
+    assert "invoices.create" in login.json()["user"]["permissions"]
+    headers = {
+        "Authorization": f"Bearer {login.cookies['access_token']}",
+        "X-Tenant-ID": tenant_id,
+    }
+
+    invoice_list = client.get("/api/v1/billing/invoices", headers=headers)
+    assert invoice_list.status_code == 200
+
+    generated = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers=headers,
+        json={"consultation_id": data["consultation"]["id"]},
+    )
+    assert generated.status_code == 201
+    invoice_id = generated.json()["invoice"]["id"]
+
+    detail = client.get(f"/api/v1/billing/invoices/{invoice_id}", headers=headers)
+    assert detail.status_code == 200
+    assert detail.json()["invoice"]["id"] == invoice_id
+
+    payment = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/payments",
+        headers=headers,
+        json={"method": "cash", "amount": 100},
+    )
+    assert payment.status_code == 201
+    assert payment.json()["invoice"]["paid_amount"] == 100
+
+
 def test_create_fee_rule_and_generate_op_invoice_with_percentage_split(
     client: TestClient,
 ):
@@ -138,7 +275,37 @@ def test_create_fee_rule_and_generate_op_invoice_with_percentage_split(
     assert detail["invoice"]["total_amount"] == 500
     assert detail["invoice"]["doctor_share_amount"] == 300
     assert detail["invoice"]["clinic_share_amount"] == 200
-    assert detail["items"][0]["description"] == "Op general consultation"
+    assert detail["items"][0]["description"] == "General Consultation"
+
+
+def test_consultation_invoice_item_uses_appointment_department_name(
+    client: TestClient,
+):
+    data = setup_signed_consultation(
+        client,
+        "op",
+        treatment_type="general_consultation",
+        department_name="General Surgery",
+    )
+    tenant_id = data["tenant"]["id"]
+    appointment = data["booking"]["appointment"]
+    create_fee_rule(
+        client,
+        tenant_id,
+        "op",
+        650,
+        practitioner_id="doctor_demo",
+        department_id=appointment["department_id"],
+    )
+
+    invoice = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"consultation_id": data["consultation"]["id"]},
+    )
+
+    assert invoice.status_code == 201
+    assert invoice.json()["items"][0]["description"] == ("General Surgery Consultation")
 
 
 def test_doctor_fee_rules_allow_different_departments_but_reject_identical_context(
@@ -596,7 +763,7 @@ def test_fee_rule_can_vary_by_doctor_department_and_treatment(client: TestClient
 
     assert invoice.status_code == 201
     assert invoice.json()["invoice"]["total_amount"] == 700
-    assert invoice.json()["items"][0]["description"] == "Op pediatric consultation"
+    assert invoice.json()["items"][0]["description"] == "Pediatric Consultation"
 
 
 def test_free_doctor_review_generates_zero_invoice_without_fee_rule(client: TestClient):
@@ -618,7 +785,7 @@ def test_free_doctor_review_generates_zero_invoice_without_fee_rule(client: Test
     assert invoice.json()["invoice"]["total_amount"] == 0
     assert invoice.json()["invoice"]["fee_rule_id"] is None
     assert (
-        invoice.json()["items"][0]["description"] == "Doctor Review doctor review Free"
+        invoice.json()["items"][0]["description"] == "Doctor Review Consultation Free"
     )
 
 
@@ -648,8 +815,7 @@ def test_fitness_certificate_uses_its_own_fee_rule_for_revenue_tracking(
     assert invoice.status_code == 201
     assert invoice.json()["invoice"]["total_amount"] == 900
     assert (
-        invoice.json()["items"][0]["description"]
-        == "Fitness Certificate fitness certificate"
+        invoice.json()["items"][0]["description"] == "Fitness Certificate Consultation"
     )
 
     report = client.get(

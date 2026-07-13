@@ -1,5 +1,7 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { DataTableProps } from "../types";
+import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize as defaultPageSize } from "@/utils/constants";
 
 export function DataTable<T>({
   columns,
@@ -7,12 +9,27 @@ export function DataTable<T>({
   emptyMessage = "No data found",
   className,
   onRowClick,
+  paginate = false,
+  pageSize = defaultPageSize,
 }: DataTableProps<T>) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const rowOffset = paginate ? (safePage - 1) * pageSize : 0;
+  const visibleData = paginate
+    ? data.slice(rowOffset, rowOffset + pageSize)
+    : data;
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+
   return (
-    <div className="overflow-auto rounded-lg border">
-      <table
-        className={`w-full min-w-[920px] table-fixed text-left text-sm ${className ?? ""}`}
-      >
+    <div>
+      <div className="overflow-auto rounded-lg border">
+        <table
+          className={`w-full min-w-[920px] table-fixed text-left text-sm ${className ?? ""}`}
+        >
         <thead className="bg-slate-50 text-xs uppercase text-slate-500">
           <tr>
             {columns.map((column) => (
@@ -39,7 +56,7 @@ export function DataTable<T>({
             </tr>
           )}
 
-          {data.map((row, index) => (
+          {visibleData.map((row, index) => (
             <tr
               key={index}
               onClick={() => onRowClick?.(row)}
@@ -56,14 +73,24 @@ export function DataTable<T>({
                   }
                 >
                   {column.render
-                    ? column.render(row, index)
+                    ? column.render(row, rowOffset + index)
                     : (row[column.key as keyof T] as React.ReactNode)}
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
+      {paginate && (
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          total={data.length}
+          onPage={setPage}
+          pageSize={pageSize}
+        />
+      )}
     </div>
   );
 }

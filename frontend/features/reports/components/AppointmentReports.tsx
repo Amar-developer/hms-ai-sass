@@ -84,6 +84,7 @@ const AppointmentReports = ({
           <DataTable
           columns={columns}
           data={doctorRows}
+          paginate
           className="w-full min-w-[1280px] text-left text-sm"
           emptyMessage="No healthcare invoices match this filter."
           />

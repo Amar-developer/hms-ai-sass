@@ -87,6 +87,16 @@ export function TenantAdmin({
   });
 
   const data = useTenantAdminData(apiSession, clinic);
+  const permissionKeys: string[] = apiSession?.user?.permissions || [];
+  const hasAdminAction = (prefix: string, action: string) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        permissionKeys.includes("*") ||
+        apiSession?.user?.roles?.includes("tenant_admin") ||
+        apiSession?.user?.user_type === "tenant_admin" ||
+        permissionKeys.includes(`${prefix}.manage`) ||
+        permissionKeys.includes(`${prefix}.${action}`),
+    );
 
   function open(nextSection: string, nextView = "list") {
     setSection(nextSection);
@@ -349,6 +359,7 @@ export function TenantAdmin({
           rows={filteredUsers}
           searchKeys={["name", "email", "mobile", "user_type", "roles", "id"]}
           createLabel="Create User"
+          canCreate={hasAdminAction("identity.users", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
           columns={USER_COLUMNS}
@@ -397,6 +408,8 @@ export function TenantAdmin({
               key={user.id}
               user={user}
               branches={data.branches}
+              canEdit={hasAdminAction("identity.users", "edit")}
+              canDelete={hasAdminAction("identity.users", "delete")}
               onEdit={() => {
                 setSelectedId(user.id);
                 setView("edit");
@@ -445,6 +458,7 @@ export function TenantAdmin({
           rows={filterdRoles}
           searchKeys={["name", "key", "id"]}
           createLabel="Create Role"
+          canCreate={hasAdminAction("identity.roles", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
           columns={ROLE_COLUMNS}
@@ -470,6 +484,8 @@ export function TenantAdmin({
             <RoleRow
               key={role.id}
               role={role}
+              canEdit={hasAdminAction("identity.roles", "edit")}
+              canDelete={hasAdminAction("identity.roles", "delete")}
               onEdit={() => {
                 setSelectedId(role.id);
                 setView("edit");
@@ -510,6 +526,7 @@ export function TenantAdmin({
           rows={filteredDepartments}
           searchKeys={["name", "code", "branch_names", "description", "id"]}
           createLabel="Create  Department"
+          canCreate={hasAdminAction("departments", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
           columns={DEPARTMENT_COLUMNS}
@@ -546,6 +563,8 @@ export function TenantAdmin({
             <DepartmentRow
               key={department.id}
               department={department}
+              canEdit={hasAdminAction("departments", "edit")}
+              canDelete={hasAdminAction("departments", "delete")}
               branches={data.branches}
               onEdit={() => {
                 setSelectedId(department.id);
@@ -599,6 +618,7 @@ export function TenantAdmin({
           rows={filteredBranches}
           searchKeys={["name", "code", "city", "state", "id"]}
           createLabel="Create Branch"
+          canCreate={hasAdminAction("branches", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
           columns={BRANCH_COLUMNS}
@@ -624,6 +644,8 @@ export function TenantAdmin({
             <BranchRow
               key={branch.id}
               branch={branch}
+              canEdit={hasAdminAction("branches", "edit")}
+              canDelete={hasAdminAction("branches", "delete")}
               onEdit={() => {
                 setSelectedId(branch.id);
                 setView("edit");
@@ -669,6 +691,7 @@ export function TenantAdmin({
           rows={filteredSuppliers}
           searchKeys={["name", "gstin", "phone", "email", "address", "id"]}
           createLabel="Create Supplier"
+          canCreate={hasAdminAction("suppliers", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
           columns={SUPPLIER_COLUMNS}
@@ -694,6 +717,8 @@ export function TenantAdmin({
             <SupplierRow
               key={supplier.id}
               supplier={supplier}
+              canEdit={hasAdminAction("suppliers", "edit")}
+              canDelete={hasAdminAction("suppliers", "delete")}
               onEdit={() => {
                 setSelectedId(supplier.id);
                 setView("edit");
@@ -742,6 +767,7 @@ export function TenantAdmin({
           rows={filteredTaxes}
           searchKeys={["name", "tax_label", "service_scope", "id"]}
           createLabel="Create Tax Rule"
+          canCreate={hasAdminAction("tax", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
           columns={TAX_RULE_COLUMNS}
@@ -767,6 +793,8 @@ export function TenantAdmin({
             <TaxRuleRow
               key={rule.id}
               rule={rule}
+              canEdit={hasAdminAction("tax", "edit")}
+              canDelete={hasAdminAction("tax", "delete")}
               branches={data.branches}
               onEdit={() => {
                 setSelectedId(rule.id);
@@ -810,6 +838,7 @@ export function TenantAdmin({
           rows={filteredOffers}
           searchKeys={["name", "code", "service_scope", "discount_type", "id"]}
           createLabel="Create Offer"
+          canCreate={hasAdminAction("discounts", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
           columns={DISCOUNT_OFFER_COLUMNS}
@@ -835,6 +864,8 @@ export function TenantAdmin({
             <DiscountOfferRow
               key={offer.id}
               offer={offer}
+              canEdit={hasAdminAction("discounts", "edit")}
+              canDelete={hasAdminAction("discounts", "delete")}
               branches={data.branches}
               onEdit={() => {
                 setSelectedId(offer.id);

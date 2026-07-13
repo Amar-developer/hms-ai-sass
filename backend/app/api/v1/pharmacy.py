@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
-from app.core.auth import require_any_permission, require_permission
+from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
@@ -83,6 +83,7 @@ def create_medicine(
     current_user: User = Depends(
         require_any_permission(
             permissions.PHARMACY_MANAGE,
+            permissions.PHARMACY_CREATE,
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
             permissions.SETTINGS_MANAGE,
         )
@@ -102,6 +103,7 @@ def list_medicines(
     current_user: User = Depends(
         require_any_permission(
             permissions.PHARMACY_MANAGE,
+            permissions.PHARMACY_READ,
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
             permissions.PATIENT_SUBSCRIPTIONS_READ,
             permissions.SETTINGS_MANAGE,
@@ -174,7 +176,9 @@ def update_medicine(
     payload: MedicineUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_EDIT)
+    ),
 ) -> MedicineCatalog:
     return update_medicine_record(
         session,
@@ -190,7 +194,9 @@ def delete_medicine(
     medicine_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_DELETE)
+    ),
 ) -> MedicineCatalog:
     return delete_medicine_record(
         session, tenant_id=tenant_id, medicine_id=medicine_id, actor=current_user
@@ -282,7 +288,9 @@ def create_purchase(
     payload: PurchaseCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_CREATE)
+    ),
 ) -> PurchaseRead:
     return create_purchase_record(
         session, tenant_id=tenant_id, payload=payload, actor=current_user
@@ -296,7 +304,9 @@ def create_pharmacy_return(
     payload: PharmacyReturnCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_EDIT)
+    ),
 ) -> PharmacyReturn:
     return create_pharmacy_return_record(
         session, tenant_id=tenant_id, payload=payload, actor=current_user
@@ -309,7 +319,9 @@ def list_batches(
     branch_id: str | None = None,
     medicine_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
+    ),
 ) -> list[dict]:
     return list_batches_service(
         session,
@@ -329,7 +341,9 @@ def create_pharmacy_issue(
     payload: PharmacyIssueCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_CREATE)
+    ),
 ) -> PharmacyIssue:
     return create_pharmacy_issue_record(
         session, tenant_id=tenant_id, payload=payload, actor=current_user
@@ -346,7 +360,9 @@ def create_pharmacy_issue_from_consultation(
     payload: PharmacyIssueFromConsultation,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_CREATE)
+    ),
 ) -> PharmacyIssue:
     return create_pharmacy_issue_from_consultation_record(
         session,
@@ -364,7 +380,9 @@ def list_pharmacy_issues(
     status_filter: PharmacyIssueStatus | None = None,
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
+    ),
 ) -> list[PharmacyIssue]:
     return list_pharmacy_issues_service(
         session,
@@ -381,7 +399,9 @@ def get_pharmacy_issue(
     issue_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
+    ),
 ) -> PharmacyIssueDetailRead:
     return get_pharmacy_issue_service(
         session, tenant_id=tenant_id, issue_id=issue_id, actor=current_user
@@ -394,7 +414,11 @@ def update_pharmacy_issue_status(
     payload: PharmacyIssueStatusUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.PHARMACY_MANAGE, permissions.PHARMACY_DISPENSE
+        )
+    ),
 ) -> PharmacyIssue:
     return update_pharmacy_issue_status_record(
         session,
@@ -411,7 +435,9 @@ def update_pharmacy_issue_amount(
     payload: PharmacyIssueAmountUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_EDIT)
+    ),
 ) -> PharmacyIssue:
     return update_pharmacy_issue_amount_record(
         session,
@@ -428,7 +454,9 @@ def link_pharmacy_billing(
     payload: PharmacyBillingLink,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_EDIT)
+    ),
 ) -> PharmacyIssue:
     return link_pharmacy_billing_record(
         session,
@@ -445,7 +473,9 @@ def list_stock_ledger(
     branch_id: str | None = None,
     medicine_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
+    ),
 ) -> list[PharmacyStockLedger]:
     return list_stock_ledger_service(
         session,
@@ -461,7 +491,9 @@ def list_low_stock(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PHARMACY_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
+    ),
 ) -> list[LowStockRead]:
     return list_low_stock_service(
         session, tenant_id=tenant_id, branch_id=branch_id, actor=current_user

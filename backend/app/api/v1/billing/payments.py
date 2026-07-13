@@ -76,7 +76,9 @@ def record_payment(
     payload: PaymentCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PAYMENTS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.PAYMENTS_MANAGE, permissions.PAYMENTS_CREATE)
+    ),
 ) -> InvoiceDetailRead:
     return record_invoice_payment(
         session,

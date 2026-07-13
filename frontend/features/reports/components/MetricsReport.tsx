@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Activity,
   ArrowLeft,
@@ -13,6 +13,8 @@ import {
 
 import Metric from "./Metric";
 import { DashboardView, MetrixProps } from "../types";
+import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize } from "@/utils/constants";
 
 
 
@@ -246,6 +248,18 @@ function ClosedMonths({
   onSelect: (snapshot: any) => void;
   money: (value: number) => string;
 }) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(snapshots.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedSnapshots = snapshots.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+
   return (
     <div className="rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
@@ -276,7 +290,7 @@ function ClosedMonths({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {snapshots.map((snapshot: any) => {
+              {pagedSnapshots.map((snapshot: any) => {
                 const active = snapshot.id === selectedId;
                 return (
                   <tr
@@ -309,6 +323,14 @@ function ClosedMonths({
               })}
             </tbody>
           </table>
+          <div className="px-4 pb-4">
+            <Pagination
+              page={safePage}
+              totalPages={totalPages}
+              total={snapshots.length}
+              onPage={setPage}
+            />
+          </div>
         </div>
       )}
     </div>

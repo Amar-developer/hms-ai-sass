@@ -77,7 +77,7 @@ export const roleModules: Record<string, string[]> = {
     "admin",
     "reports",
   ],
-  reception: ["appointments", "queue", "patients", "home_care"],
+  reception: ["appointments", "queue", "patients", "home_care", "billing"],
   nurse: [
     "appointments",
     "queue",

@@ -236,7 +236,7 @@ export function Items({ apiSession, branchId }: any) {
           return false;
         if (filters.priceBand === "free" && Number(row.price || 0) > 0)
           return false;
-        const query = filters.query.trim().toLowerCase();
+        const query = String(filters.query || "").trim().toLowerCase();
         if (
           query &&
           !`${row.kind} ${row.name} ${row.code} ${row.meta} ${row.id}`
@@ -717,7 +717,12 @@ export function Items({ apiSession, branchId }: any) {
             <FormField label="Search">
               <Input
                 value={filters.query}
-                onChange={(v) => setFiltersAndReset({ ...filters, query: v })}
+                onChange={(event: any) =>
+                  setFiltersAndReset({
+                    ...filters,
+                    query: event.target.value,
+                  })
+                }
                 placeholder="Name, code, type"
               />
             </FormField>

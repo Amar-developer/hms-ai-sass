@@ -53,8 +53,11 @@ RECEPTIONIST_DEFAULT_PERMISSION_KEYS = [
 ]
 
 DOCTOR_DEFAULT_PERMISSION_KEYS = [
+    permissions.PATIENTS_READ,
     permissions.APPOINTMENTS_READ,
     permissions.APPOINTMENTS_EDIT,
+    permissions.QUEUE_READ,
+    permissions.PRACTITIONERS_READ,
     permissions.CONSULTATIONS_READ,
     permissions.CONSULTATIONS_WRITE,
     permissions.CONSULTATIONS_CREATE,
@@ -62,6 +65,9 @@ DOCTOR_DEFAULT_PERMISSION_KEYS = [
     permissions.CONSULTATIONS_SIGN,
     permissions.LAB_CREATE,
     permissions.LAB_READ,
+    permissions.PHARMACY_READ,
+    permissions.PHYSIOTHERAPY_CREATE,
+    permissions.PHYSIOTHERAPY_READ,
     permissions.HOME_CARE_CREATE,
     permissions.HOME_CARE_READ,
     permissions.BILLING_READ,
@@ -86,6 +92,7 @@ PHARMACIST_DEFAULT_PERMISSION_KEYS = [
     permissions.PHARMACY_READ,
     permissions.PHARMACY_EDIT,
     permissions.PHARMACY_DISPENSE,
+    permissions.PATIENTS_READ,
     permissions.CONSULTATIONS_READ,
     permissions.INVOICES_CREATE,
     permissions.INVOICES_READ,

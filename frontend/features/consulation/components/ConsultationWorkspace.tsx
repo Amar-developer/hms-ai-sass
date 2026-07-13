@@ -12,11 +12,10 @@ import {
 } from "@/app/components/common/ui";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { FormField } from "@/app/components/FormElements";
-import { displayDateTime, formatPrice } from "@/utils/helper";
+import { displayDateTime } from "@/utils/helper";
 import { displayPatientGender } from "@/features/patients/helpers";
 import {
   SearchPicker,
-  TagEntryBox,
   medicineFrequencyOptions,
   medicineDurationOptions,
   medicineInstructionOptions,
@@ -136,6 +135,7 @@ export function ConsultationWorkspace(props: any) {
     saveBackendDraft,
     markDone,
     signBackendConsultation,
+    validationAttempted,
     requeuePatient,
     callPatient,
     skipPatient,
@@ -144,10 +144,10 @@ export function ConsultationWorkspace(props: any) {
     callNextInWorkspace,
     setActive,
   } = props;
-  const [medicineTagText, setMedicineTagText] = useState("");
-  const [labTagText, setLabTagText] = useState("");
   const [medicineDraftName, setMedicineDraftName] = useState("");
   const [labDraftName, setLabDraftName] = useState("");
+  const [medicineAddAttempted, setMedicineAddAttempted] = useState(false);
+  const [labAddAttempted, setLabAddAttempted] = useState(false);
   const [availableMedicineCatalog, setAvailableMedicineCatalog] =
     useState<any[]>(medicineCatalog);
   const [medicineCatalogLoading, setMedicineCatalogLoading] = useState(false);
@@ -165,6 +165,10 @@ export function ConsultationWorkspace(props: any) {
   // Patient ID always matches the same patient_number shown on invoices,
   // instead of falling back to nothing or the internal record id.
   const [patientNumberFallback, setPatientNumberFallback] = useState("");
+  useEffect(() => {
+    setMedicineAddAttempted(false);
+    setLabAddAttempted(false);
+  }, [selected?.id]);
   useEffect(() => {
     setPatientNumberFallback("");
     if (!apiSession || !patient?.id || patient?.patient_number) return;
@@ -276,16 +280,6 @@ export function ConsultationWorkspace(props: any) {
   const selectedLabTest = activeLabCatalog.find(
     (test: any) => (test.id || test.slug || test.name) === selectedLabTestId,
   );
-  const selectedLabMrp = Number(
-    selectedLabTest?.mrp_price || selectedLabTest?.mrp || 0,
-  );
-  const selectedLabSelling = Number(
-    selectedLabTest?.selling_price ||
-      selectedLabTest?.default_price ||
-      selectedLabTest?.price ||
-      0,
-  );
-
   useEffect(() => {
     setAvailableMedicineCatalog(
       Array.isArray(medicineCatalog) ? medicineCatalog : [],
@@ -412,23 +406,94 @@ export function ConsultationWorkspace(props: any) {
       selectedMedicine?.item_name ||
       selectedMedicine?.name ||
       medicineDraftName;
-    if (!String(name || "").trim()) return;
+    const dosage = medicineDosage || selectedMedicine?.strength || "";
+    setMedicineAddAttempted(true);
+    if (
+      !String(name || "").trim() ||
+      !String(dosage).trim() ||
+      !String(medicineFrequency || "").trim()
+    )
+      return;
     addMedicineFromText(
       name,
       selectedMedicine ? { item: selectedMedicine } : undefined,
     );
+    setMedicineAddAttempted(false);
     setMedicineDraftName("");
   }
   function addDraftLabTest() {
     const name =
       selectedLabTest?.item_name || selectedLabTest?.name || labDraftName;
-    if (!String(name || "").trim()) return;
+    setLabAddAttempted(true);
+    if (!String(name || "").trim() || !String(labPriority || "").trim()) return;
     addLabFromText(
       name,
       selectedLabTest ? { item: selectedLabTest } : undefined,
     );
+    setLabAddAttempted(false);
     setLabDraftName("");
   }
+  const treatmentTypeError =
+    validationAttempted && !String(treatmentType || "").trim()
+      ? "Treatment type is required."
+      : undefined;
+  const complaintsError =
+    validationAttempted && !String(complaints || "").trim()
+      ? "At least one complaint is required."
+      : undefined;
+  const diagnosisError =
+    validationAttempted && !String(diagnosisRows || "").trim()
+      ? "At least one diagnosis is required."
+      : undefined;
+  const doctorNotesError =
+    validationAttempted && !String(notes || "").trim()
+      ? "Doctor notes are required."
+      : undefined;
+  const medicineName =
+    selectedMedicine?.item_name || selectedMedicine?.name || medicineDraftName;
+  const medicineNameError =
+    medicineAddAttempted && !String(medicineName || "").trim()
+      ? "Medicine name is required."
+      : undefined;
+  const medicineDosageError =
+    medicineAddAttempted &&
+    !String(medicineDosage || selectedMedicine?.strength || "").trim()
+      ? "Dosage is required."
+      : undefined;
+  const medicineFrequencyError =
+    medicineAddAttempted && !String(medicineFrequency || "").trim()
+      ? "Frequency is required."
+      : undefined;
+  const incompleteMedicineNames = medicineItems
+    .filter(
+      (medicine: any) =>
+        !String(medicine.dosage || "").trim() ||
+        !String(medicine.frequency || "").trim(),
+    )
+    .map((medicine: any) => medicine.name)
+    .filter(Boolean);
+  const medicineRowsError =
+    validationAttempted && incompleteMedicineNames.length
+      ? `${incompleteMedicineNames.join(", ")} requires dosage and frequency.`
+      : undefined;
+  const labName =
+    selectedLabTest?.item_name || selectedLabTest?.name || labDraftName;
+  const labNameError =
+    labAddAttempted && !String(labName || "").trim()
+      ? "Lab or service name is required."
+      : undefined;
+  const labPriorityError =
+    labAddAttempted && !String(labPriority || "").trim()
+      ? "Priority is required."
+      : undefined;
+  const scanError =
+    validationAttempted && scanNeeded && !String(scanTests || "").trim()
+      ? "Scan or diagnostic name is required."
+      : undefined;
+  const referralDoctorError =
+    validationAttempted && referDoctor && !referDoctorId
+      ? "Recommended doctor is required."
+      : undefined;
   return (
     <>
       <Card>
@@ -438,6 +503,10 @@ export function ConsultationWorkspace(props: any) {
             <p className="card-desc text-slate-500">
               Structured vitals, complaints, diagnosis, prescription, follow-up
               and addendums.
+            </p>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              <span className="text-red-500">*</span> Required to complete the
+              consultation.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 md:flex-wrap lg:flex-nowrap">
@@ -554,13 +623,19 @@ export function ConsultationWorkspace(props: any) {
                 </div>
               )}
               <div className="grid gap-3 md:grid-cols-2">
-                <FormField label="Treatment Type">
+                <FormField
+                  label="Treatment Type"
+                  required
+                  error={treatmentTypeError}
+                  className={treatmentTypeError ? "[&_button]:border-red-400" : ""}
+                >
                   <SearchableSelect
                     // label="Treatment Type"
                     searchable={false}
                     value={treatmentType}
                     onChange={setTreatmentType}
                     options={treatment_type_options}
+                    required
                   />
                 </FormField>
                 <FormField label="Follow-up Advice">
@@ -602,28 +677,64 @@ export function ConsultationWorkspace(props: any) {
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
-                <FormField label="Complaints Rows">
+                <FormField
+                  label="Complaints Rows"
+                  required
+                  error={complaintsError}
+                >
                   <textarea
+                    required
+                    aria-invalid={Boolean(complaintsError) || undefined}
                     value={complaints}
                     onChange={(e: any) => setComplaints(e.target.value)}
-                    className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
+                    className={`min-h-20 w-full rounded-lg border px-4 py-3 text-sm outline-none ${
+                      complaintsError
+                        ? "border-red-400 focus:border-red-500"
+                        : "border-slate-200 focus:border-slate-500"
+                    }`}
                     placeholder="Fever | 2 days | medium"
                   />
                 </FormField>
-                <FormField label="Doctor Notes">
+                <FormField label="Diagnosis" required error={diagnosisError}>
                   <textarea
-                    value={notes}
-                    onChange={(e: any) => setNotes(e.target.value)}
-                    className="min-h-20 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm outline-none"
-                    placeholder="Clinical notes, advice..."
+                    required
+                    aria-invalid={Boolean(diagnosisError) || undefined}
+                    value={diagnosisRows}
+                    onChange={(e: any) => setDiagnosisRows(e.target.value)}
+                    className={`min-h-20 w-full rounded-lg border px-4 py-3 text-sm outline-none ${
+                      diagnosisError
+                        ? "border-red-400 focus:border-red-500"
+                        : "border-slate-200 focus:border-slate-500"
+                    }`}
+                    placeholder="Viral fever | primary | optional notes"
                   />
                 </FormField>
               </div>
+              <FormField label="Doctor Notes" required error={doctorNotesError}>
+                <textarea
+                  required
+                  aria-invalid={Boolean(doctorNotesError) || undefined}
+                  value={notes}
+                  onChange={(e: any) => setNotes(e.target.value)}
+                  className={`min-h-20 w-full rounded-lg border px-4 py-3 text-sm outline-none ${
+                    doctorNotesError
+                      ? "border-red-400 focus:border-red-500"
+                      : "border-slate-200 focus:border-slate-500"
+                  }`}
+                  placeholder="Clinical notes, advice..."
+                />
+              </FormField>
 
               {/* Medicine */}
               <div className="rounded-lg bg-slate-50 p-4">
-                <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr_auto] lg:items-end">
-                  <Field label="Medicine">
+                <div className="grid gap-3 lg:grid-cols-[1.35fr_.8fr_.7fr_.7fr_.9fr_auto] lg:items-start">
+                  <FormField
+                    label="Medicine"
+                    required
+                    error={medicineNameError}
+                    hint="Required only when adding a medicine."
+                    className={medicineNameError ? "[&_input]:border-red-400" : ""}
+                  >
                     <SearchPicker
                       value={selectedMedicineId}
                       inputValue={medicineDraftName}
@@ -663,15 +774,27 @@ export function ConsultationWorkspace(props: any) {
                         {medicineCatalogError}
                       </p>
                     )}
-                  </Field>
-                  <FormField label="Dosage">
+                  </FormField>
+                  <FormField
+                    label="Dosage"
+                    required
+                    error={medicineDosageError}
+                    className={medicineDosageError ? "[&_input]:border-red-400" : ""}
+                  >
                     <Input
+                      required
+                      aria-invalid={Boolean(medicineDosageError) || undefined}
                       value={medicineDosage}
                       onChange={(e: any) => setMedicineDosage(e.target.value)}
                       placeholder="500mg"
                     />
                   </FormField>
-                  <FormField label="Frequency">
+                  <FormField
+                    label="Frequency"
+                    required
+                    error={medicineFrequencyError}
+                    className={medicineFrequencyError ? "[&_button]:border-red-400" : ""}
+                  >
                     <SearchableSelect
                       value={medicineFrequency}
                       onChange={(value: string) => setMedicineFrequency(value)}
@@ -688,6 +811,7 @@ export function ConsultationWorkspace(props: any) {
                         }))}
                       placeholder="Select frequency"
                       searchable
+                      required
                     />
                   </FormField>
                   <FormField label="Duration">
@@ -726,7 +850,7 @@ export function ConsultationWorkspace(props: any) {
                   </FormField>
                   <Button
                     type="button"
-                    className="save-button md:w-[50%] lg:w-full"
+                    className="save-button md:w-[50%] lg:mt-[23px] lg:w-full"
                     onClick={addDraftMedicine}
                   >
                     Add
@@ -756,36 +880,68 @@ export function ConsultationWorkspace(props: any) {
                   ))}
                 </div>
                 <div className="mt-4">
-                  <FormField label="Prescription Medicine Rows">
-                    <TagEntryBox
-                      tags={medicineItems}
-                      value={medicineTagText}
-                      onChange={setMedicineTagText}
-                      onSubmit={addMedicineFromText}
-                      onRemove={removeMedicineItem}
-                      hideInput
-                      emptyText="No medicines added yet."
-                      getLabel={(m: any) =>
-                        [
-                          m.name,
-                          m.dosage,
-                          m.frequency,
-                          m.duration,
-                          m.instructions,
-                        ]
-                          .map((part: any) => String(part || "").trim())
-                          .filter(Boolean)
-                          .join(" · ")
-                      }
-                    />
+                  <FormField
+                    label="Prescription Medicine Rows"
+                    error={medicineRowsError}
+                  >
+                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                      <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                        <thead className="bg-slate-100 text-xs uppercase text-slate-600">
+                          <tr>
+                            <th className="px-3 py-2.5">Medicine</th>
+                            <th className="px-3 py-2.5">Dosage</th>
+                            <th className="px-3 py-2.5">Frequency</th>
+                            <th className="px-3 py-2.5">Duration</th>
+                            <th className="px-3 py-2.5">Instructions</th>
+                            <th className="px-3 py-2.5 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-200">
+                          {medicineItems.length ? (
+                            medicineItems.map((medicine: any, index: number) => (
+                              <tr key={`${medicine.name}-${index}`}>
+                                <td className="px-3 py-2.5 font-semibold text-slate-900">
+                                  {medicine.name || "-"}
+                                </td>
+                                <td className="px-3 py-2.5">{medicine.dosage || "-"}</td>
+                                <td className="px-3 py-2.5">{medicine.frequency || "-"}</td>
+                                <td className="px-3 py-2.5">{medicine.duration || "-"}</td>
+                                <td className="px-3 py-2.5">{medicine.instructions || "-"}</td>
+                                <td className="px-3 py-2.5 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => removeMedicineItem(index)}
+                                    className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={6} className="px-3 py-5 text-center text-slate-500">
+                                No medicines added yet.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </FormField>
                 </div>
               </div>
               {/* Lab Service */}
               <div className="grid gap-3">
                 <div className="rounded-lg bg-slate-50 p-4">
-                  <div className="mt-3 grid gap-2 md:grid-cols-[2fr_0.8fr_0.8fr_1fr_1.5fr_auto] md:items-end">
-                    <FormField label="Lab/Service">
+                  <div className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.5fr_auto] md:items-start">
+                    <FormField
+                      label="Lab/Service"
+                      required
+                      error={labNameError}
+                      hint="Required only when adding a lab or service."
+                      className={labNameError ? "[&_input]:border-red-400" : ""}
+                    >
                       <SearchPicker
                         value={selectedLabTestId}
                         inputValue={labDraftName}
@@ -823,21 +979,12 @@ export function ConsultationWorkspace(props: any) {
                         </p>
                       )}
                     </FormField>
-                    <FormField label="MRP">
-                      <Input
-                        value={formatPrice(selectedLabMrp)}
-                        readOnly
-                        placeholder="MRP"
-                      />
-                    </FormField>
-                    <FormField label="Rate">
-                      <Input
-                        value={formatPrice(selectedLabSelling)}
-                        readOnly
-                        placeholder="Selling"
-                      />
-                    </FormField>
-                    <FormField label="Priority">
+                    <FormField
+                      label="Priority"
+                      required
+                      error={labPriorityError}
+                      className={labPriorityError ? "[&_button]:border-red-400" : ""}
+                    >
                       <SearchableSelect
                         value={labPriority}
                         onChange={(value: string) => setLabPriority(value)}
@@ -848,6 +995,7 @@ export function ConsultationWorkspace(props: any) {
                         ]}
                         placeholder="Select priority"
                         searchable={false} // optional: cleaner UX for small lists
+                        required
                       />
                     </FormField>
                     <FormField label="Instructions">
@@ -861,7 +1009,7 @@ export function ConsultationWorkspace(props: any) {
                     </FormField>
                     <Button
                       type="button"
-                      className="save-button"
+                      className="save-button md:mt-[23px]"
                       onClick={addDraftLabTest}
                     >
                       Add Lab Test
@@ -888,30 +1036,50 @@ export function ConsultationWorkspace(props: any) {
 
                   <div className="mt-4">
                     <Field label="Lab & Service">
-                      <TagEntryBox
-                        tags={referralItems.filter(
-                          (item: any) => item.type === "lab",
-                        )}
-                        value={labTagText}
-                        onChange={setLabTagText}
-                        onSubmit={addLabFromText}
-                        onRemove={(labIndex: number) => {
-                          const indexes = referralItems
-                            .map((item: any, index: number) =>
-                              item.type === "lab" ? index : -1,
-                            )
-                            .filter((index: number) => index >= 0);
-                          removeReferralItem(indexes[labIndex]);
-                        }}
-                        hideInput
-                        emptyText="No lab tests added yet."
-                        getLabel={(r: any) =>
-                          [r.name, r.priority, r.instructions]
-                            .map((part: any) => String(part || "").trim())
-                            .filter(Boolean)
-                            .join(" · ")
-                        }
-                      />
+                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                        <table className="w-full min-w-[620px] border-collapse text-left text-sm">
+                          <thead className="bg-slate-100 text-xs uppercase text-slate-600">
+                            <tr>
+                              <th className="px-3 py-2.5">Lab / Service</th>
+                              <th className="px-3 py-2.5">Priority</th>
+                              <th className="px-3 py-2.5">Instructions</th>
+                              <th className="px-3 py-2.5 text-right">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-200">
+                            {referralItems.some((item: any) => item.type === "lab") ? (
+                              referralItems.map((item: any, index: number) =>
+                                item.type === "lab" ? (
+                                  <tr key={`${item.name}-${index}`}>
+                                    <td className="px-3 py-2.5 font-semibold text-slate-900">
+                                      {item.name || "-"}
+                                    </td>
+                                    <td className="px-3 py-2.5 capitalize">
+                                      {item.priority || "routine"}
+                                    </td>
+                                    <td className="px-3 py-2.5">{item.instructions || "-"}</td>
+                                    <td className="px-3 py-2.5 text-right">
+                                      <button
+                                        type="button"
+                                        onClick={() => removeReferralItem(index)}
+                                        className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                                      >
+                                        Remove
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ) : null,
+                              )
+                            ) : (
+                              <tr>
+                                <td colSpan={4} className="px-3 py-5 text-center text-slate-500">
+                                  No lab tests added yet.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </Field>
                   </div>
                 </div>
@@ -926,8 +1094,15 @@ export function ConsultationWorkspace(props: any) {
                       Scan referral
                     </label>
                     {scanNeeded && (
-                      <FormField label="Scan / Diagnostic">
+                      <FormField
+                        label="Scan / Diagnostic"
+                        required
+                        error={scanError}
+                        className={scanError ? "[&_input]:border-red-400" : ""}
+                      >
                         <Input
+                          required
+                          aria-invalid={Boolean(scanError) || undefined}
                           value={scanTests}
                           onChange={(e: any) => setScanTests(e.target.value)}
                           placeholder="X-Ray, ECG, Ultrasound"
@@ -950,13 +1125,21 @@ export function ConsultationWorkspace(props: any) {
                       Refer another doctor
                     </label>
                     {referDoctor && (
-                      <FormField label="Recommended Doctor">
+                      <FormField
+                        label="Recommended Doctor"
+                        required
+                        error={referralDoctorError}
+                        className={referralDoctorError ? "[&_select]:border-red-400" : ""}
+                      >
                         <Select
+                          required
+                          aria-invalid={Boolean(referralDoctorError) || undefined}
                           value={referDoctorId}
                           onChange={(e: any) =>
                             setReferDoctorId(e.target.value)
                           }
                         >
+                          <option value="">Select doctor</option>
                           {practitioners
                             .filter(
                               (p: any) =>
@@ -1002,8 +1185,13 @@ export function ConsultationWorkspace(props: any) {
                     Ready for billing
                   </Badge>
                 </div>
-                <FormField label="Signed Record Addendum">
+                <FormField
+                  label="Signed Record Addendum"
+                  required
+                  hint="Required before saving an addendum."
+                >
                   <textarea
+                    required
                     value={addendumNote}
                     onChange={(e: any) => setAddendumNote(e.target.value)}
                     className="min-h-20 w-full rounded-lg border border-emerald-100 px-4 py-3 text-sm outline-none"
@@ -1042,6 +1230,7 @@ export function ConsultationWorkspace(props: any) {
             )}
             <div className="flex flex-wrap gap-3">
               <Button
+                type="button"
                 onClick={apiSession ? saveBackendDraft : markDone}
                 disabled={busy || selected?.consultationStatus === "signed"}
               >
@@ -1049,6 +1238,7 @@ export function ConsultationWorkspace(props: any) {
               </Button>
               {apiSession && (
                 <Button
+                  type="button"
                   onClick={signBackendConsultation}
                   disabled={busy || selected?.consultationStatus === "signed"}
                   className="bg-emerald-700 text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"

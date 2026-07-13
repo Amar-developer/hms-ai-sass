@@ -1,7 +1,22 @@
 import { displayDate, money } from "@/utils/helper";
 import { Badge,Card } from "@/app/components/common/ui";
+import { useEffect, useState } from "react";
+import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize } from "@/utils/constants";
 
 export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = rows.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
+
   if (!rows.length) return null;
   return (
     <Card>
@@ -32,7 +47,7 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
-            {rows.map((row: any) => (
+            {pagedRows.map((row: any) => (
               <tr key={row.id} className="hover:bg-slate-50">
                 <td className="px-4 py-4 text-xs lg:text-sm">
                   <b>
@@ -61,6 +76,12 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={safePage}
+        totalPages={totalPages}
+        total={rows.length}
+        onPage={setPage}
+      />
     </Card>
   );
 }

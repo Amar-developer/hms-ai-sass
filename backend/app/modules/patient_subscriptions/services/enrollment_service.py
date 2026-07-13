@@ -10,8 +10,10 @@ from app.core.access_control import (
     scoped_branch_id,
 )
 from app.modules.audit.service import diff_changes, record_audit_event
-from app.modules.billing.models import Invoice, InvoiceItem, Payment
+from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus, Payment
 from app.modules.identity.models import User
+from app.modules.identity import permissions
+from app.modules.identity.services.policy import assert_tenant_permission
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
     PatientSubscriptionEnrollmentStatus,
@@ -34,7 +36,6 @@ from app.modules.patient_subscriptions.services.validation import (
     _get_enrollment,
     _get_plan,
     _resolve_enrollment_branch,
-    require_tenant_admin_or_super_admin,
 )
 
 
@@ -46,9 +47,6 @@ def enroll_patient(
     actor: User,
 ) -> PatientSubscriptionEnrollmentRead:
     # Local imports avoid module-load cycles between subscriptions and billing.
-    from app.modules.billing.services.invoice_status import (
-        update_invoice_payment_status,
-    )
     from app.modules.billing.services.numbering import next_invoice_number
 
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=actor)
@@ -123,8 +121,17 @@ def enroll_patient(
         created_by_user_id=payload.created_by_user_id,
     )
     PatientSubscriptionEnrollmentRepository(session).add(enrollment)
-    session.commit()
-    session.refresh(enrollment)
+    # Keep enrollment, invoice, line item, optional payment, and audit in one
+    # transaction. A dropped/failed request must never leave behind a partial
+    # membership purchase that cannot be invoiced or safely retried.
+    session.flush()
+    balance_amount = max(int(plan.price_amount or 0) - paid_now, 0)
+    if int(plan.price_amount or 0) <= 0 or balance_amount <= 0:
+        invoice_status = InvoiceStatus.PAID
+    elif paid_now > 0:
+        invoice_status = InvoiceStatus.PARTIALLY_PAID
+    else:
+        invoice_status = InvoiceStatus.ISSUED
     invoice = Invoice(
         tenant_id=tenant_id,
         branch_id=enrollment.branch_id,
@@ -139,15 +146,15 @@ def enroll_patient(
         taxable_amount=plan.price_amount,
         tax_amount=0,
         total_amount=plan.price_amount,
-        paid_amount=0,
-        balance_amount=plan.price_amount,
+        paid_amount=paid_now,
+        balance_amount=balance_amount,
+        status=invoice_status,
         doctor_share_amount=0,
         clinic_share_amount=plan.price_amount,
         created_by_user_id=payload.created_by_user_id,
     )
     session.add(invoice)
-    session.commit()
-    session.refresh(invoice)
+    session.flush()
     session.add(
         InvoiceItem(
             tenant_id=tenant_id,
@@ -160,8 +167,8 @@ def enroll_patient(
         )
     )
     enrollment.purchase_invoice_id = invoice.id
+    enrollment.paid_amount = paid_now
     session.add(enrollment)
-    session.commit()
     if paid_now > 0:
         session.add(
             Payment(
@@ -173,12 +180,6 @@ def enroll_patient(
                 collected_by_user_id=payload.created_by_user_id or actor.id,
             )
         )
-        session.commit()
-        invoice = update_invoice_payment_status(session, invoice)
-        enrollment.paid_amount = invoice.paid_amount
-        session.add(enrollment)
-        session.commit()
-    session.refresh(enrollment)
     record_audit_event(
         session,
         tenant_id=tenant_id,
@@ -188,7 +189,10 @@ def enroll_patient(
         resource_type="patient_subscription_enrollment",
         resource_id=enrollment.id,
         purpose="patient_subscription_enrollment",
+        commit=False,
     )
+    session.commit()
+    session.refresh(enrollment)
     return read_enrollment(session, enrollment)
 
 
@@ -224,7 +228,14 @@ def update_enrollment(
     actor: User,
 ) -> PatientSubscriptionEnrollmentRead:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=actor)
-    require_tenant_admin_or_super_admin(session, tenant_id, actor)
+    assert_tenant_permission(
+        session,
+        actor,
+        tenant_id,
+        permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+        permissions.PATIENT_SUBSCRIPTIONS_EDIT,
+        permissions.SETTINGS_MANAGE,
+    )
     enrollment = _get_enrollment(session, tenant_id, enrollment_id)
     require_user_branch_access(actor, enrollment.branch_id)
     updates = payload.model_dump(exclude_unset=True)
@@ -275,7 +286,14 @@ def delete_enrollment(
     session: Session, *, tenant_id: str, enrollment_id: str, actor: User
 ) -> None:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=actor)
-    require_tenant_admin_or_super_admin(session, tenant_id, actor)
+    assert_tenant_permission(
+        session,
+        actor,
+        tenant_id,
+        permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+        permissions.PATIENT_SUBSCRIPTIONS_DELETE,
+        permissions.SETTINGS_MANAGE,
+    )
     enrollment = _get_enrollment(session, tenant_id, enrollment_id)
     require_user_branch_access(actor, enrollment.branch_id)
     benefit_invoice = PatientSubscriptionSupportRepository(

@@ -25,6 +25,8 @@ import { PlanForm } from "../patients/components/PlanForm";
 import { money } from "@/utils/helper";
 import { PlanTableRow } from "../patients/components/PlanTableRow";
 import { QueuedEnrollmentsTable } from "../patients/components/QueuedEnrollmentsTable";
+import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize } from "@/utils/constants";
 
 export function PatientSubscriptions({
   apiSession,
@@ -83,6 +85,9 @@ export function PatientSubscriptions({
   );
   const [confirmDelete, setConfirmDelete] = useState("");
   const [detailPlanId, setDetailPlanId] = useState("");
+  const [planPage, setPlanPage] = useState(1);
+  const planTotalPages = Math.max(1, Math.ceil(plans.length / pageSize));
+  const safePlanPage = Math.min(planPage, planTotalPages);
   const patientMap = useMemo<Map<string, any>>(
     () => new Map((patients || []).map((p: any) => [p.id, p])),
     [patients],
@@ -141,6 +146,9 @@ export function PatientSubscriptions({
   useEffect(() => {
     load();
   }, [apiSession?.tenantId, branchId, patients?.length]);
+  useEffect(() => {
+    if (planPage !== safePlanPage) setPlanPage(safePlanPage);
+  }, [planPage, safePlanPage]);
 
   async function resolveLabBenefitIds(values: string[], branchValue: string) {
     const resolved: string[] = [];
@@ -533,6 +541,10 @@ export function PatientSubscriptions({
   const detailPlan = detailPlanId
     ? plans.find((plan: any) => plan.id === detailPlanId)
     : null;
+  const pagedPlans = plans.slice(
+    (safePlanPage - 1) * pageSize,
+    safePlanPage * pageSize,
+  );
 
   function requestDeletePlan(plan: any) {
     setConfirmDelete(plan.id);
@@ -727,7 +739,7 @@ export function PatientSubscriptions({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {plans.map((plan: any) => {
+                        {pagedPlans.map((plan: any) => {
                           const activeEnrollmentCount =
                             activeEnrollmentCountByPlan.get(plan.id) || 0;
                           return (
@@ -756,6 +768,12 @@ export function PatientSubscriptions({
                 </div>
               )}
             </div>
+            <Pagination
+              page={safePlanPage}
+              totalPages={planTotalPages}
+              total={plans.length}
+              onPage={setPlanPage}
+            />
           </Card>
           <ActiveEnrollmentsTable
             rows={activeEnrollments}

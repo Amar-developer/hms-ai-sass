@@ -47,6 +47,7 @@ export function PatientDetail({
   const canReadMembership = hasAnyPermission([
     "patient_subscriptions.manage",
     "patient_subscriptions.read",
+    "patient_subscriptions.create",
   ]);
   const canCreateMembership = hasAnyPermission([
     "patient_subscriptions.manage",

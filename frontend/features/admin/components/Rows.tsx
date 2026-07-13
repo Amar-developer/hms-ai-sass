@@ -9,27 +9,41 @@ import { RoleList } from "./RoleList";
 import { RowActions } from "./RowActions";
 import { Badge } from "@/app/components/common/ui";
 
-export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
+export function UserRow({
+  user,
+  branches,
+  onEdit,
+  onStatus,
+  onDelete,
+  canEdit = true,
+  canDelete = true,
+}: any) {
   const branch = branches.find((b: any) => b.id === user.branch_id);
 
   const actions = [
     {
       label: "Edit",
       onClick: onEdit,
+      hidden: !onEdit || !canEdit,
     },
     {
       label: user.is_active ? "Inactive" : "Active",
       onClick: onStatus,
+      hidden: !onStatus || !canEdit,
     },
     {
       label: "Delete",
       onClick: onDelete,
+      hidden: !onDelete || !canDelete,
       danger: true,
     },
   ];
 
   return (
-    <tr className="border-b hover:bg-slate-50 cursor-pointer" onClick={onEdit}>
+    <tr
+      className="border-b hover:bg-slate-50 cursor-pointer"
+      onClick={canEdit ? onEdit : undefined}
+    >
       <td className="px-4 py-3 font-bold whitespace-nowrap">{user.name}</td>
 
       <td className="px-4 py-3 whitespace-nowrap">
@@ -53,29 +67,40 @@ export function UserRow({ user, branches, onEdit, onStatus, onDelete }: any) {
   );
 }
 
-export function RoleRow({ role, onEdit, onStatus, onDelete }: any) {
+export function RoleRow({
+  role,
+  onEdit,
+  onStatus,
+  onDelete,
+  canEdit = true,
+  canDelete = true,
+}: any) {
   const locked = isLocked(role);
 
   const actions = [
     {
       label: locked ? "View" : "Edit",
       onClick: onEdit,
+      hidden: !onEdit || !canEdit,
     },
     {
       label: role.is_active ? "Inactive" : "Active",
       onClick: onStatus,
-      hidden: locked,
+      hidden: locked || !onStatus || !canEdit,
     },
     {
       label: "Delete",
       onClick: onDelete,
-      hidden: locked,
+      hidden: locked || !onDelete || !canDelete,
       danger: true,
     },
   ];
 
   return (
-    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+    <tr
+      onClick={canEdit ? onEdit : undefined}
+      className="cursor-pointer border-b hover:bg-slate-50"
+    >
       <td className="px-4 py-3 text-xs">
         <div className="flex items-center gap-2">
           <b>{role.name}</b>
@@ -115,26 +140,38 @@ export function RoleRow({ role, onEdit, onStatus, onDelete }: any) {
   );
 }
 
-export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
-  console.log(department, "department");
+export function DepartmentRow({
+  department,
+  onEdit,
+  onStatus,
+  onDelete,
+  canEdit = true,
+  canDelete = true,
+}: any) {
   const actions = [
     {
       label: "Edit",
       onClick: onEdit,
+      hidden: !onEdit || !canEdit,
     },
     {
       label: department.is_active ? "Inactive" : "Active",
       onClick: onStatus,
+      hidden: !onStatus || !canEdit,
     },
     {
       label: "Delete",
       onClick: onDelete,
+      hidden: !onDelete || !canDelete,
       danger: true,
     },
   ];
 
   return (
-    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+    <tr
+      onClick={canEdit ? onEdit : undefined}
+      className="cursor-pointer border-b hover:bg-slate-50"
+    >
       <td className="px-4 py-3 text-xs">
         <div className="flex items-center gap-2">
           <span className="font-bold">{department.name}</span>
@@ -165,24 +202,37 @@ export function DepartmentRow({ department, onEdit, onStatus, onDelete }: any) {
   );
 }
 
-export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
+export function BranchRow({
+  branch,
+  onEdit,
+  onStatus,
+  onDelete,
+  canEdit = true,
+  canDelete = true,
+}: any) {
   const actions = [
     {
       label: "Edit",
       onClick: onEdit,
+      hidden: !onEdit || !canEdit,
     },
     {
       label: branch.is_active ? "Inactive" : "Active",
       onClick: onStatus,
+      hidden: !onStatus || !canEdit,
     },
     {
       label: "Delete",
       onClick: onDelete,
+      hidden: !onDelete || !canDelete,
       danger: true,
     },
   ];
   return (
-    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+    <tr
+      onClick={canEdit ? onEdit : undefined}
+      className="cursor-pointer border-b hover:bg-slate-50"
+    >
       <td className="px-4 py-3 text-xs">
         <div className="flex items-center gap-2">
           <b>{branch.name}</b>
@@ -214,24 +264,37 @@ export function BranchRow({ branch, onEdit, onStatus, onDelete }: any) {
   );
 }
 
-export function SupplierRow({ supplier, onEdit, onStatus, onDelete }: any) {
+export function SupplierRow({
+  supplier,
+  onEdit,
+  onStatus,
+  onDelete,
+  canEdit = true,
+  canDelete = true,
+}: any) {
   const actions = [
     {
       label: "Edit",
       onClick: onEdit,
+      hidden: !onEdit || !canEdit,
     },
     {
       label: supplier.is_active ? "Inactive" : "Active",
       onClick: onStatus,
+      hidden: !onStatus || !canEdit,
     },
     {
       label: "Delete",
       onClick: onDelete,
+      hidden: !onDelete || !canDelete,
       danger: true,
     },
   ];
   return (
-    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+    <tr
+      onClick={canEdit ? onEdit : undefined}
+      className="cursor-pointer border-b hover:bg-slate-50"
+    >
       <td className="px-4 py-3 text-xs">
         <b>{supplier.name}</b>
       </td>
@@ -271,25 +334,33 @@ export function TaxRuleRow({
   onEdit,
   onStatus,
   onDelete,
+  canEdit = true,
+  canDelete = true,
 }: any) {
   const branch = branches.find((b: any) => b.id === rule.branch_id);
   const actions = [
     {
       label: "Edit",
       onClick: onEdit,
+      hidden: !onEdit || !canEdit,
     },
     {
       label: rule.is_active ? "Inactive" : "Active",
       onClick: onStatus,
+      hidden: !onStatus || !canEdit,
     },
     {
       label: "Delete",
       onClick: onDelete,
+      hidden: !onDelete || !canDelete,
       danger: true,
     },
   ];
   return (
-    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+    <tr
+      onClick={canEdit ? onEdit : undefined}
+      className="cursor-pointer border-b hover:bg-slate-50"
+    >
       <td className="px-4 py-3 text-xs">
         <b>{rule.name}</b>
       </td>
@@ -327,20 +398,25 @@ export function DiscountOfferRow({
   onEdit,
   onStatus,
   onDelete,
+  canEdit = true,
+  canDelete = true,
 }: any) {
   const branch = branches.find((b: any) => b.id === offer.branch_id);
   const actions = [
     {
       label: "Edit",
       onClick: onEdit,
+      hidden: !onEdit || !canEdit,
     },
     {
       label: offer.is_active ? "Inactive" : "Active",
       onClick: onStatus,
+      hidden: !onStatus || !canEdit,
     },
     {
       label: "Delete",
       onClick: onDelete,
+      hidden: !onDelete || !canDelete,
       danger: true,
     },
   ];
@@ -352,7 +428,10 @@ export function DiscountOfferRow({
   const minimum = Number(offer.minimum_bill_amount || 0);
 
   return (
-    <tr onClick={onEdit} className="cursor-pointer border-b hover:bg-slate-50">
+    <tr
+      onClick={canEdit ? onEdit : undefined}
+      className="cursor-pointer border-b hover:bg-slate-50"
+    >
       <td className="px-4 py-3 text-xs">
         <b>{offer.name}</b>
       </td>

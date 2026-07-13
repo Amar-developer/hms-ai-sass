@@ -79,7 +79,7 @@ def assert_role_editable_by_actor(
 
 
 def assert_grantable_permission_keys(
-    current_user: User, permission_keys: list[str]
+    session: Session, current_user: User, permission_keys: list[str]
 ) -> None:
     """Prevent tenant admins from minting platform or unknown permissions."""
     if current_user.is_super_admin:
@@ -96,4 +96,15 @@ def assert_grantable_permission_keys(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Cannot grant these permissions: {', '.join(disallowed)}",
+        )
+    if has_tenant_admin_access(session, current_user):
+        return
+    actor_permissions = set(user_permission_keys(session, current_user))
+    if permissions.IDENTITY_ROLES_MANAGE in actor_permissions:
+        return
+    excessive = sorted(set(permission_keys) - actor_permissions)
+    if excessive:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Cannot grant permissions you do not hold: {', '.join(excessive)}",
         )

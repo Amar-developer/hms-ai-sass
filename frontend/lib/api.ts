@@ -169,6 +169,7 @@ export async function apiFetch(
       {
         event: "frontend.api_connection_failed",
         module: "api",
+        requestId: correlationId,
       },
       session,
     );

@@ -278,7 +278,7 @@ export function useAppController() {
         : apiFetchIfAllowed<any[]>(
             "/queue?include_completed=true",
             session,
-            "queue.manage",
+            ["queue.manage", "queue.read"],
             [],
           ),
       isPlatformPrimaryTenant
@@ -294,7 +294,7 @@ export function useAppController() {
         : apiFetchIfAllowed<any[]>(
             "/billing/invoices",
             session,
-            "billing.manage",
+            ["billing.manage", "billing.read", "invoices.read"],
             [],
           ),
       isPlatformPrimaryTenant
@@ -759,13 +759,61 @@ export function useAppController() {
       apiSession?.user?.roles?.includes("tenant_admin") ||
       apiSession?.user?.user_type === "tenant_admin"),
   );
-  // The Tenant Admin console (Users, Roles, Departments, Branches, Suppliers,
-  // Settings, …) is reserved for the tenant admin role itself — NOT merely for
-  // anyone who happens to hold an identity/settings permission. Gating on the
-  // role (rather than a permission) is what keeps a Doctor/Receptionist/Lab/
-  // Pharmacist out of the admin shell even if a stray admin permission is left
-  // on their role. The API is the real boundary; this keeps the menu honest.
-  const canOpenTenantAdmin = isTenantAdminUser;
+  const canOpenTenantAdmin = Boolean(
+    isTenantAdminUser ||
+      navHasAnyPermission(
+        "identity.users.manage",
+        "identity.users.create",
+        "identity.users.read",
+        "identity.users.edit",
+        "identity.users.delete",
+        "identity.roles.manage",
+        "identity.roles.create",
+        "identity.roles.read",
+        "identity.roles.edit",
+        "identity.roles.delete",
+        "departments.manage",
+        "departments.create",
+        "departments.read",
+        "departments.edit",
+        "departments.delete",
+        "branches.manage",
+        "branches.create",
+        "branches.read",
+        "branches.edit",
+        "branches.delete",
+        "suppliers.manage",
+        "suppliers.create",
+        "suppliers.read",
+        "suppliers.edit",
+        "suppliers.delete",
+        "tax.manage",
+        "tax.create",
+        "tax.read",
+        "tax.edit",
+        "tax.delete",
+        "discounts.manage",
+        "discounts.create",
+        "discounts.read",
+        "discounts.edit",
+        "discounts.delete",
+        "patient_subscriptions.manage",
+        "patient_subscriptions.create",
+        "patient_subscriptions.read",
+        "patient_subscriptions.edit",
+        "patient_subscriptions.delete",
+        "files.manage",
+        "files.create",
+        "files.read",
+        "files.edit",
+        "files.delete",
+        "settings.manage",
+        "settings.create",
+        "settings.read",
+        "settings.edit",
+        "settings.delete",
+      ),
+  );
   if (canOpenTenantAdmin) permissionModules.add("admin");
   if (
     navHasAnyPermission(
@@ -776,7 +824,8 @@ export function useAppController() {
     )
   )
     permissionModules.add("appointments");
-  if (navHasAnyPermission("queue.manage")) permissionModules.add("queue");
+  if (navHasAnyPermission("queue.manage", "queue.read"))
+    permissionModules.add("queue");
   if (
     navHasAnyPermission(
       "patients.read",
@@ -840,6 +889,8 @@ export function useAppController() {
     navHasAnyPermission(
       "consultations.read",
       "consultations.write",
+      "consultations.create",
+      "consultations.edit",
       "consultations.sign",
     )
   ) {
@@ -880,9 +931,11 @@ export function useAppController() {
   if (
     navHasAnyPermission(
       "billing.manage",
+      "billing.read",
       "invoices.read",
       "invoices.create",
       "payments.manage",
+      "payments.create",
     )
   )
     permissionModules.add("billing");

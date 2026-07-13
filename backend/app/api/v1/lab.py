@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlmodel import Session
 
-from app.core.auth import require_any_permission, require_permission
+from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
@@ -160,6 +160,7 @@ def create_lab_test(
     current_user: User = Depends(
         require_any_permission(
             permissions.LAB_MANAGE,
+            permissions.LAB_CREATE,
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
             permissions.SETTINGS_MANAGE,
         )
@@ -177,6 +178,7 @@ def list_lab_tests(
     current_user: User = Depends(
         require_any_permission(
             permissions.LAB_MANAGE,
+            permissions.LAB_READ,
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
             permissions.PATIENT_SUBSCRIPTIONS_READ,
             permissions.SETTINGS_MANAGE,
@@ -199,7 +201,9 @@ def update_lab_test(
     payload: LabTestCatalogUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_EDIT)
+    ),
 ) -> LabTestCatalog:
     return update_lab_test_record(
         session,
@@ -215,7 +219,9 @@ def delete_lab_test(
     test_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_DELETE)
+    ),
 ) -> LabTestCatalog:
     return delete_lab_test_record(
         session, tenant_id=tenant_id, test_id=test_id, current_user=current_user
@@ -231,7 +237,9 @@ def create_lab_package(
     payload: LabTestPackageCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_CREATE)
+    ),
 ) -> LabTestPackageRead:
     return create_lab_package_record(session, tenant_id=tenant_id, payload=payload)
 
@@ -241,7 +249,9 @@ def list_lab_packages(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
+    ),
 ) -> list[LabTestPackageRead]:
     return list_lab_packages_service(
         session,
@@ -258,7 +268,9 @@ def update_lab_package(
     payload: LabTestPackageUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_EDIT)
+    ),
 ) -> LabTestPackageRead:
     return update_lab_package_record(
         session,
@@ -274,7 +286,9 @@ def delete_lab_package(
     package_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_DELETE)
+    ),
 ) -> LabTestPackageRead:
     return delete_lab_package_record(
         session, tenant_id=tenant_id, package_id=package_id, current_user=current_user
@@ -290,7 +304,9 @@ def create_result_template(
     payload: LabResultTemplateCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    _current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_RESULTS_MANAGE)
+    ),
 ) -> LabResultTemplateRead:
     return create_result_template_record(session, tenant_id=tenant_id, payload=payload)
 
@@ -300,7 +316,13 @@ def list_result_templates(
     tenant_id: str = Depends(require_tenant_id),
     test_id: str | None = None,
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    _current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.LAB_RESULTS_MANAGE,
+        )
+    ),
 ) -> list[LabResultTemplateRead]:
     return list_result_templates_service(
         session,
@@ -319,7 +341,9 @@ def create_lab_order(
     payload: LabOrderCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_CREATE)
+    ),
 ) -> LabOrder:
     return create_lab_order_record(
         session, tenant_id=tenant_id, payload=payload, current_user=current_user
@@ -336,7 +360,9 @@ def create_lab_order_from_consultation(
     payload: LabOrderFromConsultation,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_CREATE)
+    ),
 ) -> LabOrder:
     return create_lab_order_from_consultation_record(
         session,
@@ -354,7 +380,9 @@ def list_lab_orders(
     status_filter: LabOrderStatus | None = None,
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
+    ),
 ) -> list[LabOrder]:
     branch_id = scoped_branch_id(current_user, branch_id)
     return list_lab_orders_records(
@@ -371,7 +399,9 @@ def get_lab_order(
     order_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
+    ),
 ) -> LabOrderDetailRead:
     return get_lab_order_detail(
         session, tenant_id=tenant_id, order_id=order_id, current_user=current_user
@@ -384,7 +414,9 @@ def update_lab_order_status(
     payload: LabOrderStatusUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_EDIT)
+    ),
 ) -> LabOrder:
     return update_lab_order_status_record(
         session,
@@ -405,7 +437,9 @@ def collect_lab_sample(
     payload: LabSampleCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_EDIT)
+    ),
 ) -> LabOrderDetailRead:
     return collect_lab_sample_record(
         session,
@@ -426,7 +460,9 @@ def add_lab_result(
     payload: LabResultCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_RESULTS_MANAGE)
+    ),
 ) -> LabOrderDetailRead:
     return add_lab_result_record(
         session,
@@ -442,7 +478,9 @@ def lab_report_pdf(
     order_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.LAB_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
+    ),
 ) -> Response:
     pdf = render_lab_report_pdf(
         session, tenant_id=tenant_id, order_id=order_id, current_user=current_user

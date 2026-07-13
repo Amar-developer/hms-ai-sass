@@ -8,7 +8,7 @@ import {
   ActionButton,
   ActionGroup,
 } from "@/app/components/common/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Camera } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import {
@@ -22,6 +22,8 @@ import { humanizeOptionLabel, paymentMethodOptions } from "@/lib/options";
 import { defaultNumberingEntities } from "../constants";
 import { SidebarModuleAccessCard } from "./SidebarModuleAccessCard";
 import { displayDateTime } from "@/utils/helper";
+import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize } from "@/utils/constants";
 
 export function SettingsPanel(props: any) {
   const {
@@ -68,6 +70,20 @@ export function SettingsPanel(props: any) {
     resendMonthlyReport,
     downloadMonthlyReport,
   } = props;
+  const [reportPage, setReportPage] = useState(1);
+  const reportTotalPages = Math.max(
+    1,
+    Math.ceil(reportJobs.length / pageSize),
+  );
+  const safeReportPage = Math.min(reportPage, reportTotalPages);
+  const pagedReportJobs = reportJobs.slice(
+    (safeReportPage - 1) * pageSize,
+    safeReportPage * pageSize,
+  );
+
+  useEffect(() => {
+    if (reportPage !== safeReportPage) setReportPage(safeReportPage);
+  }, [reportPage, safeReportPage]);
   const [invoiceLogoFile, setInvoiceLogoFile] = useState<File | null>(null);
   const effectiveInvoiceLogoUrl = invoiceLogoUrl || tenantLogoUrl || "";
   const toggleReportFilter = (key: string) => (event: any) =>
@@ -484,10 +500,12 @@ export function SettingsPanel(props: any) {
                   </td>
                 </tr>
               )}
-              {reportJobs.map((job: any, index: number) => (
+              {pagedReportJobs.map((job: any, index: number) => (
                 <tr key={job.id}>
                   <td className="px-4 py-4 text-sm">
-                    <b>Report {index + 1}</b>
+                    <b>
+                      Report {(safeReportPage - 1) * pageSize + index + 1}
+                    </b>
                   </td>
                   <td>
                     <p className="text-xs text-slate-500">
@@ -549,6 +567,12 @@ export function SettingsPanel(props: any) {
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={safeReportPage}
+          totalPages={reportTotalPages}
+          total={reportJobs.length}
+          onPage={setReportPage}
+        />
       </Card>
     </div>
   );

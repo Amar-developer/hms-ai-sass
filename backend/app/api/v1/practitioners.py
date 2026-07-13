@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
 from app.core.access_control import current_doctor_practitioner_id
-from app.core.auth import require_any_permission, require_permission
+from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.core.validation import BranchId, DepartmentId, PractitionerId
@@ -170,7 +170,7 @@ def update_practitioner(
     session: Session = Depends(get_session),
     _current_user=Depends(
         require_any_permission(
-            permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_CREATE
+            permissions.PRACTITIONERS_MANAGE, permissions.PRACTITIONERS_EDIT
         )
     ),
 ) -> PractitionerRead:
@@ -187,7 +187,11 @@ def delete_practitioner(
     practitioner_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE, permissions.PRACTITIONERS_DELETE
+        )
+    ),
 ) -> dict[str, bool | str]:
     return practitioner_service.delete_practitioner(
         session,
@@ -250,7 +254,11 @@ def create_practitioner_leave(
     payload: PractitionerLeaveCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE, permissions.SCHEDULING_CREATE
+        )
+    ),
 ) -> PractitionerLeave:
     return practitioner_service.create_leave(
         session,
@@ -265,7 +273,11 @@ def list_practitioner_leaves(
     practitioner_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE, permissions.SCHEDULING_READ
+        )
+    ),
 ) -> list[PractitionerLeave]:
     return practitioner_service.list_leaves(
         session, tenant_id=tenant_id, practitioner_id=practitioner_id
@@ -282,7 +294,11 @@ def create_practitioner_room_assignment(
     payload: PractitionerRoomAssignmentCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE, permissions.SCHEDULING_CREATE
+        )
+    ),
 ) -> PractitionerRoomAssignment:
     return practitioner_service.create_room_assignment(
         session,
@@ -300,7 +316,11 @@ def list_practitioner_room_assignments(
     practitioner_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user=Depends(require_permission(permissions.PRACTITIONERS_MANAGE)),
+    _current_user=Depends(
+        require_any_permission(
+            permissions.PRACTITIONERS_MANAGE, permissions.SCHEDULING_READ
+        )
+    ),
 ) -> list[PractitionerRoomAssignment]:
     return practitioner_service.list_room_assignments(
         session, tenant_id=tenant_id, practitioner_id=practitioner_id

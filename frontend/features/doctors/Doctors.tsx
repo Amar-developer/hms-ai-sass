@@ -459,8 +459,8 @@ export function Doctors({ apiSession, clinic }: any) {
         <FormField  label="Search">
           <Input
             value={query}
-            onChange={(v) => {
-              setQuery(v);
+            onChange={(event: any) => {
+              setQuery(event.target.value);
               setPage(1);
             }}
             placeholder="Name, specialty, mobile, email"

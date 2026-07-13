@@ -58,11 +58,23 @@ function formatValue(value: any): string {
   return String(value);
 }
 
+function comparableValue(value: any): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string") return value.trim() || null;
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
 function describeEvent(event: ActivityEvent): string {
   let changes: ActivityChange[] = [];
   try {
     const parsed = event.metadata_json ? JSON.parse(event.metadata_json) : {};
-    changes = Array.isArray(parsed.changes) ? parsed.changes : [];
+    changes = Array.isArray(parsed.changes)
+      ? parsed.changes.filter(
+          (change: ActivityChange) =>
+            comparableValue(change.old) !== comparableValue(change.new),
+        )
+      : [];
   } catch {
     changes = [];
   }

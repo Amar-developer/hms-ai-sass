@@ -32,7 +32,9 @@ def create_plan(
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(
-            permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_CREATE,
+            permissions.SETTINGS_MANAGE,
         )
     ),
 ) -> PatientSubscriptionPlanRead:
@@ -51,6 +53,7 @@ def list_plans(
         require_any_permission(
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
             permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_CREATE,
             permissions.SETTINGS_MANAGE,
             permissions.IDENTITY_USERS_MANAGE,
             permissions.IDENTITY_USERS_READ,
@@ -73,7 +76,9 @@ def update_plan(
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(
-            permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_EDIT,
+            permissions.SETTINGS_MANAGE,
         )
     ),
 ) -> PatientSubscriptionPlanRead:
@@ -93,7 +98,9 @@ def delete_plan(
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(
-            permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_DELETE,
+            permissions.SETTINGS_MANAGE,
         )
     ),
 ) -> None:
@@ -135,6 +142,7 @@ def list_enrollments(
         require_any_permission(
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
             permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_CREATE,
             permissions.SETTINGS_MANAGE,
             permissions.IDENTITY_USERS_MANAGE,
             permissions.IDENTITY_USERS_READ,
@@ -160,7 +168,9 @@ def update_enrollment(
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(
-            permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_EDIT,
+            permissions.SETTINGS_MANAGE,
         )
     ),
 ) -> PatientSubscriptionEnrollmentRead:
@@ -180,7 +190,9 @@ def delete_enrollment(
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(
-            permissions.PATIENT_SUBSCRIPTIONS_MANAGE, permissions.SETTINGS_MANAGE
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_DELETE,
+            permissions.SETTINGS_MANAGE,
         )
     ),
 ) -> None:

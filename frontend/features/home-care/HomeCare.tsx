@@ -19,7 +19,7 @@ import { BookingFormValues } from "@/features/home-care/homecare.schema";
 import { patientName } from "@/utils/helper";
 import { StatusToast } from "@/app/components/common/ui";
 import { BookingDetail } from "./components/BookingDetail";
-import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize } from "@/utils/constants";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
 
@@ -43,6 +43,7 @@ export function HomeCare({
   const [serviceLoadError, setServiceLoadError] = useState("");
   const [busy, setBusy] = useState("");
   const [filters, setFilters] = useState({ query: "", status: "all" });
+  const [page, setPage] = useState(1);
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
   // Editing and cancelling bookings is restricted to tenant admins (and super
   // admins). Other roles can still view bookings and generate invoices.
@@ -108,7 +109,7 @@ export function HomeCare({
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        const query = filters.query.trim().toLowerCase();
+        const query = String(filters.query || "").trim().toLowerCase();
         if (query && !haystack.includes(query)) return false;
         if (filters.status !== "all" && booking.status !== filters.status)
           return false;
@@ -116,10 +117,22 @@ export function HomeCare({
       }),
     [bookings, filters, patientMap, staffMap],
   );
+  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedBookings = filteredBookings.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
 
   useEffect(() => {
     load();
   }, [apiSession?.tenantId, branchId]);
+  useEffect(() => {
+    setPage(1);
+  }, [filters.query, filters.status]);
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
   useEffect(() => {
     if (selected?.id) loadInvoice(selected.id);
     else setInvoiceDetail(null);
@@ -533,8 +546,11 @@ export function HomeCare({
 
       {view === "list" && (
         <BookingsList
-          bookings={filteredBookings}
-          total={bookings.length}
+          bookings={pagedBookings}
+          total={filteredBookings.length}
+          page={safePage}
+          totalPages={totalPages}
+          onPage={setPage}
           filters={filters}
           setFilters={setFilters}
           patientMap={patientMap}

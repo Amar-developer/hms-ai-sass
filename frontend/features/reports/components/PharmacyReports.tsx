@@ -106,6 +106,7 @@ const PharmacyReports = ({
           <DataTable
             columns={columns}
             data={pharmacySettlementRows}
+            paginate
             emptyMessage="No paid pharmacy invoices match this filter."
             className="w-full min-w-[1220px] text-left text-sm"
           />

@@ -11,6 +11,7 @@ export function ListCard({
   searchKeys,
   createLabel,
   onCreate,
+  canCreate = true,
   filters = [],
   filterValues = {},
   onFilterChange,
@@ -59,14 +60,16 @@ export function ListCard({
         <div className="flex items-center gap-2">
           {onRefresh && <RefreshButton onRefresh={onRefresh} />}
 
-          <button
-            type="button"
-            onClick={onCreate}
-            className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-xs bg-slate-900 font-bold text-white"
-          >
-            <Plus size={16} />
-            {createLabel}
-          </button>
+          {canCreate && onCreate && (
+            <button
+              type="button"
+              onClick={onCreate}
+              className="inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-xs bg-slate-900 font-bold text-white"
+            >
+              <Plus size={16} />
+              {createLabel}
+            </button>
+          )}
         </div>
       </div>
 

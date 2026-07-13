@@ -611,7 +611,13 @@ def get_ip_invoice(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
 ) -> InvoiceDetailRead | None:
     return get_ip_invoice_detail(
         session,
@@ -630,7 +636,13 @@ def generate_ip_invoice(
     admission_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_CREATE,
+            permissions.INVOICES_CREATE,
+        )
+    ),
 ) -> InvoiceDetailRead:
     return generate_ip_invoice_by_admission_id(
         session,

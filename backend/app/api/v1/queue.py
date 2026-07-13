@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.appointments.schemas import (
@@ -21,13 +21,19 @@ router = APIRouter(prefix="/queue")
 @router.get(
     "",
     response_model=list[QueueEntryRead],
-    dependencies=[Depends(require_permission(permissions.QUEUE_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(permissions.QUEUE_MANAGE, permissions.QUEUE_READ)
+        )
+    ],
 )
 def list_queue(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     include_completed: bool = False,
-    current_user: User = Depends(require_permission(permissions.QUEUE_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.QUEUE_MANAGE, permissions.QUEUE_READ)
+    ),
     session: Session = Depends(get_session),
 ) -> list[QueueEntry]:
     return queue_service.list_queue_entries(
@@ -42,13 +48,19 @@ def list_queue(
 @router.get(
     "/display",
     response_model=list[QueueDisplayRead],
-    dependencies=[Depends(require_permission(permissions.QUEUE_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(permissions.QUEUE_MANAGE, permissions.QUEUE_READ)
+        )
+    ],
 )
 def queue_display(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     display_mode: str = "reception",
-    current_user: User = Depends(require_permission(permissions.QUEUE_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.QUEUE_MANAGE, permissions.QUEUE_READ)
+    ),
     session: Session = Depends(get_session),
 ) -> list[QueueDisplayRead]:
     return queue_service.queue_display_rows(

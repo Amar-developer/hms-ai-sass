@@ -74,7 +74,7 @@ def test_entitlements_include_enabled_modules_for_free_trial(client):
     assert "ip" not in modules
 
 
-def test_free_trial_blocks_advanced_billing_invoice_generation(client):
+def test_free_trial_allows_basic_consultation_invoice_generation(client):
     tenant, consultation = create_signed_consultation_on_trial(client)
 
     response = client.post(
@@ -83,11 +83,8 @@ def test_free_trial_blocks_advanced_billing_invoice_generation(client):
         json={"consultation_id": consultation["id"]},
     )
 
-    assert response.status_code == 403
-    assert (
-        response.json()["detail"]
-        == "Module billing_advanced is not enabled for plan Free Trial"
-    )
+    assert response.status_code == 201
+    assert response.json()["invoice"]["invoice_number"]
 
 
 def test_starter_entitlements_enable_advanced_billing(client):

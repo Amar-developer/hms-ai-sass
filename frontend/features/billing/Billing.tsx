@@ -58,6 +58,18 @@ export function Billing({
     toDate: "",
   });
   const [page, setPage] = useState(1);
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreateInvoices = hasPermission(
+    "billing.manage",
+    "billing.create",
+    "invoices.create",
+  );
 
   const patientMap = useMemo(
     () => new Map(patients.map((p: any) => [p.id, p])),
@@ -135,7 +147,7 @@ export function Billing({
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        const query = filters.query.trim().toLowerCase();
+        const query = String(filters.query || "").trim().toLowerCase();
         if (query && !haystack.includes(query)) return false;
         if (
           filters.source !== "all" &&
@@ -1034,51 +1046,53 @@ export function Billing({
         </Card>
       </div>
 
-      <Card>
-        <h3 className="card-title font-bold">Pending Consultation Invoices</h3>
-        <p className="card-desc text-slate-500">
-          Reception can generate the consultation-fee invoice after the doctor
-          signs the consultation. Lab, pharmacy, IP, and physiotherapy each have
-          their own invoices created by those modules.
-        </p>
-        <StatusToast message={message} onClose={() => setMessage("")} />
-        <div className="mt-4 grid gap-3">
-          {signedReady.length === 0 && (
-            <div className="rounded-lg bg-slate-50 p-4 card-desc text-slate-500">
-              All completed consultations already have invoices.
-            </div>
-          )}
-          {signedReady.map((a: any) => (
-            <div
-              key={a.id}
-              className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"
-            >
-              <div>
-                <b className="text-lg lg:text-xl">
-                  {a.token} · {a.patient}
-                </b>
-                <p className="text-xs lg:text-sm text-slate-500">
-                  Completed consultation ready for billing
-                  {a.doctor && a.doctor !== "Unassigned" ? (
-                    <>
-                      {" · Signed by "}
-                      <span className="font-semibold text-slate-700">
-                        {a.doctor}
-                      </span>
-                    </>
-                  ) : null}
-                </p>
+      {canCreateInvoices && (
+        <Card>
+          <h3 className="card-title font-bold">Pending Consultation Invoices</h3>
+          <p className="card-desc text-slate-500">
+            Reception can generate the consultation-fee invoice after the doctor
+            signs the consultation. Lab, pharmacy, IP, and physiotherapy each have
+            their own invoices created by those modules.
+          </p>
+          <StatusToast message={message} onClose={() => setMessage("")} />
+          <div className="mt-4 grid gap-3">
+            {signedReady.length === 0 && (
+              <div className="rounded-lg bg-slate-50 p-4 card-desc text-slate-500">
+                All completed consultations already have invoices.
               </div>
-              <Button
-                disabled={busy === a.id}
-                onClick={() => generateInvoice(a)}
+            )}
+            {signedReady.map((a: any) => (
+              <div
+                key={a.id}
+                className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"
               >
-                {busy === a.id ? "Generating..." : "Generate Invoice"}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </Card>
+                <div>
+                  <b className="text-lg lg:text-xl">
+                    {a.token} · {a.patient}
+                  </b>
+                  <p className="text-xs lg:text-sm text-slate-500">
+                    Completed consultation ready for billing
+                    {a.doctor && a.doctor !== "Unassigned" ? (
+                      <>
+                        {" · Signed by "}
+                        <span className="font-semibold text-slate-700">
+                          {a.doctor}
+                        </span>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+                <Button
+                  disabled={busy === a.id}
+                  onClick={() => generateInvoice(a)}
+                >
+                  {busy === a.id ? "Generating..." : "Generate Invoice"}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card>
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
@@ -1100,7 +1114,9 @@ export function Billing({
           <FormField label="Search">
             <Input
               value={filters.query}
-              onChange={(v) => updateFilter("query", v)}
+              onChange={(event: any) =>
+                updateFilter("query", event.target.value)
+              }
               placeholder="Invoice, patient, source"
             />
           </FormField>

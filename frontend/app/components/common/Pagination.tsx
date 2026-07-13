@@ -1,6 +1,12 @@
-import { pageSize } from "@/utils/constants";
+import { pageSize as defaultPageSize } from "@/utils/constants";
 
-export function Pagination({ page, totalPages, total, onPage }: any) {
+export function Pagination({
+  page,
+  totalPages,
+  total,
+  onPage,
+  pageSize = defaultPageSize,
+}: any) {
   const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
   return (

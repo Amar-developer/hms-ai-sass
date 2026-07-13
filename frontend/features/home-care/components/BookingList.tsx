@@ -4,11 +4,15 @@ import { statuses } from "../constants";
 import { capitalizeFirst, displayDate, money, patientName } from "@/utils/helper";
 import { bookingTotal, isBookingLocked, userName } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
+import { Pagination } from "@/app/components/common/Pagination";
 
 
 export function BookingsList({
   bookings,
   total,
+  page,
+  totalPages,
+  onPage,
   filters,
   setFilters,
   patientMap,
@@ -43,8 +47,8 @@ export function BookingsList({
           <FormField label="Search">
             <Input
               value={filters.query}
-              onChange={(value: string) =>
-                setFilters({ ...filters, query: value })
+              onChange={(event: any) =>
+                setFilters({ ...filters, query: event.target.value })
               }
               placeholder="Booking, patient, staff, status"
             />
@@ -152,6 +156,12 @@ export function BookingsList({
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        onPage={onPage}
+      />
     </Card>
   );
 }

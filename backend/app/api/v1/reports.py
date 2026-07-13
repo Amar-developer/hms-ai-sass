@@ -24,12 +24,20 @@ router = APIRouter(prefix="/reports")
 @router.get(
     "/monthly-email/config",
     response_model=MonthlyReportConfigRead,
-    dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.SETTINGS_MANAGE, permissions.SETTINGS_READ
+            )
+        )
+    ],
 )
 def get_monthly_report_config(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    _current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    _current_user: User = Depends(
+        require_any_permission(permissions.SETTINGS_MANAGE, permissions.SETTINGS_READ)
+    ),
 ) -> MonthlyReportConfigRead:
     return reports_service.read_config(
         reports_service.load_monthly_report_config(session, tenant_id)
@@ -39,13 +47,21 @@ def get_monthly_report_config(
 @router.put(
     "/monthly-email/config",
     response_model=MonthlyReportConfigRead,
-    dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.SETTINGS_MANAGE, permissions.SETTINGS_EDIT
+            )
+        )
+    ],
 )
 def update_monthly_report_config(
     payload: MonthlyReportConfigUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.SETTINGS_MANAGE, permissions.SETTINGS_EDIT)
+    ),
 ) -> MonthlyReportConfigRead:
     saved = reports_service.save_monthly_report_config(
         session,

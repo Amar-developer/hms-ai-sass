@@ -20,14 +20,20 @@ def diff_changes(
     changes: list[dict[str, Any]] = []
     for field, new_value in after.items():
         old_value = before.get(field)
-        if old_value == new_value:
+        comparable_old = (
+            None if isinstance(old_value, str) and not old_value.strip() else old_value
+        )
+        comparable_new = (
+            None if isinstance(new_value, str) and not new_value.strip() else new_value
+        )
+        if comparable_old == comparable_new:
             continue
         changes.append(
             {
                 "field": field,
                 "label": labels.get(field, field.replace("_", " ").title()),
-                "old": old_value,
-                "new": new_value,
+                "old": comparable_old,
+                "new": comparable_new,
             }
         )
     return changes

@@ -20,12 +20,12 @@ ALL_MATRIX_MODULES = [
 
 READ_ENDPOINTS = {
     "patients": ("/api/v1/patients", "patients.read"),
-    "appointments": ("/api/v1/appointments", "appointments.manage"),
-    "queue": ("/api/v1/queue", "queue.manage"),
+    "appointments": ("/api/v1/appointments", "appointments.read"),
+    "queue": ("/api/v1/queue", "queue.read"),
     "consultations": ("/api/v1/consultations", "consultations.read"),
-    "billing": ("/api/v1/billing/doctor-fee-rules", "billing.manage"),
-    "lab": ("/api/v1/lab/catalog/tests", "lab.manage"),
-    "pharmacy": ("/api/v1/pharmacy/medicines", "pharmacy.manage"),
+    "billing": ("/api/v1/billing/invoices", "billing.read"),
+    "lab": ("/api/v1/lab/catalog/tests", "lab.read"),
+    "pharmacy": ("/api/v1/pharmacy/medicines", "pharmacy.read"),
 }
 
 
@@ -129,6 +129,104 @@ def test_role_permission_matrix_allows_only_assigned_module_reads(client):
                 assert (
                     response.status_code == 403
                 ), f"{role_key} should not read {module}: {response.text}"
+
+
+def test_granular_permissions_drive_actions_without_builtin_role_names(client):
+    tenant, branch = _create_tenant_with_all_modules(
+        client, name="Granular Permission Clinic"
+    )
+    tenant_headers = {"X-Tenant-ID": tenant["id"]}
+    patient = client.post(
+        "/api/v1/patients",
+        headers=tenant_headers,
+        json={"full_name": "Granular Patient", "branch_id": branch["id"]},
+    ).json()
+    appointment = client.post(
+        "/api/v1/appointments",
+        headers=tenant_headers,
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "appointment_type": "op",
+            "appointment_date": date.today().isoformat(),
+            "department_id": "general",
+            "practitioner_id": "doctor_demo",
+        },
+    ).json()
+
+    headers = _create_role_user_and_login(
+        client,
+        tenant["id"],
+        "granular_operator",
+        [
+            "queue.read",
+            "consultations.read",
+            "consultations.create",
+            "consultations.edit",
+            "identity.roles.create",
+            "identity.roles.read",
+            "identity.roles.edit",
+            "identity.roles.delete",
+        ],
+        branch_id=branch["id"],
+    )
+
+    assert client.get("/api/v1/queue", headers=headers).status_code == 200
+    queue_entry_id = appointment["queue_entry"]["id"]
+    assert (
+        client.post(
+            f"/api/v1/queue/{queue_entry_id}/call",
+            headers=headers,
+            json={},
+        ).status_code
+        == 403
+    )
+
+    consultation = client.post(
+        "/api/v1/consultations",
+        headers=headers,
+        json={
+            "appointment_id": appointment["appointment"]["id"],
+            "chief_complaint": "Permission regression",
+        },
+    )
+    assert consultation.status_code == 201, consultation.text
+    updated = client.patch(
+        f"/api/v1/consultations/{consultation.json()['id']}",
+        headers=headers,
+        json={"clinical_notes": "Granular edit accepted"},
+    )
+    assert updated.status_code == 200, updated.text
+
+    delegated_role = client.post(
+        "/api/v1/identity/roles",
+        headers=headers,
+        json={
+            "name": "Empty Delegated Role",
+            "key": "empty_delegated_role",
+            "permission_keys": [],
+        },
+    )
+    assert delegated_role.status_code == 201, delegated_role.text
+    role_id = delegated_role.json()["id"]
+    assert (
+        client.patch(
+            f"/api/v1/identity/roles/{role_id}",
+            headers=headers,
+            json={"name": "Renamed Delegated Role"},
+        ).status_code
+        == 200
+    )
+    escalation = client.patch(
+        f"/api/v1/identity/roles/{role_id}",
+        headers=headers,
+        json={"permission_keys": ["patients.delete"]},
+    )
+    assert escalation.status_code == 403
+    assert (
+        client.delete(f"/api/v1/identity/roles/{role_id}", headers=headers).status_code
+        == 200
+    )
 
 
 def test_module_entitlement_matrix_blocks_disabled_modules_even_with_permission(client):

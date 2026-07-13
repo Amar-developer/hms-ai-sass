@@ -1,15 +1,29 @@
-export function canUseTenantAdminSection(_section: string, user: any) {
-  // Every Tenant Admin console section (Users, Roles, Departments, Branches,
-  // Suppliers, Tax, Offers, Membership, Files, Settings) is reserved for the
-  // tenant admin role — never a clinical or front-desk role, even if a stray
-  // admin permission was left on the role. The API still enforces per-endpoint
-  // permission keys as the real security boundary; this only governs the menu.
+const SECTION_PERMISSION_PREFIXES: Record<string, string[]> = {
+  users: ["identity.users"],
+  roles: ["identity.roles"],
+  departments: ["departments"],
+  branches: ["branches"],
+  suppliers: ["suppliers"],
+  tax: ["tax"],
+  offers: ["discounts"],
+  membership: ["patient_subscriptions"],
+  files: ["files"],
+  settings: ["settings"],
+};
+
+export function canUseTenantAdminSection(section: string, user: any) {
   const permissions = user?.permissions || [];
-  return Boolean(
+  if (
     user?.is_super_admin ||
-      permissions.includes("*") ||
-      user?.roles?.includes("tenant_admin") ||
-      user?.user_type === "tenant_admin",
+    permissions.includes("*") ||
+    user?.roles?.includes("tenant_admin") ||
+    user?.user_type === "tenant_admin"
+  ) {
+    return true;
+  }
+  const prefixes = SECTION_PERMISSION_PREFIXES[section] || [];
+  return permissions.some((permission: string) =>
+    prefixes.some((prefix) => permission.startsWith(`${prefix}.`)),
   );
 }
 

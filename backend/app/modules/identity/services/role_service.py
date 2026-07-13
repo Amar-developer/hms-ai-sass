@@ -19,7 +19,6 @@ from app.modules.identity.schemas import (
 from app.modules.identity.services.helpers import (
     assert_grantable_permission_keys,
     assert_role_editable_by_actor,
-    assert_tenant_admin,
     assert_tenant_permission,
     ensure_permission,
     get_tenant_role_or_404,
@@ -47,8 +46,14 @@ class RoleService:
     def create_role(
         self, *, tenant_id: str, payload: RoleCreate, actor: User
     ) -> RoleRead:
-        assert_tenant_admin(self.session, actor, tenant_id)
-        assert_grantable_permission_keys(actor, payload.permission_keys)
+        assert_tenant_permission(
+            self.session,
+            actor,
+            tenant_id,
+            permissions.IDENTITY_ROLES_MANAGE,
+            permissions.IDENTITY_ROLES_CREATE,
+        )
+        assert_grantable_permission_keys(self.session, actor, payload.permission_keys)
         role = Role(
             tenant_id=tenant_id,
             name=payload.name,
@@ -152,9 +157,14 @@ class RoleService:
             actor,
             tenant_id,
             permissions.IDENTITY_ROLES_MANAGE,
+            permissions.IDENTITY_ROLES_CREATE,
             permissions.IDENTITY_ROLES_READ,
+            permissions.IDENTITY_ROLES_EDIT,
+            permissions.IDENTITY_ROLES_DELETE,
             permissions.IDENTITY_USERS_MANAGE,
+            permissions.IDENTITY_USERS_CREATE,
             permissions.IDENTITY_USERS_READ,
+            permissions.IDENTITY_USERS_EDIT,
         )
         roles = self.roles.list_for_tenant(tenant_id)
         return [role_read(self.session, role) for role in roles]
@@ -162,7 +172,13 @@ class RoleService:
     def update_role(
         self, *, tenant_id: str, role_id: str, payload: RoleUpdate, actor: User
     ) -> RoleRead:
-        assert_tenant_admin(self.session, actor, tenant_id)
+        assert_tenant_permission(
+            self.session,
+            actor,
+            tenant_id,
+            permissions.IDENTITY_ROLES_MANAGE,
+            permissions.IDENTITY_ROLES_EDIT,
+        )
         role = get_tenant_role_or_404(self.session, tenant_id, role_id)
         assert_role_editable_by_actor(self.session, role, actor)
         updates = payload.model_dump(exclude_unset=True)
@@ -182,7 +198,9 @@ class RoleService:
         if "is_active" in updates and updates["is_active"] is not None:
             role.is_active = updates["is_active"]
         if "permission_keys" in updates and updates["permission_keys"] is not None:
-            assert_grantable_permission_keys(actor, updates["permission_keys"])
+            assert_grantable_permission_keys(
+                self.session, actor, updates["permission_keys"]
+            )
             replace_role_permissions(self.session, role, updates["permission_keys"])
         role.updated_by_user_id = actor.id
         role.updated_at = now_utc()
@@ -204,7 +222,13 @@ class RoleService:
     def change_role_status(
         self, *, tenant_id: str, role_id: str, payload: RoleUpdate, actor: User
     ) -> RoleRead:
-        assert_tenant_admin(self.session, actor, tenant_id)
+        assert_tenant_permission(
+            self.session,
+            actor,
+            tenant_id,
+            permissions.IDENTITY_ROLES_MANAGE,
+            permissions.IDENTITY_ROLES_EDIT,
+        )
         if payload.is_active is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="is_active is required"
@@ -232,7 +256,13 @@ class RoleService:
     def delete_role(
         self, *, tenant_id: str, role_id: str, actor: User
     ) -> dict[str, str | bool]:
-        assert_tenant_admin(self.session, actor, tenant_id)
+        assert_tenant_permission(
+            self.session,
+            actor,
+            tenant_id,
+            permissions.IDENTITY_ROLES_MANAGE,
+            permissions.IDENTITY_ROLES_DELETE,
+        )
         role = get_tenant_role_or_404(self.session, tenant_id, role_id)
         assert_role_editable_by_actor(self.session, role, actor)
         role.is_active = False

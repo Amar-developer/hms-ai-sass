@@ -471,7 +471,7 @@ export function Patient({
 
   const filtered = rows
     .filter((row: any) => {
-      const search = query.trim().toLowerCase();
+      const search = String(query || "").trim().toLowerCase();
       const created = row.created_at ? new Date(row.created_at).getTime() : 0;
       const from = fromDate ? new Date(fromDate).getTime() : 0;
       const to = toDate
@@ -543,8 +543,8 @@ export function Patient({
           <FormField label="Patient / Mobile">
             <Input
               value={query}
-              onChange={(value) => {
-                setQuery(value);
+              onChange={(event: any) => {
+                setQuery(event.target.value);
                 setPage(1);
               }}
               placeholder="Name, mobile, area"

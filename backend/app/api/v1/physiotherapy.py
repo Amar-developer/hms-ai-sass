@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, Form, UploadFile, status
 from sqlmodel import Session
 
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import InvoiceDetailRead
@@ -190,7 +190,13 @@ def get_case_invoice(
     case_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
 ) -> InvoiceDetailRead | None:
     return PhysiotherapyBillingService(session).get_case_invoice(
         tenant_id=tenant_id, case_id=case_id, actor=current_user
@@ -207,7 +213,13 @@ def generate_invoice(
     payload: PhysiotherapyInvoiceCreate | None = None,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_CREATE,
+            permissions.INVOICES_CREATE,
+        )
+    ),
 ) -> InvoiceDetailRead:
     return PhysiotherapyBillingService(session).generate_invoice(
         tenant_id=tenant_id, case_id=case_id, payload=payload, actor=current_user

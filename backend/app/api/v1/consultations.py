@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlmodel import Session
 
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.consultations.models import Consultation, ConsultationAddendum
@@ -29,12 +29,24 @@ router = APIRouter(prefix="/consultations")
     "",
     response_model=ConsultationRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_WRITE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.CONSULTATIONS_WRITE,
+                permissions.CONSULTATIONS_CREATE,
+            )
+        )
+    ],
 )
 def create_consultation(
     payload: ConsultationCreate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.CONSULTATIONS_WRITE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_CREATE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Consultation:
     return ConsultationRecordService(session).create_consultation(
@@ -98,13 +110,25 @@ def get_consultation(
 @router.patch(
     "/{consultation_id}",
     response_model=ConsultationRead,
-    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_WRITE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.CONSULTATIONS_WRITE,
+                permissions.CONSULTATIONS_EDIT,
+            )
+        )
+    ],
 )
 def update_consultation(
     consultation_id: str,
     payload: ConsultationUpdate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.CONSULTATIONS_WRITE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_EDIT,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> Consultation:
     return ConsultationRecordService(session).update_consultation(
@@ -139,13 +163,25 @@ def sign_consultation(
     "/{consultation_id}/addendums",
     response_model=ConsultationAddendumRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_WRITE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.CONSULTATIONS_WRITE,
+                permissions.CONSULTATIONS_EDIT,
+            )
+        )
+    ],
 )
 def create_addendum(
     consultation_id: str,
     payload: ConsultationAddendumCreate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.CONSULTATIONS_WRITE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_EDIT,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> ConsultationAddendum:
     return ConsultationRecordService(session).create_addendum(
@@ -160,12 +196,24 @@ def create_addendum(
     "/clinical-templates",
     response_model=ConsultationTemplateRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_permission(permissions.CONSULTATIONS_WRITE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.CONSULTATIONS_WRITE,
+                permissions.CONSULTATIONS_CREATE,
+            )
+        )
+    ],
 )
 def create_clinical_template(
     payload: ConsultationTemplateCreate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.CONSULTATIONS_WRITE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.CONSULTATIONS_WRITE,
+            permissions.CONSULTATIONS_CREATE,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> ConsultationTemplateRead:
     return ClinicalTemplateService(session).create_clinical_template(

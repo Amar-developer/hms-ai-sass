@@ -216,8 +216,8 @@ export function BookingDetail({
                 <Input
                   label="Service Name"
                   value={visitForm.description}
-                  onChange={(value: string) =>
-                    setVisitField("description", value)
+                  onChange={(event: any) =>
+                    setVisitField("description", event.target.value)
                   }
                   placeholder="Type actual service done"
                 />

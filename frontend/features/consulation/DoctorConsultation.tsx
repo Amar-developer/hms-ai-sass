@@ -59,9 +59,9 @@ export function DoctorConsultation({
     apiSession?.user?.roles?.includes("doctor"),
   );
   const [scopedPractitioners, setScopedPractitioners] = useState<any[]>([]);
-  const practitionerSource = scopedPractitioners.length
-    ? scopedPractitioners
-    : livePractitioners;
+  // Keep the working doctor selector scoped, but retain the tenant-wide list
+  // for cross-department referrals.
+  const practitionerSource = [...livePractitioners, ...scopedPractitioners];
   const departmentNameById = new Map(
     (allowedDepartments || []).map((department: any) => [
       department.id,
@@ -135,7 +135,7 @@ export function DoctorConsultation({
         departmentIds.includes(departmentId))
     );
   });
-  const practitioners = doctorList.map((doctor: any) => ({
+  const practitioners = allDoctorList.map((doctor: any) => ({
     ...doctor,
     role: "Doctor",
   }));
@@ -203,6 +203,8 @@ export function DoctorConsultation({
   const [referDoctorId, setReferDoctorId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [consultationValidationAttempted, setConsultationValidationAttempted] =
+    useState(false);
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
@@ -335,6 +337,7 @@ export function DoctorConsultation({
   const selected =
     doctorQueue.find((a: any) => a.id === selectedAppointmentId) || current;
   useEffect(() => {
+    setConsultationValidationAttempted(false);
     if (selected?.treatmentType) setTreatmentType(selected.treatmentType);
     else if (
       selected?.visitPurpose === "fitness_certificate" ||
@@ -361,6 +364,9 @@ export function DoctorConsultation({
     setLabTests("");
     setScanNeeded(false);
     setScanTests("");
+    setReferDoctor(false);
+    setReferDoctorId("");
+    setAdmissionNeeded(false);
   }, [selected?.id]);
   async function resolveSelectedConsultationId() {
     if (!apiSession || !selected?.id) return "";
@@ -420,6 +426,8 @@ export function DoctorConsultation({
               )
               .join("\n"),
           );
+        } else if (c.diagnosis) {
+          setDiagnosisRows(c.diagnosis);
         }
         if (detail.medicines?.length) {
           setMedicineItems(
@@ -846,6 +854,26 @@ export function DoctorConsultation({
         .filter((row: any) => row.item_name),
     };
   }
+  function consultationDraftPayload() {
+    const structured = structuredPayload();
+    const complaintSummary =
+      structured.complaints
+        .map((row: any) => row.complaint)
+        .filter(Boolean)
+        .join(", ") || complaints.trim();
+    const diagnosisSummary =
+      structured.diagnoses
+        .map((row: any) => row.diagnosis)
+        .filter(Boolean)
+        .join(", ") || diagnosis.trim();
+    return {
+      treatment_type: treatmentType,
+      chief_complaint: complaintSummary || null,
+      diagnosis: diagnosisSummary || null,
+      clinical_notes: notes.trim() || null,
+      ...structured,
+    };
+  }
   async function callPatient(a: any) {
     if (isQueueActionLocked(a)) return;
     if (apiSession && a.queueEntryId) {
@@ -964,6 +992,7 @@ export function DoctorConsultation({
   }
 
   const resetConsultation = () => {
+    setConsultationValidationAttempted(false);
     setComplaints("");
     setDiagnosisRows("");
     setNotes("");
@@ -1068,9 +1097,8 @@ export function DoctorConsultation({
       method: "POST",
       body: JSON.stringify({
         appointment_id: selected.id,
-        treatment_type: treatmentType,
         created_by_user_id: apiSession.user?.id,
-        ...structuredPayload(),
+        ...consultationDraftPayload(),
       }),
     });
     await loadLiveData(apiSession);
@@ -1085,15 +1113,12 @@ export function DoctorConsultation({
       await apiFetch(`/consultations/${consultationId}`, apiSession, {
         method: "PATCH",
         body: JSON.stringify({
-          treatment_type: treatmentType,
-          diagnosis,
-          clinical_notes: notes,
           prescription_text: medicineRows || prescription,
           lab_referral_text: labText || null,
           scan_referral_text: scanNeeded ? scanTests : null,
           follow_up_advice: remarks,
           patient_remarks: remarks,
-          ...structuredPayload(),
+          ...consultationDraftPayload(),
         }),
       });
       await loadLiveData(apiSession);
@@ -1105,16 +1130,24 @@ export function DoctorConsultation({
     }
   }
   async function signBackendConsultation() {
-    const hasComplaints = splitRows(complaints).length > 0;
-    const hasDiagnosis = Boolean(diagnosis.trim()) || splitRows(diagnosisRows).length > 0;
+    setConsultationValidationAttempted(true);
+    const draftPayload = consultationDraftPayload();
+    const hasComplaints = Boolean(draftPayload.chief_complaint);
+    const hasDiagnosis = Boolean(draftPayload.diagnosis);
     const medicinesMissingDoseOrFrequency = splitRows(medicineRows).some((line: string) => {
       const [_name, dosage, frequency] = line.split("|").map((part: string) => part.trim());
       return !dosage || !frequency;
     });
-    if (!treatmentType || !hasComplaints || !hasDiagnosis || !notes.trim()) {
-      setMessage(
-        "Add treatment type, complaints, diagnosis, and doctor notes before signing.",
-      );
+    const missingFields = [
+      !treatmentType.trim() ? "treatment type" : "",
+      !hasComplaints ? "complaints" : "",
+      !hasDiagnosis ? "diagnosis" : "",
+      !notes.trim() ? "doctor notes" : "",
+      scanNeeded && !scanTests.trim() ? "scan / diagnostic" : "",
+      referDoctor && !referDoctorId ? "recommended doctor" : "",
+    ].filter(Boolean);
+    if (missingFields.length > 0) {
+      setMessage(`Add ${missingFields.join(", ")} before signing.`);
       return;
     }
     if (medicinesMissingDoseOrFrequency) {
@@ -1129,15 +1162,12 @@ export function DoctorConsultation({
       await apiFetch(`/consultations/${consultationId}`, apiSession, {
         method: "PATCH",
         body: JSON.stringify({
-          treatment_type: treatmentType,
-          diagnosis,
-          clinical_notes: notes,
           prescription_text: medicineRows || prescription,
           lab_referral_text: labText || null,
           scan_referral_text: scanNeeded ? scanTests : null,
           follow_up_advice: remarks,
           patient_remarks: remarks,
-          ...structuredPayload(),
+          ...draftPayload,
         }),
       });
       await apiFetch(`/consultations/${consultationId}/sign`, apiSession, {
@@ -1145,6 +1175,7 @@ export function DoctorConsultation({
         body: JSON.stringify({ signed_by_user_id: apiSession.user?.id }),
       });
       await loadLiveData(apiSession);
+      setConsultationValidationAttempted(false);
       setMessage("Consultation Completed and locked in backend.");
     } catch (err: any) {
       setMessage(err.message || "Could not sign consultation.");
@@ -1359,6 +1390,7 @@ export function DoctorConsultation({
           saveBackendDraft={saveBackendDraft}
           markDone={markDone}
           signBackendConsultation={signBackendConsultation}
+          validationAttempted={consultationValidationAttempted}
           requeuePatient={requeuePatient}
           callPatient={callPatient}
           skipPatient={skipPatient}

@@ -22,6 +22,8 @@ export type DataTableProps<T> = {
   emptyMessage?: string;
   className?: string;
   onRowClick?: (row: T) => void;
+  paginate?: boolean;
+  pageSize?: number;
 };
 
 export type HomeCareReportsProps = {

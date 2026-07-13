@@ -1,6 +1,7 @@
 import { displayDate,money } from "@/utils/helper";
 
 export function invoiceSourceKey(invoice: any) {
+  if (invoice.patient_subscription_plan_id) return "membership";
   if (invoice.lab_order_id) return "lab_scan";
   if (invoice.pharmacy_issue_id) return "pharmacy";
   if (invoice.physiotherapy_case_id) return "physiotherapy";
@@ -21,12 +22,14 @@ export function invoiceSource(invoice: any) {
     home_care: { label: "Home Care / Visit", tone: "blue" },
     ip_billing: { label: "IP Billing", tone: "blue" },
     consultation: { label: "Consultation", tone: "slate" },
+    membership: { label: "Membership", tone: "purple" },
     direct: { label: "Direct", tone: "amber" },
   };
   return sources[invoiceSourceKey(invoice)] || sources.direct;
 }
 
 export function invoiceLinkedRecord(invoice: any) {
+  if (invoice.patient_subscription_plan_id) return "Membership plan purchase";
   if (invoice.ip_admission_id) return "IP admission";
   if (invoice.physiotherapy_case_id) return "Physiotherapy case";
   if (invoice.home_care_booking_id) return "Home care / visit booking";

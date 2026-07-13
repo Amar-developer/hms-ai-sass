@@ -47,6 +47,22 @@ export function InvoiceDetailPage({
   const creditNotes = detail.credit_notes || [];
   const ledgerEntries = detail.ledger_entries || [];
   const adjustmentRequests = detail.adjustment_requests || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      currentUser?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreateInvoices = hasPermission(
+    "billing.manage",
+    "billing.create",
+    "invoices.create",
+  );
+  const canEditInvoices = hasPermission("billing.manage", "invoices.edit");
+  const canRecordPayments = hasPermission(
+    "payments.manage",
+    "payments.create",
+  );
   const source = invoiceSource(invoice);
   const showItemVendor = items.some(
     (item: any) =>
@@ -54,7 +70,7 @@ export function InvoiceDetailPage({
       numberValue(item.vendor_amount) > 0 ||
       (item.item_type === "lab" && (supplierOptions[item.id]?.length || 0) > 0),
   );
-  const showSupplierPicker = Boolean(invoice.lab_order_id);
+  const showSupplierPicker = canEditInvoices && Boolean(invoice.lab_order_id);
   const showItemPricing =
     showItemVendor ||
     items.some(
@@ -93,6 +109,7 @@ export function InvoiceDetailPage({
   const taxableAmount = numberValue(invoice.taxable_amount);
   const taxAmount = numberValue(invoice.tax_amount);
   const canRefresh =
+    canCreateInvoices &&
     invoice.consultation_id &&
     !invoice.lab_order_id &&
     !invoice.pharmacy_issue_id &&
@@ -128,6 +145,7 @@ export function InvoiceDetailPage({
   // Non-OP consultation bills are custom-priced, so allow editing the amount on
   // the bill until a payment is recorded. OP and service invoices are fixed.
   const canEditAmount = Boolean(
+    canEditInvoices &&
     updateInvoiceAmount &&
     invoice.consultation_id &&
     !invoice.lab_order_id &&
@@ -216,7 +234,8 @@ export function InvoiceDetailPage({
   const isPaymentClosed = paymentClosedStatuses.includes(
     String(invoice.status || "").toLowerCase(),
   );
-  const canCollectPayment = balanceDue > 0 && !isPaymentClosed;
+  const canCollectPayment =
+    canRecordPayments && balanceDue > 0 && !isPaymentClosed;
   function ledgerCreditAmount(entry: any) {
     if (entry.entry_type === "membership_benefit_applied") {
       return numberValue(entry.credit_amount);

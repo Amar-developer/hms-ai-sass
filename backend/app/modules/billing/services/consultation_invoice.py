@@ -18,6 +18,42 @@ from app.modules.patient_subscriptions.service import (
 )
 from app.modules.settings.models import SettingKey
 from app.modules.settings.service import resolve_setting
+from app.modules.tenants.repositories import DepartmentRepository
+
+
+def consultation_item_description(
+    session: Session,
+    *,
+    appointment: Appointment,
+    treatment_type: str | None = None,
+) -> str:
+    """Return a patient-facing consultation line name from the booked department."""
+    department = None
+    if appointment.department_id:
+        department = DepartmentRepository(session).get_for_tenant(
+            appointment.tenant_id,
+            appointment.department_id,
+        )
+
+    if department and department.name.strip():
+        label = department.name.strip()
+    else:
+        # Historical/imported appointments may not have a valid department.
+        # Keep those invoices meaningful without reverting every OP visit to
+        # the same generic label.
+        raw_label = (
+            treatment_type
+            or appointment.visit_purpose
+            or appointment.appointment_type.value
+            or "consultation"
+        )
+        label = str(raw_label).replace("_", " ").strip().title()
+
+    if not label.lower().endswith("consultation"):
+        label = f"{label} Consultation"
+    if not appointment.is_billable:
+        label = f"{label} Free"
+    return label
 
 
 def create_consultation_invoice(
@@ -155,15 +191,15 @@ def create_consultation_invoice(
     session.commit()
     session.refresh(invoice)
 
-    treatment_label = (
-        treatment_type or appointment.visit_purpose or "consultation"
-    ).replace("_", " ")
-    billable_label = "" if appointment.is_billable else " Free"
     item = InvoiceItem(
         tenant_id=appointment.tenant_id,
         invoice_id=invoice.id,
         item_type="consultation",
-        description=f"{appointment.appointment_type.value.replace('_', ' ').title()} {treatment_label}{billable_label}",
+        description=consultation_item_description(
+            session,
+            appointment=appointment,
+            treatment_type=treatment_type,
+        ),
         quantity=1,
         unit_amount=subtotal,
         total_amount=subtotal,

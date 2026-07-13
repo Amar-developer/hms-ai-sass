@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Response, status
 from sqlmodel import Session
 
-from app.core.auth import require_any_permission, require_permission
+from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import (
@@ -54,9 +54,15 @@ def create_invoice_from_consultation(
     payload: InvoiceCreateFromConsultation,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_CREATE,
+            permissions.INVOICES_CREATE,
+        )
+    ),
 ) -> InvoiceDetailRead:
-    enforce_module_enabled(session, tenant_id, "billing_advanced")
+    enforce_module_enabled(session, tenant_id, "billing_basic")
     return create_invoice_from_consultation_source(
         session,
         tenant_id=tenant_id,
@@ -79,6 +85,8 @@ def create_invoice_from_lab_order(
     current_user: User = Depends(
         require_any_permission(
             permissions.BILLING_MANAGE,
+            permissions.BILLING_CREATE,
+            permissions.INVOICES_CREATE,
             permissions.LAB_MANAGE,
             permissions.LAB_EDIT,
         )
@@ -104,7 +112,13 @@ def create_invoice_from_pharmacy_issue(
     payload: InvoiceCreateFromPharmacyIssue,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_CREATE,
+            permissions.INVOICES_CREATE,
+        )
+    ),
 ) -> InvoiceDetailRead:
     enforce_module_enabled(session, tenant_id, "billing_basic")
     return create_invoice_from_pharmacy_issue_source(
@@ -126,9 +140,11 @@ def list_invoices(
     current_user: User = Depends(
         require_any_permission(
             permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
             permissions.INVOICES_READ,
             permissions.PATIENT_SUBSCRIPTIONS_READ,
             permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_CREATE,
         )
     ),
 ) -> list[InvoiceRead]:
@@ -146,7 +162,13 @@ def get_invoice(
     invoice_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
 ) -> InvoiceDetailRead:
     return get_billing_invoice_detail(
         session,
@@ -162,7 +184,9 @@ def update_invoice_amount(
     payload: InvoiceAmountUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.BILLING_MANAGE, permissions.INVOICES_EDIT)
+    ),
 ) -> InvoiceDetailRead:
     return update_consultation_invoice_amount(
         session,
@@ -183,7 +207,9 @@ def update_invoice_item_supplier_endpoint(
     payload: InvoiceItemSupplierUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.BILLING_MANAGE, permissions.INVOICES_EDIT)
+    ),
 ) -> InvoiceDetailRead:
     return update_invoice_item_supplier(
         session,
@@ -205,7 +231,13 @@ def list_invoice_item_supplier_options_endpoint(
     item_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
 ) -> list[InvoiceItemSupplierOptionRead]:
     return list_invoice_item_supplier_options(
         session,
@@ -223,7 +255,9 @@ def apply_invoice_membership_benefit(
     invoice_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.BILLING_MANAGE, permissions.INVOICES_EDIT)
+    ),
 ) -> InvoiceDetailRead:
     return apply_membership_benefit_to_invoice(
         session,
@@ -240,7 +274,13 @@ def invoice_receipt_pdf(
     invoice_id: str,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
 ) -> Response:
     document = build_invoice_receipt_document(
         session,

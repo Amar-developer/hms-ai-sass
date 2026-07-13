@@ -18,6 +18,8 @@ import { sortQueue } from "@/lib/hmsLogic";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { QueueAction, TokenQueueProps } from "./types";
 import { dateKey, isActiveQueueAppointment, sortByTokenNumber, todayKey } from "./helpers";
+import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize } from "@/utils/constants";
 
 
 
@@ -44,6 +46,7 @@ export function TokenQueue({
   const [displayRows, setDisplayRows] = useState<any[]>([]);
   const today = todayKey();
   const [selectedDate, setSelectedDate] = useState(today);
+  const [page, setPage] = useState(1);
   const queue = sortByTokenNumber(
     sortQueue(
       scopedAppointments.filter((appointment: any) => {
@@ -78,6 +81,12 @@ export function TokenQueue({
             appointment.queueStatus === "Called",
         )
       : queue;
+  const totalPages = Math.max(1, Math.ceil(visibleQueue.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedQueue = visibleQueue.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
   const visibleDisplayRows = sortByTokenNumber(displayRows)
     .map((row: any) => ({
       ...row,
@@ -111,6 +120,14 @@ export function TokenQueue({
     displayMode,
     scopedAppointments.length,
   ]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedDate, displayMode, departmentId, doctorScope?.practitionerId]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   function updateAppointment(id: string, patch: any) {
     setAppointments(
@@ -381,7 +398,7 @@ export function TokenQueue({
             </tr>
           </thead>
           <tbody>
-            {visibleQueue.map((appointment: any) => (
+            {pagedQueue.map((appointment: any) => (
               <tr
                 key={appointment.id}
                 onClick={() => openConsultation(appointment)}
@@ -476,6 +493,12 @@ export function TokenQueue({
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={safePage}
+        totalPages={totalPages}
+        total={visibleQueue.length}
+        onPage={setPage}
+      />
     </Card>
   );
 }

@@ -62,6 +62,37 @@ class ConsultationRecordService:
             )
         return consultation
 
+    def _medicine_audit_text(self, consultation_id: str) -> str | None:
+        rows = self.details.list_medicines(consultation_id)
+        text = "; ".join(
+            " | ".join(
+                part.strip()
+                for part in (
+                    row.medicine_name,
+                    row.dosage,
+                    row.frequency,
+                    row.duration,
+                    row.instructions,
+                )
+                if part and part.strip()
+            )
+            for row in rows
+        )
+        return text or None
+
+    def _lab_service_audit_text(self, consultation_id: str) -> str | None:
+        rows = self.details.list_referrals(consultation_id)
+        text = "; ".join(
+            " | ".join(
+                part.strip()
+                for part in (row.item_name, row.priority, row.instructions)
+                if part and part.strip()
+            )
+            for row in rows
+            if row.referral_type.lower() == "lab"
+        )
+        return text or None
+
     def _require_sign_ready(self, consultation: Consultation) -> None:
         missing: list[str] = []
         if not consultation.treatment_type or not consultation.treatment_type.strip():
@@ -182,11 +213,17 @@ class ConsultationRecordService:
             )
 
         update_fields = payload.model_dump(exclude_unset=True)
-        mutable_keys = {
-            key for key in update_fields if key not in STRUCTURED_FIELD_NAMES
-        }
-        mutable_keys.add("status")
-        before = {key: getattr(consultation, key) for key in mutable_keys}
+        audit_keys = {key for key in update_fields if key not in STRUCTURED_FIELD_NAMES}
+        audit_keys.add("status")
+        if "medicines" in update_fields:
+            audit_keys.discard("prescription_text")
+        if "referrals" in update_fields:
+            audit_keys.discard("lab_referral_text")
+        before = {key: getattr(consultation, key) for key in audit_keys}
+        if "medicines" in update_fields:
+            before["medicines"] = self._medicine_audit_text(consultation.id)
+        if "referrals" in update_fields:
+            before["lab_services"] = self._lab_service_audit_text(consultation.id)
         for key, value in update_fields.items():
             if key in STRUCTURED_FIELD_NAMES:
                 continue
@@ -197,7 +234,11 @@ class ConsultationRecordService:
         self.structured_rows.replace_from_payload(consultation, payload)
         self.session.commit()
         self.session.refresh(consultation)
-        after = {key: getattr(consultation, key) for key in mutable_keys}
+        after = {key: getattr(consultation, key) for key in audit_keys}
+        if "medicines" in update_fields:
+            after["medicines"] = self._medicine_audit_text(consultation.id)
+        if "referrals" in update_fields:
+            after["lab_services"] = self._lab_service_audit_text(consultation.id)
         record_audit_event(
             self.session,
             tenant_id=tenant_id,
@@ -207,7 +248,14 @@ class ConsultationRecordService:
             resource_type="consultation",
             resource_id=consultation.id,
             purpose="treatment",
-            changes=diff_changes(before, after),
+            changes=diff_changes(
+                before,
+                after,
+                labels={
+                    "medicines": "Medicines",
+                    "lab_services": "Lab & Services",
+                },
+            ),
         )
         return consultation
 

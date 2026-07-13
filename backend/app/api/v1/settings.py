@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from app.core.access_control import scoped_branch_id
-from app.core.auth import get_current_user, require_any_permission, require_permission
+from app.core.auth import get_current_user, require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.core.validation import BranchId
@@ -24,12 +24,26 @@ router = APIRouter(prefix="/settings")
     "",
     response_model=AdminSettingRead,
     summary="Create or update setting",
-    dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.SETTINGS_MANAGE,
+                permissions.SETTINGS_CREATE,
+                permissions.SETTINGS_EDIT,
+            )
+        )
+    ],
 )
 def upsert_admin_setting(
     payload: AdminSettingUpsert,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_CREATE,
+            permissions.SETTINGS_EDIT,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> AdminSettingRead:
     return settings_service.upsert_admin_setting(
@@ -41,12 +55,20 @@ def upsert_admin_setting(
     "",
     response_model=list[AdminSettingRead],
     summary="List settings",
-    dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.SETTINGS_MANAGE, permissions.SETTINGS_READ
+            )
+        )
+    ],
 )
 def list_admin_settings(
     tenant_id: str = Depends(require_tenant_id),
     module: str | None = Query(default=None, min_length=2, max_length=80),
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.SETTINGS_MANAGE, permissions.SETTINGS_READ)
+    ),
     session: Session = Depends(get_session),
 ) -> list[AdminSettingRead]:
     return settings_service.list_admin_settings(
@@ -75,6 +97,7 @@ def get_sidebar_role_modules(
         Depends(
             require_any_permission(
                 permissions.SETTINGS_MANAGE,
+                permissions.SETTINGS_READ,
                 permissions.BILLING_MANAGE,
                 permissions.INVOICES_READ,
                 permissions.PAYMENTS_MANAGE,
@@ -90,6 +113,7 @@ def resolve_admin_setting(
     current_user: User = Depends(
         require_any_permission(
             permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
             permissions.BILLING_MANAGE,
             permissions.INVOICES_READ,
             permissions.PAYMENTS_MANAGE,
@@ -107,13 +131,21 @@ def resolve_admin_setting(
     "/bundle",
     response_model=AdminSettingsBundle,
     summary="Resolve settings bundle",
-    dependencies=[Depends(require_permission(permissions.SETTINGS_MANAGE))],
+    dependencies=[
+        Depends(
+            require_any_permission(
+                permissions.SETTINGS_MANAGE, permissions.SETTINGS_READ
+            )
+        )
+    ],
 )
 def resolve_settings_bundle(
     module: str = Query(min_length=2, max_length=80),
     branch_id: BranchId | None = None,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(require_permission(permissions.SETTINGS_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(permissions.SETTINGS_MANAGE, permissions.SETTINGS_READ)
+    ),
     session: Session = Depends(get_session),
 ) -> AdminSettingsBundle:
     branch_id = scoped_branch_id(current_user, branch_id)

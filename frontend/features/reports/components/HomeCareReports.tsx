@@ -79,6 +79,7 @@ const HomeCareReports = ({
         <DataTable
           columns={columns}
           data={homeCareReportRows}
+          paginate
           emptyMessage="No paid home care or home visit invoices match this filter."
           className="w-full min-w-[1280px] text-left text-sm"
         />

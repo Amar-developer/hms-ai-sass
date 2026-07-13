@@ -102,6 +102,7 @@ const LabReports = ({
           <DataTable
             columns={columns}
             data={labSettlementRows}
+            paginate
             emptyMessage="No paid lab invoices match this filter"
             className='w-full min-w-[1120px] text-left text-sm'
           />

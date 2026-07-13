@@ -14,6 +14,8 @@ import {
   documentUploadSchema,
 } from "../settings.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize } from "@/utils/constants";
 
 export function FilesPanel({
   apiSession,
@@ -49,6 +51,7 @@ export function FilesPanel({
     },
   });
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [category, setCategory] = useState("general");
   const [branchId, setBranchId] = useState("");
   const [patientId, setPatientId] = useState("");
@@ -157,6 +160,20 @@ export function FilesPanel({
         .includes(query.toLowerCase()),
     ),
   );
+  const totalPages = Math.max(1, Math.ceil(visible.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedFiles = visible.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   function resetUploadForm() {
     setCategory("general");
@@ -483,7 +500,7 @@ export function FilesPanel({
                   </td>
                 </tr>
               )}
-              {visible.map((file: any) => (
+              {pagedFiles.map((file: any) => (
                 <tr key={file.id} className="align-top">
                   <td className="px-2 py-2">
                     <div className="max-w-[200px]">
@@ -555,6 +572,12 @@ export function FilesPanel({
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          total={visible.length}
+          onPage={setPage}
+        />
       </Card>
     </div>
   );

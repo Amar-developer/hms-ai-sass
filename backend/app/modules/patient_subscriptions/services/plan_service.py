@@ -6,6 +6,8 @@ from sqlmodel import Session
 from app.core.access_control import enforce_entitlement
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.identity.models import User
+from app.modules.identity import permissions
+from app.modules.identity.services.policy import assert_tenant_permission
 from app.modules.patient_subscriptions.models import PatientSubscriptionPlan
 from app.modules.patient_subscriptions.repositories import (
     PatientSubscriptionPlanRepository,
@@ -23,7 +25,6 @@ from app.modules.patient_subscriptions.services.serialization import (
 )
 from app.modules.patient_subscriptions.services.validation import (
     _get_plan,
-    require_tenant_admin_or_super_admin,
 )
 
 
@@ -168,7 +169,14 @@ def update_plan(
 
 def delete_plan(session: Session, *, tenant_id: str, plan_id: str, actor: User) -> None:
     enforce_entitlement(session, tenant_id, "patient_subscriptions", current_user=actor)
-    require_tenant_admin_or_super_admin(session, tenant_id, actor)
+    assert_tenant_permission(
+        session,
+        actor,
+        tenant_id,
+        permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+        permissions.PATIENT_SUBSCRIPTIONS_DELETE,
+        permissions.SETTINGS_MANAGE,
+    )
     plan = _get_plan(session, tenant_id, plan_id)
     before = {"is_active": plan.is_active}
     # Soft-delete: deactivate the plan instead of removing it, so existing patient

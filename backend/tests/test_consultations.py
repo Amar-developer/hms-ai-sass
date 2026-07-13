@@ -1,4 +1,5 @@
 from datetime import date
+import json
 
 from fastapi.testclient import TestClient
 
@@ -306,3 +307,56 @@ def test_consultation_workflow_writes_audit_events(client: TestClient):
     assert "consultation.updated" in actions
     assert "consultation.signed" in actions
     assert "consultation.addendum.created" in actions
+
+
+def test_consultation_activity_tracks_medicine_and_lab_names_without_empty_noise(
+    client: TestClient,
+):
+    data = setup_booking(client)
+    tenant_id = data["tenant"]["id"]
+    appointment_id = data["booking"]["appointment"]["id"]
+    consultation = create_consultation(client, tenant_id, appointment_id)
+
+    response = client.patch(
+        f"/api/v1/consultations/{consultation['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "follow_up_advice": "",
+            "patient_remarks": "",
+            "prescription_text": "Vitamin C 500mg | 1-0-1",
+            "lab_referral_text": "Complete Blood Count",
+            "medicines": [
+                {
+                    "medicine_name": "Vitamin C 500mg",
+                    "dosage": "500mg",
+                    "frequency": "1-0-1",
+                    "duration": "3 days",
+                    "instructions": "After food",
+                }
+            ],
+            "referrals": [
+                {
+                    "referral_type": "lab",
+                    "item_name": "Complete Blood Count",
+                    "priority": "routine",
+                }
+            ],
+        },
+    )
+    assert response.status_code == 200
+
+    feed = client.get(
+        f"/api/v1/activity/consultation/{consultation['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+    ).json()
+    updated = next(
+        event for event in feed["events"] if event["action"] == "consultation.updated"
+    )
+    changes = json.loads(updated["metadata_json"])["changes"]
+    changes_by_field = {change["field"]: change for change in changes}
+
+    assert set(changes_by_field) == {"status", "medicines", "lab_services"}
+    assert "Vitamin C 500mg" in changes_by_field["medicines"]["new"]
+    assert "Complete Blood Count" in changes_by_field["lab_services"]["new"]
+    assert "prescription_text" not in changes_by_field
+    assert "lab_referral_text" not in changes_by_field
