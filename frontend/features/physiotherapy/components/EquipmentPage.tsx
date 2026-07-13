@@ -12,8 +12,8 @@ export function EquipmentPage({ equipment, onSubmit, busy }: any) {
           <FormField label="Name">
             <Input name="name" placeholder="HMS Indotherm 500W" required />
           </FormField>
-          <FormField label="Modality">
-            <Select name="modality_type">
+          <FormField label="Modality" required>
+            <Select name="modality_type" required>
               {modalities.map(([value, label]) => (
                 <option key={value} value={value}>
                   {label}

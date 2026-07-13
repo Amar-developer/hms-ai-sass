@@ -66,9 +66,9 @@ export const supplierSchema = z.object({
     .string()
     .trim()
     .min(2, "Supplier name must have atlease 2 characters"),
-  gstin: z.string().trim().min(1, "GST is required"),
-  phone: mobileSchema,
-  email: emailSchema,
+  gstin: z.string().trim().optional(),
+  phone: mobileSchema.optional().or(z.literal("")),
+  email: emailSchema.optional().or(z.literal("")),
   address: z.string().trim(),
   isActive: z.string().optional(),
 });

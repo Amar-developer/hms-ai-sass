@@ -75,14 +75,14 @@ export function BranchForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
-        <FormField label="Branch Name">
+        <FormField label="Branch Name" required>
           <Input
             {...register("name")}
             disabled={isLocked(branch)}
             placeholder="Enter branch name"
           />
         </FormField>
-        <FormField label="Code">
+        <FormField label="Code" required>
           <Input
             {...register("code")}
             disabled={isLocked(branch)}

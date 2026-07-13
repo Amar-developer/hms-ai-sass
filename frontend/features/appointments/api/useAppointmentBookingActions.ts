@@ -217,6 +217,10 @@ export function useAppointmentBookingActions({
   async function bookAppointment() {
     if (bookingInFlightRef.current) return;
     if (!selectedPatient) return;
+    if (!branchId || !departmentId || !appointmentDate) {
+      setMessage("Branch, department, and appointment date are required.");
+      return;
+    }
     if (!doctorId) {
       setMessage(
         "Select a doctor before booking. If the dropdown is empty, map a doctor to this tenant, branch, and department.",

@@ -721,16 +721,18 @@ export function IPCareWorkspace({
               onSubmit={(e) => postWork(e, "consent")}
               className="mt-4 grid gap-3"
             >
-              <FormField label="Consent Title">
+              <FormField label="Consent Title" required>
                 <Input
                   name="title"
                   defaultValue="General IP Admission Consent"
+                  required
                 />
               </FormField>
-              <FormField label="Consent Text">
+              <FormField label="Consent Text" required>
                 <Input
                   name="content"
                   defaultValue="Patient/guardian consent received for in-patient admission, investigation, treatment, billing, and discharge process."
+                  required
                 />
               </FormField>
               <div className="grid gap-3 md:grid-cols-2">

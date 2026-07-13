@@ -5,8 +5,9 @@ export function CaseFields() {
   return (
     <>
       <div className="grid gap-3 md:grid-cols-3">
-        <FormField label="Body Region">
+        <FormField label="Body Region" required>
           <Input
+            required
             name="body_region"
             placeholder="Knee, shoulder, lumbar spine"
           />
@@ -14,12 +15,13 @@ export function CaseFields() {
         <FormField label="Pain Score">
           <Input name="pain_score" type="number" min="0" max="10" />
         </FormField>
-        <FormField label="Assessment Date">
-          <Input name="assessment_date" type="date" defaultValue={today()} />
+        <FormField label="Assessment Date" required>
+          <Input name="assessment_date" type="date" defaultValue={today()} required />
         </FormField>
       </div>
-      <FormField label="Condition">
+      <FormField label="Condition" required>
         <Input
+          required
           name="condition"
           placeholder="Chronic pain, post-surgery, sports injury, arthritis"
         />
@@ -32,8 +34,9 @@ export function CaseFields() {
           <Input name="muscle_strength" />
         </FormField>
       </div>
-      <FormField label="Treatment Goal">
+      <FormField label="Treatment Goal" required>
         <Input
+          required
           name="treatment_goal"
           placeholder="Pain relief, mobility, strengthening, joint rehabilitation"
         />

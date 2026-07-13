@@ -40,7 +40,6 @@ export function ItemForm({
     handleSubmit,
     control,
     reset,
-    setError,
     formState: { errors },
   } = useForm<ItemFormValues>({
     resolver: zodResolver(itemSchema),
@@ -99,10 +98,6 @@ export function ItemForm({
   const isService = serviceItemTypes.includes(type);
 
   const submitWithPriceCheck = handleSubmit(async (data) => {
-    if (type !== "physio_equipment" && !data.price) {
-      setError("price", { message: "Price is required" });
-      return;
-    }
     const result = await onSubmit(data);
     if (result !== false) {
       reset();
@@ -121,7 +116,7 @@ export function ItemForm({
         />
       </FormField>
 
-      <FormField label={isService ? "Service Name" : "Item Name"}>
+      <FormField label={isService ? "Service Name" : "Item Name"} required>
         <Input
           {...register("name")}
           placeholder={`Enter ${isService ? "Service" : "Item"} Name`}

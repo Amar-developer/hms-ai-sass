@@ -63,8 +63,9 @@ export function AdmissionFields({
   return (
     <>
       {!hidePatient && (
-        <FormField label="Patient">
+        <FormField label="Patient" required>
           <SearchableSelect
+            required
             name="patient_id"
             value={patientId}
             onChange={setPatientId}

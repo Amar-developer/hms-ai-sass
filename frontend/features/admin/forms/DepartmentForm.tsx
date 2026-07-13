@@ -97,8 +97,9 @@ export function DepartmentForm({
         autoComplete="off"
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
-        <Field label="Name">
+        <Field label="Name" required>
           <SuggestionInput
+            required
             value={watch("name")}
             onChange={(event: any) => {
               setValue("name", event.target.value, {

@@ -5,4 +5,5 @@ export type CheckboxGroupProps = {
   onChange: (value: string[]) => void;
   empty?: string;
   allLabel?: string;
+  required?: boolean;
 };

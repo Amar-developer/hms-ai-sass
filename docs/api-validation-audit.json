@@ -4694,7 +4694,6 @@
     "body_media_type": "application/json",
     "body_required_fields": [
       "branch_id",
-      "department_id",
       "weekday",
       "start_time",
       "end_time"

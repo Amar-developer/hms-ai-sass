@@ -5,7 +5,7 @@ export const itemSchema = z.object({
   generic_name: z.string().trim().optional(),
   mrp_price: z
     .string()
-    .min(1, "MRP Price is required")
+    .optional()
     .refine((val) => !isNaN(Number(val)) && Number(val) >= 0, "MRP must be a valid positive number"),
 
   price: z

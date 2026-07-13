@@ -648,8 +648,9 @@ export function PatientSubscriptions({
                 onSubmit={enroll}
                 className="mt-4 grid gap-3 md:grid-cols-3"
               >
-                <FormField label="Patient">
+                <FormField label="Patient" required>
                   <SearchableSelect
+                    required
                     value={selectedPatient}
                     onChange={(value: string) => setSelectedPatient(value)}
                     placeholder="Select patient"
@@ -660,8 +661,9 @@ export function PatientSubscriptions({
                     }))}
                   />
                 </FormField>
-                <FormField label="Plan">
+                <FormField label="Plan" required>
                   <Select
+                    required
                     value={selectedPlan}
                     onChange={(e: any) => setSelectedPlan(e.target.value)}
                   >

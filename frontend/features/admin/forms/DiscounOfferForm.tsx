@@ -67,7 +67,7 @@ export function DiscountOfferForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
-        <FormField label="Offer Name">
+        <FormField label="Offer Name" required>
           <Input
             {...register("name")}
             placeholder="Enter offer name"
@@ -112,7 +112,7 @@ export function DiscountOfferForm({
             options={discountTypeOptions}
           />
         </FormField>
-        <FormField label="Value">
+        <FormField label="Value" required>
           <Input {...register("value")}  />
         </FormField>
         <FormField label="Minimum Bill Amount">

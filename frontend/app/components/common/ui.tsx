@@ -208,14 +208,26 @@ export function StatusToast({
 export function Field({
   label,
   children,
+  required = false,
 }: {
   label: string;
   children: React.ReactNode;
+  required?: boolean;
 }) {
   return (
-    <label className="block">
+    <label className="group block">
       <span className="mb-1 block text-sm lg:text-xs font-bold uppercase tracking-wide text-slate-500">
         {label}
+        <span
+          aria-hidden="true"
+          className={`ml-1 text-red-500 ${
+            required
+              ? "inline"
+              : "hidden group-has-[:required]:inline group-has-[[aria-required='true']]:inline"
+          }`}
+        >
+          *
+        </span>
       </span>
       {children}
     </label>
@@ -742,6 +754,8 @@ export function SearchableSelect<T = string>({
       <button
         type="button"
         disabled={disabled}
+        aria-required={required || undefined}
+        aria-invalid={Boolean(error) || undefined}
         onClick={() => setOpen((current) => !current)}
         className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:text-sm"
       >

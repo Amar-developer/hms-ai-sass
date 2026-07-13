@@ -259,7 +259,7 @@ Generated from the live FastAPI OpenAPI schema.
 | GET | `/api/v1/practitioners/{practitioner_id}/room-assignments` | - | - | - |
 | POST | `/api/v1/practitioners/{practitioner_id}/room-assignments` | application/json | `branch_id`, `room_name`, `start_time`, `end_time` | - |
 | GET | `/api/v1/practitioners/{practitioner_id}/schedules` | - | - | - |
-| POST | `/api/v1/practitioners/{practitioner_id}/schedules` | application/json | `branch_id`, `department_id`, `weekday`, `start_time`, `end_time` | - |
+| POST | `/api/v1/practitioners/{practitioner_id}/schedules` | application/json | `branch_id`, `weekday`, `start_time`, `end_time` | - |
 | GET | `/api/v1/queue` | - | - | `branch_id`, `include_completed` |
 | GET | `/api/v1/queue/display` | - | - | `branch_id`, `display_mode` |
 | POST | `/api/v1/queue/{entry_id}/call` | application/json | - | - |

@@ -151,7 +151,7 @@ export function UserForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-6 md:grid-cols-2"
       >
-        <FormField label="Name">
+        <FormField label="Name" required>
           <Input
             {...register("name")}
             placeholder="Enter user name"
@@ -162,7 +162,7 @@ export function UserForm({
           )}
         </FormField>
 
-        <FormField label="Email">
+        <FormField label="Email" required>
           <Input
             type="email"
             {...register("email")}
@@ -174,7 +174,7 @@ export function UserForm({
           )}
         </FormField>
 
-        <FormField label="User Type">
+        <FormField label="User Type" required>
           <SearchableSelect
             value={watch('userType')}
             onChange={(value)=>setValue('userType',value)}
@@ -219,7 +219,7 @@ export function UserForm({
         </Field>
 
         {!user && (
-          <FormField label="Temporary Password">
+          <FormField label="Temporary Password" required>
             <Input
               {...register("password")}
               type="text"

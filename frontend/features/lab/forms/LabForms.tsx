@@ -102,12 +102,13 @@ export function LabOrderForm({
       onSubmit={submitOrder}
       className="mt-4 grid gap-3 md:grid-cols-5 lg:grid-cols-6"
     >
-      <FormField label="Patient" className="md:col-span-2">
+      <FormField label="Patient" required className="md:col-span-2">
         <Controller
           name="patient_id"
           control={control}
           render={({ field }) => (
-            <SearchableSelect
+          <SearchableSelect
+            required
               value={field.value}
               onChange={field.onChange}
               searchable={true}
@@ -140,8 +141,9 @@ export function LabOrderForm({
       </FormField>
 
       {source === "external_referral" && (
-        <FormField label="External Referrer">
+        <FormField label="External Referrer" required>
           <Input
+            required
             {...register("external_referrer")}
             placeholder="Referring doctor / lab name"
           />
@@ -149,7 +151,7 @@ export function LabOrderForm({
         </FormField>
       )}
 
-      <FormField label="Lab Test / Service" className="md:col-span-2">
+      <FormField label="Lab Test / Service" required className="md:col-span-2">
         <SearchPicker
           value={selectedAvailableTestId}
           inputValue={testSearch}

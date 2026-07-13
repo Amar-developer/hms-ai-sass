@@ -620,8 +620,9 @@ export function AppointmentCalendarBooking(props: Props) {
                 }}
               >
                 <div className="grid gap-3 md:grid-cols-4">
-                  <Field label="Department">
+                  <Field label="Department" required>
                     <SearchableSelect
+                      required
                       value={departmentId}
                       onChange={setDepartmentId}
                       // className="select-filter"
@@ -633,8 +634,9 @@ export function AppointmentCalendarBooking(props: Props) {
                       }))}
                     />
                   </Field>
-                  <Field label="Doctor">
+                  <Field label="Doctor" required>
                     <SearchableSelect
+                      required
                       value={doctorId}
                       onChange={setDoctorId}
                       disabled={apiSession && doctors.length === 0}
@@ -658,8 +660,9 @@ export function AppointmentCalendarBooking(props: Props) {
                       }
                     />
                   </Field>
-                  <Field label="Visit Type">
+                  <Field label="Visit Type" required>
                     <SearchableSelect
+                      required
                       value={appointmentType}
                       onChange={() => {
                         setAppointmentType;
@@ -678,8 +681,9 @@ export function AppointmentCalendarBooking(props: Props) {
                       ]}
                     />
                   </Field>
-                  <Field label="Appointment Date">
+                  <Field label="Appointment Date" required>
                     <Input
+                      required
                       type="date"
                       value={appointmentDate}
                       onChange={(e: any) => setAppointmentDate(e.target.value)}

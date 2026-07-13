@@ -53,7 +53,7 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
-        <FormField label="Supplier Name">
+        <FormField label="Supplier Name" required>
           <Input {...register("name")} placeholder="Enter supplier name" />
           {errors.name && (
             <p className="text-xs text-red-500">{errors.name.message}</p>

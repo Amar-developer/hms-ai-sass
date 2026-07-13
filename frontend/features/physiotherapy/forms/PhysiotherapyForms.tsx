@@ -46,7 +46,7 @@ export function CaseForm({
         <p className="table-data text-slate-500">{subtitle}</p>
       </div>
       <form onSubmit={onSubmit} className="mt-5 grid gap-4">
-        <FormField label="Patient">
+        <FormField label="Patient" required>
           <SearchSelect
             name="patient_id"
             value={patientId}
@@ -102,7 +102,6 @@ export function CaseForm({
             onChange={setPhysiotherapistId}
             options={physiotherapistOptions}
             placeholder="Type physiotherapist name"
-            required
             getSearchText={(row: any) =>
               [
                 formatPhysiotherapistName(row),
@@ -165,7 +164,7 @@ export function IPCaseForm({
         </p>
       </div>
       <form onSubmit={onSubmit} className="mt-5 grid gap-4">
-        <FormField label="IP Admission">
+        <FormField label="IP Admission" required>
           <SearchSelect
             name="ip_admission_id"
             value={admissionId}
@@ -193,7 +192,6 @@ export function IPCaseForm({
             onChange={setPhysiotherapistId}
             options={physiotherapistOptions}
             placeholder="Type physiotherapist name"
-            required
             getSearchText={(row: any) =>
               [
                 formatPhysiotherapistName(row),

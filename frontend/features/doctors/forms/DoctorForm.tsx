@@ -165,8 +165,8 @@ export function DoctorForm({
         onSubmit={handleSubmit(onSubmitHandler)}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
-        <Field label="Full Name">
-          <Input {...register("fullName")} placeholder="Dr. Priya Raman" />
+        <Field label="Full Name" required>
+          <Input {...register("fullName")} placeholder="Dr. Priya Raman" required />
           <FormError error={errors.fullName?.message} />
         </Field>
 
@@ -250,6 +250,7 @@ export function DoctorForm({
             render={({ field }) => (
               <CheckboxGroup
                 title="Branches"
+                required
                 rows={branches}
                 value={field.value}
                 onChange={field.onChange}
@@ -258,6 +259,7 @@ export function DoctorForm({
               />
             )}
           />
+          <FormError error={errors.branchIds?.message} />
         </div>
 
         {/* Specialties & Fees Section */}

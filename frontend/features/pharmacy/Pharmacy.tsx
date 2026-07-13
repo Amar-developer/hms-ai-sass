@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Input,
   RefreshButton,
   SearchableSelect,
   StatusToast,
@@ -384,6 +385,14 @@ export function Pharmacy({
   async function createDirect(e: any) {
     e.preventDefault();
     if (!apiSession) return;
+    if (!branchId || !patientId) {
+      setMessage("Branch and patient are required.");
+      return;
+    }
+    if (source === "external_prescription" && !externalPrescriber.trim()) {
+      setMessage("External prescriber is required.");
+      return;
+    }
     setBusy("create");
     setMessage("");
     const fallback = buildIssueItem();
@@ -620,8 +629,9 @@ export function Pharmacy({
           onSubmit={createDirect}
           className="mt-4 grid gap-3 md:grid-cols-4"
         >
-          <FormField label="Patient">
+          <FormField label="Patient" required>
             <SearchableSelect
+              required
               value={patientId}
               onChange={setPatientId}
               options={activePatients.map((p: any) => ({
@@ -650,7 +660,17 @@ export function Pharmacy({
               searchable={false}
             />
           </FormField>
-          <FormField label="Medicine">
+          {source === "external_prescription" && (
+            <FormField label="External Prescriber" required>
+              <Input
+                value={externalPrescriber}
+                onChange={(event: any) => setExternalPrescriber(event.target.value)}
+                required
+                placeholder="Enter prescriber name"
+              />
+            </FormField>
+          )}
+          <FormField label="Medicine" required>
             <SearchPicker
               value={selectedMedicineId}
               inputValue={medicineSearch}

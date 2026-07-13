@@ -7,6 +7,7 @@ export function CheckboxGroup({
   onChange,
   empty,
   allLabel,
+  required = false,
 }: CheckboxGroupProps) {
   const selectedSet = new Set(value);
 
@@ -32,7 +33,10 @@ export function CheckboxGroup({
   return (
     <div className="rounded-lg border border-slate-200 p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-bold uppercase text-slate-500">{title}</p>
+        <p className="text-xs font-bold uppercase text-slate-500">
+          {title}
+          {required && <span className="ml-1 text-red-500">*</span>}
+        </p>
 
         {allLabel && rows.length > 0 && (
           <label className="flex items-center gap-2 text-xs font-bold text-slate-600">

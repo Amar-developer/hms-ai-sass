@@ -46,7 +46,7 @@ export function TaxRuleForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
-        <FormField label="Name" error={errors.name?.message}>
+        <FormField label="Name" required error={errors.name?.message}>
           <Input
             {...register("name")}
             required
@@ -80,7 +80,7 @@ export function TaxRuleForm({
         </FormField>
 
         <FormField label="Tax Label" error={errors.taxLabel?.message}>
-          <Input {...register("taxLabel")} required  />
+          <Input {...register("taxLabel")} />
         </FormField>
 
         <FormField label="Tax Percentage" error={errors.taxPercentage?.message}>
@@ -89,7 +89,6 @@ export function TaxRuleForm({
             type="number"
             min="0"
             max="100"
-            required
           />
         </FormField>
 

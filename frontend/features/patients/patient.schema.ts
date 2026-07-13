@@ -8,11 +8,13 @@ export const patientSchema = z.object({
 
   mobile: z
     .string()
-    .regex(/^\d{10}$/, "Mobile number must be 10 digits"),
+    .regex(/^\d{10}$/, "Mobile number must be 10 digits")
+    .optional()
+    .or(z.literal("")),
 
-  branchId: z.string().min(1, "Select a branch"),
+  branchId: z.string().optional(),
 
-  gender: z.string().min(1, "Select gender"),
+  gender: z.string().optional(),
 
   dateOfBirth: z.string().optional(),
 

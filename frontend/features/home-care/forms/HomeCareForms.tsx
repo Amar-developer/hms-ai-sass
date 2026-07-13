@@ -274,12 +274,13 @@ export function BookingForm({
         <FormError error={errors.patient_id?.message} />
       </div>
       <form onSubmit={submitBooking} className="mt-3 grid gap-3 md:grid-cols-4">
-        <FormField label="Booking Type">
+        <FormField label="Booking Type" required>
           <Controller
             name="booking_type"
             control={control}
             render={({ field }) => (
               <SearchableSelect
+                required
                 value={field.value}
                 onChange={changeBookingType}
                 options={bookingTypeOptions.map(([value, label]) => ({
@@ -293,12 +294,13 @@ export function BookingForm({
           />
         </FormField>
 
-        <FormField label="Recurrence">
+        <FormField label="Recurrence" required>
           <Controller
             name="recurrence"
             control={control}
             render={({ field }) => (
               <SearchableSelect
+                required
                 value={field.value}
                 onChange={field.onChange}
                 options={recurrenceOptions.map(([value, label]) => ({
@@ -317,6 +319,7 @@ export function BookingForm({
           render={({ field }) => (
             <DateField
               label="Start Date"
+              required
               value={field.value}
               onChange={field.onChange}
               error={errors.start_date?.message}
@@ -329,6 +332,7 @@ export function BookingForm({
           render={({ field }) => (
             <DateField
               label="End Date"
+              required
               value={field.value || ""}
               onChange={field.onChange}
               disabled={recurrence !== "custom"}
@@ -361,6 +365,7 @@ export function BookingForm({
             render={({ field }) => (
               <TextareaField
                 label="Location"
+                required
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder="Patient address or manual location"
@@ -415,6 +420,7 @@ export function BookingForm({
                 {isHomeVisitBooking ? (
                   <SearchableSelectField
                     label="Visit Service"
+                    required
                     value={line.service_id}
                     onChange={(value) => setLine(index, "service_id", value)}
                     options={[
@@ -427,8 +433,9 @@ export function BookingForm({
                     ]}
                   />
                 ) : (
-                  <FormField label="Service Name">
+                  <FormField label="Service Name" required>
                     <Input
+                      required
                       value={line.description}
                       onChange={(event: any) =>
                         setLine(index, "description", event.target.value)
@@ -462,6 +469,7 @@ export function BookingForm({
                 {isHomeVisitBooking && (
                   <NumberField
                     label="Visits/Day"
+                    required
                     value={line.quantity}
                     onChange={(value) => setLine(index, "quantity", value)}
                     min={1}
@@ -469,6 +477,7 @@ export function BookingForm({
                 )}
                 <NumberField
                   label={isHomeVisitBooking ? "Visit Price" : "Price"}
+                  required={!line.service_id}
                   value={line.unit_amount}
                   onChange={(value) => setLine(index, "unit_amount", value)}
                   min={0}

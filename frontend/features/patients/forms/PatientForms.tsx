@@ -151,7 +151,7 @@ export function PatientForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
-        <FormField label="Full Name">
+        <FormField label="Full Name" required>
           <Input
             {...register("fullName")}
             placeholder="Enter patient full name"

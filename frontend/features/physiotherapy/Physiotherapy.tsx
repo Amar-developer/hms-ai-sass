@@ -516,15 +516,16 @@ export function Physiotherapy({
             <h4 className="text-lg font-bold">Record Therapy Session</h4>
             <form onSubmit={submitSession} className="mt-4 grid gap-3">
               <div className="grid gap-3 md:grid-cols-2">
-                <FormField label="Date">
+                <FormField label="Date" required>
                   <Input
                     name="session_date"
                     type="date"
                     defaultValue={today()}
+                    required
                   />
                 </FormField>
-                <FormField label="Modality">
-                  <Select name="modality_type">
+                <FormField label="Modality" required>
+                  <Select name="modality_type" required>
                     {modalities.map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
@@ -567,10 +568,11 @@ export function Physiotherapy({
                 </Select>
               </FormField>
               <div className="grid gap-3 md:grid-cols-3">
-                <FormField label="Treatment Area">
+                <FormField label="Treatment Area" required>
                   <Input
                     name="treatment_area"
                     defaultValue={selected.body_region || ""}
+                    required
                   />
                 </FormField>
                 <FormField label="Intensity">

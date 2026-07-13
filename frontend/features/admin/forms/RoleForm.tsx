@@ -25,7 +25,7 @@ export function RoleForm({
         back={back}
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
-        <FormField label="Role Name">
+        <FormField label="Role Name" required>
           <Input
             name="name"
             value={roleName}

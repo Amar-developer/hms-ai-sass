@@ -503,9 +503,9 @@ export function Items({ apiSession, branchId }: any) {
           ...body,
           generic_name: data.generic_name || null,
           supplier_id: data.supplier_id || null,
-          mrp_price: Number(data.mrp_price),
+          mrp_price: Number(data.mrp_price || 0),
           purchase_price: Number(data.purchase_price || 0),
-          default_sale_price: Number(data.price),
+          default_sale_price: Number(data.price || 0),
           reorder_level: Number(data.reorder_level || 0),
         };
       } else if (type === "lab_test") {
@@ -515,9 +515,9 @@ export function Items({ apiSession, branchId }: any) {
         body = {
           ...body,
           supplier_id: data.supplier_id || null,
-          mrp_price: Number(data.mrp_price),
+          mrp_price: Number(data.mrp_price || 0),
           purchase_price: Number(data.purchase_price || 0),
-          default_price: Number(data.price),
+          default_price: Number(data.price || 0),
           sample_type: data.sample_type || null,
         };
       } else if (homeServiceTypes.includes(type)) {
@@ -527,8 +527,8 @@ export function Items({ apiSession, branchId }: any) {
         body = {
           ...body,
           description: data.description || null,
-          mrp_price: Number(data.mrp_price),
-          default_price: Number(data.price),
+          mrp_price: Number(data.mrp_price || 0),
+          default_price: Number(data.price || 0),
         };
       } else if (type === "physio_equipment") {
         endpoint = isEditing

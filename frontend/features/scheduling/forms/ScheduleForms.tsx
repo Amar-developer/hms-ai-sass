@@ -236,7 +236,6 @@ const defaultWeekdays: string[] = Array.from(
               <SearchableSelect
                 value={field.value}
                 onChange={field.onChange}
-                required
                 disabled={!selectedDoctorId}
                 options={
                   selectedDoctor?.department_ids
@@ -370,7 +369,13 @@ const defaultWeekdays: string[] = Array.from(
             name="slotMinutes"
             control={control}
             render={({ field }) => (
-              <NumberField label="Slot Minutes" {...field} min={1} max={240} />
+              <NumberField
+                label="Slot Minutes"
+                {...field}
+                min={1}
+                max={240}
+                required
+              />
             )}
           />
           <FormError error={errors.slotMinutes?.message} />
