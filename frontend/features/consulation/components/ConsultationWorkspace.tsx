@@ -1186,7 +1186,7 @@ export function ConsultationWorkspace(props: any) {
                   </Badge>
                 </div>
                 <FormField
-                  label="Signed Record Addendum"
+                  label="Completed Record Addendum"
                   required
                   hint="Required before saving an addendum."
                 >
@@ -1195,7 +1195,7 @@ export function ConsultationWorkspace(props: any) {
                     value={addendumNote}
                     onChange={(e: any) => setAddendumNote(e.target.value)}
                     className="min-h-20 w-full rounded-lg border border-emerald-100 px-4 py-3 text-sm outline-none"
-                    placeholder="Add clarification without changing signed record"
+                    placeholder="Add clarification without changing completed record"
                   />
                 </FormField>
                 <Button

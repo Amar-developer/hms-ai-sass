@@ -11,16 +11,17 @@ import {
   SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import {
-  FormField,
-} from "@/app/components/FormElements";
+import { FormField } from "@/app/components/FormElements";
 import { apiBlob, apiFetch } from "@/lib/api";
 import { paymentMethodOptions } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
-import { formatInvoiceDate,invoiceDateKey,
+import {
+  formatInvoiceDate,
+  invoiceDateKey,
   invoicePaidStatus,
   invoiceSource,
-  invoiceSourceKey, } from "./helpers";
+  invoiceSourceKey,
+} from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
 import { Column } from "../reports/types";
@@ -62,8 +63,8 @@ export function Billing({
   const hasPermission = (...keys: string[]) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const canCreateInvoices = hasPermission(
     "billing.manage",
@@ -147,7 +148,9 @@ export function Billing({
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        const query = String(filters.query || "").trim().toLowerCase();
+        const query = String(filters.query || "")
+          .trim()
+          .toLowerCase();
         if (query && !haystack.includes(query)) return false;
         if (
           filters.source !== "all" &&
@@ -892,13 +895,19 @@ export function Billing({
                 ? "blue"
                 : invoice.status === "partially_paid"
                   ? "amber"
-                  : "slate"
+                  : invoice.status == "cancelled"
+                    ? "red"
+                    : "slate"
           }
           className="table-status text-sm text-center"
         >
-          {invoice.status === "partially_paid"
-            ? "partially paid"
-            : invoice.status}
+
+            {invoice.status === "partially_paid"
+              ? "Partially Paid"
+              : invoice.status === "partially_refunded"
+                ? "Partially Refunded"
+                : invoice.status}
+
         </Badge>
       ),
     },
@@ -1048,11 +1057,13 @@ export function Billing({
 
       {canCreateInvoices && (
         <Card>
-          <h3 className="card-title font-bold">Pending Consultation Invoices</h3>
+          <h3 className="card-title font-bold">
+            Pending Consultation Invoices
+          </h3>
           <p className="card-desc text-slate-500">
             Reception can generate the consultation-fee invoice after the doctor
-            signs the consultation. Lab, pharmacy, IP, and physiotherapy each have
-            their own invoices created by those modules.
+            signs the consultation. Lab, pharmacy, IP, and physiotherapy each
+            have their own invoices created by those modules.
           </p>
           <StatusToast message={message} onClose={() => setMessage("")} />
           <div className="mt-4 grid gap-3">

@@ -4,6 +4,8 @@ import { Bell, LogOut, KeyRound } from "lucide-react";
 import ProfileRow from "../ProfileRow";
 import { userInitials } from "@/utils/helper";
 import { GlobalSearch } from "./GlobalSearch";
+import { SearchableSelect } from "./ui";
+import { FormField } from "../FormElements";
 
 interface AppHeaderProps {
   isSuperAdmin: boolean;
@@ -65,19 +67,13 @@ const AppHeader = ({
           )} */}
 
           {isSuperAdmin && apiSession ? (
-            <CompactControl label="Tenant">
-              <select
-                value={apiSession.tenantId}
+            <FormField label="Tenant">
+              <SearchableSelect
                 onChange={(e: any) => switchTenant(e.target.value)}
-                className="w-full bg-transparent text-xs lg:text-sm font-semibold outline-none"
-              >
-                {tenantOptions.map((tenant: any) => (
-                  <option key={tenant.id} value={tenant.id}>
-                    {tenant.name}
-                  </option>
-                ))}
-              </select>
-            </CompactControl>
+                searchable={false}
+                options={tenantOptions}
+              />
+            </FormField>
           ) : (
             <div className="grid h-11 content-center">
               <span className="text-[10px] font-bold uppercase leading-none text-slate-500">

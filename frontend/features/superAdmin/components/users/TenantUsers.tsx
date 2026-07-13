@@ -9,8 +9,10 @@ import {
   Field,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
 } from "@/app/components/common/ui";
+import { FormField } from "@/app/components/FormElements";
 import { formatDate } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
@@ -104,10 +106,7 @@ export function TenantUsers({
         <div>
           <div className="flex ">
             <h3 className="card-title font-bold mr-3">Users</h3>
-            <Badge
-              tone="blue"
-              className="table-status"
-            >
+            <Badge tone="blue" className="table-status">
               {filtered.length} users
             </Badge>
           </div>
@@ -129,51 +128,56 @@ export function TenantUsers({
           selectedId={selectedId}
           setSelectedId={setSelectedId}
         />
-        <Field label="User">
+        <FormField label="User">
           <Input
             value={filters.query}
             onChange={(e: any) => updateFilter("query", e.target.value)}
             placeholder="Name, email, mobile, type"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            // className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
-        </Field>
-        <Field label="Status">
-          <Select
+        </FormField>
+        <FormField label="Status">
+          <SearchableSelect
             value={filters.status}
-            onChange={(e: any) => updateFilter("status", e.target.value)}
-            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
-          >
-            <option value="all">All status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </Select>
-        </Field>
-        <Field label="Date field">
-          <Select
+            onChange={(value) => updateFilter("status", value)}
+            options={[
+              { value: "all", label: "All status" },
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+            searchable={false}
+            // className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
+        </FormField>
+
+        <FormField label="Date field">
+          <SearchableSelect
             value={filters.dateField}
-            onChange={(e: any) => updateFilter("dateField", e.target.value)}
-            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
-          >
-            <option value="updated_at">Modified date</option>
-            <option value="created_at">Created date</option>
-          </Select>
-        </Field>
-        <Field label="From">
+            onChange={(value) => updateFilter("dateField", value)}
+            options={[
+              { value: "updated_at", label: "Modified date" },
+              { value: "created_at", label: "Created date" },
+            ]}
+            searchable={false}
+            // className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
+          />
+        </FormField>
+        <FormField label="From">
           <Input
             type="date"
             value={filters.fromDate}
             onChange={(e: any) => updateFilter("fromDate", e.target.value)}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            // className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
-        </Field>
-        <Field label="To">
+        </FormField>
+        <FormField label="To">
           <Input
             type="date"
             value={filters.toDate}
             onChange={(e: any) => updateFilter("toDate", e.target.value)}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            // className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
-        </Field>
+        </FormField>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1320px]">

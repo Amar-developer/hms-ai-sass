@@ -721,7 +721,7 @@ export function Pharmacy({
               disabled={busy === "create"}
               className="w-[130px] px-1 py-3 lg:px-2 py-2.5"
             >
-              {busy === "create" ? "Saving..." : "Create Issue"}
+              {busy === "create" ? "Saving..." : "Create Order"}
             </Button>
           </div>
           {issueItems.length > 0 && (
@@ -790,7 +790,7 @@ export function Pharmacy({
                       >
                         {busy === a.consultationId
                           ? "Creating..."
-                          : "Create Pharmacy Issue"}
+                          : "Create Order"}
                       </Button>
                       <ActionButton
                         onClick={() =>

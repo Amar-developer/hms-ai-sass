@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { sections } from "./constants";
+import { sections, status_filters } from "./constants";
 import { canUseTenantAdminSection } from "./permissions";
 import { Card, StatusToast } from "@/app/components/common/ui";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
@@ -462,17 +462,7 @@ export function TenantAdmin({
           onCreate={() => setView("create")}
           onRefresh={data.reload}
           columns={ROLE_COLUMNS}
-          filters={[
-            {
-              key: "status",
-              label: "Status",
-              options: [
-                { value: "all", label: "All Status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ],
-            },
-          ]}
+          filters={[status_filters]}
           filterValues={roleFilter}
           onFilterChange={(key: string, value: string) => {
             setRoleFilters((prev) => ({
@@ -531,15 +521,7 @@ export function TenantAdmin({
           onRefresh={data.reload}
           columns={DEPARTMENT_COLUMNS}
           filters={[
-            {
-              key: "status",
-              label: "Status",
-              options: [
-                { value: "all", label: "All Status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ],
-            },
+            status_filters,
             {
               key: "branch",
               label: "Branch",

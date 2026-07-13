@@ -8,15 +8,17 @@ import {
   Card,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { formatDate,groupRolesByName } from "../../helpers";
+import { formatDate, groupRolesByName } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
 import { Pagination } from "@/app/components/common/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
+import { RowActions } from "@/features/admin/components/RowActions";
 
 export function RolesManagement({
   tenants,
@@ -142,36 +144,40 @@ export function RolesManagement({
             value={filters.query}
             onChange={(e: any) => updateFilter("query", e.target.value)}
             placeholder="Role name"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+            // className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
         <FormField label="Status">
-          <Select
+          <SearchableSelect
             value={filters.status}
-            onChange={(e: any) => updateFilter("status", e.target.value)}
-            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
-          >
-            <option value="all">All status</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </Select>
+            onChange={(value) => updateFilter("status", value)}
+            options={[
+              { value: "all", label: "All status" },
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+            placeholder="Select status"
+            searchable={false}
+          />
         </FormField>
+
         <FormField label="Date field">
-          <Select
+          <SearchableSelect
+            searchable={false}
             value={filters.dateField}
-            onChange={(e: any) => updateFilter("dateField", e.target.value)}
-            className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
-          >
-            <option value="updated_at">Modified date</option>
-            <option value="created_at">Created date</option>
-          </Select>
+            onChange={(value) => updateFilter("dateField", value)}
+            options={[
+              { value: "updated_at", label: "Modified date" },
+              { value: "created_at", label: "Created date" },
+            ]}
+            placeholder="Select date field"
+          />
         </FormField>
         <FormField label="From">
           <Input
             type="date"
             value={filters.fromDate}
             onChange={(e: any) => updateFilter("fromDate", e.target.value)}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
         <FormField label="To">
@@ -179,13 +185,12 @@ export function RolesManagement({
             type="date"
             value={filters.toDate}
             onChange={(e: any) => updateFilter("toDate", e.target.value)}
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[720px]">
-          <div className="hidden md:grid md:grid-cols-[2fr_1fr_.8fr_1fr_1fr_3fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+          <div className="hidden md:grid md:grid-cols-[2fr_1fr_.8fr_1fr_1fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
             <SortButton
               label="Role"
               field="name"
@@ -211,7 +216,7 @@ export function RolesManagement({
               sort={sort}
               onSort={changeSort}
             />
-            <span className="text-right">Actions</span>
+            <span className="text-start">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
             {rows.length === 0 && <Empty text="No roles match your search." />}
@@ -233,7 +238,7 @@ export function RolesManagement({
                       openRole(role);
                     }
                   }}
-                  className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[2fr_1fr_.8fr_1fr_1fr_3fr] md:items-center"
+                  className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[2fr_1fr_.8fr_1fr_1fr_.7fr] md:items-center"
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -241,7 +246,7 @@ export function RolesManagement({
                       {role.is_global_template && (
                         <Badge
                           tone="blue"
-                          className="rounded-full px-2 py-2  lg:px-4 lg:py-3 text-xs lg:text-sm"
+                          className="rounded-full px-2 py-2  text-xs"
                         >
                           Global
                         </Badge>
@@ -269,55 +274,46 @@ export function RolesManagement({
                   <span className="px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
                     {formatDate(role.updated_at)}
                   </span>
-                  <ActionGroup className="!flex-wrap xl:!flex-nowrap">
-                    {!locked && (
-                      <ActionButton
-                        onClick={stop(() => openRole(role, "roleEdit"))}
-                      >
-                        Edit
-                      </ActionButton>
-                    )}
-                    <ActionButton
-                      onClick={stop(() => openRole(role, "rolePermissions"))}
-                      disabled={locked}
-                    >
-                      Permissions
-                    </ActionButton>
-                    {role.key !== "super_admin" && (
-                      <ActionButton
-                        onClick={stop(() => openRole(role, "roleAssign"))}
-                      >
-                        Assign
-                      </ActionButton>
-                    )}
-                    {!locked && (
-                      <ActionButton
-                        onClick={stop(() =>
+                  <RowActions
+                    actions={[
+                      {
+                        label: "Edit",
+                        hidden: locked,
+                        onClick: () => openRole(role, "roleEdit"),
+                      },
+                      {
+                        label: "Permissions",
+                        disabled: locked,
+                        onClick: () => openRole(role, "rolePermissions"),
+                      },
+                      {
+                        label: "Assign",
+                        hidden: role.key === "super_admin",
+                        onClick: () => openRole(role, "roleAssign"),
+                      },
+                      {
+                        label: role.is_active ? "Inactive" : "Active",
+                        hidden: locked,
+                        onClick: () =>
                           setConfirmAction({
                             entity: "role",
                             kind: "status",
                             role: role.primary,
                           }),
-                        )}
-                      >
-                        {role.is_active ? "Inactive" : "Active"}
-                      </ActionButton>
-                    )}
-                    {!locked && (
-                      <ActionButton
-                        tone="danger"
-                        onClick={stop(() =>
+                      },
+                      {
+                        label: "Delete",
+                        danger: true,
+                        hidden: locked,
+                        onClick: () =>
                           setConfirmAction({
                             entity: "role",
                             kind: "delete",
                             role: role.primary,
                           }),
-                        )}
-                      >
-                        Delete
-                      </ActionButton>
-                    )}
-                  </ActionGroup>
+                      },
+                    ]}
+                  />
                 </div>
               );
             })}

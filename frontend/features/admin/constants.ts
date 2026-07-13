@@ -351,3 +351,14 @@ export const MUST_CHANGE_OPTIONS = [
   { value: "true", label: "Yes" },
   { value: "false", label: "No" },
 ];
+
+export const status_filters =
+  {
+    key: "status",
+    label: "Status",
+    options: [
+      { value: "all", label: "All Status" },
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+    ],
+  }

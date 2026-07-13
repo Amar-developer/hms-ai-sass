@@ -74,7 +74,7 @@ export function ConsultPrescriptionModal({
           >
             {busy === a.consultationId
               ? "Creating..."
-              : "Create Pharmacy Issue"}
+              : "Create Order"}
           </Button>
           <Button onClick={onClose} className='close-button'>Cancel</Button>
         </div>

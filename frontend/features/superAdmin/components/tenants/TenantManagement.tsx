@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Badge, Card, Field, Input, RefreshButton, Select } from "@/app/components/common/ui";
-import { tenantTypes } from "../../constants";
 import {
-  addressText,
-  formatDate,
-  formatTenantType,
-} from "../../helpers";
+  Badge,
+  Card,
+  Field,
+  Input,
+  RefreshButton,
+  Select,
+} from "@/app/components/common/ui";
+import { tenantTypes } from "../../constants";
+import { addressText, formatDate, formatTenantType } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
 import { SortButton } from "../shared/SortButton";
 import { Pagination } from "@/app/components/common/Pagination";
+import { RowActions } from "@/features/admin/components/RowActions";
 
 export function TenantManagement({
   tenants,
@@ -103,12 +107,9 @@ export function TenantManagement({
         <div>
           <div className="flex ">
             <h3 className="text-lg font-bold mr-2">Tenants</h3>
-          <Badge
-            tone="blue"
-            className="card-badge"
-          >
-            {filtered.length} tenants
-          </Badge>
+            <Badge tone="blue" className="card-badge">
+              {filtered.length} tenants
+            </Badge>
           </div>
           <p className="card-desc text-slate-500">
             Active and trial tenants appear here. Deactivated tenants are
@@ -136,7 +137,7 @@ export function TenantManagement({
           <Select
             value={filters.type}
             onChange={(e: any) => updateFilter("type", e.target.value)}
-            className='select-filter'
+            className="select-filter"
           >
             <option value="all">All types</option>
             {tenantTypes.map(([value, label]) => (
@@ -150,7 +151,7 @@ export function TenantManagement({
           <Select
             value={filters.status}
             onChange={(e: any) => updateFilter("status", e.target.value)}
-            className='select-filter'
+            className="select-filter"
           >
             <option value="all">All status</option>
             <option value="trial">Trial</option>
@@ -169,31 +170,31 @@ export function TenantManagement({
           <Select
             value={filters.dateField}
             onChange={(e: any) => updateFilter("dateField", e.target.value)}
-            className='select-filter'
+            className="select-filter"
           >
             <option value="updated_at">Modified date</option>
             <option value="created_at">Created date</option>
           </Select>
         </Field>
         <Field label="From">
-            <Input
-              type="date"
-              value={filters.fromDate}
-              onChange={(e: any) => updateFilter("fromDate", e.target.value)}
-              className="date-filter"
-            />
-          </Field>
-          <Field label="To">
-            <Input
-              type="date"
-              value={filters.toDate}
-              onChange={(e: any) => updateFilter("toDate", e.target.value)}
-              className="date-filter"
-            />
-          </Field>
+          <Input
+            type="date"
+            value={filters.fromDate}
+            onChange={(e: any) => updateFilter("fromDate", e.target.value)}
+            className="date-filter"
+          />
+        </Field>
+        <Field label="To">
+          <Input
+            type="date"
+            value={filters.toDate}
+            onChange={(e: any) => updateFilter("toDate", e.target.value)}
+            className="date-filter"
+          />
+        </Field>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
-       <div className="hidden md:grid grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_1.15fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+        <div className="hidden md:grid grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
           <SortButton
             label="Tenant"
             field="tenant"
@@ -234,73 +235,90 @@ export function TenantManagement({
         </div>
         <div className="divide-y divide-slate-200">
           {rows.length === 0 && <Empty text="No tenants match your search." />}
-          {rows.map((tenant: any) => (
-            <div
-              key={tenant.id}
-              className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_1.15fr] md:items-center"
-            >
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <b className="truncate text-xs md:text-sm">{tenant.name}</b>
-                  {tenant.is_primary && <Badge tone="blue" className="rounded-xl px-2 py-1">Primary</Badge>}
+          {rows.map((tenant: any) => {
+            const actions = [
+              {
+                label: "Edit",
+                onClick: () => {
+                  setSelectedId(tenant.id);
+                  setSection("tenantEdit");
+                },
+              },
+              {
+                label: apiSession.tenantId === tenant.id ? "Opened" : "Open",
+                onClick: () => switchTenant(tenant.id),
+                disabled: busy || apiSession.tenantId === tenant.id,
+              },
+              {
+                label: "Deactivate",
+                onClick: () => suspendTenant(tenant),
+                disabled: tenant.is_primary || busy,
+                danger: true,
+              },
+            ];
+            return (
+              <div
+                key={tenant.id}
+                className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_.7fr] md:items-center"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <b className="truncate text-xs md:text-sm">{tenant.name}</b>
+                    {tenant.is_primary && (
+                      <Badge tone="blue" className="rounded-xl px-2 py-1">
+                        Primary
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <span className="xl:hidden text-[10px] lg:text-xs font-bold uppercase text-slate-500">
+                    Type:{" "}
+                  </span>
+                  <p className="text-xs lg:text-sm">
+                    {formatTenantType(tenant.tenant_type)}
+                  </p>
+                </div>
+                <div>
+                  <Badge
+                    tone={
+                      tenant.status === "active"
+                        ? "green"
+                        : tenant.status === "trial"
+                          ? "amber"
+                          : "red"
+                    }
+                    className="table-status"
+                  >
+                    {tenant.status}
+                  </Badge>
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xs lg:text-sm">
+                    {tenant.email || "-"}
+                  </p>
+                  <p className="text-[10px] lg:text-xs text-slate-500">
+                    {tenant.phone || ""}
+                  </p>
+                </div>
+                <div className="text-xs lg:text-sm">
+                  {formatDate(tenant.created_at)}
+                </div>
+                <div className="text-xs lg:text-sm">
+                  {formatDate(tenant.updated_at)}
+                </div>
+                <div
+                  className="flex justify-center"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <RowActions
+                    actions={actions}
+                    className="right-28 -bottom-5"
+                  />
                 </div>
               </div>
-              <div>
-                <span className="xl:hidden text-[10px] lg:text-xs font-bold uppercase text-slate-500">
-                  Type:{" "}
-                </span>
-                <p className="text-xs lg:text-sm">{formatTenantType(tenant.tenant_type)}</p>
-              </div>
-              <div>
-                <Badge
-                  tone={
-                    tenant.status === "active"
-                      ? "green"
-                      : tenant.status === "trial"
-                        ? "amber"
-                        : "red"
-                  }
-                  className="table-status"
-                >
-                  {tenant.status}
-                </Badge>
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-xs lg:text-sm">{tenant.email || "-"}</p>
-                <p className="text-[10px] lg:text-xs text-slate-500">{tenant.phone || ""}</p>
-              </div>
-              <div className="text-xs lg:text-sm">{formatDate(tenant.created_at)}</div>
-              <div className="text-xs lg:text-sm">{formatDate(tenant.updated_at)}</div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(tenant.id);
-                    setSection("tenantEdit");
-                  }}
-                  className="rounded-lg border px-2 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-xs font-bold"
-                >
-                  Edit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchTenant(tenant.id)}
-                  className="rounded-lg bg-slate-900 px-2 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-xs font-bold text-white disabled:bg-slate-300"
-                  disabled={busy || apiSession.tenantId === tenant.id}
-                >
-                  {apiSession.tenantId === tenant.id ? "Opened" : "Open"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => suspendTenant(tenant)}
-                  disabled={tenant.is_primary || busy}
-                  className="rounded-lg border px-2 py-1 lg:px-3 lg:py-2 text-[10px] lg:text-xs font-bold text-red-600 disabled:text-slate-300"
-                >
-                  Deactivate
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
       <Pagination
