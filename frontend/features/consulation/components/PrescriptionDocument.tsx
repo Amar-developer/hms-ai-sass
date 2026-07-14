@@ -216,11 +216,11 @@ function PrescriptionPage({
                 />
                 <div className="flex-1 min-w-0 pt-[5px]">
                   <h1 className="m-0 leading-none whitespace-nowrap ">
-                    <span className="text-5xl font-extrabold font-['Montserrat'] tracking-[0.917px] text-[#0175A7]">
+                    <span className="text-5xl font-extrabold font-['Poppins'] tracking-[0.917px] text-[#0175A7]">
                       {clinicNamePrimary}
                     </span>
                     {clinicNameAccent && (
-                      <span className="text-5xl font-extrabold font-['Montserrat'] tracking-[0.917px] text-[#00B36F] ml-[10px]">
+                      <span className="text-5xl font-extrabold font-['Poppins'] tracking-[0.917px] text-[#00B36F] ml-[10px]">
                         {clinicNameAccent}
                       </span>
                     )}
@@ -228,16 +228,16 @@ function PrescriptionPage({
                   <div className="mt-[6px] w-[460px] max-w-full h-0 border-t-[1px] border-[#0175A7]/70" />
                   {subtitle && (
                     <p className="mt-[6px] flex flex-wrap items-center gap-[8px]">
-                      <span className="text-[9px] font-bold font-['Montserrat'] tracking-[0.124px] text-[#00B36F] whitespace-nowrap">
+                      <span className="text-[9px] font-bold font-['Poppins'] tracking-[0.124px] text-[#00B36F] whitespace-nowrap">
                         A Unit of
                       </span>
-                      <span className="text-base font-bold font-['Montserrat'] capitalize tracking-[0.124px] text-[#0175A7]">
+                      <span className="text-base font-bold font-['Poppins'] capitalize tracking-[0.124px] text-[#0175A7]">
                         {subtitle}
                       </span>
                     </p>
                   )}
                   {clinic.address && (
-                    <p className="mt-[6px] text-[#0175A7] text-[11px] font-normal font-['Montserrat'] leading-[12.5px] tracking-[1px]">
+                    <p className="mt-[6px] text-[#0175A7] text-[11px] font-normal font-['Poppins'] leading-[12.5px] tracking-[1px]">
                       {clinic.address}
                     </p>
                   )}
@@ -245,10 +245,10 @@ function PrescriptionPage({
                     <p className="mt-[6px] flex flex-wrap items-center gap-[20px]">
                       {clinic.phone && (
                         <span className="inline-flex items-center gap-[4px] whitespace-nowrap">
-                          <strong className="text-[#00B36F] text-[12px] font-bold font-['Montserrat'] tracking-[0.5px]">
+                          <strong className="text-[#00B36F] text-[12px] font-bold font-['Poppins'] tracking-[0.5px]">
                             For Appointment :
                           </strong>
-                          <span className="text-[#0175A7] text-[12px] font-bold font-['Montserrat'] tracking-[0.5px]">
+                          <span className="text-[#0175A7] text-[12px] font-bold font-['Poppins'] tracking-[0.5px]">
                             {clinic.phone}
                           </span>
                         </span>
@@ -260,7 +260,7 @@ function PrescriptionPage({
                             alt=""
                             className="w-[11px] h-auto"
                           />
-                          <span className="text-[#0175A7] text-[10px] font-medium font-['Montserrat'] tracking-[1px]">
+                          <span className="text-[#0175A7] text-[10px] font-medium font-['Poppins'] tracking-[1px]">
                             {clinic.email}
                           </span>
                         </span>
@@ -274,15 +274,15 @@ function PrescriptionPage({
             {/* Doctor info + Patient name / Date + vitals */}
             <div className="px-[49px] pt-[26px] grid grid-cols-[1fr_129px] gap-[30px] items-start">
               <div className="min-w-0">
-                <p className="m-0 text-[#0175A7] text-[21px] font-bold font-['Montserrat'] leading-none tracking-[0.6px]">
+                <p className="m-0 text-[#0175A7] text-[21px] font-bold font-['Poppins'] leading-none tracking-[0.6px]">
                   {doctorDisplayName(doctor.name || "-")}{" "}
                   {doctor.qualification && (
-                    <span className="text-[#00B36F] text-[14px] font-semibold font-['Montserrat'] ml-[4px]">
+                    <span className="text-[#00B36F] text-[14px] font-semibold font-['Poppins'] ml-[4px]">
                       {doctor.qualification}
                     </span>
                   )}
                 </p>
-                <p className="m-0 mt-[9px] flex flex-wrap items-center gap-[10px] text-[#00B36F] text-[12px] font-semibold font-['Montserrat'] leading-none tracking-[0.8px]">
+                <p className="m-0 mt-[9px] flex flex-wrap items-center gap-[10px] text-[#00B36F] text-[12px] font-semibold font-['Poppins'] leading-none tracking-[0.8px]">
                   {doctor.registrationNumber && (
                     <span>Reg.No: {doctor.registrationNumber}</span>
                   )}
@@ -292,38 +292,38 @@ function PrescriptionPage({
                   {doctor.specialty && <span>{doctor.specialty}</span>}
                 </p>
                 <p className="m-0 mt-[53px] text-[#0175A7]">
-                  <span className="text-[16px] font-medium font-['Montserrat'] tracking-[0.8px]">
+                  <span className="text-[16px] font-medium font-['Poppins'] tracking-[0.8px]">
                     Patient Name:{" "}
                   </span>
-                  <span className="inline-block min-w-[200px] text-[16px] font-normal font-['Montserrat'] tracking-[0.8px]">
+                  <span className="inline-block min-w-[200px] text-[16px] font-normal font-['Poppins'] tracking-[0.8px]">
                     {patientName}
                   </span>
                 </p>
                 <p className="m-0 mt-[8px] text-[#0175A7]">
-                  <span className="text-[16px] font-medium font-['Montserrat'] tracking-[0.8px]">
+                  <span className="text-[16px] font-medium font-['Poppins'] tracking-[0.8px]">
                     Patient ID:{" "}
                   </span>
-                  <span className="inline-block min-w-[200px] text-[16px] font-normal font-['Montserrat'] tracking-[0.8px]">
+                  <span className="inline-block min-w-[200px] text-[16px] font-normal font-['Poppins'] tracking-[0.8px]">
                     {patientId}
                   </span>
                 </p>
               </div>
               <div className="flex flex-col gap-[24px]">
                 <div className="flex items-end gap-[4px] text-[#0175A7] whitespace-nowrap">
-                  <span className="text-[16px] font-bold font-['Montserrat']">
+                  <span className="text-[16px] font-bold font-['Poppins']">
                     Date:
                   </span>
-                  <span className="min-w-[110px] text-[16px] font-bold font-['Montserrat']">
+                  <span className="min-w-[110px] text-[16px] font-bold font-['Poppins']">
                     {printDate}
                   </span>
                 </div>
                 <div className="flex flex-col gap-[14px] pl-[24px]">
                   {vitalRows.map(([label, value]) => (
                     <div key={label} className="flex items-center gap-[16px]">
-                      <span className="shrink-0 text-[#0175A7] text-[16px] font-bold font-['Montserrat']">
+                      <span className="shrink-0 text-[#0175A7] text-[16px] font-bold font-['Poppins']">
                         {label}
                       </span>
-                      <span className="w-[100px] min-h-[16px] border-b-[1px] border-[#7fb3cc] text-right text-[#0175A7] text-[12px] font-bold font-['Montserrat']">
+                      <span className="w-[100px] min-h-[16px] border-b-[1px] border-[#7fb3cc] text-right text-[#0175A7] text-[12px] font-bold font-['Poppins']">
                         {value}
                       </span>
                     </div>
@@ -334,7 +334,7 @@ function PrescriptionPage({
 
             {/* Doctor Notes */}
             <div className="relative flex-1 min-h-[265px] px-[49px] pt-[26px]">
-              <p className="m-0 text-[#111827] text-[16px] font-semibold font-['Montserrat'] underline underline-offset-[2px]">
+              <p className="m-0 text-[#111827] text-[16px] font-semibold font-['Poppins'] underline underline-offset-[2px]">
                 Doctor Notes:
               </p>
               <img
@@ -343,14 +343,14 @@ function PrescriptionPage({
                 aria-hidden="true"
                 className="pointer-events-none select-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[256px] h-auto opacity-10"
               />
-              <div className="relative mt-[11px] whitespace-pre-wrap text-[#111827] text-[14px] leading-[1.5] font-['Montserrat'] tracking-[0.6px]">
+              <div className="relative mt-[11px] whitespace-pre-wrap text-[#111827] text-[14px] leading-[1.5] font-['Poppins'] tracking-[0.6px]">
                 {notes}
               </div>
             </div>
           </div>
 
           {/* Page number + signature */}
-          <span className="absolute left-[33px] bottom-[204px] text-[#0175A7] text-[14px] font-semibold font-['Montserrat'] tracking-[0.6px]">
+          <span className="absolute left-[33px] bottom-[204px] text-[#0175A7] text-[14px] font-semibold font-['Poppins'] tracking-[0.6px]">
             Page Number: {pageNumber} of {totalPages}
           </span>
           <div className="absolute right-[49px] bottom-[196px] w-[192px] flex flex-col items-center gap-[4px]">
@@ -362,7 +362,7 @@ function PrescriptionPage({
               />
             )}
             <div className="w-[192px] h-0" />
-            <span className="text-[#0175A7] text-[14px] font-semibold font-['Montserrat']">
+            <span className="text-[#0175A7] text-[14px] font-semibold font-['Poppins']">
               Doctor Signature
             </span>
           </div>
@@ -382,7 +382,7 @@ function PrescriptionPage({
                   src="/pharmacy_logo.svg"
                   alt="Pharmacy"
                 />
-                <p className="m-0 mt-[4px] text-[#0175A7] text-[12px] font-medium font-['Montserrat'] leading-[16px] ">
+                <p className="m-0 mt-[4px] text-[#0175A7] text-[12px] font-medium font-['Poppins'] leading-[16px] ">
                   Radha Nagar Main Road, Chromepet.
                 </p>
                 {(clinic.phone || clinic.email) && (
@@ -390,7 +390,7 @@ function PrescriptionPage({
                     {clinic.phone && (
                       <span className="inline-flex items-center gap-[4px] whitespace-nowrap">
                         <PhoneIcon className="w-[10px] h-auto" />
-                        <span className="text-[12px] font-semibold font-['Montserrat']">
+                        <span className="text-[12px] font-semibold font-['Poppins']">
                           {clinic.phone}
                         </span>
                       </span>
@@ -402,7 +402,7 @@ function PrescriptionPage({
                           alt=""
                           className="w-[12px] h-auto"
                         />
-                        <span className="text-[12px] font-semibold font-['Montserrat']">
+                        <span className="text-[12px] font-semibold font-['Poppins']">
                           {clinic.email}
                         </span>
                       </span>
@@ -417,19 +417,19 @@ function PrescriptionPage({
               </div>
             </div>
             <div className="border-l-[3px] border-[#0175A7] pl-[11px]">
-              <p className="m-0 text-[#0175A7] text-xs font-bold font-['Montserrat']">
+              <p className="m-0 text-[#0175A7] text-xs font-bold font-['Poppins']">
                 CLINICAL LABORATORY SERVICES
               </p>
               <div className="mt-[6px] flex flex-col gap-[7px]">
-                <p className="m-0 flex items-center gap-[6px] text-[#0175A7] text-[10px] font-['Montserrat']">
+                <p className="m-0 flex items-center gap-[6px] text-[#0175A7] text-[10px] font-['Poppins']">
                   <span className="inline-block w-[8px] h-[8px] shrink-0 rounded-full bg-[#0175A7]" />
                   All types of test are done here at Reasonable Price
                 </p>
-                <p className="m-0 flex items-center gap-[6px] text-[#00B36F] text-[10px] font-['Montserrat']">
+                <p className="m-0 flex items-center gap-[6px] text-[#00B36F] text-[10px] font-['Poppins']">
                   <span className="inline-block w-[8px] h-[8px] shrink-0 rounded-full bg-[#00B36F]" />
                   Home sample collection available
                 </p>
-                <p className="m-0 flex items-center gap-[6px] text-[#0175A7] text-[10px] font-['Montserrat']">
+                <p className="m-0 flex items-center gap-[6px] text-[#0175A7] text-[10px] font-['Poppins']">
                   <span className="inline-block w-[8px] h-[8px] shrink-0 rounded-full bg-[#0175A7]" />
                   Online-Consultation on blood reports
                 </p>
@@ -444,10 +444,10 @@ function PrescriptionPage({
           <section className="pt-[8px] px-[30px] pb-0 text-[#111827]">
             {medicineRows.length > 0 && (
               <>
-                <p className="m-0 mb-[11px] text-[#111827] text-[16px] font-semibold font-['Montserrat'] underline underline-offset-[2px]">
+                <p className="m-0 mb-[11px] text-[#111827] text-[16px] font-semibold font-['Poppins'] underline underline-offset-[2px]">
                   Prescribed Medicines{medicineContinued ? " (Continued)" : ""}:
                 </p>
-                <table className="w-full table-fixed border-collapse overflow-hidden rounded-[3px] border border-[#d5d5d5] text-[#111827] text-[12px] font-['Montserrat']">
+                <table className="w-full table-fixed border-collapse overflow-hidden rounded-[3px] border border-[#d5d5d5] text-[#111827] text-[12px] font-['Poppins']">
                   <thead>
                     <tr className="bg-[#E3FFE6]">
                       <th className="px-[9px] py-[10px] text-left text-[13px] font-semibold whitespace-nowrap w-[8%]">
@@ -502,10 +502,10 @@ function PrescriptionPage({
             )}
             {referralRows.length > 0 && (
               <div className={medicineRows.length > 0 ? "mt-[19px]" : ""}>
-                <p className="m-0 mb-[11px] text-[#111827] text-[16px] font-semibold font-['Montserrat'] underline underline-offset-[2px]">
+                <p className="m-0 mb-[11px] text-[#111827] text-[16px] font-semibold font-['Poppins'] underline underline-offset-[2px]">
                   Prescribed Lab Tests{referralContinued ? " (Continued)" : ""}:
                 </p>
-                <table className="w-full table-fixed border-collapse overflow-hidden rounded-[3px] border border-[#d5d5d5] text-[#111827] text-[12px] font-['Montserrat']">
+                <table className="w-full table-fixed border-collapse overflow-hidden rounded-[3px] border border-[#d5d5d5] text-[#111827] text-[12px] font-['Poppins']">
                   <thead>
                     <tr className="bg-[#e3ffe5]">
                       <th className="px-[9px] py-[10px] text-left text-[13px] font-semibold whitespace-nowrap w-[8%]">
@@ -550,7 +550,7 @@ function PrescriptionPage({
           />
 
           <div className="mt-auto flex items-end justify-between px-[30px] pt-[15px]">
-            <span className="text-[16px] font-semibold font-['Montserrat'] text-[#0175A7]">
+            <span className="text-[16px] font-semibold font-['Poppins'] text-[#0175A7]">
               Page Number: {pageNumber} of {totalPages}
             </span>
           </div>

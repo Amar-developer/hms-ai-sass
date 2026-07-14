@@ -625,7 +625,6 @@ export function AppointmentCalendarBooking(props: Props) {
                       required
                       value={departmentId}
                       onChange={setDepartmentId}
-                      // className="select-filter"
                       searchable={departmentOptions.length > 8}
                       placeholder="Select department"
                       options={departmentOptions.map((department: any) => ({
@@ -784,42 +783,47 @@ export function AppointmentCalendarBooking(props: Props) {
                     <FormField label="BP">
                       <Input
                         value={intakeBp}
-                        onChange={setIntakeBp}
+                        onChange={(e: any) => setIntakeBp(e.target.value)}
                         placeholder="120/80 mmHg"
                       />
                     </FormField>
+
                     <FormField label="Pulse / PR">
                       <Input
                         value={intakePulse}
-                        onChange={setIntakePulse}
+                        onChange={(e: any) => setIntakePulse(e.target.value)}
                         placeholder="78 bpm"
                       />
                     </FormField>
+
                     <FormField label="SpO2">
                       <Input
                         value={intakeSpo2}
-                        onChange={setIntakeSpo2}
+                        onChange={(e: any) => setIntakeSpo2(e.target.value)}
                         placeholder="98%"
                       />
                     </FormField>
+
                     <FormField label="Temp">
                       <Input
                         value={intakeTemp}
-                        onChange={setIntakeTemp}
+                        onChange={(e: any) => setIntakeTemp(e.target.value)}
                         placeholder="98.6°F"
                       />
                     </FormField>
+
                     <FormField label="Height">
                       <Input
                         value={intakeHeight}
-                        onChange={setIntakeHeight}
+                        onChange={(e: any) => setIntakeHeight(e.target.value)}
                         placeholder="170cm"
                       />
                     </FormField>
+
                     <FormField label="Weight">
                       <Input
                         value={intakeWeight}
-                        onChange={setIntakeWeight}
+                        onChange={(e: any) => setIntakeWeight(e.target.value)}
                         placeholder="65kg"
                       />
                     </FormField>

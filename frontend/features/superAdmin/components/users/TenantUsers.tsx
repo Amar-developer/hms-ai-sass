@@ -12,7 +12,6 @@ import {
   SearchableSelect,
   Select,
 } from "@/app/components/common/ui";
-import { FormField } from "@/app/components/FormElements";
 import { formatDate } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
@@ -20,6 +19,9 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { UserRoleList } from "./UserRoleList";
+import { status_options } from "../../constants";
+import { RowActions } from "@/features/admin/components/RowActions";
+import { FormField } from "@/app/components/FormElements";
 
 export function TenantUsers({
   tenants,
@@ -133,20 +135,14 @@ export function TenantUsers({
             value={filters.query}
             onChange={(e: any) => updateFilter("query", e.target.value)}
             placeholder="Name, email, mobile, type"
-            // className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
         <FormField label="Status">
-          <SearchableSelect
+          <Select
             value={filters.status}
             onChange={(value) => updateFilter("status", value)}
-            options={[
-              { value: "all", label: "All status" },
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-            ]}
+            options={status_options}
             searchable={false}
-            // className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
 
@@ -159,7 +155,6 @@ export function TenantUsers({
               { value: "created_at", label: "Created date" },
             ]}
             searchable={false}
-            // className="rounded-lg px-2 py-1.5 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
         <FormField label="From">
@@ -167,7 +162,6 @@ export function TenantUsers({
             type="date"
             value={filters.fromDate}
             onChange={(e: any) => updateFilter("fromDate", e.target.value)}
-            // className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
         <FormField label="To">
@@ -175,13 +169,12 @@ export function TenantUsers({
             type="date"
             value={filters.toDate}
             onChange={(e: any) => updateFilter("toDate", e.target.value)}
-            // className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1320px]">
-          <div className="hidden md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.55fr_.65fr_.65fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
+          <div className="hidden md:grid-cols-[.9fr_1.15fr_1fr_.65fr_.55fr_.65fr_.65fr_.7fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid">
             <SortButton
               label="User"
               field="name"
@@ -214,7 +207,7 @@ export function TenantUsers({
               sort={sort}
               onSort={changeSort}
             />
-            <span className="text-right">Actions</span>
+            <span className="text-start">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
             {rows.length === 0 && <Empty text="No users match your search." />}
@@ -239,7 +232,7 @@ export function TenantUsers({
                       open();
                     }
                   }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.70fr_.65fr_.65fr_1.45fr] md:items-center"
+                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.70fr_.65fr_.65fr_.7fr] md:items-center"
                 >
                   <div>
                     <b className="text-xs lg:text-sm">{user.name}</b>
@@ -266,32 +259,58 @@ export function TenantUsers({
                   <span className="text-xs lg:text-sm flex justify-start items-center">
                     {formatDate(user.updated_at)}
                   </span>
-                  <ActionGroup>
-                    <ActionButton onClick={stop(open)}>Edit</ActionButton>
-                    <ActionButton
-                      onClick={stop(() =>
-                        setConfirmAction({
-                          entity: "user",
-                          kind: "status",
-                          user,
-                        }),
-                      )}
-                    >
-                      {user.is_active ? "Inactive" : "Active"}
-                    </ActionButton>
-                    <ActionButton
-                      tone="danger"
-                      onClick={stop(() =>
-                        setConfirmAction({
-                          entity: "user",
-                          kind: "delete",
-                          user,
-                        }),
-                      )}
-                    >
-                      Delete
-                    </ActionButton>
-                  </ActionGroup>
+                  {rows.map((user: any) => {
+                    const open = () => {
+                      setSelectedUserId(user.id);
+                      setSection("userEdit");
+                    };
+
+                    const actions = [
+                      {
+                        label: "Edit",
+                        onClick: open,
+                      },
+                      {
+                        label: user.is_active ? "Inactive" : "Active",
+                        onClick: () =>
+                          setConfirmAction({
+                            entity: "user",
+                            kind: "status",
+                            user,
+                          }),
+                      },
+                      {
+                        label: "Delete",
+                        danger: true,
+                        onClick: () =>
+                          setConfirmAction({
+                            entity: "user",
+                            kind: "delete",
+                            user,
+                          }),
+                      },
+                    ];
+
+                    return (
+                      <div
+                        key={user.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={open}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            open();
+                          }
+                        }}
+                        className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.70fr_.65fr_.65fr_auto] md:items-center"
+                      >
+                        {/* Other columns */}
+
+                        <RowActions actions={actions} />
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}

@@ -7,6 +7,7 @@ import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
 import { TenantPicker } from "../shared/TenantPicker";
 import { Pagination } from "@/app/components/common/Pagination";
+import { FormField } from "@/app/components/FormElements";
 
 export function BranchesManagement({
   tenants,
@@ -63,13 +64,14 @@ export function BranchesManagement({
           />
         </div>
       </div>
-      <div className="mt-4 grid gap-1 md:grid-cols-2 :grid-cols-[1fr_280px]">
-        <Input
-          value={query}
-          onChange={(e: any) => setQuery(e.target.value)}
-          placeholder="Search branch name, code, area, city, status"
-          className="rounded-lg px-2 py-2 lg:px-4 lg:py-1 text-xs lg:text-sm w-2/3 lg:w-[40%] mt-5"
-        />
+      <div className="mt-4 grid gap-1 md:grid-cols-3">
+        <FormField label="Search">
+          <Input
+            value={query}
+            onChange={(e: any) => setQuery(e.target.value)}
+            placeholder="Search branch name, code, area, city, status"
+          />
+        </FormField>
         <TenantPicker
           tenants={tenants}
           selectedId={selectedId}

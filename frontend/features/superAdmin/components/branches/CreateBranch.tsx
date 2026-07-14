@@ -2,6 +2,7 @@
 
 import { Button, Card, Field, Input } from "@/app/components/common/ui";
 import { TenantPicker } from "../shared/TenantPicker";
+import { FormField } from "@/app/components/FormElements";
 
 export function CreateBranch({
   tenants,
@@ -36,51 +37,45 @@ export function CreateBranch({
           selectedId={selectedId}
           setSelectedId={setSelectedId}
         />
-        <Field label="Branch Name">
+        <FormField label="Branch Name">
           <Input
             name="name"
             required
             placeholder="Main Branch"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
-        </Field>
-        <Field label="Branch Code">
+        </FormField>
+        <FormField label="Branch Code">
           <Input
             name="code"
             required
             placeholder="MAIN"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
-        </Field>
-        <Field label="Area">
+        </FormField>
+        <FormField label="Area">
           <Input
             name="area"
             placeholder="Chrompet"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
-        </Field>
-        <Field label="City">
+        </FormField>
+        <FormField label="City">
           <Input
             name="city"
             placeholder="Chennai"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
-        </Field>
-        <Field label="State">
+        </FormField>
+        <FormField label="State">
           <Input
             name="state"
             placeholder="Tamil Nadu"
-            className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
-        </Field>
+        </FormField>
         <div className="md:col-span-2">
-          <Field label="Address">
+          <FormField label="Address">
             <Input
               name="address"
               placeholder="Street, area, landmark"
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
             />
-          </Field>
+          </FormField>
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
           <Button disabled={busy}>

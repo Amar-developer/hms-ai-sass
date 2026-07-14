@@ -769,7 +769,7 @@ export function SearchableSelect<T = string>({
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 max-h-72 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin">
+        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin">
           {searchable && (
             <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2 pr-4">
               <input

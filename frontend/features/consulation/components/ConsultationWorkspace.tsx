@@ -627,7 +627,9 @@ export function ConsultationWorkspace(props: any) {
                   label="Treatment Type"
                   required
                   error={treatmentTypeError}
-                  className={treatmentTypeError ? "[&_button]:border-red-400" : ""}
+                  className={
+                    treatmentTypeError ? "[&_button]:border-red-400" : ""
+                  }
                 >
                   <SearchableSelect
                     // label="Treatment Type"
@@ -733,7 +735,9 @@ export function ConsultationWorkspace(props: any) {
                     required
                     error={medicineNameError}
                     hint="Required only when adding a medicine."
-                    className={medicineNameError ? "[&_input]:border-red-400" : ""}
+                    className={
+                      medicineNameError ? "[&_input]:border-red-400" : ""
+                    }
                   >
                     <SearchPicker
                       value={selectedMedicineId}
@@ -779,7 +783,9 @@ export function ConsultationWorkspace(props: any) {
                     label="Dosage"
                     required
                     error={medicineDosageError}
-                    className={medicineDosageError ? "[&_input]:border-red-400" : ""}
+                    className={
+                      medicineDosageError ? "[&_input]:border-red-400" : ""
+                    }
                   >
                     <Input
                       required
@@ -793,7 +799,9 @@ export function ConsultationWorkspace(props: any) {
                     label="Frequency"
                     required
                     error={medicineFrequencyError}
-                    className={medicineFrequencyError ? "[&_button]:border-red-400" : ""}
+                    className={
+                      medicineFrequencyError ? "[&_button]:border-red-400" : ""
+                    }
                   >
                     <SearchableSelect
                       value={medicineFrequency}
@@ -898,29 +906,42 @@ export function ConsultationWorkspace(props: any) {
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                           {medicineItems.length ? (
-                            medicineItems.map((medicine: any, index: number) => (
-                              <tr key={`${medicine.name}-${index}`}>
-                                <td className="px-3 py-2.5 font-semibold text-slate-900">
-                                  {medicine.name || "-"}
-                                </td>
-                                <td className="px-3 py-2.5">{medicine.dosage || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.frequency || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.duration || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.instructions || "-"}</td>
-                                <td className="px-3 py-2.5 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => removeMedicineItem(index)}
-                                    className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
-                                  >
-                                    Remove
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
+                            medicineItems.map(
+                              (medicine: any, index: number) => (
+                                <tr key={`${medicine.name}-${index}`}>
+                                  <td className="px-3 py-2.5 font-semibold text-slate-900">
+                                    {medicine.name || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.dosage || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.frequency || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.duration || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.instructions || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeMedicineItem(index)}
+                                      className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                                    >
+                                      Remove
+                                    </button>
+                                  </td>
+                                </tr>
+                              ),
+                            )
                           ) : (
                             <tr>
-                              <td colSpan={6} className="px-3 py-5 text-center text-slate-500">
+                              <td
+                                colSpan={6}
+                                className="px-3 py-5 text-center text-slate-500"
+                              >
                                 No medicines added yet.
                               </td>
                             </tr>
@@ -983,7 +1004,9 @@ export function ConsultationWorkspace(props: any) {
                       label="Priority"
                       required
                       error={labPriorityError}
-                      className={labPriorityError ? "[&_button]:border-red-400" : ""}
+                      className={
+                        labPriorityError ? "[&_button]:border-red-400" : ""
+                      }
                     >
                       <SearchableSelect
                         value={labPriority}
@@ -1047,7 +1070,9 @@ export function ConsultationWorkspace(props: any) {
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-200">
-                            {referralItems.some((item: any) => item.type === "lab") ? (
+                            {referralItems.some(
+                              (item: any) => item.type === "lab",
+                            ) ? (
                               referralItems.map((item: any, index: number) =>
                                 item.type === "lab" ? (
                                   <tr key={`${item.name}-${index}`}>
@@ -1057,11 +1082,15 @@ export function ConsultationWorkspace(props: any) {
                                     <td className="px-3 py-2.5 capitalize">
                                       {item.priority || "routine"}
                                     </td>
-                                    <td className="px-3 py-2.5">{item.instructions || "-"}</td>
+                                    <td className="px-3 py-2.5">
+                                      {item.instructions || "-"}
+                                    </td>
                                     <td className="px-3 py-2.5 text-right">
                                       <button
                                         type="button"
-                                        onClick={() => removeReferralItem(index)}
+                                        onClick={() =>
+                                          removeReferralItem(index)
+                                        }
                                         className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
                                       >
                                         Remove
@@ -1072,7 +1101,10 @@ export function ConsultationWorkspace(props: any) {
                               )
                             ) : (
                               <tr>
-                                <td colSpan={4} className="px-3 py-5 text-center text-slate-500">
+                                <td
+                                  colSpan={4}
+                                  className="px-3 py-5 text-center text-slate-500"
+                                >
                                   No lab tests added yet.
                                 </td>
                               </tr>
@@ -1125,33 +1157,29 @@ export function ConsultationWorkspace(props: any) {
                       Refer another doctor
                     </label>
                     {referDoctor && (
-                      <FormField
-                        label="Recommended Doctor"
-                        required
-                        error={referralDoctorError}
-                        className={referralDoctorError ? "[&_select]:border-red-400" : ""}
-                      >
-                        <Select
+
+                        <SearchableSelect
                           required
-                          aria-invalid={Boolean(referralDoctorError) || undefined}
+                          name="referDoctorId"
                           value={referDoctorId}
-                          onChange={(e: any) =>
-                            setReferDoctorId(e.target.value)
+                          onChange={(value) => setReferDoctorId(value)}
+                          searchable={false}
+                          options={[
+                            { value: "", label: "Select doctor" },
+                            ...practitioners
+                              .filter(
+                                (p: any) =>
+                                  p.role === "Doctor" && p.id !== doctor.id,
+                              )
+                              .map((p: any) => ({
+                                value: p.id,
+                                label: `${p.name} - ${p.specialty}`,
+                              })),
+                          ]}
+                          aria-invalid={
+                            Boolean(referralDoctorError) || undefined
                           }
-                        >
-                          <option value="">Select doctor</option>
-                          {practitioners
-                            .filter(
-                              (p: any) =>
-                                p.role === "Doctor" && p.id !== doctor.id,
-                            )
-                            .map((p: any) => (
-                              <option key={p.id} value={p.id}>
-                                {p.name} - {p.specialty}
-                              </option>
-                            ))}
-                        </Select>
-                      </FormField>
+                        />
                     )}
                   </div>
                   <div className="rounded-lg bg-slate-50 p-4">

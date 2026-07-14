@@ -24,7 +24,7 @@ export function PermissionCheckboxes({ permissions, selected }: any) {
             the module's administrative workflows where supported.
           </p>
         </div>
-        <Badge tone="slate" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm w-[15%] lg:w-[8%]">{selectedSet.size} selected</Badge>
+        <Badge tone="slate" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm w-[15%] lg:w-[15%]">{selectedSet.size} selected</Badge>
       </div>
       <div className="mt-3 grid gap-4 xl:grid-cols-2">
         {modules.map((module) => (
