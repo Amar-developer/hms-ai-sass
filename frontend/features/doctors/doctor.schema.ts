@@ -26,12 +26,12 @@ export const doctorSchema = z
       .min(3, "Doctor name must be at least 3 characters"),
     practitionerType: z.enum(["doctor", "physiotherapist"]),
     registrationNumber: z.string().trim().optional(),
-    mobile: z
+    mobile: z.string().regex(/^\d{10}$/, "Mobile number must be 10 digits"),
+    email: z
       .string()
-      .regex(/^\d{10}$/, "Mobile number must be 10 digits")
-      .optional()
-      .or(z.literal("")),
-    email: z.string().email("Invalid email address").optional().or(z.literal("")),
+      .trim()
+      .min(1, "Email is required")
+      .email("Invalid email address"),
     status: z.enum(["active", "inactive"]),
     branchIds: z.array(z.string()).min(1, "Select at least one branch"),
     // We derive departmentIds from specialtyFees - no need to keep separate

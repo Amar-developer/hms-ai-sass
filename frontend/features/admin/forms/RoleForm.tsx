@@ -63,6 +63,7 @@ export function RoleForm({
             permissions={permissions}
             selected={role?.permission_keys || []}
             disabled={isLocked(role)}
+            roleName={roleName || role?.name}
           />
         </div>
         <Actions

@@ -17,6 +17,7 @@ export const USER_COLUMNS: Column[] = [
 export const ROLE_COLUMNS: Column[] = [
   { label: "Role", width: "min-w-[200px]" },
   { label: "Key", width: "min-w-[180px]" },
+  { label: "Permissions", width: "min-w-[130px]" },
   { label: "Status", width: "min-w-[140px]" },
   { label: "Modified", width: "min-w-[140px]" },
   { label: "Actions", width: "min-w-[160px]" },

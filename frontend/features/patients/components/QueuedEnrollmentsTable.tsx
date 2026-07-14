@@ -27,6 +27,10 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
             Purchased while another plan was active — these activate
             automatically once the patient's current plan ends.
           </p>
+          <p className="mt-1 text-xs font-semibold text-amber-700">
+            Expected dates follow the current plan. On actual activation, the
+            start and end dates are recalculated from that activation date.
+          </p>
         </div>
         <Badge
           tone="amber"
@@ -42,7 +46,7 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
               <th className="px-4 py-3">Patient</th>
               <th>Plan</th>
               <th>Purchased</th>
-              <th>Expected start</th>
+              <th>Expected validity</th>
               <th>Paid</th>
             </tr>
           </thead>
@@ -63,10 +67,10 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
                   {row.plan?.name || "Membership plan"}
                 </td>
                 <td className="text-xs lg:text-sm">
-                  {displayDate(row.starts_on)}
+                  {displayDate(row.created_at)}
                 </td>
                 <td className="text-xs lg:text-sm">
-                  When current plan ends (~{displayDate(row.ends_on)})
+                  {displayDate(row.starts_on)} to {displayDate(row.ends_on)}
                 </td>
                 <td className="text-xs lg:text-sm font-semibold tabular-nums">
                   {money(row.paid_amount)}

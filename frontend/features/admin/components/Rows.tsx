@@ -121,6 +121,12 @@ export function RoleRow({
       </td>
 
       <td className="px-4 py-3 text-xs whitespace-nowrap">
+        <Badge tone="slate" className="rounded-full px-2 py-[2px]">
+          {Array.isArray(role.permission_keys) ? role.permission_keys.length : 0}
+        </Badge>
+      </td>
+
+      <td className="px-4 py-3 text-xs whitespace-nowrap">
         <Badge
           tone={role.is_active ? "green" : "red"}
           className="rounded-full px-2 py-[2px] text-[10px]"

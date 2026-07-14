@@ -27,6 +27,7 @@ export function BookingDetail({
   onInvoice,
   onOpenInvoiceModule,
   canManage = false,
+  canCreateVisit = false,
   apiSession,
 }: any) {
   if (!booking) {
@@ -63,7 +64,10 @@ export function BookingDetail({
     : "home_care_service";
   const actualTotal = (booking.visit_logs || [])
     .filter((row: any) => row.status === "completed")
-    .reduce((sum: number, row: any) => sum + Number(row.total_amount || 0), 0);
+    .reduce((sum: number, row: any) => sum + Number(row.unit_amount || 0), 0);
+  const hasBillableLog = (booking.visit_logs || []).some(
+    (row: any) => row.status === "completed",
+  );
   return (
     <div className="grid gap-4">
       <Card>
@@ -129,7 +133,7 @@ export function BookingDetail({
               Billable total {money(actualTotal)}
             </Badge>
           </div>
-          {!locked && visitForm && (
+          {!locked && visitForm && canCreateVisit && (
             <form
               onSubmit={saveVisitLog}
               className="grid gap-3 rounded-xl bg-white p-3 md:grid-cols-4"
@@ -138,8 +142,9 @@ export function BookingDetail({
                 label="Service Date"
                 value={visitForm.visit_date}
                 onChange={(value: string) => setVisitField("visit_date", value)}
+                required
               />
-              <FormField label="Staff Type">
+              <FormField label="Staff Type" required>
                 <SearchableSelect
                   value={visitForm.staff_type}
                   onChange={(value: string) =>
@@ -150,9 +155,10 @@ export function BookingDetail({
                     label,
                   }))}
                   searchable={false}
+                  required
                 />
               </FormField>
-              <FormField label="Staff Went">
+              <FormField label="Staff Went" required>
                 <SearchableSelect
                   value={visitForm.assigned_staff_user_id}
                   onChange={(value: string) => {
@@ -176,14 +182,16 @@ export function BookingDetail({
                     })),
                   ]}
                   searchable={false}
+                  required
                 />
               </FormField>
-              <FormField label="Status">
+              <FormField label="Status" required>
                 <SearchableSelect
                   value={visitForm.status}
                   onChange={(value: string) => setVisitField("status", value)}
                   options={visitLogStatuses}
                   searchable={false}
+                  required
                 />
               </FormField>
               <div>
@@ -211,16 +219,19 @@ export function BookingDetail({
                       sublabel: money(service.default_price),
                     })),
                   ]}
+                  required
                 />
               ) : (
-                <Input
-                  label="Service Name"
-                  value={visitForm.description}
-                  onChange={(event: any) =>
-                    setVisitField("description", event.target.value)
-                  }
-                  placeholder="Type actual service done"
-                />
+                <FormField label="Service Name" required>
+                  <Input
+                    value={visitForm.description}
+                    onChange={(event: any) =>
+                      setVisitField("description", event.target.value)
+                    }
+                    placeholder="Type actual service done"
+                    required
+                  />
+                </FormField>
               )}
               {fixedServiceCategory === "home_care_service" ? (
                 <SelectField
@@ -238,6 +249,7 @@ export function BookingDetail({
                         ]),
                     ...homeCareHourOptions,
                   ]}
+                  required
                 />
               ) : null}
               <NumberField
@@ -251,6 +263,7 @@ export function BookingDetail({
                   setVisitField("unit_amount", value)
                 }
                 min={0}
+                required
                 className={
                   fixedServiceCategory === "home_visit_service"
                     ? "md:col-start-3"
@@ -282,7 +295,9 @@ export function BookingDetail({
                   <th>Price</th>
                   <th>Status</th>
                   <th className="pr-3 text-right">Amount</th>
-                  {!locked && <th className="pr-3 text-right">Actions</th>}
+                  {!locked && canManage && (
+                    <th className="pr-3 text-right">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y py-2">
@@ -315,9 +330,9 @@ export function BookingDetail({
                     <td>{money(row.unit_amount)}</td>
                     <td>{humanizeOptionLabel(row.status)}</td>
                     <td className="pr-3 text-right">
-                      {money(row.total_amount)}
+                      {money(row.status === "completed" ? row.unit_amount : 0)}
                     </td>
-                    {!locked && (
+                    {!locked && canManage && (
                       <td className="pr-3 text-right">
                         <ActionButton
                           tone="danger"
@@ -360,6 +375,12 @@ export function BookingDetail({
               type="button"
               className="rounded-lg px-3 py-2 text-xs"
               onClick={invoiceDetail?.invoice ? onOpenInvoiceModule : onInvoice}
+              disabled={!invoiceDetail?.invoice && !hasBillableLog}
+              title={
+                !invoiceDetail?.invoice && !hasBillableLog
+                  ? "Add at least one completed service log before generating an invoice"
+                  : undefined
+              }
             >
               {invoiceDetail?.invoice ? "View Invoice" : "Generate Invoice"}
             </Button>

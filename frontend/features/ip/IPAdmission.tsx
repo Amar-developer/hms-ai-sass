@@ -581,7 +581,6 @@ export function IPAdmission({
         />
         <StatusToast
           message={error}
-          tone="error"
           onClose={() => setError("")}
         />
         <Card>
@@ -654,7 +653,6 @@ export function IPAdmission({
         />
         <StatusToast
           message={error}
-          tone="error"
           onClose={() => setError("")}
         />
         <Card>
@@ -702,7 +700,7 @@ export function IPAdmission({
         tone="success"
         onClose={() => setMessage("")}
       />
-      <StatusToast message={error} tone="error" onClose={() => setError("")} />
+      <StatusToast message={error} onClose={() => setError("")} />
 
       <div className="grid gap-6">
         <Card>

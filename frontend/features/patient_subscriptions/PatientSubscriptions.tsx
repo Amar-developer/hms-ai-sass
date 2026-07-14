@@ -530,7 +530,42 @@ export function PatientSubscriptions({
   const queuedEnrollments = enrollments.filter(
     (row: any) => row.status === "queued",
   );
-  const canDeletePlans = canDeleteMembershipPlans(apiSession.user);
+  const userPermissions = apiSession.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      apiSession.user?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canDeletePlans =
+    canDeleteMembershipPlans(apiSession.user) ||
+    hasPermission(
+      "patient_subscriptions.manage",
+      "patient_subscriptions.delete",
+      "settings.manage",
+    );
+  const canEditPlans =
+    canDeletePlans ||
+    hasPermission(
+      "patient_subscriptions.manage",
+      "patient_subscriptions.edit",
+      "settings.manage",
+    );
+  const canCreatePlan =
+    canDeletePlans ||
+    hasPermission(
+      "patient_subscriptions.manage",
+      "patient_subscriptions.create",
+      "settings.manage",
+    );
+  const canEnrollPatient =
+    canDeletePlans ||
+    hasPermission(
+      "patient_subscriptions.manage",
+      "patient_subscriptions.create",
+      "settings.manage",
+      "identity.users.manage",
+    );
   const activeEnrollmentCountByPlan = useMemo(() => {
     const counts = new Map<string, number>();
     activeEnrollments.forEach((row: any) => {
@@ -596,7 +631,7 @@ export function PatientSubscriptions({
           }
         />
       )}
-      {view === "create" && (
+      {view === "create" && canCreatePlan && (
         <PlanForm
           title="Create Plan"
           apiSession={apiSession}
@@ -623,7 +658,7 @@ export function PatientSubscriptions({
           setDiscountedMedicineIds={setDiscountedMedicineIds}
         />
       )}
-      {view === "edit" && editingPlan && (
+      {view === "edit" && editingPlan && canEditPlans && (
         <PlanForm
           title="Edit Plan"
           apiSession={apiSession}
@@ -653,7 +688,7 @@ export function PatientSubscriptions({
       )}
       {view === "list" && (
         <>
-          {showEnrollment && (
+          {showEnrollment && canEnrollPatient && (
             <Card>
               <h3 className="text-lg font-bold">Enroll Patient</h3>
               <form
@@ -694,6 +729,12 @@ export function PatientSubscriptions({
                   </Button>
                 </div>
               </form>
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                If the patient already has an active plan, this purchase is
+                queued. Its expected validity starts after the current plan;
+                when activation actually occurs, both dates are recalculated
+                from that activation date. Only one queued plan is allowed.
+              </p>
             </Card>
           )}
 
@@ -707,13 +748,15 @@ export function PatientSubscriptions({
               </div>
               <div className="flex items-center gap-2">
                 <RefreshButton onRefresh={load} />
-                <Button
-                  type="button"
-                  onClick={() => setView("create")}
-                  className="save-button text-xs"
-                >
-                  Create Plan
-                </Button>
+                {canCreatePlan && (
+                  <Button
+                    type="button"
+                    onClick={() => setView("create")}
+                    className="save-button text-xs"
+                  >
+                    Create Plan
+                  </Button>
+                )}
               </div>
             </div>
             <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
@@ -755,6 +798,7 @@ export function PatientSubscriptions({
                               startEdit={startEdit}
                               togglePlanActive={togglePlanActive}
                               canDeletePlans={canDeletePlans}
+                              canEditPlans={canEditPlans}
                               openDetail={() => {
                                 setDetailPlanId(plan.id);
                                 setView("detail");

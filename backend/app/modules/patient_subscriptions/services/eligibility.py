@@ -98,6 +98,27 @@ def resolve_current_enrollment(
             session.add(row)
             dirty = True
     if current:
+        # Keep expected queued validity immediately after the current plan.
+        # This also repairs legacy queued rows that retained their purchase
+        # date in starts_on and therefore appeared to overlap the active plan.
+        expected_start = current.ends_on + timedelta(days=1)
+        queued_rows = repo.status_rows_for_patient(
+            tenant_id=tenant_id,
+            patient_id=patient_id,
+            enrollment_status=PatientSubscriptionEnrollmentStatus.QUEUED,
+        )
+        for queued in queued_rows:
+            plan = PatientSubscriptionPlanRepository(session).get_for_tenant(
+                tenant_id, queued.plan_id
+            )
+            if not plan:
+                continue
+            expected_end = enrollment_end_date(expected_start, plan)
+            if queued.starts_on != expected_start or queued.ends_on != expected_end:
+                queued.starts_on = expected_start
+                queued.ends_on = expected_end
+                session.add(queued)
+                dirty = True
         if dirty:
             session.commit()
         return current
@@ -119,6 +140,7 @@ def resolve_current_enrollment(
         if dirty:
             session.commit()
         return None
+    next_enrollment.starts_on = today
     next_enrollment.activated_on = today
     next_enrollment.ends_on = enrollment_end_date(today, plan)
     next_enrollment.status = PatientSubscriptionEnrollmentStatus.ACTIVE

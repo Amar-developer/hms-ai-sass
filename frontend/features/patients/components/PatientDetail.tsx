@@ -58,6 +58,7 @@ export function PatientDetail({
     "billing.read",
     "invoices.read",
   ]);
+  const canEditPatient = hasAnyPermission(["patients.edit"]);
   const alerts = [
     ...(summary?.critical_alerts || []),
     ...(summary?.allergies || []),
@@ -333,16 +334,18 @@ export function PatientDetail({
               <span className="absolute inset-x-0 bottom-0 bg-slate-900/75 px-1 py-1 text-center text-[9px] font-bold text-white opacity-0 transition group-hover:opacity-100">
                 {patient.photo_url ? "Change" : "Upload"}
               </span>
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(e: any) => {
-                  const f = e.target.files?.[0];
-                  if (f) onUploadPhoto(f);
-                  e.currentTarget.value = "";
-                }}
-              />
+              {canEditPatient && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e: any) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUploadPhoto(f);
+                    e.currentTarget.value = "";
+                  }}
+                />
+              )}
             </label>
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -368,7 +371,7 @@ export function PatientDetail({
             >
               Back to Patients
             </button>
-            <Button onClick={onEdit}>Edit Patient</Button>
+            {canEditPatient && <Button onClick={onEdit}>Edit Patient</Button>}
           </div>
         </div>
         <StatusToast message={message} onClose={onMessageClose} />
@@ -458,63 +461,63 @@ export function PatientDetail({
         )}
       </Card>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <DetailSection
-          title="Alerts"
-          description="Allergies and critical notes."
-          count={alerts.length}
-        >
-          {alerts.length === 0 && (
-            <Empty text="No active allergy or critical alert." />
+      {(alerts.length > 0 || risks.length > 0) && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {alerts.length > 0 && (
+            <DetailSection
+              title="Alerts"
+              description="Allergies and critical notes."
+              count={alerts.length}
+            >
+              <div className="space-y-2">
+                {alerts.map((alert: any) => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
+              </div>
+            </DetailSection>
           )}
-          <div className="space-y-2">
-            {alerts.map((alert: any) => (
-              <AlertCard key={alert.id} alert={alert} />
-            ))}
-          </div>
-        </DetailSection>
-        <DetailSection
-          title="Risk Notes"
-          description="Care risks and general notes."
-          count={risks.length}
-        >
-          {risks.length === 0 && <Empty text="No active risk notes." />}
-          <div className="space-y-2">
-            {risks.map((alert: any) => (
-              <AlertCard key={alert.id} alert={alert} />
-            ))}
-          </div>
-        </DetailSection>
-      </div>
-
-      <DetailSection
-        title="Consultations"
-        description="Click a consultation to open the consultation workspace."
-        count={consultations.length}
-      >
-        {consultations.length === 0 && (
-          <Empty text="No consultation records found." />
-        )}
-        <DataTable
-          columns={consultationColumns}
-          data={consultations}
-          emptyMessage="No consultation records found."
-          onRowClick={openConsultation}
-        />
-      </DetailSection>
-
-      <div className="grid gap-5 lg:grid-cols-2">
-        <DetailSection
-          title="Lab & Service"
-          description="Ordered diagnostic tests and services."
-          count={labRows.length}
-        >
-          {labOrders.length === 0 && (
-            <Empty text="No lab orders found." />
+          {risks.length > 0 && (
+            <DetailSection
+              title="Risk Notes"
+              description="Care risks and general notes."
+              count={risks.length}
+            >
+              <div className="space-y-2">
+                {risks.map((alert: any) => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
+              </div>
+            </DetailSection>
           )}
-          <div
-            className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}
-          >
+        </div>
+      )}
+
+      {consultations.length > 0 && (
+        <DetailSection
+          title="Consultations"
+          description="Click a consultation to open the consultation workspace."
+          count={consultations.length}
+        >
+          <DataTable
+            columns={consultationColumns}
+            data={consultations}
+            emptyMessage="No consultation records found."
+            onRowClick={openConsultation}
+          />
+        </DetailSection>
+      )}
+
+      {(labRows.length > 0 || medicineRows.length > 0) && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {labRows.length > 0 && (
+            <DetailSection
+              title="Lab & Service"
+              description="Ordered diagnostic tests and services."
+              count={labRows.length}
+            >
+              <div
+                className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}
+              >
             <table className="w-full min-w-[520px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
                 <tr>
@@ -549,20 +552,19 @@ export function PatientDetail({
                 ))}
               </tbody>
             </table>
-          </div>
-        </DetailSection>
-
-        <DetailSection
-          title="Medicines"
-          description="Pharmacy issues and dispensed medicines."
-          count={medicineRows.length}
-        >
-          {pharmacyIssues.length === 0 && (
-            <Empty text="No pharmacy records found." />
+              </div>
+            </DetailSection>
           )}
-          <div
-            className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}
-          >
+
+          {medicineRows.length > 0 && (
+            <DetailSection
+              title="Medicines"
+              description="Pharmacy issues and dispensed medicines."
+              count={medicineRows.length}
+            >
+              <div
+                className={`max-h-[300px] overflow-y-auto rounded-lg border border-slate-200 ${hiddenScrollbar}`}
+              >
             <table className="w-full min-w-[520px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase text-slate-500">
                 <tr>
@@ -597,19 +599,19 @@ export function PatientDetail({
                 ))}
               </tbody>
             </table>
-          </div>
-        </DetailSection>
-      </div>
+              </div>
+            </DetailSection>
+          )}
+        </div>
+      )}
 
-      <DetailSection
-        title="Physiotherapy"
-        description="Cases, treatment goals, and planned sessions."
-        count={physioCases.length}
-      >
-        {physioCases.length === 0 && (
-          <Empty text="No physiotherapy records found." />
-        )}
-        <div className="grid gap-3 lg:grid-cols-2">
+      {physioCases.length > 0 && (
+        <DetailSection
+          title="Physiotherapy"
+          description="Cases, treatment goals, and planned sessions."
+          count={physioCases.length}
+        >
+          <div className="grid gap-3 lg:grid-cols-2">
           {physioCases.map((c: any) => (
             <button
               type="button"
@@ -624,18 +626,17 @@ export function PatientDetail({
               <StatusBadge status={c.status} />
             </button>
           ))}
-        </div>
-      </DetailSection>
+          </div>
+        </DetailSection>
+      )}
 
-      <DetailSection
-        title="IP Admissions"
-        description="Admission, bed, diagnosis, and discharge status."
-        count={patientIpAdmissions.length}
-      >
-        {patientIpAdmissions.length === 0 && (
-          <Empty text="No IP admission records found." />
-        )}
-        <div className="space-y-3">
+      {patientIpAdmissions.length > 0 && (
+        <DetailSection
+          title="IP Admissions"
+          description="Admission, bed, diagnosis, and discharge status."
+          count={patientIpAdmissions.length}
+        >
+          <div className="space-y-3">
           {patientIpAdmissions.map((adm: any) => (
             <button
               type="button"
@@ -650,10 +651,11 @@ export function PatientDetail({
               <StatusBadge status={adm.status} />
             </button>
           ))}
-        </div>
-      </DetailSection>
+          </div>
+        </DetailSection>
+      )}
 
-      {canReadMembership && (
+      {canReadMembership && resolvedMembershipEnrollments.length > 0 && (
         <DetailSection
           title="Billing & Membership"
           description="Membership plan history and benefit usage."
@@ -707,10 +709,17 @@ export function PatientDetail({
                       </Badge>
                     </div>
                     <p className="text-xs text-slate-500">
+                      {row.status === "queued" ? "Expected: " : ""}
                       {fmtDate(row.starts_on)} to {fmtDate(row.ends_on)} · paid{" "}
                       {money(invoice?.paid_amount ?? row.paid_amount)} /{" "}
                       {money(invoice?.total_amount ?? row.plan?.price_amount)}
                     </p>
+                    {row.status === "queued" && (
+                      <p className="text-xs font-semibold text-amber-700">
+                        Activates after the current plan; dates are recalculated
+                        on actual activation.
+                      </p>
+                    )}
                     <p className="text-xs text-slate-500">
                       Purchase invoice:{" "}
                       {invoice?.invoice_number ||
@@ -784,7 +793,7 @@ export function PatientDetail({
         </DetailSection>
       )}
 
-      {canReadBilling && (
+      {canReadBilling && patientInvoices.length > 0 && (
         <DetailSection
           title="Billing Invoices"
           description="Patient invoices, paid amount, and due amount."

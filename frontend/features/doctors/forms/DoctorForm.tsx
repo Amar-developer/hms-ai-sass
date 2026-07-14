@@ -203,13 +203,18 @@ export function DoctorForm({
           <FormError error={errors.registrationNumber?.message} />
         </Field>
 
-        <Field label="Mobile">
-          <Input {...register("mobile")} placeholder="Enter mobile" />
+        <Field label="Mobile" required>
+          <Input {...register("mobile")} placeholder="Enter mobile" required />
           <FormError error={errors.mobile?.message} />
         </Field>
 
-        <Field label="Email">
-          <Input {...register("email")} placeholder="Enter email" />
+        <Field label="Email" required>
+          <Input
+            type="email"
+            {...register("email")}
+            placeholder="Enter email"
+            required
+          />
           <FormError error={errors.email?.message} />
         </Field>
 

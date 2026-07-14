@@ -5,7 +5,7 @@ from sqlmodel import Session
 
 from app.core.access_control import enforce_entitlement, scoped_branch_id
 from app.modules.audit.service import record_audit_event
-from app.modules.billing.models import DoctorSettlement
+from app.modules.billing.models import DoctorSettlement, InvoiceStatus
 from app.modules.billing.repositories.settlement_report_repository import (
     BillingSettlementReportRepository,
 )
@@ -208,9 +208,17 @@ def revenue_report(
                 "doctor_share": 0,
             },
         )
-        net_invoice_amount = int(invoice.paid_amount or 0) + int(
-            invoice.balance_amount or 0
-        )
+        # balance_amount after a refund reflects the waived/refunded portion,
+        # not money still owed, so it must not be added back into revenue.
+        if invoice.status in (
+            InvoiceStatus.REFUNDED,
+            InvoiceStatus.PARTIALLY_REFUNDED,
+        ):
+            net_invoice_amount = int(invoice.paid_amount or 0)
+        else:
+            net_invoice_amount = int(invoice.paid_amount or 0) + int(
+                invoice.balance_amount or 0
+            )
         original_total = int(invoice.total_amount or 0)
         net_ratio = (
             net_invoice_amount / original_total

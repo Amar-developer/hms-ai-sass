@@ -61,8 +61,17 @@ export function Badge({
 export function noticeTone(message: string): NoticeTone {
   const text = String(message || "").toLowerCase();
   if (!text) return "info";
+  // Client-side "please fill this in" validation prompts are a nudge, not a
+  // system failure, so they read as a calm warning rather than an alarming
+  // red error even though they mention "required"/"missing"/"select".
   if (
-    /denied|not allowed|not assigned|unauthorized|forbidden|failed|could not|error|invalid|missing|required|does not|not found/.test(
+    /is required|are required|required\.$|missing|select |enter the|choose |already|warning|queued|called|request/.test(
+      text,
+    )
+  )
+    return "warning";
+  if (
+    /denied|not allowed|not assigned|unauthorized|forbidden|failed|could not|error|invalid|does not|not found/.test(
       text,
     )
   )
@@ -71,8 +80,6 @@ export function noticeTone(message: string): NoticeTone {
     /delete|deleted|deactivated|removed|suspended|cancelled|inactive/.test(text)
   )
     return "delete";
-  if (/already|choose|select|warning|queued|called|request/.test(text))
-    return "warning";
   if (
     /created|updated|saved|linked|assigned|uploaded|generated|recorded|success|activated|changed|complete|completed/.test(
       text,

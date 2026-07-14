@@ -208,6 +208,31 @@ export function Pharmacy({
     };
   }, [apiSession, apiSession?.tenantId, branchId, medicineSearch]);
 
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreatePharmacyIssue = hasPermission(
+    "pharmacy.manage",
+    "pharmacy.create",
+  );
+  const canDispensePharmacyIssue = hasPermission(
+    "pharmacy.manage",
+    "pharmacy.dispense",
+  );
+  const canEditPharmacyIssue = hasPermission(
+    "pharmacy.manage",
+    "pharmacy.edit",
+  );
+  const canBillPharmacyIssue = hasPermission(
+    "billing.manage",
+    "billing.create",
+    "invoices.create",
+  );
+
   const medicineOptions = availableMedicines.map((m: any) => ({
     value: m.id || m.slug || m.name,
     label: m.item_name || m.name,
@@ -623,6 +648,7 @@ export function Pharmacy({
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
+      {canCreatePharmacyIssue && (
       <Card>
         <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
         <form
@@ -741,72 +767,78 @@ export function Pharmacy({
           )}
         </form>
       </Card>
+      )}
       <Card>
         <h3 className="card-title font-bold">Doctor Prescriptions</h3>
-        <div className="mt-4 grid gap-3">
+        <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
           {(() => {
             const visible = prescriptionReady.filter(
               (a: any) => !dismissedConsultations.includes(a.consultationId),
             );
             return (
-              <>
-                {visible.length === 0 && (
-                  <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
-                    No Completed prescriptions ready.
-                  </div>
-                )}
-                {visible.slice(0, 6).map((a: any) => (
-                  <div
-                    key={a.id}
-                    className="flex flex-col justify-between gap-3 rounded-lg border p-4 md:flex-row md:items-center"
-                  >
-                    <div>
-                      <b className="card-title">
-                        {a.token} · {a.patient}
-                      </b>
-                      <p className="card-desc text-slate-500">
-                        Completed prescription ready
-                        {a.doctor && a.doctor !== "Unassigned" ? (
-                          <>
-                            {" · Signed by "}
-                            <span className="font-semibold text-slate-700">
-                              {a.doctor}
-                            </span>
-                          </>
-                        ) : null}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <ActionButton
-                        onClick={() => loadConsultDetail(a)}
-                        className="close-button"
-                      >
-                        View Rx
-                      </ActionButton>
-                      <Button
-                        disabled={busy === a.consultationId}
-                        onClick={() => createFromConsultation(a)}
-                        className="rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs"
-                      >
-                        {busy === a.consultationId
-                          ? "Creating..."
-                          : "Create Order"}
-                      </Button>
-                      <ActionButton
-                        onClick={() =>
-                          setDismissedConsultations((ids: string[]) => [
-                            ...ids,
-                            a.consultationId,
-                          ])
-                        }
-                        className="close-button"
-                      >
-                        Remove
-                      </ActionButton>
-                    </div>
-                  </div>
-                ))}
-              </>
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Prescription</th>
+                    <th className="px-4 py-3">Patient</th>
+                    <th className="px-4 py-3">Doctor</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {visible.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-5 text-slate-500">
+                        No completed prescriptions ready.
+                      </td>
+                    </tr>
+                  ) : (
+                    visible.slice(0, 6).map((a: any) => (
+                      <tr key={a.id}>
+                        <td className="px-4 py-3 font-bold">{a.token || "-"}</td>
+                        <td className="px-4 py-3 font-semibold">{a.patient}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {a.doctor && a.doctor !== "Unassigned"
+                            ? a.doctor
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            <ActionButton
+                              onClick={() => loadConsultDetail(a)}
+                              className="close-button"
+                            >
+                              View Medicines
+                            </ActionButton>
+                            {canCreatePharmacyIssue && (
+                              <Button
+                                disabled={busy === a.consultationId}
+                                onClick={() => createFromConsultation(a)}
+                                className="rounded-lg px-2 py-2 text-xs lg:px-4"
+                              >
+                                {busy === a.consultationId
+                                  ? "Creating..."
+                                  : "Create Pharmacy Issue"}
+                              </Button>
+                            )}
+                            <ActionButton
+                              onClick={() =>
+                                setDismissedConsultations((ids: string[]) => [
+                                  ...ids,
+                                  a.consultationId,
+                                ])
+                              }
+                              className="close-button"
+                            >
+                              Remove
+                            </ActionButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             );
           })()}
         </div>
@@ -937,14 +969,16 @@ export function Pharmacy({
                       ) : (
                         <div className="flex items-center gap-2">
                           <b>₹{issue.amount}</b>
-                          <button
-                            type="button"
-                            disabled={cancelled || billed}
-                            onClick={() => startEditAmount(issue)}
-                            className="rounded-xl border px-2 py-1 text-xs font-bold disabled:bg-slate-50 disabled:text-slate-300"
-                          >
-                            Edit
-                          </button>
+                          {canEditPharmacyIssue && (
+                            <button
+                              type="button"
+                              disabled={cancelled || billed}
+                              onClick={() => startEditAmount(issue)}
+                              className="rounded-xl border px-2 py-1 text-xs font-bold disabled:bg-slate-50 disabled:text-slate-300"
+                            >
+                              Edit
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -968,27 +1002,33 @@ export function Pharmacy({
                               ? "Updating..."
                               : "Select action"}
                           </option>
-                          <option
-                            value="partial"
-                            disabled={dispensed || cancelled || invoiced}
-                          >
-                            Partial dispense
-                          </option>
-                          <option
-                            value="dispense"
-                            disabled={dispensed || cancelled || invoiced}
-                          >
-                            Dispense
-                          </option>
-                          {!invoiced && (
+                          {canDispensePharmacyIssue && (
+                            <option
+                              value="partial"
+                              disabled={dispensed || cancelled || invoiced}
+                            >
+                              Partial dispense
+                            </option>
+                          )}
+                          {canDispensePharmacyIssue && (
+                            <option
+                              value="dispense"
+                              disabled={dispensed || cancelled || invoiced}
+                            >
+                              Dispense
+                            </option>
+                          )}
+                          {!invoiced && canBillPharmacyIssue && (
                             <option value="invoice">Generate invoice</option>
                           )}
-                          <option
-                            value="cancel"
-                            disabled={dispensed || cancelled || invoiced}
-                          >
-                            Cancel order
-                          </option>
+                          {canDispensePharmacyIssue && (
+                            <option
+                              value="cancel"
+                              disabled={dispensed || cancelled || invoiced}
+                            >
+                              Cancel order
+                            </option>
+                          )}
                         </select>
                       </div>
                     </td>

@@ -120,6 +120,7 @@ export function PatientForm({
   }, [patient, defaultBranchId, reset]);
 
   const dateOfBirth = watch("dateOfBirth");
+  const dateOfBirthRegistration = register("dateOfBirth");
 
   useEffect(() => {
     if (!dateOfBirth) {
@@ -155,20 +156,28 @@ export function PatientForm({
           <Input
             {...register("fullName")}
             placeholder="Enter patient full name"
+            required
           />
           <FormError error={errors.fullName?.message} />
         </FormField>
-        <FormField label="Mobile">
+        <FormField label="Mobile" required>
           <Input
             {...register("mobile")}
             placeholder="Enter patient mobile number"
+            required
           />
           <FormError error={errors.mobile?.message} />
         </FormField>
-        <FormField label="Branch">
+        <FormField label="Branch" required>
           <SearchableSelect
+            required
             value={watch("branchId")}
-            onChange={(value) => setValue("branchId", value)}
+            onChange={(value) =>
+              setValue("branchId", value, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
             searchable={branchOptions.length > 8}
             placeholder="Select branch"
             options={
@@ -180,29 +189,46 @@ export function PatientForm({
                   }))
             }
           />
+          <FormError error={errors.branchId?.message} />
         </FormField>
-        <FormField label="Gender">
+        <FormField label="Gender" required>
           <SearchableSelect
+            required
             value={watch("gender")}
             searchable={false}
             options={genders.map(([value, label]) => ({
               value,
               label,
             }))}
-            onChange={(value) => setValue("gender", value)}
+            onChange={(value) =>
+              setValue("gender", value, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
           />
+          <FormError error={errors.gender?.message} />
         </FormField>
         <FormField label="Date of Birth">
-          <Input type="date" max={today} {...register("dateOfBirth")} />
+          <Input
+            type="date"
+            max={today}
+            name={dateOfBirthRegistration.name}
+            value={dateOfBirth || ""}
+            onChange={dateOfBirthRegistration.onChange}
+            onBlur={dateOfBirthRegistration.onBlur}
+          />
         </FormField>
-        <FormField label="Age Years">
+        <FormField label="Age Years" required>
           <Input
             type="number"
             min="0"
             max="130"
             placeholder="Age"
             {...register("ageYears")}
+            required
           />
+          <FormError error={errors.ageYears?.message} />
         </FormField>
         <FormField label="Guardian Name">
           <Input
@@ -251,11 +277,13 @@ export function PatientForm({
           </FormField>
         )}
         <div className="md:col-span-2 xl:col-span-3">
-          <FormField label="Address">
+          <FormField label="Address" required>
             <Input
               {...register("address")}
               placeholder="Enter patient Address"
+              required
             />
+            <FormError error={errors.address?.message} />
           </FormField>
         </div>
 
@@ -314,6 +342,7 @@ export function MembershipEnrollForm({
 
   function handleSubmit(e: any) {
     e.preventDefault();
+    if (!selectedPlan || loading) return;
     onSubmit({ planId, branchId, startsOn, paidAmount, paymentMethod });
   }
 
@@ -359,7 +388,7 @@ export function MembershipEnrollForm({
         />
       </FormField>
       <div className="md:col-span-5">
-        <Button disabled={loading || activePlans.length === 0}>
+        <Button disabled={loading || !selectedPlan}>
           {loading ? "Saving..." : "Enroll & Create Invoice"}
         </Button>
       </div>

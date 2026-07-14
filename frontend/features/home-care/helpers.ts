@@ -66,14 +66,14 @@ export function bookingTotal(booking: any) {
   if (Array.isArray(booking?.visit_logs)) {
     return booking.visit_logs
       .filter((row: any) => row.status === "completed")
-      .reduce((sum: number, row: any) => sum + Number(row.total_amount || 0), 0);
+      .reduce((sum: number, row: any) => sum + Number(row.unit_amount || 0), 0);
   }
   const completedVisits = (booking?.visit_logs || []).filter(
     (row: any) => row.status === "completed",
   );
   if (completedVisits.length) {
     return completedVisits.reduce(
-      (sum: number, row: any) => sum + Number(row.total_amount || 0),
+      (sum: number, row: any) => sum + Number(row.unit_amount || 0),
       0,
     );
   }

@@ -35,7 +35,7 @@ class SubscriptionPlan(SQLModel, table=True):
     included_doctors: int = Field(default=1, ge=0)
     price_inr_monthly: int = Field(default=0, ge=0)
     enabled_modules_json: str = Field(default="[]")
-    is_active: bool = Field(default=True)
+    is_active: bool = Field(default=True, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
     updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc)
@@ -48,7 +48,7 @@ class TenantSubscription(SQLModel, table=True):
     plan_id: str = Field(index=True, foreign_key="subscriptionplan.id")
     starts_on: date
     ends_on: date | None = Field(default=None)
-    is_active: bool = Field(default=True)
+    is_active: bool = Field(default=True, index=True)
     is_trial: bool = Field(default=False, index=True)
     status: SubscriptionStatus = Field(default=SubscriptionStatus.ACTIVE, index=True)
     billing_amount: int = Field(default=0, ge=0)

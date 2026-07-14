@@ -22,12 +22,14 @@ import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { PatientDetail } from "./components/PatientDetail";
 import { activeTenantOptions } from "@/utils/helper";
 import { PatientRow } from "./components/PatientRow";
+import { mapPatient } from "@/lib/liveData";
 
 type PatientProps = {
   apiSession: ApiSession | null;
   branchId?: string;
   loadLiveData?: (session: ApiSession) => void | Promise<unknown>;
   setActive?: (page: string) => void;
+  setPatients?: (updater: (prev: any[]) => any[]) => void;
 };
 
 const pageSize = 10;
@@ -43,8 +45,19 @@ export function Patient({
   branchId,
   loadLiveData,
   setActive,
+  setPatients,
 }: PatientProps) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      isSuperAdmin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreatePatient = hasPermission("patients.write", "patients.create");
+  const canEditPatient = hasPermission("patients.edit");
+  const canDeletePatient = hasPermission("patients.delete");
   const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
@@ -75,6 +88,16 @@ export function Patient({
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
   const selected =
     selectedDetail || rows.find((row: any) => row.id === selectedId);
+
+  function syncSharedPatient(patient: any) {
+    if (!setPatients || !patient?.id) return;
+    const mapped = mapPatient(patient);
+    setPatients((previous: any[]) =>
+      previous.some((row: any) => row.id === mapped.id)
+        ? previous.map((row: any) => (row.id === mapped.id ? mapped : row))
+        : [mapped, ...previous],
+    );
+  }
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
@@ -278,6 +301,7 @@ export function Patient({
         toRow(created),
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
+      syncSharedPatient(created);
       setSelectedId(created.id);
       await loadData(tenantId);
       open("detail", created.id);
@@ -317,6 +341,7 @@ export function Patient({
         toRow(updated),
         ...previous.filter((row: any) => row.id !== updated.id),
       ]);
+      syncSharedPatient(updated);
       setSelectedDetail(updated);
       await loadData(tenantId);
       open("detail", updated.id);
@@ -345,6 +370,7 @@ export function Patient({
         toRow(updated),
         ...previous.filter((row: any) => row.id !== updated.id),
       ]);
+      syncSharedPatient(updated);
       setMessage("Photo uploaded.");
     } catch (err: any) {
       setMessage(err.message || "Could not upload photo.");
@@ -366,6 +392,13 @@ export function Patient({
           item.id === row.id ? { ...item, status: "inactive" } : item,
         ),
       );
+      if (setPatients) {
+        setPatients((previous: any[]) =>
+          previous.map((item: any) =>
+            item.id === row.id ? { ...item, status: "inactive" } : item,
+          ),
+        );
+      }
       if (selectedId === row.id)
         setSelectedDetail({ ...selectedDetail, status: "inactive" });
       setMessage("Patient deleted/deactivated.");
@@ -374,6 +407,30 @@ export function Patient({
     } finally {
       setBusy(false);
       setConfirm(null);
+    }
+  }
+
+  async function activatePatient(row: any) {
+    if (!scopedSession) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const updated = await apiFetch(`/patients/${row.id}`, scopedSession, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "active" }),
+      });
+      setRows((previous: any[]) =>
+        previous.map((item: any) =>
+          item.id === row.id ? { ...item, status: updated.status } : item,
+        ),
+      );
+      syncSharedPatient(updated);
+      if (selectedId === row.id) setSelectedDetail(updated);
+      setMessage("Patient activated.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not activate patient.");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -419,7 +476,7 @@ export function Patient({
       </Card>
     );
 
-  if (view === "create")
+  if (view === "create" && canCreatePatient)
     return (
       <PatientForm
         title="Create Patient"
@@ -430,7 +487,7 @@ export function Patient({
         back={() => open("list")}
       />
     );
-  if (view === "edit" && selected)
+  if (view === "edit" && selected && canEditPatient)
     return (
       <PatientForm
         key={`${selected.id}:${selected.updated_at || ""}`}
@@ -512,14 +569,16 @@ export function Patient({
         </div>
         <div className="flex items-center gap-2">
           <RefreshButton onRefresh={() => loadData(tenantId)} />
-          <button
-            type="button"
-            onClick={() => open("create")}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
-          >
-            <Plus size={16} />
-            Create Patient
-          </button>
+          {canCreatePatient && (
+            <button
+              type="button"
+              onClick={() => open("create")}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
+            >
+              <Plus size={16} />
+              Create Patient
+            </button>
+          )}
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
@@ -644,8 +703,9 @@ export function Patient({
                 row={row}
                 branches={branches}
                 onView={() => open("detail", row.id)}
-                onEdit={() => openPatientEdit(row.id)}
-                onDelete={() => setConfirm({ row })}
+                onEdit={canEditPatient ? () => openPatientEdit(row.id) : undefined}
+                onDelete={canDeletePatient ? () => setConfirm({ row }) : undefined}
+                onActivate={canEditPatient ? () => activatePatient(row) : undefined}
               />
             ))}
           </div>

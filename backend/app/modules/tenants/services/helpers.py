@@ -114,6 +114,27 @@ def assert_unique_tenant_values(
             )
 
 
+def assert_admin_name_not_organization_name(
+    *, tenant_name: str | None, admin_name: str | None
+) -> None:
+    """Reject an admin account name that is really the org name.
+
+    Ledger/audit views display the acting user's name, not the tenant name,
+    so an admin account named after the organization (a common onboarding
+    mistake) makes every ledger entry look like it was performed by "the
+    company" instead of a person.
+    """
+    payload_admin_name = normal_key(admin_name)
+    if not payload_admin_name:
+        return
+    if payload_admin_name == normal_key(tenant_name):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin name cannot be the same as the organization name. "
+            "Enter the actual person's name.",
+        )
+
+
 def get_department_or_404(
     session: Session, tenant_id: str, department_id: str
 ) -> Department:

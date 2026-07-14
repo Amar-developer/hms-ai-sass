@@ -511,8 +511,19 @@ export function useAppController() {
 
   useEffect(() => {
     if (!apiSession) return;
+    const refreshCurrentUser = async () => {
+      try {
+        const freshUser = await apiFetch("/auth/me", apiSession);
+        const next = { ...apiSession, user: freshUser };
+        localStorage.setItem("medizinhub.session", JSON.stringify(next));
+        setApiSession(next);
+      } catch {
+        // Session may have been revoked; loadLiveData below will surface any auth error.
+      }
+    };
     const refreshLiveData = () => {
       if (document.visibilityState === "hidden") return;
+      refreshCurrentUser();
       loadLiveData(apiSession).catch((err: any) => {
         setLiveStatus(
           err.message || "Connected, but live data could not be refreshed.",
@@ -734,6 +745,7 @@ export function useAppController() {
     allowedDepartments,
     doctorScope,
     livePractitioners,
+    setLivePractitioners,
     patients,
     setPatients,
     appointments,

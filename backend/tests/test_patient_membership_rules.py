@@ -13,7 +13,11 @@ from app.modules.patient_subscriptions.service import (
 from app.modules.lab.models import LabOrder, LabOrderItem
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
+    PatientSubscriptionEnrollmentStatus,
     PatientSubscriptionPlan,
+)
+from app.modules.patient_subscriptions.services.eligibility import (
+    resolve_current_enrollment,
 )
 from app.modules.patient_subscriptions.service import (
     active_patient_enrollment,
@@ -25,6 +29,100 @@ from app.modules.patient_subscriptions.service import (
     sync_free_item_usage_from_invoices,
 )
 from app.modules.tenants.models import Department, Tenant
+
+
+def test_queued_membership_dates_follow_current_plan_and_actual_activation(
+    test_engine,
+):
+    today = date.today()
+    tenant_id = "tenant_queue_dates"
+    branch_id = "branch_queue_dates"
+    with Session(test_engine) as session:
+        current_plan = PatientSubscriptionPlan(
+            id="ptplan_queue_current",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            name="Current Plan",
+            duration_days=30,
+        )
+        queued_plan = PatientSubscriptionPlan(
+            id="ptplan_queue_next",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            name="Queued Plan",
+            duration_days=60,
+        )
+        current = PatientSubscriptionEnrollment(
+            id="ptsub_queue_current",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id="patient_queue_expected",
+            plan_id=current_plan.id,
+            starts_on=today,
+            activated_on=today,
+            ends_on=today + timedelta(days=9),
+            status=PatientSubscriptionEnrollmentStatus.ACTIVE,
+        )
+        queued = PatientSubscriptionEnrollment(
+            id="ptsub_queue_next",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=current.patient_id,
+            plan_id=queued_plan.id,
+            starts_on=today,
+            ends_on=today + timedelta(days=59),
+            status=PatientSubscriptionEnrollmentStatus.QUEUED,
+        )
+        expired = PatientSubscriptionEnrollment(
+            id="ptsub_queue_expired",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id="patient_queue_promote",
+            plan_id=current_plan.id,
+            starts_on=today - timedelta(days=30),
+            activated_on=today - timedelta(days=30),
+            ends_on=today - timedelta(days=1),
+            status=PatientSubscriptionEnrollmentStatus.ACTIVE,
+        )
+        promote = PatientSubscriptionEnrollment(
+            id="ptsub_queue_promote",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=expired.patient_id,
+            plan_id=queued_plan.id,
+            starts_on=today + timedelta(days=5),
+            ends_on=today + timedelta(days=64),
+            status=PatientSubscriptionEnrollmentStatus.QUEUED,
+        )
+        session.add(current_plan)
+        session.add(queued_plan)
+        session.add(current)
+        session.add(queued)
+        session.add(expired)
+        session.add(promote)
+        session.commit()
+
+        resolved_current = resolve_current_enrollment(
+            session,
+            tenant_id=tenant_id,
+            patient_id=current.patient_id,
+        )
+        session.refresh(queued)
+        promoted = resolve_current_enrollment(
+            session,
+            tenant_id=tenant_id,
+            patient_id=expired.patient_id,
+        )
+
+        assert resolved_current is not None
+        assert queued.starts_on == current.ends_on + timedelta(days=1)
+        assert queued.ends_on == queued.starts_on + timedelta(days=59)
+        assert promoted is not None
+        assert promoted.id == promote.id
+        assert promoted.status == PatientSubscriptionEnrollmentStatus.ACTIVE
+        assert promoted.starts_on == today
+        assert promoted.activated_on == today
+        assert promoted.ends_on == today + timedelta(days=59)
 
 
 def test_patient_membership_respects_activation_delay(test_engine):

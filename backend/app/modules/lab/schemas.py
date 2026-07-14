@@ -159,6 +159,7 @@ class LabConsultationReferralRead(BaseModel):
     appointment_id: str
     patient_id: str
     patient_name: str
+    practitioner_name: str | None = None
     token_number: str | None = None
     lab_referral_text: str
     status: str

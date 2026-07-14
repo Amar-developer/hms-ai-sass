@@ -334,7 +334,7 @@ export function Physiotherapy({
     <div className="space-y-6">
       <Header view={view} setView={setView} />
       <StatusToast message={message} tone="success" onClose={() => setMessage("")} />
-      <StatusToast message={error} tone="error" onClose={() => setError("")} />
+      <StatusToast message={error} onClose={() => setError("")} />
 
       {view === "op" && (
         <CaseForm

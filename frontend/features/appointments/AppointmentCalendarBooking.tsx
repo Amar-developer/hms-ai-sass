@@ -326,16 +326,16 @@ export function AppointmentCalendarBooking(props: Props) {
     apiSession
       ? liveMatches
       : searchPatients(patients, patientSearch).map((patient: any) => ({
-          id: patient.id,
-          full_name: patient.name,
-          mobile: patient.mobile,
-          guardian_name: patient.guardian,
-          guardian_mobile: patient.guardianMobile,
-          area: patient.area,
-          age_years: patient.age,
-          gender: patient.gender,
-          status: patient.status,
-        }))
+        id: patient.id,
+        full_name: patient.name,
+        mobile: patient.mobile,
+        guardian_name: patient.guardian,
+        guardian_mobile: patient.guardianMobile,
+        area: patient.area,
+        age_years: patient.age,
+        gender: patient.gender,
+        status: patient.status,
+      }))
   ).filter(
     (patient: any) =>
       !patient.status || String(patient.status).toLowerCase() === "active",
@@ -650,12 +650,12 @@ export function AppointmentCalendarBooking(props: Props) {
                         doctors.length === 0
                           ? [{ value: "", label: "No doctor available" }]
                           : doctors.map((item: any) => ({
-                              value: item.id,
-                              label: item.full_name || item.name,
-                              sublabel: selectedDepartmentName
-                                ? selectedDepartmentName
-                                : undefined,
-                            }))
+                            value: item.id,
+                            label: item.full_name || item.name,
+                            sublabel: selectedDepartmentName
+                              ? selectedDepartmentName
+                              : undefined,
+                          }))
                       }
                     />
                   </Field>
@@ -686,7 +686,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       type="date"
                       value={appointmentDate}
                       onChange={(e: any) => setAppointmentDate(e.target.value)}
-                      // className="date-filter"
+                    // className="date-filter"
                     />
                   </Field>
                   <div className="rounded-lg bg-slate-50 p-4">
@@ -734,36 +734,36 @@ export function AppointmentCalendarBooking(props: Props) {
                 {(appointmentType === "follow_up" ||
                   appointmentType === "doctor_review" ||
                   appointmentType === "fitness_certificate") && (
-                  <div className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-2">
-                    <SelectField
-                      label="Billing"
-                      value={isBillable ? "paid" : "free"}
-                      onChange={(v) => setIsBillable(v === "paid")}
-                      options={[
-                        { value: "paid", label: "Chargeable" },
-                        { value: "free", label: "Free Review" },
-                      ]}
-                    />
-                    {isBillable && (
-                      <Field label="Consultation Price (₹)">
-                        <Input
-                          type="number"
-                          min={0}
-                          value={customFee}
-                          onChange={(e: any) => setCustomFee(e.target.value)}
-                          placeholder="Set price for this visit"
-                        />
-                      </Field>
-                    )}
-                    <FormField label="Billing Note">
-                      <Input
-                        value={billingNote}
-                        onChange={setBillingNote}
-                        placeholder="Within free review period, certificate request, etc."
+                    <div className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-2">
+                      <SelectField
+                        label="Billing"
+                        value={isBillable ? "paid" : "free"}
+                        onChange={(v) => setIsBillable(v === "paid")}
+                        options={[
+                          { value: "paid", label: "Chargeable" },
+                          { value: "free", label: "Free Review" },
+                        ]}
                       />
-                    </FormField>
-                  </div>
-                )}
+                      {isBillable && (
+                        <Field label="Consultation Price (₹)">
+                          <Input
+                            type="number"
+                            min={0}
+                            value={customFee}
+                            onChange={(e: any) => setCustomFee(e.target.value)}
+                            placeholder="Set price for this visit"
+                          />
+                        </Field>
+                      )}
+                      <FormField label="Billing Note">
+                        <Input
+                          value={billingNote}
+                          onChange={setBillingNote}
+                          placeholder="Within free review period, certificate request, etc."
+                        />
+                      </FormField>
+                    </div>
+                  )}
                 {appointmentType !== "emergency" && (
                   <div className="mt-4 rounded-lg bg-blue-50 p-4 text-xs text-blue-800">
                     Consultation time will be auto-assigned from the doctor's
@@ -1131,9 +1131,9 @@ export function AppointmentCalendarBooking(props: Props) {
                     {appointment.appointmentDate || "-"}
                     {appointment.appointmentTime || appointment.appointment_time
                       ? ` ${formatDisplayTime(
-                          appointment.appointmentTime ||
-                            appointment.appointment_time,
-                        )}`
+                        appointment.appointmentTime ||
+                        appointment.appointment_time,
+                      )}`
                       : ""}
                   </span>
                   <Badge

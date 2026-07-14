@@ -1,83 +1,155 @@
 import { Badge } from "@/app/components/common/ui";
 import { permissionModuleTitle, title } from "../helpers";
 
-export function PermissionCheckboxes({ permissions, selected, disabled }: any) {
+const STANDARD_ACTIONS = [
+  { key: "read", label: "Read", actions: ["read"] },
+  { key: "write", label: "Create / Write", actions: ["create", "write"] },
+  { key: "edit", label: "Edit", actions: ["edit"] },
+  { key: "delete", label: "Delete", actions: ["delete"] },
+  { key: "manage", label: "Manage", actions: ["manage"] },
+] as const;
+
+const STANDARD_ACTION_NAMES = new Set(
+  STANDARD_ACTIONS.flatMap((column) => [...column.actions]),
+);
+
+function actionLabel(permission: any) {
+  return title(
+    String(permission.action || "manage")
+      .replaceAll("_", " ")
+      .replaceAll(".", " "),
+  );
+}
+
+function PermissionOption({ permission, selectedSet, disabled }: any) {
+  return (
+    <label
+      className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-700"
+      title={permission.description || permission.key}
+    >
+      <input
+        name="permissionKeys"
+        type="checkbox"
+        value={permission.key}
+        defaultChecked={selectedSet.has(permission.key)}
+        disabled={disabled}
+        className="h-4 w-4 shrink-0 rounded border-slate-300"
+      />
+      <span className="truncate">{actionLabel(permission)}</span>
+    </label>
+  );
+}
+
+export function PermissionCheckboxes({
+  permissions,
+  selected,
+  disabled,
+  roleName,
+}: any) {
   const catalog = [...(permissions || [])];
   const grouped = catalog.reduce((acc: any, permission: any) => {
     acc[permission.module] = [...(acc[permission.module] || []), permission];
     return acc;
   }, {});
-  const modules = Object.keys(grouped).sort();
+  const modules = Object.keys(grouped).sort((a, b) =>
+    permissionModuleTitle(a).localeCompare(permissionModuleTitle(b)),
+  );
   const selectedSet = new Set(selected || []);
-  const labelFor = (permission: any) =>
-    title(
-      String(permission.action || "manage")
-        .replaceAll("_", " ")
-        .replaceAll(".", " "),
-    );
+
   return (
     <div>
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
-          <h4 className="card-title font-bold">Module Permissions</h4>
+          <h4 className="card-title font-bold">
+            {roleName ? `${roleName} Permissions` : "Role Permissions"}
+          </h4>
           <p className="card-desc text-slate-500">
-            Enable the exact workflow actions this role may use. Manage grants
-            the module's administrative workflows where supported.
+            Assign module access by action. Create and legacy Write permissions
+            share one column; module-specific workflow actions remain separate.
           </p>
         </div>
-        <Badge tone="slate" className="w-[20%] lg:w-[15%] normal-badge">
+        <Badge tone="slate" className="normal-badge whitespace-nowrap">
           {selectedSet.size} selected
         </Badge>
       </div>
-      <div className="mt-3 grid gap-4 xl:grid-cols-2">
-        {modules.map((module) => (
-          <div
-            key={module}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
-              <div className="flex justify-between  w-full">
-                <h5 className="text-base lg:text-sm font-bold">
-                  {permissionModuleTitle(module)}
-                </h5>
-                <p className="text-xs text-slate-500">
-                  {grouped[module].length} permissions
-                </p>
-              </div>
-              {/* <Badge tone="slate" className="rounded-lg py-2 px-2">
-                Module
-              </Badge> */}
-            </div>
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-              {grouped[module]
-                .sort((a: any, b: any) => a.key.localeCompare(b.key))
-                .map((permission: any) => (
-                  <label
-                    key={permission.key}
-                    className="flex items-start gap-2  lg:text-[11px]"
-                    title={permission.description || permission.key}
-                  >
-                    <input
-                      name="permissionKeys"
-                      type="checkbox"
-                      value={permission.key}
-                      defaultChecked={selectedSet.has(permission.key)}
-                      disabled={disabled}
-                      className="mt-1 h-3 w-3"
-                    />
-                    <span>
-                      <span className="text-sm lg:text-[12px] font-semibold">
-                        {labelFor(permission)}
-                      </span>
-                      {/* <span className="block break-all text-[11px] text-slate-400">
-                                {permission.key}
-                              </span> */}
+
+      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+        <table className="w-full min-w-[1040px] table-fixed text-left text-xs">
+          <thead className="bg-slate-100 uppercase text-slate-600">
+            <tr>
+              <th className="w-[210px] px-4 py-3">Module</th>
+              {STANDARD_ACTIONS.map((column) => (
+                <th key={column.key} className="w-[130px] px-3 py-3">
+                  {column.label}
+                </th>
+              ))}
+              <th className="px-3 py-3">Other Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-200 bg-white">
+            {modules.map((module) => {
+              const modulePermissions = [...grouped[module]].sort(
+                (a: any, b: any) => a.key.localeCompare(b.key),
+              );
+              const specialPermissions = modulePermissions.filter(
+                (permission: any) =>
+                  !STANDARD_ACTION_NAMES.has(permission.action),
+              );
+              return (
+                <tr key={module} className="align-top hover:bg-slate-50">
+                  <th className="px-4 py-3 text-sm font-bold text-slate-900">
+                    {permissionModuleTitle(module)}
+                    <span className="mt-0.5 block break-all text-[10px] font-medium text-slate-400">
+                      {module}
                     </span>
-                  </label>
-                ))}
-            </div>
-          </div>
-        ))}
+                  </th>
+                  {STANDARD_ACTIONS.map((column) => {
+                    const actionPermissions = modulePermissions.filter(
+                      (permission: any) =>
+                        (column.actions as readonly string[]).includes(
+                          permission.action,
+                        ),
+                    );
+                    return (
+                      <td key={column.key} className="px-3 py-3">
+                        {actionPermissions.length ? (
+                          <div className="space-y-2">
+                            {actionPermissions.map((permission: any) => (
+                              <PermissionOption
+                                key={permission.key}
+                                permission={permission}
+                                selectedSet={selectedSet}
+                                disabled={disabled}
+                              />
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300">—</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td className="px-3 py-3">
+                    {specialPermissions.length ? (
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {specialPermissions.map((permission: any) => (
+                          <PermissionOption
+                            key={permission.key}
+                            permission={permission}
+                            selectedSet={selectedSet}
+                            disabled={disabled}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );

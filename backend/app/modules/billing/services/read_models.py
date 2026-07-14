@@ -22,6 +22,7 @@ from app.modules.billing.schemas import (
 )
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.membership import invoice_membership_benefit
+from app.modules.billing.services.source_sync import sync_invoice_source_after_reversal
 
 
 def actor_names(session: Session, user_ids: set[str | None]) -> dict[str, str]:
@@ -97,10 +98,25 @@ def invoice_adjustment_requests(
 
 
 def normalize_invoice_status(session: Session, invoice: Invoice) -> Invoice:
-    if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
+    if invoice.status == InvoiceStatus.CANCELLED:
         return invoice
-    if int(invoice.total_amount or 0) <= 0 or int(invoice.balance_amount or 0) <= 0:
-        return update_invoice_payment_status(session, invoice)
+    if (
+        invoice.status in {InvoiceStatus.REFUNDED, InvoiceStatus.PARTIALLY_REFUNDED}
+        or int(invoice.total_amount or 0) <= 0
+        or int(invoice.balance_amount or 0) <= 0
+    ):
+        previous_status = invoice.status
+        invoice = update_invoice_payment_status(session, invoice)
+        if (
+            previous_status
+            in {InvoiceStatus.REFUNDED, InvoiceStatus.PARTIALLY_REFUNDED}
+            and invoice.status != previous_status
+        ):
+            # Repair source records that older credit-note behavior may have
+            # reopened or detached after falsely classifying an invoice as a
+            # refund.
+            sync_invoice_source_after_reversal(session, invoice)
+        return invoice
     return invoice
 
 
@@ -153,6 +169,14 @@ def read_invoice_detail(
 
     def ledger_read(entry: BillingLedgerEntry) -> BillingLedgerEntryRead:
         read = BillingLedgerEntryRead.model_validate(entry, from_attributes=True)
+        if entry.entry_type == "credit_note_issued":
+            # Older rows stored a credit note as a financial debit. Keep the
+            # audit entry but expose it as informational data.
+            read.debit_amount = 0
+            read.credit_amount = 0
+            read.invoice_total_delta = 0
+            read.paid_amount_delta = 0
+            read.balance_amount_delta = 0
         read.actor_user_name = entry_actor_names.get(str(entry.actor_user_id or ""))
         return read
 

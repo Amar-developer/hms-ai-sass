@@ -78,6 +78,22 @@ export function Lab({
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [consultDetail, setConsultDetail] = useState<any>(null);
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreateLabOrder = hasPermission("lab.manage", "lab.create");
+  const canEditLabOrder = hasPermission("lab.manage", "lab.edit");
+  const canBillLabOrder = hasPermission(
+    "billing.manage",
+    "billing.create",
+    "invoices.create",
+    "lab.manage",
+    "lab.edit",
+  );
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
   const orderedConsultationIds = useMemo(
@@ -102,6 +118,7 @@ export function Lab({
                 token: row.token_number || "",
                 tokenType: "Normal",
                 patient: row.patient_name || row.patient_id,
+                doctor: row.practitioner_name || "Unassigned",
                 referrals: row.referrals || [],
               }))
             : appointments
@@ -800,17 +817,21 @@ export function Lab({
               {rowBusy || invoiceBusy ? "Updating..." : "Select action"}
             </option>
 
-            <option value="invoice" disabled={cancelled || invoiced}>
-              Generate invoice
-            </option>
+            {canBillLabOrder && (
+              <option value="invoice" disabled={cancelled || invoiced}>
+                Generate invoice
+              </option>
+            )}
 
             <option value="pdf" disabled={cancelled}>
               Download PDF
             </option>
 
-            <option value="cancel" disabled={cancelled || invoiced}>
-              Cancel order
-            </option>
+            {canEditLabOrder && (
+              <option value="cancel" disabled={cancelled || invoiced}>
+                Cancel order
+              </option>
+            )}
           </select>
         );
       },
@@ -855,6 +876,7 @@ export function Lab({
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
+      {canCreateLabOrder && (
       <Card>
         <h3 className="card-title font-bold">Create Lab & Service Order</h3>
         <LabOrderForm
@@ -901,72 +923,76 @@ export function Lab({
           onSubmit={handleCreateOrder}
         />
       </Card>
+      )}
       <Card>
         <h3 className="card-title font-bold">Consultation Referrals</h3>
-        <div className="mt-4 grid gap-3">
+        <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
           {(() => {
             const visible = labReady.filter(
               (a: any) => !dismissedConsultations.includes(a.consultationId),
             );
             return (
-              <>
-                {visible.length === 0 && (
-                  <div className="rounded-lg  bg-slate-50 p-4 card-desc text-slate-500">
-                    No Completed consultation referrals ready.
-                  </div>
-                )}
-                {visible.slice(0, 6).map((a: any) => (
-                  <div
-                    key={a.id}
-                    className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"
-                  >
-                    <div>
-                      <b className="text-base lg:text-lg">
-                        {a.token} · {a.patient}
-                      </b>
-                      <p className="text-xs text-slate-500">
-                        Completed consultation referral
-                        {a.doctor && a.doctor !== "Unassigned" ? (
-                          <>
-                            {" · Signed by "}
-                            <span className="font-semibold text-slate-700">
-                              {a.doctor}
-                            </span>
-                          </>
-                        ) : null}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <ActionButton
-                        onClick={() => loadConsultDetail(a)}
-                        className="close-button"
-                      >
-                        View Tests
-                      </ActionButton>
-                      <Button
-                        disabled={busy === a.consultationId}
-                        onClick={() => createFromConsultation(a)}
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-2 text-xs"
-                      >
-                        {busy === a.consultationId
-                          ? "Creating..."
-                          : "Create Order"}
-                      </Button>
-                      <ActionButton
-                        onClick={() =>
-                          setDismissedConsultations((ids: string[]) => [
-                            ...ids,
-                            a.consultationId,
-                          ])
-                        }
-                        className="close-button"
-                      >
-                        Remove
-                      </ActionButton>
-                    </div>
-                  </div>
-                ))}
-              </>
+              <table className="w-full min-w-[850px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Referral</th>
+                    <th className="px-4 py-3">Patient</th>
+                    <th className="px-4 py-3">Doctor</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {visible.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-4 py-5 text-slate-500">
+                        No completed consultation referrals ready.
+                      </td>
+                    </tr>
+                  ) : (
+                    visible.slice(0, 6).map((a: any) => (
+                      <tr key={a.id}>
+                        <td className="px-4 py-3 font-bold">{a.token || "-"}</td>
+                        <td className="px-4 py-3 font-semibold">{a.patient}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {a.doctor && a.doctor !== "Unassigned"
+                            ? a.doctor
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            <ActionButton
+                              onClick={() => loadConsultDetail(a)}
+                              className="close-button"
+                            >
+                              View Tests
+                            </ActionButton>
+                            {canCreateLabOrder && (
+                              <Button
+                                disabled={busy === a.consultationId}
+                                onClick={() => createFromConsultation(a)}
+                                className="rounded-lg px-2 py-2 text-xs lg:px-4"
+                              >
+                                {busy === a.consultationId ? "Creating..." : "Create Order"}
+                              </Button>
+                            )}
+                            <ActionButton
+                              onClick={() =>
+                                setDismissedConsultations((ids: string[]) => [
+                                  ...ids,
+                                  a.consultationId,
+                                ])
+                              }
+                              className="close-button"
+                            >
+                              Remove
+                            </ActionButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             );
           })()}
         </div>

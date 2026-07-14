@@ -9,6 +9,7 @@ export function PlanRowActions({
   togglePlanActive,
   requestDeletePlan,
   canDeletePlans,
+  canEditPlans,
   className = "right-0 top-0",
 }: any) {
   const { open, setOpen, ref, buttonRef } = useDropdown();
@@ -42,20 +43,24 @@ export function PlanRowActions({
             View
           </button>
 
-          <button
-            onClick={stop(() => startEdit(plan))}
-            className="block w-full px-4 py-1 text-left hover:bg-slate-100"
-          >
-            Edit
-          </button>
+          {canEditPlans && (
+            <button
+              onClick={stop(() => startEdit(plan))}
+              className="block w-full px-4 py-1 text-left hover:bg-slate-100"
+            >
+              Edit
+            </button>
+          )}
 
-          <button
-            disabled={busy === `toggle-${plan.id}`}
-            onClick={stop(() => togglePlanActive(plan))}
-            className="block w-full px-4 py-1 text-left hover:bg-slate-100"
-          >
-            {plan.is_active ? "Pause" : "Activate"}
-          </button>
+          {canEditPlans && (
+            <button
+              disabled={busy === `toggle-${plan.id}`}
+              onClick={stop(() => togglePlanActive(plan))}
+              className="block w-full px-4 py-1 text-left hover:bg-slate-100"
+            >
+              {plan.is_active ? "Pause" : "Activate"}
+            </button>
+          )}
 
           {canDeletePlans && (
             <button

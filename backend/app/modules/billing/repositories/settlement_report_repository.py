@@ -1,6 +1,5 @@
-from datetime import date
+from datetime import date, datetime, time, timedelta
 
-from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
@@ -97,7 +96,12 @@ class BillingSettlementReportRepository:
         if branch_id:
             statement = statement.where(Invoice.branch_id == branch_id)
         if from_date:
-            statement = statement.where(func.date(Invoice.created_at) >= from_date)
+            statement = statement.where(
+                Invoice.created_at >= datetime.combine(from_date, time.min)
+            )
         if to_date:
-            statement = statement.where(func.date(Invoice.created_at) <= to_date)
+            statement = statement.where(
+                Invoice.created_at
+                < datetime.combine(to_date + timedelta(days=1), time.min)
+            )
         return list(self.session.exec(statement).all())

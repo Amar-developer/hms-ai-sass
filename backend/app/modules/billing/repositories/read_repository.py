@@ -7,7 +7,6 @@ from app.modules.billing.models import (
     BillingAdjustmentStatus,
     BillingLedgerEntry,
     CreditNote,
-    CreditNoteStatus,
     Invoice,
     InvoiceItem,
     Payment,
@@ -150,16 +149,6 @@ class BillingReadRepository:
                 .order_by(CreditNote.created_at)
             ).all()
         )
-
-    def issued_credit_note_total(self, invoice: Invoice) -> int:
-        amount = self.session.exec(
-            select(func.coalesce(func.sum(CreditNote.amount), 0)).where(
-                CreditNote.tenant_id == invoice.tenant_id,
-                CreditNote.invoice_id == invoice.id,
-                CreditNote.status == CreditNoteStatus.ISSUED,
-            )
-        ).one()
-        return int(amount or 0)
 
     def list_ledger_entries(self, invoice: Invoice) -> list[BillingLedgerEntry]:
         return list(

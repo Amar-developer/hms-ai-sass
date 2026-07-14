@@ -179,7 +179,7 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
         },
     )
     assert completed_visit.status_code == 201
-    assert completed_visit.json()["total_amount"] == 1000
+    assert completed_visit.json()["total_amount"] == 500
 
     bookings = client.get(
         f"/api/v1/home-care/bookings?branch_id={branch_id}&patient_id={patient_id}&status_filter=scheduled",
@@ -197,10 +197,11 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     assert invoice.status_code == 201
     invoice_body = invoice.json()
     assert invoice_body["invoice"]["home_care_booking_id"] == booking_body["id"]
-    assert invoice_body["invoice"]["subtotal_amount"] == 1000
+    assert invoice_body["invoice"]["subtotal_amount"] == 500
     assert invoice_body["invoice"]["discount_amount"] == 100
-    assert invoice_body["invoice"]["total_amount"] == 900
+    assert invoice_body["invoice"]["total_amount"] == 400
     assert invoice_body["items"][0]["item_type"] == "home_care"
+    assert invoice_body["items"][0]["total_amount"] == 500
     assert invoice_body["items"][0]["external_slug"] == "home_care_service"
     assert (
         invoice_body["items"][0]["external_item_code"] == completed_visit.json()["id"]
@@ -222,7 +223,7 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     payment = client.post(
         f"/api/v1/billing/invoices/{invoice_body['invoice']['id']}/payments",
         headers=headers,
-        json={"method": "cash", "amount": 900},
+        json={"method": "cash", "amount": 400},
     )
     assert payment.status_code == 201
 

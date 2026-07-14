@@ -237,21 +237,29 @@ export function InvoiceDetailPage({
   const canCollectPayment =
     canRecordPayments && balanceDue > 0 && !isPaymentClosed;
   function ledgerCreditAmount(entry: any) {
-    if (entry.entry_type === "membership_benefit_applied") {
-      return numberValue(entry.credit_amount);
+    if (entry.entry_type === "credit_note_issued") return 0;
+    const explicitCredit = numberValue(entry.credit_amount);
+    if (explicitCredit > 0) {
+      return explicitCredit;
     }
     return Math.max(numberValue(entry.paid_amount_delta), 0);
   }
   function ledgerDebitAmount(entry: any) {
+    if (entry.entry_type === "credit_note_issued") return 0;
+    const explicitDebit = numberValue(entry.debit_amount);
+    if (explicitDebit > 0) {
+      return explicitDebit;
+    }
     return Math.max(-numberValue(entry.paid_amount_delta), 0);
   }
   const financialLedgerEntries = ledgerEntries.filter(
     (entry: any) =>
-      numberValue(entry.debit_amount) !== 0 ||
-      numberValue(entry.credit_amount) !== 0 ||
-      numberValue(entry.invoice_total_delta) !== 0 ||
-      numberValue(entry.paid_amount_delta) !== 0 ||
-      numberValue(entry.balance_amount_delta) !== 0,
+      entry.entry_type !== "credit_note_issued" &&
+      (numberValue(entry.debit_amount) !== 0 ||
+        numberValue(entry.credit_amount) !== 0 ||
+        numberValue(entry.invoice_total_delta) !== 0 ||
+        numberValue(entry.paid_amount_delta) !== 0 ||
+        numberValue(entry.balance_amount_delta) !== 0),
   );
   const ledgerRunningById = new Map<string, any>();
   [...financialLedgerEntries]
@@ -305,7 +313,8 @@ export function InvoiceDetailPage({
       method: credit.credit_note_number || "-",
       reference: credit.reason || "-",
       status: credit.status || "issued",
-      amount: -Math.abs(numberValue(credit.amount)),
+      amount: Math.abs(numberValue(credit.amount)),
+      informational: true,
       tone: "amber" as const,
     })),
   ].sort(
@@ -911,9 +920,11 @@ export function InvoiceDetailPage({
                           </Badge>
                         </td>
                         <td
-                          className={`px-4 py-3 text-right font-black tabular-nums ${amountTone(row.amount)}`}
+                          className={`px-4 py-3 text-right font-black tabular-nums ${row.informational ? "text-slate-700" : amountTone(row.amount)}`}
                         >
-                          {signedMoney(row.amount)}
+                          {row.informational
+                            ? money(row.amount)
+                            : signedMoney(row.amount)}
                         </td>
                       </tr>
                     ))}

@@ -14,6 +14,7 @@ export function PlanTableRow({
   startEdit,
   togglePlanActive,
   canDeletePlans,
+  canEditPlans,
   openDetail,
 }: any) {
   return (
@@ -60,6 +61,7 @@ export function PlanTableRow({
             togglePlanActive={togglePlanActive}
             requestDeletePlan={requestDeletePlan}
             canDeletePlans={canDeletePlans}
+            canEditPlans={canEditPlans}
             className="right-10 -bottom-2"
           />
         </td>

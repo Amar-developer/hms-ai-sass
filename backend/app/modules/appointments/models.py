@@ -1,6 +1,6 @@
 from datetime import date, datetime, time
 from enum import Enum
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Index, UniqueConstraint
 from sqlmodel import Field, SQLModel
 from app.modules.tenants.models import new_id, now_utc
 
@@ -32,6 +32,15 @@ class AppointmentStatus(str, Enum):
 
 
 class Appointment(SQLModel, table=True):
+    __table_args__ = (
+        Index(
+            "ix_appointment_tenant_branch_date",
+            "tenant_id",
+            "branch_id",
+            "appointment_date",
+        ),
+    )
+
     id: str = Field(default_factory=lambda: new_id("appt"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")

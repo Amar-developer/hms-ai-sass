@@ -16,7 +16,7 @@ class User(SQLModel, table=True):
     mobile: str | None = Field(default=None, max_length=20)
     password_hash: str = Field(default="", max_length=260)
     is_super_admin: bool = Field(default=False, index=True)
-    is_active: bool = Field(default=True)
+    is_active: bool = Field(default=True, index=True)
     must_change_password: bool = Field(default=False)
     last_login_at: datetime | None = Field(default=None)
     created_by_user_id: str | None = Field(default=None, index=True)

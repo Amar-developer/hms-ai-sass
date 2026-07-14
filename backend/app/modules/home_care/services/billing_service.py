@@ -10,7 +10,11 @@ from app.modules.billing.schemas import (
     PaymentRead,
 )
 from app.modules.billing.services.numbering import next_invoice_number
-from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
+from app.modules.home_care.models import (
+    HomeCareBooking,
+    HomeCareBookingItem,
+    HomeCareVisitLog,
+)
 from app.modules.home_care.repositories import (
     HomeCareBillingRepository,
     HomeCareBookingItemRepository,
@@ -150,7 +154,16 @@ class HomeCareBillingService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Home care booking patient is invalid",
             )
-        subtotal = sum(row.total_amount for row in rows)
+
+        def billable_amount(row: HomeCareVisitLog | HomeCareBookingItem) -> int:
+            # Visit-log unit_amount is the final amount entered by the user.
+            # Using it here also corrects legacy logs whose stored total_amount
+            # was previously multiplied by the hours/visit quantity.
+            if isinstance(row, HomeCareVisitLog):
+                return int(row.unit_amount or 0)
+            return int(row.total_amount or 0)
+
+        subtotal = sum(billable_amount(row) for row in rows)
         discount = min(payload.discount_amount, subtotal)
         taxable = subtotal - discount
         tax_rule = self._resolve_tax_rule(
@@ -195,8 +208,9 @@ class HomeCareBillingService:
         }
         for row in rows:
             service = service_by_id.get(row.service_id or "")
+            line_amount = billable_amount(row)
             selling_amount = int(
-                row.total_amount
+                line_amount
                 if row.service_category == "home_care_service"
                 else row.unit_amount or (service.default_price if service else 0)
             )
@@ -212,7 +226,7 @@ class HomeCareBillingService:
                     description=description,
                     quantity=row.quantity,
                     unit_amount=row.unit_amount,
-                    total_amount=row.total_amount,
+                    total_amount=line_amount,
                     mrp_amount=mrp_amount,
                     selling_amount=selling_amount,
                     external_source="home_care",

@@ -6,21 +6,25 @@ export const patientSchema = z.object({
     .trim()
     .min(3, "Full name is required"),
 
-  mobile: z
-    .string()
-    .regex(/^\d{10}$/, "Mobile number must be 10 digits")
-    .optional()
-    .or(z.literal("")),
+  mobile: z.string().regex(/^\d{10}$/, "Mobile number must be 10 digits"),
 
-  branchId: z.string().optional(),
+  branchId: z.string().trim().min(1, "Branch is required"),
 
-  gender: z.string().optional(),
+  gender: z.string().trim().min(1, "Gender is required"),
 
   dateOfBirth: z.string().optional(),
 
   ageYears: z
     .string()
-    .optional(),
+    .trim()
+    .min(1, "Age is required")
+    .refine(
+      (value) =>
+        Number.isInteger(Number(value)) &&
+        Number(value) >= 0 &&
+        Number(value) <= 130,
+      "Age must be between 0 and 130",
+    ),
 
   guardianName: z.string().optional(),
 
@@ -46,7 +50,7 @@ export const patientSchema = z.object({
 
   bloodGroup: z.string().optional(),
 
-  address: z.string().optional(),
+  address: z.string().trim().min(1, "Address is required"),
 
   status: z.string().optional(),
 });

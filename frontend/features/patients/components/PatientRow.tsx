@@ -3,7 +3,14 @@ import { Badge } from "@/app/components/common/ui";
 import { displayPatientGender } from "../helpers";
 import { RowActions } from "@/features/admin/components/RowActions";
 
-export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
+export function PatientRow({
+  row,
+  branches,
+  onView,
+  onEdit,
+  onDelete,
+  onActivate,
+}: any) {
   const branch = branches.find((item: any) => item.id === row.branch_id);
   const subscriptionStatus = row.subscription_status;
   const stop = (handler: () => void) => (event: any) => {
@@ -106,11 +113,18 @@ export function PatientRow({ row, branches, onView, onEdit, onDelete }: any) {
               {
                 label: "Edit",
                 onClick: onEdit,
+                hidden: !onEdit,
               },
               {
                 label: "Delete",
                 onClick: onDelete,
+                hidden: !onDelete || row.status !== "active",
                 danger: true,
+              },
+              {
+                label: "Activate",
+                onClick: onActivate,
+                hidden: !onActivate || row.status !== "inactive",
               },
             ]}
             className="right-7 -bottom-5"

@@ -33,7 +33,6 @@ from app.modules.billing.services.ledger import (
 from app.modules.billing.services.payments import record_invoice_payment
 from app.modules.billing.services.source_sync import (
     sync_home_care_booking_status,
-    sync_invoice_source_after_reversal,
     sync_patient_membership_payment,
     sync_physiotherapy_case_status,
 )
@@ -62,7 +61,6 @@ def create_credit_note(
         payload=payload,
         current_user=current_user,
         record_billing_ledger=record_billing_ledger,
-        sync_invoice_source_after_reversal=sync_invoice_source_after_reversal,
     )
 
 

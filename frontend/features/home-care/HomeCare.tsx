@@ -45,13 +45,22 @@ export function HomeCare({
   const [filters, setFilters] = useState({ query: "", status: "all" });
   const [page, setPage] = useState(1);
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
   // Editing and cancelling bookings is restricted to tenant admins (and super
-  // admins). Other roles can still view bookings and generate invoices.
+  // admins), or any role explicitly granted home_care.edit/manage.
   const canManageBooking = Boolean(
     apiSession?.user?.is_super_admin ||
-    apiSession?.user?.user_type === "tenant_admin" ||
-    apiSession?.user?.roles?.includes("tenant_admin"),
+      apiSession?.user?.user_type === "tenant_admin" ||
+      apiSession?.user?.roles?.includes("tenant_admin") ||
+      hasPermission("home_care.edit", "home_care.manage"),
   );
+  const canCreateBooking = hasPermission("home_care.create", "home_care.manage");
   const [visitForm, setVisitForm] = useState<any>(() => ({
     visit_date: today(),
     assigned_staff_user_id: "",
@@ -140,19 +149,27 @@ export function HomeCare({
   useEffect(() => {
     if (!selected?.id) return;
     const firstService = selected.services?.[0];
-    if (!firstService) return;
-    const category = firstService.service_category || "home_care_service";
     setVisitForm((prev: any) => ({
       ...prev,
-      service_id:
-        category === "home_visit_service" ? firstService.service_id || "" : "",
-      service_category: category,
-      description: firstService.description || "",
-      quantity:
-        category === "home_visit_service"
-          ? "1"
-          : String(Math.max(1, Number(firstService.quantity || 2))),
-      unit_amount: String(firstService.unit_amount || 0),
+      visit_date: selected.start_date || today(),
+      ...(firstService
+        ? {
+            service_id:
+              (firstService.service_category || "home_care_service") ===
+              "home_visit_service"
+                ? firstService.service_id || ""
+                : "",
+            service_category:
+              firstService.service_category || "home_care_service",
+            description: firstService.description || "",
+            quantity:
+              (firstService.service_category || "home_care_service") ===
+              "home_visit_service"
+                ? "1"
+                : String(Math.max(1, Number(firstService.quantity || 2))),
+            unit_amount: String(firstService.unit_amount || 0),
+          }
+        : {}),
     }));
   }, [selected?.id]);
   function setVisitField(key: string, value: any) {
@@ -378,9 +395,41 @@ export function HomeCare({
       (selected.visit_logs || []).some(
         (row: any) => row.service_category === "home_visit_service",
       );
-    setBusy("visit-log");
     setMessage("");
     setError("");
+    if (!visitForm.visit_date) {
+      setError("Service date is required.");
+      return;
+    }
+    if (!visitForm.staff_type) {
+      setError("Staff type is required.");
+      return;
+    }
+    if (!visitForm.assigned_staff_user_id) {
+      setError("Select which staff member went for the visit.");
+      return;
+    }
+    if (!visitForm.status) {
+      setError("Status is required.");
+      return;
+    }
+    if (selectedIsHomeVisit && !visitForm.service_id) {
+      setError("Select a visit service.");
+      return;
+    }
+    if (!selectedIsHomeVisit && !String(visitForm.description || "").trim()) {
+      setError("Enter the service name.");
+      return;
+    }
+    if (!selectedIsHomeVisit && !Number(visitForm.quantity)) {
+      setError("Hours is required.");
+      return;
+    }
+    if (visitForm.unit_amount === "" || visitForm.unit_amount === null || visitForm.unit_amount === undefined) {
+      setError("Price is required.");
+      return;
+    }
+    setBusy("visit-log");
     try {
       await apiFetch(`/home-care/bookings/${selected.id}/visits`, apiSession, {
         method: "POST",
@@ -404,7 +453,7 @@ export function HomeCare({
       setMessage("Actual service log saved.");
       setVisitForm((prev: any) => ({
         ...prev,
-        visit_date: today(),
+        visit_date: selected.start_date || today(),
         notes: "",
       }));
     } catch (err: any) {
@@ -542,7 +591,7 @@ export function HomeCare({
         tone="success"
         onClose={() => setMessage("")}
       />
-      <StatusToast message={error} tone="error" onClose={() => setError("")} />
+      <StatusToast message={error} onClose={() => setError("")} />
 
       {view === "list" && (
         <BookingsList
@@ -561,6 +610,7 @@ export function HomeCare({
           onEdit={startEdit}
           onInvoice={openInvoice}
           canManage={canManageBooking}
+          canCreate={canCreateBooking}
         />
       )}
 
@@ -600,6 +650,7 @@ export function HomeCare({
           onCancel={cancelBooking}
           onInvoice={() => selected && openInvoice(selected)}
           canManage={canManageBooking}
+          canCreateVisit={canCreateBooking}
           apiSession={apiSession}
           onOpenInvoiceModule={() =>
             invoiceDetail?.invoice &&

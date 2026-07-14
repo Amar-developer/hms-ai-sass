@@ -4,10 +4,12 @@ from sqlmodel import Session
 from app.core.auth import (
     get_current_auth_session,
     get_current_user,
+    require_any_permission,
     require_super_admin,
 )
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
+from app.modules.identity import permissions
 from app.modules.identity.models import AuthSession, User
 from app.modules.identity.schemas import (
     AuthUserRead,
@@ -107,7 +109,11 @@ def list_permission_catalog(
 def create_role(
     payload: RoleCreate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_ROLES_MANAGE, permissions.IDENTITY_ROLES_CREATE
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> RoleRead:
     return RoleService(session).create_role(
@@ -132,7 +138,19 @@ def assign_role_to_tenant(
 @router.get("/identity/roles", response_model=list[RoleRead])
 def list_roles(
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_ROLES_MANAGE,
+            permissions.IDENTITY_ROLES_CREATE,
+            permissions.IDENTITY_ROLES_READ,
+            permissions.IDENTITY_ROLES_EDIT,
+            permissions.IDENTITY_ROLES_DELETE,
+            permissions.IDENTITY_USERS_MANAGE,
+            permissions.IDENTITY_USERS_CREATE,
+            permissions.IDENTITY_USERS_READ,
+            permissions.IDENTITY_USERS_EDIT,
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> list[RoleRead]:
     return RoleService(session).list_roles(tenant_id=tenant_id, actor=current_user)
@@ -143,7 +161,11 @@ def update_role(
     role_id: str,
     payload: RoleUpdate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_ROLES_MANAGE, permissions.IDENTITY_ROLES_EDIT
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> RoleRead:
     return RoleService(session).update_role(
@@ -156,7 +178,11 @@ def change_role_status(
     role_id: str,
     payload: RoleUpdate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_ROLES_MANAGE, permissions.IDENTITY_ROLES_EDIT
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> RoleRead:
     return RoleService(session).change_role_status(
@@ -168,7 +194,11 @@ def change_role_status(
 def delete_role(
     role_id: str,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_ROLES_MANAGE, permissions.IDENTITY_ROLES_DELETE
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
     return RoleService(session).delete_role(
@@ -182,7 +212,11 @@ def delete_role(
 def create_user(
     payload: UserCreate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_CREATE
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> UserRead:
     return UserService(session).create_user(
@@ -193,7 +227,11 @@ def create_user(
 @router.get("/identity/users", response_model=list[UserRead])
 def list_users(
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_READ
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> list[UserRead]:
     return UserService(session).list_users(tenant_id=tenant_id, actor=current_user)
@@ -204,7 +242,11 @@ def update_user(
     user_id: str,
     payload: UserUpdate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_EDIT
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> UserRead:
     return UserService(session).update_user(
@@ -217,7 +259,11 @@ def reset_user_password(
     user_id: str,
     payload: ResetUserPasswordRequest,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_EDIT
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> UserRead:
     return UserService(session).reset_user_password(
@@ -230,7 +276,11 @@ def change_user_status(
     user_id: str,
     payload: UserUpdate,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_EDIT
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> UserRead:
     return UserService(session).change_user_status(
@@ -242,7 +292,11 @@ def change_user_status(
 def delete_user(
     user_id: str,
     tenant_id: str = Depends(require_tenant_id),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.IDENTITY_USERS_MANAGE, permissions.IDENTITY_USERS_DELETE
+        )
+    ),
     session: Session = Depends(get_session),
 ) -> dict[str, str | bool]:
     return UserService(session).delete_user(

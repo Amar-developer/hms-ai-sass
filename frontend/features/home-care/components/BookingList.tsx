@@ -23,6 +23,7 @@ export function BookingsList({
   onEdit,
   onInvoice,
   canManage = false,
+  canCreate = false,
 }: any) {
   return (
     <Card>
@@ -37,9 +38,11 @@ export function BookingsList({
           </div>
           <div className="mt-2 flex items-center gap-2">
             <RefreshButton onRefresh={onRefresh} />
-            <Button type="button" onClick={onCreate} className="save-button">
-              New Booking
-            </Button>
+            {canCreate && (
+              <Button type="button" onClick={onCreate} className="save-button">
+                New Booking
+              </Button>
+            )}
           </div>
         </div>
 

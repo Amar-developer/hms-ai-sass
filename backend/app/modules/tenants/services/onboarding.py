@@ -41,6 +41,7 @@ from app.modules.tenants.schemas import (
     TenantRead,
 )
 from app.modules.tenants.services.helpers import (
+    assert_admin_name_not_organization_name,
     assert_unique_tenant_values,
     copy_branch_template,
     copy_department_template,
@@ -68,6 +69,11 @@ def onboard_tenant(
         email=payload.tenant.email,
         phone=payload.tenant.phone,
     )
+    if payload.admin_user:
+        assert_admin_name_not_organization_name(
+            tenant_name=payload.tenant.name,
+            admin_name=payload.admin_user.name,
+        )
     if payload.tenant.is_primary or payload.tenant.tenant_type in (
         TenantType.PRIMARY,
         TenantType.PRIMARY.value,

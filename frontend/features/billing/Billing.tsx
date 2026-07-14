@@ -1066,41 +1066,44 @@ export function Billing({
             have their own invoices created by those modules.
           </p>
           <StatusToast message={message} onClose={() => setMessage("")} />
-          <div className="mt-4 grid gap-3">
-            {signedReady.length === 0 && (
-              <div className="rounded-lg bg-slate-50 p-4 card-desc text-slate-500">
-                All completed consultations already have invoices.
-              </div>
-            )}
-            {signedReady.map((a: any) => (
-              <div
-                key={a.id}
-                className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"
-              >
-                <div>
-                  <b className="text-lg lg:text-xl">
-                    {a.token} · {a.patient}
-                  </b>
-                  <p className="text-xs lg:text-sm text-slate-500">
-                    Completed consultation ready for billing
-                    {a.doctor && a.doctor !== "Unassigned" ? (
-                      <>
-                        {" · Signed by "}
-                        <span className="font-semibold text-slate-700">
-                          {a.doctor}
-                        </span>
-                      </>
-                    ) : null}
-                  </p>
-                </div>
-                <Button
-                  disabled={busy === a.id}
-                  onClick={() => generateInvoice(a)}
-                >
-                  {busy === a.id ? "Generating..." : "Generate Invoice"}
-                </Button>
-              </div>
-            ))}
+          <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="px-4 py-3">Consultation</th>
+                  <th className="px-4 py-3">Patient</th>
+                  <th className="px-4 py-3">Doctor</th>
+                  <th className="px-4 py-3 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {signedReady.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-5 text-slate-500">
+                      All completed consultations already have invoices.
+                    </td>
+                  </tr>
+                ) : (
+                  signedReady.map((a: any) => (
+                    <tr key={a.id}>
+                      <td className="px-4 py-3 font-bold">{a.token || "-"}</td>
+                      <td className="px-4 py-3 font-semibold">{a.patient}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-"}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          disabled={busy === a.id}
+                          onClick={() => generateInvoice(a)}
+                        >
+                          {busy === a.id ? "Generating..." : "Generate Invoice"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
         </Card>
       )}

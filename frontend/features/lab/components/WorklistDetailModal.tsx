@@ -1,5 +1,4 @@
 import { Card,ActionButton } from "@/app/components/common/ui";
-import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { displayDateTime } from "@/utils/helper";
 
 export function WorklistDetailModal({
@@ -24,23 +23,30 @@ export function WorklistDetailModal({
           </div>
           <ActionButton onClick={onClose}>Close</ActionButton>
         </div>
-        <div className="mt-5 grid gap-2">
+        <div className="mt-5 overflow-auto rounded-lg border border-slate-200">
           {items.length === 0 ? (
-            <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">
+            <p className="p-4 text-sm text-slate-500">
               No items found.
             </p>
           ) : (
-            items.map((item: string, index: number) => (
-              <div
-                key={`${item}-${index}`}
-                className="rounded-2xl border border-slate-200 bg-white p-3 text-sm font-semibold"
-              >
-                {index + 1}. {item}
-              </div>
-            ))
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                <tr>
+                  <th className="w-16 px-4 py-3">#</th>
+                  <th className="px-4 py-3">Lab Test / Service</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200">
+                {items.map((item: string, index: number) => (
+                  <tr key={`${item}-${index}`}>
+                    <td className="px-4 py-3 text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-3 font-semibold">{item}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
-        <ActivityLog resourceType="lab_order" resourceId={id} apiSession={apiSession} />
       </Card>
     </div>
   );

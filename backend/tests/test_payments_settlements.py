@@ -131,12 +131,54 @@ def test_credit_note_can_be_issued_for_invoice(client):
         headers={"X-Tenant-ID": tenant_id},
     )
     assert detail.status_code == 200
-    assert detail.json()["invoice"]["status"] == "partially_refunded"
-    assert detail.json()["invoice"]["balance_amount"] == 900
-    assert any(
-        entry["entry_type"] == "credit_note_issued"
+    assert detail.json()["invoice"]["status"] == "issued"
+    assert detail.json()["invoice"]["total_amount"] == 1000
+    assert detail.json()["invoice"]["paid_amount"] == 0
+    assert detail.json()["invoice"]["balance_amount"] == 1000
+    credit_entry = next(
+        entry
         for entry in detail.json()["ledger_entries"]
+        if entry["entry_type"] == "credit_note_issued"
     )
+    assert credit_entry["debit_amount"] == 0
+    assert credit_entry["credit_amount"] == 0
+    assert credit_entry["invoice_total_delta"] == 0
+    assert credit_entry["paid_amount_delta"] == 0
+    assert credit_entry["balance_amount_delta"] == 0
+
+
+def test_credit_note_does_not_mark_paid_invoice_as_refunded(client):
+    data, invoice = create_invoice(client, fee=75)
+    tenant_id = data["tenant"]["id"]
+    paid = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"method": "cash", "amount": 75},
+    )
+
+    credit = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/credit-notes",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"amount": 75, "reason": "Billing credit"},
+    )
+    detail = client.get(
+        f"/api/v1/billing/invoices/{invoice['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+
+    assert paid.status_code == 201
+    assert credit.status_code == 201
+    assert detail.status_code == 200
+    assert detail.json()["invoice"]["status"] == "paid"
+    assert detail.json()["invoice"]["paid_amount"] == 75
+    assert detail.json()["invoice"]["balance_amount"] == 0
+    credit_entry = next(
+        entry
+        for entry in detail.json()["ledger_entries"]
+        if entry["entry_type"] == "credit_note_issued"
+    )
+    assert credit_entry["status_after"] == "paid"
+    assert credit_entry["balance_amount_delta"] == 0
 
 
 def test_unpaid_invoice_can_be_cancelled(client):

@@ -104,16 +104,18 @@ def enroll_patient(
         # stale estimate.
         enrollment_status = PatientSubscriptionEnrollmentStatus.QUEUED
         provisional_start = current.ends_on + timedelta(days=1)
+        enrollment_starts_on = provisional_start
         enrollment_ends_on = enrollment_end_date(provisional_start, plan)
     else:
         enrollment_status = PatientSubscriptionEnrollmentStatus.ACTIVE
+        enrollment_starts_on = payload.starts_on
         enrollment_ends_on = enrollment_end_date(payload.starts_on, plan)
     enrollment = PatientSubscriptionEnrollment(
         tenant_id=tenant_id,
         branch_id=branch_id,
         patient_id=payload.patient_id,
         plan_id=payload.plan_id,
-        starts_on=payload.starts_on,
+        starts_on=enrollment_starts_on,
         activated_on=payload.starts_on if not current else None,
         ends_on=enrollment_ends_on,
         status=enrollment_status,

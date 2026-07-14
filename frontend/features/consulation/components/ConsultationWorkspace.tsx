@@ -5,7 +5,6 @@ import {
   Card,
   Select,
   Input,
-  Field,
   Button,
   Badge,
   SearchableSelect,
@@ -892,9 +891,9 @@ export function ConsultationWorkspace(props: any) {
                     label="Prescription Medicine Rows"
                     error={medicineRowsError}
                   >
-                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                    <div className="scrollbar-hidden max-h-[292px] overflow-auto rounded-lg border border-slate-200 bg-white">
                       <table className="w-full min-w-[760px] border-collapse text-left text-sm">
-                        <thead className="bg-slate-100 text-xs uppercase text-slate-600">
+                        <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
                           <tr>
                             <th className="px-3 py-2.5">Medicine</th>
                             <th className="px-3 py-2.5">Dosage</th>
@@ -906,36 +905,26 @@ export function ConsultationWorkspace(props: any) {
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                           {medicineItems.length ? (
-                            medicineItems.map(
-                              (medicine: any, index: number) => (
-                                <tr key={`${medicine.name}-${index}`}>
-                                  <td className="px-3 py-2.5 font-semibold text-slate-900">
-                                    {medicine.name || "-"}
-                                  </td>
-                                  <td className="px-3 py-2.5">
-                                    {medicine.dosage || "-"}
-                                  </td>
-                                  <td className="px-3 py-2.5">
-                                    {medicine.frequency || "-"}
-                                  </td>
-                                  <td className="px-3 py-2.5">
-                                    {medicine.duration || "-"}
-                                  </td>
-                                  <td className="px-3 py-2.5">
-                                    {medicine.instructions || "-"}
-                                  </td>
-                                  <td className="px-3 py-2.5 text-right">
-                                    <button
-                                      type="button"
-                                      onClick={() => removeMedicineItem(index)}
-                                      className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
-                                    >
-                                      Remove
-                                    </button>
-                                  </td>
-                                </tr>
-                              ),
-                            )
+                            medicineItems.map((medicine: any, index: number) => (
+                              <tr key={`${medicine.name}-${index}`} className="h-[51px]">
+                                <td className="px-3 py-2.5 font-semibold text-slate-900">
+                                  {medicine.name || "-"}
+                                </td>
+                                <td className="px-3 py-2.5">{medicine.dosage || "-"}</td>
+                                <td className="px-3 py-2.5">{medicine.frequency || "-"}</td>
+                                <td className="px-3 py-2.5">{medicine.duration || "-"}</td>
+                                <td className="px-3 py-2.5">{medicine.instructions || "-"}</td>
+                                <td className="px-3 py-2.5 text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => removeMedicineItem(index)}
+                                    className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                                  >
+                                    Remove
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
                           ) : (
                             <tr>
                               <td
@@ -1058,10 +1047,10 @@ export function ConsultationWorkspace(props: any) {
                   </div>
 
                   <div className="mt-4">
-                    <Field label="Lab & Service">
-                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                    <FormField label="Lab & Service">
+                      <div className="scrollbar-hidden max-h-[292px] overflow-auto rounded-lg border border-slate-200 bg-white">
                         <table className="w-full min-w-[620px] border-collapse text-left text-sm">
-                          <thead className="bg-slate-100 text-xs uppercase text-slate-600">
+                          <thead className="sticky top-0 z-10 bg-slate-100 text-xs uppercase text-slate-600">
                             <tr>
                               <th className="px-3 py-2.5">Lab / Service</th>
                               <th className="px-3 py-2.5">Priority</th>
@@ -1075,7 +1064,7 @@ export function ConsultationWorkspace(props: any) {
                             ) ? (
                               referralItems.map((item: any, index: number) =>
                                 item.type === "lab" ? (
-                                  <tr key={`${item.name}-${index}`}>
+                                  <tr key={`${item.name}-${index}`} className="h-[51px]">
                                     <td className="px-3 py-2.5 font-semibold text-slate-900">
                                       {item.name || "-"}
                                     </td>
@@ -1112,7 +1101,7 @@ export function ConsultationWorkspace(props: any) {
                           </tbody>
                         </table>
                       </div>
-                    </Field>
+                    </FormField>
                   </div>
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">

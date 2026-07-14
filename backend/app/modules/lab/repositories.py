@@ -18,6 +18,7 @@ from app.modules.lab.models import (
     LabTestPackageItem,
 )
 from app.modules.patients.models import Patient
+from app.modules.practitioners.models import Practitioner
 from app.modules.queue.models import QueueEntry
 from app.modules.tenants.models import Branch
 
@@ -141,14 +142,23 @@ class LabReferenceRepository:
 
     def list_consultation_referrals(
         self, *, tenant_id: str, branch_id: str | None
-    ) -> list[tuple[Consultation, Appointment, Patient, QueueEntry | None]]:
+    ) -> list[
+        tuple[
+            Consultation,
+            Appointment,
+            Patient,
+            QueueEntry | None,
+            Practitioner | None,
+        ]
+    ]:
         statement = (
-            select(Consultation, Appointment, Patient, QueueEntry)
+            select(Consultation, Appointment, Patient, QueueEntry, Practitioner)
             .join(Appointment, Appointment.id == Consultation.appointment_id)
             .join(Patient, Patient.id == Consultation.patient_id)
             .outerjoin(
                 QueueEntry, QueueEntry.appointment_id == Consultation.appointment_id
             )
+            .outerjoin(Practitioner, Practitioner.id == Appointment.practitioner_id)
             .where(
                 Consultation.tenant_id == tenant_id,
                 Consultation.status == ConsultationStatus.SIGNED,

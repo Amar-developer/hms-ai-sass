@@ -44,10 +44,12 @@ export function DoctorRow({
     {
       label: row.status === "active" ? "Inactive" : "Active",
       onClick: onStatus,
+      hidden: !onStatus,
     },
     {
       label: "Delete",
       onClick: onDelete,
+      hidden: !onDelete,
       danger: true,
     },
   ];

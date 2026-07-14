@@ -92,7 +92,10 @@ class HomeCareVisitService:
             else (existing.quantity if existing else 1)
         )
         billable = status_value == "completed"
-        total_amount = quantity * unit_amount
+        # The visit-log Price field is the agreed total for the selected
+        # service duration/visit. Quantity records hours/visits for reporting;
+        # it must not multiply the entered price a second time.
+        total_amount = unit_amount
         values = {
             "tenant_id": tenant_id,
             "booking_id": booking.id,

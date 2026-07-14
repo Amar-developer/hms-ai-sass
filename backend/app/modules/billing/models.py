@@ -129,6 +129,12 @@ class Invoice(SQLModel, table=True):
             ),
         ),
         Index("uq_invoice_physiotherapy_case_id", "physiotherapy_case_id", unique=True),
+        Index(
+            "ix_invoice_tenant_branch_created_at",
+            "tenant_id",
+            "branch_id",
+            "created_at",
+        ),
     )
 
     id: str = Field(default_factory=lambda: new_id("invoice"), primary_key=True)

@@ -32,7 +32,7 @@ def fallback_lab_referrals(text: str | None) -> list[dict[str, str | None]]:
 
 
 def build_lab_consultation_referral_reads(
-    rows: list[tuple[object, object, object, object | None]],
+    rows: list[tuple[object, object, object, object | None, object | None]],
     referral_rows: list[object],
 ) -> list[LabConsultationReferralRead]:
     referrals_by_consultation: dict[str, list[object]] = {}
@@ -40,7 +40,7 @@ def build_lab_consultation_referral_reads(
         referrals_by_consultation.setdefault(row.consultation_id, []).append(row)
 
     result: list[LabConsultationReferralRead] = []
-    for consultation, appointment, patient, queue_entry in rows:
+    for consultation, appointment, patient, queue_entry, practitioner in rows:
         structured = referrals_by_consultation.get(consultation.id, [])
         referrals = [
             LabConsultationReferralItemRead(
@@ -61,6 +61,7 @@ def build_lab_consultation_referral_reads(
                 appointment_id=appointment.id,
                 patient_id=patient.id,
                 patient_name=patient.full_name,
+                practitioner_name=(practitioner.full_name if practitioner else None),
                 token_number=queue_entry.token_number if queue_entry else None,
                 lab_referral_text=consultation.lab_referral_text or "",
                 status=consultation.status.value,
