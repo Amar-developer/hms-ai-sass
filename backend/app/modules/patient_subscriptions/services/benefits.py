@@ -37,6 +37,9 @@ def benefit_preview(
     if service_type != "consultation":
         department_id = None
     discount_amount = 0
+    free_items_amount = 0
+    item_discount_amount = 0
+    regular_items_amount = subtotal_amount
     free_item_ids: list[str] = []
     discounted_item_ids: list[str] = []
     reason = None
@@ -61,23 +64,36 @@ def benefit_preview(
             for item_id in item_set
             if item_id in free_map and (free_map[item_id] - used.get(item_id, 0)) > 0
         )
-        discounted_item_ids = sorted(item_set.intersection(discounted_ids))
+        discounted_item_ids = sorted(
+            item_set.intersection(discounted_ids).difference(free_item_ids)
+        )
         if free_item_ids:
-            discount_amount = sum(
+            free_items_amount = sum(
                 int(item_amounts.get(item_id, 0) or 0) for item_id in free_item_ids
             )
-            if discount_amount <= 0:
-                discount_amount = subtotal_amount
+            if free_items_amount <= 0:
+                free_items_amount = subtotal_amount
             reason = "Selected lab test is fully free in this plan"
-        elif plan.lab_discount_percentage > 0 and (
-            not discounted_ids or discounted_item_ids
-        ):
+        discount_basis_ids = (
+            discounted_item_ids
+            if discounted_ids
+            else sorted(item_set.difference(free_item_ids))
+        )
+        if not discounted_ids:
+            discounted_item_ids = discount_basis_ids
+        discount_basis = sum(
+            int(item_amounts.get(item_id, 0) or 0) for item_id in discount_basis_ids
+        )
+        if not item_amounts and not free_item_ids:
+            discount_basis = subtotal_amount
+        if plan.lab_discount_percentage > 0 and discount_basis > 0:
             if subtotal_amount > plan.min_discount_amount:
-                discount_amount = round(
-                    subtotal_amount * plan.lab_discount_percentage / 100
+                item_discount_amount = round(
+                    discount_basis * plan.lab_discount_percentage / 100
                 )
-                reason = f"{plan.lab_discount_percentage}% lab discount"
-            else:
+                discount_reason = f"{plan.lab_discount_percentage}% lab discount"
+                reason = f"{reason}; {discount_reason}" if reason else discount_reason
+            elif not reason:
                 reason = (
                     f"Lab bill must exceed ₹{plan.min_discount_amount} "
                     f"to unlock the {plan.lab_discount_percentage}% lab discount"
@@ -91,15 +107,29 @@ def benefit_preview(
             for item_id in item_set
             if item_id in free_map and (free_map[item_id] - used.get(item_id, 0)) > 0
         )
-        discounted_item_ids = sorted(item_set.intersection(discounted_ids))
+        discounted_item_ids = sorted(
+            item_set.intersection(discounted_ids).difference(free_item_ids)
+        )
         if free_item_ids:
-            discount_amount = sum(
+            free_items_amount = sum(
                 int(item_amounts.get(item_id, 0) or 0) for item_id in free_item_ids
             )
-            if discount_amount <= 0:
-                discount_amount = subtotal_amount
+            if free_items_amount <= 0:
+                free_items_amount = subtotal_amount
             reason = "Selected medicine is fully free in this plan"
-        elif not discounted_ids or discounted_item_ids:
+        discount_basis_ids = (
+            discounted_item_ids
+            if discounted_ids
+            else sorted(item_set.difference(free_item_ids))
+        )
+        if not discounted_ids:
+            discounted_item_ids = discount_basis_ids
+        discount_basis = sum(
+            int(item_amounts.get(item_id, 0) or 0) for item_id in discount_basis_ids
+        )
+        if not item_amounts and not free_item_ids:
+            discount_basis = subtotal_amount
+        if discount_basis > 0:
             matching_slabs = [
                 slab
                 for slab in slabs_from_json(plan.pharmacy_discount_slabs_json)
@@ -116,28 +146,45 @@ def benefit_preview(
                     reverse=True,
                 )[0]
                 percentage = int(slab["discount_percentage"] or 0)
-                discount_amount = round(subtotal_amount * percentage / 100)
+                item_discount_amount = round(discount_basis * percentage / 100)
                 max_label = (
                     f"₹{slab['max_amount']}"
                     if slab["max_amount"] is not None
                     else "above"
                 )
-                reason = f"{percentage}% pharmacy discount for ₹{slab['min_amount']} - {max_label} bill"
+                discount_reason = f"{percentage}% pharmacy discount for ₹{slab['min_amount']} - {max_label} bill"
+                reason = f"{reason}; {discount_reason}" if reason else discount_reason
             elif (
                 plan.pharmacy_discount_percentage > 0
                 and subtotal_amount >= plan.min_discount_amount
             ):
-                discount_amount = round(
-                    subtotal_amount * plan.pharmacy_discount_percentage / 100
+                item_discount_amount = round(
+                    discount_basis * plan.pharmacy_discount_percentage / 100
                 )
-                reason = f"{plan.pharmacy_discount_percentage}% pharmacy discount"
-            else:
+                discount_reason = (
+                    f"{plan.pharmacy_discount_percentage}% pharmacy discount"
+                )
+                reason = f"{reason}; {discount_reason}" if reason else discount_reason
+            elif not reason:
                 reason = (
                     "Pharmacy bill is outside the membership discount slabs"
                     if slabs_from_json(plan.pharmacy_discount_slabs_json)
                     else f"Pharmacy bill must be at least ₹{plan.min_discount_amount} "
                     f"to unlock the {plan.pharmacy_discount_percentage}% pharmacy discount"
                 )
+    if service_type in ("lab", "pharmacy"):
+        free_items_amount = min(free_items_amount, subtotal_amount)
+        item_discount_amount = min(
+            item_discount_amount, max(subtotal_amount - free_items_amount, 0)
+        )
+        discount_amount = free_items_amount + item_discount_amount
+        benefit_original_amount = free_items_amount
+        if item_amounts and item_discount_amount > 0:
+            benefit_original_amount += sum(
+                int(item_amounts.get(item_id, 0) or 0)
+                for item_id in discounted_item_ids
+            )
+        regular_items_amount = max(subtotal_amount - benefit_original_amount, 0)
     discount_amount = min(discount_amount, subtotal_amount)
     if service_type == "consultation":
         log = benefit_logger.info if discount_amount > 0 else benefit_logger.warning
@@ -161,6 +208,9 @@ def benefit_preview(
         "service_type": service_type,
         "subtotal_amount": subtotal_amount,
         "discount_amount": discount_amount,
+        "free_items_amount": free_items_amount,
+        "item_discount_amount": item_discount_amount,
+        "regular_items_amount": regular_items_amount,
         "payable_amount": max(subtotal_amount - discount_amount, 0),
         "free_item_ids": free_item_ids,
         "discounted_item_ids": discounted_item_ids,

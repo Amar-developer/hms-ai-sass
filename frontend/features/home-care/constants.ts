@@ -3,6 +3,7 @@ import { today } from "@/utils/helper";
 export const statuses = [
   ["requested", "Requested"],
   ["scheduled", "Scheduled"],
+  ["assigned", "Assigned"],
   ["in_progress", "In Progress"],
   ["completed", "Completed"],
   ["invoiced", "Invoiced"],
@@ -33,6 +34,14 @@ export const staffTypeOptions = [
 ];
 
 export const LOCKED_STATUSES = ["invoiced", "paid", "completed", "cancelled"];
+
+export const editableBookingStatuses = [
+  { value: "requested", label: "Requested" },
+  { value: "scheduled", label: "Scheduled" },
+  { value: "assigned", label: "Assigned" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "completed", label: "Completed" },
+];
 
 export const emptyForm = {
   patient_id: "",

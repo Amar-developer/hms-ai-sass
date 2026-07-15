@@ -244,25 +244,11 @@ def create_discount_offer(
     return offer
 
 
-def list_discount_offers(
-    session: Session, *, tenant_id: str, branch_id: str | None
-) -> list[DiscountOffer]:
-    return BillingReferenceRepository(session).list_discount_offers(
-        tenant_id=tenant_id,
-        branch_id=branch_id,
-    )
-
-
 def list_accessible_discount_offers(
-    session: Session,
-    *,
-    tenant_id: str,
-    branch_id: str | None,
-    actor: User,
+    session: Session, *, tenant_id: str, branch_id: str | None, actor: User
 ) -> list[DiscountOffer]:
     enforce_entitlement(session, tenant_id, "billing_basic")
-    return list_discount_offers(
-        session,
+    return BillingReferenceRepository(session).list_discount_offers(
         tenant_id=tenant_id,
         branch_id=scoped_branch_id(actor, branch_id),
     )
@@ -279,13 +265,16 @@ def update_discount_offer(
     enforce_entitlement(session, tenant_id, "billing_basic")
     offer = BillingReferenceRepository(session).get_discount_offer(offer_id)
     if not offer or offer.tenant_id != tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Discount offer not found"
-        )
-    if payload.branch_id:
-        require_branch_in_tenant(session, tenant_id, payload.branch_id)
+        raise HTTPException(status_code=404, detail="Discount offer not found")
     require_user_branch_access(actor, payload.branch_id or offer.branch_id)
     updates = payload.model_dump(exclude_unset=True)
+    next_discount_type = updates.get("discount_type", offer.discount_type)
+    next_value = int(updates.get("value", offer.value) or 0)
+    if next_discount_type.value == "percentage" and next_value > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Percentage discount cannot exceed 100",
+        )
     before = {key: getattr(offer, key) for key in updates}
     for key, value in updates.items():
         setattr(offer, key, value)

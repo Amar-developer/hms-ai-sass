@@ -87,6 +87,42 @@ def test_file_upload_list_update_delete_and_audit(client, test_engine):
         assert {"file.uploaded", "file.updated", "file.deleted"}.issubset(actions)
 
 
+def test_lab_report_upload_replaces_same_order_attachment(client):
+    tenant, branch = create_file_tenant_and_branch(client)
+    headers = {"X-Tenant-ID": tenant["id"]}
+    attachment = {
+        "branch_id": branch["id"],
+        "category": "lab_report",
+        "source_module": "lab",
+        "attached_to_doctype": "LabOrder",
+        "attached_to_name": "laborder-report-test",
+        "attached_to_field": "report_url",
+        "attached_to_label": "Lab Report",
+    }
+    first = client.post(
+        "/api/v1/files",
+        headers=headers,
+        data=attachment,
+        files={"file": ("first-report.png", _png(b"first"), "image/png")},
+    )
+    second = client.post(
+        "/api/v1/files",
+        headers=headers,
+        data=attachment,
+        files={"file": ("final-report.png", _png(b"final"), "image/png")},
+    )
+    listed = client.get(
+        "/api/v1/files?category=lab_report&attached_to_name=laborder-report-test",
+        headers=headers,
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["file_name"] == "final-report.png"
+    assert len(listed.json()) == 1
+
+
 def test_files_are_tenant_isolated(client):
     tenant, branch = create_file_tenant_and_branch(client)
     other_tenant = client.post(

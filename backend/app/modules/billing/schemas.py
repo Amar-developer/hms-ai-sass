@@ -94,11 +94,6 @@ class InvoiceItemSupplierUpdate(BaseModel):
     supplier_id: str | None = None
 
 
-class InvoiceAmountUpdate(BaseModel):
-    amount: int = Field(ge=0)
-    updated_by_user_id: str | None = None
-
-
 class InvoiceItemSupplierOptionRead(BaseModel):
     supplier: str
     supplier_name: str
@@ -125,9 +120,14 @@ class InvoiceRead(BaseModel):
     subtotal_amount: int
     discount_amount: int
     membership_discount_amount: int = 0
+    membership_free_items_amount: int = 0
+    membership_item_discount_amount: int = 0
+    membership_regular_items_amount: int = 0
     taxable_amount: int
     tax_amount: int
     tax_rule_id: str | None
+    tax_percentage: int = 0
+    tax_label: str | None = None
     total_amount: int
     paid_amount: int
     balance_amount: int
@@ -136,6 +136,11 @@ class InvoiceRead(BaseModel):
     fee_rule_id: str | None
     discount_approval_id: str | None
     discount_offer_id: str | None = None
+    offer_discount_amount: int = 0
+    offer_discount_name: str | None = None
+    offer_discount_type: DiscountType | None = None
+    offer_discount_value: int = 0
+    approved_discount_amount: int = 0
     payment_methods: list[PaymentMethod] = Field(default_factory=list)
     created_by_user_id: str | None
     created_at: datetime
@@ -150,6 +155,9 @@ class InvoiceMembershipBenefitRead(BaseModel):
     plan_id: str | None = None
     plan_name: str | None = None
     discount_amount: int = 0
+    free_items_amount: int = 0
+    item_discount_amount: int = 0
+    regular_items_amount: int = 0
     payable_amount: int = 0
     reason: str | None = None
 
@@ -318,6 +326,12 @@ class DiscountOfferCreate(BaseModel):
     valid_from: datetime | None = None
     valid_until: datetime | None = None
     created_by_user_id: UserId | None = None
+
+    @model_validator(mode="after")
+    def validate_percentage_value(self) -> "DiscountOfferCreate":
+        if self.discount_type == DiscountType.PERCENTAGE and self.value > 100:
+            raise ValueError("Percentage discount cannot exceed 100")
+        return self
 
 
 class DiscountOfferUpdate(BaseModel):

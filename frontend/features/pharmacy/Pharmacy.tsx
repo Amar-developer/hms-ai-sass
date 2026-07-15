@@ -15,7 +15,7 @@ import { apiFetch } from "@/lib/api";
 import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDate } from "@/utils/helper";
+import { displayDate, displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import {
   isBilledIssue,
@@ -745,7 +745,7 @@ export function Pharmacy({
             </button>
             <Button
               disabled={busy === "create"}
-              className="w-[130px] px-1 py-3 lg:px-2 py-2.5"
+              className="w-[130px] px-1 lg:px-2 py-2.5"
             >
               {busy === "create" ? "Saving..." : "Create Order"}
             </Button>
@@ -782,13 +782,14 @@ export function Pharmacy({
                     <th className="px-4 py-3">Prescription</th>
                     <th className="px-4 py-3">Patient</th>
                     <th className="px-4 py-3">Doctor</th>
+                    <th className="px-4 py-3">Date &amp; Time</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {visible.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-5 text-slate-500">
+                      <td colSpan={5} className="px-4 py-5 text-slate-500">
                         No completed prescriptions ready.
                       </td>
                     </tr>
@@ -802,13 +803,20 @@ export function Pharmacy({
                             ? a.doctor
                             : "-"}
                         </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                          {displayDateTime(
+                            a.consultationSignedAt ||
+                              a.consultationCreatedAt ||
+                              a.appointmentDate,
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-2">
                             <ActionButton
                               onClick={() => loadConsultDetail(a)}
                               className="close-button"
                             >
-                              View Medicines
+                              View
                             </ActionButton>
                             {canCreatePharmacyIssue && (
                               <Button
@@ -818,7 +826,7 @@ export function Pharmacy({
                               >
                                 {busy === a.consultationId
                                   ? "Creating..."
-                                  : "Create Pharmacy Issue"}
+                                  : "Create Issue"}
                               </Button>
                             )}
                             <ActionButton

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, RefreshButton, Select, StatusToast } from "@/app/components/common/ui";
-import { FormField, NumberField } from "@/app/components/FormElements";
+import { FormField } from "@/app/components/FormElements";
 import {
   UPLOADS_BASE,
   apiFetch,
@@ -42,7 +42,6 @@ export function Physiotherapy({
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [invoiceDiscount, setInvoiceDiscount] = useState("0");
   const patientMap = useMemo(
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
@@ -314,7 +313,6 @@ export function Physiotherapy({
         apiSession,
         selected.id,
         {
-          discount_amount: Number(invoiceDiscount || 0),
           created_by_user_id: apiSession.user?.id,
         },
       );
@@ -690,13 +688,7 @@ export function Physiotherapy({
                 />
               </div>
               {!invoiceDetail ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                  <NumberField
-                    label="Discount"
-                    value={invoiceDiscount}
-                    onChange={setInvoiceDiscount}
-                    min={0}
-                  />
+                <div className="mt-4 flex justify-end">
                   <Button
                     type="button"
                     onClick={generateInvoice}

@@ -63,8 +63,12 @@ export function mapAppointment(
   return {
     id: row.id,
     queueEntryId: q?.id,
+    queuePosition: Number(q?.queue_position || 0),
+    queue_position: Number(q?.queue_position || 0),
     consultationId: c?.id,
     consultationStatus: c?.status,
+    consultationSignedAt: c?.signed_at,
+    consultationCreatedAt: c?.created_at,
     treatmentType: c?.treatment_type,
     prescriptionText: c?.prescription_text,
     labReferralText: c?.lab_referral_text,

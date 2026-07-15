@@ -478,24 +478,30 @@ def create_invoice_from_consultation_source(
         return read_invoice_detail(
             session, refresh_consultation_invoice(session, existing)
         )
-    if payload.discount_amount > 0:
-        approval = (
-            source_repo.get_discount_approval(payload.discount_approval_id)
-            if payload.discount_approval_id
-            else None
-        )
+    approved_discount = int(payload.discount_amount or 0)
+    approval = None
+    if payload.discount_approval_id:
+        approval = source_repo.get_discount_approval(payload.discount_approval_id)
         if (
             not approval
             or approval.tenant_id != tenant_id
             or approval.branch_id != consultation.branch_id
+            or approval.consultation_id != consultation.id
             or approval.status != ApprovalStatus.APPROVED
-            or approval.requested_amount < payload.discount_amount
         ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Approved discount approval is required for invoice discount",
             )
-
+        if approved_discount <= 0:
+            approved_discount = int(approval.requested_amount or 0)
+    if approved_discount > 0 and (
+        not approval or int(approval.requested_amount or 0) < approved_discount
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Approved discount approval is required for invoice discount",
+        )
     appointment = source_repo.get_appointment_for_tenant(
         tenant_id=tenant_id,
         appointment_id=consultation.appointment_id,
@@ -510,7 +516,7 @@ def create_invoice_from_consultation_source(
             session,
             appointment=appointment,
             consultation_id=consultation.id,
-            discount_amount=payload.discount_amount,
+            discount_amount=approved_discount,
             discount_approval_id=payload.discount_approval_id,
             discount_offer_id=payload.discount_offer_id,
             tax_rule_id=payload.tax_rule_id,

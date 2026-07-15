@@ -10,6 +10,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, forwardRef } from "react";
+import { createPortal } from "react-dom";
 import {
   capitalizeFirst,
   displayToIsoDate,
@@ -65,7 +66,7 @@ export function noticeTone(message: string): NoticeTone {
   // system failure, so they read as a calm warning rather than an alarming
   // red error even though they mention "required"/"missing"/"select".
   if (
-    /is required|are required|required\.$|missing|select |enter the|choose |already|warning|queued|called|request/.test(
+    /is required|are required|required\.$|missing|^add .+ before|select |enter the|choose |already|warning|queued|called|request/.test(
       text,
     )
   )
@@ -707,14 +708,23 @@ export function SearchableSelect<T = string>({
 }: SearchableSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [menuPosition, setMenuPosition] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+  });
 
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
 
     function handleClick(event: MouseEvent) {
-      if (!wrapRef.current?.contains(event.target as Node)) {
+      if (
+        !wrapRef.current?.contains(event.target as Node) &&
+        !menuRef.current?.contains(event.target as Node)
+      ) {
         setOpen(false);
         setQuery("");
       }
@@ -726,6 +736,40 @@ export function SearchableSelect<T = string>({
       document.removeEventListener("mousedown", handleClick);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function positionMenu() {
+      const rect = wrapRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const visibleOptionCount = Math.min(options.length, maxOptions);
+      const menuHeight = Math.min(
+        224,
+        Math.max(
+          44,
+          visibleOptionCount * 44 +
+            (searchable ? 58 : 0) +
+            (value && searchable ? 36 : 0) +
+            2,
+        ),
+      );
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const top =
+        spaceBelow >= menuHeight || rect.top < menuHeight
+          ? rect.bottom + 4
+          : Math.max(rect.top - menuHeight - 4, 8);
+      setMenuPosition({ left: rect.left, top, width: rect.width });
+    }
+
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [maxOptions, open, options.length, searchable, value]);
 
   const filtered = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -775,8 +819,14 @@ export function SearchableSelect<T = string>({
         />
       </button>
 
-      {open && (
-        <div className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin">
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+        <div
+          ref={menuRef}
+          style={menuPosition}
+          className="fixed z-[1000] max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin"
+        >
           {searchable && (
             <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2 pr-4">
               <input
@@ -835,7 +885,8 @@ export function SearchableSelect<T = string>({
               )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
 
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}

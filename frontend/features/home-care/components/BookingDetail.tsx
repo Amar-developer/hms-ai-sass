@@ -4,7 +4,7 @@ import { humanizeOptionLabel } from "@/lib/options";
 import { Info } from "@/app/components/common/Info";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { SearchableSelect,ActionButton,ActionGroup,Button,Card, Input,Badge } from "@/app/components/common/ui";
-import { homeCareHourPrices, staffTypeOptions, visitLogStatuses } from "../constants";
+import { editableBookingStatuses, homeCareHourPrices, staffTypeOptions, visitLogStatuses } from "../constants";
 import { DateField, FormField, NumberField, SearchableSelectField, SelectField, TextareaField } from "@/app/components/FormElements";
 import { homeCareHourOptions } from "../forms/HomeCareForms";
 
@@ -24,6 +24,7 @@ export function BookingDetail({
   onBack,
   onEdit,
   onCancel,
+  onStatusChange,
   onInvoice,
   onOpenInvoiceModule,
   canManage = false,
@@ -79,10 +80,26 @@ export function BookingDetail({
               {patientCode(patient) || patient?.mobile || ""}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge className="normal-badge">
-              {humanizeOptionLabel(booking.status)}
-            </Badge>
+          <div className="flex flex-wrap items-end gap-2">
+            {canManage && !locked ? (
+              <div className="min-w-44">
+                <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">
+                  Booking Status
+                </p>
+                <SearchableSelect
+                  value={booking.status}
+                  onChange={onStatusChange}
+                  options={editableBookingStatuses}
+                  searchable={false}
+                  disabled={busy === "booking-status"}
+                  className="[&>button]:h-9"
+                />
+              </div>
+            ) : (
+              <Badge className="normal-badge">
+                {humanizeOptionLabel(booking.status)}
+              </Badge>
+            )}
             <ActionButton onClick={onBack}>Back to list</ActionButton>
           </div>
         </div>
@@ -95,15 +112,10 @@ export function BookingDetail({
           <Info title="Start Date" value={displayDate(booking.start_date)} />
           <Info title="End Date" value={displayDate(booking.end_date)} />
           <Info title="Total" value={money(bookingTotal(booking))} />
+          <Info title="Location" value={booking.location || "-"} />
         </div>
-        {(booking.location || booking.complaints || booking.notes) && (
-          <div className="mt-4 grid gap-3 md:grid-cols-3">
-            {booking.location && (
-              <div className="rounded-lg bg-slate-50 p-3 text-xs">
-                <p className="font-bold uppercase text-slate-500">Location</p>
-                <p className="mt-1 text-slate-700">{booking.location}</p>
-              </div>
-            )}
+        {(booking.complaints || booking.notes) && (
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             {booking.complaints && (
               <div className="rounded-lg bg-slate-50 p-3 text-xs">
                 <p className="font-bold uppercase text-slate-500">Complaints</p>
@@ -118,6 +130,33 @@ export function BookingDetail({
             )}
           </div>
         )}
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 md:max-w-2xl lg:max-w-5xl">
+          <div className="mb-3">
+            <p className="text-xs font-bold uppercase text-slate-500">
+              Requested Services
+            </p>
+            <p className="text-xs text-slate-500">
+              Requested dates: {displayDate(booking.start_date)} to{" "}
+              {displayDate(booking.end_date || booking.start_date)}
+            </p>
+          </div>
+          {(booking.services || []).length === 0 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-3 text-xs text-slate-500">
+              No requested services recorded.
+            </p>
+          ) : (
+            <div className="grid gap-2 md:grid-cols-2">
+              {(booking.services || []).map((row: any, index: number) => (
+                <div
+                  key={row.id || `${row.description}-${index}`}
+                  className="rounded-xl bg-slate-50 px-4 py-3 font-bold text-slate-900"
+                >
+                  {row.description || "Requested service"}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="mt-4 rounded-2xl bg-slate-50 p-4 md:max-w-2xl lg:max-w-5xl">
           <div className="mb-3 flex flex-col justify-between gap-2 md:flex-row md:items-center">
             <div>
@@ -316,7 +355,8 @@ export function BookingDetail({
                     <td className="px-3 py-2">{displayDate(row.visit_date)}</td>
                     <td>
                       {row.assigned_staff_name ||
-                        userName(staffMap.get(row.assigned_staff_user_id))}
+                        userName(staffMap.get(row.assigned_staff_user_id)) ||
+                        "Not assigned"}
                     </td>
                     <td>
                       {row.description}

@@ -97,11 +97,11 @@ class BillingReferenceRepository:
             self.session.exec(statement.order_by(TaxRule.created_at.desc())).all()
         )
 
-    def get_discount_offer(self, offer_id: str) -> DiscountOffer | None:
-        return self.session.get(DiscountOffer, offer_id)
-
     def get_discount_approval(self, approval_id: str) -> DiscountApproval | None:
         return self.session.get(DiscountApproval, approval_id)
+
+    def get_discount_offer(self, offer_id: str) -> DiscountOffer | None:
+        return self.session.get(DiscountOffer, offer_id)
 
     def list_active_discount_offers(self, *, tenant_id: str) -> list[DiscountOffer]:
         return list(

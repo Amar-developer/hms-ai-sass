@@ -21,6 +21,9 @@ MEMBERSHIP_BENEFIT_FIELDS = (
     "status",
     "discount_amount",
     "membership_discount_amount",
+    "membership_free_items_amount",
+    "membership_item_discount_amount",
+    "membership_regular_items_amount",
     "total_amount",
     "balance_amount",
 )
@@ -104,6 +107,9 @@ def invoice_membership_benefit(
             service_type=service_type,
             plan_id=invoice.patient_subscription_plan_id,
             discount_amount=applied_amount,
+            free_items_amount=int(invoice.membership_free_items_amount or 0),
+            item_discount_amount=int(invoice.membership_item_discount_amount or 0),
+            regular_items_amount=int(invoice.membership_regular_items_amount or 0),
             payable_amount=max(int(invoice.subtotal_amount or 0) - applied_amount, 0),
             reason="Membership benefit applied",
         )
@@ -158,6 +164,9 @@ def invoice_membership_benefit(
         plan_id=preview.get("plan_id"),
         plan_name=preview.get("plan_name"),
         discount_amount=discount_amount,
+        free_items_amount=int(preview["free_items_amount"] or 0),
+        item_discount_amount=int(preview["item_discount_amount"] or 0),
+        regular_items_amount=int(preview["regular_items_amount"] or 0),
         payable_amount=int(preview.get("payable_amount") or 0),
         reason=preview.get("reason"),
     )
@@ -239,6 +248,9 @@ def apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invo
     total = taxable + tax_amount
     invoice.discount_amount = discount
     invoice.membership_discount_amount = membership_discount
+    invoice.membership_free_items_amount = int(preview["free_items_amount"] or 0)
+    invoice.membership_item_discount_amount = int(preview["item_discount_amount"] or 0)
+    invoice.membership_regular_items_amount = int(preview["regular_items_amount"] or 0)
     invoice.taxable_amount = taxable
     invoice.tax_amount = tax_amount
     invoice.total_amount = total

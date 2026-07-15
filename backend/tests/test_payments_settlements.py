@@ -1,3 +1,14 @@
+from sqlmodel import Session
+
+from app.modules.billing.models import (
+    DiscountOffer,
+    DiscountType,
+    Invoice,
+    InvoiceStatus,
+    TaxRule,
+)
+from app.modules.billing.services.invoice_amounts import apply_generic_invoice_discount
+from app.modules.billing.services.rules import calculate_offer_discount
 from test_billing import create_fee_rule, setup_signed_consultation
 
 
@@ -107,6 +118,220 @@ def test_paid_invoice_cannot_be_cancelled_until_refunded(client):
     assert refund.json()["invoice"]["status"] == "refunded"
     assert refund.json()["invoice"]["paid_amount"] == 0
     assert refund.json()["payments"][0]["status"] == "refunded"
+
+
+def test_discount_request_reduces_invoice_after_approval_and_execution(client):
+    data, invoice = create_invoice(client, "home_visit", 1000, doctor_pct=60)
+    tenant_id = data["tenant"]["id"]
+
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "discount",
+            "amount": 100,
+            "reason": "Goodwill discount",
+        },
+    ).json()
+    approved = client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/approve",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+    executed = client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/execute",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+
+    assert request["status"] == "pending"
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert executed.status_code == 200
+    invoice_after = executed.json()["invoice"]
+    assert invoice_after["subtotal_amount"] == 1000
+    assert invoice_after["discount_amount"] == 100
+    assert invoice_after["total_amount"] == 900
+    assert invoice_after["balance_amount"] == 900
+    assert invoice_after["doctor_share_amount"] == 540
+    assert executed.json()["credit_notes"][0]["amount"] == 100
+    discount_entry = next(
+        entry
+        for entry in executed.json()["ledger_entries"]
+        if entry["entry_type"] == "invoice_discount_applied"
+    )
+    assert discount_entry["credit_amount"] == 100
+    assert discount_entry["invoice_total_delta"] == -100
+    assert discount_entry["balance_amount_delta"] == -100
+
+
+def test_discount_request_blocked_after_payment_recorded(client):
+    data, invoice = create_invoice(client, "home_visit", 1000, doctor_pct=60)
+    tenant_id = data["tenant"]["id"]
+    client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"method": "cash", "amount": 1000},
+    )
+
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "discount",
+            "amount": 100,
+            "reason": "Too late discount",
+        },
+    )
+
+    assert request.status_code == 409
+    assert "refund" in request.json()["detail"].lower()
+
+
+def test_discount_request_allowed_for_op_consultation_invoice(client):
+    # OP consultations used to be excluded from the old direct "edit amount"
+    # feature; discount requests are available for every invoice type now.
+    data, invoice = create_invoice(client, "op", 1000, doctor_pct=60)
+    tenant_id = data["tenant"]["id"]
+
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "discount",
+            "amount": 100,
+            "reason": "OP goodwill discount",
+        },
+    ).json()
+    client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/approve",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+    executed = client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/execute",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+
+    assert executed.status_code == 200
+    invoice_after = executed.json()["invoice"]
+    assert invoice_after["subtotal_amount"] == 1000
+    assert invoice_after["discount_amount"] == 100
+    assert invoice_after["total_amount"] == 900
+    assert invoice_after["balance_amount"] == 900
+    assert invoice_after["doctor_share_amount"] == 540
+
+
+def test_generic_discount_reduces_non_consultation_invoice_total(test_engine):
+    # Lab/pharmacy/physiotherapy/home-care/direct invoices don't have the
+    # consultation fee-rule structure — the generic discount path just knocks
+    # the amount straight off total/balance instead of recomputing tax/share.
+    with Session(test_engine) as session:
+        invoice = Invoice(
+            tenant_id="tenant_generic_discount",
+            branch_id="branch_main",
+            patient_id="patient_generic",
+            lab_order_id="laborder_generic",
+            invoice_number="MHB-INV-GENERIC",
+            subtotal_amount=800,
+            taxable_amount=800,
+            total_amount=800,
+            paid_amount=0,
+            balance_amount=800,
+            status=InvoiceStatus.ISSUED,
+        )
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+
+        updated = apply_generic_invoice_discount(
+            session,
+            invoice=invoice,
+            discount_amount=200,
+            actor_user_id="tenant_admin",
+        )
+        total_amount = updated.total_amount
+        balance_amount = updated.balance_amount
+        discount_amount = updated.discount_amount
+        result_status = updated.status
+
+    assert total_amount == 600
+    assert balance_amount == 600
+    assert discount_amount == 200
+    assert result_status == InvoiceStatus.ISSUED
+
+
+def test_generic_discount_recomputes_percentage_tax(test_engine):
+    with Session(test_engine) as session:
+        tax_rule = TaxRule(
+            id="taxrule_generic_18",
+            tenant_id="tenant_generic_tax",
+            branch_id="branch_main",
+            name="GST 18",
+            tax_percentage=18,
+            service_scope="lab",
+        )
+        invoice = Invoice(
+            tenant_id="tenant_generic_tax",
+            branch_id="branch_main",
+            patient_id="patient_generic_tax",
+            lab_order_id="laborder_generic_tax",
+            invoice_number="MHB-INV-GENERIC-TAX",
+            subtotal_amount=1000,
+            discount_amount=100,
+            taxable_amount=900,
+            tax_amount=162,
+            tax_rule_id=tax_rule.id,
+            total_amount=1062,
+            paid_amount=0,
+            balance_amount=1062,
+            status=InvoiceStatus.ISSUED,
+        )
+        session.add(tax_rule)
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+
+        updated = apply_generic_invoice_discount(
+            session,
+            invoice=invoice,
+            discount_amount=100,
+            actor_user_id="tenant_admin",
+        )
+
+        assert updated.discount_amount == 200
+        assert updated.taxable_amount == 800
+        assert updated.tax_amount == 144
+        assert updated.total_amount == 944
+        assert updated.balance_amount == 944
+
+
+def test_offer_percentage_uses_gross_subtotal_once(test_engine):
+    with Session(test_engine) as session:
+        offer = DiscountOffer(
+            tenant_id="tenant_offer_percentage",
+            branch_id="branch_main",
+            name="Ten Percent",
+            service_scope="lab",
+            discount_type=DiscountType.PERCENTAGE,
+            value=10,
+        )
+        session.add(offer)
+        session.commit()
+        session.refresh(offer)
+
+        discount, selected = calculate_offer_discount(
+            session,
+            tenant_id=offer.tenant_id,
+            branch_id=offer.branch_id,
+            service_scope="lab",
+            subtotal=1000,
+            discount_offer_id=offer.id,
+        )
+
+        assert selected and selected.id == offer.id
+        assert discount == 100
 
 
 def test_credit_note_can_be_issued_for_invoice(client):

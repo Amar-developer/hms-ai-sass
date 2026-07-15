@@ -7,14 +7,11 @@ import {
 import { humanizeOptionLabel } from "@/lib/options";
 import { displayDate, money, patientName } from "@/utils/helper";
 import { bookingTotal } from "../helpers";
-import { NumberField } from "@/app/components/FormElements";
 
 export function InvoiceCard({
   booking,
   patientMap,
   invoiceDetail,
-  discount,
-  setDiscount,
   busy,
   onGenerate,
   onBack,
@@ -67,7 +64,7 @@ export function InvoiceCard({
             <b className="text-right text-slate-900">
               {money(invoiceDetail.invoice.subtotal_amount)}
             </b>
-            <span>Discount</span>
+            <span>Approved / offer discount</span>
             <b className="text-right text-slate-900">
               {money(invoiceDetail.invoice.discount_amount)}
             </b>
@@ -75,7 +72,7 @@ export function InvoiceCard({
             <b className="text-right text-slate-900">
               {money(invoiceDetail.invoice.tax_amount)}
             </b>
-            <span>Total</span>
+            <span>Final payable</span>
             <b className="text-right text-slate-900">
               {money(invoiceDetail.invoice.total_amount)}
             </b>
@@ -103,12 +100,11 @@ export function InvoiceCard({
         </p>
       ) : (
         <div className="mt-4 grid gap-3">
-          <NumberField
-            label="Discount"
-            value={discount}
-            onChange={setDiscount}
-            min={0}
-          />
+          <p className="text-xs text-slate-500">
+            Generate the invoice at the full service amount. To reduce the
+            price, open it in the Invoices module and use Request Discount;
+            the tenant admin must approve it before it is applied.
+          </p>
           <Button type="button" disabled={busy} onClick={onGenerate}>
             {busy ? "Generating..." : "Generate Invoice"}
           </Button>

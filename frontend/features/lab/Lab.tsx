@@ -9,9 +9,9 @@ import {
   RefreshButton,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiBlob, apiFetch } from "@/lib/api";
+import { apiBlob, apiFetch, apiUpload } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDate, formatPrice } from "@/utils/helper";
+import { displayDate, displayDateTime, formatPrice } from "@/utils/helper";
 import { pageSize } from "./constants";
 import {
   downloadBlob,
@@ -72,6 +72,9 @@ export function Lab({
   const [reportFiles, setReportFiles] = useState<Record<string, File | null>>(
     {},
   );
+  const [reportDocuments, setReportDocuments] = useState<Record<string, any>>(
+    {},
+  );
   const [localInvoicedOrderIds, setLocalInvoicedOrderIds] = useState<string[]>(
     [],
   );
@@ -120,6 +123,7 @@ export function Lab({
                 patient: row.patient_name || row.patient_id,
                 doctor: row.practitioner_name || "Unassigned",
                 referrals: row.referrals || [],
+                referralDate: row.signed_at || row.created_at,
               }))
             : appointments
           ).filter(
@@ -300,6 +304,7 @@ export function Lab({
         packageRows,
         templateRows,
         supplierRows,
+        reportRows,
       ] = await Promise.all([
         apiFetch("/lab/orders", apiSession),
         apiFetch("/lab/consultation-referrals", apiSession).catch(() => []),
@@ -307,6 +312,9 @@ export function Lab({
         apiFetch("/lab/catalog/packages", apiSession),
         apiFetch("/lab/result-templates", apiSession),
         apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
+        apiFetch("/files?category=lab_report&limit=500", apiSession).catch(
+          () => [],
+        ),
       ]);
       setOrders(orderRows);
       setConsultationReferrals(referralRows || []);
@@ -314,6 +322,20 @@ export function Lab({
       setPackages(packageRows);
       setTemplates(templateRows);
       setSuppliers(supplierRows || []);
+      const documentsByOrder: Record<string, any> = {};
+      const urlsByOrder: Record<string, string> = {};
+      for (const file of reportRows || []) {
+        if (
+          file.attached_to_doctype !== "LabOrder" ||
+          !file.attached_to_name ||
+          documentsByOrder[file.attached_to_name]
+        )
+          continue;
+        documentsByOrder[file.attached_to_name] = file;
+        urlsByOrder[file.attached_to_name] = file.file_url;
+      }
+      setReportDocuments(documentsByOrder);
+      setReportUrl(urlsByOrder);
     } catch (err: any) {
       setMessage(err.message || "Could not load lab workspace.");
     } finally {
@@ -544,10 +566,42 @@ export function Lab({
     }
   }
 
+  async function uploadReport(order: any, file: File | null) {
+    if (!file || !apiSession) return;
+    setBusy(`report-${order.id}`);
+    setMessage("");
+    setReportFiles((current) => ({ ...current, [order.id]: file }));
+    try {
+      const upload = new FormData();
+      upload.append("file", file);
+      upload.append("branch_id", order.branch_id || branchId || "");
+      upload.append("patient_id", order.patient_id);
+      upload.append("category", "lab_report");
+      upload.append("source_module", "lab");
+      upload.append("attached_to_doctype", "LabOrder");
+      upload.append("attached_to_name", order.id);
+      upload.append("attached_to_field", "report_url");
+      upload.append("attached_to_label", "Lab Report");
+      const document = await apiUpload("/files", apiSession, upload);
+      setReportDocuments((current) => ({ ...current, [order.id]: document }));
+      setReportUrl((current) => ({
+        ...current,
+        [order.id]: document.file_url,
+      }));
+      setReportFiles((current) => ({ ...current, [order.id]: null }));
+      setMessage(`Report uploaded: ${document.file_name}`);
+    } catch (err: any) {
+      setMessage(err.message || "Could not upload report.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function releaseResult(order: any) {
     setBusy(order.id);
     setMessage("");
     const reportFile = reportFiles[order.id];
+    const reportDocument = reportDocuments[order.id];
     try {
       await apiFetch(`/lab/orders/${order.id}/results`, apiSession, {
         method: "POST",
@@ -556,7 +610,8 @@ export function Lab({
           result_summary: "Result released from MedizinHub lab screen.",
           abnormal_flag: false,
           report_url: reportUrl[order.id] || null,
-          report_file_name: reportFile?.name || null,
+          report_file_name:
+            reportDocument?.file_name || reportFile?.name || null,
           released_by_user_id: apiSession.user?.id,
         }),
       });
@@ -583,6 +638,16 @@ export function Lab({
       if (localFile) {
         win?.close();
         downloadBlob(localFile, localFile.name);
+        return;
+      }
+      const storedDocument = reportDocuments[order.id];
+      if (storedDocument?.id) {
+        win?.close();
+        const blob = await apiBlob(
+          `/files/${storedDocument.id}/download`,
+          apiSession,
+        );
+        downloadBlob(blob, storedDocument.file_name || "lab-report");
         return;
       }
       // 2. Check if a report_url was stored on the released result
@@ -778,16 +843,17 @@ export function Lab({
               type="file"
               className="hidden"
               accept="application/pdf,image/*"
-              disabled={released || cancelled}
-              onChange={(e) =>
-                setReportFiles({
-                  ...reportFiles,
-                  [o.id]: e.target.files?.[0] || null,
-                })
+              disabled={
+                released || cancelled || busy === `report-${o.id}`
               }
+              onChange={(e) => uploadReport(o, e.target.files?.[0] || null)}
             />
 
-            {reportFiles[o.id]?.name || "Upload report"}
+            {busy === `report-${o.id}`
+              ? "Uploading..."
+              : reportFiles[o.id]?.name ||
+                reportDocuments[o.id]?.file_name ||
+                "Upload report"}
           </label>
         );
       },
@@ -824,7 +890,7 @@ export function Lab({
             )}
 
             <option value="pdf" disabled={cancelled}>
-              Download PDF
+              Download Report
             </option>
 
             {canEditLabOrder && (
@@ -938,13 +1004,14 @@ export function Lab({
                     <th className="px-4 py-3">Referral</th>
                     <th className="px-4 py-3">Patient</th>
                     <th className="px-4 py-3">Doctor</th>
+                    <th className="px-4 py-3">Date &amp; Time</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {visible.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-5 text-slate-500">
+                      <td colSpan={5} className="px-4 py-5 text-slate-500">
                         No completed consultation referrals ready.
                       </td>
                     </tr>
@@ -957,6 +1024,14 @@ export function Lab({
                           {a.doctor && a.doctor !== "Unassigned"
                             ? a.doctor
                             : "-"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                          {displayDateTime(
+                            a.referralDate ||
+                              a.consultationSignedAt ||
+                              a.consultationCreatedAt ||
+                              a.appointmentDate,
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex justify-end gap-2">

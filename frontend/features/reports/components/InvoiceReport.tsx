@@ -1,7 +1,7 @@
 import React from "react";
 import { Card,Badge } from "@/app/components/common/ui";
 import { DataTable } from "./DataTable";
-import { settlementPaidBasis } from "../helpers";
+import { reportedInvoiceTotal } from "../financials";
 import { Pagination } from "@/app/components/common/Pagination";
 import { InvoiceProps } from "../types";
 
@@ -9,9 +9,11 @@ import { InvoiceProps } from "../types";
 
 const InvoiceReport = ({
   filteredInvoices,
+  invoicePageRows,
   appointmentById,
   patientById,
   invoiceSettlementAmount,
+  invoicePaymentMode,
   numberValue,
   doctorById,
   rowDate,
@@ -23,7 +25,8 @@ const InvoiceReport = ({
   safeInvoicePage,
   pageSize,
   totalInvoicePages,
-  setInvoicePage
+  setInvoicePage,
+  onOpenInvoices,
 
 }: InvoiceProps) => {
   const invoiceColumns = [
@@ -102,7 +105,7 @@ const InvoiceReport = ({
     key: "total_amount",
     header: "Total",
     width:'90px',
-    render: (row: any) => money(row.total_amount),
+    render: (row: any) => money(reportedInvoiceTotal(row)),
   },
   {
     key: "paid_amount",
@@ -124,11 +127,10 @@ const InvoiceReport = ({
       money(row.membership_discount_amount),
   },
   {
-    key: "doctor_share_amount",
-    header: "Doctor Fee",
-    width:'100px',
-    render: (row: any) =>
-      money(row.doctor_share_amount),
+    key: "payment_mode",
+    header: "Mode of Payment",
+    width: "130px",
+    render: (row: any) => invoicePaymentMode(row),
   },
   {
     key: "settlement",
@@ -138,12 +140,19 @@ const InvoiceReport = ({
       money(invoiceSettlementAmount(row)),
   },
   {
+    key: "settlement_percentage",
+    header: "Settlement %",
+    width: "110px",
+    render: (row: any) =>
+      `${numberValue(row.paid_amount) > 0 ? Math.round((invoiceSettlementAmount(row) / numberValue(row.paid_amount)) * 100) : 0}%`,
+  },
+  {
     key: "clinic_profit",
     header: "Clinic Profit",
     width:'90px',
     render: (row: any) => {
       const paid = numberValue(row.paid_amount);
-      const settlement = settlementPaidBasis(row);
+      const settlement = invoiceSettlementAmount(row);
 
       return (
         <span className="font-bold">
@@ -168,7 +177,8 @@ const InvoiceReport = ({
         <DataTable
           className="w-full min-w-[1120px] text-left text-sm"
           columns={invoiceColumns}
-          data={filteredInvoices}
+          data={invoicePageRows}
+          onRowClick={(row: any) => onOpenInvoices(row.id)}
           emptyMessage="No paid invoices match this filter."
         />
       </div>

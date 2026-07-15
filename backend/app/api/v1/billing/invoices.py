@@ -5,7 +5,6 @@ from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import (
-    InvoiceAmountUpdate,
     InvoiceCreateFromConsultation,
     InvoiceCreateFromLabOrder,
     InvoiceCreateFromPharmacyIssue,
@@ -13,9 +12,6 @@ from app.modules.billing.schemas import (
     InvoiceItemSupplierOptionRead,
     InvoiceItemSupplierUpdate,
     InvoiceRead,
-)
-from app.modules.billing.services.invoice_amounts import (
-    update_consultation_invoice_amount,
 )
 from app.modules.billing.services.invoice_items import (
     list_invoice_item_supplier_options,
@@ -175,26 +171,6 @@ def get_invoice(
         tenant_id=tenant_id,
         invoice_id=invoice_id,
         current_user=current_user,
-    )
-
-
-@router.patch("/invoices/{invoice_id}/amount", response_model=InvoiceDetailRead)
-def update_invoice_amount(
-    invoice_id: str,
-    payload: InvoiceAmountUpdate,
-    tenant_id: str = Depends(require_tenant_id),
-    session: Session = Depends(get_session),
-    current_user: User = Depends(
-        require_any_permission(permissions.BILLING_MANAGE, permissions.INVOICES_EDIT)
-    ),
-) -> InvoiceDetailRead:
-    return update_consultation_invoice_amount(
-        session,
-        tenant_id=tenant_id,
-        invoice_id=invoice_id,
-        payload=payload,
-        current_user=current_user,
-        read_invoice_detail=read_invoice_detail_full,
     )
 
 

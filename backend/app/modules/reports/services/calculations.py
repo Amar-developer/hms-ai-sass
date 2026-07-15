@@ -18,6 +18,11 @@ def invoice_membership_benefit(invoice: Invoice) -> int:
     return int(invoice.membership_discount_amount or 0)
 
 
+def invoice_report_total(invoice: Invoice) -> int:
+    """Full service value displayed by reports, including membership usage."""
+    return int(invoice.total_amount or 0) + invoice_membership_benefit(invoice)
+
+
 def invoice_offer_discount(invoice: Invoice) -> int:
     return max(
         int(invoice.discount_amount or 0) - invoice_membership_benefit(invoice), 0

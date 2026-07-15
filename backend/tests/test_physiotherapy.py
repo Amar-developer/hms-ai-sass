@@ -145,10 +145,23 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
     assert session.status_code == 201
     assert session.json()["session_number"] == 1
 
+    offer = client.post(
+        "/api/v1/billing/discount-offers",
+        headers=headers,
+        json={
+            "branch_id": branch_id,
+            "name": "Physiotherapy Concession",
+            "service_scope": "physiotherapy",
+            "discount_type": "fixed",
+            "value": 100,
+        },
+    )
+    assert offer.status_code == 201
+
     invoice = client.post(
         f"/api/v1/physiotherapy/cases/{case_body['id']}/invoice",
         headers=headers,
-        json={"discount_amount": 100},
+        json={"discount_offer_id": offer.json()["id"]},
     )
     assert invoice.status_code == 201
     assert invoice.json()["invoice"]["physiotherapy_case_id"] == case_body["id"]

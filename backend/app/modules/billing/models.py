@@ -42,6 +42,7 @@ class BillingAdjustmentType(str, Enum):
     CANCEL = "cancel"
     FULL_REFUND = "full_refund"
     PARTIAL_REFUND = "partial_refund"
+    DISCOUNT = "discount"
 
 
 class BillingAdjustmentStatus(str, Enum):
@@ -173,6 +174,9 @@ class Invoice(SQLModel, table=True):
     subtotal_amount: int = Field(default=0, ge=0)
     discount_amount: int = Field(default=0, ge=0)
     membership_discount_amount: int = Field(default=0, ge=0)
+    membership_free_items_amount: int = Field(default=0, ge=0)
+    membership_item_discount_amount: int = Field(default=0, ge=0)
+    membership_regular_items_amount: int = Field(default=0, ge=0)
     taxable_amount: int = Field(default=0, ge=0)
     tax_amount: int = Field(default=0, ge=0)
     tax_rule_id: str | None = Field(default=None, index=True)

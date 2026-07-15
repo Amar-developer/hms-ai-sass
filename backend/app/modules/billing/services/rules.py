@@ -6,9 +6,9 @@ from sqlmodel import Session
 
 from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.billing.models import (
+    DoctorFeeRule,
     DiscountOffer,
     DiscountType,
-    DoctorFeeRule,
     FeeShareType,
     TaxRule,
 )
@@ -150,7 +150,6 @@ def find_tax_rule(
 
 
 def _offer_discount_value(offer: DiscountOffer, subtotal: int) -> int:
-    """Discount this offer yields for the subtotal, or 0 if it is not eligible."""
     now = datetime.now(timezone.utc)
     valid_from = (
         offer.valid_from.replace(tzinfo=timezone.utc)
@@ -168,10 +167,11 @@ def _offer_discount_value(offer: DiscountOffer, subtotal: int) -> int:
         return 0
     if subtotal < offer.minimum_bill_amount:
         return 0
-    if offer.discount_type == DiscountType.FIXED:
-        discount = offer.value
-    else:
-        discount = round(subtotal * offer.value / 100)
+    discount = (
+        offer.value
+        if offer.discount_type == DiscountType.FIXED
+        else round(subtotal * offer.value / 100)
+    )
     if offer.max_discount_amount is not None:
         discount = min(discount, offer.max_discount_amount)
     return max(min(discount, subtotal), 0)
@@ -186,17 +186,11 @@ def calculate_offer_discount(
     subtotal: int,
     discount_offer_id: str | None,
 ) -> tuple[int, DiscountOffer | None]:
-    """Resolves the discount offer to apply: an explicitly chosen offer used
-    as-is, or the best eligible active offer auto-selected for the scope."""
     if subtotal <= 0:
         return 0, None
-    # An explicitly chosen offer is used as-is. Otherwise auto-apply the best
-    # eligible active offer (mirrors tax-rule auto-selection), so configured
-    # offers actually reach the bill instead of showing "Offer not applied".
+    repository = BillingReferenceRepository(session)
     if discount_offer_id:
-        offer = BillingReferenceRepository(session).get_discount_offer(
-            discount_offer_id
-        )
+        offer = repository.get_discount_offer(discount_offer_id)
         if (
             not offer
             or offer.tenant_id != tenant_id
@@ -207,19 +201,14 @@ def calculate_offer_discount(
             return 0, None
         discount = _offer_discount_value(offer, subtotal)
         return (discount, offer) if discount > 0 else (0, None)
-
-    offers = BillingReferenceRepository(session).list_active_discount_offers(
-        tenant_id=tenant_id
-    )
-    best_offer: DiscountOffer | None = None
+    best_offer = None
     best_discount = 0
-    for offer in offers:
+    for offer in repository.list_active_discount_offers(tenant_id=tenant_id):
         if not _service_matches(offer.service_scope, service_scope):
             continue
         if offer.branch_id and offer.branch_id != branch_id:
             continue
         discount = _offer_discount_value(offer, subtotal)
         if discount > best_discount:
-            best_discount = discount
-            best_offer = offer
+            best_discount, best_offer = discount, offer
     return (best_discount, best_offer) if best_offer else (0, None)

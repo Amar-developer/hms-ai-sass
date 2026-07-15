@@ -4,6 +4,7 @@ export type AppointmentReportsProps = {
   money: any;
   doctorRows: any;
   percent: any;
+  onOpenInvoices: any;
 };
 
 export type Column<T> = {
@@ -31,6 +32,7 @@ export type HomeCareReportsProps = {
   openSections: any;
   setOpenSections: any;
   money: any;
+  onOpenInvoices: any;
 };
 
 export type InvoiceProps = {
@@ -56,6 +58,7 @@ export type InvoiceProps = {
   pageSize: number;
   totalInvoicePages:any
   setInvoicePage:any
+  onOpenInvoices:any
 };
 
 export type LabReportsProps = {
@@ -63,6 +66,7 @@ export type LabReportsProps = {
   openSections: any;
   setOpenSections: any;
   money: any;
+  onOpenInvoices: any;
 };
 
 export type MetrixProps = {
@@ -97,4 +101,5 @@ export type PharmacyReportsProps = {
   openSections: any;
   setOpenSections: any;
   money: any;
+  onOpenInvoices: any;
 };

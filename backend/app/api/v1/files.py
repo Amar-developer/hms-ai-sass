@@ -114,6 +114,9 @@ async def upload_file(
             permissions.FILES_CREATE,
             permissions.SETTINGS_MANAGE,
             permissions.SETTINGS_CREATE,
+            permissions.LAB_MANAGE,
+            permissions.LAB_EDIT,
+            permissions.LAB_RESULTS_MANAGE,
         )
     ),
 ) -> FileDocument:

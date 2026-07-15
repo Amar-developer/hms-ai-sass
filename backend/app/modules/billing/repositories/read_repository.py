@@ -7,12 +7,15 @@ from app.modules.billing.models import (
     BillingAdjustmentStatus,
     BillingLedgerEntry,
     CreditNote,
+    DiscountApproval,
+    DiscountOffer,
     Invoice,
     InvoiceItem,
     Payment,
     PaymentStatus,
 )
 from app.modules.identity.models import User
+from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
 from app.modules.pharmacy.models import PharmacySupplier
 from app.modules.practitioners.models import Practitioner
 
@@ -33,6 +36,18 @@ class BillingReadRepository:
         if not invoice or invoice.tenant_id != tenant_id:
             return None
         return invoice
+
+    def get_discount_approval(self, approval_id: str) -> DiscountApproval | None:
+        return self.session.get(DiscountApproval, approval_id)
+
+    def get_discount_offer(self, offer_id: str) -> DiscountOffer | None:
+        return self.session.get(DiscountOffer, offer_id)
+
+    def get_home_care_booking(self, booking_id: str) -> HomeCareBooking | None:
+        return self.session.get(HomeCareBooking, booking_id)
+
+    def get_home_care_visit_log(self, visit_id: str) -> HomeCareVisitLog | None:
+        return self.session.get(HomeCareVisitLog, visit_id)
 
     def get_payment_for_update(self, payment_id: str) -> Payment | None:
         return self.session.exec(

@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.validation import (
     BranchId,
@@ -126,6 +126,8 @@ class PhysiotherapySessionRead(PhysiotherapySessionCreate):
 
 
 class PhysiotherapyInvoiceCreate(BaseModel):
-    discount_amount: int = Field(default=0, ge=0)
+    model_config = ConfigDict(extra="forbid")
+
     tax_rule_id: str | None = None
+    discount_offer_id: str | None = None
     created_by_user_id: UserId | None = None

@@ -52,3 +52,18 @@ export function isActiveQueueAppointment(appointment: any) {
       .toLowerCase() !== "signed"
   );
 }
+
+export function sortByQueuePosition(rows: any[]) {
+  return [...rows].sort((a: any, b: any) => {
+    const aPosition = Number(a.queuePosition || a.queue_position || 0);
+    const bPosition = Number(b.queuePosition || b.queue_position || 0);
+    if (aPosition > 0 && bPosition > 0 && aPosition !== bPosition)
+      return aPosition - bPosition;
+    if (aPosition > 0 && bPosition <= 0) return -1;
+    if (bPosition > 0 && aPosition <= 0) return 1;
+    return tokenSortValue(a).localeCompare(tokenSortValue(b), undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+  });
+}

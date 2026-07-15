@@ -48,6 +48,16 @@ def create_queue_entry_for_appointment(
     session.commit()
     session.refresh(entry)
     session.refresh(appointment)
+    # A newly booked emergency must be promoted ahead of normal waiting
+    # tokens immediately, not only after the next queue action.
+    from app.modules.queue.services.transitions import normalize_queue_positions
+
+    normalize_queue_positions(
+        session,
+        tenant_id=entry.tenant_id,
+        branch_id=entry.branch_id,
+    )
+    session.refresh(entry)
     record_queue_event(
         session,
         entry=entry,

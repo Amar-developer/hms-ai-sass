@@ -334,6 +334,14 @@ export function DoctorConsultation({
     ) ||
     activeQueue.find((a: any) => statusKey(a.queueStatus) === "requeued") ||
     activeQueue[0];
+  function nextEligibleAppointment(excludeId?: string) {
+    return activeQueue.find((appointment: any) => {
+      if (appointment.id === excludeId) return false;
+      return ["waiting", "in_queue", "emergency_queue", "requeued"].includes(
+        statusKey(appointment.queueStatus || appointment.queue_status),
+      );
+    });
+  }
   const selected =
     doctorQueue.find((a: any) => a.id === selectedAppointmentId) || current;
   useEffect(() => {
@@ -898,7 +906,10 @@ export function DoctorConsultation({
     setSelectedAppointmentId(a.id);
   }
   function callNext() {
-    if (current) callPatient(current);
+    const next = nextEligibleAppointment(
+      statusKey(current?.queueStatus) === "called" ? current?.id : undefined,
+    );
+    if (next) callPatient(next);
   }
   function openConsultation(id: string) {
     setSelectedAppointmentId(id);
@@ -923,7 +934,7 @@ export function DoctorConsultation({
     setActive?.("patients");
   }
   function callNextInWorkspace() {
-    const next = activeQueue.find((a: any) => a.id !== selected?.id) || current;
+    const next = nextEligibleAppointment(selected?.id);
     if (!next) return;
     callPatient(next);
     openConsultation(next.id);
@@ -946,6 +957,8 @@ export function DoctorConsultation({
           },
         );
         await loadLiveData(apiSession);
+        const next = nextEligibleAppointment(selected.id);
+        if (next) setSelectedAppointmentId(next.id);
         setMessage("Patient marked not available.");
       } catch (err: any) {
         setMessage(err.message || "Could not update token.");
@@ -975,6 +988,8 @@ export function DoctorConsultation({
           }),
         });
         await loadLiveData(apiSession);
+        const next = nextEligibleAppointment(selected.id);
+        if (next) setSelectedAppointmentId(next.id);
         setMessage("Token requeued.");
       } catch (err: any) {
         setMessage(err.message || "Could not requeue token.");

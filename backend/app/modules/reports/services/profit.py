@@ -12,6 +12,7 @@ from app.modules.reports.services.calculations import (
     invoice_item_total,
     invoice_membership_benefit,
     invoice_offer_discount,
+    invoice_report_total,
     is_paid_invoice,
     settlement_paid_basis,
 )
@@ -45,6 +46,37 @@ def build_profit_report_email_attachments(
             invoice for invoice in paid_invoices if invoice.branch_id == branch_id
         ]
     invoice_ids = [invoice.id for invoice in paid_invoices]
+    payment_modes_by_invoice: dict[str, set[str]] = {
+        invoice_id: set() for invoice_id in invoice_ids
+    }
+    for payment in repo.list_recorded_payments_by_invoice_ids(
+        tenant_id=tenant_id, invoice_ids=invoice_ids
+    ):
+        method = (
+            payment.method.value if hasattr(payment.method, "value") else payment.method
+        )
+        payment_modes_by_invoice.setdefault(payment.invoice_id, set()).add(str(method))
+
+    def payment_mode(invoice) -> str:
+        modes = {
+            value.replace("_", " ").title()
+            for value in payment_modes_by_invoice.get(invoice.id, set())
+        }
+        if invoice_membership_benefit(invoice) > 0:
+            modes.add("Membership Benefit")
+        return " + ".join(sorted(modes)) if modes else "-"
+
+    def combined_payment_modes(values: set[str]) -> str:
+        modes = sorted(value for value in values if value and value != "-")
+        return " + ".join(modes) if modes else "-"
+
+    def allocated_balance(invoice, line_amount: int) -> int:
+        item_total = invoice_item_total(invoice)
+        balance = int(invoice.balance_amount or 0)
+        if not item_total or not line_amount or not balance:
+            return 0
+        return round((line_amount * balance) / item_total)
+
     invoice_items_by_invoice: dict[str, list[InvoiceItem]] = {
         invoice.id: [] for invoice in paid_invoices
     }
@@ -76,6 +108,14 @@ def build_profit_report_email_attachments(
         supplier_filter_ids.add(supplier_id)
         pharmacy_supplier_filter_ids.add(supplier_id)
     classifier = ReportInvoiceClassifier(invoice_items_by_invoice)
+
+    def invoice_settlement(invoice) -> int:
+        if classifier.classify(invoice) in {"lab", "pharmacy"}:
+            return sum(
+                int(item.buying_amount or 0) * int(item.quantity or 1)
+                for item in invoice_items_by_invoice.get(invoice.id, [])
+            )
+        return settlement_paid_basis(invoice)
 
     if invoice_type in {
         "consultation",
@@ -148,7 +188,12 @@ def build_profit_report_email_attachments(
     )
 
     doctor_buckets: dict[str, dict] = {}
-    for invoice in paid_invoices:
+    consultation_invoices = [
+        invoice
+        for invoice in paid_invoices
+        if classifier.classify(invoice) == "consultation"
+    ]
+    for invoice in consultation_invoices:
         appointment = appointments.get(invoice.appointment_id or "")
         key = (
             appointment.practitioner_id
@@ -161,11 +206,14 @@ def build_profit_report_email_attachments(
             {
                 "doctor": doctor.full_name if doctor else "Unassigned",
                 "consultations": 0,
+                "consultation_ids": set(),
                 "invoices": 0,
                 "gross": 0,
                 "paid": 0,
+                "balance": 0,
                 "offer": 0,
                 "membership": 0,
+                "payment_modes": set(),
                 "doctor_fee": 0,
                 "settlement": 0,
                 "clinic_fee": 0,
@@ -174,16 +222,24 @@ def build_profit_report_email_attachments(
         )
         paid = int(invoice.paid_amount or 0)
         doctor_fee = int(invoice.doctor_share_amount or 0)
-        settlement = settlement_paid_basis(invoice)
+        settlement = invoice_settlement(invoice)
         bucket["invoices"] += 1
-        bucket["gross"] += int(invoice.total_amount or 0)
+        bucket["consultation_ids"].add(
+            invoice.appointment_id or invoice.consultation_id or invoice.id
+        )
+        bucket["gross"] += invoice_report_total(invoice)
         bucket["paid"] += paid
+        bucket["balance"] += int(invoice.balance_amount or 0)
         bucket["offer"] += invoice_offer_discount(invoice)
         bucket["membership"] += invoice_membership_benefit(invoice)
+        bucket["payment_modes"].add(payment_mode(invoice))
         bucket["doctor_fee"] += doctor_fee
         bucket["settlement"] += settlement
         bucket["clinic_fee"] += int(invoice.clinic_share_amount or 0) or max(
-            int(invoice.total_amount or 0) - doctor_fee, 0
+            invoice_report_total(invoice)
+            - invoice_membership_benefit(invoice)
+            - doctor_fee,
+            0,
         )
         bucket["final_profit"] += max(paid - settlement, 0)
     for appointment in completed_appointments:
@@ -194,18 +250,24 @@ def build_profit_report_email_attachments(
             {
                 "doctor": doctor.full_name if doctor else "Unassigned",
                 "consultations": 0,
+                "consultation_ids": set(),
                 "invoices": 0,
                 "gross": 0,
                 "paid": 0,
+                "balance": 0,
                 "offer": 0,
                 "membership": 0,
+                "payment_modes": set(),
                 "doctor_fee": 0,
                 "settlement": 0,
                 "clinic_fee": 0,
                 "final_profit": 0,
             },
         )
-        bucket["consultations"] += 1
+        bucket["consultation_ids"].add(appointment.id)
+
+    for bucket in doctor_buckets.values():
+        bucket["consultations"] = len(bucket["consultation_ids"])
 
     def percent(value: int, total: int) -> str:
         return "0%" if not total else f"{round((value / total) * 100)}%"
@@ -216,10 +278,13 @@ def build_profit_report_email_attachments(
         "Invoices",
         "Gross Revenue",
         "Paid Revenue",
+        "Balance",
         "Offer Discount",
         "Membership Benefit",
+        "Mode of Payment",
         "Doctor Fee",
         "Settlement",
+        "Settlement %",
         "Clinic Fee",
         "Gross Profit %",
         "Final Profit",
@@ -231,12 +296,15 @@ def build_profit_report_email_attachments(
             row["invoices"],
             row["gross"],
             row["paid"],
+            row["balance"],
             row["offer"],
             row["membership"],
+            combined_payment_modes(row["payment_modes"]),
             row["doctor_fee"],
             row["settlement"],
+            percent(row["settlement"], row["paid"]),
             row["clinic_fee"],
-            percent(max(row["gross"] - row["doctor_fee"], 0), row["gross"]),
+            percent(row["final_profit"], row["paid"]),
             row["final_profit"],
         ]
         for row in sorted(
@@ -255,12 +323,23 @@ def build_profit_report_email_attachments(
                 sum(int(row["invoices"] or 0) for row in doctor_buckets.values()),
                 total_gross,
                 sum(int(row["paid"] or 0) for row in doctor_buckets.values()),
+                sum(int(row["balance"] or 0) for row in doctor_buckets.values()),
                 sum(int(row["offer"] or 0) for row in doctor_buckets.values()),
                 sum(int(row["membership"] or 0) for row in doctor_buckets.values()),
+                "Multiple",
                 total_doctor_fee,
                 sum(int(row["settlement"] or 0) for row in doctor_buckets.values()),
+                percent(
+                    sum(int(row["settlement"] or 0) for row in doctor_buckets.values()),
+                    sum(int(row["paid"] or 0) for row in doctor_buckets.values()),
+                ),
                 sum(int(row["clinic_fee"] or 0) for row in doctor_buckets.values()),
-                percent(max(total_gross - total_doctor_fee, 0), total_gross),
+                percent(
+                    sum(
+                        int(row["final_profit"] or 0) for row in doctor_buckets.values()
+                    ),
+                    sum(int(row["paid"] or 0) for row in doctor_buckets.values()),
+                ),
                 sum(int(row["final_profit"] or 0) for row in doctor_buckets.values()),
             ]
         )
@@ -278,8 +357,10 @@ def build_profit_report_email_attachments(
         "Total",
         "Paid",
         "Balance",
+        "Mode of Payment",
         "Doctor Fee",
         "Settlement",
+        "Settlement %",
         "Clinic Profit",
     ]
     invoice_rows = []
@@ -291,7 +372,7 @@ def build_profit_report_email_attachments(
             if appointment and appointment.practitioner_id
             else None
         )
-        settlement = settlement_paid_basis(invoice)
+        settlement = invoice_settlement(invoice)
         paid = int(invoice.paid_amount or 0)
         invoice_rows.append(
             [
@@ -306,11 +387,13 @@ def build_profit_report_email_attachments(
                 invoice_item_total(invoice),
                 invoice_offer_discount(invoice),
                 invoice_membership_benefit(invoice),
-                int(invoice.total_amount or 0),
+                invoice_report_total(invoice),
                 paid,
                 int(invoice.balance_amount or 0),
+                payment_mode(invoice),
                 int(invoice.doctor_share_amount or 0),
                 settlement,
+                percent(settlement, paid),
                 max(paid - settlement, 0),
             ]
         )
@@ -326,14 +409,19 @@ def build_profit_report_email_attachments(
                 sum(invoice_item_total(invoice) for invoice in paid_invoices),
                 sum(invoice_offer_discount(invoice) for invoice in paid_invoices),
                 sum(invoice_membership_benefit(invoice) for invoice in paid_invoices),
-                sum(int(invoice.total_amount or 0) for invoice in paid_invoices),
+                sum(invoice_report_total(invoice) for invoice in paid_invoices),
                 sum(int(invoice.paid_amount or 0) for invoice in paid_invoices),
                 sum(int(invoice.balance_amount or 0) for invoice in paid_invoices),
+                "Multiple",
                 sum(int(invoice.doctor_share_amount or 0) for invoice in paid_invoices),
-                sum(settlement_paid_basis(invoice) for invoice in paid_invoices),
+                sum(invoice_settlement(invoice) for invoice in paid_invoices),
+                percent(
+                    sum(invoice_settlement(invoice) for invoice in paid_invoices),
+                    sum(int(invoice.paid_amount or 0) for invoice in paid_invoices),
+                ),
                 sum(
                     max(
-                        int(invoice.paid_amount or 0) - settlement_paid_basis(invoice),
+                        int(invoice.paid_amount or 0) - invoice_settlement(invoice),
                         0,
                     )
                     for invoice in paid_invoices
@@ -402,12 +490,15 @@ def build_profit_report_email_attachments(
                 "offer": 0,
                 "membership": 0,
                 "revenue": 0,
+                "balance": 0,
+                "payment_modes": set(),
                 "purchase": 0,
             },
         )
         bucket["orders"].add(item.lab_order_id)
         if invoice:
             bucket["invoices"].add(invoice.id)
+            bucket["payment_modes"].add(payment_mode(invoice))
         bucket["item_total"] += line_amount
         bucket["offer"] += (
             allocated_line_offer_discount(invoice, line_amount) if invoice else 0
@@ -418,6 +509,7 @@ def build_profit_report_email_attachments(
         bucket["revenue"] += (
             allocated_line_revenue(invoice, line_amount) if invoice else 0
         )
+        bucket["balance"] += allocated_balance(invoice, line_amount) if invoice else 0
         bucket["purchase"] += purchase_price
     lab_settlement_headers = [
         "Supplier",
@@ -428,7 +520,10 @@ def build_profit_report_email_attachments(
         "Offer Discount",
         "Membership Benefit",
         "Net Revenue",
+        "Balance",
+        "Mode of Payment",
         "Purchase Cost",
+        "Settlement %",
         "Lab Profit",
     ]
     lab_settlement_rows = [
@@ -441,7 +536,10 @@ def build_profit_report_email_attachments(
             row["offer"],
             row["membership"],
             row["revenue"],
+            row["balance"],
+            combined_payment_modes(row["payment_modes"]),
             row["purchase"],
+            percent(row["purchase"], row["revenue"]),
             max(row["revenue"] - row["purchase"], 0),
         ]
         for row in sorted(
@@ -461,7 +559,13 @@ def build_profit_report_email_attachments(
                 sum(int(row["offer"] or 0) for row in lab_buckets.values()),
                 sum(int(row["membership"] or 0) for row in lab_buckets.values()),
                 sum(int(row["revenue"] or 0) for row in lab_buckets.values()),
+                sum(int(row["balance"] or 0) for row in lab_buckets.values()),
+                "Multiple",
                 sum(int(row["purchase"] or 0) for row in lab_buckets.values()),
+                percent(
+                    sum(int(row["purchase"] or 0) for row in lab_buckets.values()),
+                    sum(int(row["revenue"] or 0) for row in lab_buckets.values()),
+                ),
                 sum(
                     max(int(row["revenue"] or 0) - int(row["purchase"] or 0), 0)
                     for row in lab_buckets.values()
@@ -523,12 +627,15 @@ def build_profit_report_email_attachments(
                 "offer": 0,
                 "membership": 0,
                 "revenue": 0,
+                "balance": 0,
+                "payment_modes": set(),
                 "purchase": 0,
             },
         )
         bucket["issues"].add(item.pharmacy_issue_id)
         if invoice:
             bucket["invoices"].add(invoice.id)
+            bucket["payment_modes"].add(payment_mode(invoice))
         bucket["quantity"] += quantity
         bucket["item_total"] += line_amount
         bucket["offer"] += (
@@ -538,6 +645,7 @@ def build_profit_report_email_attachments(
             allocated_line_membership_benefit(invoice, line_amount) if invoice else 0
         )
         bucket["revenue"] += revenue
+        bucket["balance"] += allocated_balance(invoice, line_amount) if invoice else 0
         bucket["purchase"] += purchase
     pharmacy_settlement_headers = [
         "Supplier",
@@ -549,7 +657,10 @@ def build_profit_report_email_attachments(
         "Offer Discount",
         "Membership Benefit",
         "Net Revenue",
+        "Balance",
+        "Mode of Payment",
         "Purchase Cost",
+        "Settlement %",
         "Pharmacy Profit",
     ]
     pharmacy_settlement_rows = [
@@ -563,7 +674,10 @@ def build_profit_report_email_attachments(
             row["offer"],
             row["membership"],
             row["revenue"],
+            row["balance"],
+            combined_payment_modes(row["payment_modes"]),
             row["purchase"],
+            percent(row["purchase"], row["revenue"]),
             max(row["revenue"] - row["purchase"], 0),
         ]
         for row in sorted(

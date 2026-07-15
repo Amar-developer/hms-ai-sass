@@ -10,6 +10,7 @@ const LabReports = ({
   openSections,
   setOpenSections,
   money,
+  onOpenInvoices,
 }: LabReportsProps) => {
   const columns = [
     {
@@ -31,15 +32,41 @@ const LabReports = ({
       header: "Invoices",
     },
     {
+      key: "total",
+      header: "Total",
+      render: (row: any) => money(row.total),
+    },
+    {
       key: "revenue",
-      header: "Revenue",
+      header: "Paid Revenue",
       render: (row: any) => money(row.revenue),
+    },
+    {
+      key: "balance",
+      header: "Balance",
+      render: (row: any) => money(row.balance),
+    },
+    {
+      key: "membershipBenefit",
+      header: "Membership Benefit",
+      width: '160px',
+      render: (row: any) => money(row.membershipBenefit),
+    },
+    {
+      key: "paymentMode",
+      header: "Mode of Payment",
+      width: "140px",
     },
     {
       key: "purchaseCost",
       header: "Purchase Cost",
       width: '160px',
       render: (row: any) => money(row.purchaseCost),
+    },
+    {
+      key: "settlementPercent",
+      header: "Settlement %",
+      width: "120px",
     },
     {
       key: "profit",
@@ -102,6 +129,7 @@ const LabReports = ({
           <DataTable
             columns={columns}
             data={labSettlementRows}
+            onRowClick={(row: any) => onOpenInvoices(row.invoices)}
             paginate
             emptyMessage="No paid lab invoices match this filter"
             className='w-full min-w-[1120px] text-left text-sm'

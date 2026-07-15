@@ -26,7 +26,7 @@ import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
 import { Column } from "../reports/types";
 import { DataTable } from "../reports/components/DataTable";
-import { money } from "@/utils/helper";
+import { displayDateTime, money } from "@/utils/helper";
 
 export function Billing({
   apiSession,
@@ -179,11 +179,25 @@ export function Billing({
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
+  // Lab/pharmacy/IP/physiotherapy invoices legitimately carry the same
+  // consultation_id/appointment_id as the originating consultation (so their
+  // billing can be traced back to it), so only a *pure* consultation invoice
+  // — not just any invoice referencing that consultation — can mean the
+  // consultation-fee invoice was actually generated. A membership-covered
+  // consultation is auto-invoiced (₹0/discounted, paid via the plan benefit)
+  // the moment it's signed — invoiceSourceKey reports that as "membership",
+  // not "consultation", but it's still the consultation's actual invoice, so
+  // it must count here too or an already-billed free visit never leaves this
+  // list.
+  const consultationInvoices = invoices.filter((i: any) => {
+    const key = invoiceSourceKey(i);
+    return key === "consultation" || key === "membership";
+  });
   const invoicedConsultations = new Set(
-    invoices.map((i: any) => i.consultation_id).filter(Boolean),
+    consultationInvoices.map((i: any) => i.consultation_id).filter(Boolean),
   );
   const invoicedAppointments = new Set(
-    invoices
+    consultationInvoices
       .filter((i: any) => i.consultation_id)
       .map((i: any) => i.appointment_id)
       .filter(Boolean),
@@ -290,7 +304,6 @@ export function Billing({
           method: "POST",
           body: JSON.stringify({
             consultation_id: a.consultationId,
-            discount_amount: 0,
             created_by_user_id: apiSession.user?.id,
           }),
         },
@@ -317,7 +330,6 @@ export function Billing({
         method: "POST",
         body: JSON.stringify({
           consultation_id: invoice.consultation_id,
-          discount_amount: invoice.discount_amount || 0,
           created_by_user_id: apiSession.user?.id,
         }),
       });
@@ -598,31 +610,6 @@ export function Billing({
     }
   }
 
-  async function updateInvoiceAmount(invoice: any, amount: number) {
-    if (!apiSession) return;
-    setBusy(`amount-${invoice.id}`);
-    setMessage("");
-    try {
-      const row = await apiFetch(
-        `/billing/invoices/${invoice.id}/amount`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            amount,
-            updated_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      setDetail(row);
-      setMessage("Invoice amount updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not update amount.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   async function cancelInvoice(invoice: any) {
     if (!apiSession) return;
     if (
@@ -665,14 +652,20 @@ export function Billing({
     );
     if (!reason) return;
     let amount: any = null;
-    if (type === "partial_refund") {
+    if (type === "partial_refund" || type === "discount") {
       const raw = window.prompt(
-        `Partial refund amount for ${invoice.invoice_number}`,
+        type === "discount"
+          ? `Discount amount for ${invoice.invoice_number}`
+          : `Partial refund amount for ${invoice.invoice_number}`,
       );
       if (!raw) return;
       amount = Number(raw);
       if (!amount || amount <= 0) {
-        setMessage("Enter a valid refund amount.");
+        setMessage(
+          type === "discount"
+            ? "Enter a valid discount amount."
+            : "Enter a valid refund amount.",
+        );
         return;
       }
     }
@@ -989,7 +982,6 @@ export function Billing({
         currentUser={apiSession.user}
         supplierOptions={supplierOptions}
         updateInvoiceItemSupplier={updateInvoiceItemSupplier}
-        updateInvoiceAmount={updateInvoiceAmount}
         apiSession={apiSession}
       />
     );
@@ -1073,13 +1065,14 @@ export function Billing({
                   <th className="px-4 py-3">Consultation</th>
                   <th className="px-4 py-3">Patient</th>
                   <th className="px-4 py-3">Doctor</th>
+                  <th className="px-4 py-3">Date &amp; Time</th>
                   <th className="px-4 py-3 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
                 {signedReady.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-4 py-5 text-slate-500">
+                    <td colSpan={5} className="px-4 py-5 text-slate-500">
                       All completed consultations already have invoices.
                     </td>
                   </tr>
@@ -1090,6 +1083,13 @@ export function Billing({
                       <td className="px-4 py-3 font-semibold">{a.patient}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {a.doctor && a.doctor !== "Unassigned" ? a.doctor : "-"}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                        {displayDateTime(
+                          a.consultationSignedAt ||
+                            a.consultationCreatedAt ||
+                            a.appointmentDate,
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Button

@@ -146,22 +146,12 @@ def update_tax_rule_endpoint(
     )
 
 
-@router.post(
-    "/discount-offers",
-    response_model=DiscountOfferRead,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/discount-offers", response_model=DiscountOfferRead, status_code=201)
 def create_discount_offer_endpoint(
     payload: DiscountOfferCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(
-        require_any_permission(
-            permissions.DISCOUNTS_MANAGE,
-            permissions.DISCOUNTS_CREATE,
-            permissions.BILLING_MANAGE,
-        )
-    ),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> DiscountOffer:
     return create_discount_offer(
         session, tenant_id=tenant_id, payload=payload, actor=current_user
@@ -173,19 +163,10 @@ def list_discount_offers_endpoint(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(
-        require_any_permission(
-            permissions.DISCOUNTS_MANAGE,
-            permissions.DISCOUNTS_READ,
-            permissions.BILLING_MANAGE,
-        )
-    ),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> list[DiscountOffer]:
     return list_accessible_discount_offers(
-        session,
-        tenant_id=tenant_id,
-        branch_id=branch_id,
-        actor=current_user,
+        session, tenant_id=tenant_id, branch_id=branch_id, actor=current_user
     )
 
 
@@ -195,13 +176,7 @@ def update_discount_offer_endpoint(
     payload: DiscountOfferUpdate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(
-        require_any_permission(
-            permissions.DISCOUNTS_MANAGE,
-            permissions.DISCOUNTS_EDIT,
-            permissions.BILLING_MANAGE,
-        )
-    ),
+    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
 ) -> DiscountOffer:
     return update_discount_offer(
         session,

@@ -342,7 +342,13 @@ export function AppShell(props: any) {
       case "subscriptions":
         return <PatientSubscriptions {...ctx} />;
       case "reports":
-        return <Reports {...ctx} section={reportsSection} />;
+        return (
+          <Reports
+            {...ctx}
+            section={reportsSection}
+            setActive={navigatePage}
+          />
+        );
       default:
         return (
           <Card>

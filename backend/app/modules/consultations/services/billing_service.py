@@ -82,7 +82,6 @@ class ConsultationBillingService:
                 self.session,
                 appointment=appointment,
                 consultation_id=consultation.id,
-                discount_amount=0,
                 created_by_user_id=actor_user_id,
             )
         except IntegrityError:

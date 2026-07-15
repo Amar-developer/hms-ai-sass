@@ -3,7 +3,7 @@ from datetime import date, datetime
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment, AppointmentStatus
-from app.modules.billing.models import Invoice, InvoiceItem
+from app.modules.billing.models import Invoice, InvoiceItem, Payment, PaymentStatus
 from app.modules.lab.models import LabOrderItem, LabTestCatalog, LabTestPackage
 from app.modules.patients.models import Patient
 from app.modules.pharmacy.models import (
@@ -109,6 +109,24 @@ class ReportDataRepository:
                     InvoiceItem.tenant_id == tenant_id,
                     InvoiceItem.invoice_id.in_(invoice_ids),
                 )
+            ).all()
+        )
+
+    def list_recorded_payments_by_invoice_ids(
+        self, *, tenant_id: str, invoice_ids: list[str]
+    ) -> list[Payment]:
+        if not invoice_ids:
+            return []
+        return list(
+            self.session.exec(
+                select(Payment)
+                .where(
+                    Payment.tenant_id == tenant_id,
+                    Payment.invoice_id.in_(invoice_ids),
+                    Payment.status == PaymentStatus.RECORDED,
+                    Payment.amount > Payment.refunded_amount,
+                )
+                .order_by(Payment.collected_at)
             ).all()
         )
 

@@ -10,6 +10,7 @@ const PharmacyReports = ({
   openSections,
   setOpenSections,
   money,
+  onOpenInvoices,
 }: PharmacyReportsProps) => {
   const columns = [
     {
@@ -34,14 +35,40 @@ const PharmacyReports = ({
       header: "Qty",
     },
     {
+      key: "total",
+      header: "Total",
+      render: (row: any) => money(row.total),
+    },
+    {
       key: "revenue",
-      header: "Revenue",
+      header: "Paid Revenue",
       render: (row: any) => money(row.revenue),
+    },
+    {
+      key: "balance",
+      header: "Balance",
+      render: (row: any) => money(row.balance),
+    },
+    {
+      key: "membershipBenefit",
+      header: "Membership Benefit",
+      width: '160px',
+      render: (row: any) => money(row.membershipBenefit),
+    },
+    {
+      key: "paymentMode",
+      header: "Mode of Payment",
+      width: "140px",
     },
     {
       key: "purchaseCost",
       header: "Purchase Cost",
       render: (row: any) => money(row.purchaseCost),
+    },
+    {
+      key: "settlementPercent",
+      header: "Settlement %",
+      width: "120px",
     },
     {
       key: "profit",
@@ -106,6 +133,7 @@ const PharmacyReports = ({
           <DataTable
             columns={columns}
             data={pharmacySettlementRows}
+            onRowClick={(row: any) => onOpenInvoices(row.invoices)}
             paginate
             emptyMessage="No paid pharmacy invoices match this filter."
             className="w-full min-w-[1220px] text-left text-sm"

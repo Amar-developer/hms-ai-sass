@@ -5,7 +5,14 @@ from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access
-from app.modules.billing.models import Invoice, InvoiceItem, Payment
+from app.modules.billing.models import (
+    BillingAdjustmentStatus,
+    BillingAdjustmentType,
+    DiscountType,
+    Invoice,
+    InvoiceItem,
+    Payment,
+)
 from app.modules.billing.repositories.invoice_support_repository import (
     BillingInvoiceSupportRepository,
 )
@@ -16,7 +23,6 @@ from app.modules.settings.service import resolve_setting
 from app.modules.tenants.models import Branch, Tenant
 from app.modules.billing.services.receipt_pdf_utils import (
     amount_words,
-    item_discount_percent,
     item_mrp_amount,
     item_mrp_text,
     item_selling_amount,
@@ -46,6 +52,7 @@ def build_receipt_pdf(
     payments: list[Payment],
     logo_url: str | None,
     bank_details: dict[str, object] | None = None,
+    discount_details: dict[str, object] | None = None,
 ) -> bytes:
     width, height = 595, 842
     ops: list[str] = []
@@ -268,19 +275,20 @@ def build_receipt_pdf(
 
     table_top = 578
     table_bottom = 280
-    x_cols = [16, 38, 226, 274, 371, 419, 467, 515, 579]
+    x_cols = [16, 38, 210, 252, 339, 379, 429, 479, 529, 579]
     rect(16, table_bottom, 563, table_top - table_bottom)
     line(16, 552, 579, 552, green)
     for x in x_cols[1:-1]:
         line(x, table_bottom, x, table_top, green)
     center(16, 38, 563, "Sr.\nNo", 7, True)
-    center(38, 226, 563, "Name of Product / Service", 8, True)
-    center(226, 274, 563, "Exp. Date", 8, True)
-    center(274, 371, 563, "HSN / SAC", 8, True)
-    center(371, 419, 563, "Qty", 8, True)
-    center(419, 467, 563, "MRP", 8, True)
-    center(467, 515, 563, "Disc. %", 8, True)
-    center(515, 579, 563, "Rate", 8, True)
+    center(38, 210, 563, "Name of Product / Service", 8, True)
+    center(210, 252, 563, "Exp.", 8, True)
+    center(252, 339, 563, "HSN / SAC", 8, True)
+    center(339, 379, 563, "Qty", 8, True)
+    center(379, 429, 563, "MRP", 8, True)
+    center(429, 479, 563, "Disc. %", 8, True)
+    center(479, 529, 563, "Disc. Amt", 7, True)
+    center(529, 579, 563, "Rate", 8, True)
 
     subtotal = int(invoice.subtotal_amount or 0)
     membership_discount = min(
@@ -299,15 +307,37 @@ def build_receipt_pdf(
     )
     total_discount = item_discount_total + total_invoice_discount
 
+    discount_details = discount_details or {}
     row_y = 532
     for index, item in enumerate(items[:10], start=1):
+        gross_line = int(item.total_amount or 0)
+        allocated_invoice_discount = (
+            round(total_invoice_discount * gross_line / subtotal) if subtotal > 0 else 0
+        )
+        line_item_discount = max(
+            (item_mrp_amount(item) or 0) - item_selling_amount(item), 0
+        ) * int(item.quantity or 0)
+        line_discount = line_item_discount + allocated_invoice_discount
+        line_discount_percent = (
+            f"{round(line_discount * 100 / gross_line, 1):g}%"
+            if gross_line > 0 and line_discount > 0
+            else "-"
+        )
+        net_line = max(gross_line - allocated_invoice_discount, 0)
         text(25, row_y, index, 8)
         for offset, line_value in enumerate(wrap_text(item.description, 36)[:2]):
             text(45, row_y - offset * 10, line_value, 8)
-        text(396, row_y, item.quantity, 8, align="right")
-        text(459, row_y, item_mrp_text(item), 8, align="right")
-        text(505, row_y, item_discount_percent(item), 8, align="right")
-        text(570, row_y, money_pdf(item.total_amount), 8, align="right")
+        text(370, row_y, item.quantity, 8, align="right")
+        text(420, row_y, item_mrp_text(item), 8, align="right")
+        text(470, row_y, line_discount_percent, 8, align="right")
+        text(
+            520,
+            row_y,
+            money_pdf(line_discount) if line_discount else "-",
+            8,
+            align="right",
+        )
+        text(570, row_y, money_pdf(net_line), 8, align="right")
         row_y -= 18
     if len(items) > 10:
         text(45, row_y, f"+ {len(items) - 10} more item(s)", 8, True)
@@ -317,22 +347,45 @@ def build_receipt_pdf(
         ("Subtotal", subtotal),
     ]
     if membership_discount > 0:
-        summary_rows.append(("Membership Benefit", -membership_discount))
-    if extra_discount > 0:
-        summary_rows.append(("Extra Discount", -extra_discount))
+        summary_rows.append(
+            (
+                f"Membership Benefit ({percent_pdf(membership_discount, subtotal)})",
+                -membership_discount,
+            )
+        )
+    approved_discount = int(discount_details.get("approved_amount") or 0)
+    offer_discount = int(discount_details.get("offer_amount") or 0)
+    if offer_discount > 0:
+        offer_name = str(discount_details.get("offer_name") or "Offer Module")
+        summary_rows.append(
+            (
+                f"Offer: {offer_name} ({percent_pdf(offer_discount, subtotal)})",
+                -offer_discount,
+            )
+        )
+    if approved_discount > 0:
+        summary_rows.append(
+            (
+                f"Admin Approved ({percent_pdf(approved_discount, subtotal)})",
+                -approved_discount,
+            )
+        )
+    classified = approved_discount + offer_discount
+    if extra_discount > classified:
+        summary_rows.append(("Other Discount", -(extra_discount - classified)))
     if tax > 0:
         summary_rows.append((f"Tax ({percent_pdf(tax, taxable)})", tax))
     for label, amount in summary_rows:
         text(350, summary_y, label, 8, True, "right")
         text(570, summary_y, signed_money_pdf(amount), 8, amount >= 0, "right")
-        summary_y -= 16
+        summary_y -= 13
 
     line(16, 264, 579, 264, green)
-    for x in [371, 419, 467, 515]:
+    for x in [339, 379, 429, 479, 529]:
         line(x, 264, x, 280, green)
-    text(406, 269, item_quantity_total, 8, True, "right")
+    text(370, 269, item_quantity_total, 8, True, "right")
     if total_discount > 0:
-        text(505, 269, money_pdf(total_discount), 8, True, "right")
+        text(520, 269, money_pdf(total_discount), 8, True, "right")
     text(350, 269, "Total", 9, True, "right")
     text(570, 269, money_pdf(invoice.total_amount), 9, True, "right")
 
@@ -582,6 +635,36 @@ def build_invoice_receipt_document(
     patient = support_repo.get_patient(invoice.patient_id)
     items = support_repo.list_invoice_items(invoice)
     payments = support_repo.list_payments(invoice)
+    total_discount = int(invoice.discount_amount or 0)
+    membership_discount = min(
+        int(invoice.membership_discount_amount or 0), total_discount
+    )
+    approved_discount = sum(
+        int(row.amount or 0)
+        for row in support_repo.list_adjustment_requests(invoice)
+        if row.request_type == BillingAdjustmentType.DISCOUNT
+        and row.status == BillingAdjustmentStatus.EXECUTED
+    )
+    legacy_approval = support_repo.get_discount_approval(invoice.discount_approval_id)
+    if legacy_approval:
+        approved_discount += int(legacy_approval.requested_amount or 0)
+    approved_discount = min(
+        approved_discount, max(total_discount - membership_discount, 0)
+    )
+    offer = support_repo.get_discount_offer(invoice.discount_offer_id)
+    offer_discount = 0
+    if offer and offer.tenant_id == invoice.tenant_id:
+        offer_discount = (
+            int(offer.value or 0)
+            if offer.discount_type == DiscountType.FIXED
+            else round(int(invoice.subtotal_amount or 0) * int(offer.value or 0) / 100)
+        )
+        if offer.max_discount_amount is not None:
+            offer_discount = min(offer_discount, offer.max_discount_amount)
+    offer_discount = min(
+        offer_discount,
+        max(total_discount - membership_discount - approved_discount, 0),
+    )
     logo_url, _scope, _scope_id = resolve_setting(
         session,
         tenant_id=tenant_id,
@@ -608,6 +691,11 @@ def build_invoice_receipt_document(
             payments=payments,
             logo_url=str(logo_url or getattr(tenant, "logo_url", "") or ""),
             bank_details=bank_details if isinstance(bank_details, dict) else {},
+            discount_details={
+                "offer_amount": offer_discount,
+                "offer_name": offer.name if offer else None,
+                "approved_amount": approved_discount,
+            },
         ),
         filename=_receipt_filename(patient, invoice),
     )

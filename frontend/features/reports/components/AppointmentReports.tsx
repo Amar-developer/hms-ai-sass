@@ -10,6 +10,7 @@ const AppointmentReports = ({
   setOpenSections,
   money,
   percent,
+  onOpenInvoices,
 }: AppointmentReportsProps) => {
   const columns = [
     {
@@ -28,7 +29,7 @@ const AppointmentReports = ({
     },
     {
       key: "grossRevenue",
-      header: "Gross Revenue",
+      header: "Total",
       render: (row: any) => money(row.grossRevenue),
     },
     {
@@ -37,15 +38,31 @@ const AppointmentReports = ({
       render: (row: any) => money(row.paidRevenue),
     },
     {
-      key: "doctorFee",
-      header: "Doctor Fee",
-      render: (row: any) => money(row.doctorFee),
+      key: "balance",
+      header: "Balance",
+      render: (row: any) => money(row.balance),
+    },
+    {
+      key: "membershipBenefit",
+      header: "Membership Benefit",
+      width: '150px',
+      render: (row: any) => money(row.membershipBenefit),
+    },
+    {
+      key: "paymentMode",
+      header: "Mode of Payment",
+      width: "140px",
     },
     {
       key: "settlement",
       header: "Settlement",
       width:'120px',
       render: (row: any) => money(row.settlement),
+    },
+    {
+      key: "settlementPercent",
+      header: "Settlement %",
+      width: "120px",
     },
     {
       key: "clinicFee",
@@ -55,11 +72,7 @@ const AppointmentReports = ({
     {
       key: "grossProfitPercentage",
       header: "Gross Profit %",
-      render: (row: any) =>
-        percent(
-          Math.max(row.grossRevenue - row.doctorFee, 0),
-          row.grossRevenue,
-        ),
+      render: (row: any) => percent(row.finalProfit, row.paidRevenue),
     },
     {
       key: "finalProfit",
@@ -84,6 +97,7 @@ const AppointmentReports = ({
           <DataTable
           columns={columns}
           data={doctorRows}
+          onRowClick={(row: any) => onOpenInvoices(row.invoiceIds)}
           paginate
           className="w-full min-w-[1280px] text-left text-sm"
           emptyMessage="No healthcare invoices match this filter."

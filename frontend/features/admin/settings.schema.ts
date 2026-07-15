@@ -80,7 +80,17 @@ export const taxRuleSchema = z.object({
 
   branchId: z.string(),
 
-  serviceScope: z.enum(["all", "consultation", "lab", "pharmacy", "service"]),
+  serviceScope: z.enum([
+    "all",
+    "consultation",
+    "lab",
+    "pharmacy",
+    "home_care",
+    "home_visit",
+    "physiotherapy",
+    "ip",
+    "service",
+  ]),
 
   taxLabel: z.string().trim().min(1, "Tax label is required"),
 
@@ -102,7 +112,17 @@ export const discountOfferSchema = z
 
     branchId: z.string().optional(),
 
-    serviceScope: z.enum(["all", "consultation", "lab", "pharmacy", "service"]),
+    serviceScope: z.enum([
+      "all",
+      "consultation",
+      "lab",
+      "pharmacy",
+      "home_care",
+      "home_visit",
+      "physiotherapy",
+      "ip",
+      "service",
+    ]),
 
     discountType: z.enum(["percentage", "fixed"]),
 
@@ -118,6 +138,13 @@ export const discountOfferSchema = z
 
     isActive: z.string().optional(),
   })
+  .refine(
+    (data) => data.discountType !== "percentage" || data.value <= 100,
+    {
+      path: ["value"],
+      message: "Percentage discount cannot exceed 100%",
+    },
+  )
   .refine(
     (data) => {
       if (!data.validFrom || !data.validUntil) return true;

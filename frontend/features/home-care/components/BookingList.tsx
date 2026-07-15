@@ -2,7 +2,7 @@ import { Card, RefreshButton,Button, Input, SearchableSelect, ActionButton,Actio
 import { FormField } from "@/app/components/FormElements";
 import { statuses } from "../constants";
 import { capitalizeFirst, displayDate, money, patientName } from "@/utils/helper";
-import { bookingTotal, isBookingLocked, userName } from "../helpers";
+import { bookingStaffName, bookingTotal, isBookingLocked } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
 
@@ -107,8 +107,7 @@ export function BookingsList({
                     {capitalizeFirst(patientName(patient))}
                   </td>
                   <td className="card-desc">
-                    {booking.assigned_staff_name ||
-                      userName(staffMap.get(booking.assigned_staff_user_id))}
+                    {bookingStaffName(booking, staffMap)}
                     {booking.staff_type && (
                       <p className="text-xs text-slate-500">
                         {humanizeOptionLabel(booking.staff_type)}

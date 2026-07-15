@@ -35,6 +35,7 @@ def record_file_document(
     )
     if existing:
         existing.file_name = file_name or existing.file_name
+        existing.file_url = file_url or existing.file_url
         existing.branch_id = branch_id or existing.branch_id
         existing.patient_id = patient_id or existing.patient_id
         existing.content_type = content_type or existing.content_type

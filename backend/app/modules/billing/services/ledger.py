@@ -76,14 +76,25 @@ def ensure_invoice_submit_ledger(session: Session, invoice: Invoice) -> None:
         entry_type="invoice_submitted",
     ):
         return
+    # A membership discount is baked into total_amount/balance_amount at
+    # invoice creation, then ensure_invoice_membership_benefit_ledger below
+    # records a *separate* ledger entry that subtracts it again to show that
+    # transition. Using the already-net total/balance here would double the
+    # discount across the two entries — undershooting the running Bill
+    # Amount/Balance by the discount amount even after the invoice is fully
+    # paid. Add it back so "Invoice Submitted" represents the gross,
+    # pre-membership-discount figure and the two entries telescope correctly.
+    membership_discount = int(invoice.membership_discount_amount or 0)
+    gross_total = int(invoice.total_amount or 0) + membership_discount
+    gross_balance = int(invoice.balance_amount or 0) + membership_discount
     record_billing_ledger(
         session,
         invoice,
         entry_type="invoice_submitted",
         description="Invoice submitted",
-        debit_amount=int(invoice.total_amount or 0),
-        invoice_total_delta=int(invoice.total_amount or 0),
-        balance_amount_delta=int(invoice.balance_amount or 0),
+        debit_amount=gross_total,
+        invoice_total_delta=gross_total,
+        balance_amount_delta=gross_balance,
         actor_user_id=invoice.created_by_user_id,
     )
 
@@ -102,15 +113,22 @@ def ensure_invoice_membership_benefit_ledger(
         entry_type="membership_benefit_applied",
     ):
         return
+    free_amount = int(invoice.membership_free_items_amount or 0)
+    discounted_amount = int(invoice.membership_item_discount_amount or 0)
+    regular_amount = int(invoice.membership_regular_items_amount or 0)
+    breakdown = (
+        f"Free items ₹{free_amount}; membership discount ₹{discounted_amount}; "
+        f"regular chargeable items ₹{regular_amount}"
+    )
     record_billing_ledger(
         session,
         invoice,
         entry_type="membership_benefit_applied",
-        description="Membership benefit applied",
+        description=f"Membership benefit applied ({breakdown})",
         credit_amount=membership_amount,
         invoice_total_delta=-membership_amount,
         balance_amount_delta=-membership_amount,
-        reason="Membership benefit settled by patient plan",
+        reason=f"Membership benefit settled by patient plan. {breakdown}",
         actor_user_id=actor_user_id or invoice.created_by_user_id,
     )
 

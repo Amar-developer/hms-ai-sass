@@ -16,6 +16,12 @@ from app.modules.billing.models import (
     PaymentStatus,
 )
 from app.modules.billing.repositories.read_repository import BillingReadRepository
+from app.modules.billing.services.invoice_amounts import (
+    apply_consultation_invoice_discount,
+    apply_generic_invoice_discount,
+    ensure_invoice_eligible_for_discount_request,
+    is_consultation_invoice,
+)
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.numbering import next_credit_note_number
 
@@ -29,6 +35,19 @@ def validate_adjustment_amount(
     refundable = int(invoice.paid_amount or 0)
     if request_type == BillingAdjustmentType.CANCEL:
         return 0
+    if request_type == BillingAdjustmentType.DISCOUNT:
+        requested = int(amount or 0)
+        if requested <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Discount amount is required",
+            )
+        if requested > int(invoice.total_amount or 0):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Discount amount cannot exceed the invoice total",
+            )
+        return requested
     if request_type == BillingAdjustmentType.FULL_REFUND:
         if refundable <= 0:
             raise HTTPException(
@@ -77,6 +96,10 @@ def ensure_invoice_can_request_adjustment(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Paid invoices must be refunded instead of cancelled",
+        )
+    if request_type == BillingAdjustmentType.DISCOUNT:
+        ensure_invoice_eligible_for_discount_request(
+            tenant_id=invoice.tenant_id, invoice=invoice
         )
 
 
@@ -168,6 +191,53 @@ def execute_billing_adjustment(
             actor_user_id=actor_user_id,
         )
         sync_invoice_source_after_reversal(session, invoice)
+        return invoice
+
+    if request_type == BillingAdjustmentType.DISCOUNT:
+        discount_amount = validate_adjustment_amount(invoice, request_type, amount)
+        if is_consultation_invoice(invoice):
+            invoice = apply_consultation_invoice_discount(
+                session,
+                tenant_id=invoice.tenant_id,
+                invoice=invoice,
+                discount_amount=discount_amount,
+                actor_user_id=actor_user_id,
+            )
+        else:
+            invoice = apply_generic_invoice_discount(
+                session,
+                invoice=invoice,
+                discount_amount=discount_amount,
+                actor_user_id=actor_user_id,
+            )
+        # Tax is recomputed on the lower subtotal, so the invoice total can
+        # drop by more than the raw discount amount — use the actual change
+        # for the credit note and ledger rather than the requested amount.
+        actual_reduction = max(old_total - int(invoice.total_amount or 0), 0)
+        credit = CreditNote(
+            tenant_id=invoice.tenant_id,
+            branch_id=invoice.branch_id,
+            invoice_id=invoice.id,
+            credit_note_number=next_credit_note_number(session, invoice.tenant_id),
+            amount=actual_reduction or discount_amount,
+            reason=reason,
+            created_by_user_id=actor_user_id,
+        )
+        session.add(credit)
+        session.commit()
+        session.refresh(credit)
+        record_billing_ledger(
+            session,
+            invoice,
+            entry_type="invoice_discount_applied",
+            description="Discount applied to invoice",
+            credit_amount=actual_reduction,
+            invoice_total_delta=-actual_reduction,
+            balance_amount_delta=-actual_reduction,
+            reason=reason,
+            actor_user_id=actor_user_id,
+            related_credit_note_id=credit.id,
+        )
         return invoice
 
     refund_amount = validate_adjustment_amount(invoice, request_type, amount)

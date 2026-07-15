@@ -17,7 +17,7 @@ import { apiFetch, type ApiSession } from "@/lib/api";
 import { sortQueue } from "@/lib/hmsLogic";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { QueueAction, TokenQueueProps } from "./types";
-import { dateKey, isActiveQueueAppointment, sortByTokenNumber, todayKey } from "./helpers";
+import { dateKey, isActiveQueueAppointment, sortByQueuePosition, todayKey } from "./helpers";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 
@@ -47,7 +47,13 @@ export function TokenQueue({
   const today = todayKey();
   const [selectedDate, setSelectedDate] = useState(today);
   const [page, setPage] = useState(1);
-  const queue = sortByTokenNumber(
+  const queueRevision = scopedAppointments
+    .map(
+      (row: any) =>
+        `${row.id}:${row.queueStatus || row.queue_status}:${row.queuePosition || row.queue_position || 0}`,
+    )
+    .join("|");
+  const queue = sortByQueuePosition(
     sortQueue(
       scopedAppointments.filter((appointment: any) => {
         if (
@@ -87,7 +93,7 @@ export function TokenQueue({
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
-  const visibleDisplayRows = sortByTokenNumber(displayRows)
+  const visibleDisplayRows = sortByQueuePosition(displayRows)
     .map((row: any) => ({
       ...row,
       appointment: queue.find(
@@ -100,6 +106,7 @@ export function TokenQueue({
     let alive = true;
     async function loadDisplay() {
       if (!apiSession) return;
+      if (alive) setDisplayRows([]);
       try {
         const rows = await apiFetch(
           `/queue/display?display_mode=${displayMode}`,
@@ -118,7 +125,7 @@ export function TokenQueue({
     apiSession?.email,
     apiSession?.tenantId,
     displayMode,
-    scopedAppointments.length,
+    queueRevision,
   ]);
 
   useEffect(() => {

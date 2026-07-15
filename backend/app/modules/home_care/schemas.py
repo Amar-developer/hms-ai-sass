@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.validation import BranchId, PatientId, UserId
 
@@ -183,6 +183,8 @@ class HomeCareBookingRead(BaseModel):
 
 
 class HomeCareInvoiceCreate(BaseModel):
-    discount_amount: int = Field(default=0, ge=0)
+    model_config = ConfigDict(extra="forbid")
+
     tax_rule_id: str | None = None
+    discount_offer_id: str | None = None
     created_by_user_id: UserId | None = None

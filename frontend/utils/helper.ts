@@ -110,7 +110,9 @@ export function patientName(p: any) {
 }
 
 export function money(value: any) {
-  return `₹${Number(value || 0).toLocaleString("en-IN")}`;
+  const amount = Number(value || 0);
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}₹${Math.abs(amount).toLocaleString("en-IN")}`;
 }
 
 export const formatPrice = (value: number) =>

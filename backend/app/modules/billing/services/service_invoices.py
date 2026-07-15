@@ -5,10 +5,7 @@ from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.billing.services.numbering import next_invoice_number
-from app.modules.billing.services.rules import (
-    calculate_offer_discount,
-    find_tax_rule,
-)
+from app.modules.billing.services.rules import calculate_offer_discount, find_tax_rule
 
 LedgerRecorder = Callable[..., object]
 MembershipLedgerEnsurer = Callable[..., None]
@@ -56,6 +53,9 @@ def create_service_invoice(
     membership_discount = 0
     membership_enrollment_id = None
     membership_plan_id = None
+    membership_free_items_amount = 0
+    membership_item_discount_amount = 0
+    membership_regular_items_amount = 0
     try:
         from app.modules.patient_subscriptions.service import (
             active_patient_enrollment,
@@ -90,6 +90,9 @@ def create_service_invoice(
                 session=session,
             )
             membership_discount = int(preview["discount_amount"] or 0)
+            membership_free_items_amount = int(preview["free_items_amount"] or 0)
+            membership_item_discount_amount = int(preview["item_discount_amount"] or 0)
+            membership_regular_items_amount = int(preview["regular_items_amount"] or 0)
             if membership_discount > 0:
                 membership_enrollment_id = enrollment.id
                 membership_plan_id = plan.id
@@ -133,6 +136,9 @@ def create_service_invoice(
         subtotal_amount=amount,
         discount_amount=discount_amount,
         membership_discount_amount=membership_discount,
+        membership_free_items_amount=membership_free_items_amount,
+        membership_item_discount_amount=membership_item_discount_amount,
+        membership_regular_items_amount=membership_regular_items_amount,
         taxable_amount=taxable_amount,
         tax_amount=tax_amount,
         tax_rule_id=tax_rule.id if tax_rule else None,

@@ -70,7 +70,12 @@ export function searchPatients(patients: any[], q: string) {
 export function sortQueue(appts: any[]) {
   return [...appts].sort(
     (a, b) =>
-      a.priority - b.priority || String(a.time).localeCompare(String(b.time)),
+      (Number(a.queuePosition || a.queue_position || 0) ||
+        Number.MAX_SAFE_INTEGER) -
+        (Number(b.queuePosition || b.queue_position || 0) ||
+          Number.MAX_SAFE_INTEGER) ||
+      a.priority - b.priority ||
+      String(a.time).localeCompare(String(b.time)),
   );
 }
 export function getDoctorFeeSetting(

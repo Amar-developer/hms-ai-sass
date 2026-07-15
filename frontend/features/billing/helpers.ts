@@ -49,8 +49,11 @@ export function numberValue(value: any) {
 export function invoiceDiscountParts(invoice: any) {
   const discount = numberValue(invoice.discount_amount);
   const membership = numberValue(invoice.membership_discount_amount);
+  const approved = numberValue(invoice.approved_discount_amount);
+  const offer = numberValue(invoice.offer_discount_amount);
   return {
-    offerDiscount: Math.max(discount - membership, 0),
+    approvedDiscount: approved,
+    offerDiscount: offer,
     membershipDiscount: membership,
   };
 }

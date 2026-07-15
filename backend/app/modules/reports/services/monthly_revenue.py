@@ -32,6 +32,31 @@ def build_monthly_revenue_report(
         end_at=datetime.combine(end, datetime.max.time()),
     )
     paid_invoices = [invoice for invoice in invoices if is_paid_invoice(invoice)]
+    payment_modes_by_invoice: dict[str, set[str]] = {
+        invoice.id: set() for invoice in paid_invoices
+    }
+    for payment in repo.list_recorded_payments_by_invoice_ids(
+        tenant_id=tenant_id,
+        invoice_ids=[invoice.id for invoice in paid_invoices],
+    ):
+        method = (
+            payment.method.value if hasattr(payment.method, "value") else payment.method
+        )
+        payment_modes_by_invoice.setdefault(payment.invoice_id, set()).add(str(method))
+
+    def payment_mode(invoice) -> str:
+        modes = {
+            value.replace("_", " ").title()
+            for value in payment_modes_by_invoice.get(invoice.id, set())
+        }
+        if invoice_membership_benefit(invoice) > 0:
+            modes.add("Membership Benefit")
+        return " + ".join(sorted(modes)) if modes else "-"
+
+    def combined_payment_modes(values: set[str]) -> str:
+        modes = sorted(value for value in values if value and value != "-")
+        return " + ".join(modes) if modes else "-"
+
     appointments = {
         row.id: row
         for row in repo.list_appointments_by_ids(
@@ -78,10 +103,22 @@ def build_monthly_revenue_report(
                     ["Item Total", _money(total_item)],
                     ["Offer Discounts Used", _money(total_offer)],
                     ["Membership Benefits Used", _money(total_membership)],
+                    [
+                        "Payment Modes",
+                        combined_payment_modes(
+                            {payment_mode(invoice) for invoice in paid_invoices}
+                        ),
+                    ],
                     ["Net Invoice Revenue", _money(total_invoice)],
                     ["Paid Revenue", _money(total_paid)],
                     ["Doctor Fee", _money(total_doctor)],
                     ["Settlement", _money(total_settlement)],
+                    [
+                        "Settlement %",
+                        "0%"
+                        if not total_paid
+                        else f"{round((total_settlement / total_paid) * 100)}%",
+                    ],
                     ["Clinic Profit", _money(total_profit)],
                 ],
             )
@@ -112,6 +149,8 @@ def build_monthly_revenue_report(
                     "membership": 0,
                     "invoice": 0,
                     "paid": 0,
+                    "balance": 0,
+                    "payment_modes": set(),
                     "doctor": 0,
                     "settlement": 0,
                 },
@@ -122,6 +161,8 @@ def build_monthly_revenue_report(
             bucket["membership"] += invoice_membership_benefit(invoice)
             bucket["invoice"] += int(invoice.total_amount or 0)
             bucket["paid"] += int(invoice.paid_amount or 0)
+            bucket["balance"] += int(invoice.balance_amount or 0)
+            bucket["payment_modes"].add(payment_mode(invoice))
             bucket["doctor"] += int(invoice.doctor_share_amount or 0)
             bucket["settlement"] += settlement_paid_basis(invoice)
         return [
@@ -133,8 +174,13 @@ def build_monthly_revenue_report(
                 _money(row["membership"]),
                 _money(row["invoice"]),
                 _money(row["paid"]),
+                _money(row["balance"]),
+                combined_payment_modes(row["payment_modes"]),
                 _money(row["doctor"]),
                 _money(row["settlement"]),
+                "0%"
+                if not row["paid"]
+                else f"{round((row['settlement'] / row['paid']) * 100)}%",
                 _money(max(row["paid"] - row["settlement"], 0)),
             ]
             for row in sorted(
@@ -150,8 +196,11 @@ def build_monthly_revenue_report(
         "Membership Benefit",
         "Net Invoice Revenue",
         "Paid Revenue",
+        "Balance",
+        "Mode of Payment",
         "Doctor Fee",
         "Settlement",
+        "Settlement %",
         "Clinic Profit",
     ]
     if filters.get("doctor", True):
@@ -195,8 +244,11 @@ def build_monthly_revenue_report(
                     _money(invoice_membership_benefit(invoice)),
                     _money(int(invoice.total_amount or 0)),
                     _money(paid),
+                    _money(int(invoice.balance_amount or 0)),
+                    payment_mode(invoice),
                     _money(int(invoice.doctor_share_amount or 0)),
                     _money(settlement),
+                    "0%" if not paid else f"{round((settlement / paid) * 100)}%",
                     _money(max(paid - settlement, 0)),
                 ]
             )
@@ -214,8 +266,11 @@ def build_monthly_revenue_report(
                     "Membership Benefit",
                     "Net Total",
                     "Paid",
+                    "Balance",
+                    "Mode of Payment",
                     "Doctor Fee",
                     "Settlement",
+                    "Settlement %",
                     "Clinic Profit",
                 ],
                 invoice_rows,

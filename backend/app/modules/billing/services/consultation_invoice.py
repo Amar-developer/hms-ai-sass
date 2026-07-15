@@ -6,8 +6,8 @@ from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.billing.services.rules import (
-    calculate_fee_split,
     calculate_offer_discount,
+    calculate_fee_split,
     find_fee_rule,
     find_tax_rule,
 )
@@ -61,7 +61,7 @@ def create_consultation_invoice(
     *,
     appointment: Appointment,
     consultation_id: str,
-    discount_amount: int,
+    discount_amount: int = 0,
     created_by_user_id: str | None,
     discount_approval_id: str | None = None,
     discount_offer_id: str | None = None,
@@ -139,7 +139,10 @@ def create_consultation_invoice(
         subtotal=subtotal,
         discount_offer_id=discount_offer_id,
     )
-    discount = min(discount_amount + offer_discount + membership_discount, subtotal)
+    discount = min(
+        int(discount_amount or 0) + offer_discount + membership_discount,
+        subtotal,
+    )
     taxable = subtotal - discount
     tax_rule = find_tax_rule(
         session,

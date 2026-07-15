@@ -1,5 +1,5 @@
 import { displayDateTime, money } from "@/utils/helper";
-import { claimedDetail, invoiceDiscountParts, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, itemTypeLabel, numberValue } from "../helpers";
+import { claimedDetail, invoiceDiscountParts, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, itemTypeLabel, numberValue, percentLabel } from "../helpers";
 import { useEffect, useState } from "react";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Input, SearchableSelect } from "@/app/components/common/ui";
@@ -38,7 +38,6 @@ export function InvoiceDetailPage({
   currentUser,
   supplierOptions = {},
   updateInvoiceItemSupplier,
-  updateInvoiceAmount,
   apiSession,
 }: any) {
   const invoice = detail.invoice || {};
@@ -64,12 +63,21 @@ export function InvoiceDetailPage({
     "payments.create",
   );
   const source = invoiceSource(invoice);
-  const showItemVendor = items.some(
-    (item: any) =>
-      Boolean(item.vendor_name) ||
-      numberValue(item.vendor_amount) > 0 ||
-      (item.item_type === "lab" && (supplierOptions[item.id]?.length || 0) > 0),
+  const isMembershipInvoice = Boolean(invoice.patient_subscription_plan_id);
+  const sourceUsesVendor = Boolean(
+    invoice.consultation_id ||
+      invoice.appointment_id ||
+      invoice.home_care_booking_id ||
+      invoice.lab_order_id ||
+      invoice.pharmacy_issue_id,
   );
+  const showItemVendor =
+    !isMembershipInvoice &&
+    (sourceUsesVendor ||
+      items.some(
+        (item: any) =>
+          Boolean(item.vendor_name) || numberValue(item.vendor_amount) > 0,
+      ));
   const showSupplierPicker = canEditInvoices && Boolean(invoice.lab_order_id);
   const showItemPricing =
     showItemVendor ||
@@ -77,14 +85,41 @@ export function InvoiceDetailPage({
       (item: any) =>
         numberValue(item.mrp_amount) > 0 || numberValue(item.buying_amount) > 0,
     );
-  const vendorLabel = invoice.lab_order_id ? "Supplier" : "Vendor";
-  const vendorPriceLabel = invoice.lab_order_id
-    ? "Supplier Price"
+  const isConsultationInvoice = Boolean(
+    (invoice.consultation_id || invoice.appointment_id) &&
+      !invoice.lab_order_id &&
+      !invoice.pharmacy_issue_id &&
+      !invoice.home_care_booking_id,
+  );
+  const vendorLabel = isConsultationInvoice ? "Doctor" : "Vendor";
+  const vendorPriceLabel = isConsultationInvoice
+    ? "Doctor Settlement"
     : "Vendor Price";
   const linkedRecord = invoiceLinkedRecord(invoice);
   const discountParts = invoiceDiscountParts(invoice);
   const membershipLabel = invoiceMembershipLabel(invoice);
   const membershipBenefit = detail.membership_benefit;
+  const membershipFreeItems = numberValue(
+    membershipBenefit?.is_applied
+      ? invoice.membership_free_items_amount
+      : membershipBenefit?.free_items_amount,
+  );
+  const membershipItemDiscount = numberValue(
+    membershipBenefit?.is_applied
+      ? invoice.membership_item_discount_amount
+      : membershipBenefit?.item_discount_amount,
+  );
+  const membershipRegularItems = numberValue(
+    membershipBenefit?.is_applied
+      ? invoice.membership_regular_items_amount
+      : membershipBenefit?.regular_items_amount,
+  );
+  const hasItemMembershipBreakdown = Boolean(
+    (invoice.lab_order_id || invoice.pharmacy_issue_id) &&
+      (membershipFreeItems > 0 ||
+        membershipItemDiscount > 0 ||
+        membershipRegularItems > 0),
+  );
   const membershipEffectiveSaving = invoiceTaxAdjustedDiscount(
     invoice,
     discountParts.membershipDiscount,
@@ -142,24 +177,15 @@ export function InvoiceDetailPage({
       (supplierOptions[item.id]?.length || 0) > 0 &&
       !item.supplier_id,
   );
-  // Non-OP consultation bills are custom-priced, so allow editing the amount on
-  // the bill until a payment is recorded. OP and service invoices are fixed.
-  const canEditAmount = Boolean(
+  // Any invoice type can carry a discount request until a payment is
+  // recorded — once paid, a refund is the correct action instead. Actually
+  // applying the discount always goes through the same request -> approve ->
+  // execute flow as a refund, never directly.
+  const canRequestDiscountBase = Boolean(
     canEditInvoices &&
-    updateInvoiceAmount &&
-    invoice.consultation_id &&
-    !invoice.lab_order_id &&
-    !invoice.pharmacy_issue_id &&
-    !invoice.ip_admission_id &&
-    !invoice.physiotherapy_case_id &&
-    !invoice.home_care_booking_id &&
-    invoice.appointment_type &&
-    invoice.appointment_type !== "op" &&
     numberValue(invoice.paid_amount) <= 0 &&
     !["cancelled", "refunded"].includes(String(invoice.status)),
   );
-  const [editingAmount, setEditingAmount] = useState(false);
-  const [amountDraft, setAmountDraft] = useState("");
   function updatePayRow(index: number, key: string, value: any) {
     setPayRows((rows) =>
       rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
@@ -205,8 +231,16 @@ export function InvoiceDetailPage({
   function itemRate(item: any) {
     return numberValue(item.selling_amount) || numberValue(item.unit_amount);
   }
+  function itemInvoiceDiscount(item: any) {
+    const subtotal = numberValue(invoice.subtotal_amount);
+    if (subtotal <= 0) return 0;
+    return Math.round(
+      (numberValue(item.total_amount) * numberValue(invoice.discount_amount)) /
+        subtotal,
+    );
+  }
   const itemTableColSpan =
-    5 + (showItemVendor ? 2 : 0) + (showItemPricing ? 1 : 0);
+    7 + (showItemVendor ? 2 : 0) + (showItemPricing ? 1 : 0);
   const currentUserRoles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
     : [];
@@ -230,6 +264,7 @@ export function InvoiceDetailPage({
     canRequestAdjustment && numberValue(invoice.paid_amount) <= 0;
   const canRequestRefund =
     canRequestAdjustment && numberValue(invoice.paid_amount) > 0;
+  const canRequestDiscount = canRequestAdjustment && canRequestDiscountBase;
   const paymentClosedStatuses = ["cancelled", "refunded", "partially_refunded"];
   const isPaymentClosed = paymentClosedStatuses.includes(
     String(invoice.status || "").toLowerCase(),
@@ -237,7 +272,11 @@ export function InvoiceDetailPage({
   const canCollectPayment =
     canRecordPayments && balanceDue > 0 && !isPaymentClosed;
   function ledgerCreditAmount(entry: any) {
-    if (entry.entry_type === "credit_note_issued") return 0;
+    if (
+      entry.entry_type === "credit_note_issued" ||
+      entry.entry_type === "invoice_submitted"
+    )
+      return 0;
     const explicitCredit = numberValue(entry.credit_amount);
     if (explicitCredit > 0) {
       return explicitCredit;
@@ -245,7 +284,11 @@ export function InvoiceDetailPage({
     return Math.max(numberValue(entry.paid_amount_delta), 0);
   }
   function ledgerDebitAmount(entry: any) {
-    if (entry.entry_type === "credit_note_issued") return 0;
+    if (
+      entry.entry_type === "credit_note_issued" ||
+      entry.entry_type === "invoice_submitted"
+    )
+      return 0;
     const explicitDebit = numberValue(entry.debit_amount);
     if (explicitDebit > 0) {
       return explicitDebit;
@@ -386,8 +429,8 @@ export function InvoiceDetailPage({
           </div>
 
           <div className="mt-5 space-y-5">
-            <div className="rounded-2xl border border-slate-200 bg-white">
-              <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h4 className="card-title font-bold">
                     {source.label} Bill Items
@@ -396,51 +439,56 @@ export function InvoiceDetailPage({
                     Line items linked to this invoice.
                   </p>
                 </div>
-                <div className="rounded-lg bg-slate-50 px-3 py-2 flex justify-between w-16">
-                  <p className="text-[11px] font-bold uppercase text-slate-500">
+                <div className="inline-flex items-center gap-1 rounded-md bg-slate-50 px-2.5 py-2">
+                  <span className="text-[10px] font-bold uppercase text-slate-500">
                     Items
-                  </p>
-                  <p className="text-xs lg:text-sm font-black tabular-nums text-slate-950">
+                  </span>
+                  <span className="text-xs font-black tabular-nums text-slate-950">
                     {items.length}
-                  </p>
+                  </span>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="m-3 overflow-x-auto rounded-xl border border-slate-200">
                 <table
-                  className={`w-full text-left text-sm ${showItemVendor || showItemPricing ? "min-w-[980px]" : "min-w-[720px]"}`}
+                  className={`w-full border-separate border-spacing-0 text-left text-xs ${showItemVendor || showItemPricing ? "min-w-[980px]" : "min-w-[760px]"}`}
                 >
-                  <thead className="bg-slate-100 text-xs font-semibold text-slate-500">
+                  <thead className="bg-slate-100 text-[11px] font-medium text-slate-500">
                     <tr>
-                      <th className="w-12 px-4 py-3 text-center">No.</th>
-                      <th className="px-3 py-3">Item</th>
-                      <th className="px-3 py-3 text-right">Quantity</th>
+                      <th className="w-12 border-r border-slate-200 px-3 py-2 text-center">No.</th>
+                      <th className="min-w-52 border-r border-slate-200 px-3 py-2">Item</th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">Quantity</th>
                       {showItemVendor && (
-                        <th className="px-3 py-3">{vendorLabel}</th>
+                        <th className="min-w-36 border-r border-slate-200 px-3 py-2">{vendorLabel}</th>
                       )}
                       {showItemVendor && (
-                        <th className="px-3 py-3 text-right">
+                        <th className="border-r border-slate-200 px-3 py-2 text-right">
                           {vendorPriceLabel}
                         </th>
                       )}
                       {showItemPricing && (
-                        <th className="px-3 py-3 text-right">MRP</th>
+                        <th className="border-r border-slate-200 px-3 py-2 text-right">MRP</th>
                       )}
-                      <th className="px-3 py-3 text-right">Rate (INR)</th>
-                      <th className="px-4 py-3 text-right">Amount (INR)</th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">Rate (INR)</th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">Discount %</th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">
+                        Discount amount
+                      </th>
+                      <th className="px-3 py-2 text-right">Amount (INR)</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody>
                     {items.length === 0 && (
                       <tr>
                         <td
                           colSpan={itemTableColSpan}
-                          className="px-4 py-5 text-sm font-semibold text-slate-500"
+                          className="border-t border-slate-200 px-4 py-5 text-sm font-semibold text-slate-500"
                         >
                           No bill items found.
                         </td>
                       </tr>
                     )}
                     {items.map((item: any, index: number) => {
+                      const allocatedDiscount = itemInvoiceDiscount(item);
                       const itemSupplierOptions =
                         supplierOptions[item.id] || [];
                       const vendorName =
@@ -455,13 +503,13 @@ export function InvoiceDetailPage({
                           ? numberValue(itemSupplierOptions[0].buying_price)
                           : 0);
                       return (
-                        <tr key={item.id} className="align-middle">
-                          <td className="px-4 py-4 text-center table-data tabular-nums">
+                        <tr key={item.id} className="align-middle hover:bg-slate-50/70">
+                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-center tabular-nums text-slate-600">
                             {index + 1}
                           </td>
-                          <td className="px-3 py-4">
+                          <td className="border-r border-t border-slate-200 px-3 py-2.5">
                             <span
-                              className="block max-w-[420px] table-data break-words font-bold text-slate-950"
+                              className="block max-w-64 truncate font-bold text-slate-900"
                               title={
                                 item.description ||
                                 itemTypeLabel(item.item_type)
@@ -470,15 +518,12 @@ export function InvoiceDetailPage({
                               {item.description ||
                                 itemTypeLabel(item.item_type)}
                             </span>
-                            <span className="mt-1 inline-flex rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold uppercase text-slate-500">
-                              {itemTypeLabel(item.item_type)}
-                            </span>
                           </td>
-                          <td className="px-3 py-4 text-right table-data font-bold tabular-nums">
+                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-semibold tabular-nums text-slate-700">
                             {item.quantity}
                           </td>
                           {showItemVendor && (
-                            <td className="px-3 py-4">
+                            <td className="border-r border-t border-slate-200 px-3 py-2.5">
                               {canPickSupplier ? (
                                 <SearchableSelect
                                   value={item.supplier_id || ""}
@@ -507,27 +552,44 @@ export function InvoiceDetailPage({
                                   ]}
                                 />
                               ) : (
-                                <span className="table-data font-semibold text-slate-800">
+                                <span className="font-medium text-slate-800">
                                   {vendorName || "-"}
                                 </span>
                               )}
                             </td>
                           )}
                           {showItemVendor && (
-                            <td className="px-3 py-4 text-right table-data tabular-nums">
+                            <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
                               {vendorAmount > 0 ? money(vendorAmount) : "-"}
                             </td>
                           )}
                           {showItemPricing && (
-                            <td className="px-3 py-4 text-right table-data tabular-nums">
+                            <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
                               {money(itemMrp(item))}
                             </td>
                           )}
-                          <td className="px-3 py-4 text-right table-data font-bold tabular-nums">
+                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-slate-800">
                             {money(itemRate(item))}
                           </td>
-                          <td className="px-4 py-4 text-right table-data font-black tabular-nums text-slate-950">
-                            {money(item.total_amount)}
+                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
+                            {percentLabel(
+                              allocatedDiscount,
+                              item.total_amount,
+                            )}
+                          </td>
+                          <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-emerald-700">
+                            {allocatedDiscount > 0
+                              ? `-${money(allocatedDiscount)}`
+                              : money(0)}
+                          </td>
+                          <td className="border-t border-slate-200 px-3 py-2.5 text-right font-black tabular-nums text-slate-900">
+                            {money(
+                              Math.max(
+                                numberValue(item.total_amount) -
+                                  allocatedDiscount,
+                                0,
+                              ),
+                            )}
                           </td>
                         </tr>
                       );
@@ -535,61 +597,13 @@ export function InvoiceDetailPage({
                   </tbody>
                 </table>
               </div>
-              {canEditAmount && (
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
-                  {editingAmount ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Input
-                        type="number"
-                        min={0}
-                        autoFocus
-                        value={amountDraft}
-                        onChange={(e: any) => setAmountDraft(e.target.value)}
-                        className="w-32"
-                      />
-                      <button
-                        type="button"
-                        disabled={
-                          busy === `amount-${invoice.id}` ||
-                          amountDraft === "" ||
-                          Number(amountDraft) < 0
-                        }
-                        onClick={() => {
-                          updateInvoiceAmount(invoice, Number(amountDraft));
-                          setEditingAmount(false);
-                        }}
-                        className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
-                      >
-                        {busy === `amount-${invoice.id}` ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingAmount(false)}
-                        className="rounded-lg border px-3 py-2 text-xs font-bold"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="text-xs font-bold text-slate-500">
-                        Consultation price is editable for this visit type until
-                        payment.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAmountDraft(
-                            String(numberValue(invoice.subtotal_amount)),
-                          );
-                          setEditingAmount(true);
-                        }}
-                        className="rounded-lg border px-3 py-2 text-xs font-bold hover:bg-white"
-                      >
-                        Edit amount
-                      </button>
-                    </>
-                  )}
+              {canRequestDiscountBase && (
+                <div className="mx-3 mb-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
+                  <span className="text-xs font-bold text-slate-500">
+                    Need a lower price on this bill? Use "Request Discount" in
+                    Refund &amp; Cancellation Requests below — it applies once
+                    approved.
+                  </span>
                 </div>
               )}
             </div>
@@ -608,7 +622,15 @@ export function InvoiceDetailPage({
                     value={money(invoice.subtotal_amount)}
                   />
                   <BillLine
-                    label="Offer discount"
+                    label={
+                      invoice.offer_discount_name
+                        ? `Offer: ${invoice.offer_discount_name}${
+                            invoice.offer_discount_type === "percentage"
+                              ? ` (${invoice.offer_discount_value}%)`
+                              : ""
+                          }`
+                        : "Offer & Discount"
+                    }
                     value={`-${money(discountParts.offerDiscount)}`}
                     muted={discountParts.offerDiscount <= 0}
                     savings={discountParts.offerDiscount > 0}
@@ -618,11 +640,51 @@ export function InvoiceDetailPage({
                             discountParts.offerDiscount,
                             invoice.subtotal_amount,
                           )
-                        : "No offer discount applied"
+                        : "No Offer & Discount Applied"
                     }
                   />
                   <BillLine
-                    label="Membership benefit"
+                    label="Admin Approved Discount"
+                    value={`-${money(discountParts.approvedDiscount)}`}
+                    muted={discountParts.approvedDiscount <= 0}
+                    savings={discountParts.approvedDiscount > 0}
+                    note={
+                      discountParts.approvedDiscount > 0
+                        ? claimedDetail(
+                            discountParts.approvedDiscount,
+                            invoice.subtotal_amount,
+                            "approved",
+                          )
+                        : "No request-based discount approved"
+                    }
+                  />
+                  {hasItemMembershipBreakdown && (
+                    <BillLine
+                      label="Membership free items"
+                      value={`-${money(membershipFreeItems)}`}
+                      muted={membershipFreeItems <= 0}
+                      savings={membershipFreeItems > 0}
+                      note="Original value of eligible items covered fully by membership"
+                    />
+                  )}
+                  {hasItemMembershipBreakdown && (
+                    <BillLine
+                      label="Membership discount"
+                      value={`-${money(membershipItemDiscount)}`}
+                      muted={membershipItemDiscount <= 0}
+                      savings={membershipItemDiscount > 0}
+                      note="Discount applied only to eligible non-free items"
+                    />
+                  )}
+                  {hasItemMembershipBreakdown && (
+                    <BillLine
+                      label="Regular chargeable items"
+                      value={money(membershipRegularItems)}
+                      note="Non-eligible items charged at their normal price"
+                    />
+                  )}
+                  <BillLine
+                    label={hasItemMembershipBreakdown ? "Total membership benefit" : "Membership benefit"}
                     value={`-${money(discountParts.membershipDiscount)}`}
                     muted={discountParts.membershipDiscount <= 0}
                     savings={discountParts.membershipDiscount > 0}
@@ -645,7 +707,11 @@ export function InvoiceDetailPage({
                   />
                   <BillLine label="Subtotal" value={money(taxableAmount)} />
                   <BillLine
-                    label="Tax"
+                    label={`${invoice.tax_label || "Tax"}${
+                      numberValue(invoice.tax_percentage) > 0
+                        ? ` (${invoice.tax_percentage}%)`
+                        : ""
+                    }`}
                     value={money(taxAmount)}
                     muted={taxAmount <= 0}
                     note={
@@ -963,6 +1029,14 @@ export function InvoiceDetailPage({
                 >
                   Request Partial Refund
                 </ActionButton>
+                {canRequestDiscountBase && (
+                  <ActionButton
+                    onClick={() => requestAdjustment?.(invoice, "discount")}
+                    disabled={!canRequestDiscount}
+                  >
+                    Request Discount
+                  </ActionButton>
+                )}
               </ActionGroup>
             </div>
             <div className="overflow-auto">

@@ -4,11 +4,15 @@ from sqlmodel import Session
 
 from app.modules.billing.models import (
     BillingAdjustmentRequest,
+    BillingAdjustmentStatus,
+    BillingAdjustmentType,
+    DiscountType,
     BillingLedgerEntry,
     Invoice,
     InvoiceItem,
     InvoiceStatus,
     PaymentMethod,
+    TaxRule,
 )
 from app.modules.billing.repositories.read_repository import BillingReadRepository
 from app.modules.billing.schemas import (
@@ -44,6 +48,48 @@ def invoice_payment_methods(session: Session, invoice: Invoice) -> list[PaymentM
 def invoice_read(session: Session, invoice: Invoice) -> InvoiceRead:
     invoice_response = InvoiceRead.model_validate(invoice, from_attributes=True)
     invoice_response.payment_methods = invoice_payment_methods(session, invoice)
+    repo = BillingReadRepository(session)
+    if invoice.tax_rule_id:
+        tax_rule = session.get(TaxRule, invoice.tax_rule_id)
+        if tax_rule and tax_rule.tenant_id == invoice.tenant_id:
+            invoice_response.tax_percentage = int(tax_rule.tax_percentage or 0)
+            invoice_response.tax_label = tax_rule.tax_label
+    total_discount = int(invoice.discount_amount or 0)
+    membership_discount = min(
+        int(invoice.membership_discount_amount or 0), total_discount
+    )
+    approved_discount = sum(
+        int(row.amount or 0)
+        for row in repo.list_adjustment_requests(invoice)
+        if row.request_type == BillingAdjustmentType.DISCOUNT
+        and row.status == BillingAdjustmentStatus.EXECUTED
+    )
+    if invoice.discount_approval_id:
+        legacy_approval = repo.get_discount_approval(invoice.discount_approval_id)
+        if legacy_approval:
+            approved_discount += int(legacy_approval.requested_amount or 0)
+    approved_discount = min(
+        approved_discount, max(total_discount - membership_discount, 0)
+    )
+    offer_discount = 0
+    if invoice.discount_offer_id:
+        offer = repo.get_discount_offer(invoice.discount_offer_id)
+        if offer and offer.tenant_id == invoice.tenant_id:
+            invoice_response.offer_discount_name = offer.name
+            invoice_response.offer_discount_type = offer.discount_type
+            invoice_response.offer_discount_value = int(offer.value or 0)
+            offer_discount = (
+                int(offer.value or 0)
+                if offer.discount_type == DiscountType.FIXED
+                else round(
+                    int(invoice.subtotal_amount or 0) * int(offer.value or 0) / 100
+                )
+            )
+            if offer.max_discount_amount is not None:
+                offer_discount = min(offer_discount, offer.max_discount_amount)
+    remaining = max(total_discount - membership_discount - approved_discount, 0)
+    invoice_response.offer_discount_amount = min(offer_discount, remaining)
+    invoice_response.approved_discount_amount = approved_discount
     if invoice.appointment_id:
         appointment = BillingReadRepository(session).get_appointment(
             invoice.appointment_id
@@ -152,12 +198,30 @@ def read_invoice_detail(
                 if practitioner and practitioner.tenant_id == invoice.tenant_id:
                     consultation_vendor_name = practitioner.full_name
     consultation_vendor_amount = int(invoice.doctor_share_amount or 0)
+    home_care_booking = (
+        read_repo.get_home_care_booking(invoice.home_care_booking_id)
+        if invoice.home_care_booking_id
+        else None
+    )
 
     def item_read(item: InvoiceItem) -> InvoiceItemRead:
         read = InvoiceItemRead.model_validate(item, from_attributes=True)
-        if item.item_type == "consultation" and consultation_vendor_amount > 0:
-            read.vendor_name = consultation_vendor_name or "Doctor share"
+        if item.item_type == "consultation":
+            read.vendor_name = consultation_vendor_name or "Doctor"
             read.vendor_amount = consultation_vendor_amount
+        elif item.item_type == "home_care":
+            visit = (
+                read_repo.get_home_care_visit_log(item.external_item_code)
+                if item.external_item_code
+                and item.external_slug == "home_visit_service"
+                else None
+            )
+            read.vendor_name = (
+                getattr(visit, "assigned_staff_name", None)
+                or getattr(home_care_booking, "assigned_staff_name", None)
+                or "-"
+            )
+            read.vendor_amount = 0
         elif item.item_type in {"lab", "pharmacy"}:
             read.vendor_name = (
                 supplier_names.get(str(item.supplier_id or ""))
@@ -177,6 +241,13 @@ def read_invoice_detail(
             read.invoice_total_delta = 0
             read.paid_amount_delta = 0
             read.balance_amount_delta = 0
+        elif entry.entry_type == "invoice_submitted":
+            # Issuing an invoice doesn't move any cash — Credit/Debit is only
+            # for payment, refund, or membership-benefit movement. Keep the
+            # invoice_total_delta/balance_amount_delta so Bill Amount/Balance
+            # still populate correctly on this first row.
+            read.debit_amount = 0
+            read.credit_amount = 0
         read.actor_user_name = entry_actor_names.get(str(entry.actor_user_id or ""))
         return read
 

@@ -1,43 +1,37 @@
 import { patientName } from "@/utils/helper";
 import { LOCKED_STATUSES } from "./constants";
 
+export { addDays, dayCount, recurrenceEndDate } from "./calendar";
 
 
-export function addDays(value: string, days: number) {
-  const date = new Date(`${value}T00:00:00`);
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-export function recurrenceEndDate(startDate: string, recurrence: string) {
-  if (!startDate) return "";
-  if (recurrence === "custom") return "";
-  if (recurrence === "one_week") return addDays(startDate, 6);
-  if (recurrence === "monthly") {
-    const date = new Date(`${startDate}T00:00:00`);
-    date.setMonth(date.getMonth() + 1);
-    date.setDate(date.getDate() - 1);
-    return date.toISOString().slice(0, 10);
-  }
-  return startDate;
-}
-
-export function dayCount(start: string, end: string) {
-  if (!start) return 1;
-  const startTime = new Date(`${start}T00:00:00`).getTime();
-  const endTime = new Date(`${end || start}T00:00:00`).getTime();
-  const diff = Math.round((endTime - startTime) / 86400000) + 1;
-  return diff > 0 ? diff : 1;
-}
 
 export function patientCode(p: any) {
   return p?.patientNumber || p?.patient_number || "";
 }
 
 export function userName(user: any) {
-  return (
-    user?.full_name || user?.name || user?.email || user?.mobile || "Staff"
+  return user?.full_name || user?.name || user?.email || user?.mobile || "";
+}
+
+// A booking's own assigned_staff_* fields are rarely set in practice — staff
+// actually gets assigned per visit log when the service log is recorded.
+// Show the most recently logged visit's staff instead of falling back to a
+// generic "Staff" placeholder that looks like a real name but isn't one.
+export function bookingStaffName(booking: any, staffMap: Map<string, any>) {
+  if (booking?.assigned_staff_name) return booking.assigned_staff_name;
+  const bookingUser = userName(staffMap?.get(booking?.assigned_staff_user_id));
+  if (bookingUser) return bookingUser;
+  const logs = [...(booking?.visit_logs || [])].sort(
+    (a: any, b: any) =>
+      new Date(b.visit_date || 0).getTime() -
+      new Date(a.visit_date || 0).getTime(),
   );
+  for (const log of logs) {
+    if (log.assigned_staff_name) return log.assigned_staff_name;
+    const logUser = userName(staffMap?.get(log.assigned_staff_user_id));
+    if (logUser) return logUser;
+  }
+  return "Not assigned yet";
 }
 
 export function userTypeKey(user: any) {
@@ -63,11 +57,6 @@ export function patientSearchLabel(patient: any) {
 }
 
 export function bookingTotal(booking: any) {
-  if (Array.isArray(booking?.visit_logs)) {
-    return booking.visit_logs
-      .filter((row: any) => row.status === "completed")
-      .reduce((sum: number, row: any) => sum + Number(row.unit_amount || 0), 0);
-  }
   const completedVisits = (booking?.visit_logs || []).filter(
     (row: any) => row.status === "completed",
   );

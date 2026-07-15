@@ -10,6 +10,7 @@ const HomeCareReports = ({
   openSections,
   setOpenSections,
   money,
+  onOpenInvoices,
 }: HomeCareReportsProps) => {
   const columns = [
     {
@@ -36,9 +37,24 @@ const HomeCareReports = ({
       header: "Staff",
     },
     {
+      key: "totalAmount",
+      header: "Total",
+      render: (row: any) => money(row.totalAmount),
+    },
+    {
       key: "paidAmount",
       header: "Paid Amount",
       render: (row: any) => money(row.paidAmount),
+    },
+    {
+      key: "balance",
+      header: "Balance",
+      render: (row: any) => money(row.balance),
+    },
+    {
+      key: "membershipBenefit",
+      header: "Membership Benefit",
+      render: (row: any) => money(row.membershipBenefit),
     },
     {
       key: "paymentMode",
@@ -48,6 +64,10 @@ const HomeCareReports = ({
       key: "settlement",
       header: "Settlement",
       render: (row: any) => money(row.settlement),
+    },
+    {
+      key: "settlementPercent",
+      header: "Settlement %",
     },
     {
       key: "grossProfit",
@@ -79,6 +99,7 @@ const HomeCareReports = ({
         <DataTable
           columns={columns}
           data={homeCareReportRows}
+          onRowClick={(row: any) => onOpenInvoices(row.invoiceIds)}
           paginate
           emptyMessage="No paid home care or home visit invoices match this filter."
           className="w-full min-w-[1280px] text-left text-sm"

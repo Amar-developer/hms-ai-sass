@@ -20,6 +20,7 @@ from app.modules.home_care.models import HomeCareBooking
 from app.modules.lab.models import LabOrderItem, LabTestCatalog
 from app.modules.reports.models import MonthlyRevenueSnapshot
 from app.modules.reports.services.calculations import (
+    invoice_report_total,
     is_paid_invoice,
     settlement_paid_basis,
 )
@@ -178,7 +179,7 @@ def compute_dashboard_metrics(
     membership_claims: dict[str, dict] = {}
 
     for invoice in paid:
-        total = int(invoice.total_amount or 0)
+        total = invoice_report_total(invoice)
         amount_paid = int(invoice.paid_amount or 0)
         balance = int(invoice.balance_amount or 0)
         doctor_share = int(invoice.doctor_share_amount or 0)
@@ -190,7 +191,8 @@ def compute_dashboard_metrics(
         totals["doctorFee"] += doctor_share
         totals["settlement"] += settlement
         totals["clinicFee"] += int(invoice.clinic_share_amount or 0) or max(
-            total - doctor_share, 0
+            total - int(invoice.membership_discount_amount or 0) - doctor_share,
+            0,
         )
         totals["tax"] += int(invoice.tax_amount or 0)
         totals["membershipDiscount"] += int(invoice.membership_discount_amount or 0)
@@ -251,7 +253,8 @@ def compute_dashboard_metrics(
         reverse=True,
     )
 
-    gross_profit = max(totals["grossRevenue"] - totals["doctorFee"], 0)
+    chargeable_gross = max(totals["grossRevenue"] - totals["membershipDiscount"], 0)
+    gross_profit = max(chargeable_gross - totals["doctorFee"], 0)
     final_profit = max(totals["paidRevenue"] - totals["settlement"], 0)
 
     lab_purchase_cost = _lab_settlement_purchase_cost(

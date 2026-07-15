@@ -11,6 +11,7 @@ from app.modules.billing.schemas import (
     PaymentRead,
 )
 from app.modules.billing.services.numbering import next_invoice_number
+from app.modules.billing.services.rules import calculate_offer_discount, find_tax_rule
 from app.modules.identity.models import User
 from app.modules.physiotherapy.models import PhysiotherapyCase
 from app.modules.physiotherapy.repositories import (
@@ -56,22 +57,19 @@ class PhysiotherapyBillingService:
         )
 
     def _resolve_tax_rule(
-        self, tenant_id: str, branch_id: str, tax_rule_id: str | None
+        self,
+        tenant_id: str,
+        branch_id: str,
+        service_scope: str,
+        tax_rule_id: str | None,
     ) -> TaxRule | None:
-        tax_rule = self.billing.get_active_tax_rule(
-            tenant_id=tenant_id, branch_id=branch_id, tax_rule_id=tax_rule_id
+        return find_tax_rule(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            service_scope=service_scope,
+            tax_rule_id=tax_rule_id,
         )
-        if tax_rule:
-            if (
-                tax_rule.tenant_id != tenant_id
-                or not tax_rule.is_active
-                or tax_rule.branch_id not in {None, branch_id}
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tax rule"
-                )
-            return tax_rule
-        return None
 
     def _sync_case_status_from_invoice(
         self, case: PhysiotherapyCase, invoice: Invoice
@@ -128,10 +126,17 @@ class PhysiotherapyBillingService:
                 detail="Add at least one billable physiotherapy session before generating invoice",
             )
         subtotal = sum(row.charge_amount for row in rows)
-        discount = min(payload.discount_amount, subtotal)
+        discount, offer = calculate_offer_discount(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=case.branch_id,
+            service_scope="physiotherapy",
+            subtotal=subtotal,
+            discount_offer_id=payload.discount_offer_id,
+        )
         taxable = subtotal - discount
         tax_rule = self._resolve_tax_rule(
-            tenant_id, case.branch_id, payload.tax_rule_id
+            tenant_id, case.branch_id, "physiotherapy", payload.tax_rule_id
         )
         tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
         total = taxable + tax_amount
@@ -180,6 +185,7 @@ class PhysiotherapyBillingService:
             taxable_amount=taxable,
             tax_amount=tax_amount,
             tax_rule_id=tax_rule.id if tax_rule else None,
+            discount_offer_id=offer.id if offer else None,
             total_amount=total,
             balance_amount=total,
             doctor_share_amount=doctor_share,

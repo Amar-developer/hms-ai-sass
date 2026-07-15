@@ -112,8 +112,13 @@ export function DiscountOfferForm({
             options={discountTypeOptions}
           />
         </FormField>
-        <FormField label="Value" required>
-          <Input {...register("value")}  />
+        <FormField label="Value" required error={errors.value?.message}>
+          <Input
+            {...register("value")}
+            type="number"
+            min="0"
+            max={watch("discountType") === "percentage" ? "100" : undefined}
+          />
         </FormField>
         <FormField label="Minimum Bill Amount">
           <Input {...register("minimumBillAmount")}  />

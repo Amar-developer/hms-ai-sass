@@ -1,6 +1,13 @@
 from sqlmodel import Session, select
 
-from app.modules.billing.models import Invoice, InvoiceItem, Payment
+from app.modules.billing.models import (
+    BillingAdjustmentRequest,
+    DiscountApproval,
+    DiscountOffer,
+    Invoice,
+    InvoiceItem,
+    Payment,
+)
 from app.modules.lab.models import LabOrderItem
 from app.modules.patients.models import Patient
 from app.modules.pharmacy.models import PharmacyIssueItem
@@ -64,6 +71,24 @@ class BillingInvoiceSupportRepository:
                 .order_by(Payment.collected_at)
             ).all()
         )
+
+    def list_adjustment_requests(
+        self, invoice: Invoice
+    ) -> list[BillingAdjustmentRequest]:
+        return list(
+            self.session.exec(
+                select(BillingAdjustmentRequest).where(
+                    BillingAdjustmentRequest.tenant_id == invoice.tenant_id,
+                    BillingAdjustmentRequest.invoice_id == invoice.id,
+                )
+            ).all()
+        )
+
+    def get_discount_approval(self, approval_id: str | None) -> DiscountApproval | None:
+        return self.session.get(DiscountApproval, approval_id) if approval_id else None
+
+    def get_discount_offer(self, offer_id: str | None) -> DiscountOffer | None:
+        return self.session.get(DiscountOffer, offer_id) if offer_id else None
 
     def list_lab_order_items(self, invoice: Invoice) -> list[LabOrderItem]:
         if not invoice.lab_order_id:

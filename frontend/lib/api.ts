@@ -297,7 +297,6 @@ export async function apiUpload(
 }
 
 export type PhysiotherapyInvoicePayload = {
-  discount_amount?: number;
   tax_rule_id?: string | null;
   created_by_user_id?: string | null;
 };

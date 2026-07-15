@@ -41,6 +41,7 @@ def _display_row(entry: QueueEntry, language: str) -> QueueDisplayRead:
         appointment_id=entry.appointment_id,
         priority=entry.priority.value,
         status=entry.status,
+        queue_position=entry.queue_position,
         display_text=f"{entry.token_number} - {entry.status.value.replace('_', ' ').title()}",
         call_message=token_call_message(entry.token_number, language),
     )
@@ -67,7 +68,11 @@ def queue_display_rows(
     statement = statement.where(QueueEntry.status.notin_(TERMINAL_STATUSES))
     rows = list(
         session.exec(
-            statement.order_by(QueueEntry.token_number, QueueEntry.created_at)
+            statement.order_by(
+                QueueEntry.queue_position,
+                QueueEntry.created_at,
+                QueueEntry.id,
+            )
         ).all()
     )
     if display_mode == "called_only":

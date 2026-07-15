@@ -312,6 +312,14 @@ class FileService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invoice logo must be a PNG or JPEG image (GIF/WEBP display in the browser but cannot be printed on the invoice).",
             )
+        previous = FileDocumentRepository(self.session).find_attachment(
+            tenant_id=tenant_id,
+            file_url="",
+            attached_to_doctype=attached_to_doctype,
+            attached_to_name=attached_to_name,
+            attached_to_field=attached_to_field,
+        )
+        previous_url = previous.file_url if previous else None
         row = record_file_document(
             self.session,
             tenant_id=tenant_id,
@@ -336,6 +344,8 @@ class FileService:
         self._sync_practitioner_signature_attachment(row, actor_user_id=actor.id)
         self.session.commit()
         self.session.refresh(row)
+        if previous_url and previous_url != url_path:
+            (UPLOADS_DIR / Path(previous_url).name).unlink(missing_ok=True)
         record_audit_event(
             self.session,
             tenant_id=tenant_id,

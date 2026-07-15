@@ -69,6 +69,10 @@ def list_queue_entries(
         statement = statement.where(QueueEntry.status.notin_(TERMINAL_STATUSES))
     return list(
         session.exec(
-            statement.order_by(QueueEntry.token_number, QueueEntry.created_at)
+            statement.order_by(
+                QueueEntry.queue_position,
+                QueueEntry.created_at,
+                QueueEntry.id,
+            )
         ).all()
     )

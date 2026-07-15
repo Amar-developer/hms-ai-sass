@@ -1,4 +1,9 @@
 import { displayDate } from "@/utils/helper";
+import {
+  membershipBenefitUsage,
+  recognizedInvoiceRevenue,
+  reportedInvoiceTotal,
+} from "./financials";
 
 export function numberValue(value: any) {
   return Number(value || 0);
@@ -206,8 +211,8 @@ export function aggregateInvoiceMetrics(
 ) {
   return list.reduce(
     (acc: any, invoice: any) => {
-      const total = numberValue(invoice.total_amount);
-      const paid = numberValue(invoice.paid_amount);
+      const total = reportedInvoiceTotal(invoice);
+      const paid = recognizedInvoiceRevenue(invoice);
       const balance = numberValue(invoice.balance_amount);
       const doctorShare = numberValue(invoice.doctor_share_amount);
       const settlement = settlementPaidBasis(invoice);
@@ -219,9 +224,9 @@ export function aggregateInvoiceMetrics(
       acc.settlement += settlement;
       acc.clinicFee +=
         numberValue(invoice.clinic_share_amount) ||
-        Math.max(total - doctorShare, 0);
+        Math.max(total - membershipBenefitUsage(invoice) - doctorShare, 0);
       acc.tax += numberValue(invoice.tax_amount);
-      acc.membershipDiscount += numberValue(invoice.membership_discount_amount);
+      acc.membershipDiscount += membershipBenefitUsage(invoice);
       if (
         invoice.patient_subscription_enrollment_id ||
         invoice.patient_subscription_plan_id
@@ -253,7 +258,7 @@ export function aggregateInvoiceMetrics(
           acc.homeVisitRevenue += paid;
         else acc.homeCareRevenue += paid;
       }
-      const membershipClaim = numberValue(invoice.membership_discount_amount);
+      const membershipClaim = membershipBenefitUsage(invoice);
       if (membershipClaim > 0) {
         const claimRow = acc.membershipClaims[type] || {
           type,

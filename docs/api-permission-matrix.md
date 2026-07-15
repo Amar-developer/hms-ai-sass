@@ -298,9 +298,8 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/receipt.pdf` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply` | `billing.manage` |
-| `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `billing.manage` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
-| `PATCH` | `/api/v1/billing/invoices/{invoice_id}/amount` | `billing.manage` |
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/adjustment-requests` | Any of `billing.manage`, `invoices.read`, `invoices.edit`, `payments.manage` |
 | `POST` | `/api/v1/billing/adjustment-requests/{request_id}/approve` | `billing.manage` |
@@ -316,6 +315,8 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `GET` | `/api/v1/billing/reports/revenue` | `reports.read` |
 
 Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, payments, refunds, credit notes, and cancellations. Invoice generation, discount approval, settlement finalization, and revenue reporting enforce `billing_advanced`. Branch-scoped users can access only branch-matching invoices, payments, fee rules, tax rules, credit notes, reports, and settlements. Doctor settlement summary returns paid-basis doctor share, finalized settlement amount, remaining payable amount, and `can_finalize`; duplicate finalization is rejected after the payable amount reaches zero.
+
+`adjustment-requests` accepts `request_type` of `cancel`, `full_refund`, `partial_refund`, or `discount`. The old direct "edit invoice amount" action is gone — a `discount` request now works for any invoice type (consultation, OP or non-OP, lab, pharmacy, physiotherapy, home care, IP, or direct) as long as no payment has been recorded yet, through the same request → approve → execute flow as `full_refund`/`partial_refund`, approved/rejected/executed with the identical `billing.manage` gate. For a consultation invoice, execution recomputes subtotal/tax/doctor-share from the lower fee, exactly as the old direct edit did; for every other invoice type it knocks the discount straight off the total/balance without touching per-item tax, the same coarse-grained way cancel/refund already adjust an invoice's top-level totals. Credit notes remain a separate, immediate, informational-only action (`POST .../credit-notes`) — issuing one records a note against the invoice and does not change its total, balance, or paid amount; a `discount`/refund execution additionally creates a `CreditNote` as part of its own audit trail.
 
 ## Monthly Email Reports
 

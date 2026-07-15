@@ -3,7 +3,13 @@ from datetime import date, timedelta
 from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceStatus
+from app.modules.billing.repositories.read_repository import BillingReadRepository
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.ledger import (
+    ensure_invoice_membership_benefit_ledger,
+    ensure_invoice_submit_ledger,
+    record_billing_ledger,
+)
 from app.modules.billing.services.read_models import (
     normalize_invoice_status as _normalize_invoice_status,
 )
@@ -602,7 +608,10 @@ def test_free_lab_test_discount_uses_item_amount_and_quantity_limit():
         subtotal_amount=225,
     )
     assert first["free_item_ids"] == ["LABRBS"]
-    assert first["discount_amount"] == 75
+    assert first["free_items_amount"] == 75
+    assert first["item_discount_amount"] == 8
+    assert first["regular_items_amount"] == 0
+    assert first["discount_amount"] == 83
 
     consume_free_items(
         enrollment, service_type="lab", free_item_ids=first["free_item_ids"]
@@ -618,6 +627,72 @@ def test_free_lab_test_discount_uses_item_amount_and_quantity_limit():
 
     assert second["free_item_ids"] == []
     assert second["discount_amount"] == 4
+
+
+def test_lab_discount_applies_only_to_configured_eligible_item():
+    plan = PatientSubscriptionPlan(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        name="Selected Lab Discount",
+        lab_discount_percentage=10,
+        discounted_lab_test_ids_json='["LAB_ELIGIBLE"]',
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        patient_id="patient_mixed_lab",
+        plan_id=plan.id,
+        starts_on=date.today(),
+        ends_on=date.today() + timedelta(days=119),
+    )
+
+    result = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="lab",
+        item_ids=["LAB_ELIGIBLE", "LAB_REGULAR"],
+        item_amounts={"LAB_ELIGIBLE": 500, "LAB_REGULAR": 700},
+        subtotal_amount=1200,
+    )
+
+    assert result["discount_amount"] == 50
+    assert result["item_discount_amount"] == 50
+    assert result["free_items_amount"] == 0
+    assert result["regular_items_amount"] == 700
+    assert result["payable_amount"] == 1150
+
+
+def test_pharmacy_free_item_does_not_reduce_regular_item_price():
+    plan = PatientSubscriptionPlan(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        name="Free Medicine Plan",
+        pharmacy_discount_percentage=0,
+        free_medicine_ids_json=free_items_to_json(["MED_FREE"], {"MED_FREE": 1}),
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        patient_id="patient_mixed_pharmacy",
+        plan_id=plan.id,
+        starts_on=date.today(),
+        ends_on=date.today() + timedelta(days=119),
+    )
+
+    result = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="pharmacy",
+        item_ids=["MED_FREE", "MED_REGULAR"],
+        item_amounts={"MED_FREE": 500, "MED_REGULAR": 700},
+        subtotal_amount=1200,
+    )
+
+    assert result["free_items_amount"] == 500
+    assert result["item_discount_amount"] == 0
+    assert result["regular_items_amount"] == 700
+    assert result["discount_amount"] == 500
+    assert result["payable_amount"] == 700
 
 
 def test_previous_lab_benefit_invoices_count_against_free_quantity(test_engine):
@@ -720,6 +795,68 @@ def test_zero_total_membership_invoice_is_marked_paid(test_engine):
     assert updated.balance_amount == 0
     assert updated.paid_amount == 0
     assert updated.status == InvoiceStatus.PAID
+
+
+def test_membership_discount_ledger_nets_to_correct_balance_after_payment(
+    test_engine,
+):
+    """A membership discount is baked into total/balance at creation, then
+    ensure_invoice_membership_benefit_ledger records a *separate* entry that
+    subtracts it again to show the transition. The invoice_submitted entry
+    must use the gross (pre-discount) figure or the two entries double the
+    discount, leaving a negative running balance even after full payment.
+    """
+    with Session(test_engine) as session:
+        # State right after creation: membership discount already applied to
+        # total/balance, before any payment.
+        invoice = Invoice(
+            tenant_id="tenant_membership_ledger",
+            branch_id="branch_main",
+            patient_id="patient_ledger",
+            invoice_number="MHB-INV-LEDGER",
+            subtotal_amount=500,
+            discount_amount=150,
+            membership_discount_amount=150,
+            taxable_amount=350,
+            tax_amount=0,
+            total_amount=350,
+            paid_amount=0,
+            balance_amount=350,
+            status=InvoiceStatus.ISSUED,
+        )
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+
+        # Simulates the first detail read right after creation.
+        ensure_invoice_submit_ledger(session, invoice)
+        ensure_invoice_membership_benefit_ledger(session, invoice)
+
+        # Simulates a later full cash payment.
+        invoice.paid_amount = 350
+        invoice.balance_amount = 0
+        invoice.status = InvoiceStatus.PAID
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+        record_billing_ledger(
+            session,
+            invoice,
+            entry_type="payment_recorded",
+            description="Payment recorded",
+            credit_amount=350,
+            paid_amount_delta=350,
+            balance_amount_delta=-350,
+        )
+
+        entries = BillingReadRepository(session).list_ledger_entries(invoice)
+        running_total = sum(e.invoice_total_delta for e in entries)
+        running_paid = sum(e.paid_amount_delta for e in entries)
+        running_balance = sum(e.balance_amount_delta for e in entries)
+
+    assert running_total == 350
+    assert running_paid == 350
+    assert running_balance == 0
 
 
 def test_zero_total_invoice_read_normalizes_legacy_issued_status(test_engine):

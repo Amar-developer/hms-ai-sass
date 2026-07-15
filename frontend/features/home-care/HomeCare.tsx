@@ -37,7 +37,6 @@ export function HomeCare({
   const [selectedId, setSelectedId] = useState("");
   const [editing, setEditing] = useState<any>(null);
   const [invoiceDetail, setInvoiceDetail] = useState<any>(null);
-  const [invoiceDiscount, setInvoiceDiscount] = useState("0");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [serviceLoadError, setServiceLoadError] = useState("");
@@ -372,7 +371,6 @@ export function HomeCare({
 
   function openInvoice(booking: any) {
     setSelectedId(booking.id);
-    setInvoiceDiscount("0");
     setView("invoice");
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -513,6 +511,33 @@ export function HomeCare({
     }
   }
 
+  async function updateBookingStatus(status: string) {
+    if (!apiSession || !selected || status === selected.status) return;
+    setBusy("booking-status");
+    setMessage("");
+    setError("");
+    try {
+      const saved = await apiFetch(
+        `/home-care/bookings/${selected.id}`,
+        apiSession,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status }),
+        },
+      );
+      await load();
+      if (loadLiveData) await loadLiveData(apiSession);
+      setSelectedId(saved.id);
+      setMessage(
+        `Booking status changed to ${humanizeOptionLabel(saved.status)}.`,
+      );
+    } catch (err: any) {
+      setError(err.message || "Unable to update booking status.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   function startEdit(booking: any) {
     if (isBookingLocked(booking)) {
       setSelectedId(booking.id);
@@ -560,7 +585,6 @@ export function HomeCare({
         {
           method: "POST",
           body: JSON.stringify({
-            discount_amount: Number(invoiceDiscount || 0),
             created_by_user_id: apiSession.user?.id,
           }),
         },
@@ -648,6 +672,7 @@ export function HomeCare({
           onBack={backToList}
           onEdit={() => selected && startEdit(selected)}
           onCancel={cancelBooking}
+          onStatusChange={updateBookingStatus}
           onInvoice={() => selected && openInvoice(selected)}
           canManage={canManageBooking}
           canCreateVisit={canCreateBooking}
@@ -664,8 +689,6 @@ export function HomeCare({
           booking={selected}
           patientMap={patientMap}
           invoiceDetail={invoiceDetail}
-          discount={invoiceDiscount}
-          setDiscount={setInvoiceDiscount}
           busy={busy === "invoice"}
           onGenerate={generateInvoice}
           onBack={() => (selected ? openView(selected) : backToList())}

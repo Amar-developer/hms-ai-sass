@@ -143,6 +143,7 @@ class QueueDisplayRead(BaseModel):
     appointment_id: str
     priority: str
     status: AppointmentStatus
+    queue_position: int
     display_text: str
     call_message: str
 

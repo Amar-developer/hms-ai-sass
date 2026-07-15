@@ -123,6 +123,9 @@ class PatientBenefitPreviewRead(BaseModel):
     service_type: str
     subtotal_amount: int
     discount_amount: int
+    free_items_amount: int = 0
+    item_discount_amount: int = 0
+    regular_items_amount: int = 0
     payable_amount: int
     free_item_ids: list[str] = Field(default_factory=list)
     discounted_item_ids: list[str] = Field(default_factory=list)

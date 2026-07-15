@@ -10,6 +10,7 @@ from app.modules.billing.schemas import (
     PaymentRead,
 )
 from app.modules.billing.services.numbering import next_invoice_number
+from app.modules.billing.services.rules import calculate_offer_discount, find_tax_rule
 from app.modules.home_care.models import (
     HomeCareBooking,
     HomeCareBookingItem,
@@ -64,22 +65,19 @@ class HomeCareBillingService:
         )
 
     def _resolve_tax_rule(
-        self, tenant_id: str, branch_id: str, tax_rule_id: str | None
+        self,
+        tenant_id: str,
+        branch_id: str,
+        service_scope: str,
+        tax_rule_id: str | None,
     ) -> TaxRule | None:
-        tax_rule = self.billing.get_active_tax_rule(
-            tenant_id=tenant_id, branch_id=branch_id, tax_rule_id=tax_rule_id
+        return find_tax_rule(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            service_scope=service_scope,
+            tax_rule_id=tax_rule_id,
         )
-        if tax_rule:
-            if (
-                tax_rule.tenant_id != tenant_id
-                or not tax_rule.is_active
-                or tax_rule.branch_id not in {None, branch_id}
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid tax rule"
-                )
-            return tax_rule
-        return None
 
     def _sync_booking_status_from_invoice(
         self, booking: HomeCareBooking, invoice: Invoice
@@ -164,10 +162,20 @@ class HomeCareBillingService:
             return int(row.total_amount or 0)
 
         subtotal = sum(billable_amount(row) for row in rows)
-        discount = min(payload.discount_amount, subtotal)
+        service_scope = (
+            "home_visit" if booking.booking_type == "home_visit" else "home_care"
+        )
+        discount, offer = calculate_offer_discount(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=booking.branch_id,
+            service_scope=service_scope,
+            subtotal=subtotal,
+            discount_offer_id=payload.discount_offer_id,
+        )
         taxable = subtotal - discount
         tax_rule = self._resolve_tax_rule(
-            tenant_id, booking.branch_id, payload.tax_rule_id
+            tenant_id, booking.branch_id, service_scope, payload.tax_rule_id
         )
         tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
         total = taxable + tax_amount
@@ -191,6 +199,7 @@ class HomeCareBillingService:
             taxable_amount=taxable,
             tax_amount=tax_amount,
             tax_rule_id=tax_rule.id if tax_rule else None,
+            discount_offer_id=offer.id if offer else None,
             total_amount=total,
             balance_amount=total,
             clinic_share_amount=total,

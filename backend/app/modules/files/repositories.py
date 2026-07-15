@@ -23,15 +23,16 @@ class FileDocumentRepository:
         attached_to_name: str | None,
         attached_to_field: str | None,
     ) -> FileDocument | None:
-        return self.session.exec(
-            select(FileDocument).where(
-                FileDocument.tenant_id == tenant_id,
-                FileDocument.file_url == file_url,
+        statement = select(FileDocument).where(FileDocument.tenant_id == tenant_id)
+        if attached_to_doctype and attached_to_name and attached_to_field:
+            statement = statement.where(
                 FileDocument.attached_to_doctype == attached_to_doctype,
                 FileDocument.attached_to_name == attached_to_name,
                 FileDocument.attached_to_field == attached_to_field,
             )
-        ).first()
+        else:
+            statement = statement.where(FileDocument.file_url == file_url)
+        return self.session.exec(statement).first()
 
     def find_by_url(self, *, tenant_id: str, file_url: str) -> FileDocument | None:
         return self.session.exec(

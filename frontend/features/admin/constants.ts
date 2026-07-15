@@ -187,7 +187,11 @@ export const serviceScopes = [
   ["consultation", "Consultation"],
   ["lab", "Lab / Service"],
   ["pharmacy", "Pharmacy"],
-  ["items", "Items"],
+  ["home_care", "Home Care"],
+  ["home_visit", "Home Visit"],
+  ["physiotherapy", "Physiotherapy"],
+  ["ip", "IP Admission"],
+  ["service", "Other Services"],
 ] as const;
 
 export const fileCategoryOptions = [

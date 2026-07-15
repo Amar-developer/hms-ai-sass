@@ -189,10 +189,23 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     assert [row["id"] for row in bookings.json()] == [booking_body["id"]]
     assert len(bookings.json()[0]["visit_logs"]) == 2
 
+    offer = client.post(
+        "/api/v1/billing/discount-offers",
+        headers=headers,
+        json={
+            "branch_id": branch_id,
+            "name": "Home Care Concession",
+            "service_scope": "home_care",
+            "discount_type": "fixed",
+            "value": 100,
+        },
+    )
+    assert offer.status_code == 201
+
     invoice = client.post(
         f"/api/v1/home-care/bookings/{booking_body['id']}/invoice",
         headers=headers,
-        json={"discount_amount": 100},
+        json={"discount_offer_id": offer.json()["id"]},
     )
     assert invoice.status_code == 201
     invoice_body = invoice.json()

@@ -100,6 +100,69 @@ def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
     assert metrics["finalProfit"] == 1800 - (200 + 160)  # settlement scaled by paid
 
 
+def test_membership_claim_is_usage_not_revenue_or_profit(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Membership Report Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        # A regular paid consultation contributes revenue, settlement and profit.
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-REGULAR",
+                subtotal_amount=600,
+                total_amount=600,
+                paid_amount=600,
+                doctor_share_amount=360,
+                clinic_share_amount=240,
+            )
+        )
+        # A fully covered consultation is a membership claim only. It must not
+        # increase gross/paid revenue, settlement, or final profit.
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-MEMBER",
+                subtotal_amount=600,
+                discount_amount=600,
+                membership_discount_amount=600,
+                total_amount=0,
+                paid_amount=0,
+                balance_amount=0,
+                doctor_share_amount=0,
+                clinic_share_amount=0,
+            )
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    totals = metrics["totals"]
+    assert totals["invoices"] == 2
+    assert totals["grossRevenue"] == 1200
+    assert totals["paidRevenue"] == 600
+    assert totals["membershipDiscount"] == 600
+    assert totals["membershipClaims"] == [
+        {
+            "type": "consultation",
+            "label": "Consultation",
+            "invoices": 1,
+            "claimedAmount": 600,
+        }
+    ]
+    assert totals["settlement"] == 360
+    assert metrics["grossProfit"] == 240
+    assert metrics["finalProfit"] == 240
+
+
 def test_archive_month_freezes_and_is_idempotent(test_engine):
     with Session(test_engine) as session:
         tenant = Tenant(name="Archive Clinic")
