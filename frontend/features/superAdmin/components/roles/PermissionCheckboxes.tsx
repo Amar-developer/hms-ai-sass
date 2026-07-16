@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/app/components/common/ui";
-import { formatTitle,permissionModuleTitle } from "../../helpers";
+import { formatTitle, permissionModuleTitle } from "../../helpers";
 
 export function PermissionCheckboxes({ permissions, selected }: any) {
   const catalog = [...(permissions || [])];
@@ -18,13 +18,18 @@ export function PermissionCheckboxes({ permissions, selected }: any) {
     <div>
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
         <div>
-          <h4 className="text-base lg:text-lg font-bold">Module Permissions</h4>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h4 className="card-title font-bold">Module Permissions</h4>
+          <p className="card-desc text-slate-500">
             Enable the exact workflow actions this role may use. Manage grants
             the module's administrative workflows where supported.
           </p>
         </div>
-        <Badge tone="slate" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm w-[15%] lg:w-[15%]">{selectedSet.size} selected</Badge>
+        <Badge
+          tone="slate"
+          className="rounded-lg px-2 py-2 lg:px-3 lg:py-2 text-xs lg:text-sm w-[15%] lg:w-[15%]"
+        >
+          {selectedSet.size} selected
+        </Badge>
       </div>
       <div className="mt-3 grid gap-4 xl:grid-cols-2">
         {modules.map((module) => (
@@ -35,11 +40,10 @@ export function PermissionCheckboxes({ permissions, selected }: any) {
             <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
               <div>
                 <h5 className="font-bold">{permissionModuleTitle(module)}</h5>
-                <p className="text-xs text-slate-500">
-                  {grouped[module].length} permissions
-                </p>
               </div>
-              <Badge tone="slate" className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">Module</Badge>
+              <p className="text-xs text-slate-500">
+                {grouped[module].length} permissions
+              </p>
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               {grouped[module]
@@ -47,7 +51,7 @@ export function PermissionCheckboxes({ permissions, selected }: any) {
                 .map((permission: any) => (
                   <label
                     key={permission.key}
-                    className="flex items-start gap-2 rounded-xl bg-slate-50 p-3 text-sm"
+                    className="flex items-start gap-2 rounded-xl bg-slate-50 p-1.5 text-sm"
                     title={permission.description || permission.key}
                   >
                     <input
@@ -55,14 +59,11 @@ export function PermissionCheckboxes({ permissions, selected }: any) {
                       name="permissionKeys"
                       value={permission.key}
                       defaultChecked={selectedSet.has(permission.key)}
-                      className="mt-1 h-4 w-4"
+                      className="mt-1 h-3.5 w-3.5"
                     />
                     <span>
-                      <span className="font-semibold">
+                      <span className="font-semibold text-xs">
                         {labelFor(permission)}
-                      </span>
-                      <span className="block break-all text-xs text-slate-400">
-                        {permission.key}
                       </span>
                     </span>
                   </label>

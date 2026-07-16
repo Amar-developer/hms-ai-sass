@@ -72,7 +72,7 @@ export function GlobalSearch({ items }: GlobalSearchProps) {
 
   return (
     <div ref={rootRef} className="relative min-w-0">
-      <div className="flex h-11 min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 mt-3">
+      <div className="flex h-10 min-w-0 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 ">
         <Search size={17} className="shrink-0 text-slate-400" />
         <input
           ref={inputRef}

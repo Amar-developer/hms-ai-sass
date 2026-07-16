@@ -27,6 +27,7 @@ import { PlanTableRow } from "../patients/components/PlanTableRow";
 import { QueuedEnrollmentsTable } from "../patients/components/QueuedEnrollmentsTable";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 
 export function PatientSubscriptions({
   apiSession,
@@ -92,6 +93,7 @@ export function PatientSubscriptions({
     () => new Map((patients || []).map((p: any) => [p.id, p])),
     [patients],
   );
+  const [confirm, setConfirm] = useState<any>(null);
   async function load() {
     if (!apiSession) return;
     setLoadError("");
@@ -498,20 +500,23 @@ export function PatientSubscriptions({
       setBusy("");
     }
   }
-
+  function requestCancelEnrollment(row: any) {
+    setConfirm(row);
+  }
   function cancelEnrollment(row: any) {
     const patientName =
       patientMap.get(row.patient_id)?.name ||
       patientMap.get(row.patient_id)?.full_name ||
       "this patient";
     const planName = row.plan?.name || "membership plan";
-    if (!window.confirm(`Cancel ${planName} enrollment for ${patientName}?`)) {
-      return;
-    }
+    // if (!window.confirm(`Cancel ${planName} enrollment for ${patientName}?`)) {
+    //   return;
+    // }
     updateEnrollment(row, {
       status: "cancelled",
       ends_on: new Date().toISOString().slice(0, 10),
     });
+    setConfirm(false)
   }
 
   if (!apiSession)
@@ -534,8 +539,8 @@ export function PatientSubscriptions({
   const hasPermission = (...keys: string[]) =>
     Boolean(
       apiSession.user?.is_super_admin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const canDeletePlans =
     canDeleteMembershipPlans(apiSession.user) ||
@@ -586,7 +591,7 @@ export function PatientSubscriptions({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="">
       {loadError && (
         <div className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
           <span className="font-bold">⚠ Could not load plans:</span>
@@ -825,13 +830,25 @@ export function PatientSubscriptions({
             canManage={canDeletePlans}
             busy={busy}
             onUpdate={updateEnrollment}
-            onCancel={cancelEnrollment}
+            onCancel={requestCancelEnrollment}
           />
           <QueuedEnrollmentsTable
             rows={queuedEnrollments}
             patientMap={patientMap}
           />
         </>
+      )}
+      {confirm && (
+        <ConfirmModal
+          action={{
+            kind: "cancel",
+            entity: "enrollment",
+            row: confirm,
+          }}
+          busy={busy === `enrollment-${confirm.id}`}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => cancelEnrollment(confirm)}
+        />
       )}
     </div>
   );

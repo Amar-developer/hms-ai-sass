@@ -10,7 +10,11 @@ import {
   Button,
   ActionButton,
 } from "@/app/components/common/ui";
-import { itemTypes, modalities, serviceItemTypes } from "@/features/items/constants";
+import {
+  itemTypes,
+  modalities,
+  serviceItemTypes,
+} from "@/features/items/constants";
 import { FormError } from "@/app/components/common/FormError";
 import { useEffect } from "react";
 
@@ -72,7 +76,7 @@ export function ItemForm({
           initialData.default_sale_price ||
             initialData.default_price ||
             initialData.package_price ||
-            ""
+            "",
         ),
         purchase_price: String(initialData.purchase_price || ""),
         supplier_id: initialData.supplier_id || "",
@@ -105,8 +109,11 @@ export function ItemForm({
   });
 
   return (
-    <form onSubmit={submitWithPriceCheck} className="mt-5 grid gap-3 md:grid-cols-4">
-      <FormField label="Item Type">
+    <form
+      onSubmit={submitWithPriceCheck}
+      className="mt-5 grid gap-3 md:grid-cols-4"
+    >
+      <FormField label="Item Type" required>
         <SearchableSelect
           value={type}
           onChange={(newType) => onTypeChange?.(newType)}
@@ -121,7 +128,7 @@ export function ItemForm({
           {...register("name")}
           placeholder={`Enter ${isService ? "Service" : "Item"} Name`}
         />
-        <FormError error={errors.name?.message} />
+        {errors.name && <FormError error={errors.name?.message} />}
       </FormField>
 
       <FormField label="Code / Serial">
@@ -131,13 +138,16 @@ export function ItemForm({
         />
       </FormField>
 
-      <FormField label="MRP Price (₹)">
+      <FormField label="MRP Price (₹)" required>
         <Input {...register("mrp_price")} type="number" min="0" />
-        <FormError error={errors.mrp_price?.message} />
+        {errors.mrp_price && <FormError error={errors.mrp_price?.message} />}
       </FormField>
 
       {!type.includes("physio_equipment") && (
-        <FormField label={isService ? "Service Price (₹)" : "Price (₹)"}>
+        <FormField
+          label={isService ? "Service Price (₹)" : "Price (₹)"}
+          required
+        >
           <Input {...register("price")} type="number" min="0" />
           <FormError error={errors.price?.message} />
         </FormField>

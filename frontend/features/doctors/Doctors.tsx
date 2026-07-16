@@ -121,7 +121,6 @@ export function Doctors({ apiSession, clinic, setLivePractitioners }: any) {
       setBusy(false);
     }
   }
-
   useEffect(() => {
     if (apiSession) {
       loadTenants();
@@ -396,7 +395,6 @@ export function Doctors({ apiSession, clinic, setLivePractitioners }: any) {
       setConfirm(null);
     }
   }
-
   if (!apiSession)
     return (
       <Card>
@@ -439,7 +437,6 @@ export function Doctors({ apiSession, clinic, setLivePractitioners }: any) {
         back={() => open("list")}
       />
     );
-
   const filtered = rows
     .filter((row: any) => {
       const text = [

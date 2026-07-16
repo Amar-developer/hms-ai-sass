@@ -1,13 +1,17 @@
-import { useForm } from "react-hook-form";
+import { Form, useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card,Input, SearchableSelect  } from "@/app/components/common/ui";
+import { Card, Input, SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { DiscountOfferFormValues, discountOfferSchema } from "../settings.schema";
+import {
+  DiscountOfferFormValues,
+  discountOfferSchema,
+} from "../settings.schema";
 import { useEffect } from "react";
 import { serviceScopes } from "../constants";
 import { discountTypeOptions } from "../options";
+import { FormError } from "@/app/components/common/FormError";
 
 export function DiscountOfferForm({
   title,
@@ -68,13 +72,12 @@ export function DiscountOfferForm({
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
         <FormField label="Offer Name" required>
-          <Input
-            {...register("name")}
-            placeholder="Enter offer name"
-          />
+          <Input {...register("name")} placeholder="Enter offer name" />
+          {errors.name && <FormError error={errors.name?.message} />}
         </FormField>
-        <FormField label="Code">
-          <Input {...register("code")}  />
+        <FormField label="Code" required>
+          <Input {...register("code")} placeholder="Enter Discount Code" />{" "}
+          {errors.code && <FormError error={errors.code?.message} />}
         </FormField>
         <FormField label="Branch">
           <SearchableSelect
@@ -112,33 +115,25 @@ export function DiscountOfferForm({
             options={discountTypeOptions}
           />
         </FormField>
-        <FormField label="Value" required error={errors.value?.message}>
-          <Input
-            {...register("value")}
-            type="number"
-            min="0"
-            max={watch("discountType") === "percentage" ? "100" : undefined}
-          />
+        <FormField label="Value" required>
+          <Input {...register("value")} />
+          {errors.value && <FormError error={errors.value?.message} />}
         </FormField>
         <FormField label="Minimum Bill Amount">
-          <Input {...register("minimumBillAmount")}  />
+          <Input {...register("minimumBillAmount")} />
         </FormField>
         <FormField label="Max Discount">
-          <Input {...register("maxDiscountAmount")}  />
+          <Input {...register("maxDiscountAmount")} />
         </FormField>
         <FormField label="Valid From">
-          <Input
-            {...register("validFrom")}
-            type="date"
-
-          />
+          <Input {...register("validFrom")} type="date" />
+          {errors.validFrom && <FormError error={errors.validFrom?.message} />}
         </FormField>
         <FormField label="Valid Until">
-          <Input
-            {...register("validUntil")}
-            type="date"
-
-          />
+          <Input {...register("validUntil")} type="date" />
+          {errors.validUntil && (
+            <FormError error={errors.validUntil?.message} />
+          )}
         </FormField>
         {offer && (
           <FormField label="Status">

@@ -18,15 +18,15 @@ export function CreateRole({
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-base lg:text-lg font-bold">Create Role</h3>
-          <p className="text-xs lg:text-sm text-slate-500">
+          <h3 className="card-title font-bold">Create Role</h3>
+          <p className="card-desc text-slate-500">
             Add a role and select module permissions.
           </p>
         </div>
         <button
           type="button"
           onClick={back}
-          className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm border font-bold"
+          className="close-button border font-bold"
         >
           Back to Roles
         </button>

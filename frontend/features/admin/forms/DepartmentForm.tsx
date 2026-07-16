@@ -99,7 +99,6 @@ export function DepartmentForm({
       >
         <Field label="Name" required>
           <SuggestionInput
-            required
             value={watch("name")}
             onChange={(event: any) => {
               setValue("name", event.target.value, {

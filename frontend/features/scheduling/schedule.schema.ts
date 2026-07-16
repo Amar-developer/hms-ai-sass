@@ -19,7 +19,7 @@ const timeRangeSchema = z.object({
 export const scheduleSchema = z.object({
   practitionerId: z.string().min(1, "Doctor is required"),
   branchId: z.string().min(1, "Branch is required"),
-  departmentId: z.string().optional(),
+  departmentId: z.string().min(1,'Department is required'),
 
   // Multiple weekdays
   weekdays: z.array(z.string()).min(1, "Select at least one weekday"),

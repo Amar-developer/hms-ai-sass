@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { Form, useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -6,6 +6,7 @@ import { Card,Input, SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { TaxRuleFormValues, taxRuleSchema } from "../settings.schema";
 import { serviceScopes } from "../constants";
+import { FormError } from "@/app/components/common/FormError";
 
 
 export function TaxRuleForm({
@@ -46,12 +47,14 @@ export function TaxRuleForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
-        <FormField label="Name" required error={errors.name?.message}>
+        <FormField label="Name" required>
           <Input
             {...register("name")}
-            required
             placeholder="Enter tax name"
           />
+          {errors.name && (
+            <FormError error={errors.name?.message}/>
+          )}
         </FormField>
 
         <FormField label="Branch" error={errors.branchId?.message}>
@@ -83,13 +86,14 @@ export function TaxRuleForm({
           <Input {...register("taxLabel")} />
         </FormField>
 
-        <FormField label="Tax Percentage" error={errors.taxPercentage?.message}>
+        <FormField label="Tax Percentage" >
           <Input
-            {...register("taxPercentage")}
+            {...register("taxPercentage",{valueAsNumber:true})}
             type="number"
-            min="0"
-            max="100"
           />
+          {errors.taxPercentage && (
+            <FormError error={errors.taxPercentage?.message}/>
+          )}
         </FormField>
 
         {rule && (

@@ -1,13 +1,27 @@
 import { PractitionerPicker } from "../components/PractitionerPicker";
-import { useEffect, useState } from "react";
-import { ALL_BRANCHES,weekdays } from "../constants";
-import { FormField,NumberField,TextField, TimeField } from "@/app/components/FormElements";
+import React, { useEffect, useState } from "react";
+import { ALL_BRANCHES, weekdays } from "../constants";
+import {
+  FormField,
+  NumberField,
+  TextField,
+  TimeField,
+} from "@/app/components/FormElements";
 import { Plus, X } from "lucide-react";
-import { Card, Button, SearchableSelect, Field } from "@/app/components/common/ui";
+import {
+  Card,
+  Button,
+  SearchableSelect,
+  Field,
+} from "@/app/components/common/ui";
 import { useForm, Controller, SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ScheduleFormValues, scheduleSchema } from "../schedule.schema";
 import { FormError } from "../../../app/components/common/FormError";
+import {
+  WeekdayMode,
+  WeekdaySelector,
+} from "@/app/components/common/WeekdaySelector";
 
 export function ScheduleForm({
   title,
@@ -19,32 +33,47 @@ export function ScheduleForm({
   onSubmit,
   back,
 }: any) {
-  const defaultRanges = schedule?.schedules?.length
-    ? schedule.schedules
-        .filter((row: any) => row.is_active !== false)
-        .map((row: any) => ({
-          start: String(row.start_time || "09:00").slice(0, 5),
-          end: String(row.end_time || "13:00").slice(0, 5),
-          isActive: row.is_active !== false,
-        }))
-    : [
+  const [mode, setMode] = useState<WeekdayMode>("");
+  const defaultRanges = React.useMemo(() => {
+    const schedules = schedule?.schedules ?? [];
+    if (!schedules.length) {
+      return [
         {
           start: String(schedule?.start_time || "09:00").slice(0, 5),
           end: String(schedule?.end_time || "13:00").slice(0, 5),
           isActive: schedule?.is_active !== false,
         },
       ];
+    }
 
-// Add this before useForm
-const defaultWeekdays: string[] = Array.from(
-  new Set(
-    (schedule?.schedules || [schedule])
-      .filter(Boolean)
-      .map((row: any) => String(row?.weekday ?? 0))
-  )
-);
+    const unique = new Map();
 
-// Then in defaultValues:
+    schedules
+      .filter((row: any) => row.is_active !== false)
+      .forEach((row: any) => {
+        const key = `${row.start_time}-${row.end_time}`;
+
+        if (!unique.has(key)) {
+          unique.set(key, {
+            start: String(row.start_time).slice(0, 5),
+            end: String(row.end_time).slice(0, 5),
+            isActive: row.is_active !== false,
+          });
+        }
+      });
+
+    return Array.from(unique.values());
+  }, [schedule]);
+  // Add this before useForm
+  const defaultWeekdays: string[] = Array.from(
+    new Set(
+      (schedule?.schedules || [schedule])
+        .filter(Boolean)
+        .map((row: any) => String(row?.weekday ?? 0)),
+    ),
+  );
+
+  // Then in defaultValues:
   const {
     register,
     handleSubmit,
@@ -58,7 +87,9 @@ const defaultWeekdays: string[] = Array.from(
       practitionerId: schedule?.practitioner_id || "",
       branchId: schedule?.branch_id || "",
       departmentId: schedule?.department_id || "",
-     weekdays: defaultWeekdays.length ? defaultWeekdays : [String(schedule?.weekday ?? 0)],
+      weekdays: defaultWeekdays.length
+        ? defaultWeekdays
+        : [String(schedule?.weekday ?? 0)],
       ranges: defaultRanges.length
         ? defaultRanges
         : [{ start: "09:00", end: "13:00", isActive: true }],
@@ -67,18 +98,13 @@ const defaultWeekdays: string[] = Array.from(
     },
   });
 
-  const [selectedDays, setSelectedDays] = useState<string[]>(defaultWeekdays);
   const [ranges, setRanges] = useState(defaultRanges);
   const [dayToAdd, setDayToAdd] = useState("");
 
   const selectedDoctorId = watch("practitionerId");
   const selectedBranchId = watch("branchId");
   const selectedDepartmentId = watch("departmentId");
-
-  // Sync local state → RHF
-  useEffect(() => {
-    setValue("weekdays", selectedDays, { shouldValidate: true });
-  }, [selectedDays, setValue]);
+  const selectedDays = watch("weekdays");
 
   useEffect(() => {
     setValue("ranges", ranges, { shouldValidate: true });
@@ -106,18 +132,15 @@ const defaultWeekdays: string[] = Array.from(
     if (selectedDoctorId) applyDoctorLinks(selectedDoctorId);
   }, [selectedDoctorId]);
 
-  // Weekday helpers
-  const addDay = (value: string) => {
-    if (value && !selectedDays.includes(value)) {
-      setSelectedDays((prev) => [...prev, value]);
-    }
-    setDayToAdd("");
-  };
-
   const removeDay = (value: string) => {
-    if (selectedDays.length > 1) {
-      setSelectedDays((prev) => prev.filter((d) => d !== value));
-    }
+    setValue(
+      "weekdays",
+      selectedDays.filter((d) => d !== value),
+      {
+        shouldValidate: true,
+        shouldDirty: true,
+      },
+    );
   };
 
   // Range helpers
@@ -168,27 +191,26 @@ const defaultWeekdays: string[] = Array.from(
       >
         {/* Doctor */}
         <div className="block">
-          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-slate-500">
-            Doctor
-          </span>
-          <Controller
-            name="practitionerId"
-            control={control}
-            render={({ field }) => (
-              <PractitionerPicker
-                doctors={doctors}
-                value={field.value}
-                onChange={(id) => {
-                  field.onChange(id);
-                }}
-              />
-            )}
-          />
-          <FormError error={errors.practitionerId?.message} />
+          <FormField label="Doctor" required>
+            <Controller
+              name="practitionerId"
+              control={control}
+              render={({ field }) => (
+                <PractitionerPicker
+                  doctors={doctors}
+                  value={field.value}
+                  onChange={(id) => {
+                    field.onChange(id);
+                  }}
+                />
+              )}
+            />
+            <FormError error={errors.practitionerId?.message} />
+          </FormField>
         </div>
 
         {/* Branch */}
-        <Field label="Branch">
+        <FormField label="Branch" required>
           <Controller
             name="branchId"
             control={control}
@@ -225,10 +247,10 @@ const defaultWeekdays: string[] = Array.from(
             )}
           />
           <FormError error={errors.branchId?.message} />
-        </Field>
+        </FormField>
 
         {/* Department */}
-        <Field label="Medical Department">
+        <FormField label="Medical Department" required>
           <Controller
             name="departmentId"
             control={control}
@@ -249,47 +271,61 @@ const defaultWeekdays: string[] = Array.from(
             )}
           />
           <FormError error={errors.departmentId?.message} />
-        </Field>
+        </FormField>
 
         {/* Weekdays */}
         <div className="md:col-span-2 xl:col-span-3">
-          <div className="grid gap-3 md:grid-cols-[260px_1fr] md:items-end">
-            <FormField label="Add Weekday">
-              <SearchableSelect
-                value={dayToAdd}
-                onChange={addDay}
-                options={[
-                  { value: "", label: "Select day" },
-                  ...weekdays
-                    .filter(([v]) => !selectedDays.includes(v))
-                    .map(([value, label]) => ({ value, label })),
-                ]}
+          <div className="grid gap-3 md:grid-cols-3">
+            <FormField label="Weekdays" required>
+              <WeekdaySelector
+                mode={mode}
+                selectedDays={selectedDays}
+                onModeChange={setMode}
+                onDaysChange={(days) =>
+                  setValue("weekdays", days, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
               />
+              <FormError error={errors.weekdays?.message} />
             </FormField>
 
-            <div className="flex min-h-[40px] flex-wrap items-end gap-2">
-              {selectedDays.map((value) => {
-                const label =
-                  weekdays.find(([day]) => day === value)?.[1] || value;
-                return (
-                  <span
-                    key={value}
-                    className="inline-flex items-center gap-2 border border-slate-200 bg-white rounded-lg px-4 py-2.5 text-sm font-bold text-slate-800"
-                  >
-                    {label}
-                    <button
-                      type="button"
-                      onClick={() => removeDay(value)}
-                      className="text-slate-500 hover:text-red-600"
-                    >
-                      <X size={14} />
-                    </button>
-                  </span>
-                );
-              })}
+            <div>
+              <Controller
+                name="slotMinutes"
+                control={control}
+                render={({ field }) => (
+                  <NumberField
+                    label="Slot Minutes"
+                    {...field}
+                    min={1}
+                    max={240}
+                    required
+                  />
+                )}
+              />
+              <FormError error={errors.slotMinutes?.message} />
+            </div>
+
+            <div>
+              <Controller
+                name="roomNumber"
+                control={control}
+                render={({ field }) => (
+                  <NumberField
+                    label="Room Number"
+                    {...field}
+                    min={1}
+                    placeholder="012"
+                  />
+                )}
+              />
+              <FormError error={errors.roomNumber?.message} />
             </div>
           </div>
-          <FormError error={errors.weekdays?.message} />
+
+          {/* Slot Minutes & Room */}
         </div>
 
         {/* Time Ranges */}
@@ -361,40 +397,6 @@ const defaultWeekdays: string[] = Array.from(
             </div>
           ))}
           <FormError error={errors.ranges?.message} />
-        </div>
-
-        {/* Slot Minutes & Room */}
-        <div>
-          <Controller
-            name="slotMinutes"
-            control={control}
-            render={({ field }) => (
-              <NumberField
-                label="Slot Minutes"
-                {...field}
-                min={1}
-                max={240}
-                required
-              />
-            )}
-          />
-          <FormError error={errors.slotMinutes?.message} />
-        </div>
-
-        <div>
-          <Controller
-            name="roomNumber"
-            control={control}
-            render={({ field }) => (
-              <NumberField
-                label="Room Number"
-                {...field}
-                min={1}
-                placeholder="012"
-              />
-            )}
-          />
-          <FormError error={errors.roomNumber?.message} />
         </div>
 
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">

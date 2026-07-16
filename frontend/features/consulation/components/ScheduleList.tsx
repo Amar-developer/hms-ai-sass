@@ -12,7 +12,7 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
         <Badge className="normal-badge">{rows.length} rows</Badge>
       </div>
       <div className="overflow-hidden rounded-lg border border-slate-200">
-        <div className="hidden grid-cols-[1fr_1fr_1fr_.95fr_1.6fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
+        <div className="hidden grid-cols-[1fr_1fr_1fr_.95fr_1fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase tracking-wide text-slate-500 md:grid">
           <span>Patient</span>
           <span>Status</span>
           <span>Date & Time</span>
@@ -27,7 +27,7 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
         {rows.map((row: any) => (
           <div
             key={row.id}
-            className={`grid gap-3 border-t border-slate-100 px-4 py-4 transition hover:bg-slate-50 md:grid-cols-[1fr_1fr_1fr_.95fr_1.6fr] ${selectedId === row.id ? "bg-slate-50" : ""}`}
+            className={`grid gap-3 border-t border-slate-100 px-4 py-4 transition hover:bg-slate-50 md:grid-cols-[1fr_1fr_1fr_.95fr_1fr] ${selectedId === row.id ? "bg-slate-50" : ""}`}
           >
             <div>
               <p className="font-bold text-slate-950 ">{row.patient}</p>
@@ -63,30 +63,7 @@ export function ScheduleList({ rows, selectedId, onSelect, onConsult }: any) {
                 {humanizeOptionLabel(row.visitType || row.tokenType || "OP")}
               </Badge>
             </div>
-            <div className="flex flex-wrap items-start gap-2 text-slate-600">
-              <div className="flex items-center p-1">
-                {String(row.visitType || "")
-                  .toLowerCase()
-                  .includes("online") ? (
-                  <Video className="h-5 w-5 text-blue-600" />
-                ) : (
-                  <UserRoundCheck className="h-5 w-5 text-emerald-600" />
-                )}
-                <span className="text-xs flex   font-bold">
-                  {String(row.visitType || "OP")
-                    .toLowerCase()
-                    .includes("online")
-                    ? "Online"
-                    : "Clinic"}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => onSelect(row.id)}
-                className="rounded-xl border px-3 py-2 text-xs font-bold"
-              >
-                Select
-              </button>
+            <div className="flex flex-wrap justify-center gap-2 text-slate-600">
               <button
                 type="button"
                 onClick={() => onConsult(row.id)}

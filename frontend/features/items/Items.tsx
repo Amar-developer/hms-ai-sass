@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionButton,
   ActionGroup,
@@ -23,12 +23,16 @@ import {
   homeServiceTypes,
   itemTypes,
   modalities,
+  price_options,
   serviceItemTypes,
+  sort_type_options,
 } from "@/features/items/constants";
 import { ItemForm } from "@/features/items/forms/ItemForms";
 import { ItemFormValues, itemSchema } from "@/features/items/items.schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { RowActions } from "../admin/components/RowActions";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 
 function generatedItemCode(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -119,6 +123,7 @@ export function Items({ apiSession, branchId }: any) {
   const [homeCareServices, setHomeCareServices] = useState<any[]>([]);
   const [packageTestIds, setPackageTestIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<any>(null);
+  const [confirmAction, setConfirmAction] = useState<any>(null);
   const [filters, setFilters] = useState({
     type: "all",
     query: "",
@@ -127,6 +132,7 @@ export function Items({ apiSession, branchId }: any) {
     sortBy: "name",
   });
   const [page, setPage] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 10;
   function setFiltersAndReset(f: any) {
     setFilters(f);
@@ -236,7 +242,9 @@ export function Items({ apiSession, branchId }: any) {
           return false;
         if (filters.priceBand === "free" && Number(row.price || 0) > 0)
           return false;
-        const query = String(filters.query || "").trim().toLowerCase();
+        const query = String(filters.query || "")
+          .trim()
+          .toLowerCase();
         if (
           query &&
           !`${row.kind} ${row.name} ${row.code} ${row.meta} ${row.id}`
@@ -296,7 +304,6 @@ export function Items({ apiSession, branchId }: any) {
   }
 
   function resetItemForm(nextType = type) {
-    console.log("resetForm");
     setForm(createEmptyForm(nextType));
     setPackageTestIds([]);
   }
@@ -638,7 +645,6 @@ export function Items({ apiSession, branchId }: any) {
         is_portable: String(Boolean(raw.is_portable)),
         branch_scope: raw.branch_id ? "branch" : "tenant",
       });
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function cancelEdit() {
@@ -647,10 +653,22 @@ export function Items({ apiSession, branchId }: any) {
     resetItemForm(type);
   }
 
-  async function deleteItem(row: any) {
-    if (!apiSession || !confirm(`Delete ${row.name}?`)) return;
+  function deleteItem(row: any) {
+    setConfirmAction({
+      kind: "delete",
+      entity: "item",
+      row,
+    });
+  }
+
+  async function confirmDelete() {
+    if (!apiSession || !confirmAction) return;
+
+    const row = confirmAction.row;
+
     setBusy(`delete-${row.id}`);
     setMessage("");
+
     const path =
       row.type === "medicine"
         ? `/pharmacy/medicines/${row.id}`
@@ -661,10 +679,16 @@ export function Items({ apiSession, branchId }: any) {
             : homeServiceTypes.includes(row.type)
               ? `/home-care/services/${row.id}`
               : `/physiotherapy/equipment/${row.id}`;
+
     try {
-      await apiFetch(path, apiSession, { method: "DELETE" });
+      await apiFetch(path, apiSession, {
+        method: "DELETE",
+      });
+
       await load();
+
       setMessage("Item deleted.");
+      setConfirmAction(null);
     } catch (err: any) {
       setMessage(err.message || "Could not delete item.");
     } finally {
@@ -676,7 +700,7 @@ export function Items({ apiSession, branchId }: any) {
   const pagedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 scroll-mt-24" ref={containerRef}>
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
@@ -745,14 +769,7 @@ export function Items({ apiSession, branchId }: any) {
                 value={filters.sortBy}
                 onChange={(v) => setFiltersAndReset({ ...filters, sortBy: v })}
                 searchable={false}
-                options={[
-                  { value: "name", label: "Name" },
-                  { value: "latest", label: "Latest" },
-                  { value: "type", label: "Type" },
-                  { value: "code", label: "Code" },
-                  { value: "mrp", label: "MRP" },
-                  { value: "price", label: "Sale Price" },
-                ]}
+                options={sort_type_options}
               />
             </FormField>
             <FormField label="Price">
@@ -762,11 +779,7 @@ export function Items({ apiSession, branchId }: any) {
                   setFiltersAndReset({ ...filters, priceBand: v })
                 }
                 searchable={false}
-                options={[
-                  { value: "all", label: "All prices" },
-                  { value: "priced", label: "Priced only" },
-                  { value: "free", label: "Free / zero" },
-                ]}
+                options={price_options}
               />
             </FormField>
           </div>
@@ -816,23 +829,47 @@ export function Items({ apiSession, branchId }: any) {
                     {row.price === null ? "-" : `₹${row.price}`}
                   </td>
                   <td className="pr-4">
-                    <ActionGroup className="justify-end">
-                      <ActionButton onClick={() => startEdit(row)}>
-                        Edit
-                      </ActionButton>
-                      <ActionButton
-                        tone="danger"
-                        disabled={busy === `delete-${row.id}`}
-                        onClick={() => deleteItem(row)}
-                      >
-                        {busy === `delete-${row.id}` ? "Deleting..." : "Delete"}
-                      </ActionButton>
-                    </ActionGroup>
+                    <div className="flex justify-end">
+                      <RowActions
+                        actions={[
+                          {
+                            label: "Edit",
+                            onClick: () => {
+                              startEdit(row);
+
+                              setTimeout(() => {
+                                containerRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }, 100);
+                            },
+                          },
+                          {
+                            label:
+                              busy === `delete-${row.id}`
+                                ? "Deleting..."
+                                : "Delete",
+                            onClick: () => deleteItem(row),
+                            disabled: busy === `delete-${row.id}`,
+                            danger: true,
+                          },
+                        ]}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {confirmAction && (
+            <ConfirmModal
+              action={confirmAction}
+              busy={busy === `delete-${confirmAction.row.id}`}
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={confirmDelete}
+            />
+          )}
         </div>
         <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
           <span className="text-slate-500">

@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { requiredString,emailSchema,mobileSchema } from "@/app/validations/common";
+import {
+  requiredString,
+  emailSchema,
+  mobileSchema,
+} from "@/app/validations/common";
 
 export const userSchema = z.object({
   name: requiredString("Name is required"),
@@ -10,7 +14,7 @@ export const userSchema = z.object({
     "receptionist",
     "nurse",
     "lab",
-    'doctor',
+    "doctor",
     "pharmacy",
     "billing",
     "back_office",
@@ -25,8 +29,6 @@ export const userSchema = z.object({
 });
 
 export type UserFormValues = z.infer<typeof userSchema>;
-
-
 
 export const departmentSchema = z.object({
   name: z.string().trim().min(2, "Department name is required"),
@@ -48,13 +50,13 @@ export const branchSchema = z.object({
 
   code: z.string().trim().min(1, "Branch code is required"),
 
-  city: z.string().optional(),
+  city: z.string().min(1, "City is required"),
 
-  area: z.string().optional(),
+  area: z.string().min(1, "Area is required"),
 
-  state: z.string().optional(),
+  state: z.string().min(1, "State is required"),
 
-  address: z.string().optional(),
+  address: z.string().min(1, "Address is required"),
 
   isActive: z.string().optional(),
 });
@@ -67,9 +69,9 @@ export const supplierSchema = z.object({
     .trim()
     .min(2, "Supplier name must have atlease 2 characters"),
   gstin: z.string().trim().optional(),
-  phone: mobileSchema.optional().or(z.literal("")),
-  email: emailSchema.optional().or(z.literal("")),
-  address: z.string().trim(),
+  phone: mobileSchema,
+  email: emailSchema,
+  address: z.string().min(1, "Address is required"),
   isActive: z.string().optional(),
 });
 
@@ -94,7 +96,9 @@ export const taxRuleSchema = z.object({
 
   taxLabel: z.string().trim().min(1, "Tax label is required"),
 
-  taxPercentage: z.number().min(0).max(100),
+  taxPercentage: z.number()
+    .min(1, "Tax percentage should be greater than 0")
+    .max(100, "Tax percentage cannot exceed 100"),
 
   isActive: z.string().optional(),
 });
@@ -108,7 +112,7 @@ export const discountOfferSchema = z
       .trim()
       .min(2, "Offer name must contain at least 2 characters"),
 
-    code: z.string().trim().optional(),
+    code: z.string().trim().min(3,'Code is required'),
 
     branchId: z.string().optional(),
 
@@ -132,9 +136,9 @@ export const discountOfferSchema = z
 
     maxDiscountAmount: z.number().min(0).optional(),
 
-    validFrom: z.string().optional(),
+    validFrom: z.string().min(1,"Validity start date is required"),
 
-    validUntil: z.string().optional(),
+    validUntil: z.string().min(1,'Validity end date is required'),
 
     isActive: z.string().optional(),
   })
@@ -159,17 +163,16 @@ export const discountOfferSchema = z
 
 export type DiscountOfferFormValues = z.infer<typeof discountOfferSchema>;
 
-
 export const planSchema = z.object({
-  name: z.string().trim().min(2),
+  name: z.string().trim().min(2,"Plan name is required"),
 
   code: z.string().optional(),
 
-  priceAmount: z.number().min(0),
+  priceAmount: z.number().min(1,'Price is required'),
 
-  durationDays: z.number().min(1),
+  durationDays: z.number().min(1,'Duration days is required'),
 
-  activationAfterDays: z.number().min(0),
+  activationAfterDays: z.number().min(1,"Activation After days is required"),
 
   freeConsultations: z.number().min(0),
 
@@ -177,23 +180,15 @@ export const planSchema = z.object({
 
   pharmacyDiscount: z.number().min(0).max(100),
 
-  minDiscountAmount: z.number().min(0),
+  minDiscountAmount: z.number().min(1,"Minimum Bill amount is required"),
 });
 
 export type PlanFormInput = z.input<typeof planSchema>;
 
 export type PlanFormValues = z.infer<typeof planSchema>;
 
-
-
 export const documentUploadSchema = z.object({
-
-  file: z
-    .any()
-    .refine(
-      (files) => files?.length === 1,
-      "File is required"
-    ),
+  file: z.any().refine((files) => files?.length === 1, "File is required"),
 
   category: z.string().min(1, "Category is required"),
 
@@ -216,6 +211,4 @@ export const documentUploadSchema = z.object({
   notes: z.string().optional(),
 });
 
-
-export type DocumentUploadFormValues =
-  z.infer<typeof documentUploadSchema>;
+export type DocumentUploadFormValues = z.infer<typeof documentUploadSchema>;

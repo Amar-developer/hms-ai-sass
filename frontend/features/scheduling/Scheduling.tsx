@@ -187,7 +187,6 @@ export function Scheduling({ apiSession, branchId }: any) {
 
   async function updateSchedule(data: ScheduleFormValues) {
     if (!scopedSession || !selected) return;
-    console.log('updateSchedule')
     const practitionerId = data.practitionerId || selected.practitioner_id;
     const doctorBranchIds =
       doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
@@ -535,7 +534,7 @@ export function Scheduling({ apiSession, branchId }: any) {
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1120px]">
-          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
+          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span>Doctor</span>
             <span>Branch</span>
             <span>Department</span>
@@ -543,7 +542,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             <span>Timing</span>
             <span>Slots</span>
             <span className="text-center">Status</span>
-            <span className="text-right">Actions</span>
+            <span className="text-center">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
             {pageRows.length === 0 && (

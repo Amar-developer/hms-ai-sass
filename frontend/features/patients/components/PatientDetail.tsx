@@ -381,7 +381,7 @@ export function PatientDetail({
             value={`${patient.age_years ?? "-"} / ${displayPatientGender(patient.gender)}`}
           />
           <Info title="Blood Group" value={patient.blood_group || "-"} />
-          <Info title="Area" value={patient.area || "-"} />
+          <Info title="Mobile" value={patient.mobile || "-"} />
           <Info title="Address" value={patient.address || "-"} />
           <Info title="Guardian" value={patient.guardian_name || "-"} />
           <Info title="Alternate Mobile" value={patient.alternate_mobile || "-"} />

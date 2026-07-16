@@ -1,16 +1,16 @@
 import { z } from "zod";
 
 export const itemSchema = z.object({
-  name: z.string().trim().min(2, "Item name must be at least 2 characters"),
+  name: z.string().trim().min(2, "Item name is required"),
   generic_name: z.string().trim().optional(),
   mrp_price: z
     .string()
-    .optional()
+    .min(1,'MRP price is required')
     .refine((val) => !isNaN(Number(val)) && Number(val) >= 0, "MRP must be a valid positive number"),
 
   price: z
     .string()
-    .optional()
+    .min(1,'Price is required')
     .refine((val) => !val || (!isNaN(Number(val)) && Number(val) >= 0), "Price must be a valid positive number"),
 
   purchase_price: z

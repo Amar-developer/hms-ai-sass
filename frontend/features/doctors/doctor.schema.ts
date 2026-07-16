@@ -19,7 +19,9 @@ const specialtyFeeSchema = z.object({
 
 export const doctorSchema = z
   .object({
-    userId: z.string().optional(),
+    userId: z
+      .string()
+      .min(1, "Please select a user"),
     fullName: z
       .string()
       .trim()

@@ -10,6 +10,7 @@ import { canResetTenantUserPassword } from "../permissions";
 import { Card,Field,Input, SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { booleanOptions, userTypeOptions } from "../options";
+import { FormError } from "@/app/components/common/FormError";
 
 export function UserForm({
   title,
@@ -184,15 +185,17 @@ export function UserForm({
           />
         </FormField>
 
-        <Field label="Mobile">
+        <FormField label="Mobile" required>
           <Input
             mobileNumber
+            type='number'
             {...register("mobile")}
             placeholder="Enter mobile number"
           />
-        </Field>
+          <FormError error={errors.mobile?.message}/>
+        </FormField>
 
-        <Field label="Branch Access">
+        <FormField label="Branch Access" required>
           <SearchableSelect
             value={selectedBranch}
             onChange={(value) =>
@@ -216,7 +219,7 @@ export function UserForm({
             ]}
             error={errors.branchId?.message}
           />
-        </Field>
+        </FormField>
 
         {!user && (
           <FormField label="Temporary Password" required>

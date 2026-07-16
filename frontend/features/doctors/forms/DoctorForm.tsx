@@ -1,16 +1,26 @@
 import { FormError } from "@/app/components/common/FormError";
-import { Button, Card, Field, Input, SearchableSelect } from "@/app/components/common/ui";
-import { DoctorFormValues, doctorSchema } from "@/features/doctors/doctor.schema";
-import { activeDoctorDepartmentFeeRules,activeDoctorFeeRule } from "../helpers";
+import {
+  Button,
+  Card,
+  Field,
+  Input,
+  SearchableSelect,
+} from "@/app/components/common/ui";
+import {
+  DoctorFormValues,
+  doctorSchema,
+} from "@/features/doctors/doctor.schema";
+import {
+  activeDoctorDepartmentFeeRules,
+  activeDoctorFeeRule,
+} from "../helpers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import React, { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { doctorTypes } from "../constants";
 import { CheckboxGroup } from "../components/CheckboxGroup";
 import { Plus, X } from "lucide-react";
-import { NumberField } from "@/app/components/FormElements";
-
-
+import { NumberField, FormField } from "@/app/components/FormElements";
 
 export function DoctorForm({
   title,
@@ -30,15 +40,43 @@ export function DoctorForm({
 
   // Better initial data
   const initialSpecialtyFees = React.useMemo(() => {
-    if (doctor?.specialtyFees?.length) return doctor.specialtyFees;
+    if (!doctor) {
+      return [
+        {
+          departmentId: "",
+          fee: "",
+          doctorSharePercentage: "70",
+        },
+      ];
+    }
+
+    const departmentFeeRules = activeDoctorDepartmentFeeRules(feeRules, doctor);
+
+    const fallbackFeeRule = activeDoctorFeeRule(feeRules, doctor);
+
+    if (doctor.department_ids?.length) {
+      return doctor.department_ids.map((departmentId: string) => {
+        const rule =
+          departmentFeeRules.find(
+            (r: any) => r.department_id === departmentId,
+          ) || fallbackFeeRule;
+
+        return {
+          departmentId,
+          fee: String(rule?.fee_amount ?? ""),
+          doctorSharePercentage: String(rule?.doctor_share_percentage ?? 70),
+        };
+      });
+    }
+
     return [
       {
-        departmentId: doctor?.department_ids?.[0] || "",
-        fee: doctor?.fee ? String(doctor.fee) : "",
+        departmentId: "",
+        fee: "",
         doctorSharePercentage: "70",
       },
     ];
-  }, [doctor]);
+  }, [doctor, feeRules]);
 
   const {
     register,
@@ -150,6 +188,11 @@ export function DoctorForm({
       specialtyFees: validSpecialties,
     });
   };
+
+  useEffect(() => {
+    setSpecialtyFees(initialSpecialtyFees);
+    setValue("specialtyFees", initialSpecialtyFees);
+  }, [initialSpecialtyFees, setValue]);
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -160,17 +203,22 @@ export function DoctorForm({
           Back to Doctors
         </button>
       </div>
-
+      <div className="rounded-lg p-3">
+        <p className="text-xs font-semibold text-amber-700">
+          Create a doctor user account first, then link it here using the
+          "Linked Login User" field.
+        </p>
+      </div>
       <form
         onSubmit={handleSubmit(onSubmitHandler)}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"
       >
-        <Field label="Full Name" required>
-          <Input {...register("fullName")} placeholder="Dr. Priya Raman" required />
+        <FormField label="Full Name" required>
+          <Input {...register("fullName")} placeholder="Dr. Priya Raman" />
           <FormError error={errors.fullName?.message} />
-        </Field>
+        </FormField>
 
-        <Field label="Doctor Type">
+        <FormField label="Doctor Type">
           <SearchableSelect
             value={watch("practitionerType")}
             onChange={(value) => setValue("practitionerType", value)}
@@ -180,46 +228,46 @@ export function DoctorForm({
               label,
             }))}
           />
-        </Field>
+        </FormField>
 
-        <Field label="Linked Login User">
+        <FormField label="Linked Login User" required>
           <SearchableSelect
             value={watch("userId")}
             onChange={applyLoginUser}
             searchable={doctorUsers.length > 8}
-            placeholder="No login linked"
+            placeholder="Select User"
             options={[
-              { value: "", label: "No login linked" },
+              { value: "", label: "Select User" },
               ...doctorUsers.map((user: any) => ({
                 value: user.id,
                 label: `${user.name} - ${user.email}`,
               })),
             ]}
           />
-        </Field>
+          <FormError error={errors.userId?.message} />
+        </FormField>
 
-        <Field label="Registration Number">
+        <FormField label="Registration Number">
           <Input {...register("registrationNumber")} placeholder="TNMC12345" />
           <FormError error={errors.registrationNumber?.message} />
-        </Field>
+        </FormField>
 
-        <Field label="Mobile" required>
-          <Input {...register("mobile")} placeholder="Enter mobile" required />
+        <FormField label="Mobile" required>
+          <Input {...register("mobile")} placeholder="Enter mobile" />
           <FormError error={errors.mobile?.message} />
-        </Field>
+        </FormField>
 
-        <Field label="Email" required>
+        <FormField label="Email" required>
           <Input
             type="email"
             {...register("email")}
             placeholder="Enter email"
-            required
           />
           <FormError error={errors.email?.message} />
-        </Field>
+        </FormField>
 
         {doctor && (
-          <Field label="Status">
+          <FormField label="Status">
             <SearchableSelect
               value={watch("status")}
               onChange={(value) => setValue("status", value)}
@@ -229,10 +277,10 @@ export function DoctorForm({
                 { value: "inactive", label: "Inactive" },
               ]}
             />
-          </Field>
+          </FormField>
         )}
 
-        <Field label="Share Tax with Doctor">
+        <FormField label="Share Tax with Doctor">
           <SearchableSelect
             value={watch("shareTaxWithDoctor") ? "true" : "false"}
             onChange={(value) =>
@@ -246,7 +294,7 @@ export function DoctorForm({
               { value: "false", label: "No" },
             ]}
           />
-        </Field>
+        </FormField>
 
         <div className="md:col-span-2 xl:col-span-3">
           <Controller
@@ -305,7 +353,7 @@ export function DoctorForm({
                     key={index}
                     className="grid gap-3 rounded-lg bg-slate-50 p-3 md:grid-cols-[1fr_220px_180px_auto] md:items-end"
                   >
-                    <Field
+                    <FormField
                       label={
                         index === 0
                           ? "Primary Specialty"
@@ -329,7 +377,7 @@ export function DoctorForm({
                           })),
                         ]}
                       />
-                    </Field>
+                    </FormField>
 
                     <NumberField
                       label={
@@ -340,7 +388,6 @@ export function DoctorForm({
                       value={row.fee}
                       onChange={(value) => updateSpecialty(index, "fee", value)}
                       min={0}
-                      required
                       placeholder="650"
                     />
 

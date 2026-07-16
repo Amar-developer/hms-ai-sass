@@ -112,7 +112,7 @@ export function TenantUsers({
               {filtered.length} users
             </Badge>
           </div>
-          <p className="table-data text-slate-500">
+          <p className="card-desc text-slate-500">
             Create, edit, activate/deactivate, and search tenant users.
           </p>
         </div>
@@ -138,9 +138,9 @@ export function TenantUsers({
           />
         </FormField>
         <FormField label="Status">
-          <Select
+          <SearchableSelect
             value={filters.status}
-            onChange={(value) => updateFilter("status", value)}
+            onChange={(value:any) => updateFilter("status", value)}
             options={status_options}
             searchable={false}
           />

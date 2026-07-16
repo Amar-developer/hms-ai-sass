@@ -2,7 +2,7 @@ export const hiddenScrollbar =
   "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
 export const genders = [
-  ["", "Select gender"],
+  ["select gender", "Select gender"],
   ["male", "Male"],
   ["female", "Female"],
   ["other", "Other"],

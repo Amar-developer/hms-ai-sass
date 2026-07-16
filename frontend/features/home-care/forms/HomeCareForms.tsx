@@ -29,7 +29,12 @@ import {
   statuses,
 } from "../constants";
 import { money } from "@/utils/helper";
-import { patientLocation,dayCount,patientSearchLabel,recurrenceEndDate } from "../helpers";
+import {
+  patientLocation,
+  dayCount,
+  patientSearchLabel,
+  recurrenceEndDate,
+} from "../helpers";
 import { BookingFormProps } from "../types";
 
 export const homeCareHourOptions = Object.entries(homeCareHourPrices).map(
@@ -38,8 +43,6 @@ export const homeCareHourOptions = Object.entries(homeCareHourPrices).map(
     label: `${value} hours - ${money(price)}`,
   }),
 );
-
-
 
 export function BookingForm({
   patients,
@@ -77,6 +80,7 @@ export function BookingForm({
       status: "requested",
       location: "",
       notes: "",
+      lineItems: lineItems,
     },
   });
 
@@ -230,6 +234,12 @@ export function BookingForm({
     }
   });
 
+  useEffect(() => {
+    setValue("lineItems", lineItems, {
+      shouldValidate: true,
+    });
+  }, [lineItems, setValue]);
+
   return (
     <Card>
       <div className="flex justify-between gap-3">
@@ -274,13 +284,16 @@ export function BookingForm({
         <FormError error={errors.patient_id?.message} />
       </div>
       <form onSubmit={submitBooking} className="mt-3 grid gap-3 md:grid-cols-4">
-        <FormField label="Booking Type" required>
+        <FormField
+          label="Booking Type"
+          required
+          error={errors.booking_type?.message}
+        >
           <Controller
             name="booking_type"
             control={control}
             render={({ field }) => (
               <SearchableSelect
-                required
                 value={field.value}
                 onChange={changeBookingType}
                 options={bookingTypeOptions.map(([value, label]) => ({
@@ -294,13 +307,16 @@ export function BookingForm({
           />
         </FormField>
 
-        <FormField label="Recurrence" required>
+        <FormField
+          label="Recurrence"
+          required
+          error={errors.recurrence?.message}
+        >
           <Controller
             name="recurrence"
             control={control}
             render={({ field }) => (
               <SearchableSelect
-                required
                 value={field.value}
                 onChange={field.onChange}
                 options={recurrenceOptions.map(([value, label]) => ({
@@ -319,7 +335,6 @@ export function BookingForm({
           render={({ field }) => (
             <DateField
               label="Start Date"
-              required
               value={field.value}
               onChange={field.onChange}
               error={errors.start_date?.message}
@@ -336,16 +351,18 @@ export function BookingForm({
               value={field.value || ""}
               onChange={field.onChange}
               disabled={recurrence !== "custom"}
+              error={errors.end_date?.message}
             />
           )}
         />
 
-        <FormField label="Status">
+        <FormField label="Status" required error={errors.status?.message}>
           <Controller
             name="status"
             control={control}
             render={({ field }) => (
               <SearchableSelect
+                required
                 value={field.value}
                 onChange={field.onChange}
                 options={statuses.map(([value, label]) => ({
@@ -365,11 +382,11 @@ export function BookingForm({
             render={({ field }) => (
               <TextareaField
                 label="Location"
-                required
                 value={field.value || ""}
                 onChange={field.onChange}
                 placeholder="Patient address or manual location"
                 rows={3}
+                error={errors.location?.message}
               />
             )}
           />
@@ -418,29 +435,50 @@ export function BookingForm({
                 }
               >
                 {isHomeVisitBooking ? (
-                  <SearchableSelectField
-                    label="Visit Service"
-                    required
-                    value={line.service_id}
-                    onChange={(value) => setLine(index, "service_id", value)}
-                    options={[
-                      { value: "", label: "Select home visit service" },
-                      ...visitServices.map((service: any) => ({
-                        value: service.id,
-                        label: service.name,
-                        sublabel: money(service.default_price),
-                      })),
-                    ]}
-                  />
+                  <FormField label="Visit Service" required>
+                    <SearchableSelect
+                      value={line.service_id}
+                      onChange={(value) => setLine(index, "service_id", value)}
+                      options={[
+                        { value: "", label: "Select home visit service" },
+                        ...visitServices.map((service: any) => ({
+                          value: service.id,
+                          label: service.name,
+                          sublabel: money(service.default_price),
+                        })),
+                      ]}
+                      searchable={true}
+                    />
+                    <FormError
+                      error={errors.lineItems?.[index]?.service_id?.message}
+                    />
+                  </FormField>
                 ) : (
+                  // <FormField label="Visit Service">
+                  //   <SearchableSelect
+                  //     value={line.service_id}
+                  //     onChange={(value) => setLine(index, "service_id", value)}
+                  //     options={[
+                  //       { value: "", label: "Select home visit service" },
+                  //       ...visitServices.map((service: any) => ({
+                  //         value: service.id,
+                  //         label: service.name,
+                  //         sublabel: money(service.default_price),
+                  //       })),
+                  //     ]}
+                  //     searchable={true}
+                  //   />
+                  // </FormField>
                   <FormField label="Service Name" required>
                     <Input
-                      required
                       value={line.description}
-                      onChange={(event: any) =>
+                      onChange={(event) =>
                         setLine(index, "description", event.target.value)
                       }
                       placeholder="Type home care service name"
+                    />
+                    <FormError
+                      error={errors.lineItems?.[index]?.description?.message}
                     />
                   </FormField>
                 )}

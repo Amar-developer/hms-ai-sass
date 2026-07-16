@@ -119,7 +119,7 @@ export function RolesManagement({
                 : `${filtered.length} roles`}
             </Badge>
           </div>
-          <p className="table-data text-slate-500">
+          <p className="card-desc text-slate-500">
             {selected?.is_primary
               ? "Primary tenant roles are global templates. Assign templates to customer tenants to avoid duplicate setup."
               : "Create, edit, deactivate, and search tenant roles with latest changes shown first."}

@@ -135,7 +135,7 @@ const InvoiceReport = ({
   {
     key: "settlement",
     header: "Settlement",
-    width:'90px',
+    width:'100px',
     render: (row: any) =>
       money(invoiceSettlementAmount(row)),
   },
@@ -149,13 +149,13 @@ const InvoiceReport = ({
   {
     key: "clinic_profit",
     header: "Clinic Profit",
-    width:'90px',
+    width:'140px',
     render: (row: any) => {
       const paid = numberValue(row.paid_amount);
       const settlement = invoiceSettlementAmount(row);
 
       return (
-        <span className="font-bold">
+        <span className="font-bold ">
           {money(Math.max(paid - settlement, 0))}
         </span>
       );

@@ -16,6 +16,7 @@ const AppointmentReports = ({
     {
       key: "doctor",
       header: "Doctor",
+      width:'80px',
       render: (row: any) => <b>{row.doctor}</b>,
     },
     {
@@ -26,32 +27,25 @@ const AppointmentReports = ({
     {
       key: "invoices",
       header: "Invoices",
+      width:'80px'
     },
     {
       key: "grossRevenue",
-      header: "Total",
+      width:'150px',
+      header: "Gross Revenue",
       render: (row: any) => money(row.grossRevenue),
     },
     {
       key: "paidRevenue",
       header: "Paid",
+      width:'80px',
       render: (row: any) => money(row.paidRevenue),
     },
     {
-      key: "balance",
-      header: "Balance",
-      render: (row: any) => money(row.balance),
-    },
-    {
-      key: "membershipBenefit",
-      header: "Membership Benefit",
-      width: '150px',
-      render: (row: any) => money(row.membershipBenefit),
-    },
-    {
-      key: "paymentMode",
-      header: "Mode of Payment",
-      width: "140px",
+      key: "doctorFee",
+      header: "Doctor Fee",
+      width:'120px',
+      render: (row: any) => money(row.doctorFee),
     },
     {
       key: "settlement",
@@ -67,16 +61,23 @@ const AppointmentReports = ({
     {
       key: "clinicFee",
       header: "Clinic Fee",
+      width:'110px',
       render: (row: any) => money(row.clinicFee),
     },
     {
       key: "grossProfitPercentage",
       header: "Gross Profit %",
-      render: (row: any) => percent(row.finalProfit, row.paidRevenue),
+      width:'150px',
+      render: (row: any) =>
+        percent(
+          Math.max(row.grossRevenue - row.doctorFee, 0),
+          row.grossRevenue,
+        ),
     },
     {
       key: "finalProfit",
       header: "Final Profit",
+      width:'130px',
       render: (row: any) => (
         <span className="font-bold">{money(row.finalProfit)}</span>
       ),

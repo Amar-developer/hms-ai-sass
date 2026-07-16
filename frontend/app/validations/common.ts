@@ -16,6 +16,7 @@ export const passwordSchema = z
 export const mobileSchema = z
   .string()
   .trim()
+  .min(1, "Mobile number is required")
   .regex(/^[0-9]{10}$/, "Mobile number must be 10 digits");
 
 export const requiredString = (message = "This field is required") =>

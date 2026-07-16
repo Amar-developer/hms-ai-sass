@@ -2,12 +2,11 @@ import { useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card,Input, SearchableSelect  } from "@/app/components/common/ui";
+import { Card, Input, SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { useEffect } from "react";
 import { SupplierFormValues, supplierSchema } from "../settings.schema";
 import { statusOptions } from "../options";
-
 
 export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
   const {
@@ -68,6 +67,7 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
         <FormField label="Phone">
           <Input
             mobileNumber
+            type='number'
             {...register("phone")}
             placeholder="Enter supplier mobile number"
           />

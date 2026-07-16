@@ -565,20 +565,21 @@ export function AppShell(props: any) {
                     <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
                       Tenant Admin
                     </span>
-                    <select
+                    <SearchableSelect
                       value={tenantAdminSection}
-                      onChange={(event) => {
+                      onChange={(value: string) => {
                         setTenantAdminSettingsOpen(true);
-                        setTenantAdminSection(event.target.value);
+                        setTenantAdminSection(value);
                       }}
-                      className="h-9 min-w-[190px] rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition  bg-white"
-                    >
-                      {visibleTenantAdminSections.map(([id, label]: any) => (
-                        <option key={id} value={id}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                      options={visibleTenantAdminSections.map(
+                        ([id, label]: any) => ({
+                          label,
+                          value: id,
+                        }),
+                      )}
+                      searchable={false}
+                      className="min-w-[200px] scrollbar-thin"
+                    />
                   </div>
                 )}
 
@@ -595,7 +596,7 @@ export function AppShell(props: any) {
                       label: department.name,
                     }))}
                     disabled={!canChangeDepartment}
-                    className="h-9 min-w-[190px] rounded-lg  border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                    // className="h-9 min-w-[190px] rounded-lg  border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
                     placeholder="Select department"
                     searchable={false}
                   />

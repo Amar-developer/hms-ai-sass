@@ -41,7 +41,6 @@ export function PractitionerPicker({ doctors, value, onChange }: any) {
         }}
         onBlur={() => window.setTimeout(() => setOpen(false), 120)}
         placeholder="Type doctor or physiotherapist"
-        required={!value}
         className=' placeholder:text-xs search-input'
       />
       {open && (

@@ -356,13 +356,23 @@ export const MUST_CHANGE_OPTIONS = [
   { value: "false", label: "No" },
 ];
 
-export const status_filters =
+export const status_filters = {
+  key: "status",
+  label: "Status",
+  options: [
+    { value: "all", label: "All Status" },
+    { value: "active", label: "Active" },
+    { value: "inactive", label: "Inactive" },
+  ],
+};
+
+export const branch_status_options = [
   {
-    key: "status",
-    label: "Status",
-    options: [
-      { value: "all", label: "All Status" },
-      { value: "active", label: "Active" },
-      { value: "inactive", label: "Inactive" },
-    ],
-  }
+    value: "true",
+    label: "Active",
+  },
+  {
+    value: "false",
+    label: "Inactive",
+  },
+];

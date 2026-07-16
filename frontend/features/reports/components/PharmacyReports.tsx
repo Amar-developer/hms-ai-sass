@@ -16,15 +16,18 @@ const PharmacyReports = ({
     {
       key: "supplier",
       header: "Supplier",
+      width:'90px',
       render: (row: any) => <b>{row.supplier}</b>,
     },
     {
       key: "item",
       header: "Medicine",
+      width:'90px',
     },
     {
       key: "issueCount",
       header: "Issues",
+      width:'90px',
     },
     {
       key: "invoiceCount",

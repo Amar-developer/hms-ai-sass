@@ -20,3 +20,18 @@ export const modalities = [
   ["muscle_stimulator", "Muscle Stimulator / EMS"],
   ["exercise", "Therapeutic Exercise"],
 ];
+
+export const sort_type_options = [
+  { value: "name", label: "Name" },
+  { value: "latest", label: "Latest" },
+  { value: "type", label: "Type" },
+  { value: "code", label: "Code" },
+  { value: "mrp", label: "MRP" },
+  { value: "price", label: "Sale Price" },
+];
+
+export const price_options = [
+  { value: "all", label: "All prices" },
+  { value: "priced", label: "Priced only" },
+  { value: "free", label: "Free / zero" },
+];

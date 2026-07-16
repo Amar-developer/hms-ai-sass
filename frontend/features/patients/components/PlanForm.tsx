@@ -5,11 +5,11 @@ import { normalizePharmacySlabs } from "../helpers";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Card,Input,Button } from "@/app/components/common/ui";
+import { Card, Input, Button } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { PharmacySlabEditor } from "./PharmacySlabEditor";
 import { BenefitPicker } from "./BenefitPicker";
-
+import { FormError } from "@/app/components/common/FormError";
 
 export function PlanForm({
   title,
@@ -41,13 +41,13 @@ export function PlanForm({
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<PlanFormValues,PlanFormInput,any>({
+  } = useForm<PlanFormValues, PlanFormInput, any>({
     resolver: zodResolver(planSchema),
     defaultValues: {
       name: plan?.name ?? "",
       code: plan?.code ?? "",
       priceAmount: plan?.price_amount ?? 0,
-      durationDays: plan?.duration_days ?? 1,
+      durationDays: plan?.duration_days ?? 0,
       activationAfterDays: plan?.activation_after_days ?? 0,
       freeConsultations: plan?.free_consultations ?? 0,
       labDiscount: plan?.lab_discount_percentage ?? 0,
@@ -72,18 +72,14 @@ export function PlanForm({
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h3 className="text-lg font-bold">{title}</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="card-title font-bold">{title}</h3>
+          <p className="card-desc text-slate-500">
             {plan
               ? "Update this membership plan."
               : "Create one tenant-scoped membership plan for all branches."}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={back}
-          className="rounded-lg border px-4 py-3 text-sm font-bold"
-        >
+        <button type="button" onClick={back} className="close-button font-bold">
           Back to Plans
         </button>
       </div>
@@ -93,36 +89,46 @@ export function PlanForm({
       >
         <FormField label="Plan Name">
           <Input {...register("name")} placeholder="Membership plan name" />
-
-          {errors.name && (
-            <p className="text-xs text-red-500">{errors.name.message}</p>
-          )}
+          {errors.name && <FormError error={errors.name?.message} />}
         </FormField>
         <FormField label="Code">
           <Input {...register("code")} placeholder="Optional plan code" />
-
-          {errors.code && (
-            <p className="text-xs text-red-500">{errors.code.message}</p>
-          )}
+          {errors.code && <FormError error={errors.code?.message} />}
         </FormField>
         <FormField label="Price">
-          <Input {...register("priceAmount")} type="number" min="0" />
-
+          <Input
+            {...register("priceAmount", {
+              valueAsNumber: true,
+            })}
+            type="number"
+            min="0"
+          />
           {errors.priceAmount && (
-            <p className="text-xs text-red-500">{errors.priceAmount.message}</p>
+            <FormError error={errors.priceAmount?.message} />
           )}
         </FormField>
         <FormField label="Duration Days">
-          <Input {...register("durationDays")} type="number" />
+          <Input
+            {...register("durationDays", {
+              valueAsNumber: true,
+            })}
+            type="number"
+          />
 
           {errors.durationDays && (
-            <p className="text-xs text-red-500">
-              {errors.durationDays.message}
-            </p>
+            <FormError error={errors.durationDays?.message} />
           )}
         </FormField>
         <FormField label="Activation After Days">
-          <Input {...register("activationAfterDays")} type="number" />
+          <Input
+            {...register("activationAfterDays", {
+              valueAsNumber: true,
+            })}
+            type="number"
+          />
+          {errors.activationAfterDays && (
+            <FormError error={errors.activationAfterDays?.message} />
+          )}
         </FormField>
         <FormField label="Free Consultations">
           <Input {...register("freeConsultations")} type="number" />
@@ -216,7 +222,15 @@ export function PlanForm({
           />
         </FormField>
         <FormField label="Min Bill Amount for Discount">
-          <Input {...register("minDiscountAmount")} type="number" />
+          <Input
+            {...register("minDiscountAmount", {
+              valueAsNumber: true,
+            })}
+            type="number"
+          />
+          {errors.minDiscountAmount && (
+            <FormError error={errors.minDiscountAmount?.message} />
+          )}
         </FormField>
         <div className="md:col-span-2 xl:col-span-4">
           <PharmacySlabEditor

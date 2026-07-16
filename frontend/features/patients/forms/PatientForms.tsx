@@ -43,7 +43,7 @@ export function PatientForm({
       mobile: patientField(patient, "mobile") || "",
       branchId:
         patientField(patient, "branch_id", "branchId") || defaultBranchId || "",
-      gender: patientField(patient, "gender") || "",
+      gender: patientField(patient, "gender") || "select a gender",
       dateOfBirth: patientDateInputValue(
         patientField(patient, "date_of_birth", "dateOfBirth"),
       ),
@@ -92,7 +92,7 @@ export function PatientForm({
       mobile: patientField(patient, "mobile") || "",
       branchId:
         patientField(patient, "branch_id", "branchId") || defaultBranchId || "",
-      gender: patientField(patient, "gender") || "",
+      gender: patientField(patient, "gender") || genders[0][0],
       dateOfBirth: patientDateInputValue(
         patientField(patient, "date_of_birth", "dateOfBirth"),
       ),
@@ -156,21 +156,26 @@ export function PatientForm({
           <Input
             {...register("fullName")}
             placeholder="Enter patient full name"
-            required
           />
           <FormError error={errors.fullName?.message} />
         </FormField>
         <FormField label="Mobile" required>
           <Input
-            {...register("mobile")}
+            type="text"
+            inputMode="numeric"
+            maxLength={10}
             placeholder="Enter patient mobile number"
-            required
+            {...register("mobile", {
+              onChange: (e) => {
+                e.target.value = e.target.value.replace(/\D/g, "");
+              },
+            })}
           />
+
           <FormError error={errors.mobile?.message} />
         </FormField>
         <FormField label="Branch" required>
           <SearchableSelect
-            required
             value={watch("branchId")}
             onChange={(value) =>
               setValue("branchId", value, {
@@ -193,7 +198,6 @@ export function PatientForm({
         </FormField>
         <FormField label="Gender" required>
           <SearchableSelect
-            required
             value={watch("gender")}
             searchable={false}
             options={genders.map(([value, label]) => ({
@@ -226,7 +230,6 @@ export function PatientForm({
             max="130"
             placeholder="Age"
             {...register("ageYears")}
-            required
           />
           <FormError error={errors.ageYears?.message} />
         </FormField>
@@ -251,9 +254,6 @@ export function PatientForm({
         <FormField label="Email">
           <Input {...register("email")} placeholder="Enter patient email" />
           <FormError error={errors.email?.message} />
-        </FormField>
-        <FormField label="Area">
-          <Input {...register("area")} placeholder="Enter patient area" />
         </FormField>
         <FormField label="Blood Group">
           <SearchableSelect
@@ -281,7 +281,6 @@ export function PatientForm({
             <Input
               {...register("address")}
               placeholder="Enter patient Address"
-              required
             />
             <FormError error={errors.address?.message} />
           </FormField>

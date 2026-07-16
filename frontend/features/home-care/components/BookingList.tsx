@@ -1,11 +1,25 @@
-import { Card, RefreshButton,Button, Input, SearchableSelect, ActionButton,ActionGroup,Badge } from "@/app/components/common/ui";
+import {
+  Card,
+  RefreshButton,
+  Button,
+  Input,
+  SearchableSelect,
+  ActionButton,
+  ActionGroup,
+  Badge,
+} from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { statuses } from "../constants";
-import { capitalizeFirst, displayDate, money, patientName } from "@/utils/helper";
-import { bookingStaffName, bookingTotal, isBookingLocked } from "../helpers";
+import {
+  capitalizeFirst,
+  displayDate,
+  money,
+  patientName,
+} from "@/utils/helper";
+import { bookingTotal, isBookingLocked, userName, bookingStaffName } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
-
+import { RowActions } from "@/features/admin/components/RowActions";
 
 export function BookingsList({
   bookings,
@@ -82,7 +96,7 @@ export function BookingsList({
               <th>Date Range</th>
               <th>Status</th>
               <th className=" w-[120px] text-center">Total</th>
-              <th className="pr-4 w-[220px]  text-right">Actions</th>
+              <th className="pr-4 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -107,6 +121,7 @@ export function BookingsList({
                     {capitalizeFirst(patientName(patient))}
                   </td>
                   <td className="card-desc">
+
                     {bookingStaffName(booking, staffMap)}
                     {booking.staff_type && (
                       <p className="text-xs text-slate-500">
@@ -130,27 +145,29 @@ export function BookingsList({
                     {money(bookingTotal(booking))}
                   </td>
                   <td className="pr-4">
-                    <ActionGroup className="justify-end">
-                      <ActionButton onClick={() => onView(booking)}>
-                        View
-                      </ActionButton>
-                      {canManage && (
-                        <ActionButton
-                          onClick={() => onEdit(booking)}
-                          disabled={isBookingLocked(booking)}
-                          title={
-                            isBookingLocked(booking)
-                              ? "Locked after billing/completion"
-                              : undefined
-                          }
-                        >
-                          Edit
-                        </ActionButton>
-                      )}
-                      <ActionButton onClick={() => onInvoice(booking)}>
-                        Invoice
-                      </ActionButton>
-                    </ActionGroup>
+                    <div className="flex justify-center">
+                      <RowActions
+                        actions={[
+                          {
+                            label: "View",
+                            onClick: () => onView(booking),
+                          },
+                          ...(canManage
+                            ? [
+                                {
+                                  label: "Edit",
+                                  onClick: () => onEdit(booking),
+                                  disabled: isBookingLocked(booking),
+                                },
+                              ]
+                            : []),
+                          {
+                            label: "Invoice",
+                            onClick: () => onInvoice(booking),
+                          },
+                        ]}
+                      />
+                    </div>
                   </td>
                 </tr>
               );

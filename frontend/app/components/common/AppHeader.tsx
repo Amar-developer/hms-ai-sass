@@ -56,22 +56,21 @@ const AppHeader = ({
   setShowPassword,
   setReportsOpen,
 }: AppHeaderProps) => {
+  const tenantSelectOptions = tenantOptions.map((tenant) => ({
+    label: tenant.name,
+    value: tenant.id,
+  }));
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
       <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(200px,1.15fr)_minmax(150px,.8fr)_minmax(220px,1fr)_auto] lg:grid-cols-[minmax(260px,1.15fr)_minmax(180px,.8fr)_minmax(280px,1fr)_auto] lg:items-center">
         <div className="min-w-0">
-          {/* {!isSuperAdmin && (
-            <div className="lg:hidden">
-              <BrandBlock compact setSidebarOpen={setReportsOpen} />
-            </div>
-          )} */}
-
           {isSuperAdmin && apiSession ? (
             <FormField label="Tenant">
               <SearchableSelect
-                onChange={(e: any) => switchTenant(e.target.value)}
+                value={clinic?.id || ""}
+                onChange={(value: string) => switchTenant(value)}
                 searchable={false}
-                options={tenantOptions}
+                options={tenantSelectOptions}
               />
             </FormField>
           ) : (
@@ -85,24 +84,25 @@ const AppHeader = ({
             </div>
           )}
         </div>
-        <GlobalSearch items={searchItems} />
-        <CompactControl label="Branch" hideLabel>
+        <FormField label="Search">
+          <GlobalSearch items={searchItems} />
+        </FormField>
+        <FormField label="Branch">
           {canChangeBranch ? (
-            <select
+            <SearchableSelect
               value={branchId}
-              onChange={(e: any) => setBranchId(e.target.value)}
-              className="w-full bg-transparent text-xs  font-semibold outline-none"
-            >
-              {clinic.branches.map((b: any) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              onChange={(value: string) => setBranchId(value)}
+              searchable={false}
+              options={clinic.branches.map((b: any) => ({
+                label: b.name,
+                value: b.id,
+              }))}
+              className="border-0"
+            />
           ) : (
             <span className="truncate">{branchName}</span>
           )}
-        </CompactControl>
+        </FormField>
 
         <div className="flex shrink-0 items-start lg:items-center mt-3  gap-2">
           <button

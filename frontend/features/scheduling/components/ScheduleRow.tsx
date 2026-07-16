@@ -1,6 +1,7 @@
 import { publicDisplayValue } from "@/lib/options";
 import { formatDisplayRange } from "../helpers";
-import { Badge,ActionButton, ActionGroup } from "@/app/components/common/ui";
+import { Badge, ActionButton, ActionGroup } from "@/app/components/common/ui";
+import { RowActions } from "@/features/admin/components/RowActions";
 
 export function ScheduleRow({
   row,
@@ -48,10 +49,7 @@ export function ScheduleRow({
         ? "red"
         : "amber";
   const firstSchedule = scheduleRows[0];
-  const stop = (handler: any) => (event: any) => {
-    event.stopPropagation();
-    handler();
-  };
+
   return (
     <div
       role="button"
@@ -63,7 +61,7 @@ export function ScheduleRow({
           onEdit();
         }
       }}
-      className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] md:items-center"
+      className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_.7fr] md:items-center"
     >
       <div>
         <b className="text-sm">{doctorName}</b>
@@ -74,18 +72,31 @@ export function ScheduleRow({
       </div>
       <span className="text-sm">{branchName}</span>
       <span className="text-sm">{departmentName}</span>
-      <span className="text-sm">{row.room_number ? row.room_number.padStart(3, "0") : "-"}</span>
+      <span className="text-sm">
+        {row.room_number ? row.room_number.padStart(3, "0") : "-"}
+      </span>
       <span className="text-sm">
         {formatDisplayRange(firstSchedule.start_time, firstSchedule.end_time)}
       </span>
       <span className="text-sm">{row.slot_minutes} min</span>
-      <Badge tone={statusTone as any} className="table-status text-sm">{statusLabel}</Badge>
-      <ActionGroup className="justify-end">
-        <ActionButton onClick={stop(onEdit)}>Edit</ActionButton>
-        <ActionButton tone="danger" onClick={stop(onDelete)}>
-          Delete
-        </ActionButton>
-      </ActionGroup>
+      <Badge tone={statusTone as any} className="table-status text-sm">
+        {statusLabel}
+      </Badge>
+      <div className="flex justify-center">
+        <RowActions
+          actions={[
+            {
+              label: "Edit",
+              onClick: onEdit,
+            },
+            {
+              label: "Delete",
+              onClick: onDelete,
+              danger: true,
+            },
+          ]}
+        />
+      </div>
     </div>
   );
 }

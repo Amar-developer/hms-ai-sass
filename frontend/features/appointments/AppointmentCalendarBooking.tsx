@@ -326,16 +326,16 @@ export function AppointmentCalendarBooking(props: Props) {
     apiSession
       ? liveMatches
       : searchPatients(patients, patientSearch).map((patient: any) => ({
-        id: patient.id,
-        full_name: patient.name,
-        mobile: patient.mobile,
-        guardian_name: patient.guardian,
-        guardian_mobile: patient.guardianMobile,
-        area: patient.area,
-        age_years: patient.age,
-        gender: patient.gender,
-        status: patient.status,
-      }))
+          id: patient.id,
+          full_name: patient.name,
+          mobile: patient.mobile,
+          guardian_name: patient.guardian,
+          guardian_mobile: patient.guardianMobile,
+          area: patient.area,
+          age_years: patient.age,
+          gender: patient.gender,
+          status: patient.status,
+        }))
   ).filter(
     (patient: any) =>
       !patient.status || String(patient.status).toLowerCase() === "active",
@@ -437,7 +437,6 @@ export function AppointmentCalendarBooking(props: Props) {
       label: d,
     }),
   );
-
   if (mode === "book") {
     return (
       <div className="space-y-5">
@@ -510,6 +509,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       onChange={(event: any) => {
                         setPatientSearch(event.target.value);
                         setPatientLookupOpen(true);
+
                         if (bookingStep === "newPatient")
                           setBookingStep("appointment");
                       }}
@@ -518,10 +518,26 @@ export function AppointmentCalendarBooking(props: Props) {
                           event.preventDefault();
                           setPatientLookupOpen(false);
                         }
+
+                        if (
+                          event.key === "Enter" &&
+                          patientLookupOpen &&
+                          patientMatches.length > 0
+                        ) {
+                          event.preventDefault();
+
+                          const patient = patientMatches[0];
+
+                          setSelectedPatient(patient);
+                          setPatientSearch("");
+                          setPatientLookupOpen(false);
+                          setBookingStep("appointment");
+                          setMessage("");
+                        }
                       }}
                       placeholder="Search patient name, mobile, or patient ID"
                       autoComplete="off"
-                      className="rounded-lg py-3 pl-10 pr-10 text-xs "
+                      className="rounded-lg py-3 pl-10 pr-10 text-xs"
                     />
                     {patientSearch && (
                       <button
@@ -650,12 +666,12 @@ export function AppointmentCalendarBooking(props: Props) {
                         doctors.length === 0
                           ? [{ value: "", label: "No doctor available" }]
                           : doctors.map((item: any) => ({
-                            value: item.id,
-                            label: item.full_name || item.name,
-                            sublabel: selectedDepartmentName
-                              ? selectedDepartmentName
-                              : undefined,
-                          }))
+                              value: item.id,
+                              label: item.full_name || item.name,
+                              sublabel: selectedDepartmentName
+                                ? selectedDepartmentName
+                                : undefined,
+                            }))
                       }
                     />
                   </Field>
@@ -663,10 +679,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     <SearchableSelect
                       required
                       value={appointmentType}
-                      onChange={() => {
-                        setAppointmentType;
-                      }}
-                      // className="select-filter"
+                      onChange={setAppointmentType}
                       searchable={false}
                       options={[
                         { value: "op", label: "OP" },
@@ -686,7 +699,6 @@ export function AppointmentCalendarBooking(props: Props) {
                       type="date"
                       value={appointmentDate}
                       onChange={(e: any) => setAppointmentDate(e.target.value)}
-                    // className="date-filter"
                     />
                   </Field>
                   <div className="rounded-lg bg-slate-50 p-4">
@@ -734,36 +746,36 @@ export function AppointmentCalendarBooking(props: Props) {
                 {(appointmentType === "follow_up" ||
                   appointmentType === "doctor_review" ||
                   appointmentType === "fitness_certificate") && (
-                    <div className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-2">
-                      <SelectField
-                        label="Billing"
-                        value={isBillable ? "paid" : "free"}
-                        onChange={(v) => setIsBillable(v === "paid")}
-                        options={[
-                          { value: "paid", label: "Chargeable" },
-                          { value: "free", label: "Free Review" },
-                        ]}
-                      />
-                      {isBillable && (
-                        <Field label="Consultation Price (₹)">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={customFee}
-                            onChange={(e: any) => setCustomFee(e.target.value)}
-                            placeholder="Set price for this visit"
-                          />
-                        </Field>
-                      )}
-                      <FormField label="Billing Note">
+                  <div className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 md:grid-cols-2">
+                    <SelectField
+                      label="Billing"
+                      value={isBillable ? "paid" : "free"}
+                      onChange={(v) => setIsBillable(v === "paid")}
+                      options={[
+                        { value: "paid", label: "Chargeable" },
+                        { value: "free", label: "Free Review" },
+                      ]}
+                    />
+                    {isBillable && (
+                      <Field label="Consultation Price (₹)">
                         <Input
-                          value={billingNote}
-                          onChange={setBillingNote}
-                          placeholder="Within free review period, certificate request, etc."
+                          type="number"
+                          min={0}
+                          value={customFee}
+                          onChange={(e: any) => setCustomFee(e.target.value)}
+                          placeholder="Set price for this visit"
                         />
-                      </FormField>
-                    </div>
-                  )}
+                      </Field>
+                    )}
+                    <FormField label="Billing Note">
+                      <Input
+                        value={billingNote}
+                        onChange={setBillingNote}
+                        placeholder="Within free review period, certificate request, etc."
+                      />
+                    </FormField>
+                  </div>
+                )}
                 {appointmentType !== "emergency" && (
                   <div className="mt-4 rounded-lg bg-blue-50 p-4 text-xs text-blue-800">
                     Consultation time will be auto-assigned from the doctor's
@@ -1131,9 +1143,9 @@ export function AppointmentCalendarBooking(props: Props) {
                     {appointment.appointmentDate || "-"}
                     {appointment.appointmentTime || appointment.appointment_time
                       ? ` ${formatDisplayTime(
-                        appointment.appointmentTime ||
-                        appointment.appointment_time,
-                      )}`
+                          appointment.appointmentTime ||
+                            appointment.appointment_time,
+                        )}`
                       : ""}
                   </span>
                   <Badge

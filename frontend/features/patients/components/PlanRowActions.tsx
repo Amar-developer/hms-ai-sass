@@ -19,7 +19,7 @@ export function PlanRowActions({
     fn?.();
     setOpen(false);
   };
-
+  console.log(canDeletePlans,'canDeleteplans')
   return (
     <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
       {/* 3-dot button */}
@@ -62,7 +62,7 @@ export function PlanRowActions({
             </button>
           )}
 
-          {canDeletePlans && (
+          {canDeletePlans && plan.is_active && (
             <button
               onClick={stop(() => requestDeletePlan(plan))}
               className="block w-full px-4 py-1 text-left text-red-600 hover:bg-red-50"

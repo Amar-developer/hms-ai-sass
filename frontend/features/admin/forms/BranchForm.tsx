@@ -1,13 +1,19 @@
-import { useForm } from "react-hook-form";
+import { Form, useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Card,Field,Input, SearchableSelect  } from "@/app/components/common/ui";
+import {
+  Card,
+  Field,
+  Input,
+  SearchableSelect,
+} from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { isLocked } from "../helpers";
 import { BranchFormValues, branchSchema } from "../settings.schema";
 import { useEffect } from "react";
-
+import { FormError } from "@/app/components/common/FormError";
+import { branch_status_options } from "../constants";
 
 export function BranchForm({
   title,
@@ -81,6 +87,7 @@ export function BranchForm({
             disabled={isLocked(branch)}
             placeholder="Enter branch name"
           />
+          {errors.name && <FormError error={errors.name?.message} />}
         </FormField>
         <FormField label="Code" required>
           <Input
@@ -88,9 +95,7 @@ export function BranchForm({
             disabled={isLocked(branch)}
             placeholder="Enter branch code"
           />
-          {errors.code && (
-            <p className="mt-1 text-xs text-red-500">{errors.code.message}</p>
-          )}
+          {errors.code && <FormError error={errors.code?.message} />}
         </FormField>
         <FormField label="City">
           <Input
@@ -98,21 +103,30 @@ export function BranchForm({
             disabled={isLocked(branch)}
             placeholder="Enter city name"
           />
+          {errors.city && (
+            <FormError error={errors.city?.message} />
+          )}
         </FormField>
-        <Field label="Area">
+        <FormField label="Area">
           <Input
             {...register("area")}
             disabled={isLocked(branch)}
             placeholder="Enter branch area"
           />
-        </Field>
-        <Field label="State">
+          {errors.area && (
+            <FormError error={errors.area?.message}/>
+          )}
+        </FormField>
+        <FormField label="State">
           <Input
             {...register("state")}
             disabled={isLocked(branch)}
             placeholder="Enter state name"
           />
-        </Field>
+          {errors.state && (
+            <FormError error={errors.state?.message}/>
+          )}
+        </FormField>
         {branch && (
           <FormField label="Status">
             <SearchableSelect
@@ -124,16 +138,7 @@ export function BranchForm({
               }}
               disabled={isLocked(branch)}
               searchable={false}
-              options={[
-                {
-                  value: "true",
-                  label: "Active",
-                },
-                {
-                  value: "false",
-                  label: "Inactive",
-                },
-              ]}
+              options={branch_status_options}
             />
           </FormField>
         )}
@@ -144,6 +149,9 @@ export function BranchForm({
               disabled={isLocked(branch)}
               placeholder="Enter branch address"
             />
+            {errors.address && (
+              <FormError error={errors.address?.message}/>
+            )}
           </FormField>
         </div>
         <Actions

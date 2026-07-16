@@ -101,9 +101,6 @@ export function SettingsPanel(props: any) {
   const setBankDetail = (key: string, value: string) =>
     setBankDetails({ ...bankDetails, [key]: value });
 
-  console.log(apiSession, "apiSession");
-  console.log(tenantLogoUrl, "tenantLogoUrl");
-  console.log(invoiceLogoUrl, "InvoiceLogiUrl");
   return (
     <div className="space-y-5">
       <Card>

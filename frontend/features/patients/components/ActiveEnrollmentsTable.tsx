@@ -1,9 +1,10 @@
 import { Pagination } from "@/app/components/common/Pagination";
 import { enrollmentPageSize } from "../constants";
 import { useEffect, useState } from "react";
-import { Card,Badge } from "@/app/components/common/ui";
+import { Card, Badge } from "@/app/components/common/ui";
 import { PlanIconButton } from "./PlanIconButton";
 import { displayDate, money } from "@/utils/helper";
+import { RowActions } from "@/features/admin/components/RowActions";
 
 export function ActiveEnrollmentsTable({
   rows,
@@ -72,7 +73,7 @@ export function ActiveEnrollmentsTable({
             <col className="w-[80px]" />
             <col className="w-[140px]" />
             <col className="w-[180px]" />
-            <col className="w-[180px]" />
+            <col className="w-[160px]" />
             <col className="w-[120px]" />
             <col className="w-[120px]" />
             <col className="w-[160px]" />
@@ -147,10 +148,10 @@ export function ActiveEnrollmentsTable({
                         />
                       </div>
                     ) : (
-                      <>
+                      <div className="flex">
                         {displayDate(row.starts_on)} to{" "}
                         {displayDate(row.ends_on)}
-                      </>
+                      </div>
                     )}
                   </td>
                   <td className="text-left font-semibold tabular-nums text-xs lg:text-sm">
@@ -175,42 +176,35 @@ export function ActiveEnrollmentsTable({
                   </td>
                   {canManage && (
                     <td className="pr-4">
-                      <div className="flex justify-end gap-2">
-                        {isEditing ? (
-                          <>
-                            <PlanIconButton
-                              title="Save"
-                              disabled={busy === `enrollment-${row.id}`}
-                              onClick={() => saveEdit(row)}
-                              tone="green"
-                            >
-                              Save
-                            </PlanIconButton>
-                            <PlanIconButton
-                              title="Cancel"
-                              onClick={() => setEditing(null)}
-                            >
-                              Cancel
-                            </PlanIconButton>
-                          </>
-                        ) : (
-                          <>
-                            <PlanIconButton
-                              title="Edit enrollment"
-                              onClick={() => startEdit(row)}
-                            >
-                              Edit
-                            </PlanIconButton>
-                            <PlanIconButton
-                              title="Cancel enrollment"
-                              disabled={busy === `enrollment-${row.id}`}
-                              onClick={() => onCancel(row)}
-                              tone="amber"
-                            >
-                              Cancel
-                            </PlanIconButton>
-                          </>
-                        )}
+                      <div className="flex justify-center">
+                        <RowActions
+                          actions={
+                            isEditing
+                              ? [
+                                  {
+                                    label: "Save",
+                                    onClick: () => saveEdit(row),
+                                    disabled: busy === `enrollment-${row.id}`,
+                                  },
+                                  {
+                                    label: "Cancel",
+                                    onClick: () => setEditing(null),
+                                  },
+                                ]
+                              : [
+                                  {
+                                    label: "Edit",
+                                    onClick: () => startEdit(row),
+                                  },
+                                  {
+                                    label: "Cancel",
+                                    onClick: () => onCancel(row),
+                                    disabled: busy === `enrollment-${row.id}`,
+                                    danger: true,
+                                  },
+                                ]
+                          }
+                        />
                       </div>
                     </td>
                   )}

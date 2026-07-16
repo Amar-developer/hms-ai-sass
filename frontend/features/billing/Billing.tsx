@@ -76,7 +76,6 @@ export function Billing({
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
-  console.log(patientMap, "patientmap");
   useEffect(() => {
     let alive = true;
     apiFetch(
