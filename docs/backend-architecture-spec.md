@@ -242,7 +242,8 @@ Global template lock policy:
 - The primary `MedizinHub HMS` tenant should also maintain a reusable `tenant_admin` global role template. This template can be copied to customer tenants, but it must contain only tenant-scoped permissions and must exclude `platform.*` permissions.
 - Branches created under the primary `MedizinHub HMS` tenant can also act as global branch templates. Branch template assignment uses branch code as the uniqueness rule inside the target tenant to avoid duplicate branch names and redundant setup data.
 - When Super Admin assigns a global role, department, or branch to a customer tenant, the assigned record stores the source template id and is marked locked.
-- Customer tenant admins can view and use locked global roles/departments/branches where applicable, but cannot edit, deactivate, delete, or alter role permissions on those locked records.
+- Super Admin can configure role permissions for every tenant. Customer tenant admins can configure permissions on every role in their own tenant, including a role assigned from a global template. `platform.*` permissions remain reserved for roles in the primary tenant and cannot be granted to customer-tenant roles.
+- A template-assigned role keeps its name, key, status, source linkage, and delete protection. Locked global departments and branches remain fully protected from tenant-admin changes.
 - Customer tenant admins can still create and manage their own local tenant roles, departments, and branches inside their tenant.
 - Only MedizinHub HMS Super Admin can update the primary global template and reassign it to customer tenants.
 

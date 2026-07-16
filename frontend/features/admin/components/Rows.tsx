@@ -8,10 +8,12 @@ import {
 import { RoleList } from "./RoleList";
 import { RowActions } from "./RowActions";
 import { Badge } from "@/app/components/common/ui";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function UserRow({
   user,
   branches,
+  canCopyIds = false,
   onEdit,
   onStatus,
   onDelete,
@@ -44,7 +46,16 @@ export function UserRow({
       className="border-b hover:bg-slate-50 cursor-pointer"
       onClick={canEdit ? onEdit : undefined}
     >
-      <td className="px-4 py-3 font-bold whitespace-nowrap">{user.name}</td>
+      <td className="px-4 py-3 font-bold whitespace-nowrap">
+        <div className="flex items-center gap-2">
+          <span>{user.name}</span>
+          <CopyIdButton
+            value={user.id}
+            label="User ID"
+            allowed={canCopyIds}
+          />
+        </div>
+      </td>
 
       <td className="px-4 py-3 whitespace-nowrap">
         <Badge tone={user.is_active ? "green" : "red"} className="rounded-full">
@@ -69,6 +80,7 @@ export function UserRow({
 
 export function RoleRow({
   role,
+  canCopyIds = false,
   onEdit,
   onStatus,
   onDelete,
@@ -79,7 +91,7 @@ export function RoleRow({
 
   const actions = [
     {
-      label: locked ? "View" : "Edit",
+      label: locked ? "Permissions" : "Edit",
       onClick: onEdit,
       hidden: !onEdit || !canEdit,
     },
@@ -104,6 +116,11 @@ export function RoleRow({
       <td className="px-4 py-3 text-xs">
         <div className="flex items-center gap-2">
           <b>{role.name}</b>
+          <CopyIdButton
+            value={role.id}
+            label="Role ID"
+            allowed={canCopyIds}
+          />
 
           {locked && (
             <Badge
@@ -210,6 +227,7 @@ export function DepartmentRow({
 
 export function BranchRow({
   branch,
+  canCopyIds = false,
   onEdit,
   onStatus,
   onDelete,
@@ -242,6 +260,11 @@ export function BranchRow({
       <td className="px-4 py-3 text-xs">
         <div className="flex items-center gap-2">
           <b>{branch.name}</b>
+          <CopyIdButton
+            value={branch.id}
+            label="Branch ID"
+            allowed={canCopyIds}
+          />
 
           {isLocked(branch) && <Badge tone="purple">Locked</Badge>}
         </div>

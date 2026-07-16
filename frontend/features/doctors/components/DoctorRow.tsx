@@ -1,5 +1,6 @@
 import { Badge } from "@/app/components/common/ui";
 import { RowActions } from "@/features/admin/components/RowActions";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 import { doctorTypes } from "../constants";
 import { activeDoctorDepartmentFeeRules,activeDoctorFeeRule,formatPractitionerName } from "../helpers";
 export function DoctorRow({
@@ -10,6 +11,7 @@ export function DoctorRow({
   onEdit,
   onStatus,
   onDelete,
+  canCopyIds = false,
 }: any) {
   const branchNames = (row.branch_ids || []).map(
     (id: string) =>
@@ -67,7 +69,14 @@ export function DoctorRow({
       className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_.65fr] xl:items-center"
     >
       <div>
-        <b className="text-sm">{formatPractitionerName(row)}</b>
+        <div className="flex min-w-0 items-center gap-2">
+          <b className="truncate text-sm">{formatPractitionerName(row)}</b>
+          <CopyIdButton
+            value={row.id}
+            label="Doctor ID"
+            allowed={canCopyIds}
+          />
+        </div>
       </div>
       <span className="text-sm">{typeLabel}</span>
       <span className="text-slate-600 text-sm">

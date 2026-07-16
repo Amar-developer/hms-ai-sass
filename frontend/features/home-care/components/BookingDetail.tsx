@@ -33,6 +33,8 @@ import {
   TextareaField,
 } from "@/app/components/FormElements";
 import { homeCareHourOptions } from "../forms/HomeCareForms";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+
 
 export function BookingDetail({
   booking,
@@ -54,6 +56,7 @@ export function BookingDetail({
   onOpenInvoiceModule,
   canManage = false,
   canCreateVisit = false,
+  canCopyIds = false,
   apiSession,
 }: any) {
   if (!booking) {
@@ -99,7 +102,14 @@ export function BookingDetail({
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
-            <h3 className="text-lg font-bold">{booking.booking_number}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold">{booking.booking_number}</h3>
+              <CopyIdButton
+                value={booking.id}
+                label="Home Care Booking ID"
+                allowed={canCopyIds}
+              />
+            </div>
             <p className="text-xs text-slate-500">
               {patientName(patient)} ·{" "}
               {patientCode(patient) || patient?.mobile || ""}
@@ -377,7 +387,16 @@ export function BookingDetail({
                 )}
                 {(booking.visit_logs || []).map((row: any) => (
                   <tr key={row.id}>
-                    <td className="px-3 py-2">{displayDate(row.visit_date)}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <span>{displayDate(row.visit_date)}</span>
+                        <CopyIdButton
+                          value={row.id}
+                          label="Home Visit ID"
+                          allowed={canCopyIds}
+                        />
+                      </div>
+                    </td>
                     <td>
                       {row.assigned_staff_name ||
                         userName(staffMap.get(row.assigned_staff_user_id)) ||
@@ -462,7 +481,14 @@ export function BookingDetail({
         {invoiceDetail?.invoice ? (
           <div className="mt-4 rounded-2xl border p-4 text-sm">
             <div className="flex items-center justify-between gap-3">
-              <b>{invoiceDetail.invoice.invoice_number}</b>
+              <div className="flex items-center gap-2">
+                <b>{invoiceDetail.invoice.invoice_number}</b>
+                <CopyIdButton
+                  value={invoiceDetail.invoice.id}
+                  label="Invoice ID"
+                  allowed={canCopyIds}
+                />
+              </div>
               <Badge>{humanizeOptionLabel(invoiceDetail.invoice.status)}</Badge>
             </div>
             <div className="mt-3 grid grid-cols-2 gap-3 text-slate-600">

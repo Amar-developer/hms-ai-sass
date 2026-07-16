@@ -97,10 +97,13 @@ def change_password(
 
 @router.get("/identity/permissions", response_model=list[PermissionRead])
 def list_permission_catalog(
-    _current_user: User = Depends(get_current_user),
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[PermissionRead]:
-    return RoleService(session).list_permission_catalog()
+    return RoleService(session).list_permission_catalog(
+        tenant_id=tenant_id, actor=current_user
+    )
 
 
 @router.post(

@@ -104,10 +104,9 @@ export function AppShell(props: any) {
     allowedDepartments || [],
     departmentId,
   );
-  const departmentName =
-    departmentOptions.find((d: any) => d.id === departmentId)?.name ||
-    departmentOptions[0]?.name ||
-    "Assigned medical department";
+  const departmentNames = departmentOptions
+    .map((department: any) => department.name)
+    .filter(Boolean);
   const displayClinicName = clinic.name || "Hospital / Clinic";
   const visibleTenantOptions = activeTenantOptions(tenants);
   const tenantOptions = isSuperAdmin
@@ -477,8 +476,9 @@ export function AppShell(props: any) {
             setBranchId={setBranchId}
             clinic={clinic}
             canChangeBranch={canChangeBranch}
+            isDoctorUser={isDoctorUser}
             branchName={branchName}
-            departmentName={departmentName}
+            departmentNames={departmentNames}
             displayClinicName={displayClinicName}
             searchItems={searchItems}
             profileOpen={profileOpen}

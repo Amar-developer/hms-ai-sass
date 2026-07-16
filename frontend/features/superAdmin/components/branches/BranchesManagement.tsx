@@ -8,6 +8,7 @@ import { Empty } from "@/app/components/common/Empty";
 import { TenantPicker } from "../shared/TenantPicker";
 import { Pagination } from "@/app/components/common/Pagination";
 import { FormField } from "@/app/components/FormElements";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function BranchesManagement({
   tenants,
@@ -15,6 +16,7 @@ export function BranchesManagement({
   setSelectedId,
   selected,
   branches,
+  canCopyIds = false,
   setSelectedBranchId,
   setSection,
   setConfirmAction,
@@ -101,6 +103,11 @@ export function BranchesManagement({
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <b className="text-xs lg:text-sm">{branch.name}</b>
+                    <CopyIdButton
+                      value={branch.id}
+                      label="Branch ID"
+                      allowed={canCopyIds}
+                    />
                     {branch.is_global_template && (
                       <Badge tone="blue">Global</Badge>
                     )}

@@ -5,7 +5,6 @@ from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access
-from app.core.schema_repair import ensure_settingkey_enum_values
 from app.modules.audit.service import record_audit_event
 from app.modules.identity.models import User
 from app.modules.settings.models import AdminSetting, SettingKey, SettingScope
@@ -240,22 +239,6 @@ def list_admin_settings(
         scope_ids=scope_ids,
     )
     return [read_setting(setting) for setting in settings]
-
-
-def get_sidebar_role_modules(session: Session, *, tenant_id: str) -> dict:
-    """Per-role sidebar module map (e.g. {"reception": ["appointments", ...]}).
-
-    Readable by any authenticated user so each user's sidebar can render. Empty
-    roles fall back to the frontend's built-in defaults.
-    """
-    ensure_settingkey_enum_values(session)
-    value, _scope, _scope_id = resolve_setting(
-        session,
-        tenant_id=tenant_id,
-        module="navigation",
-        key=SettingKey.SIDEBAR_ROLE_MODULES,
-    )
-    return value if isinstance(value, dict) else {}
 
 
 def resolve_admin_setting(

@@ -20,14 +20,12 @@ import {
 import { MultiCheckSelect } from "./MultiCheckSelect";
 import { humanizeOptionLabel, paymentMethodOptions } from "@/lib/options";
 import { defaultNumberingEntities } from "../constants";
-import { SidebarModuleAccessCard } from "./SidebarModuleAccessCard";
 import { displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 
 export function SettingsPanel(props: any) {
   const {
-    apiSession,
     settings,
     invoicePrefix,
     setInvoicePrefix,
@@ -380,7 +378,6 @@ export function SettingsPanel(props: any) {
           </Button>
         </div>
       </Card>
-      <SidebarModuleAccessCard apiSession={apiSession} />
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>

@@ -762,29 +762,6 @@
     "issues": []
   },
   {
-    "method": "PATCH",
-    "path": "/api/v1/billing/invoices/{invoice_id}/amount",
-    "summary": "Update Invoice Amount",
-    "tags": [
-      "billing"
-    ],
-    "path_params": [
-      "invoice_id"
-    ],
-    "query_params": [],
-    "header_params": [
-      "X-Tenant-ID",
-      "authorization"
-    ],
-    "body_media_type": "application/json",
-    "body_required_fields": [
-      "amount"
-    ],
-    "body_field_count": 2,
-    "weak_body_fields": [],
-    "issues": []
-  },
-  {
     "method": "POST",
     "path": "/api/v1/billing/invoices/{invoice_id}/cancel",
     "summary": "Cancel Invoice Endpoint",
@@ -1712,6 +1689,7 @@
     "path_params": [],
     "query_params": [],
     "header_params": [
+      "X-Tenant-ID",
       "authorization"
     ],
     "body_media_type": null,
@@ -5168,25 +5146,6 @@
       "module",
       "branch_id"
     ],
-    "header_params": [
-      "X-Tenant-ID",
-      "authorization"
-    ],
-    "body_media_type": null,
-    "body_required_fields": [],
-    "body_field_count": 0,
-    "weak_body_fields": [],
-    "issues": []
-  },
-  {
-    "method": "GET",
-    "path": "/api/v1/settings/sidebar-modules",
-    "summary": "Get sidebar modules",
-    "tags": [
-      "Settings"
-    ],
-    "path_params": [],
-    "query_params": [],
     "header_params": [
       "X-Tenant-ID",
       "authorization"

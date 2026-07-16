@@ -16,6 +16,7 @@ import { Empty } from "@/app/components/common/Empty";
 import { SortButton } from "../shared/SortButton";
 import { Pagination } from "@/app/components/common/Pagination";
 import { RowActions } from "@/features/admin/components/RowActions";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function TenantManagement({
   tenants,
@@ -23,6 +24,7 @@ export function TenantManagement({
   setSection,
   switchTenant,
   apiSession,
+  canCopyIds = false,
   busy,
   suspendTenant,
   onRefresh,
@@ -264,6 +266,11 @@ export function TenantManagement({
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <b className="truncate text-xs md:text-sm">{tenant.name}</b>
+                    <CopyIdButton
+                      value={tenant.id}
+                      label="Tenant ID"
+                      allowed={canCopyIds}
+                    />
                     {tenant.is_primary && (
                       <Badge tone="blue" className="rounded-xl px-2 py-1">
                         Primary

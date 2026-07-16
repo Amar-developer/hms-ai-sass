@@ -27,6 +27,10 @@ import { LabOrderForm } from "@/features/lab/forms/LabForms";
 import { LabOrderFormValues } from "@/features/lab/lab.schema";
 import { DataTable } from "../reports/components/DataTable";
 import { Column } from "../reports/types";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 export function Lab({
   apiSession,
@@ -36,6 +40,7 @@ export function Lab({
   loadLiveData,
   liveInvoices = [],
 }: any) {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [consultationReferrals, setConsultationReferrals] = useState<any[]>([]);
@@ -773,7 +778,16 @@ export function Lab({
       render: (o) => {
         const p: any = patientMap.get(o.patient_id);
 
-        return p?.name || publicDisplayValue(o.patient_id, "Patient");
+        return (
+          <div className="flex items-center gap-2">
+            <span>{p?.name || publicDisplayValue(o.patient_id, "Patient")}</span>
+            <CopyIdButton
+              value={o.id}
+              label="Lab / Service Order ID"
+              allowed={canCopyIds}
+            />
+          </div>
+        );
       },
     },
 

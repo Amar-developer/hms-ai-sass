@@ -27,6 +27,7 @@ import { PasswordResetModal } from "./components/shared/PasswordResetModal";
 import { SubscriptionManagement } from "./components/subscriptions/SubscriptionManagement";
 import { TenantBranchSettings } from "./components/subscriptions/TenantBranchSettings";
 import { useSuperAdminData, useSuperAdminActions } from "./api";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
 export { superAdminSections } from "./constants";
 
@@ -48,6 +49,7 @@ export function SuperAdminDashboard({
   const [passwordUser, setPasswordUser] = useState<any>(null);
 
   const data = useSuperAdminData(apiSession);
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
 
   const selectableTenants = tenantSelectOptions(data.tenants);
   const selected =
@@ -224,6 +226,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           switchTenant={switchTenant}
           apiSession={apiSession}
+          canCopyIds={canCopyIds}
           busy={data.busy}
           suspendTenant={actions.suspendTenant}
           onRefresh={data.reload}
@@ -263,6 +266,7 @@ export function SuperAdminDashboard({
           selectedId={data.selectedId}
           setSelectedId={data.setSelectedId}
           roles={data.roles}
+          canCopyIds={canCopyIds}
           setSelectedRoleId={setSelectedRoleId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
@@ -315,6 +319,7 @@ export function SuperAdminDashboard({
           selectedId={data.selectedId}
           setSelectedId={data.setSelectedId}
           users={data.users}
+          canCopyIds={canCopyIds}
           setSelectedUserId={setSelectedUserId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
@@ -401,6 +406,7 @@ export function SuperAdminDashboard({
           selectedId={data.selectedId}
           setSelectedId={data.setSelectedId}
           branches={data.tenantBranches}
+          canCopyIds={canCopyIds}
           setSelectedBranchId={setSelectedBranchId}
           setSection={changeSection}
           setConfirmAction={setConfirmAction}

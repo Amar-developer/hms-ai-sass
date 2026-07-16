@@ -23,6 +23,7 @@ import { PatientDetail } from "./components/PatientDetail";
 import { activeTenantOptions } from "@/utils/helper";
 import { PatientRow } from "./components/PatientRow";
 import { mapPatient } from "@/lib/liveData";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -48,6 +49,7 @@ export function Patient({
   setPatients,
 }: PatientProps) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -702,6 +704,7 @@ export function Patient({
                 key={row.id}
                 row={row}
                 branches={branches}
+                canCopyIds={canCopyIds}
                 onView={() => open("detail", row.id)}
                 onEdit={canEditPatient ? () => openPatientEdit(row.id) : undefined}
                 onDelete={canDeletePatient ? () => setConfirm({ row }) : undefined}

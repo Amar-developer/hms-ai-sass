@@ -6,6 +6,10 @@ import { userInitials } from "@/utils/helper";
 import { GlobalSearch } from "./GlobalSearch";
 import { SearchableSelect } from "./ui";
 import { FormField } from "../FormElements";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "./CopyIdButton";
 
 interface AppHeaderProps {
   isSuperAdmin: boolean;
@@ -18,9 +22,10 @@ interface AppHeaderProps {
   clinic: any;
 
   canChangeBranch: boolean;
+  isDoctorUser: boolean;
 
   branchName: string;
-  departmentName: string;
+  departmentNames: string[];
   displayClinicName: string;
 
   searchItems: any[];
@@ -44,8 +49,9 @@ const AppHeader = ({
   setBranchId,
   clinic,
   canChangeBranch,
+  isDoctorUser,
   branchName,
-  departmentName,
+  departmentNames,
   displayClinicName,
   searchItems,
   profileOpen,
@@ -56,10 +62,8 @@ const AppHeader = ({
   setShowPassword,
   setReportsOpen,
 }: AppHeaderProps) => {
-  const tenantSelectOptions = tenantOptions.map((tenant) => ({
-    label: tenant.name,
-    value: tenant.id,
-  }));
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
       <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(200px,1.15fr)_minmax(150px,.8fr)_minmax(220px,1fr)_auto] lg:grid-cols-[minmax(260px,1.15fr)_minmax(180px,.8fr)_minmax(280px,1fr)_auto] lg:items-center">
@@ -70,7 +74,7 @@ const AppHeader = ({
                 value={clinic?.id || ""}
                 onChange={(value: string) => switchTenant(value)}
                 searchable={false}
-                options={tenantSelectOptions}
+                options={tenantOptions}
               />
             </FormField>
           ) : (
@@ -128,9 +132,16 @@ const AppHeader = ({
                     {userInitials(apiSession?.user, apiSession?.email)}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-bold text-slate-900">
-                      {apiSession?.user?.name || roleLabel}
-                    </p>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <p className="truncate font-bold text-slate-900">
+                        {apiSession?.user?.name || roleLabel}
+                      </p>
+                      <CopyIdButton
+                        value={apiSession?.user?.id}
+                        label="User ID"
+                        allowed={canCopyIds}
+                      />
+                    </div>
                     <p className="truncate text-xs text-slate-500">
                       {apiSession?.email || "Not connected"}
                     </p>
@@ -140,13 +151,27 @@ const AppHeader = ({
                   <ProfileRow label="Role" value={roleLabel} />
                   <ProfileRow
                     label="Tenant"
-                    value={apiSession?.tenantId || clinic.id}
+                    value={displayClinicName}
+                    action={
+                      <CopyIdButton
+                        value={apiSession?.tenantId || clinic.id}
+                        label="Tenant ID"
+                        allowed={canCopyIds}
+                      />
+                    }
                   />
                   <ProfileRow label="Branch" value={branchName} />
-                  <ProfileRow
-                    label="Medical Department"
-                    value={departmentName}
-                  />
+                  {isDoctorUser && (
+                    <ProfileRow
+                      label="Medical Department"
+                      value={
+                        departmentNames.length
+                          ? departmentNames.join(", ")
+                          : "No assigned medical department"
+                      }
+                      wrap
+                    />
+                  )}
                 </div>
                 <div className="mt-4 grid gap-2 border-t border-slate-100 pt-3">
                   <button

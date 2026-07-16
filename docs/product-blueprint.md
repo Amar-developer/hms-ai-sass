@@ -100,7 +100,7 @@ Primary tenant super admin capabilities:
 - Subscription Model Assignment: assign customer tenant to a SaaS plan, trial, module entitlement, and patient/branch/doctor limits.
 - Global Department Templates: create common departments/specialties under the primary `MedizinHub HMS` tenant and assign them to customer tenants to avoid duplicate setup. Super admins can also promote useful departments created in a demo/customer tenant into the primary tenant as reusable templates. Assigned global departments are locked for customer tenant admins.
 - Tenant Department Management: secondary tenant admins can create, read, update, and deactivate departments/specialties only inside their own tenant.
-- Global Role Templates: create common roles under the primary `MedizinHub HMS` tenant and assign/copy them to customer tenants with selected permissions. Super admins can also promote a useful role created in a customer tenant, such as MedizinHub Demo Clinic, into the primary tenant as a global template and then copy it to other clinics. Assigned global roles and their permissions are locked for customer tenant admins.
+- Global Role Templates: create common roles under the primary `MedizinHub HMS` tenant and assign/copy them to customer tenants with selected permissions. Super admins can also promote a useful role created in a customer tenant, such as MedizinHub Demo Clinic, into the primary tenant as a global template and then copy it to other clinics. Assigned role metadata remains template-controlled, while customer tenant admins may customize the assigned role's non-platform permissions inside their own tenant.
 - Tenant Role Management: secondary tenant admins can manage roles only inside their own tenant, using the same create, edit, deactivate, and permission assignment screens.
 - Global Branch Templates: create common branch templates such as Main Branch, City Branch, Lab Branch, or Pharmacy Branch under the primary `MedizinHub HMS` tenant and assign them to customer tenants. Super admins can also promote useful branch structures created in a demo/customer tenant into the primary tenant as reusable templates. Assigned global branches are locked for customer tenant admins.
 - User Management: create, read, update, deactivate, and assign users to roles, branches, departments, or practitioner profiles.
@@ -131,7 +131,7 @@ Authorization rules:
 - The `super_admin` role is platform-only and must remain under the primary `MedizinHub HMS` tenant. It cannot be assigned to customer tenants.
 - The primary tenant must include a reusable `Tenant Admin` role template with tenant-scoped administration permissions only. This role can be copied to customer tenants and assigned to each clinic owner/admin user.
 - Users with `tenant_admin` in a customer tenant can manage only their assigned tenant scope. They must not receive platform tenant creation, platform subscription management, or cross-tenant access permissions.
-- Assigned global templates are sticky and locked in customer tenants: tenant admins may view and use them, but cannot edit, deactivate, delete, or change permissions on those assigned records.
+- Assigned global templates are sticky in customer tenants. Tenant admins cannot rename, deactivate, delete, or change the source linkage of assigned records; for roles only, they may customize non-platform permissions within their own tenant. Customer-tenant roles cannot receive `platform.*` permissions, even when managed by Super Admin. Departments and branches remain fully locked.
 - Global templates cover roles, departments, and branches. Common role examples include Admin, Back Office Staff, Staff Nurse, Doctor, Staff Accountant, Lab Technician, Pharmacy User, Billing Staff, and Reception Staff. Common branch examples include Main Branch, OP Branch, Lab Branch, Pharmacy Branch, City Branch, and Satellite Clinic Branch.
 - Customer tenant admins keep tenant-scoped role and department management for local records; they cannot assign global templates across tenants.
 - Staff users must receive permissions through roles, not hard-coded frontend checks.
@@ -157,6 +157,8 @@ Minimum identity features:
 ### Role Management Policy
 
 Role management must control both what a user can see and what actions the user can perform. Frontend menus, buttons, forms, API routes, reports, exports, and background actions must all be driven by the same backend permission catalog.
+
+Sidebar visibility is derived directly from effective role permissions. A module is shown when the user holds any permission action under that module's permission prefix and the tenant subscription enables it; no separate per-role sidebar configuration or built-in role visibility list is used.
 
 Role management objectives:
 

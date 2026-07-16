@@ -7,6 +7,10 @@ import { BillLine } from "./BillLine";
 import { InvoiceMeta } from "./InvoiceMeta";
 import { Badge,ActionButton,ActionGroup,Card } from "@/app/components/common/ui";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 export function InvoiceDetailPage({
   detail,
@@ -41,6 +45,7 @@ export function InvoiceDetailPage({
   apiSession,
 }: any) {
   const invoice = detail.invoice || {};
+  const canCopyIds = canCopyDatabaseIds(currentUser);
   const items = detail.items || [];
   const payments = detail.payments || [];
   const creditNotes = detail.credit_notes || [];
@@ -396,7 +401,14 @@ export function InvoiceDetailPage({
                 )}
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                <b className="table-data">{invoice.invoice_number}</b>
+                <div className="flex items-center gap-2">
+                  <b className="table-data">{invoice.invoice_number}</b>
+                  <CopyIdButton
+                    value={invoice.id}
+                    label="Invoice ID"
+                    allowed={canCopyIds}
+                  />
+                </div>
                 <span className="text-slate-500">
                   {patient?.name || patient?.full_name || "Patient"}
                 </span>

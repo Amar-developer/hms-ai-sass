@@ -4,6 +4,7 @@ from sqlmodel import Session
 from app.core.auth import user_permission_keys, user_role_keys
 from app.modules.identity import permissions
 from app.modules.identity.models import Role, User
+from app.modules.tenants.models import Tenant
 
 
 def assert_tenant_admin(session: Session, current_user: User, tenant_id: str) -> None:
@@ -29,7 +30,7 @@ def assert_tenant_permission(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Tenant access denied"
         )
-    if "tenant_admin" in user_role_keys(session, current_user):
+    if has_tenant_admin_access(session, current_user):
         return
     if not set(permission_keys).intersection(
         user_permission_keys(session, current_user)
@@ -67,29 +68,50 @@ def assert_can_target_user_for_management(
 
 
 def assert_role_editable_by_actor(
-    _session: Session, role: Role, current_user: User
+    session: Session,
+    role: Role,
+    current_user: User,
+    *,
+    allow_template_permission_override: bool = False,
 ) -> None:
     if current_user.is_super_admin:
         return
     if role.is_template_locked or role.source_template_role_id:
+        if allow_template_permission_override and has_tenant_admin_access(
+            session, current_user
+        ):
+            return
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="This role is assigned from MedizinHub HMS global template and cannot be changed by tenant admin",
+            detail=(
+                "This role is assigned from a MedizinHub HMS global template; "
+                "tenant admins may change its permissions but not its name, key, "
+                "status, or template linkage"
+            ),
         )
 
 
 def assert_grantable_permission_keys(
-    session: Session, current_user: User, permission_keys: list[str]
+    session: Session,
+    current_user: User,
+    tenant_id: str,
+    permission_keys: list[str],
 ) -> None:
-    """Prevent tenant admins from minting platform or unknown permissions."""
-    if current_user.is_super_admin:
-        return
+    """Reject unknown keys and keep platform permissions on the primary tenant."""
     catalog = set(permissions.PERMISSION_CATALOG)
+    target_tenant = session.get(Tenant, tenant_id)
     disallowed = sorted(
         {
             key
             for key in permission_keys
-            if key.startswith("platform.") or key not in catalog
+            if key not in catalog
+            or (
+                key.startswith("platform.")
+                and (
+                    not current_user.is_super_admin
+                    or not (target_tenant and target_tenant.is_primary)
+                )
+            )
         }
     )
     if disallowed:
@@ -97,6 +119,8 @@ def assert_grantable_permission_keys(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"Cannot grant these permissions: {', '.join(disallowed)}",
         )
+    if current_user.is_super_admin:
+        return
     if has_tenant_admin_access(session, current_user):
         return
     actor_permissions = set(user_permission_keys(session, current_user))

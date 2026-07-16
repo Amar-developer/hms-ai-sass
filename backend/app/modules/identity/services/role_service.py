@@ -38,10 +38,16 @@ class RoleService:
         self.role_permissions = IdentityRolePermissionRepository(session)
         self.tenants = IdentityTenantRepository(session)
 
-    def list_permission_catalog(self) -> list[PermissionRead]:
-        return [
-            permission_read(key) for key in sorted(set(permissions.PERMISSION_CATALOG))
-        ]
+    def list_permission_catalog(
+        self, *, tenant_id: str, actor: User
+    ) -> list[PermissionRead]:
+        permission_keys = permissions.PERMISSION_CATALOG
+        tenant = self.tenants.get(tenant_id)
+        if not actor.is_super_admin or not tenant or not tenant.is_primary:
+            permission_keys = [
+                key for key in permission_keys if not key.startswith("platform.")
+            ]
+        return [permission_read(key) for key in sorted(set(permission_keys))]
 
     def create_role(
         self, *, tenant_id: str, payload: RoleCreate, actor: User
@@ -53,7 +59,9 @@ class RoleService:
             permissions.IDENTITY_ROLES_MANAGE,
             permissions.IDENTITY_ROLES_CREATE,
         )
-        assert_grantable_permission_keys(self.session, actor, payload.permission_keys)
+        assert_grantable_permission_keys(
+            self.session, actor, tenant_id, payload.permission_keys
+        )
         role = Role(
             tenant_id=tenant_id,
             name=payload.name,
@@ -179,9 +187,17 @@ class RoleService:
             permissions.IDENTITY_ROLES_MANAGE,
             permissions.IDENTITY_ROLES_EDIT,
         )
-        role = get_tenant_role_or_404(self.session, tenant_id, role_id)
-        assert_role_editable_by_actor(self.session, role, actor)
         updates = payload.model_dump(exclude_unset=True)
+        role = get_tenant_role_or_404(self.session, tenant_id, role_id)
+        assert_role_editable_by_actor(
+            self.session,
+            role,
+            actor,
+            allow_template_permission_override=(
+                set(updates) == {"permission_keys"}
+                and updates["permission_keys"] is not None
+            ),
+        )
         if "key" in updates and updates["key"]:
             next_key = normalize_role_key(updates["key"])
             duplicate = self.roles.duplicate_key_for_tenant(
@@ -199,7 +215,7 @@ class RoleService:
             role.is_active = updates["is_active"]
         if "permission_keys" in updates and updates["permission_keys"] is not None:
             assert_grantable_permission_keys(
-                self.session, actor, updates["permission_keys"]
+                self.session, actor, tenant_id, updates["permission_keys"]
             )
             replace_role_permissions(self.session, role, updates["permission_keys"])
         role.updated_by_user_id = actor.id

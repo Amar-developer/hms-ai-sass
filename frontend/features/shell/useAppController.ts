@@ -11,12 +11,9 @@ import { demoUsers, loginPresets } from "@/lib/authPresets";
 import { type LiveSummary, mapAppointment, mapPatient } from "@/lib/liveData";
 import { canOpenModule } from "@/lib/moduleAccess";
 import { reportClientError, storedClientLogSession } from "@/lib/clientLogging";
-import { nav, roleModules } from "@/lib/navigation";
+import { nav } from "@/lib/navigation";
 import { uniqueDepartmentRows } from "@/lib/options";
-import {
-  normalizeSidebarModuleMap,
-  resolveSidebarModules,
-} from "@/lib/sidebarAccess";
+import { navigationModulesForPermissions } from "@/lib/permissionNavigation";
 import { activeTenantOptions } from "@/utils/helper";
 
 const allModuleIds = nav.map(([id]) => id);
@@ -85,9 +82,6 @@ export function useAppController() {
   const [patients, setPatients] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [ipAdmissions, setIpAdmissions] = useState<any[]>([]);
-  const [roleModuleOverrides, setRoleModuleOverrides] = useState<
-    Record<string, string[]>
-  >({});
   const activeRef = useRef(active);
   const branchIdRef = useRef(branchId);
   const liveBranchIdRef = useRef(liveBranchId);
@@ -154,7 +148,6 @@ export function useAppController() {
     setPatients([]);
     setAppointments([]);
     setIpAdmissions([]);
-    setRoleModuleOverrides({});
     activeRef.current = "dashboard";
     liveBranchIdRef.current = "";
     departmentIdRef.current = defaultDepartment.id;
@@ -255,7 +248,6 @@ export function useAppController() {
       practitionerRows,
       scheduleRows,
       entitlements,
-      sidebarRoleMap,
     ] = await Promise.all([
       isPlatformPrimaryTenant
         ? Promise.resolve<any[]>([])
@@ -318,7 +310,6 @@ export function useAppController() {
         [],
       ),
       entitlementsPromise,
-      apiFetch("/settings/sidebar-modules", session).catch(() => ({})),
     ]);
 
     const linkedPractitioner = isDoctorUser
@@ -418,7 +409,6 @@ export function useAppController() {
         ? entitlements.enabled_modules
         : defaultEntitlementModuleIds,
     );
-    setRoleModuleOverrides(normalizeSidebarModuleMap(sidebarRoleMap));
     setLiveSummary({
       patients: patientRows.length,
       appointments: appointmentRows.length,
@@ -757,233 +747,11 @@ export function useAppController() {
     loadLiveData,
     liveInvoices,
   };
-  const permissionModules = new Set<string>();
   const permissionKeys = apiSession?.user?.permissions || [];
-  const navHasAnyPermission = (...keys: string[]) =>
-    Boolean(
-      apiSession?.user?.is_super_admin ||
-      permissionKeys.includes("*") ||
-      keys.some((key) => permissionKeys.includes(key)),
-    );
-  const isTenantAdminUser = Boolean(
-    !isSuperAdmin &&
-    (role === "tenant_admin" ||
-      apiSession?.user?.roles?.includes("tenant_admin") ||
-      apiSession?.user?.user_type === "tenant_admin"),
-  );
-  const canOpenTenantAdmin = Boolean(
-    isTenantAdminUser ||
-      navHasAnyPermission(
-        "identity.users.manage",
-        "identity.users.create",
-        "identity.users.read",
-        "identity.users.edit",
-        "identity.users.delete",
-        "identity.roles.manage",
-        "identity.roles.create",
-        "identity.roles.read",
-        "identity.roles.edit",
-        "identity.roles.delete",
-        "departments.manage",
-        "departments.create",
-        "departments.read",
-        "departments.edit",
-        "departments.delete",
-        "branches.manage",
-        "branches.create",
-        "branches.read",
-        "branches.edit",
-        "branches.delete",
-        "suppliers.manage",
-        "suppliers.create",
-        "suppliers.read",
-        "suppliers.edit",
-        "suppliers.delete",
-        "tax.manage",
-        "tax.create",
-        "tax.read",
-        "tax.edit",
-        "tax.delete",
-        "discounts.manage",
-        "discounts.create",
-        "discounts.read",
-        "discounts.edit",
-        "discounts.delete",
-        "patient_subscriptions.manage",
-        "patient_subscriptions.create",
-        "patient_subscriptions.read",
-        "patient_subscriptions.edit",
-        "patient_subscriptions.delete",
-        "files.manage",
-        "files.create",
-        "files.read",
-        "files.edit",
-        "files.delete",
-        "settings.manage",
-        "settings.create",
-        "settings.read",
-        "settings.edit",
-        "settings.delete",
-      ),
-  );
-  if (canOpenTenantAdmin) permissionModules.add("admin");
-  if (
-    navHasAnyPermission(
-      "appointments.manage",
-      "appointments.create",
-      "appointments.read",
-      "appointments.edit",
-    )
-  )
-    permissionModules.add("appointments");
-  if (navHasAnyPermission("queue.manage", "queue.read"))
-    permissionModules.add("queue");
-  if (
-    navHasAnyPermission(
-      "patients.read",
-      "patients.write",
-      "patients.create",
-      "patients.edit",
-    )
-  )
-    permissionModules.add("patients");
-  if (
-    navHasAnyPermission(
-      "practitioners.manage",
-      "practitioners.read",
-      "practitioners.create",
-      "practitioners.edit",
-    )
-  )
-    permissionModules.add("practitioners");
-  if (
-    navHasAnyPermission(
-      "scheduling.manage",
-      "scheduling.read",
-      "scheduling.create",
-      "scheduling.edit",
-      "scheduling.delete",
-    )
-  )
-    permissionModules.add("scheduling");
-  if (
-    navHasAnyPermission(
-      "pharmacy.manage",
-      "pharmacy.read",
-      "pharmacy.create",
-      "pharmacy.edit",
-      "lab.manage",
-      "lab.read",
-      "lab.create",
-      "lab.edit",
-      "physiotherapy.manage",
-      "physiotherapy.read",
-      "physiotherapy.create",
-      "physiotherapy.edit",
-      "home_care.manage",
-      "home_care.read",
-      "home_care.create",
-      "home_care.edit",
-    )
-  )
-    permissionModules.add("items");
-  if (
-    navHasAnyPermission(
-      "ip.manage",
-      "ip.read",
-      "ip.create",
-      "ip.edit",
-      "ip.delete",
-    )
-  )
-    permissionModules.add("ip");
-  if (
-    navHasAnyPermission(
-      "consultations.read",
-      "consultations.write",
-      "consultations.create",
-      "consultations.edit",
-      "consultations.sign",
-    )
-  ) {
-    permissionModules.add("doctor");
-    permissionModules.add("consultation");
-  }
-  if (navHasAnyPermission("lab.manage", "lab.read", "lab.create", "lab.edit"))
-    permissionModules.add("lab");
-  if (
-    navHasAnyPermission(
-      "pharmacy.manage",
-      "pharmacy.read",
-      "pharmacy.create",
-      "pharmacy.edit",
-    )
-  )
-    permissionModules.add("pharmacy");
-  if (
-    navHasAnyPermission(
-      "physiotherapy.manage",
-      "physiotherapy.read",
-      "physiotherapy.create",
-      "physiotherapy.edit",
-      "physiotherapy.delete",
-    )
-  )
-    permissionModules.add("physiotherapy");
-  if (
-    navHasAnyPermission(
-      "home_care.manage",
-      "home_care.read",
-      "home_care.create",
-      "home_care.edit",
-      "home_care.delete",
-    )
-  )
-    permissionModules.add("home_care");
-  if (
-    navHasAnyPermission(
-      "billing.manage",
-      "billing.read",
-      "invoices.read",
-      "invoices.create",
-      "payments.manage",
-      "payments.create",
-    )
-  )
-    permissionModules.add("billing");
-  if (
-    isTenantAdminUser ||
-    canOpenTenantAdmin ||
-    navHasAnyPermission(
-      "patient_subscriptions.manage",
-      "patient_subscriptions.read",
-      "patient_subscriptions.create",
-    )
-  )
-    permissionModules.add("subscriptions");
-  if (navHasAnyPermission("reports.read", "audit.read"))
-    permissionModules.add("reports");
-  const isTenantAdminDashboardUser = Boolean(
-    !isSuperAdmin &&
-    (role === "tenant_admin" ||
-      apiSession?.user?.roles?.includes("tenant_admin") ||
-      apiSession?.user?.user_type === "tenant_admin"),
-  );
-  // Role-based sidebar control is additive: users with multiple roles get the union
-  // of every assigned role's configured modules plus modules exposed by their
-  // combined permission set.
-  // Tenant-admin-configurable per-role sidebar modules override the built-in defaults
-  // (lib/navigation.ts). Unconfigured roles keep their defaults.
-  const roleAllowedModules = resolveSidebarModules({
-    user: apiSession?.user,
-    fallbackRole: role,
-    defaults: roleModules,
-    overrides: roleModuleOverrides,
-    permissionModules,
+  const roleAllowedModules = navigationModulesForPermissions(permissionKeys, {
+    isSuperAdmin,
   });
   const enabled = (id: string) => {
-    if (id === "dashboard") return isTenantAdminDashboardUser;
-    if (id === "reports") return canOpenModule(id, roleAllowedModules, clinic);
     return canOpenModule(id, roleAllowedModules, clinic);
   };
 

@@ -14,6 +14,10 @@ import { DetailSection } from "./DetailSection";
 import { AlertCard } from "./AlertCard";
 import { hiddenScrollbar } from "../constants";
 import { money } from "@/utils/helper";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 export function PatientDetail({
   apiSession,
@@ -38,6 +42,7 @@ export function PatientDetail({
   setActive,
 }: any & { apiSession?: ApiSession | null }) {
   const permissionKeys = apiSession?.user?.permissions || [];
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const hasAnyPermission = (keys: string[]) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
@@ -350,6 +355,11 @@ export function PatientDetail({
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="card-title font-bold">{patient.full_name}</h3>
+                <CopyIdButton
+                  value={patient.id}
+                  label="Patient ID"
+                  allowed={canCopyIds}
+                />
                 <Badge
                   tone={isAdmitted ? "amber" : "green"}
                   className="normal-badge"

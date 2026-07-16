@@ -2,6 +2,7 @@ import { capitalizeFirst } from "@/utils/helper";
 import { Badge } from "@/app/components/common/ui";
 import { displayPatientGender } from "../helpers";
 import { RowActions } from "@/features/admin/components/RowActions";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function PatientRow({
   row,
@@ -10,6 +11,7 @@ export function PatientRow({
   onEdit,
   onDelete,
   onActivate,
+  canCopyIds = false,
 }: any) {
   const branch = branches.find((item: any) => item.id === row.branch_id);
   const subscriptionStatus = row.subscription_status;
@@ -32,9 +34,16 @@ export function PatientRow({
     >
       <div className="grid gap-4 px-5 py-4 text-sm md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr] xl:items-center">
         <div className="min-w-0">
-          <b className="block text-sm truncate text-slate-950">
-            {capitalizeFirst(row.full_name)}
-          </b>
+          <div className="flex min-w-0 items-center gap-2">
+            <b className="block truncate text-sm text-slate-950">
+              {capitalizeFirst(row.full_name)}
+            </b>
+            <CopyIdButton
+              value={row.id}
+              label="Patient ID"
+              allowed={canCopyIds}
+            />
+          </div>
           <p className="mt-0.5 text-sm  font-medium text-slate-500">
             {row.patient_number}
           </p>

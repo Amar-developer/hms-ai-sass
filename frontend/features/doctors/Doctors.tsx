@@ -25,11 +25,13 @@ import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { activeTenantOptions } from "@/utils/helper";
 import { DoctorForm } from "@/features/doctors/forms/DoctorForm";
 import { Pagination } from "@/app/components/common/Pagination";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
 const pageSize = 10;
 
 export function Doctors({ apiSession, clinic, setLivePractitioners }: any) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -565,6 +567,7 @@ export function Doctors({ apiSession, clinic, setLivePractitioners }: any) {
               <DoctorRow
                 key={row.id}
                 row={row}
+                canCopyIds={canCopyIds}
                 branches={branches}
                 departments={departments}
                 feeRules={feeRules}

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from app.core.access_control import scoped_branch_id
-from app.core.auth import get_current_user, require_any_permission
+from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.core.validation import BranchId
@@ -74,19 +74,6 @@ def list_admin_settings(
     return settings_service.list_admin_settings(
         session, tenant_id=tenant_id, module=module, actor=current_user
     )
-
-
-@router.get(
-    "/sidebar-modules",
-    response_model=dict,
-    summary="Get sidebar modules",
-)
-def get_sidebar_role_modules(
-    tenant_id: str = Depends(require_tenant_id),
-    _current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> dict:
-    return settings_service.get_sidebar_role_modules(session, tenant_id=tenant_id)
 
 
 @router.get(

@@ -1083,6 +1083,22 @@
         "operationId": "list_permission_catalog_api_v1_identity_permissions_get",
         "parameters": [
           {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          },
+          {
             "name": "authorization",
             "in": "header",
             "required": false,
@@ -14891,106 +14907,6 @@
         }
       }
     },
-    "/api/v1/billing/invoices/{invoice_id}/amount": {
-      "patch": {
-        "tags": [
-          "billing"
-        ],
-        "summary": "Update Invoice Amount",
-        "operationId": "update_invoice_amount_api_v1_billing_invoices__invoice_id__amount_patch",
-        "parameters": [
-          {
-            "name": "invoice_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Invoice Id"
-            }
-          },
-          {
-            "name": "X-Tenant-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tenant-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "name": "access_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Access Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/InvoiceAmountUpdate"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/InvoiceDetailRead"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier": {
       "patch": {
         "tags": [
@@ -26529,89 +26445,6 @@
         }
       }
     },
-    "/api/v1/settings/sidebar-modules": {
-      "get": {
-        "tags": [
-          "Settings"
-        ],
-        "summary": "Get sidebar modules",
-        "operationId": "get_sidebar_role_modules_api_v1_settings_sidebar_modules_get",
-        "parameters": [
-          {
-            "name": "X-Tenant-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tenant-Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "name": "access_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Access Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Get Sidebar Role Modules Api V1 Settings Sidebar Modules Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/settings/resolve": {
       "get": {
         "tags": [
@@ -28673,7 +28506,8 @@
         "enum": [
           "cancel",
           "full_refund",
-          "partial_refund"
+          "partial_refund",
+          "discount"
         ],
         "title": "BillingAdjustmentType"
       },
@@ -33250,12 +33084,6 @@
       },
       "HomeCareInvoiceCreate": {
         "properties": {
-          "discount_amount": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Discount Amount",
-            "default": 0
-          },
           "tax_rule_id": {
             "anyOf": [
               {
@@ -33266,6 +33094,17 @@
               }
             ],
             "title": "Tax Rule Id"
+          },
+          "discount_offer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Offer Id"
           },
           "created_by_user_id": {
             "anyOf": [
@@ -33282,6 +33121,7 @@
             "title": "Created By User Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "HomeCareInvoiceCreate"
       },
@@ -36355,31 +36195,6 @@
         ],
         "title": "IPTreatmentRead"
       },
-      "InvoiceAmountUpdate": {
-        "properties": {
-          "amount": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Amount"
-          },
-          "updated_by_user_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Updated By User Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "amount"
-        ],
-        "title": "InvoiceAmountUpdate"
-      },
       "InvoiceCreateFromConsultation": {
         "properties": {
           "consultation_id": {
@@ -36843,6 +36658,21 @@
             "title": "Discount Amount",
             "default": 0
           },
+          "free_items_amount": {
+            "type": "integer",
+            "title": "Free Items Amount",
+            "default": 0
+          },
+          "item_discount_amount": {
+            "type": "integer",
+            "title": "Item Discount Amount",
+            "default": 0
+          },
+          "regular_items_amount": {
+            "type": "integer",
+            "title": "Regular Items Amount",
+            "default": 0
+          },
           "payable_amount": {
             "type": "integer",
             "title": "Payable Amount",
@@ -37010,6 +36840,21 @@
             "title": "Membership Discount Amount",
             "default": 0
           },
+          "membership_free_items_amount": {
+            "type": "integer",
+            "title": "Membership Free Items Amount",
+            "default": 0
+          },
+          "membership_item_discount_amount": {
+            "type": "integer",
+            "title": "Membership Item Discount Amount",
+            "default": 0
+          },
+          "membership_regular_items_amount": {
+            "type": "integer",
+            "title": "Membership Regular Items Amount",
+            "default": 0
+          },
           "taxable_amount": {
             "type": "integer",
             "title": "Taxable Amount"
@@ -37028,6 +36873,22 @@
               }
             ],
             "title": "Tax Rule Id"
+          },
+          "tax_percentage": {
+            "type": "integer",
+            "title": "Tax Percentage",
+            "default": 0
+          },
+          "tax_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Label"
           },
           "total_amount": {
             "type": "integer",
@@ -37081,6 +36942,42 @@
               }
             ],
             "title": "Discount Offer Id"
+          },
+          "offer_discount_amount": {
+            "type": "integer",
+            "title": "Offer Discount Amount",
+            "default": 0
+          },
+          "offer_discount_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Discount Name"
+          },
+          "offer_discount_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscountType"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "offer_discount_value": {
+            "type": "integer",
+            "title": "Offer Discount Value",
+            "default": 0
+          },
+          "approved_discount_amount": {
+            "type": "integer",
+            "title": "Approved Discount Amount",
+            "default": 0
           },
           "payment_methods": {
             "items": {
@@ -37213,6 +37110,17 @@
           "patient_name": {
             "type": "string",
             "title": "Patient Name"
+          },
+          "practitioner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Practitioner Name"
           },
           "token_number": {
             "anyOf": [
@@ -40656,6 +40564,21 @@
           "discount_amount": {
             "type": "integer",
             "title": "Discount Amount"
+          },
+          "free_items_amount": {
+            "type": "integer",
+            "title": "Free Items Amount",
+            "default": 0
+          },
+          "item_discount_amount": {
+            "type": "integer",
+            "title": "Item Discount Amount",
+            "default": 0
+          },
+          "regular_items_amount": {
+            "type": "integer",
+            "title": "Regular Items Amount",
+            "default": 0
           },
           "payable_amount": {
             "type": "integer",
@@ -44604,12 +44527,6 @@
       },
       "PhysiotherapyInvoiceCreate": {
         "properties": {
-          "discount_amount": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Discount Amount",
-            "default": 0
-          },
           "tax_rule_id": {
             "anyOf": [
               {
@@ -44620,6 +44537,17 @@
               }
             ],
             "title": "Tax Rule Id"
+          },
+          "discount_offer_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Offer Id"
           },
           "created_by_user_id": {
             "anyOf": [
@@ -44636,6 +44564,7 @@
             "title": "Created By User Id"
           }
         },
+        "additionalProperties": false,
         "type": "object",
         "title": "PhysiotherapyInvoiceCreate"
       },
@@ -45835,10 +45764,17 @@
             "title": "Branch Id"
           },
           "department_id": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 3,
-            "pattern": "^[A-Za-z][A-Za-z0-9_-]{1,79}$",
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 3,
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{1,79}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Department Id"
           },
           "weekday": {
@@ -45911,7 +45847,6 @@
         "type": "object",
         "required": [
           "branch_id",
-          "department_id",
           "weekday",
           "start_time",
           "end_time"
@@ -46899,6 +46834,10 @@
           "status": {
             "$ref": "#/components/schemas/AppointmentStatus"
           },
+          "queue_position": {
+            "type": "integer",
+            "title": "Queue Position"
+          },
           "display_text": {
             "type": "string",
             "title": "Display Text"
@@ -46916,6 +46855,7 @@
           "appointment_id",
           "priority",
           "status",
+          "queue_position",
           "display_text",
           "call_message"
         ],
@@ -47783,7 +47723,6 @@
           "report.monthly_email_filters",
           "report.monthly_email_last_sent_period",
           "catalog.integrations",
-          "navigation.role_modules",
           "accounts.bank_details"
         ],
         "title": "SettingKey"

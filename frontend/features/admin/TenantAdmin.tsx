@@ -39,6 +39,7 @@ import {
 import { useTenantAdminData } from "./api/useTenantAdminData";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
 import { Role } from "./types";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
 export function TenantAdmin({
   apiSession,
@@ -88,6 +89,7 @@ export function TenantAdmin({
 
   const data = useTenantAdminData(apiSession, clinic);
   const permissionKeys: string[] = apiSession?.user?.permissions || [];
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const hasAdminAction = (prefix: string, action: string) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
@@ -408,6 +410,7 @@ export function TenantAdmin({
               key={user.id}
               user={user}
               branches={data.branches}
+              canCopyIds={canCopyIds}
               canEdit={hasAdminAction("identity.users", "edit")}
               canDelete={hasAdminAction("identity.users", "delete")}
               onEdit={() => {
@@ -474,6 +477,7 @@ export function TenantAdmin({
             <RoleRow
               key={role.id}
               role={role}
+              canCopyIds={canCopyIds}
               canEdit={hasAdminAction("identity.roles", "edit")}
               canDelete={hasAdminAction("identity.roles", "delete")}
               onEdit={() => {
@@ -626,6 +630,7 @@ export function TenantAdmin({
             <BranchRow
               key={branch.id}
               branch={branch}
+              canCopyIds={canCopyIds}
               canEdit={hasAdminAction("branches", "edit")}
               canDelete={hasAdminAction("branches", "delete")}
               onEdit={() => {

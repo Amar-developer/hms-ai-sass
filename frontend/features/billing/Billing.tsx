@@ -27,6 +27,10 @@ import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
 import { Column } from "../reports/types";
 import { DataTable } from "../reports/components/DataTable";
 import { displayDateTime, money } from "@/utils/helper";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 export function Billing({
   apiSession,
@@ -35,6 +39,7 @@ export function Billing({
   patients,
   liveInvoices,
 }: any) {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -839,7 +844,14 @@ export function Billing({
       width: "200px",
       render: (invoice) => (
         <>
-          <b>{invoice.invoice_number}</b>
+          <div className="flex items-center gap-2">
+            <b>{invoice.invoice_number}</b>
+            <CopyIdButton
+              value={invoice.id}
+              label="Invoice ID"
+              allowed={canCopyIds}
+            />
+          </div>
           <p className="mt-1 text-sm font-semibold text-slate-400">
             {formatInvoiceDate(invoice)}
           </p>

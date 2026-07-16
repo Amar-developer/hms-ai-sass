@@ -3,8 +3,13 @@ import { displayDateTime } from "@/utils/helper";
 import { useEffect, useState } from "react";
 import { Card, ActionButton } from "@/app/components/common/ui";
 import { normalizeMedicineSchedule, parseMedicines } from "../helpers";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any) {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [consultMedicines, setConsultMedicines] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -46,7 +51,14 @@ export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any
       <Card className="w-full max-w-3xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-xl font-bold">Medicine List</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold">Medicine List</h3>
+              <CopyIdButton
+                value={issue?.id}
+                label="Pharmacy Issue ID"
+                allowed={canCopyIds}
+              />
+            </div>
             <p className="mt-1 text-sm text-slate-500">{patient}</p>
             <p className="text-xs text-slate-500">
               {issue?.created_at ? displayDateTime(issue.created_at) : ""}

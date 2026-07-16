@@ -31,7 +31,6 @@ class SettingKey(str, Enum):
     REPORT_MONTHLY_EMAIL_FILTERS = "report.monthly_email_filters"
     REPORT_MONTHLY_EMAIL_LAST_SENT_PERIOD = "report.monthly_email_last_sent_period"
     CATALOG_INTEGRATIONS = "catalog.integrations"
-    SIDEBAR_ROLE_MODULES = "navigation.role_modules"
     ACCOUNTS_BANK_DETAILS = "accounts.bank_details"
 
 

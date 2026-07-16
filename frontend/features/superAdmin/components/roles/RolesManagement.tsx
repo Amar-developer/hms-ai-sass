@@ -19,6 +19,7 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { RowActions } from "@/features/admin/components/RowActions";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function RolesManagement({
   tenants,
@@ -26,6 +27,7 @@ export function RolesManagement({
   setSelectedId,
   selected,
   roles,
+  canCopyIds = false,
   setSelectedRoleId,
   setSection,
   setConfirmAction,
@@ -243,6 +245,11 @@ export function RolesManagement({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <b className="text-xs lg:text-sm">{role.name}</b>
+                      <CopyIdButton
+                        value={role.primary?.id || role.id}
+                        label="Role ID"
+                        allowed={canCopyIds}
+                      />
                       {role.is_global_template && (
                         <Badge
                           tone="blue"

@@ -436,7 +436,6 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `GET` | `/api/v1/settings` | `settings.manage` |
 | `GET` | `/api/v1/settings/resolve` | `settings.manage` |
 | `GET` | `/api/v1/settings/bundle` | `settings.manage` |
-| `GET` | `/api/v1/settings/sidebar-modules` | Authenticated tenant user |
 | `POST` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications` | `notifications.manage` |
 | `POST` | `/api/v1/audit-events` | `audit.read` |

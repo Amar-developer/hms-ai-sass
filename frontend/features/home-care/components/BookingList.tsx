@@ -19,7 +19,9 @@ import {
 import { bookingTotal, isBookingLocked, userName, bookingStaffName } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "@/features/admin/components/RowActions";
+
 
 export function BookingsList({
   bookings,
@@ -38,6 +40,7 @@ export function BookingsList({
   onInvoice,
   canManage = false,
   canCreate = false,
+  canCopyIds = false,
 }: any) {
   return (
     <Card>
@@ -112,7 +115,14 @@ export function BookingsList({
               return (
                 <tr key={booking.id}>
                   <td className="px-4 py-3">
-                    <b className="card-desc">{booking.booking_number}</b>
+                    <div className="flex items-center gap-2">
+                      <b className="card-desc">{booking.booking_number}</b>
+                      <CopyIdButton
+                        value={booking.id}
+                        label="Home Care Booking ID"
+                        allowed={canCopyIds}
+                      />
+                    </div>
                     <p className="text-xs text-slate-500">
                       {booking.services?.length || 0} services
                     </p>

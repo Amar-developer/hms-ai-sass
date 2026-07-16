@@ -121,34 +121,6 @@ def test_payment_methods_and_communication_providers_can_be_configured(client):
     assert communication.json()["value"] == ["whatsapp", "sms"]
 
 
-def test_sidebar_role_modules_preserve_custom_and_empty_role_access(client):
-    tenant, _branch = create_tenant_and_branch(client)
-    role_modules = {
-        "reception": ["appointments", "queue", "patients"],
-        "lab": [],
-    }
-
-    saved = client.put(
-        "/api/v1/settings",
-        headers={"X-Tenant-ID": tenant["id"]},
-        json={
-            "scope": "tenant",
-            "module": "navigation",
-            "key": "navigation.role_modules",
-            "value": role_modules,
-        },
-    )
-    loaded = client.get(
-        "/api/v1/settings/sidebar-modules",
-        headers={"X-Tenant-ID": tenant["id"]},
-    )
-
-    assert saved.status_code == 200
-    assert saved.json()["value"] == role_modules
-    assert loaded.status_code == 200
-    assert loaded.json() == role_modules
-
-
 def test_invalid_branch_scope_is_rejected(client):
     first, _branch = create_tenant_and_branch(client)
     _second, other_branch = create_tenant_and_branch(client)

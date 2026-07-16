@@ -122,7 +122,8 @@ Frontend:
 - `lib/liveData.ts`: shared live summary type and backend row mapping helpers.
 - `lib/moduleAccess.ts`: shared module access helper used by the shell controller.
 - `__tests__/fixtures/`: unit-test fixture data. Production modules must load backend data through `lib/api.ts`.
-- `lib/navigation.ts`: shared navigation items and role-to-module access map.
+- `lib/navigation.ts`: shared navigation item definitions.
+- `lib/permissionNavigation.ts`: derives visible sidebar modules exclusively from the authenticated user's effective permission keys.
 - `lib/hmsLogic.ts`: frontend helper logic.
 
 Docs:

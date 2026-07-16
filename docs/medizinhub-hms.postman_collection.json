@@ -3106,72 +3106,6 @@
           "response": []
         },
         {
-          "name": "Update Invoice Amount",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Tenant-ID",
-                "value": "{{tenantId}}"
-              },
-              {
-                "key": "X-Branch-ID",
-                "value": "{{branchId}}"
-              },
-              {
-                "key": "authorization",
-                "value": "",
-                "disabled": true,
-                "description": ""
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{authToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/billing/invoices/:invoice_id/amount",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "billing",
-                "invoices",
-                ":invoice_id",
-                "amount"
-              ],
-              "query": []
-            },
-            "description": "Update Invoice Amount",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"amount\": 0\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            }
-          },
-          "response": []
-        },
-        {
           "name": "Cancel Invoice Endpoint",
           "request": {
             "method": "POST",
@@ -5462,7 +5396,7 @@
             "description": "Generate Invoice",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"discount_amount\": 0,\n  \"tax_rule_id\": \"\",\n  \"created_by_user_id\": \"\"\n}",
+              "raw": "{\n  \"tax_rule_id\": \"\",\n  \"discount_offer_id\": \"\",\n  \"created_by_user_id\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -12112,7 +12046,7 @@
             "description": "Generate Invoice",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"discount_amount\": 0,\n  \"tax_rule_id\": \"\",\n  \"created_by_user_id\": \"\"\n}",
+              "raw": "{\n  \"tax_rule_id\": \"\",\n  \"discount_offer_id\": \"\",\n  \"created_by_user_id\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -13530,7 +13464,7 @@
             "description": "Create Practitioner Schedule",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"branch_id\": \"\",\n  \"department_id\": \"\",\n  \"weekday\": 0,\n  \"start_time\": \"\",\n  \"end_time\": \"\"\n}",
+              "raw": "{\n  \"branch_id\": \"\",\n  \"weekday\": 0,\n  \"start_time\": \"\",\n  \"end_time\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -14864,57 +14798,6 @@
               ]
             },
             "description": "Resolve setting"
-          },
-          "response": []
-        },
-        {
-          "name": "Get sidebar modules",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Accept",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Tenant-ID",
-                "value": "{{tenantId}}"
-              },
-              {
-                "key": "X-Branch-ID",
-                "value": "{{branchId}}"
-              },
-              {
-                "key": "authorization",
-                "value": "",
-                "disabled": true,
-                "description": ""
-              }
-            ],
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{authToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/v1/settings/sidebar-modules",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "v1",
-                "settings",
-                "sidebar-modules"
-              ],
-              "query": []
-            },
-            "description": "Get sidebar modules"
           },
           "response": []
         }

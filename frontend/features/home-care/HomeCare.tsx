@@ -20,6 +20,7 @@ import { patientName } from "@/utils/helper";
 import { StatusToast } from "@/app/components/common/ui";
 import { BookingDetail } from "./components/BookingDetail";
 import { pageSize } from "@/utils/constants";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
 
@@ -30,6 +31,7 @@ export function HomeCare({
   loadLiveData,
   setActive,
 }: any) {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [view, setView] = useState<View>("list");
   const [bookings, setBookings] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -635,6 +637,7 @@ export function HomeCare({
           onInvoice={openInvoice}
           canManage={canManageBooking}
           canCreate={canCreateBooking}
+          canCopyIds={canCopyIds}
         />
       )}
 
@@ -676,6 +679,7 @@ export function HomeCare({
           onInvoice={() => selected && openInvoice(selected)}
           canManage={canManageBooking}
           canCreateVisit={canCreateBooking}
+          canCopyIds={canCopyIds}
           apiSession={apiSession}
           onOpenInvoiceModule={() =>
             invoiceDetail?.invoice &&
@@ -689,6 +693,7 @@ export function HomeCare({
           booking={selected}
           patientMap={patientMap}
           invoiceDetail={invoiceDetail}
+          canCopyIds={canCopyIds}
           busy={busy === "invoice"}
           onGenerate={generateInvoice}
           onBack={() => (selected ? openView(selected) : backToList())}

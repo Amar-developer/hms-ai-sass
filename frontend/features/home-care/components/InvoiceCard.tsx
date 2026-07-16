@@ -7,12 +7,14 @@ import {
 import { humanizeOptionLabel } from "@/lib/options";
 import { displayDate, money, patientName } from "@/utils/helper";
 import { bookingTotal } from "../helpers";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function InvoiceCard({
   booking,
   patientMap,
   invoiceDetail,
   busy,
+  canCopyIds = false,
   onGenerate,
   onBack,
   onOpenInvoiceModule,
@@ -41,7 +43,14 @@ export function InvoiceCard({
         </Badge>
       </div>
       <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm">
-        <b>{booking.booking_number}</b>
+        <div className="flex items-center gap-2">
+          <b>{booking.booking_number}</b>
+          <CopyIdButton
+            value={booking.id}
+            label="Home Care Booking ID"
+            allowed={canCopyIds}
+          />
+        </div>
         <p className="mt-1 text-slate-500">
           {patientName(patientMap.get(booking.patient_id))} ·{" "}
           {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
@@ -54,7 +63,14 @@ export function InvoiceCard({
       {invoiceDetail?.invoice ? (
         <div className="mt-4 rounded-2xl border p-4 text-sm">
           <div className="flex items-center justify-between gap-3">
-            <b>{invoiceDetail.invoice.invoice_number}</b>
+            <div className="flex items-center gap-2">
+              <b>{invoiceDetail.invoice.invoice_number}</b>
+              <CopyIdButton
+                value={invoiceDetail.invoice.id}
+                label="Invoice ID"
+                allowed={canCopyIds}
+              />
+            </div>
             <Badge className="normal-badge">
               {humanizeOptionLabel(invoiceDetail.invoice.status)}
             </Badge>

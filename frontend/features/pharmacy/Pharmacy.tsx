@@ -25,6 +25,10 @@ import {
 import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
 import { MedicineDetailModal } from "./components/MedicineDetailModal";
 import { isActivePatientRecord,patientPickerLabel, } from "../patients/helpers";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 const pageSize = 10;
 
@@ -36,6 +40,7 @@ export function Pharmacy({
   loadLiveData,
   liveInvoices = [],
 }: any) {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [issues, setIssues] = useState<any[]>([]);
   const [issuesLoaded, setIssuesLoaded] = useState(false);
   const [medicines, setMedicines] = useState<any[]>([]);
@@ -919,8 +924,17 @@ export function Pharmacy({
                       </p>
                     </td>
                     <td className="text-xs">
-                      {p?.name ||
-                        publicDisplayValue(issue.patient_id, "Patient")}
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {p?.name ||
+                            publicDisplayValue(issue.patient_id, "Patient")}
+                        </span>
+                        <CopyIdButton
+                          value={issue.id}
+                          label="Pharmacy Issue ID"
+                          allowed={canCopyIds}
+                        />
+                      </div>
                     </td>
                     <td>
                       <Badge className="table-status w-[70%] text-xs px-2">

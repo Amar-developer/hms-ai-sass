@@ -1,7 +1,7 @@
 "use client";
 
 import { apiBlob, apiFetch, apiUpload } from "@/lib/api";
-import { dateInputToIso,title } from "../helpers";
+import { dateInputToIso, isLocked, title } from "../helpers";
 import {
   UserFormValues,
   DepartmentFormValues,
@@ -251,15 +251,19 @@ export function useTenantAdminActions({
     e.preventDefault();
     if (!selectedRole) return;
     const fd = new FormData(e.currentTarget);
+    const permissionKeys = fd.getAll("permissionKeys").map(String);
+    const payload = isLocked(selectedRole)
+      ? { permission_keys: permissionKeys }
+      : {
+          name: fd.get("name"),
+          key: fd.get("key"),
+          is_active: fd.get("isActive") === "true",
+          permission_keys: permissionKeys,
+        };
     await updateEntity(
       "roles",
       selectedRole.id,
-      {
-        name: fd.get("name"),
-        key: fd.get("key"),
-        is_active: fd.get("isActive") === "true",
-        permission_keys: fd.getAll("permissionKeys").map(String),
-      },
+      payload,
       "Role updated.",
       "Could not update role.",
     );

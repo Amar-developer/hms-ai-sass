@@ -1,5 +1,9 @@
 import { Card,ActionButton } from "@/app/components/common/ui";
 import { displayDateTime } from "@/utils/helper";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 export function WorklistDetailModal({
   title,
@@ -10,12 +14,20 @@ export function WorklistDetailModal({
   onClose,
   apiSession,
 }: any) {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
       <Card className="w-full max-w-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-xl font-bold">{title}</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-xl font-bold">{title}</h3>
+              <CopyIdButton
+                value={id}
+                label="Lab / Service Order ID"
+                allowed={canCopyIds}
+              />
+            </div>
             <p className="mt-1 text-sm text-slate-500">{patient}</p>
             <p className="text-xs text-slate-500">
               {createdAt ? displayDateTime(createdAt) : ""}

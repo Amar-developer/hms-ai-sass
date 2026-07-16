@@ -34,6 +34,10 @@ import { Info } from "@/app/components/common/Info";
 import { Pagination } from "@/app/components/common/Pagination";
 import { useAppointmentBookingData } from "./api/useAppointmentBookingData";
 import { useAppointmentBookingActions } from "./api/useAppointmentBookingActions";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 type Props = {
   clinic: any;
@@ -152,6 +156,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
 
   const patientMap = useMemo(
     () => new Map(patients.map((patient: any) => [patient.id, patient])),
@@ -1072,11 +1077,18 @@ export function AppointmentCalendarBooking(props: Props) {
                       </p>
                     </div>
                     <div>
-                      <b className="table-data">{appointment.patient_name}</b>
+                      <div className="flex items-center gap-2">
+                        <b className="table-data">{appointment.patient_name}</b>
+                        <CopyIdButton
+                          value={appointment.id}
+                          label="Appointment ID"
+                          allowed={canCopyIds}
+                        />
+                      </div>
                     </div>
                     <div>
                       <p className="text-xs text-slate-500">
-                        {appointment.token_number || appointment.id}
+                        {appointment.token_number || "-"}
                       </p>
                     </div>
                     <span className="table-data">
@@ -1119,9 +1131,16 @@ export function AppointmentCalendarBooking(props: Props) {
                   className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_70px_140px_140px_150px_180px_120px_280px] md:items-center"
                 >
                   <div>
-                    <p className="text-sm font-semibold  break-all">
-                      {appointment.patient}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold break-all">
+                        {appointment.patient}
+                      </p>
+                      <CopyIdButton
+                        value={appointment.id}
+                        label="Appointment ID"
+                        allowed={canCopyIds}
+                      />
+                    </div>
                   </div>
                   <div>
                     <p className="text-sm  text-slate-500">

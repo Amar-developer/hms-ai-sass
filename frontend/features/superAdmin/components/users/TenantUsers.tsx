@@ -22,12 +22,14 @@ import { UserRoleList } from "./UserRoleList";
 import { status_options } from "../../constants";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { FormField } from "@/app/components/FormElements";
+import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function TenantUsers({
   tenants,
   selectedId,
   setSelectedId,
   users,
+  canCopyIds = false,
   setSelectedUserId,
   setSection,
   setConfirmAction,
@@ -235,7 +237,14 @@ export function TenantUsers({
                   className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[1fr_1.15fr_1.15fr_.65fr_.70fr_.65fr_.65fr_.7fr] md:items-center"
                 >
                   <div>
-                    <b className="text-xs lg:text-sm">{user.name}</b>
+                    <div className="flex items-center gap-2">
+                      <b className="text-xs lg:text-sm">{user.name}</b>
+                      <CopyIdButton
+                        value={user.id}
+                        label="User ID"
+                        allowed={canCopyIds}
+                      />
+                    </div>
                     <p className="text-[10px] lg:text-xs text-slate-500">
                       {user.user_number || "User account"}
                     </p>

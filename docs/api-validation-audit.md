@@ -4,8 +4,8 @@ Generated from the live FastAPI OpenAPI schema.
 
 ## Summary
 
-- Total operations: 278
-- Operations with request bodies: 140
+- Total operations: 276
+- Operations with request bodies: 139
 - Operations with audit findings: 27
 - Body operations without required fields (includes PATCH/update endpoints): 54
 - POST/PUT body operations without required fields: 27
@@ -81,7 +81,6 @@ Generated from the live FastAPI OpenAPI schema.
 | GET | `/api/v1/billing/invoices/{invoice_id}` | - | - | - |
 | POST | `/api/v1/billing/invoices/{invoice_id}/adjustment-requests` | application/json | `request_type`, `reason` | - |
 | POST | `/api/v1/billing/invoices/{invoice_id}/amend` | application/json | `reason` | - |
-| PATCH | `/api/v1/billing/invoices/{invoice_id}/amount` | application/json | `amount` | - |
 | POST | `/api/v1/billing/invoices/{invoice_id}/cancel` | application/json | `reason` | - |
 | POST | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | application/json | `amount`, `reason` | - |
 | PATCH | `/api/v1/billing/invoices/{invoice_id}/items/{item_id}/supplier` | application/json | - | - |
@@ -282,7 +281,6 @@ Generated from the live FastAPI OpenAPI schema.
 | PUT | `/api/v1/settings` | application/json | `module`, `key`, `value` | - |
 | GET | `/api/v1/settings/bundle` | - | - | `module`, `branch_id` |
 | GET | `/api/v1/settings/resolve` | - | - | `key`, `module`, `branch_id` |
-| GET | `/api/v1/settings/sidebar-modules` | - | - | - |
 | GET | `/api/v1/subscription-plans` | - | - | - |
 | POST | `/api/v1/subscription-plans` | application/json | `key`, `name` | - |
 | GET | `/api/v1/subscription-plans/announcements` | - | - | - |
