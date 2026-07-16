@@ -32,6 +32,7 @@ import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
 import { activeTenantOptions } from "@/utils/helper";
+import { ErrorLogs } from "@/features/error-logs/ErrorLogs";
 
 export function AppShell(props: any) {
   const {
@@ -67,11 +68,15 @@ export function AppShell(props: any) {
   const visibleNav = nav.filter(
     ([id]: any) => enabled(id) && !(isSuperAdmin && id === "admin"),
   );
-  const activePage = visibleNav.some(([id]: any) => id === active)
-    ? active
-    : isSuperAdmin
-      ? "superadmin"
-      : visibleNav[0]?.[0] || "dashboard";
+  const canAccessErrorLogs = enabled("error_logs");
+  const activePage =
+    active === "error_logs" && canAccessErrorLogs
+      ? active
+      : visibleNav.some(([id]: any) => id === active)
+        ? active
+        : isSuperAdmin
+          ? "superadmin"
+          : visibleNav[0]?.[0] || "dashboard";
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
     demoUsers.find((u: any) => u[0] === primaryRole)?.[1] ||
@@ -131,7 +136,9 @@ export function AppShell(props: any) {
   const profileOpenRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeNavLabel =
-    visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
+    activePage === "error_logs"
+      ? "Error Logs"
+      : visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
 
   const activeSectionLabel =
     activePage === "superadmin"
@@ -163,6 +170,18 @@ export function AppShell(props: any) {
       keywords: `${label} page form list`,
       action: () => navigatePage(id),
     })),
+    ...(canAccessErrorLogs
+      ? [
+          {
+            id: "module-error_logs",
+            label: "Error Logs",
+            description: "Module",
+            keywords:
+              "errors warnings api permission denied frontend backend logs",
+            action: () => navigatePage("error_logs"),
+          },
+        ]
+      : []),
     ...tenantAdminSections
       .filter(([sectionId]: any) =>
         visibleTenantAdminSections.some(([id]: any) => id === sectionId),
@@ -348,6 +367,8 @@ export function AppShell(props: any) {
             setActive={navigatePage}
           />
         );
+      case "error_logs":
+        return <ErrorLogs apiSession={apiSession} />;
       default:
         return (
           <Card>

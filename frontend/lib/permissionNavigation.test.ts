@@ -38,6 +38,15 @@ describe("navigationModulesForPermissions", () => {
     expect(modules).toEqual(expect.arrayContaining(["admin", "dashboard"]));
   });
 
+  it("shows error logs only when its role permission is assigned", () => {
+    expect(
+      navigationModulesForPermissions(["error_logs.read"]),
+    ).toContain("error_logs");
+    expect(
+      navigationModulesForPermissions(["patients.read"]),
+    ).not.toContain("error_logs");
+  });
+
   it("keeps the platform workspace exclusive to a super admin", () => {
     expect(
       navigationModulesForPermissions([], { isSuperAdmin: false }),

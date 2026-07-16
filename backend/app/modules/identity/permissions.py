@@ -129,6 +129,8 @@ AI_ASSIST_MANAGE = "ai.assist.manage"
 AI_ASSIST_USE = "ai.assist.use"
 AUDIT_READ = "audit.read"
 AUDIT_EXPORT = "audit.export"
+ERROR_LOGS_READ = "error_logs.read"
+ERROR_LOGS_MANAGE = "error_logs.manage"
 REPORTS_READ = "reports.read"
 REPORTS_MANAGE = "reports.manage"
 REPORTS_CREATE = "reports.create"
@@ -279,6 +281,8 @@ PERMISSION_CATALOG = [
     AI_ASSIST_USE,
     AUDIT_READ,
     AUDIT_EXPORT,
+    ERROR_LOGS_READ,
+    ERROR_LOGS_MANAGE,
     REPORTS_READ,
     REPORTS_MANAGE,
     REPORTS_CREATE,

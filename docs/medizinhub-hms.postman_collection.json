@@ -3925,10 +3925,10 @@
       ]
     },
     {
-      "name": "Client Logs",
+      "name": "Error Logs",
       "item": [
         {
-          "name": "Record frontend log",
+          "name": "Record frontend log (legacy path)",
           "request": {
             "method": "POST",
             "header": [
@@ -3977,10 +3977,345 @@
               ],
               "query": []
             },
-            "description": "Record frontend log",
+            "description": "Record frontend log (legacy path)",
             "body": {
               "mode": "raw",
               "raw": "{\n  \"event\": \"\",\n  \"message\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List error logs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Branch-ID",
+                "value": "{{branchId}}"
+              },
+              {
+                "key": "authorization",
+                "value": "",
+                "disabled": true,
+                "description": ""
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/error-logs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "error-logs"
+              ],
+              "query": [
+                {
+                  "key": "level",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "source",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "resolved",
+                  "value": "False",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "status_code",
+                  "value": "0",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "q",
+                  "value": "",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "include_global",
+                  "value": "False",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "disabled": true,
+                  "description": ""
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": true,
+                  "description": ""
+                }
+              ]
+            },
+            "description": "List error logs"
+          },
+          "response": []
+        },
+        {
+          "name": "Record frontend error or warning",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Branch-ID",
+                "value": "{{branchId}}"
+              },
+              {
+                "key": "authorization",
+                "value": "",
+                "disabled": true,
+                "description": ""
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/error-logs/client",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "error-logs",
+                "client"
+              ],
+              "query": []
+            },
+            "description": "Record frontend error or warning",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"event\": \"\",\n  \"message\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete error log",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Branch-ID",
+                "value": "{{branchId}}"
+              },
+              {
+                "key": "authorization",
+                "value": "",
+                "disabled": true,
+                "description": ""
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/error-logs/:error_log_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "error-logs",
+                ":error_log_id"
+              ],
+              "query": []
+            },
+            "description": "Delete error log"
+          },
+          "response": []
+        },
+        {
+          "name": "Get error log",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Branch-ID",
+                "value": "{{branchId}}"
+              },
+              {
+                "key": "authorization",
+                "value": "",
+                "disabled": true,
+                "description": ""
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/error-logs/:error_log_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "error-logs",
+                ":error_log_id"
+              ],
+              "query": []
+            },
+            "description": "Get error log"
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve or reopen error log",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Tenant-ID",
+                "value": "{{tenantId}}"
+              },
+              {
+                "key": "X-Branch-ID",
+                "value": "{{branchId}}"
+              },
+              {
+                "key": "authorization",
+                "value": "",
+                "disabled": true,
+                "description": ""
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{authToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/error-logs/:error_log_id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "error-logs",
+                ":error_log_id"
+              ],
+              "query": []
+            },
+            "description": "Resolve or reopen error log",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"resolved\": true,\n  \"resolution_note\": \"\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

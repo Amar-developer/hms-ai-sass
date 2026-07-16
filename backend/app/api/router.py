@@ -3,7 +3,10 @@ from fastapi import APIRouter
 from app.api.v1.appointments import router as appointments_router
 from app.api.v1.audit import activity_router, router as audit_router
 from app.api.v1.billing import router as billing_router
-from app.api.v1.client_logs import router as client_logs_router
+from app.api.v1.client_logs import (
+    legacy_router as legacy_client_logs_router,
+    router as error_logs_router,
+)
 from app.api.v1.consultations import router as consultations_router
 from app.api.v1.health import router as health_router
 from app.api.v1.files import router as files_router
@@ -29,7 +32,8 @@ api_router.include_router(health_router, tags=["Health"])
 api_router.include_router(files_router, tags=["Files"])
 api_router.include_router(modules_router, tags=["Modules"])
 api_router.include_router(identity_router, tags=["identity"])
-api_router.include_router(client_logs_router, tags=["Client Logs"])
+api_router.include_router(error_logs_router, tags=["Error Logs"])
+api_router.include_router(legacy_client_logs_router, tags=["Error Logs"])
 api_router.include_router(tenants_router, tags=["tenants"])
 api_router.include_router(subscriptions_router, tags=["subscriptions"])
 api_router.include_router(audit_router, tags=["Audit"])

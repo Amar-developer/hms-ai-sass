@@ -1052,9 +1052,9 @@
   {
     "method": "POST",
     "path": "/api/v1/client-logs",
-    "summary": "Record frontend log",
+    "summary": "Record frontend log (legacy path)",
     "tags": [
-      "Client Logs"
+      "Error Logs"
     ],
     "path_params": [],
     "query_params": [],
@@ -1067,7 +1067,7 @@
       "event",
       "message"
     ],
-    "body_field_count": 7,
+    "body_field_count": 11,
     "weak_body_fields": [],
     "issues": []
   },
@@ -1265,6 +1265,120 @@
     "issues": [
       "request body has no required fields"
     ]
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/error-logs",
+    "summary": "List error logs",
+    "tags": [
+      "Error Logs"
+    ],
+    "path_params": [],
+    "query_params": [
+      "level",
+      "source",
+      "category",
+      "resolved",
+      "status_code",
+      "q",
+      "include_global",
+      "limit",
+      "offset"
+    ],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "POST",
+    "path": "/api/v1/error-logs/client",
+    "summary": "Record frontend error or warning",
+    "tags": [
+      "Error Logs"
+    ],
+    "path_params": [],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [
+      "event",
+      "message"
+    ],
+    "body_field_count": 11,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v1/error-logs/{error_log_id}",
+    "summary": "Delete error log",
+    "tags": [
+      "Error Logs"
+    ],
+    "path_params": [
+      "error_log_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "GET",
+    "path": "/api/v1/error-logs/{error_log_id}",
+    "summary": "Get error log",
+    "tags": [
+      "Error Logs"
+    ],
+    "path_params": [
+      "error_log_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": null,
+    "body_required_fields": [],
+    "body_field_count": 0,
+    "weak_body_fields": [],
+    "issues": []
+  },
+  {
+    "method": "PATCH",
+    "path": "/api/v1/error-logs/{error_log_id}",
+    "summary": "Resolve or reopen error log",
+    "tags": [
+      "Error Logs"
+    ],
+    "path_params": [
+      "error_log_id"
+    ],
+    "query_params": [],
+    "header_params": [
+      "X-Tenant-ID",
+      "authorization"
+    ],
+    "body_media_type": "application/json",
+    "body_required_fields": [],
+    "body_field_count": 2,
+    "weak_body_fields": [],
+    "issues": []
   },
   {
     "method": "GET",

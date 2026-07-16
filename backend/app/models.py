@@ -22,6 +22,7 @@ from app.modules.consultations.models import (
     ConsultationMedicine,
 )
 from app.modules.consultations.models import ConsultationReferral, ConsultationVital
+from app.modules.error_logs.models import ErrorLog
 from app.modules.home_care.models import (
     HomeCareBooking,
     HomeCareBookingItem,
@@ -123,6 +124,7 @@ __all__ = [
     "HomeCareService",
     "HomeCareVisitLog",
     "DoctorSettlement",
+    "ErrorLog",
     "DiscountApproval",
     "DiscountOffer",
     "CreditNote",

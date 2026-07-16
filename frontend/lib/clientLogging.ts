@@ -12,7 +12,11 @@ type ClientLogContext = {
   event?: string;
   module?: string;
   requestId?: string | null;
-  level?: "warning" | "error";
+  level?: "warning" | "error" | "critical";
+  category?: string;
+  method?: string;
+  statusCode?: number;
+  metadata?: Record<string, unknown>;
 };
 
 const recentLogs = new Map<string, number>();
@@ -59,7 +63,7 @@ export function reportClientError(
   recentLogs.set(fingerprint, now);
   sentLogTimes.push(now);
 
-  void fetch(`${API_BASE}/client-logs`, {
+  void fetch(`${API_BASE}/error-logs/client`, {
     method: "POST",
     keepalive: true,
     credentials: "include",
@@ -73,8 +77,26 @@ export function reportClientError(
       message,
       module: sanitize(context.module || "frontend", 100),
       route: sanitize(window.location.pathname, 300),
+      method: sanitize(context.method, 12) || null,
+      status_code: context.statusCode || null,
       request_id: sanitize(context.requestId, 100) || null,
       stack: sanitize(resolvedError.stack, 4000) || null,
+      category: sanitize(context.category, 60) || null,
+      metadata_json: sanitize(JSON.stringify(context.metadata || {}), 8000),
     }),
   }).catch(() => undefined);
+}
+
+export function formatClientLogArguments(values: unknown[]) {
+  return values
+    .map((value) => {
+      if (value instanceof Error) return value.message;
+      if (typeof value === "string") return value;
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    })
+    .join(" ");
 }

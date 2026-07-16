@@ -4,10 +4,10 @@ Generated from the live FastAPI OpenAPI schema.
 
 ## Summary
 
-- Total operations: 276
-- Operations with request bodies: 139
+- Total operations: 281
+- Operations with request bodies: 141
 - Operations with audit findings: 27
-- Body operations without required fields (includes PATCH/update endpoints): 54
+- Body operations without required fields (includes PATCH/update endpoints): 55
 - POST/PUT body operations without required fields: 27
 
 ## Findings
@@ -104,6 +104,11 @@ Generated from the live FastAPI OpenAPI schema.
 | PATCH | `/api/v1/consultations/{consultation_id}` | application/json | - | - |
 | POST | `/api/v1/consultations/{consultation_id}/addendums` | application/json | `note` | - |
 | POST | `/api/v1/consultations/{consultation_id}/sign` | application/json | - | - |
+| GET | `/api/v1/error-logs` | - | - | `level`, `source`, `category`, `resolved`, `status_code`, `q`, `include_global`, `limit`, `offset` |
+| POST | `/api/v1/error-logs/client` | application/json | `event`, `message` | - |
+| DELETE | `/api/v1/error-logs/{error_log_id}` | - | - | - |
+| GET | `/api/v1/error-logs/{error_log_id}` | - | - | - |
+| PATCH | `/api/v1/error-logs/{error_log_id}` | application/json | - | - |
 | GET | `/api/v1/files` | - | - | `branch_id`, `patient_id`, `category`, `attached_to_doctype`, `attached_to_name`, `q`, `limit` |
 | POST | `/api/v1/files` | multipart/form-data | `file` | - |
 | POST | `/api/v1/files/sync-uploads` | - | - | - |

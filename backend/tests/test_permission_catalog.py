@@ -19,6 +19,7 @@ def test_permission_catalog_has_unique_keys_and_all_application_modules():
         "consultations",
         "departments",
         "discounts",
+        "error_logs",
         "files",
         "home_care",
         "identity.roles",

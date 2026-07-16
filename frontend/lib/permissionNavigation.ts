@@ -28,6 +28,7 @@ const NAV_PERMISSION_PREFIXES: Record<string, string[]> = {
   billing: ["billing", "invoices", "payments", "settlements"],
   subscriptions: ["patient_subscriptions"],
   reports: ["reports", "audit", "subscriptions.reports"],
+  error_logs: ["error_logs"],
 };
 
 function permissionMatchesPrefix(permission: string, prefix: string) {

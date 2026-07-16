@@ -74,6 +74,40 @@ function notifySessionExpired() {
   window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT));
 }
 
+function reportApiFailure(
+  path: string,
+  status: number,
+  detail: string,
+  requestId: string | null,
+  method: string,
+  session: ApiSession,
+) {
+  reportClientError(
+    new Error(detail),
+    {
+      event:
+        status >= 500
+          ? "frontend.api_server_error"
+          : status === 401 || status === 403
+            ? "frontend.api_permission_error"
+            : "frontend.api_request_error",
+      module: "api",
+      category:
+        status === 401 || status === 403
+          ? "permission"
+          : status === 422
+            ? "validation"
+            : "api",
+      level: status >= 500 ? "error" : "warning",
+      requestId,
+      method,
+      statusCode: status,
+      metadata: { api_path: path },
+    },
+    session,
+  );
+}
+
 function cleanupIdempotencyKeys(now = Date.now()) {
   for (const [signature, cached] of idempotencyKeys.entries()) {
     if (cached.expiresAt <= now) idempotencyKeys.delete(signature);
@@ -180,17 +214,14 @@ export async function apiFetch(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    if (res.status >= 500) {
-      reportClientError(
-        new Error(detail),
-        {
-          event: "frontend.api_server_error",
-          module: "api",
-          requestId: res.headers.get("x-request-id"),
-        },
-        session,
-      );
-    }
+    reportApiFailure(
+      path,
+      res.status,
+      detail,
+      res.headers.get("x-request-id"),
+      String(options.method || "GET").toUpperCase(),
+      session,
+    );
     throw apiError(path, detail, res);
   }
   if (res.status === 204 || res.headers.get("content-length") === "0")
@@ -231,17 +262,14 @@ export async function apiBlob(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    if (res.status >= 500) {
-      reportClientError(
-        new Error(detail),
-        {
-          event: "frontend.api_server_error",
-          module: "api",
-          requestId: res.headers.get("x-request-id"),
-        },
-        session,
-      );
-    }
+    reportApiFailure(
+      path,
+      res.status,
+      detail,
+      res.headers.get("x-request-id"),
+      String(options.method || "GET").toUpperCase(),
+      session,
+    );
     throw apiError(path, detail, res);
   }
   return res.blob();
@@ -280,17 +308,14 @@ export async function apiUpload(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    if (res.status >= 500) {
-      reportClientError(
-        new Error(detail),
-        {
-          event: "frontend.api_server_error",
-          module: "api",
-          requestId: res.headers.get("x-request-id"),
-        },
-        session,
-      );
-    }
+    reportApiFailure(
+      path,
+      res.status,
+      detail,
+      res.headers.get("x-request-id"),
+      "POST",
+      session,
+    );
     throw apiError(path, detail, res);
   }
   return res.json();

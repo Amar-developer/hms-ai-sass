@@ -27,6 +27,7 @@ export function canOpenModule(
       id === "queue" ||
       id === "reports" ||
       id === "items" ||
+      id === "error_logs" ||
       id === "admin" ||
       id === "superadmin" ||
       moduleEnabled)

@@ -10,7 +10,11 @@ import {
 import { demoUsers, loginPresets } from "@/lib/authPresets";
 import { type LiveSummary, mapAppointment, mapPatient } from "@/lib/liveData";
 import { canOpenModule } from "@/lib/moduleAccess";
-import { reportClientError, storedClientLogSession } from "@/lib/clientLogging";
+import {
+  formatClientLogArguments,
+  reportClientError,
+  storedClientLogSession,
+} from "@/lib/clientLogging";
 import { nav } from "@/lib/navigation";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { navigationModulesForPermissions } from "@/lib/permissionNavigation";
@@ -423,6 +427,35 @@ export function useAppController() {
   }
 
   useEffect(() => {
+    const originalConsoleWarn = console.warn;
+    const originalConsoleError = console.error;
+    console.warn = (...values: unknown[]) => {
+      originalConsoleWarn(...values);
+      reportClientError(
+        new Error(formatClientLogArguments(values)),
+        {
+          event: "frontend.console_warning",
+          module: "console",
+          level: "warning",
+          category: "frontend",
+        },
+        storedClientLogSession(),
+      );
+    };
+    console.error = (...values: unknown[]) => {
+      originalConsoleError(...values);
+      reportClientError(
+        new Error(formatClientLogArguments(values)),
+        {
+          event: "frontend.console_error",
+          module: "console",
+          level: "error",
+          category: "frontend",
+        },
+        storedClientLogSession(),
+      );
+    };
+
     function handleUnhandled(event: PromiseRejectionEvent) {
       event.preventDefault();
       const reason = event.reason;
@@ -490,6 +523,8 @@ export function useAppController() {
     }
 
     return () => {
+      console.warn = originalConsoleWarn;
+      console.error = originalConsoleError;
       window.removeEventListener("unhandledrejection", handleUnhandled);
       window.removeEventListener("error", handleWindowError);
       window.removeEventListener(

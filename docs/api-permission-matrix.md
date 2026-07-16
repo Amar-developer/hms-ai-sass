@@ -60,6 +60,8 @@ Current enforced guardrails:
 | `home_care.create/read/edit/delete` | Granular home-care service and booking controls |
 | `notifications.manage` | Notification queue create/list |
 | `audit.read` | Audit event create/list/detail |
+| `error_logs.read` | View and search tenant error logs |
+| `error_logs.manage` | Resolve, reopen, and delete tenant error logs |
 | `reports.read` | Subscription active/entitlement reads and future reports |
 
 ## Public and Auth APIs
@@ -74,7 +76,19 @@ Current enforced guardrails:
 | `GET` | `/api/v1/auth/me` | Authenticated | Current user, roles, permissions |
 | `POST` | `/api/v1/auth/logout` | Authenticated | Revokes current session |
 | `POST` | `/api/v1/auth/change-password` | Authenticated | Changes current user's password |
-| `POST` | `/api/v1/client-logs` | Public | Accepts frontend client log events |
+| `POST` | `/api/v1/client-logs` | Authenticated tenant user | Legacy frontend error/warning capture path |
+| `POST` | `/api/v1/error-logs/client` | Authenticated tenant user | Persistent frontend error/warning capture path |
+
+## Error Logs
+
+Error Logs is intentionally hidden from the sidebar. Users with `error_logs.read` or `error_logs.manage` open it through the global module search.
+
+| Method | Endpoint | Permission |
+| --- | --- | --- |
+| `GET` | `/api/v1/error-logs` | `error_logs.read` or `error_logs.manage` |
+| `GET` | `/api/v1/error-logs/{error_log_id}` | `error_logs.read` or `error_logs.manage` |
+| `PATCH` | `/api/v1/error-logs/{error_log_id}` | `error_logs.manage` |
+| `DELETE` | `/api/v1/error-logs/{error_log_id}` | `error_logs.manage` |
 
 ## Tenant and Platform
 
