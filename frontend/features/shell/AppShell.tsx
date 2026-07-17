@@ -116,8 +116,16 @@ export function AppShell(props: any) {
   const visibleTenantOptions = activeTenantOptions(tenants);
   const tenantOptions = isSuperAdmin
     ? visibleTenantOptions.length
-      ? visibleTenantOptions
-      : [{ id: apiSession?.tenantId || clinic.id, name: displayClinicName }]
+      ? visibleTenantOptions.map((tenant: any) => ({
+          value: tenant.id,
+          label: tenant.name || tenant.id,
+        }))
+      : [
+          {
+            value: apiSession?.tenantId || clinic.id,
+            label: displayClinicName,
+          },
+        ]
     : clinics;
   const [superAdminSection, setSuperAdminSection] = useState("overview");
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
@@ -133,6 +141,7 @@ export function AppShell(props: any) {
   const [reportsSection, setReportsSection] = useState("metrix");
   const [sideBarOpen, setSidebarOpen] = useState(true);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(false);
   const profileOpenRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeNavLabel =
@@ -258,8 +267,10 @@ export function AppShell(props: any) {
       if (window.innerWidth >= 1024) {
         setSidebarOpen(true);
         setTabletCollapsed(false);
+        setIsDesktop(true);
       } else {
         setTabletCollapsed(true);
+        setIsDesktop(false);
       }
     };
 
@@ -384,59 +395,20 @@ export function AppShell(props: any) {
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
       {/* Sidebar */}
-      <div
-        className={`
+      {!isDesktop && (
+        <div
+          className={`
     fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200
     transition-all duration-300
 
     md:w-14
     ${!tabletCollapsed ? "md:w-64" : ""}
 
-    lg:w-50
+    lg:hidden lg:w-50
   `}
-      >
-        {/* Tablet view Sidebar */}
-        <div className="w-fit scrollbar-hidden h-full overflow-y-auto  ">
-          <Sidebar
-            visibleNav={visibleNav}
-            activePage={activePage}
-            navigatePage={navigatePage}
-            isSuperAdmin={isSuperAdmin}
-            reportsOpen={reportsOpen}
-            setReportsOpen={setReportsOpen}
-            reportsSection={reportsSection}
-            setReportsSection={setReportsSection}
-            tenantAdminSettingsOpen={tenantAdminSettingsOpen}
-            setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
-            tenantAdminSection={tenantAdminSection}
-            setTenantAdminSection={setTenantAdminSection}
-            superAdminSettingsOpen={superAdminSettingsOpen}
-            setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
-            superAdminSection={superAdminSection}
-            setSuperAdminSection={setSuperAdminSection}
-            visibleTenantAdminSections={visibleTenantAdminSections}
-            enabled={enabled}
-            clinic={clinic}
-            setSidebarOpen={setSidebarOpen}
-            sideBarOpen={sideBarOpen}
-            reportSections={reportSections}
-            reportSection={reportsSection}
-            superAdminSections={superAdminSections}
-            tabletCollapsed={tabletCollapsed}
-            setTabletCollapsed={setTabletCollapsed}
-          />
-        </div>
-      </div>
-      <div className="h-full lg:flex">
-        <aside
-          className={`scrollbar-hidden hidden h-screen w-64 lg:w-50  shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block`}
         >
-          {/* Desktop view */}
-          <div
-            className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-50 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
-              sideBarOpen ? "translate-x-0" : "-translate-x-full"
-            }`}
-          >
+          {/* Tablet view Sidebar */}
+          <div className="w-fit scrollbar-hidden h-full overflow-y-auto  ">
             <Sidebar
               visibleNav={visibleNav}
               activePage={activePage}
@@ -466,6 +438,49 @@ export function AppShell(props: any) {
               setTabletCollapsed={setTabletCollapsed}
             />
           </div>
+        </div>
+      )}
+      <div className="h-full lg:flex">
+        <aside
+          className={`scrollbar-hidden hidden h-screen w-64 lg:w-50  shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block`}
+        >
+          {/* Desktop view */}
+          {isDesktop && (
+            <div
+              className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-50 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+                sideBarOpen ? "translate-x-0" : "-translate-x-full"
+              }`}
+            >
+              <Sidebar
+                visibleNav={visibleNav}
+                activePage={activePage}
+                navigatePage={navigatePage}
+                isSuperAdmin={isSuperAdmin}
+                reportsOpen={reportsOpen}
+                setReportsOpen={setReportsOpen}
+                reportsSection={reportsSection}
+                setReportsSection={setReportsSection}
+                tenantAdminSettingsOpen={tenantAdminSettingsOpen}
+                setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
+                tenantAdminSection={tenantAdminSection}
+                setTenantAdminSection={setTenantAdminSection}
+                superAdminSettingsOpen={superAdminSettingsOpen}
+                setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
+                superAdminSection={superAdminSection}
+                setSuperAdminSection={setSuperAdminSection}
+                visibleTenantAdminSections={visibleTenantAdminSections}
+                enabled={enabled}
+                clinic={clinic}
+                setSidebarOpen={setSidebarOpen}
+                sideBarOpen={sideBarOpen}
+                reportSections={reportSections}
+                reportSection={reportsSection}
+                superAdminSections={superAdminSections}
+                tabletCollapsed={tabletCollapsed}
+                setTabletCollapsed={setTabletCollapsed}
+              />
+            </div>
+          )}
           <div className="mt-8 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
               {isSuperAdmin ? "Primary Tenant" : clinic.type}
@@ -528,7 +543,7 @@ export function AppShell(props: any) {
                     type="button"
                     onClick={() => goHistory(-1)}
                     disabled={!canGoBack}
-                    title="Back"
+                    title="Previous page"
                     className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
                   >
                     <ArrowLeft size={14} />

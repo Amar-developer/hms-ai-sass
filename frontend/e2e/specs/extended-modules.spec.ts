@@ -46,9 +46,11 @@ test.describe("extended tenant modules", () => {
     await page.getByRole("button", { name: "Patient Membership" }).click();
     await page.getByRole("button", { name: "Create Plan" }).click();
     await page.getByPlaceholder("Membership plan name").fill(name);
-    await page.locator('input[type="number"]').nth(0).fill("750");
-    await page.locator('input[type="number"]').nth(1).fill("30");
-    await page.locator('input[type="number"]').nth(3).fill("2");
+    await page.locator('input[name="priceAmount"]').fill("750");
+    await page.locator('input[name="durationDays"]').fill("30");
+    await page.locator('input[name="activationAfterDays"]').fill("1");
+    await page.locator('input[name="freeConsultations"]').fill("2");
+    await page.locator('input[name="minDiscountAmount"]').fill("1");
     await page.getByRole("button", { name: "Create Plan" }).last().click();
     await expect(page.getByText(/Plan created/i)).toBeVisible();
 
@@ -80,7 +82,7 @@ test.describe("extended tenant modules", () => {
       .fill("Resolved by frontend Playwright E2E");
     await page.getByRole("button", { name: "Mark Resolved" }).click();
     await expect(page.getByText("Error log resolved.")).toBeVisible();
-    await page.getByRole("button", { name: "Back" }).click();
+    await page.getByRole("button", { name: "Back to Error Logs", exact: true }).click();
     await expect(page.getByRole("row").filter({ hasText: seed.errorRoute })).toContainText(
       "Resolved",
     );
@@ -106,8 +108,12 @@ test.describe("super administrator and entitlements", () => {
     const page = await context.newPage();
     await page.goto("/");
     await expect(page.getByText("Super Admin", { exact: true }).first()).toBeVisible();
-    const tenantField = page.getByText("Tenant", { exact: true }).first().locator("..");
-    await tenantField.getByRole("button").click();
+    const tenantSelector = page
+      .locator("header > div > div")
+      .first()
+      .getByRole("button");
+    await expect(tenantSelector).not.toHaveText("Select...");
+    await tenantSelector.click();
     await page.getByRole("button", { name: seed.tenantName, exact: true }).last().click();
     await expect(page.getByText(seed.tenantName, { exact: true })).toBeVisible();
     await context.close();

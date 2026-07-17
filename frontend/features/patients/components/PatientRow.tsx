@@ -21,7 +21,6 @@ export function PatientRow({
   };
   return (
     <div
-      role="button"
       tabIndex={0}
       onClick={onView}
       onKeyDown={(event: any) => {

@@ -97,12 +97,7 @@ jobs:
           MEDIZINHUB_FRONTEND_E2E_DATABASE_URL: postgresql+psycopg://medizinhub:medizinhub_ci@127.0.0.1:5432/medizinhub_frontend_e2e
           MEDIZINHUB_FRONTEND_E2E_API_URL: http://127.0.0.1:8091/api/v1
           MEDIZINHUB_FRONTEND_E2E_BASE_URL: http://127.0.0.1:3100
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            npm run test:e2e
-          else
-            npm run test:e2e:extended
-          fi
+        run: npm run test:e2e
 
       - name: Upload Playwright failure artifacts
         if: failure()

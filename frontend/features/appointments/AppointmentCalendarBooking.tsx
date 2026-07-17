@@ -1119,7 +1119,6 @@ export function AppointmentCalendarBooking(props: Props) {
               return (
                 <div
                   key={appointment.id}
-                  role="button"
                   tabIndex={0}
                   onClick={() => openConsultation(appointment)}
                   onKeyDown={(event: any) => {

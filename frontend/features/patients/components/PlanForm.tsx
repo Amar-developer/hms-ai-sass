@@ -84,7 +84,10 @@ export function PlanForm({
         </button>
       </div>
       <form
-        onSubmit={handleSubmit(onSubmit)}
+        onSubmit={(event) => {
+          const form = event.currentTarget;
+          void handleSubmit(() => onSubmit(form))(event);
+        }}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4"
       >
         <FormField label="Plan Name">
@@ -131,7 +134,10 @@ export function PlanForm({
           )}
         </FormField>
         <FormField label="Free Consultations">
-          <Input {...register("freeConsultations")} type="number" />
+          <Input
+            {...register("freeConsultations", { valueAsNumber: true })}
+            type="number"
+          />
         </FormField>
         <div className="md:col-span-2">
           <FormField label="Free Consultation Departments">
@@ -211,11 +217,16 @@ export function PlanForm({
           </p>
         </div>
         <FormField label="Lab Discount %">
-          <Input {...register("labDiscount")} type="number" min="0" max="100" />
+          <Input
+            {...register("labDiscount", { valueAsNumber: true })}
+            type="number"
+            min="0"
+            max="100"
+          />
         </FormField>
         <FormField label="Pharmacy Discount %">
           <Input
-            {...register("pharmacyDiscount")}
+            {...register("pharmacyDiscount", { valueAsNumber: true })}
             type="number"
             min="0"
             max="100"
