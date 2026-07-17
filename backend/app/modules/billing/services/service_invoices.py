@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
+from app.modules.billing.services.discount_policy import compose_invoice_discounts
 from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.billing.services.rules import calculate_offer_discount, find_tax_rule
 
@@ -108,7 +109,14 @@ def create_service_invoice(
                         free_item_ids=preview["free_item_ids"],
                     )
                     session.add(enrollment)
-            discount_amount = min(discount_amount + membership_discount, amount)
+            discount_composition = compose_invoice_discounts(
+                subtotal=amount,
+                membership_discount=membership_discount,
+                offer_discount=discount_amount,
+            )
+            discount_amount = discount_composition.total
+            if membership_discount > 0:
+                offer = None
             taxable_amount = amount - discount_amount
             tax_amount = round(
                 taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100
@@ -120,6 +128,18 @@ def create_service_invoice(
         # be swallowed, otherwise a free consultation becomes a paid invoice
         # without updating usage.
         pass
+    # The membership lookup can legitimately return no benefit. Compose once
+    # more outside the lookup block so both membership and non-membership paths
+    # use the same exclusive-discount policy.
+    discount_composition = compose_invoice_discounts(
+        subtotal=amount,
+        membership_discount=membership_discount,
+        offer_discount=discount_amount if membership_discount <= 0 else 0,
+    )
+    discount_amount = discount_composition.total
+    if membership_discount > 0:
+        offer = None
+    taxable_amount = amount - discount_amount
     tax_amount = round(
         taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100
     )
@@ -147,7 +167,9 @@ def create_service_invoice(
         balance_amount=total_amount,
         doctor_share_amount=0,
         clinic_share_amount=total_amount,
-        discount_offer_id=offer.id if offer else None,
+        discount_offer_id=offer.id
+        if offer and discount_composition.offer > 0
+        else None,
         patient_subscription_enrollment_id=membership_enrollment_id,
         patient_subscription_plan_id=membership_plan_id,
         created_by_user_id=created_by_user_id,

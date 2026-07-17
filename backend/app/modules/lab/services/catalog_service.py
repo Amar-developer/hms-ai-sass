@@ -6,6 +6,7 @@ from sqlmodel import Session
 from app.core.access_control import require_user_branch_access
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.identity.models import User
+from app.modules.item_catalog_validation import validate_unique_item_name
 from app.modules.lab.models import LabResultTemplate, LabTestCatalog, LabTestPackage
 from app.modules.lab.repositories import LabCatalogRepository
 from app.modules.lab.schemas import (
@@ -28,6 +29,9 @@ def create_lab_test_record(
     enforce_module_enabled(session, tenant_id, "lab")
     data = payload.model_dump()
     data["branch_id"] = None
+    data["name"] = validate_unique_item_name(
+        session, tenant_id=tenant_id, name=payload.name
+    )
     test = LabTestCatalog.model_validate(data, update={"tenant_id": tenant_id})
     session.add(test)
     session.commit()
@@ -66,6 +70,14 @@ def update_lab_test_record(
     data = payload.model_dump(exclude_unset=True)
     if "branch_id" in data:
         data["branch_id"] = None
+    if data.get("name"):
+        data["name"] = validate_unique_item_name(
+            session,
+            tenant_id=tenant_id,
+            name=data["name"],
+            exclude_model=LabTestCatalog,
+            exclude_id=test.id,
+        )
     before = {key: getattr(test, key) for key in data}
     for key, value in data.items():
         setattr(test, key, value)
@@ -126,6 +138,9 @@ def create_lab_package_record(
     catalog_repo = LabCatalogRepository(session)
     data = payload.model_dump(exclude={"test_ids"})
     data["branch_id"] = None
+    data["name"] = validate_unique_item_name(
+        session, tenant_id=tenant_id, name=payload.name
+    )
     package = LabTestPackage.model_validate(data, update={"tenant_id": tenant_id})
     session.add(package)
     session.commit()
@@ -180,6 +195,14 @@ def update_lab_package_record(
     data = payload.model_dump(exclude_unset=True, exclude={"test_ids"})
     if "branch_id" in data:
         data["branch_id"] = None
+    if data.get("name"):
+        data["name"] = validate_unique_item_name(
+            session,
+            tenant_id=tenant_id,
+            name=data["name"],
+            exclude_model=LabTestPackage,
+            exclude_id=package.id,
+        )
     before = {key: getattr(package, key) for key in data}
     for key, value in data.items():
         setattr(package, key, value)

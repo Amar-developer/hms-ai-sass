@@ -10,6 +10,10 @@ const nextConfig = {
     ? { distDir: ".next-build" }
     : {}),
   output: "standalone",
+  // The repository lives below a desktop-level package-lock.json on some
+  // developer machines. Pin tracing to this frontend package so Next.js does
+  // not infer the parent directory as the application root.
+  outputFileTracingRoot: process.cwd(),
 };
 
 export default nextConfig;

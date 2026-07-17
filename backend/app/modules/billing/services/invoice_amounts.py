@@ -6,6 +6,9 @@ from app.modules.billing.models import Invoice, InvoiceStatus
 from app.modules.billing.repositories.adjustment_repository import (
     BillingAdjustmentRepository,
 )
+from app.modules.billing.services.discount_policy import (
+    ensure_invoice_allows_additional_discount,
+)
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.rules import (
     calculate_offer_discount,
@@ -33,6 +36,7 @@ def ensure_invoice_eligible_for_discount_request(
     payment — a discount reduces what's owed; once anything is paid, a
     refund is the correct action instead.
     """
+    ensure_invoice_allows_additional_discount(invoice)
     if invoice.status in {InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED}:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

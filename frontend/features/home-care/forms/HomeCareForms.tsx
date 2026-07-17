@@ -84,8 +84,9 @@ export function BookingForm({
     },
   });
 
-  // Reset the whole form (and the local patient-lookup state) whenever we
-  // start editing a different booking, or drop back to creating a new one.
+  // Initialize only when the form starts editing a different booking (or
+  // switches between edit and create). Patient/service list refreshes happen
+  // on tab focus and must not wipe an in-progress booking draft.
   useEffect(() => {
     if (editing) {
       const isVisitBooking = editing.booking_type
@@ -127,7 +128,7 @@ export function BookingForm({
       setLookupPatient(null);
       setPatientSearch("");
     }
-  }, [editing, services, patients, reset]);
+  }, [editing?.id, reset]);
 
   const patientId = watch("patient_id");
   const bookingType = watch("booking_type");
@@ -156,6 +157,18 @@ export function BookingForm({
   const selectedLookupPatient =
     (patientId && patients.find((p: any) => p.id === patientId)) ||
     lookupPatient;
+
+  // Keep the selected patient in sync with a freshly loaded patient row while
+  // preserving the patient_id and the rest of the current form draft.
+  useEffect(() => {
+    if (!patientId) return;
+    const refreshedPatient = patients.find(
+      (patient: any) => patient.id === patientId,
+    );
+    if (!refreshedPatient) return;
+    setLookupPatient(refreshedPatient);
+    setPatientSearch(patientSearchLabel(refreshedPatient));
+  }, [patientId, patients]);
 
   function selectPatient(patient: any) {
     const location = patientLocation(patient);

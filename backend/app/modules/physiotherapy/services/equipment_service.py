@@ -8,6 +8,7 @@ from app.core.access_control import (
 )
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.identity.models import User
+from app.modules.item_catalog_validation import validate_unique_item_name
 from app.modules.physiotherapy.models import PhysiotherapyEquipment
 from app.modules.physiotherapy.repositories import PhysiotherapyEquipmentRepository
 from app.modules.physiotherapy.schemas import (
@@ -36,8 +37,12 @@ class PhysiotherapyEquipmentService:
         enforce_module_enabled(self.session, tenant_id, "physiotherapy")
         require_branch_in_tenant(self.session, tenant_id, payload.branch_id)
         require_user_branch_access(actor, payload.branch_id)
+        data = payload.model_dump()
+        data["name"] = validate_unique_item_name(
+            self.session, tenant_id=tenant_id, name=payload.name
+        )
         equipment = PhysiotherapyEquipment.model_validate(
-            payload,
+            data,
             update={
                 "tenant_id": tenant_id,
                 "created_by_user_id": actor.id,
@@ -76,6 +81,14 @@ class PhysiotherapyEquipmentService:
             )
         require_user_branch_access(actor, equipment.branch_id)
         data = payload.model_dump(exclude_unset=True)
+        if data.get("name"):
+            data["name"] = validate_unique_item_name(
+                self.session,
+                tenant_id=tenant_id,
+                name=data["name"],
+                exclude_model=PhysiotherapyEquipment,
+                exclude_id=equipment.id,
+            )
         next_branch_id = data.get("branch_id", equipment.branch_id)
         require_branch_in_tenant(self.session, tenant_id, next_branch_id)
         require_user_branch_access(actor, next_branch_id)

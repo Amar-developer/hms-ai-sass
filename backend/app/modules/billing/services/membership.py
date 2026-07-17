@@ -9,6 +9,9 @@ from app.modules.billing.models import Invoice
 from app.modules.billing.repositories.invoice_support_repository import (
     BillingInvoiceSupportRepository,
 )
+from app.modules.billing.services.discount_policy import (
+    MEMBERSHIP_DISCOUNT_CONFLICT_DETAIL,
+)
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceMembershipBenefitRead
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.rules import find_tax_rule
@@ -180,6 +183,20 @@ def apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invo
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot apply membership benefit after payment is recorded",
         )
+    existing_non_membership_discount = max(
+        int(invoice.discount_amount or 0)
+        - int(invoice.membership_discount_amount or 0),
+        0,
+    )
+    if (
+        existing_non_membership_discount > 0
+        or invoice.discount_offer_id
+        or invoice.discount_approval_id
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=MEMBERSHIP_DISCOUNT_CONFLICT_DETAIL,
+        )
     service_type = invoice_membership_service(invoice)
     if not service_type:
         raise HTTPException(
@@ -228,14 +245,7 @@ def apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invo
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=preview.get("reason") or "No membership benefit available",
         )
-    offer_discount = max(
-        int(invoice.discount_amount or 0)
-        - int(invoice.membership_discount_amount or 0),
-        0,
-    )
-    discount = min(
-        offer_discount + membership_discount, int(invoice.subtotal_amount or 0)
-    )
+    discount = min(membership_discount, int(invoice.subtotal_amount or 0))
     taxable = max(int(invoice.subtotal_amount or 0) - discount, 0)
     tax_rule = find_tax_rule(
         session,

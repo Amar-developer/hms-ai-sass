@@ -1,5 +1,5 @@
 import { displayDateTime, money } from "@/utils/helper";
-import { claimedDetail, invoiceDiscountParts, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, itemTypeLabel, numberValue, percentLabel } from "../helpers";
+import { claimedDetail, invoiceDiscountParts, invoiceHasAppliedMembershipBenefit, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, itemTypeLabel, numberValue, percentLabel } from "../helpers";
 import { useEffect, useState } from "react";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Input, SearchableSelect } from "@/app/components/common/ui";
@@ -182,15 +182,17 @@ export function InvoiceDetailPage({
       (supplierOptions[item.id]?.length || 0) > 0 &&
       !item.supplier_id,
   );
-  // Any invoice type can carry a discount request until a payment is
-  // recorded — once paid, a refund is the correct action instead. Actually
-  // applying the discount always goes through the same request -> approve ->
-  // execute flow as a refund, never directly.
+  // Any invoice type without a membership benefit can carry a discount
+  // request until payment. Membership savings are exclusive so the patient
+  // cannot receive a second request-based or promotional reduction.
   const canRequestDiscountBase = Boolean(
     canEditInvoices &&
     numberValue(invoice.paid_amount) <= 0 &&
+    !invoiceHasAppliedMembershipBenefit(invoice) &&
     !["cancelled", "refunded"].includes(String(invoice.status)),
   );
+  const membershipLocksAdditionalDiscounts =
+    invoiceHasAppliedMembershipBenefit(invoice);
   function updatePayRow(index: number, key: string, value: any) {
     setPayRows((rows) =>
       rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)),
@@ -609,7 +611,7 @@ export function InvoiceDetailPage({
                   </tbody>
                 </table>
               </div>
-              {canRequestDiscountBase && (
+              {canRequestDiscountBase ? (
                 <div className="mx-3 mb-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
                   <span className="text-xs font-bold text-slate-500">
                     Need a lower price on this bill? Use "Request Discount" in
@@ -617,7 +619,14 @@ export function InvoiceDetailPage({
                     approved.
                   </span>
                 </div>
-              )}
+              ) : membershipLocksAdditionalDiscounts ? (
+                <div className="mx-3 mb-3 rounded-lg border border-purple-200 bg-purple-50 px-4 py-3">
+                  <span className="text-xs font-bold text-purple-800">
+                    Additional discounts and promotional offers are unavailable
+                    because a patient membership benefit is applied.
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             <aside className="rounded-lg border border-slate-200 bg-white">

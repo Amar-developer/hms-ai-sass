@@ -11,6 +11,7 @@ from app.modules.home_care.schemas import (
     HomeCareServiceUpdate,
 )
 from app.modules.identity.models import User
+from app.modules.item_catalog_validation import validate_unique_item_name
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import now_utc
 
@@ -40,6 +41,9 @@ class HomeCareCatalogService:
         enforce_module_enabled(self.session, tenant_id, "home_care")
         data = payload.model_dump()
         data["branch_id"] = None
+        data["name"] = validate_unique_item_name(
+            self.session, tenant_id=tenant_id, name=payload.name
+        )
         service = HomeCareService.model_validate(
             data,
             update={
@@ -83,6 +87,14 @@ class HomeCareCatalogService:
         data = payload.model_dump(exclude_unset=True)
         if "branch_id" in data:
             data["branch_id"] = None
+        if data.get("name"):
+            data["name"] = validate_unique_item_name(
+                self.session,
+                tenant_id=tenant_id,
+                name=data["name"],
+                exclude_model=HomeCareService,
+                exclude_id=service.id,
+            )
         before = {key: getattr(service, key) for key in data}
         for key, value in data.items():
             if key == "code" and not value:

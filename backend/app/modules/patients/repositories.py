@@ -23,6 +23,16 @@ class PatientRepository:
             return None
         return patient
 
+    def patients_with_primary_mobile(self, *, tenant_id: str) -> list[Patient]:
+        return list(
+            self.session.exec(
+                select(Patient).where(
+                    Patient.tenant_id == tenant_id,
+                    Patient.mobile.is_not(None),
+                )
+            ).all()
+        )
+
     def duplicate_candidate_rows(
         self,
         *,

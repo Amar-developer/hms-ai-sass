@@ -64,15 +64,18 @@ export function noticeTone(message: string): NoticeTone {
   if (!text) return "info";
   // Client-side "please fill this in" validation prompts are a nudge, not a
   // system failure, so they read as a calm warning rather than an alarming
-  // red error even though they mention "required"/"missing"/"select".
+  // red error even though they mention "required"/"missing"/"select". Only
+  // "already exists" duplicate-name nudges match on "already" — other
+  // "already ..." messages (e.g. a booking conflict) are genuine failures
+  // and must fall through to the error check below.
   if (
-    /is required|are required|required\.$|missing|^add .+ before|select |enter the|choose |already|warning|queued|called|request/.test(
+    /is required|are required|required\.$|missing|^add .+ before|select |enter the|choose |already exists|warning|queued|called|request/.test(
       text,
     )
   )
     return "warning";
   if (
-    /denied|not allowed|not assigned|unauthorized|forbidden|failed|could not|error|invalid|does not|not found/.test(
+    /denied|not allowed|not assigned|unauthorized|forbidden|failed|could not|error|invalid|does not|not found|already has/.test(
       text,
     )
   )

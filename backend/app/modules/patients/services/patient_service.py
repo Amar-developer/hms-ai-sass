@@ -31,6 +31,7 @@ from app.modules.patients.schemas import (
     PatientUpdate,
 )
 from app.modules.patients.services.duplicates import PatientDuplicateService
+from app.modules.patients.services.mappers import normalize_mobile
 from app.modules.patients.services.search import PatientSearchService
 from app.modules.settings.numbering import next_document_number
 from app.modules.subscriptions.service import enforce_patient_limit
@@ -51,6 +52,39 @@ class PatientService:
             )
         return patient
 
+    def _validate_mobile_numbers(
+        self,
+        *,
+        tenant_id: str,
+        mobile: str | None,
+        alternate_mobile: str | None,
+        exclude_patient_id: str | None = None,
+    ) -> None:
+        normalized_mobile = normalize_mobile(mobile)
+        normalized_alternate = normalize_mobile(alternate_mobile)
+        if normalized_mobile and normalized_mobile == normalized_alternate:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=(
+                    "Primary mobile number and alternate phone number must be "
+                    "different."
+                ),
+            )
+        if not normalized_mobile:
+            return
+        for existing in self.patients.patients_with_primary_mobile(tenant_id=tenant_id):
+            if existing.id == exclude_patient_id:
+                continue
+            if normalize_mobile(existing.mobile) == normalized_mobile:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        "Mobile number is already used as the primary mobile "
+                        "number for another patient. Use Alternate Phone Number "
+                        "for a shared family contact."
+                    ),
+                )
+
     def register_patient(
         self, *, tenant_id: str, payload: PatientCreate, actor: User
     ) -> Patient:
@@ -62,6 +96,12 @@ class PatientService:
             )
         enforce_patient_limit(self.session, tenant_id)
         require_branch_in_tenant(self.session, tenant_id, payload.branch_id)
+
+        self._validate_mobile_numbers(
+            tenant_id=tenant_id,
+            mobile=payload.mobile,
+            alternate_mobile=payload.alternate_mobile,
+        )
 
         duplicates = PatientDuplicateService(self.session).candidates(
             tenant_id=tenant_id, payload=payload
@@ -212,6 +252,12 @@ class PatientService:
         updates = payload.model_dump(exclude_unset=True)
         if "branch_id" in updates:
             require_branch_in_tenant(self.session, tenant_id, updates["branch_id"])
+        self._validate_mobile_numbers(
+            tenant_id=tenant_id,
+            mobile=updates.get("mobile", patient.mobile),
+            alternate_mobile=updates.get("alternate_mobile", patient.alternate_mobile),
+            exclude_patient_id=patient.id,
+        )
         before = {key: getattr(patient, key) for key in updates}
         for key, value in updates.items():
             setattr(patient, key, value)

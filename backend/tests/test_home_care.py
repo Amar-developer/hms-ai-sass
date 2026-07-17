@@ -70,6 +70,20 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     service_body = service.json()
     assert service_body["code"].startswith("HC-NURSIN-")
 
+    duplicate_service = client.post(
+        "/api/v1/home-care/services",
+        headers=headers,
+        json={
+            "branch_id": branch_id,
+            "name": "  nursing visit  ",
+            "default_price": 900,
+        },
+    )
+    assert duplicate_service.status_code == 409
+    assert duplicate_service.json()["detail"] == (
+        'An item named "nursing visit" already exists.'
+    )
+
     service_update = client.patch(
         f"/api/v1/home-care/services/{service_body['id']}",
         headers=headers,

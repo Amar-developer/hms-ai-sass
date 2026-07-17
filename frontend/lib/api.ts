@@ -13,6 +13,9 @@ export type ApiSession = {
 };
 
 export const AUTH_SESSION_EXPIRED_EVENT = "medizinhub.auth.sessionExpired";
+export const LIVE_DATA_CHANGED_EVENT = "medizinhub.liveData.changed";
+export const LIVE_DATA_CHANGED_STORAGE_KEY =
+  "medizinhub.liveData.changed.revision";
 
 const IDEMPOTENT_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const IDEMPOTENCY_KEY_TTL_MS = 2 * 60 * 1000;
@@ -72,6 +75,31 @@ function apiError(
 function notifySessionExpired() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT));
+}
+
+function notifyLiveDataChanged(
+  path: string,
+  session: ApiSession,
+  method: string,
+) {
+  if (typeof window === "undefined") return;
+  const detail = {
+    tenantId: session.tenantId,
+    path,
+    method,
+    revision: `${Date.now()}-${requestId()}`,
+  };
+  window.dispatchEvent(new CustomEvent(LIVE_DATA_CHANGED_EVENT, { detail }));
+  try {
+    // The custom event updates the current tab. Storage events notify other
+    // open HMS tabs without persisting any clinical or patient data.
+    localStorage.setItem(
+      LIVE_DATA_CHANGED_STORAGE_KEY,
+      JSON.stringify({ tenantId: detail.tenantId, revision: detail.revision }),
+    );
+  } catch {
+    // Same-tab refresh still works when storage is blocked or unavailable.
+  }
 }
 
 function reportApiFailure(
@@ -183,11 +211,13 @@ export async function apiFetch(
   options: RequestInit = {},
 ) {
   let res: Response;
+  const method = String(options.method || "GET").toUpperCase();
   const idempotencyKey = idempotencyKeyFor(path, session, options);
   const correlationId = requestId();
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
+      cache: options.cache ?? "no-store",
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
@@ -219,10 +249,13 @@ export async function apiFetch(
       res.status,
       detail,
       res.headers.get("x-request-id"),
-      String(options.method || "GET").toUpperCase(),
+      method,
       session,
     );
     throw apiError(path, detail, res);
+  }
+  if (IDEMPOTENT_METHODS.has(method)) {
+    notifyLiveDataChanged(path, session, method);
   }
   if (res.status === 204 || res.headers.get("content-length") === "0")
     return null;
@@ -239,6 +272,7 @@ export async function apiBlob(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
+      cache: options.cache ?? "no-store",
       credentials: "include",
       headers: {
         "X-Tenant-ID": session.tenantId,
@@ -272,6 +306,10 @@ export async function apiBlob(
     );
     throw apiError(path, detail, res);
   }
+  const method = String(options.method || "GET").toUpperCase();
+  if (IDEMPOTENT_METHODS.has(method)) {
+    notifyLiveDataChanged(path, session, method);
+  }
   return res.blob();
 }
 
@@ -285,6 +323,7 @@ export async function apiUpload(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
+      cache: "no-store",
       credentials: "include",
       headers: {
         "X-Tenant-ID": session.tenantId,
@@ -318,6 +357,7 @@ export async function apiUpload(
     );
     throw apiError(path, detail, res);
   }
+  notifyLiveDataChanged(path, session, "POST");
   return res.json();
 }
 

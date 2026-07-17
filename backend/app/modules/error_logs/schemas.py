@@ -19,7 +19,7 @@ class ClientErrorLogCreate(BaseModel):
 
 class ErrorLogAccepted(BaseModel):
     accepted: bool
-    id: str
+    id: str | None = None
 
 
 class ErrorLogRead(BaseModel):
@@ -51,11 +51,18 @@ class ErrorLogRead(BaseModel):
     created_at: datetime
 
 
+class ErrorLogSummary(BaseModel):
+    errors: int
+    warnings: int
+    permission_issues: int
+
+
 class ErrorLogPage(BaseModel):
     items: list[ErrorLogRead]
     total: int
     limit: int
     offset: int
+    summary: ErrorLogSummary
 
 
 class ErrorLogResolve(BaseModel):

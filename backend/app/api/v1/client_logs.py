@@ -64,7 +64,7 @@ def _record_client_log(
         stack_trace=payload.stack,
         metadata_json=payload.metadata_json,
     )
-    return ErrorLogAccepted(accepted=True, id=row.id)
+    return ErrorLogAccepted(accepted=True, id=row.id if row else None)
 
 
 @router.post(
@@ -124,9 +124,11 @@ def list_error_logs(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> ErrorLogPage:
-    rows, total = ErrorLogRepository(session).list(
+    repository = ErrorLogRepository(session)
+    resolved_include_global = bool(include_global and current_user.is_super_admin)
+    rows, total = repository.list(
         tenant_id=tenant_id,
-        include_global=bool(include_global and current_user.is_super_admin),
+        include_global=resolved_include_global,
         level=level,
         source=source,
         category=category,
@@ -136,7 +138,19 @@ def list_error_logs(
         limit=limit,
         offset=offset,
     )
-    return ErrorLogPage(items=rows, total=total, limit=limit, offset=offset)
+    summary = repository.summary(
+        tenant_id=tenant_id,
+        include_global=resolved_include_global,
+        level=level,
+        source=source,
+        category=category,
+        resolved=resolved,
+        status_code=status_code,
+        query=q,
+    )
+    return ErrorLogPage(
+        items=rows, total=total, limit=limit, offset=offset, summary=summary
+    )
 
 
 def _tenant_error_log_or_404(

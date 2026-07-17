@@ -7,7 +7,7 @@ import {
 import { FormField } from "../../../app/components/FormElements";
 import { NumberField, DateField } from "../../../app/components/FormElements";
 import { paymentMethodOptions } from "@/lib/options";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateAgeYears,
   patientDateInputValue,
@@ -35,7 +35,7 @@ export function PatientForm({
     watch,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<PatientFormValues>({
     resolver: zodResolver(patientSchema),
     defaultValues: {
@@ -87,6 +87,11 @@ export function PatientForm({
   }, [branches, watch("branchId")]);
 
   useEffect(() => {
+    // Never overwrite fields the user is actively editing: if this fires
+    // again after mount (e.g. a parent re-render passes a new `patient`
+    // reference), a dirty form must keep the user's unsaved input instead
+    // of silently reverting to server data underneath them.
+    if (isDirty) return;
     reset({
       fullName: patientField(patient, "full_name", "fullName") || "",
       mobile: patientField(patient, "mobile") || "",
@@ -122,7 +127,17 @@ export function PatientForm({
   const dateOfBirth = watch("dateOfBirth");
   const dateOfBirthRegistration = register("dateOfBirth");
 
+  // Skip the initial mount: defaultValues/reset already computed the
+  // correct ageYears (from date_of_birth, or from age_years for patients
+  // registered by age only). Without this guard, this effect still runs
+  // once on mount and, seeing an empty dateOfBirth, immediately wipes out
+  // that correct value — breaking every age-only patient's edit form.
+  const skipFirstDobEffect = useRef(true);
   useEffect(() => {
+    if (skipFirstDobEffect.current) {
+      skipFirstDobEffect.current = false;
+      return;
+    }
     if (!dateOfBirth) {
       setValue("ageYears", "");
       return;
@@ -159,7 +174,7 @@ export function PatientForm({
           />
           <FormError error={errors.fullName?.message} />
         </FormField>
-        <FormField label="Mobile" required>
+        <FormField label="Mobile Number">
           <Input
             type="text"
             inputMode="numeric"
@@ -173,6 +188,9 @@ export function PatientForm({
           />
 
           <FormError error={errors.mobile?.message} />
+          <p className="mt-1 text-[11px] text-slate-500">
+            Primary mobile numbers must be unique for each patient.
+          </p>
         </FormField>
         <FormField label="Branch" required>
           <SearchableSelect
@@ -245,11 +263,22 @@ export function PatientForm({
             placeholder="Enter guardian mobile"
           />
         </FormField>
-        <FormField label="Alternate Mobile">
+        <FormField label="Alternate Phone Number">
           <Input
-            {...register("alternateMobile")}
-            placeholder="Enter guardian mobile number"
+            type="text"
+            inputMode="numeric"
+            maxLength={10}
+            {...register("alternateMobile", {
+              onChange: (e) => {
+                e.target.value = e.target.value.replace(/\D/g, "");
+              },
+            })}
+            placeholder="Enter shared family contact number"
           />
+          <FormError error={errors.alternateMobile?.message} />
+          <p className="mt-1 text-[11px] text-slate-500">
+            A family member&apos;s existing mobile number can be used here.
+          </p>
         </FormField>
         <FormField label="Email">
           <Input {...register("email")} placeholder="Enter patient email" />

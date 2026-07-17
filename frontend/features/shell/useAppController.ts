@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import {
   API_BASE,
   AUTH_SESSION_EXPIRED_EVENT,
+  LIVE_DATA_CHANGED_EVENT,
+  LIVE_DATA_CHANGED_STORAGE_KEY,
   apiFetch,
   type ApiSession,
 } from "@/lib/api";
@@ -90,6 +92,10 @@ export function useAppController() {
   const branchIdRef = useRef(branchId);
   const liveBranchIdRef = useRef(liveBranchId);
   const departmentIdRef = useRef(departmentId);
+  const liveDataRequestRef = useRef(0);
+  const mutationRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   function updateActive(value: string) {
     activeRef.current = value;
@@ -162,6 +168,11 @@ export function useAppController() {
   }
 
   async function loadLiveData(session: ApiSession) {
+    if (mutationRefreshTimerRef.current) {
+      clearTimeout(mutationRefreshTimerRef.current);
+      mutationRefreshTimerRef.current = null;
+    }
+    const requestRevision = ++liveDataRequestRef.current;
     setLiveStatus("Loading seeded backend data...");
     const referenceReadPermissions = [
       "settings.manage",
@@ -201,6 +212,7 @@ export function useAppController() {
         [],
       ),
     ]);
+    if (requestRevision !== liveDataRequestRef.current) return;
     const activeTenant = tenantRows.find(
       (tenant: any) => tenant.id === session.tenantId,
     );
@@ -315,6 +327,10 @@ export function useAppController() {
       ),
       entitlementsPromise,
     ]);
+    // Focus, navigation, and mutation events can request overlapping refreshes.
+    // Only the newest response may update shared state, otherwise a slower old
+    // request can overwrite a just-saved record with stale data.
+    if (requestRevision !== liveDataRequestRef.current) return;
 
     const linkedPractitioner = isDoctorUser
       ? practitionerRows.find(
@@ -555,20 +571,56 @@ export function useAppController() {
         );
       });
     };
+    const scheduleMutationRefresh = () => {
+      if (document.visibilityState === "hidden") return;
+      if (mutationRefreshTimerRef.current) {
+        clearTimeout(mutationRefreshTimerRef.current);
+      }
+      // Most modules already call loadLiveData after their own save. The short
+      // delay lets that explicit refresh cancel this fallback while coalescing
+      // multi-request operations into one shared refresh.
+      mutationRefreshTimerRef.current = setTimeout(() => {
+        mutationRefreshTimerRef.current = null;
+        refreshLiveData();
+      }, 50);
+    };
+    const handleLiveDataChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ tenantId?: string }>).detail;
+      if (detail?.tenantId && detail.tenantId !== apiSession.tenantId) return;
+      scheduleMutationRefresh();
+    };
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === "medizinhub.entitlements.refresh") refreshLiveData();
+      if (event.key === "medizinhub.entitlements.refresh") {
+        scheduleMutationRefresh();
+        return;
+      }
+      if (event.key !== LIVE_DATA_CHANGED_STORAGE_KEY || !event.newValue)
+        return;
+      try {
+        const detail = JSON.parse(event.newValue);
+        if (detail?.tenantId && detail.tenantId !== apiSession.tenantId) return;
+        scheduleMutationRefresh();
+      } catch {
+        scheduleMutationRefresh();
+      }
     };
     window.addEventListener("focus", refreshLiveData);
     window.addEventListener("storage", handleStorage);
     window.addEventListener("medizinhub.entitlements.refresh", refreshLiveData);
+    window.addEventListener(LIVE_DATA_CHANGED_EVENT, handleLiveDataChanged);
     document.addEventListener("visibilitychange", refreshLiveData);
     return () => {
+      if (mutationRefreshTimerRef.current) {
+        clearTimeout(mutationRefreshTimerRef.current);
+        mutationRefreshTimerRef.current = null;
+      }
       window.removeEventListener("focus", refreshLiveData);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener(
         "medizinhub.entitlements.refresh",
         refreshLiveData,
       );
+      window.removeEventListener(LIVE_DATA_CHANGED_EVENT, handleLiveDataChanged);
       document.removeEventListener("visibilitychange", refreshLiveData);
     };
     // }, [apiSession?.tenantId]);

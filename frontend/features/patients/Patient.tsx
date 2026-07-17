@@ -492,7 +492,7 @@ export function Patient({
   if (view === "edit" && selected && canEditPatient)
     return (
       <PatientForm
-        key={`${selected.id}:${selected.updated_at || ""}`}
+        key={selected.id}
         title="Edit Patient"
         patient={selected}
         branches={branches}

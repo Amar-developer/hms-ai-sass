@@ -35,20 +35,18 @@ class ErrorLogRepository:
             .order_by(ErrorLog.last_seen_at.desc())
         ).first()
 
-    def list(
+    def _build_filters(
         self,
         *,
         tenant_id: str,
-        include_global: bool = False,
-        level: str | None = None,
-        source: str | None = None,
-        category: str | None = None,
-        resolved: bool | None = None,
-        status_code: int | None = None,
-        query: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> tuple[list[ErrorLog], int]:
+        include_global: bool,
+        level: str | None,
+        source: str | None,
+        category: str | None,
+        resolved: bool | None,
+        status_code: int | None,
+        query: str | None,
+    ) -> list:
         tenant_clause = (
             or_(ErrorLog.tenant_id == tenant_id, ErrorLog.tenant_id.is_(None))
             if include_global
@@ -76,6 +74,32 @@ class ErrorLogRepository:
                     ErrorLog.request_id.ilike(needle),
                 )
             )
+        return filters
+
+    def list(
+        self,
+        *,
+        tenant_id: str,
+        include_global: bool = False,
+        level: str | None = None,
+        source: str | None = None,
+        category: str | None = None,
+        resolved: bool | None = None,
+        status_code: int | None = None,
+        query: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[ErrorLog], int]:
+        filters = self._build_filters(
+            tenant_id=tenant_id,
+            include_global=include_global,
+            level=level,
+            source=source,
+            category=category,
+            resolved=resolved,
+            status_code=status_code,
+            query=query,
+        )
 
         rows = list(
             self.session.exec(
@@ -93,8 +117,54 @@ class ErrorLogRepository:
         )
         return rows, total
 
+    def summary(
+        self,
+        *,
+        tenant_id: str,
+        include_global: bool = False,
+        level: str | None = None,
+        source: str | None = None,
+        category: str | None = None,
+        resolved: bool | None = None,
+        status_code: int | None = None,
+        query: str | None = None,
+    ) -> dict[str, int]:
+        filters = self._build_filters(
+            tenant_id=tenant_id,
+            include_global=include_global,
+            level=level,
+            source=source,
+            category=category,
+            resolved=resolved,
+            status_code=status_code,
+            query=query,
+        )
+
+        def count(*extra) -> int:
+            return int(
+                self.session.exec(
+                    select(func.count()).select_from(ErrorLog).where(*filters, *extra)
+                ).one()
+            )
+
+        return {
+            "errors": count(ErrorLog.level.in_(["error", "critical"])),
+            "warnings": count(ErrorLog.level == "warning"),
+            "permission_issues": count(ErrorLog.category == "permission"),
+        }
+
     def delete(self, row: ErrorLog) -> None:
         self.session.delete(row)
+
+    def delete_expired(self, cutoff: datetime) -> int:
+        rows = list(
+            self.session.exec(
+                select(ErrorLog).where(ErrorLog.last_seen_at < cutoff)
+            ).all()
+        )
+        for row in rows:
+            self.session.delete(row)
+        return len(rows)
 
     def touch(
         self,

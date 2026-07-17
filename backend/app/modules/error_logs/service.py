@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+from datetime import timedelta
 from typing import Any
 
 from sqlmodel import Session
@@ -8,6 +9,11 @@ from sqlmodel import Session
 from app.modules.error_logs.models import ErrorLog
 from app.modules.error_logs.repositories import ErrorLogRepository
 from app.modules.tenants.models import now_utc
+
+# Mirrors Frappe's Log Settings default retention (90 days) for the Error
+# Log doctype: entries older than this are routine noise, not an audit
+# trail, so they're purged rather than kept forever.
+ERROR_LOG_RETENTION_DAYS = 90
 
 
 SECRET_PATTERN = re.compile(
@@ -59,6 +65,16 @@ def error_fingerprint(
     return hashlib.sha256(raw.encode("utf-8", errors="ignore")).hexdigest()
 
 
+def _is_routine_noise(*, status_code: int | None, event: str) -> bool:
+    # 401s are normal control flow (expired session, login race, logged-out
+    # polling) rather than bugs — Frappe's Error Log doctype excludes the
+    # same class of "not authenticated" outcome for this reason. A genuine
+    # slow request is still worth recording even if it also 401'd.
+    if event == "request.slow":
+        return False
+    return status_code == 401
+
+
 def record_error_log(
     session: Session,
     *,
@@ -78,7 +94,9 @@ def record_error_log(
     stack_trace: str | None = None,
     metadata_json: str | dict[str, Any] | None = None,
     commit: bool = True,
-) -> ErrorLog:
+) -> ErrorLog | None:
+    if _is_routine_noise(status_code=status_code, event=event):
+        return None
     clean_source = sanitize_log_text(source, 40) or "backend"
     clean_level = sanitize_log_text(level, 20).lower() or "error"
     clean_category = sanitize_log_text(category, 60) or "application"
@@ -134,6 +152,16 @@ def record_error_log(
         session.commit()
         session.refresh(row)
     return row
+
+
+def purge_expired_error_logs(
+    session: Session, *, retention_days: int = ERROR_LOG_RETENTION_DAYS
+) -> int:
+    cutoff = now_utc() - timedelta(days=retention_days)
+    deleted = ErrorLogRepository(session).delete_expired(cutoff)
+    if deleted:
+        session.commit()
+    return deleted
 
 
 def resolve_error_log(

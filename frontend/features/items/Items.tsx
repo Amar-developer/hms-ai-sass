@@ -33,6 +33,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RowActions } from "../admin/components/RowActions";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { findDuplicateItem, itemEndpoint } from "./helpers";
 
 function generatedItemCode(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -477,13 +478,19 @@ export function Items({ apiSession, branchId }: any) {
       }
       setMessage(wasEditing ? "Item updated." : "Item saved.");
     } catch (err: any) {
-      setMessage(err.message || "Could not save item.");
+      setMessage(err.detail || err.message || "Could not save item.");
     } finally {
       setBusy("");
     }
   }
   async function handleItemSubmit(data: ItemFormValues) {
     if (!apiSession) return;
+
+    const duplicate = findDuplicateItem(rows, data.name, editing?.id);
+    if (duplicate) {
+      setMessage(`An item named "${data.name.trim()}" already exists.`);
+      return false;
+    }
 
     setBusy("save");
     setMessage("");
@@ -499,13 +506,10 @@ export function Items({ apiSession, branchId }: any) {
           : editing.code || generatedItemCode(type, data.name)
         : generatedItemCode(type, data.name);
 
-      let endpoint = "";
+      const endpoint = itemEndpoint(type, editing?.id);
       let body: any = { code: itemCode, name: data.name };
 
       if (type === "medicine") {
-        endpoint = isEditing
-          ? `/pharmacy/medicines/${editing.id}`
-          : "/pharmacy/medicines";
         body = {
           ...body,
           generic_name: data.generic_name || null,
@@ -516,9 +520,6 @@ export function Items({ apiSession, branchId }: any) {
           reorder_level: Number(data.reorder_level || 0),
         };
       } else if (type === "lab_test") {
-        endpoint = isEditing
-          ? `/lab/catalog/tests/${editing.id}`
-          : "/lab/catalog/tests";
         body = {
           ...body,
           supplier_id: data.supplier_id || null,
@@ -527,10 +528,19 @@ export function Items({ apiSession, branchId }: any) {
           default_price: Number(data.price || 0),
           sample_type: data.sample_type || null,
         };
+      } else if (type === "lab_package") {
+        body = {
+          ...body,
+          description: data.description || null,
+          mrp_price: Number(data.mrp_price || 0),
+          purchase_price: 0,
+          package_price: Number(data.price || 0),
+          test_ids: packageTestIds,
+          ...(isEditing
+            ? { updated_by_user_id: apiSession.user?.id }
+            : { created_by_user_id: apiSession.user?.id }),
+        };
       } else if (homeServiceTypes.includes(type)) {
-        endpoint = isEditing
-          ? `/home-care/services/${editing.id}`
-          : "/home-care/services";
         body = {
           ...body,
           description: data.description || null,
@@ -538,9 +548,6 @@ export function Items({ apiSession, branchId }: any) {
           default_price: Number(data.price || 0),
         };
       } else if (type === "physio_equipment") {
-        endpoint = isEditing
-          ? `/physiotherapy/equipment/${editing.id}`
-          : "/physiotherapy/equipment";
         body = {
           ...body,
           modality_type: data.modality_type,
@@ -572,7 +579,7 @@ export function Items({ apiSession, branchId }: any) {
       return true;
     } catch (err: any) {
       console.error(err);
-      setMessage(err.message || "Failed to save item.");
+      setMessage(err.detail || err.message || "Failed to save item.");
       return false;
     } finally {
       setBusy("");

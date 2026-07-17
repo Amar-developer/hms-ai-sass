@@ -6,6 +6,7 @@ from sqlmodel import Session
 from app.core.access_control import require_user_branch_access
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.identity.models import User
+from app.modules.item_catalog_validation import validate_unique_item_name
 from app.modules.pharmacy.models import MedicineCatalog, PharmacySupplier
 from app.modules.pharmacy.repositories import (
     PharmacyCatalogRepository,
@@ -28,7 +29,11 @@ def create_medicine_record(
     enforce_module_enabled(session, tenant_id, "pharmacy")
     if payload.branch_id:
         require_user_branch_access(actor, payload.branch_id)
-    medicine = MedicineCatalog.model_validate(payload, update={"tenant_id": tenant_id})
+    data = payload.model_dump()
+    data["name"] = validate_unique_item_name(
+        session, tenant_id=tenant_id, name=payload.name
+    )
+    medicine = MedicineCatalog.model_validate(data, update={"tenant_id": tenant_id})
     session.add(medicine)
     session.commit()
     session.refresh(medicine)
@@ -64,6 +69,14 @@ def update_medicine_record(
         )
     require_user_branch_access(actor, medicine.branch_id)
     data = payload.model_dump(exclude_unset=True)
+    if data.get("name"):
+        data["name"] = validate_unique_item_name(
+            session,
+            tenant_id=tenant_id,
+            name=data["name"],
+            exclude_model=MedicineCatalog,
+            exclude_id=medicine.id,
+        )
     next_branch_id = data.get("branch_id", medicine.branch_id)
     if next_branch_id:
         require_user_branch_access(actor, next_branch_id)

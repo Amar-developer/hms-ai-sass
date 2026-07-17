@@ -1,7 +1,14 @@
+from datetime import timedelta
+
 from sqlmodel import Session, select
 
 from app.modules.error_logs.models import ErrorLog
-from app.modules.tenants.models import Tenant, TenantStatus
+from app.modules.error_logs.service import (
+    ERROR_LOG_RETENTION_DAYS,
+    purge_expired_error_logs,
+    record_error_log,
+)
+from app.modules.tenants.models import Tenant, TenantStatus, now_utc
 
 
 def _tenant(test_engine) -> Tenant:
@@ -85,3 +92,91 @@ def test_backend_request_failures_are_persisted(client, test_engine):
 
     with Session(test_engine) as session:
         assert session.exec(select(ErrorLog)).first() is not None
+
+
+def test_unauthenticated_401_failures_are_not_persisted(
+    unauthenticated_client, test_engine
+):
+    tenant = _tenant(test_engine)
+
+    response = unauthenticated_client.post(
+        "/api/v1/tenants",
+        json={"name": "Should Not Log"},
+        headers={"X-Tenant-ID": tenant.id},
+    )
+    assert response.status_code == 401
+
+    with Session(test_engine) as session:
+        assert session.exec(select(ErrorLog)).first() is None
+
+
+def test_summary_counts_reflect_all_matching_rows_not_just_current_page(
+    client, test_engine
+):
+    tenant = _tenant(test_engine)
+    client.headers.update({"X-Tenant-ID": tenant.id})
+
+    for index in range(3):
+        client.post(
+            "/api/v1/error-logs/client",
+            json={
+                "level": "error",
+                "event": f"frontend.test_error_{index}",
+                "message": f"boom {index}",
+            },
+        )
+    client.post(
+        "/api/v1/error-logs/client",
+        json={
+            "level": "warning",
+            "event": "frontend.test_warning",
+            "message": "careful",
+        },
+    )
+
+    response = client.get("/api/v1/error-logs?limit=1&offset=0")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == 1
+    assert body["total"] == 4
+    assert body["summary"]["errors"] == 3
+    assert body["summary"]["warnings"] == 1
+
+
+def test_purge_expired_error_logs_removes_only_stale_rows(test_engine):
+    tenant = _tenant(test_engine)
+
+    with Session(test_engine) as session:
+        stale = record_error_log(
+            session,
+            tenant_id=tenant.id,
+            source="backend_api",
+            level="error",
+            category="api",
+            event="request.failed",
+            message="stale error",
+            status_code=500,
+        )
+        fresh = record_error_log(
+            session,
+            tenant_id=tenant.id,
+            source="backend_api",
+            level="error",
+            category="api",
+            event="request.failed",
+            message="fresh error",
+            status_code=500,
+        )
+        stale.last_seen_at = now_utc() - timedelta(days=ERROR_LOG_RETENTION_DAYS + 1)
+        session.add(stale)
+        session.commit()
+        stale_id, fresh_id = stale.id, fresh.id
+
+    with Session(test_engine) as session:
+        deleted = purge_expired_error_logs(session)
+        assert deleted == 1
+
+    with Session(test_engine) as session:
+        remaining_ids = {row.id for row in session.exec(select(ErrorLog)).all()}
+        assert stale_id not in remaining_ids
+        assert fresh_id in remaining_ids

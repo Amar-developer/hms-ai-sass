@@ -58,6 +58,14 @@ export function invoiceDiscountParts(invoice: any) {
   };
 }
 
+export function invoiceHasAppliedMembershipBenefit(invoice: any) {
+  return [
+    invoice?.membership_discount_amount,
+    invoice?.membership_free_items_amount,
+    invoice?.membership_item_discount_amount,
+  ].some((value) => numberValue(value) > 0);
+}
+
 export function invoiceMembershipLabel(invoice: any) {
   if (numberValue(invoice.membership_discount_amount) > 0)
     return "Membership benefit applied";

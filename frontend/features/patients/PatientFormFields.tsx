@@ -99,7 +99,7 @@ export function PatientFormFields({
           placeholder="Enter patient full name"
         />
       </Field>
-      <Field label="Mobile">
+      <Field label="Mobile Number">
         <Input
           name="mobile"
           mobileNumber
@@ -184,15 +184,17 @@ export function PatientFormFields({
 
         />
       </Field>
-      <Field label="Alternate Mobile">
+      <Field label="Alternate Phone Number">
         <Input
           name="alternateMobile"
+          inputMode="numeric"
+          maxLength={10}
           defaultValue={patientField(
             patient,
             "alternate_mobile",
             "alternateMobile",
           )}
-          placeholder="Enter guardian mobile number"
+          placeholder="Enter shared family contact number"
 
         />
       </Field>

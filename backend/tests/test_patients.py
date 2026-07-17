@@ -65,6 +65,90 @@ def test_create_patient_rejects_future_date_of_birth(client: TestClient):
     assert "Date of birth cannot be in the future" in str(response.json())
 
 
+def test_primary_mobile_is_unique_but_can_be_reused_as_alternate(
+    client: TestClient,
+):
+    tenant = create_tenant(client)
+    first = create_patient(client, tenant["id"], full_name="Family Member One")
+
+    duplicate_primary = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Family Member Two",
+            "mobile": "98765 43210",
+        },
+    )
+    shared_alternate = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Family Member Two",
+            "alternate_mobile": first["mobile"],
+        },
+    )
+
+    assert duplicate_primary.status_code == 409
+    assert duplicate_primary.json()["detail"] == (
+        "Mobile number is already used as the primary mobile number for another "
+        "patient. Use Alternate Phone Number for a shared family contact."
+    )
+    assert shared_alternate.status_code == 201
+    assert shared_alternate.json()["mobile"] is None
+    assert shared_alternate.json()["alternate_mobile"] == first["mobile"]
+
+
+def test_patient_cannot_use_same_primary_and_alternate_number(client: TestClient):
+    tenant = create_tenant(client)
+
+    response = client.post(
+        "/api/v1/patients",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "full_name": "Same Contact Patient",
+            "mobile": "90000-00001",
+            "alternate_mobile": "9000000001",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Primary mobile number and alternate phone number must be different."
+    )
+
+
+def test_patient_update_enforces_primary_mobile_rules(client: TestClient):
+    tenant = create_tenant(client)
+    first = create_patient(client, tenant["id"], full_name="First Patient")
+    second = create_patient(
+        client,
+        tenant["id"],
+        full_name="Second Patient",
+        mobile="9000000002",
+        alternate_mobile="9000000003",
+    )
+
+    duplicate_primary = client.patch(
+        f"/api/v1/patients/{second['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"mobile": first["mobile"]},
+    )
+    same_own_numbers = client.patch(
+        f"/api/v1/patients/{second['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"mobile": second["alternate_mobile"]},
+    )
+    unchanged_primary = client.patch(
+        f"/api/v1/patients/{first['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"full_name": "First Patient Updated"},
+    )
+
+    assert duplicate_primary.status_code == 409
+    assert same_own_numbers.status_code == 422
+    assert unchanged_primary.status_code == 200
+
+
 def test_patient_search_matches_name_mobile_guardian_and_area(client: TestClient):
     tenant = create_tenant(client)
     create_patient(client, tenant["id"], full_name="Ravi Kumar", area="Adyar")

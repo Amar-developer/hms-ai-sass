@@ -614,7 +614,7 @@ require_user_branch_access(current_user, payload.branch_id)
 | Tenant/branch access denied | `backend/app/core/auth.py`, `backend/app/core/access_control.py` |
 | UI sends wrong field | `features/<module>/*.tsx` |
 | Frontend API headers | `lib/api.ts` |
-| Seeded demo data wrong | `backend/scripts/seed_demo_new.py` |
+| Seeded demo data wrong | `backend/scripts/seed_demo.py` |
 
 ## Backend Verification Commands
 

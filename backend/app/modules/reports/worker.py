@@ -5,6 +5,7 @@ from datetime import date
 from sqlmodel import Session, select
 
 from app.core.database import engine
+from app.modules.error_logs.service import purge_expired_error_logs
 from app.modules.reports.models import ReportJob, ReportJobStatus
 from app.modules.reports.queue import (
     dequeue_monthly_report_job,
@@ -61,14 +62,19 @@ def enqueue_due_monthly_reports(session: Session) -> None:
 
 
 def run_once() -> None:
-    # A single scheduler lock guards both the monthly email digest and the
-    # month-end dashboard snapshot so only one worker runs them per cycle.
+    # A single scheduler lock guards the monthly email digest, the month-end
+    # dashboard snapshot, and error-log retention so only one worker runs
+    # them per cycle. This is the app's only recurring background worker,
+    # so periodic maintenance piggybacks on it rather than standing up a
+    # separate scheduler.
     if scheduler_lock():
         with Session(engine) as session:
             enqueue_due_monthly_reports(session)
             # Freeze the just-finished month into income dashboard snapshots
             # once it rolls over (idempotent; skips already-archived tenants).
             archive_due_months(session)
+            # Delete error logs past retention (idempotent no-op most cycles).
+            purge_expired_error_logs(session)
     job_id = dequeue_monthly_report_job(timeout=5)
     if not job_id:
         return

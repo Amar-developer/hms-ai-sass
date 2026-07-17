@@ -3,6 +3,7 @@ from sqlmodel import Session
 
 from app.modules.appointments.models import Appointment, AppointmentType
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
+from app.modules.billing.services.discount_policy import compose_invoice_discounts
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.billing.services.rules import (
@@ -139,10 +140,18 @@ def create_consultation_invoice(
         subtotal=subtotal,
         discount_offer_id=discount_offer_id,
     )
-    discount = min(
-        int(discount_amount or 0) + offer_discount + membership_discount,
-        subtotal,
+    discount_composition = compose_invoice_discounts(
+        subtotal=subtotal,
+        membership_discount=membership_discount,
+        approved_discount=discount_amount,
+        offer_discount=offer_discount,
     )
+    discount = discount_composition.total
+    if membership_discount > 0:
+        # Membership takes precedence over request-based and promotional
+        # discounts. Do not retain references that imply those were applied.
+        offer = None
+        discount_approval_id = None
     taxable = subtotal - discount
     tax_rule = find_tax_rule(
         session,
@@ -185,7 +194,9 @@ def create_consultation_invoice(
         clinic_share_amount=clinic_share,
         fee_rule_id=fee_rule_id,
         discount_approval_id=discount_approval_id,
-        discount_offer_id=offer.id if offer else None,
+        discount_offer_id=offer.id
+        if offer and discount_composition.offer > 0
+        else None,
         patient_subscription_enrollment_id=membership_enrollment_id,
         patient_subscription_plan_id=membership_plan_id,
         created_by_user_id=created_by_user_id,

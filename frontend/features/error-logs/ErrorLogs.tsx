@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -21,9 +21,8 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
+import { pageSize } from "@/utils/constants";
 import { displayDateTime } from "@/utils/helper";
-
-const pageSize = 25;
 
 function levelTone(level: string) {
   if (level === "critical" || level === "error") return "red";
@@ -60,16 +59,7 @@ export function ErrorLogs({ apiSession }: any) {
   );
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const summary = useMemo(
-    () => ({
-      errors: rows.filter((row) =>
-        ["error", "critical"].includes(row.level),
-      ).length,
-      warnings: rows.filter((row) => row.level === "warning").length,
-      permission: rows.filter((row) => row.category === "permission").length,
-    }),
-    [rows],
-  );
+  const [summary, setSummary] = useState({ errors: 0, warnings: 0, permission: 0 });
 
   async function load() {
     if (!apiSession) return;
@@ -88,6 +78,11 @@ export function ErrorLogs({ apiSession }: any) {
       const response = await apiFetch(`/error-logs?${params}`, apiSession);
       setRows(response?.items || []);
       setTotal(Number(response?.total || 0));
+      setSummary({
+        errors: Number(response?.summary?.errors || 0),
+        warnings: Number(response?.summary?.warnings || 0),
+        permission: Number(response?.summary?.permission_issues || 0),
+      });
       if (selected) {
         const updated = (response?.items || []).find(
           (row: any) => row.id === selected.id,
@@ -308,12 +303,12 @@ export function ErrorLogs({ apiSession }: any) {
           <div className="rounded-xl bg-rose-50 p-3">
             <CircleAlert className="text-rose-600" size={18} />
             <p className="mt-2 text-2xl font-bold">{summary.errors}</p>
-            <p className="text-xs text-slate-500">Errors on this page</p>
+            <p className="text-xs text-slate-500">Errors</p>
           </div>
           <div className="rounded-xl bg-amber-50 p-3">
             <AlertTriangle className="text-amber-600" size={18} />
             <p className="mt-2 text-2xl font-bold">{summary.warnings}</p>
-            <p className="text-xs text-slate-500">Warnings on this page</p>
+            <p className="text-xs text-slate-500">Warnings</p>
           </div>
           <div className="rounded-xl bg-blue-50 p-3">
             <CheckCircle2 className="text-blue-600" size={18} />
