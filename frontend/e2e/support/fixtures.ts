@@ -95,3 +95,11 @@ export function visibleNavButton(page: Page, label: string) {
     .filter({ visible: true })
     .first();
 }
+
+export function patientListRow(page: Page, patientName: string) {
+  return page
+    .getByTestId("patient-row")
+    .filter({ hasText: patientName })
+    .filter({ visible: true })
+    .first();
+}
