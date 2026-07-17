@@ -40,6 +40,7 @@ export async function openModule(page: Page, label: string) {
   await page
     .getByRole("button", { name: label, exact: true })
     .filter({ visible: true })
+    .and(page.locator(":not([disabled])"))
     .last()
     .click();
 }
@@ -91,6 +92,14 @@ export function visibleNavButton(page: Page, label: string) {
   return page
     .locator("nav")
     .getByRole("button", { name: label })
+    .filter({ visible: true })
+    .first();
+}
+
+export function patientListRow(page: Page, patientName: string) {
+  return page
+    .getByTestId("patient-row")
+    .filter({ hasText: patientName })
     .filter({ visible: true })
     .first();
 }

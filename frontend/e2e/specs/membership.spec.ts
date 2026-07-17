@@ -3,6 +3,7 @@ import {
   expect,
   openModule,
   chooseFieldOption,
+  patientListRow,
   selectBranch,
 } from "../support/fixtures";
 import { authFile } from "../support/paths";
@@ -21,10 +22,9 @@ test.describe("patient membership", () => {
     await selectBranch(page, seed.branchName);
     await openModule(page, "EMR / Patient Management");
     await page.getByPlaceholder("Name, mobile, area").fill(seed.patientName);
-    await page
-      .getByRole("button", { name: new RegExp(seed.patientName) })
-      .filter({ visible: true })
-      .click();
+    const patientRow = patientListRow(page, seed.patientName);
+    await expect(patientRow).toBeVisible();
+    await patientRow.click();
     await expect(page.getByText("Membership Plan Enrollment")).toBeVisible();
     await chooseFieldOption(
       page,

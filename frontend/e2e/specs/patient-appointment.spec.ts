@@ -4,6 +4,7 @@ import {
   openModule,
   chooseFieldOption,
   fieldContainer,
+  patientListRow,
   selectBranch,
 } from "../support/fixtures";
 import { authFile } from "../support/paths";
@@ -46,11 +47,9 @@ test.describe("patient and appointment workflow", () => {
 
     await page.getByRole("button", { name: "Back to Patients" }).click();
     await page.getByPlaceholder("Name, mobile, area").fill(patientName);
-    await expect(page.getByText(patientName, { exact: true })).toBeVisible();
-    await page
-      .getByRole("button", { name: new RegExp(patientName) })
-      .filter({ visible: true })
-      .click();
+    const patientRow = patientListRow(page, patientName);
+    await expect(patientRow).toBeVisible();
+    await patientRow.click();
     await expect(page.getByText(mobile, { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Edit Patient" }).click();
     await page

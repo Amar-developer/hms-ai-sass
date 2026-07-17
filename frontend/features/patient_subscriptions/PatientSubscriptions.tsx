@@ -220,9 +220,7 @@ export function PatientSubscriptions({
     return resolved;
   }
 
-  async function createPlan(event: any) {
-    event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
+  async function createPlan(form: HTMLFormElement) {
     const fd = new FormData(form);
     if (busy === "plan") return;
     setBusy("plan");
@@ -363,10 +361,9 @@ export function PatientSubscriptions({
     setView("list");
   }
 
-  async function updatePlan(event: any) {
-    event.preventDefault();
+  async function updatePlan(form: HTMLFormElement) {
     if (!editingPlan) return;
-    const fd = new FormData(event.currentTarget);
+    const fd = new FormData(form);
     setBusy("edit");
     setToast(null);
     try {

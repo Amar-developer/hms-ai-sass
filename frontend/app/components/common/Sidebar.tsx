@@ -236,6 +236,7 @@ export function Sidebar(props: SidebarProps) {
               <div key={id}>
                 <button
                   type="button"
+                  aria-label={label}
                   onClick={(e) => {
                     props.navigatePage(id);
 

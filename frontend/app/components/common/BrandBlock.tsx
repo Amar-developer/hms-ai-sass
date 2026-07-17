@@ -16,6 +16,8 @@ export function BrandBlock({
   return (
     <div className="flex items-center gap-3">
       <button
+        type="button"
+        aria-label="Toggle navigation"
         onClick={() => {
           if (window.innerWidth >= 1024) return;
           setTabletCollapsed(!tabletCollapsed);
