@@ -14,6 +14,7 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 import {
   FormField,
 } from "@/app/components/FormElements";
@@ -228,7 +229,9 @@ export function Patient({
 
   useEffect(() => {
     if (!apiSession || !tenantId || typeof window === "undefined") return;
-    const pendingPatientId = sessionStorage.getItem("medizinhub.patientId");
+    const pendingPatientId =
+      sessionStorage.getItem("medizinhub.patientId") ||
+      readNotificationTarget("patient")?.resourceId;
     if (!pendingPatientId) return;
     sessionStorage.removeItem("medizinhub.patientId");
     setSelectedId(pendingPatientId);

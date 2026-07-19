@@ -28,6 +28,9 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Validate release version
+        run: node scripts/version.mjs check
+
       - name: Test
         working-directory: frontend
         run: npm test
@@ -270,6 +273,11 @@ jobs:
             git fetch origin
             git checkout develop
             git pull --ff-only origin develop
+
+            # VERSION is the release identity used by the image and runtime.
+            export MEDIZINHUB_APP_VERSION="$(tr -d '\r\n' < VERSION)"
+            export MEDIZINHUB_BUILD_COMMIT="$(git rev-parse --short=12 HEAD)"
+            export MEDIZINHUB_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
             # Check disk before deploy
             docker system df

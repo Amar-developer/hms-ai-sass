@@ -43,7 +43,7 @@ async def upload_admission_document_file(
     file: UploadFile,
     current_user: User,
 ) -> IPAdmission:
-    saved_filename, url_path, _ct = await save_upload(
+    saved_filename, url_path, verified_content_type = await save_upload(
         file, f"ip_admission_{admission_id[:12]}"
     )
     admission.admission_document_url = url_path
@@ -59,7 +59,7 @@ async def upload_admission_document_file(
         patient_id=admission.patient_id,
         file_name=admission.admission_document_name or saved_filename,
         file_url=url_path,
-        content_type=file.content_type,
+        content_type=verified_content_type,
         category="admission",
         source_module="ip",
         attached_to_doctype="IPAdmission",
@@ -126,7 +126,7 @@ async def upload_admission_document_rows(
     for file in files:
         if not file.filename:
             continue
-        saved_filename, url_path, _ct = await save_upload(
+        saved_filename, url_path, verified_content_type = await save_upload(
             file, f"ip_{normalized_type}_{admission_id[:12]}"
         )
         row = IPDocument(
@@ -136,7 +136,7 @@ async def upload_admission_document_rows(
             document_type=normalized_type,
             file_name=file.filename or saved_filename,
             file_url=url_path,
-            content_type=file.content_type,
+            content_type=verified_content_type,
             uploaded_by_user_id=current_user.id,
         )
         session.add(row)
@@ -147,7 +147,7 @@ async def upload_admission_document_rows(
             patient_id=admission.patient_id,
             file_name=file.filename or saved_filename,
             file_url=url_path,
-            content_type=file.content_type,
+            content_type=verified_content_type,
             category=normalized_type,
             source_module="ip",
             attached_to_doctype="IPAdmission",

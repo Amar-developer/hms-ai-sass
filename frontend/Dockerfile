@@ -1,3 +1,7 @@
+ARG APP_VERSION=0.1.0
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME
+
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
@@ -12,14 +16,24 @@ ENV NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=$NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+# Docker builds start from a clean filesystem. Invoke Next directly so the
+# host-only prebuild cleanup script outside the ./frontend build context is
+# not required (or incorrectly resolved as /scripts inside the image).
+RUN NEXT_PRIVATE_BUILD_WORKER=0 ./node_modules/.bin/next build
 
 FROM node:20-alpine AS runner
+ARG APP_VERSION
+ARG BUILD_COMMIT
+ARG BUILD_TIME
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
+LABEL org.opencontainers.image.title="MedizinHub HMS Web"
+LABEL org.opencontainers.image.version=$APP_VERSION
+LABEL org.opencontainers.image.revision=$BUILD_COMMIT
+LABEL org.opencontainers.image.created=$BUILD_TIME
 RUN addgroup -S nextjs && adduser -S nextjs -G nextjs
 COPY --from=builder --chown=nextjs:nextjs /app/.next-build/standalone ./
 COPY --from=builder --chown=nextjs:nextjs /app/.next-build/static ./.next-build/static

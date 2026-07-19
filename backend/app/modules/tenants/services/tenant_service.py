@@ -1,7 +1,7 @@
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
-from app.core.uploads import save_upload
+from app.core.uploads import UPLOADS_DIR, save_upload
 from app.modules.audit.models import AuditEvent
 from app.modules.audit.repositories import AuditEventRepository
 from app.modules.files.service import record_file_document
@@ -163,11 +163,15 @@ async def upload_tenant_logo(
     tenants = TenantRepository(session)
     audit_events = AuditEventRepository(session)
     tenant = get_tenant_or_404(session, tenant_id)
-    if not (file.content_type or "").startswith("image/"):
+    filename, url_path, verified_content_type = await save_upload(
+        file, f"tenant_logo_{tenant.id}"
+    )
+    if verified_content_type not in {"image/png", "image/jpeg"}:
+        (UPLOADS_DIR / filename).unlink(missing_ok=True)
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Upload an image logo"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Tenant logo must be a PNG or JPEG image",
         )
-    filename, url_path, _ct = await save_upload(file, f"tenant_logo_{tenant.id}")
     tenant.logo_url = url_path
     tenant.updated_by_user_id = current_user.id
     tenant.updated_at = now_utc()
@@ -187,7 +191,7 @@ async def upload_tenant_logo(
         tenant_id=tenant.id,
         file_name=file.filename or filename,
         file_url=url_path,
-        content_type=file.content_type,
+        content_type=verified_content_type,
         category="logo",
         source_module="tenants",
         attached_to_doctype="Tenant",

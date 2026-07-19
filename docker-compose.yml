@@ -31,6 +31,9 @@ services:
       args:
         NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
         NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-false}
+        APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
+        BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
     container_name: medizinhub-frontend
     ports:
       - "3000:3000"
@@ -49,7 +52,12 @@ services:
     restart: unless-stopped
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
+        BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
     container_name: medizinhub-backend
     ports:
       - "8080:8080"
@@ -62,6 +70,8 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    volumes:
+      - medizinhub_uploads_data:/app/uploads
     command: >
       bash -c "
       alembic -c alembic/alembic.ini upgrade head &&
@@ -70,6 +80,9 @@ services:
     environment:
       PYTHONPATH: /app
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+      MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
+      MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
+      MEDIZINHUB_BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()\""]
       interval: 30s
@@ -79,7 +92,12 @@ services:
     restart: unless-stopped
 
   report-worker:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
+        BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
+        BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
     container_name: medizinhub-report-worker
     extra_hosts:
       - "local.healthcare:host-gateway"
@@ -88,11 +106,17 @@ services:
         condition: service_healthy
     env_file:
       - .env
+    volumes:
+      - medizinhub_uploads_data:/app/uploads
     command: python -m app.modules.reports.worker
     environment:
       PYTHONPATH: /app
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
+      MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
+      MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
+      MEDIZINHUB_BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
     restart: unless-stopped
 
 volumes:
   medizinhub_postgres_data:
+  medizinhub_uploads_data:

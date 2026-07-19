@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 
 from app.core.auth import get_current_user, require_permission
@@ -14,11 +14,37 @@ from app.modules.audit.schemas import (
     AuditEventRead,
     CommentCreate,
     CommentRead,
+    MentionUserRead,
 )
-from app.modules.audit.service import add_comment
+from app.modules.audit.service import (
+    add_comment,
+    comment_read,
+    list_mention_users,
+)
 
 router = APIRouter(prefix="/audit-events")
 activity_router = APIRouter(prefix="/activity")
+
+
+@activity_router.get(
+    "/mention-users",
+    response_model=list[MentionUserRead],
+    summary="Search active users in the current tenant for an @mention",
+)
+def mention_users(
+    query: str = Query(default="", alias="q", max_length=120),
+    limit: int = Query(default=20, ge=1, le=50),
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[MentionUserRead]:
+    return list_mention_users(
+        session,
+        tenant_id=tenant_id,
+        current_user_id=current_user.id,
+        query=query,
+        limit=limit,
+    )
 
 
 @router.post(
@@ -96,7 +122,10 @@ def get_activity_feed(
     comments = CommentRepository(session).list_for_resource(
         tenant_id, resource_type, resource_id
     )
-    return ActivityFeed(events=events, comments=comments)
+    return ActivityFeed(
+        events=events,
+        comments=[comment_read(session, comment) for comment in comments],
+    )
 
 
 @activity_router.post(
@@ -121,5 +150,6 @@ def create_comment(
         resource_id=resource_id,
         author=current_user,
         body=payload.body,
+        mentioned_user_ids=payload.mentioned_user_ids,
     )
-    return comment
+    return comment_read(session, comment)

@@ -1,6 +1,6 @@
 import React from "react";
 import CompactControl from "./CompactControl";
-import { Bell, LogOut, KeyRound } from "lucide-react";
+import { LogOut, KeyRound } from "lucide-react";
 import ProfileRow from "../ProfileRow";
 import { userInitials } from "@/utils/helper";
 import { GlobalSearch } from "./GlobalSearch";
@@ -10,6 +10,7 @@ import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "./CopyIdButton";
+import { NotificationCenter } from "./NotificationCenter";
 
 interface AppHeaderProps {
   isSuperAdmin: boolean;
@@ -38,6 +39,7 @@ interface AppHeaderProps {
   handleLogout: any;
   setShowPassword: any;
   setReportsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  navigatePage: (target: string | { id: string; section?: string }) => void;
 }
 
 const AppHeader = ({
@@ -61,6 +63,7 @@ const AppHeader = ({
   handleLogout,
   setShowPassword,
   setReportsOpen,
+  navigatePage,
 }: AppHeaderProps) => {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
 
@@ -109,13 +112,11 @@ const AppHeader = ({
         </FormField>
 
         <div className="flex shrink-0 items-start lg:items-center mt-3  gap-2">
-          <button
-            type="button"
-            className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 text-slate-500"
-            title="Notifications"
-          >
-            <Bell size={18} />
-          </button>
+          <NotificationCenter
+            apiSession={apiSession}
+            navigatePage={navigatePage}
+            onOpen={() => setProfileOpen(false)}
+          />
           <div ref={profileOpenRef} className="relative">
             <button
               type="button"

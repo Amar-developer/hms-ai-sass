@@ -39,6 +39,7 @@ from app.modules.audit.service import record_audit_event
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
+from app.modules.notifications.services.in_app import notify_appointment_booked
 from app.modules.practitioners.service import (
     check_practitioner_availability,
     check_practitioner_date_availability,
@@ -327,6 +328,13 @@ class AppointmentBookingService:
                 resource_id=appointment.id,
                 queued_by_user_id=payload.created_by_user_id,
             )
+        notify_appointment_booked(
+            self.session,
+            appointment=appointment,
+            patient_name=patient.full_name,
+            token_number=queue_entry.token_number,
+            actor_user_id=actor.id,
+        )
         booking = AppointmentBookingRead(
             appointment=AppointmentRead.model_validate(
                 appointment, from_attributes=True
@@ -418,6 +426,16 @@ class AppointmentBookingService:
             commit=False,
         )
         queue_entry = create_queue_entry_for_appointment(self.session, appointment)
+        patient = self.references.get_patient_for_tenant(
+            tenant_id, appointment.patient_id
+        )
+        notify_appointment_booked(
+            self.session,
+            appointment=appointment,
+            patient_name=patient.full_name if patient else "Patient",
+            token_number=queue_entry.token_number,
+            actor_user_id=actor.id,
+        )
         return AppointmentBookingRead(
             appointment=AppointmentRead.model_validate(
                 appointment, from_attributes=True

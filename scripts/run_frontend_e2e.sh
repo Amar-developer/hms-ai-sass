@@ -22,6 +22,10 @@ if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1 && [[ ! -x "${PYTHON_BIN}" ]]; t
   echo "Configured PYTHON_BIN is not executable: ${PYTHON_BIN}" >&2
   exit 127
 fi
+if ! "${PYTHON_BIN}" -c "import alembic, psycopg, sqlalchemy, uvicorn" 2>/dev/null; then
+  echo "Frontend E2E Python dependencies are missing. Install backend/requirements-dev.txt in backend/.venv first." >&2
+  exit 127
+fi
 E2E_DATABASE_URL="${MEDIZINHUB_FRONTEND_E2E_DATABASE_URL:-postgresql+psycopg://medizinhub:medizinhub_dev@127.0.0.1:5433/medizinhub_frontend_e2e}"
 API_BASE_URL="${MEDIZINHUB_FRONTEND_E2E_API_URL:-http://127.0.0.1:8091/api/v1}"
 FRONTEND_BASE_URL="${MEDIZINHUB_FRONTEND_E2E_BASE_URL:-http://127.0.0.1:3100}"
@@ -76,6 +80,8 @@ if not database_name.endswith("_e2e"):
     raise SystemExit(
         "Refusing to reset database: frontend E2E database name must end with '_e2e'"
     )
+if database_url.host not in {None, "127.0.0.1", "localhost"}:
+    raise SystemExit("Refusing to reset database: frontend E2E PostgreSQL must use localhost")
 
 api_url = urlsplit(sys.argv[2])
 frontend_url = urlsplit(sys.argv[3])
@@ -106,20 +112,69 @@ API_PORT="${CONNECTION_PARTS[6]}"
 FRONTEND_HOST="${CONNECTION_PARTS[7]}"
 FRONTEND_PORT="${CONNECTION_PARTS[8]}"
 
+# This suite resets one shared database schema, so concurrent runs would
+# corrupt each other's seed data. Serialize runs on platforms that provide
+# flock (Linux development and GitHub Actions).
+if command -v flock >/dev/null 2>&1; then
+  E2E_LOCK_FILE="${TMPDIR:-/tmp}/medizinhub-frontend-e2e.lock"
+  exec 9>"${E2E_LOCK_FILE}"
+  if ! flock -n 9; then
+    echo "Another frontend E2E run is already using the shared test database." >&2
+    exit 1
+  fi
+fi
+
+"${PYTHON_BIN}" - "${API_HOST}" "${API_PORT}" "${FRONTEND_HOST}" "${FRONTEND_PORT}" <<'PY'
+import errno
+import socket
+import sys
+
+checks = (
+    ("FastAPI", sys.argv[1], int(sys.argv[2])),
+    ("Next.js", sys.argv[3], int(sys.argv[4])),
+)
+for label, host, port in checks:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
+        try:
+            server.bind((host, port))
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                raise SystemExit(
+                    f"{label} E2E port {host}:{port} is already in use. "
+                    "Stop the stale server or override the corresponding E2E URL."
+                ) from exc
+            raise
+PY
+
 DB_HOST="${DB_HOST}" DB_PORT="${DB_PORT}" DB_NAME="${DB_NAME}" \
 DB_USER="${DB_USER}" DB_PASSWORD="${DB_PASSWORD}" \
 "${PYTHON_BIN}" - <<'PY'
 import os
 import psycopg
+from psycopg import sql
 
-with psycopg.connect(
-    host=os.environ["DB_HOST"],
-    port=int(os.environ["DB_PORT"]),
-    dbname=os.environ["DB_NAME"],
-    user=os.environ["DB_USER"],
-    password=os.environ["DB_PASSWORD"],
-    autocommit=True,
-) as connection:
+connection_args = {
+    "host": os.environ["DB_HOST"],
+    "port": int(os.environ["DB_PORT"]),
+    "user": os.environ["DB_USER"],
+    "password": os.environ["DB_PASSWORD"],
+    "autocommit": True,
+}
+database_name = os.environ["DB_NAME"]
+
+try:
+    connection = psycopg.connect(dbname=database_name, **connection_args)
+except psycopg.OperationalError as exc:
+    if exc.sqlstate != "3D000":
+        raise
+    with psycopg.connect(dbname="postgres", **connection_args) as maintenance:
+        with maintenance.cursor() as cursor:
+            cursor.execute(
+                sql.SQL("CREATE DATABASE {}").format(sql.Identifier(database_name))
+            )
+    connection = psycopg.connect(dbname=database_name, **connection_args)
+
+with connection:
     with connection.cursor() as cursor:
         cursor.execute("DROP SCHEMA IF EXISTS public CASCADE")
         cursor.execute("CREATE SCHEMA public")
@@ -153,15 +208,15 @@ pid = int(sys.argv[2])
 last_error = None
 for _ in range(90):
     try:
+        os.kill(pid, 0)
+    except OSError:
+        raise SystemExit("FastAPI exited before becoming healthy")
+    try:
         with urlopen(f"{base_url}/health", timeout=2) as response:
             if response.status == 200:
                 raise SystemExit(0)
     except OSError as exc:
         last_error = exc
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        raise SystemExit("FastAPI exited before becoming healthy")
     time.sleep(1)
 raise SystemExit(f"FastAPI did not become healthy: {last_error}")
 PY
@@ -184,15 +239,15 @@ pid = int(sys.argv[2])
 last_error = None
 for _ in range(90):
     try:
+        os.kill(pid, 0)
+    except OSError:
+        raise SystemExit("Next.js exited before becoming healthy")
+    try:
         with urlopen(url, timeout=2) as response:
             if response.status == 200:
                 raise SystemExit(0)
     except OSError as exc:
         last_error = exc
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        raise SystemExit("Next.js exited before becoming healthy")
     time.sleep(1)
 raise SystemExit(f"Next.js did not become healthy: {last_error}")
 PY

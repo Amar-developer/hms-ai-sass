@@ -1,6 +1,7 @@
 from pathlib import Path
 import zlib
 
+from app.core.uploads import UPLOADS_DIR
 from app.modules.billing.models import InvoiceItem
 
 
@@ -281,9 +282,9 @@ def local_logo_image(logo_url: str | None) -> dict[str, object] | None:
         return None
     path: Path | None = None
     if logo_url.startswith("/uploads/"):
-        path = Path("uploads") / Path(logo_url).name
+        path = UPLOADS_DIR / Path(logo_url).name
     elif logo_url.startswith("uploads/"):
-        path = Path(logo_url)
+        path = UPLOADS_DIR / Path(logo_url).name
     if not path or not path.exists():
         return None
     data = path.read_bytes()

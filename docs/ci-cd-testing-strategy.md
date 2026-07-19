@@ -121,18 +121,22 @@ This is slower but catches missing production dependencies.
 The frontend keeps Vitest for unit/component tests and uses Playwright for
 browser workflows against a real Next.js server, FastAPI process, and isolated
 PostgreSQL database. The safe runner accepts only databases ending in
-`_e2e`, applies Alembic migrations, starts both servers, and cleans them up.
+`_e2e`, accepts only a local database host, creates the frontend E2E database
+when missing, applies Alembic migrations, starts both servers, and cleans them
+up. It also rejects occupied ports and serializes local runs so two suites
+cannot reset the shared database at the same time.
 
 ```bash
 cd frontend
+npm run test:e2e:install         # one-time browser installation
 npm run test:e2e                 # Chromium critical suite
-npm run test:e2e:extended        # Chromium extended suite
+npm run test:e2e:extended        # Chromium 21-test extended suite
 npm run test:e2e:cross-browser   # Critical Chromium/Firefox/WebKit suite
 npm run test:e2e:ui              # Local Playwright UI mode
 ```
 
-CI uploads Playwright reports and traces only when a test fails, and the dev
-deployment job depends on the full frontend E2E job.
+CI uploads Playwright reports and traces only when a test fails. The dev
+deployment job depends on the critical frontend E2E job.
 
 ### 7. Smoke Test After Deploy
 
@@ -158,9 +162,10 @@ Use this rule:
 
 ```text
 Pull request: lint + unit + integration + API + backend E2E + frontend build + critical frontend Chromium E2E
-Main branch: same CI checks + extended frontend Chromium E2E
-Nightly/manual: critical cross-browser frontend E2E
-Deploy: only after main CI succeeds, including frontend E2E
+Main branch: same CI checks, including critical frontend Chromium E2E
+Nightly: 21 extended Chromium tests + critical Firefox/WebKit tests
+Manual: critical cross-browser tests, or the complete suite in all browsers when requested
+Deploy: only after main CI succeeds, including critical frontend E2E
 After deploy: smoke test
 ```
 

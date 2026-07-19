@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, RefreshButton, Select, StatusToast } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import {
-  UPLOADS_BASE,
   apiFetch,
   apiUpload,
+  uploadAssetUrl,
   generatePhysiotherapyInvoice,
   getPhysiotherapyInvoice,
 } from "@/lib/api";
@@ -18,6 +18,7 @@ import { modalities } from "./constants";
 import { CaseForm,IPCaseForm } from "@/features/physiotherapy/forms/PhysiotherapyForms";
 import { Info } from "@/app/components/common/Info";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 
 type View = "list" | "op" | "ip" | "detail";
 
@@ -88,6 +89,13 @@ export function Physiotherapy({
   useEffect(() => {
     if (!selectedId && cases[0]?.id) setSelectedId(cases[0].id);
   }, [cases, selectedId]);
+  useEffect(() => {
+    const target = readNotificationTarget("physiotherapy_case");
+    if (!target || !cases.some((row: any) => row.id === target.resourceId))
+      return;
+    setSelectedId(target.resourceId);
+    setView("detail");
+  }, [apiSession?.tenantId, cases.length]);
   useEffect(() => {
     setSessionPhysiotherapistId(selected?.physiotherapist_id || "");
   }, [selected?.id, selected?.physiotherapist_id]);
@@ -448,7 +456,7 @@ export function Physiotherapy({
                       {consentFiles(selected).map((file:any,index:number)=>(
                         <a
                           key={`${file.url}-${index}`}
-                          href={`${UPLOADS_BASE}${file.url}`}
+                          href={uploadAssetUrl(file.url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="block break-all text-sm font-semibold text-blue-700 underline"

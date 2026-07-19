@@ -44,6 +44,10 @@ from app.modules.billing.services.source_sync import (
     sync_physiotherapy_case_status,
 )
 from app.modules.identity.models import User
+from app.modules.notifications.services.in_app import (
+    notify_billing_request_created,
+    notify_billing_request_status,
+)
 
 
 def create_billing_adjustment_request(
@@ -98,6 +102,12 @@ def create_billing_adjustment_request(
             }
         ),
     )
+    notify_billing_request_created(
+        session,
+        request=row,
+        actor=actor,
+        invoice_number=invoice.invoice_number,
+    )
     return read_adjustment_request(session, row)
 
 
@@ -150,6 +160,16 @@ def approve_billing_adjustment_request(
             before, {"status": row.status, "decision_reason": row.decision_reason}
         ),
     )
+    invoice = BillingAdjustmentRepository(session).get_invoice_for_tenant(
+        tenant_id=tenant_id, invoice_id=row.invoice_id
+    )
+    notify_billing_request_status(
+        session,
+        request=row,
+        actor=actor,
+        status_value="approved",
+        invoice_number=invoice.invoice_number if invoice else None,
+    )
     return read_adjustment_request(session, row)
 
 
@@ -197,6 +217,16 @@ def reject_billing_adjustment_request(
         changes=diff_changes(
             before, {"status": row.status, "decision_reason": row.decision_reason}
         ),
+    )
+    invoice = BillingAdjustmentRepository(session).get_invoice_for_tenant(
+        tenant_id=tenant_id, invoice_id=row.invoice_id
+    )
+    notify_billing_request_status(
+        session,
+        request=row,
+        actor=actor,
+        status_value="rejected",
+        invoice_number=invoice.invoice_number if invoice else None,
     )
     return read_adjustment_request(session, row)
 
@@ -258,6 +288,13 @@ def execute_billing_adjustment_request(
     row.executed_at = datetime.now(timezone.utc)
     session.add(row)
     session.commit()
+    notify_billing_request_status(
+        session,
+        request=row,
+        actor=actor,
+        status_value="executed",
+        invoice_number=invoice.invoice_number,
+    )
     return read_invoice_detail_full(session, invoice)
 
 

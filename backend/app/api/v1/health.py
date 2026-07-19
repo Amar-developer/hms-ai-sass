@@ -12,6 +12,9 @@ class HealthResponse(BaseModel):
     status: str
     service: str
     version: str
+    build_commit: str
+    built_at: str | None
+    environment: str
     checked_at: datetime
 
 
@@ -30,6 +33,9 @@ def health() -> HealthResponse:
         status="ok",
         service=settings.app_name,
         version=settings.app_version,
+        build_commit=settings.build_commit,
+        built_at=settings.build_time,
+        environment=settings.environment,
         checked_at=datetime.now(timezone.utc),
     )
 
@@ -45,6 +51,9 @@ def readiness() -> ReadinessResponse:
         status="ready",
         service=settings.app_name,
         version=settings.app_version,
+        build_commit=settings.build_commit,
+        built_at=settings.build_time,
+        environment=settings.environment,
         checked_at=datetime.now(timezone.utc),
         dependencies={
             "database": "not_configured",

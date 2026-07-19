@@ -6,6 +6,14 @@ export const API_BASE = (
 
 export const UPLOADS_BASE = API_BASE.replace(/\/api\/v1$/, "");
 
+export function uploadAssetUrl(value: string | null | undefined): string {
+  const path = String(value || "").trim();
+  if (!path) return "";
+  if (path.startsWith("/uploads/")) return `${UPLOADS_BASE}${path}`;
+  if (path.startsWith("uploads/")) return `${UPLOADS_BASE}/${path}`;
+  return path;
+}
+
 export type ApiSession = {
   tenantId: string;
   email: string;

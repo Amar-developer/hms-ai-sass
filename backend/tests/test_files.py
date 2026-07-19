@@ -54,6 +54,16 @@ def test_file_upload_list_update_delete_and_audit(client, test_engine):
     assert uploaded["category"] == "clinical"
     assert uploaded["is_private"] is True
 
+    static_file = client.get(uploaded["file_url"])
+    authorized_download = client.get(
+        f"/api/v1/files/{uploaded['id']}/download", headers=headers
+    )
+    assert static_file.status_code == 200
+    assert static_file.content == PNG_SIGNATURE + b"fake"
+    assert authorized_download.status_code == 200
+    assert authorized_download.content == PNG_SIGNATURE + b"fake"
+    assert "patient-photo.png" in authorized_download.headers["content-disposition"]
+
     listed = client.get(
         "/api/v1/files?category=clinical&q=patient-photo", headers=headers
     )
@@ -172,6 +182,18 @@ def test_tenant_logo_upload_persists_invoice_logo_setting(client, test_engine):
         ).first()
         assert setting is not None
         assert decode_value(setting.value_json) == logo_url
+
+
+def test_tenant_logo_rejects_spoofed_non_image_content(client):
+    tenant, _branch = create_file_tenant_and_branch(client)
+
+    upload = client.post(
+        f"/api/v1/tenants/{tenant['id']}/logo",
+        files={"file": ("fake-logo.png", BytesIO(b"%PDF-1.4\nfake"), "image/png")},
+    )
+
+    assert upload.status_code == 400
+    assert upload.json()["detail"] == "Tenant logo must be a PNG or JPEG image"
 
 
 def test_file_registry_invoice_logo_attachment_updates_invoice_logo_setting(

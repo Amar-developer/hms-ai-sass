@@ -1,4 +1,4 @@
-import { apiFetch, UPLOADS_BASE } from "@/lib/api";
+import { apiFetch, uploadAssetUrl } from "@/lib/api";
 import { appendLine, inr, splitRows, today } from "@/utils/helper";
 import { catalogKey, dailyDoseQuantity, isClosedAdmission, parseAmount } from "../helpers";
 import { useEffect, useState } from "react";
@@ -762,7 +762,7 @@ export function IPCareWorkspace({
                   {consentDocuments.map((doc: any) => (
                     <a
                       key={doc.id}
-                      href={`${UPLOADS_BASE}${doc.file_url}`}
+                      href={uploadAssetUrl(doc.file_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="rounded-xl border px-3 py-2 text-xs font-bold text-blue-700 underline"
@@ -825,7 +825,7 @@ export function IPCareWorkspace({
                   {dischargeDocuments.map((doc: any) => (
                     <a
                       key={doc.id}
-                      href={`${UPLOADS_BASE}${doc.file_url}`}
+                      href={uploadAssetUrl(doc.file_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="rounded-xl border px-3 py-2 text-xs font-bold text-blue-700 underline"

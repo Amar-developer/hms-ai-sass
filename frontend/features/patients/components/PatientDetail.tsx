@@ -1,4 +1,4 @@
-import { ApiSession, UPLOADS_BASE } from "@/lib/api";
+import { ApiSession, uploadAssetUrl } from "@/lib/api";
 import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, uniqueClinicalRecords } from "../helpers";
 import { DataTable } from "@/features/reports/components/DataTable";
 import { Column } from "@/features/reports/types";
@@ -327,7 +327,7 @@ export function PatientDetail({
             <label className="group relative block h-16 w-16 shrink-0 cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
               {patient.photo_url ? (
                 <img
-                  src={`${UPLOADS_BASE}${patient.photo_url}`}
+                  src={uploadAssetUrl(patient.photo_url)}
                   alt="Patient"
                   className="h-full w-full object-cover"
                 />

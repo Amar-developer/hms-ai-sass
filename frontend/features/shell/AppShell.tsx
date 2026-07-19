@@ -524,6 +524,7 @@ export function AppShell(props: any) {
             handleLogout={handleLogout}
             setShowPassword={setShowPassword}
             setReportsOpen={setReportsOpen}
+            navigatePage={navigatePage}
             // setTabletCollapsed={setTabletCollapsed}
           />
 
