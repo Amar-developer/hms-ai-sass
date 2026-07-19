@@ -16,7 +16,10 @@ ENV NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=$NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npm run build
+# Docker builds start from a clean filesystem. Invoke Next directly so the
+# host-only prebuild cleanup script outside the ./frontend build context is
+# not required (or incorrectly resolved as /scripts inside the image).
+RUN NEXT_PRIVATE_BUILD_WORKER=0 ./node_modules/.bin/next build
 
 FROM node:20-alpine AS runner
 ARG APP_VERSION
