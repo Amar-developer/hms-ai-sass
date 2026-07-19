@@ -452,9 +452,14 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `GET` | `/api/v1/settings/bundle` | `settings.manage` |
 | `POST` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications` | `notifications.manage` |
+| `GET` | `/api/v1/notifications/in-app` | Authenticated tenant user; current user's inbox only |
+| `PATCH` | `/api/v1/notifications/in-app/{notification_id}` | Authenticated tenant user; current user's notification only |
+| `POST` | `/api/v1/notifications/in-app/read-all` | Authenticated tenant user; current user's inbox only |
+| `POST` | `/api/v1/notifications/in-app/announcements` | Tenant Admin for own tenant; Super Admin may publish platform-wide |
 | `POST` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events/{event_id}` | `audit.read` |
+| `GET` | `/api/v1/activity/mention-users` | Authenticated tenant user; active users in current tenant only |
 | `GET` | `/api/v1/activity/{resource_type}/{resource_id}` | Authenticated tenant user |
 | `POST` | `/api/v1/activity/{resource_type}/{resource_id}/comments` | Authenticated tenant user |
 
