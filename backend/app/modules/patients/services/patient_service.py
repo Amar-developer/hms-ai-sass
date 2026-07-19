@@ -7,7 +7,7 @@ from app.core.access_control import (
     require_branch_in_tenant,
 )
 from app.core.auth import user_permission_keys
-from app.core.uploads import save_upload
+from app.core.uploads import UPLOADS_DIR, save_upload
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.files.service import record_file_document
 from app.modules.identity import permissions
@@ -383,7 +383,15 @@ class PatientService:
     ) -> Patient:
         enforce_entitlement(self.session, tenant_id, "patients")
         patient = self._get_or_404(tenant_id, patient_id)
-        _filename, url_path, _ct = await save_upload(file, f"patient_{patient_id[:12]}")
+        _filename, url_path, verified_content_type = await save_upload(
+            file, f"patient_{patient_id[:12]}"
+        )
+        if not verified_content_type.startswith("image/"):
+            (UPLOADS_DIR / _filename).unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Patient photo must be a PNG, JPEG, GIF, or WEBP image",
+            )
         patient.photo_url = url_path
         patient.photo_file_name = file.filename or _filename
         patient.updated_at = now_utc()
@@ -395,7 +403,7 @@ class PatientService:
             patient_id=patient.id,
             file_name=patient.photo_file_name or _filename,
             file_url=url_path,
-            content_type=file.content_type,
+            content_type=verified_content_type,
             category="patient_photo",
             source_module="patients",
             attached_to_doctype="Patient",

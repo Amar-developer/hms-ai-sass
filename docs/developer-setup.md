@@ -13,8 +13,8 @@ Install these tools first:
 
 | Tool | Recommended Version | Used For |
 | --- | --- | --- |
-| Node.js | 20 LTS or newer | Frontend |
-| npm | Comes with Node.js | Frontend dependencies |
+| Node.js | 24 (see `.nvmrc`; 20+ supported) | Frontend |
+| npm | 10 or newer | Frontend dependencies |
 | Python | 3.10 or newer | Backend |
 | Git | Latest stable | Source control |
 
@@ -48,7 +48,11 @@ git --version
 From the project root:
 
 ```bash
-npm install
+nvm use  # if nvm is installed; selects Node 24 from .nvmrc
+cd frontend
+npm ci
+npm run test:e2e:install  # once, when browser E2E tests are needed
+cd ..
 ```
 
 ### 3. Install Backend Dependencies
@@ -211,7 +215,10 @@ git --version
 From the project root:
 
 ```powershell
-npm install
+cd frontend
+npm ci
+npm run test:e2e:install  # once, when browser E2E tests are needed
+cd ..
 ```
 
 ### 3. Install Backend Dependencies
@@ -326,7 +333,11 @@ git --version
 From the project root:
 
 ```bash
-npm install
+nvm use  # if nvm is installed; selects Node 24 from .nvmrc
+cd frontend
+npm ci
+npm run test:e2e:install  # once, when browser E2E tests are needed
+cd ..
 ```
 
 ### 3. Install Backend Dependencies
@@ -475,7 +486,9 @@ Current backend environment variables:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `MEDIZINHUB_APP_NAME` | `MedizinHub HMS API` | API display name |
-| `MEDIZINHUB_APP_VERSION` | `0.1.0` | API version |
+| `MEDIZINHUB_APP_VERSION` | root `VERSION` | Optional runtime override; official deployments inject the tracked product release version |
+| `MEDIZINHUB_BUILD_COMMIT` | `unknown` | Git commit identifying the deployed build |
+| `MEDIZINHUB_BUILD_TIME` | empty | UTC timestamp assigned by the deployment workflow |
 | `MEDIZINHUB_ENVIRONMENT` | `local` | Runtime environment |
 | `MEDIZINHUB_API_PREFIX` | `/api/v1` | API route prefix |
 | `MEDIZINHUB_ENABLE_DOCS` | `true` | Enable Swagger/ReDoc |
@@ -578,22 +591,23 @@ pip install -r requirements-dev.txt
 macOS/Linux:
 
 ```bash
-rm -rf node_modules package-lock.json
-npm install
+cd frontend
+rm -rf node_modules
+npm ci
 ```
 
 Windows PowerShell:
 
 ```powershell
+cd frontend
 Remove-Item -Recurse -Force node_modules
-Remove-Item package-lock.json
-npm install
+npm ci
 ```
 
 ## Recommended Daily Developer Workflow
 
 1. Pull latest code.
-2. Run `npm install` if frontend dependencies changed.
+2. Run `cd frontend && npm ci` if `frontend/package-lock.json` changed.
 3. Run backend dependency install if `backend/requirements*.txt` changed.
 4. Start backend on port `8000`.
 5. Start frontend on port `3000`.
@@ -602,7 +616,7 @@ npm install
 Commands:
 
 ```bash
-npm test
+npm --prefix frontend test
 backend/.venv/bin/python -m pytest
 backend/.venv/bin/ruff check backend/app backend/tests
 ```

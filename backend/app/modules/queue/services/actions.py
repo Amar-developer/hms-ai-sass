@@ -4,6 +4,7 @@ from app.modules.appointments.models import AppointmentStatus
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import queue_notification_if_allowed
+from app.modules.notifications.services.in_app import notify_appointment_status
 from app.modules.queue.models import QueueEntry
 from app.modules.queue.services.display import token_call_message, token_language
 from app.modules.queue.services.queries import authorize_entry
@@ -64,7 +65,7 @@ def mark_not_available(
     entry, appointment = authorize_entry(
         session, tenant_id=tenant_id, entry_id=entry_id, actor=actor
     )
-    return sync_transition(
+    updated = sync_transition(
         session,
         entry=entry,
         appointment=appointment,
@@ -73,6 +74,15 @@ def mark_not_available(
         reason=reason,
         actor_user_id=actor_user_id,
     )
+    notify_appointment_status(
+        session,
+        appointment=appointment,
+        token_number=updated.token_number,
+        status_value="patient_not_available",
+        actor_user_id=actor.id,
+        reason=reason,
+    )
+    return updated
 
 
 def requeue(
@@ -88,7 +98,7 @@ def requeue(
     entry, appointment = authorize_entry(
         session, tenant_id=tenant_id, entry_id=entry_id, actor=actor
     )
-    return requeue_entry(
+    updated = requeue_entry(
         session,
         entry=entry,
         appointment=appointment,
@@ -96,6 +106,15 @@ def requeue(
         actor_user_id=actor_user_id,
         place_at_end=place_at_end,
     )
+    notify_appointment_status(
+        session,
+        appointment=appointment,
+        token_number=updated.token_number,
+        status_value="requeued",
+        actor_user_id=actor.id,
+        reason=reason,
+    )
+    return updated
 
 
 def cancel(
@@ -110,7 +129,7 @@ def cancel(
     entry, appointment = authorize_entry(
         session, tenant_id=tenant_id, entry_id=entry_id, actor=actor
     )
-    return sync_transition(
+    updated = sync_transition(
         session,
         entry=entry,
         appointment=appointment,
@@ -119,6 +138,15 @@ def cancel(
         reason=reason,
         actor_user_id=actor_user_id,
     )
+    notify_appointment_status(
+        session,
+        appointment=appointment,
+        token_number=updated.token_number,
+        status_value="cancelled",
+        actor_user_id=actor.id,
+        reason=reason,
+    )
+    return updated
 
 
 def mark_no_show(
@@ -134,7 +162,7 @@ def mark_no_show(
         session, tenant_id=tenant_id, entry_id=entry_id, actor=actor
     )
     enforce_no_show_threshold(session, entry)
-    return sync_transition(
+    updated = sync_transition(
         session,
         entry=entry,
         appointment=appointment,
@@ -143,6 +171,15 @@ def mark_no_show(
         reason=reason,
         actor_user_id=actor_user_id,
     )
+    notify_appointment_status(
+        session,
+        appointment=appointment,
+        token_number=updated.token_number,
+        status_value="no_show",
+        actor_user_id=actor.id,
+        reason=reason,
+    )
+    return updated
 
 
 def start_consultation(

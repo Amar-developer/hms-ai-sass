@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { apiFetch, type ApiSession } from "@/lib/api";
+import {
+  clearNotificationTarget,
+  readNotificationTarget,
+} from "@/lib/notificationTarget";
 import { Button, Card } from "./ui";
 import { parseInstant } from "@/utils/helper";
+import {
+  MentionCommentInput,
+  type MentionUser,
+} from "./MentionCommentInput";
 
 type ActivityChange = {
   field: string;
@@ -24,8 +32,33 @@ type ActivityComment = {
   author_name?: string | null;
   author_email?: string | null;
   body: string;
+  mentions?: MentionUser[];
   created_at: string;
 };
+
+function renderCommentBody(comment: ActivityComment) {
+  const names = (comment.mentions || [])
+    .map((user) => user.name)
+    .sort((first, second) => second.length - first.length);
+  if (names.length === 0) return comment.body;
+  const escaped = names.map((name) =>
+    name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+  );
+  const mentionPattern = new RegExp(`(@(?:${escaped.join("|")}))`, "g");
+  const mentionTokens = new Set(names.map((name) => `@${name}`));
+  return comment.body.split(mentionPattern).map((part, index) =>
+    mentionTokens.has(part) ? (
+      <span
+        key={`${part}-${index}`}
+        className="rounded bg-blue-50 px-1 font-bold text-blue-700"
+      >
+        {part}
+      </span>
+    ) : (
+      <span key={`${part}-${index}`}>{part}</span>
+    ),
+  );
+}
 
 function timeAgo(iso: string, now = Date.now()): string {
   const then = parseInstant(iso).getTime();
@@ -103,9 +136,12 @@ export function ActivityLog({
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [comments, setComments] = useState<ActivityComment[]>([]);
   const [draft, setDraft] = useState("");
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [posting, setPosting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [highlightedCommentId, setHighlightedCommentId] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
     if (!apiSession || !resourceId) return;
@@ -129,15 +165,39 @@ export function ActivityLog({
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!resourceId) return;
+    const target = readNotificationTarget(resourceType);
+    if (!target || target.resourceId !== resourceId) return;
+    if (
+      target.commentId &&
+      !comments.some((comment) => comment.id === target.commentId)
+    )
+      return;
+    setHighlightedCommentId(target.commentId || "");
+    const frame = window.requestAnimationFrame(() => {
+      containerRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+      clearNotificationTarget(target);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [resourceType, resourceId, comments]);
+
   const postComment = async () => {
     if (!apiSession || !resourceId || !draft.trim()) return;
     setPosting(true);
     try {
       await apiFetch(`/activity/${resourceType}/${resourceId}/comments`, apiSession, {
         method: "POST",
-        body: JSON.stringify({ body: draft.trim() }),
+        body: JSON.stringify({
+          body: draft.trim(),
+          mentioned_user_ids: mentionedUserIds,
+        }),
       });
       setDraft("");
+      setMentionedUserIds([]);
       await load();
     } finally {
       setPosting(false);
@@ -150,15 +210,16 @@ export function ActivityLog({
   ].sort((a, b) => parseInstant(a.at).getTime() - parseInstant(b.at).getTime());
 
   return (
-    <Card className="px-3 py-3 lg:px-4 lg:py-4 text-xs lg:text-sm mt-5">
+    <div ref={containerRef}>
+      <Card className="px-3 py-3 lg:px-4 lg:py-4 text-xs lg:text-sm mt-5">
       <h4 className="text-sm font-black text-slate-950">Comments</h4>
       <div className="mt-2 flex gap-2">
-        <textarea
+        <MentionCommentInput
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Type a reply / comment"
-          rows={2}
-          className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
+          onChange={setDraft}
+          onMentionedUserIdsChange={setMentionedUserIds}
+          apiSession={apiSession}
+          disabled={posting}
         />
       </div>
       <div className="mt-2 flex justify-end">
@@ -181,13 +242,21 @@ export function ActivityLog({
       )}
       <ul className="mt-3 space-y-3">
         {timeline.map((item) => (
-          <li key={`${item.kind}-${item.data.id}`} className="border-l-2 border-slate-200 pl-3 text-sm text-slate-700">
+          <li
+            key={`${item.kind}-${item.data.id}`}
+            className={`border-l-2 pl-3 text-sm text-slate-700 ${
+              item.kind === "comment" && item.data.id === highlightedCommentId
+                ? "rounded-r-lg border-blue-500 bg-blue-50 px-3 py-2 ring-1 ring-blue-200"
+                : "border-slate-200"
+            }`}
+          >
             {item.kind === "comment" ? (
               <>
                 <span className="font-black text-slate-950">
                   {item.data.author_email || item.data.author_name || "Someone"}
                 </span>{" "}
-                commented: <span>{(item.data as ActivityComment).body}</span>
+                commented:{" "}
+                <span>{renderCommentBody(item.data as ActivityComment)}</span>
               </>
             ) : (
               <span>{describeEvent(item.data as ActivityEvent)}</span>
@@ -197,6 +266,7 @@ export function ActivityLog({
           </li>
         ))}
       </ul>
-    </Card>
+      </Card>
+    </div>
   );
 }

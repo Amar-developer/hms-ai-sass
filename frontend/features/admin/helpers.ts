@@ -1,6 +1,6 @@
 import { serviceScopes } from "./constants";
 import { humanizeOptionLabel,normalizeOptionLabel } from "@/lib/options";
-import { UPLOADS_BASE } from "@/lib/api";
+import { uploadAssetUrl } from "@/lib/api";
 import { displayDate } from "@/utils/helper";
 
 export function title(value: string) {
@@ -97,8 +97,7 @@ export function patientLabel(patients: any[], patientId: any) {
 }
 
 export function assetUrl(value: string) {
-  if (!value) return "";
-  return value.startsWith("/uploads/") ? `${UPLOADS_BASE}${value}` : value;
+  return uploadAssetUrl(value);
 }
 
 export function listValue(value: string) {

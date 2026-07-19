@@ -21,8 +21,9 @@ This project now includes a practical documentation backbone for evolving the pr
 ## Run
 
 ```bash
+nvm use  # if nvm is installed; selects Node 24 from .nvmrc
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -54,9 +55,12 @@ One-time setup this needs (see [backend/README.md](./backend/README.md)):
 ```bash
 docker compose up -d postgres redis
 PGPASSWORD=medizinhub_dev createdb -h 127.0.0.1 -p 5433 -U medizinhub medizinhub_e2e
-PGPASSWORD=medizinhub_dev createdb -h 127.0.0.1 -p 5433 -U medizinhub medizinhub_frontend_e2e
-cd frontend && npx playwright install --with-deps chromium firefox webkit
+cd frontend && npm run test:e2e:install
 ```
+
+The frontend E2E runner creates `medizinhub_frontend_e2e` on its first run
+when the local PostgreSQL user has database-creation permission. It refuses
+non-local database hosts and database names that do not end in `_e2e`.
 
 Run the full local quality gate from the frontend package before every push:
 
@@ -90,7 +94,7 @@ one on its own:
 
 ```bash
 npm run test:e2e               # frontend, chromium only, @critical
-npm run test:e2e:extended      # frontend, chromium only, full suite
+npm run test:e2e:extended      # frontend, chromium only, 21 @extended tests
 npm run test:e2e:cross-browser # frontend, chromium + firefox + webkit, @critical
 bash ../backend/scripts/run_backend_e2e.sh   # backend, live API suite
 ```
@@ -98,7 +102,9 @@ bash ../backend/scripts/run_backend_e2e.sh   # backend, live API suite
 GitHub Actions runs the same main checks on pull requests and pushes to
 `main`, `master`, and `develop`. It also runs the PostgreSQL-backed live
 backend and frontend E2E suites. Pull requests run the critical Chromium
-browser suite; main/develop runs the extended Chromium suite.
+browser suite. The nightly workflow runs the 21 extended Chromium tests plus
+the critical Firefox and WebKit tests. A manual workflow can run the complete
+suite in all three browsers.
 
 ```bash
 bash backend/scripts/run_backend_e2e.sh
@@ -570,6 +576,9 @@ docker compose down -v
 
 # NEVER - deletes database volume!
 docker volume rm medizinhub-hms_medizinhub_postgres_data
+
+# NEVER - deletes persistent patient/document uploads!
+docker volume rm medizinhub-hms_medizinhub_uploads_data
 
 # NEVER without backup - removes MariaDB data!
 sudo apt-get remove --purge mysql*

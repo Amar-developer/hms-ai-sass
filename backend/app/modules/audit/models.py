@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, SQLModel
 
 from app.modules.tenants.models import new_id, now_utc
@@ -33,3 +34,19 @@ class DocumentComment(SQLModel, table=True):
     body: str = Field(min_length=1, max_length=4000)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
+
+
+class DocumentCommentMention(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint(
+            "comment_id",
+            "mentioned_user_id",
+            name="uq_documentcommentmention_comment_user",
+        ),
+    )
+
+    id: str = Field(default_factory=lambda: new_id("mention"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    comment_id: str = Field(index=True, foreign_key="documentcomment.id")
+    mentioned_user_id: str = Field(index=True, foreign_key="user.id")
+    created_at: datetime = Field(default_factory=now_utc, index=True)

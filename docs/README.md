@@ -21,10 +21,12 @@ operations documents take priority over older product-planning material.
 - [Database ERD and production gaps](db-design-erd-production-gaps.md)
 - [API permission matrix](api-permission-matrix.md)
 - [Module catalog](module-catalog.md)
+- [In-app notifications](in-app-notifications.md)
 
 ## Testing, Deployment, and Operations
 
 - [CI/CD testing strategy](ci-cd-testing-strategy.md)
+- [Versioning and releases](versioning-and-releases.md)
 - [Pending frontend/backend testing checklist](testing-pending-checklist.md)
 - [EC2 Docker deployment](ec2-docker-deployment.md)
 - [Production logging runbook](production-logging-runbook.md)

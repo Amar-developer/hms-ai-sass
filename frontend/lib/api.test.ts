@@ -7,6 +7,7 @@ import {
   LIVE_DATA_CHANGED_STORAGE_KEY,
   apiFetch,
   apiUpload,
+  uploadAssetUrl,
   type ApiSession,
 } from "./api";
 
@@ -26,6 +27,24 @@ function jsonResponse(body: unknown, status = 200) {
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
+});
+
+describe("uploaded asset URL resolution", () => {
+  it("points stored upload paths at the backend host", () => {
+    expect(uploadAssetUrl("/uploads/report.pdf")).toBe(
+      "http://127.0.0.1:8000/uploads/report.pdf",
+    );
+    expect(uploadAssetUrl("uploads/report.pdf")).toBe(
+      "http://127.0.0.1:8000/uploads/report.pdf",
+    );
+  });
+
+  it("preserves absolute and empty values", () => {
+    expect(uploadAssetUrl("https://files.example.test/report.pdf")).toBe(
+      "https://files.example.test/report.pdf",
+    );
+    expect(uploadAssetUrl(null)).toBe("");
+  });
 });
 
 describe("api live-data synchronization", () => {

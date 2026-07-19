@@ -9,7 +9,7 @@ import {
   RefreshButton,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiBlob, apiFetch, apiUpload } from "@/lib/api";
+import { apiBlob, apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate, displayDateTime, formatPrice } from "@/utils/helper";
 import { pageSize } from "./constants";
@@ -663,9 +663,9 @@ export function Lab({
         );
         if (resultWithUrl?.report_url) {
           if (win) {
-            win.location.href = resultWithUrl.report_url;
+            win.location.href = uploadAssetUrl(resultWithUrl.report_url);
           } else {
-            window.open(resultWithUrl.report_url, "_blank");
+            window.open(uploadAssetUrl(resultWithUrl.report_url), "_blank");
           }
           return;
         }

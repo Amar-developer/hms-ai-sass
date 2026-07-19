@@ -1,9 +1,10 @@
 import uuid
-from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 
-UPLOADS_DIR = Path("uploads")
+from app.core.config import get_settings
+
+UPLOADS_DIR = get_settings().uploads_dir.expanduser().resolve()
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 _CHUNK = 1024 * 1024  # 1 MB streamed read
 

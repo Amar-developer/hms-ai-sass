@@ -14,6 +14,7 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch, type ApiSession } from "@/lib/api";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import {
   FormField,
@@ -158,6 +159,44 @@ export function AppointmentCalendarBooking(props: Props) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mentionTarget = readNotificationTarget("appointment");
+    const appointmentId = window.sessionStorage.getItem(
+      "medizinhub.notificationAppointmentId",
+    );
+    if (!appointmentId) return;
+    window.sessionStorage.removeItem("medizinhub.notificationAppointmentId");
+    if (mentionTarget?.eventType === "comment.mentioned") {
+      let active = true;
+      apiFetch(`/appointments/${appointmentId}`, apiSession)
+        .then((appointment: any) => {
+          if (!active) return;
+          setBooked({ appointment, queue_entry: null });
+          setSelectedPatient(
+            patients.find(
+              (patient: any) =>
+                patient.id === (appointment.patient_id || appointment.patientId),
+            ) || null,
+          );
+          setMode("book");
+          setBookingStep("success");
+        })
+        .catch(() => {
+          if (!active) return;
+          setMode("list");
+          setQuery(appointmentId);
+          setPage(1);
+        });
+      return () => {
+        active = false;
+      };
+    }
+    setMode("list");
+    setQuery(appointmentId);
+    setPage(1);
+  }, [apiSession?.tenantId]);
+
   const patientMap = useMemo(
     () => new Map(patients.map((patient: any) => [patient.id, patient])),
     [patients],
@@ -214,6 +253,7 @@ export function AppointmentCalendarBooking(props: Props) {
       appointment.patientId || appointment.patient_id,
     );
     const text = [
+      appointment.id,
       appointment.patient,
       appointment.patient_name,
       appointment.patient_number,

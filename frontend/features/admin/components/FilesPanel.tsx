@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { fileCategoryOptions,doctypeFetchPaths,fileCategoryRules } from "../constants";
-import { apiFetch, apiUpload } from "@/lib/api";
+import { apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
 import { FormField } from "@/app/components/FormElements";
 import { Card,Button,Input, SearchableSelect, Badge, ActionButton } from "@/app/components/common/ui";
 import { asOptionList,patientLabel } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
-import { UPLOADS_BASE } from "@/lib/api";
 import { capitalizeFirst, displayDateTime } from "@/utils/helper";
 import { isActivePatientRecord,patientPickerLabel } from "@/features/patients/helpers";
 import { useForm } from "react-hook-form";
@@ -53,27 +52,26 @@ export function FilesPanel({
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [category, setCategory] = useState("general");
-  const [branchId, setBranchId] = useState("");
-  const [patientId, setPatientId] = useState("");
-  const [sourceModule, setSourceModule] = useState("");
   const [doctype, setDoctype] = useState("");
-  const [recordId, setRecordId] = useState("");
-  const [fieldName, setFieldName] = useState("");
-  const [labelValue, setLabelValue] = useState("");
-  const [folder, setFolder] = useState("");
   const [recordOptions, setRecordOptions] = useState<any[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const rule = fileCategoryRules[category] || fileCategoryRules.general;
 
   useEffect(() => {
-    setSourceModule(rule.modules[0] || "");
-    setDoctype(rule.doctypes[0] || "");
-    setFieldName(rule.fields[0] || "");
-    setLabelValue(rule.labels[0] || "");
-    setFolder(rule.folders[0] || "");
-    setRecordId("");
-  }, [category]);
+    const nextSourceModule = rule.modules[0] || "";
+    const nextDoctype = rule.doctypes[0] || "";
+    const nextFieldName = rule.fields[0] || "";
+    const nextLabel = rule.labels[0] || "";
+    const nextFolder = rule.folders[0] || "";
+    setDoctype(nextDoctype);
+    setValue("source_module", nextSourceModule);
+    setValue("attached_to_doctype", nextDoctype);
+    setValue("attached_to_name", "");
+    setValue("attached_to_field", nextFieldName);
+    setValue("attached_to_label", nextLabel);
+    setValue("folder", nextFolder);
+  }, [category, rule, setValue]);
 
   const patientOptions = useMemo(
     () =>
@@ -176,26 +174,20 @@ export function FilesPanel({
   }, [page, safePage]);
 
   function resetUploadForm() {
+    const generalRule = fileCategoryRules.general;
     setCategory("general");
-    setBranchId("");
-    setPatientId("");
-    setSourceModule("");
-    setDoctype("");
-    setRecordId("");
-    setFieldName("");
-    setLabelValue("");
-    setFolder("");
+    setDoctype(generalRule.doctypes[0] || "");
 
     reset({
       category: "general",
       branch_id: "",
       patient_id: "",
-      source_module: "",
-      attached_to_doctype: "",
+      source_module: generalRule.modules[0] || "",
+      attached_to_doctype: generalRule.doctypes[0] || "",
       attached_to_name: "",
-      attached_to_field: "",
-      attached_to_label: "",
-      folder: "",
+      attached_to_field: generalRule.fields[0] || "",
+      attached_to_label: generalRule.labels[0] || "",
+      folder: generalRule.folders[0] || "",
       notes: "",
     });
   }
@@ -215,16 +207,16 @@ export function FilesPanel({
     upload.append("file", file);
 
     const fields: Record<string, string> = {
-      category,
-      source_module: sourceModule,
-      attached_to_doctype: doctype,
-      attached_to_name: recordId,
-      attached_to_field: fieldName,
-      attached_to_label: labelValue,
-      folder,
+      category: data.category || "general",
+      source_module: data.source_module || "",
+      attached_to_doctype: data.attached_to_doctype || "",
+      attached_to_name: data.attached_to_name || "",
+      attached_to_field: data.attached_to_field || "",
+      attached_to_label: data.attached_to_label || "",
+      folder: data.folder || "",
       notes: data.notes || "",
-      branch_id: branchId,
-      patient_id: patientId,
+      branch_id: data.branch_id || "",
+      patient_id: data.patient_id || "",
     };
 
     Object.entries(fields).forEach(([key, value]) => {
@@ -353,7 +345,10 @@ export function FilesPanel({
             <SearchableSelect
               name="category"
               value={watch("category")}
-              onChange={(value)=>setValue('category',value)}
+              onChange={(value) => {
+                setValue("category", value);
+                setCategory(value);
+              }}
               options={fileCategoryOptions}
               searchPlaceholder="Search categories..."
               // className="select-input"
@@ -362,7 +357,9 @@ export function FilesPanel({
           <FormField label="Branch">
             <SearchableSelect
               value={watch('branch_id')}
-              onChange={(value)=>setValue('branch_id',value)}
+              onChange={(value) => {
+                setValue("branch_id", value);
+              }}
               placeholder="Tenant level"
               options={branches.map((branch: any) => ({
                 value: branch.id,
@@ -375,7 +372,9 @@ export function FilesPanel({
           <FormField label="Patient">
             <SearchableSelect
               value={watch('patient_id')}
-              onChange={(value)=>setValue('patient_id',value)}
+              onChange={(value) => {
+                setValue("patient_id", value);
+              }}
               placeholder="No patient link"
               options={patientOptions}
               searchPlaceholder="Search patients..."
@@ -384,7 +383,9 @@ export function FilesPanel({
           <FormField label="Source Module">
             <SearchableSelect
               value={watch('source_module')}
-              onChange={(value)=>setValue('source_module',value)}
+              onChange={(value) => {
+                setValue("source_module", value);
+              }}
               options={asOptionList(rule.modules)}
               searchPlaceholder="Search modules..."
               allowCustom
@@ -393,7 +394,11 @@ export function FilesPanel({
           <FormField label="Linked Doctype">
             <SearchableSelect
               value={watch('attached_to_doctype')}
-              onChange={(value)=>setValue('attached_to_doctype',value)}
+              onChange={(value) => {
+                setValue("attached_to_doctype", value);
+                setDoctype(value);
+                setValue("attached_to_name", "");
+              }}
               options={asOptionList(rule.doctypes)}
               searchPlaceholder="Search doctypes..."
               allowCustom
@@ -402,7 +407,9 @@ export function FilesPanel({
           <FormField label="Linked Record ID">
             <SearchableSelect
               value={watch('attached_to_name')}
-              onChange={(value)=>setValue('attached_to_name',value)}
+              onChange={(value) => {
+                setValue("attached_to_name", value);
+              }}
               options={recordOptions}
               placeholder={
                 recordsLoading
@@ -419,7 +426,9 @@ export function FilesPanel({
           <FormField label="Linked Field">
             <SearchableSelect
               value={watch('attached_to_field')}
-              onChange={(value)=>setValue('attached_to_field',value)}
+              onChange={(value) => {
+                setValue("attached_to_field", value);
+              }}
               options={asOptionList(rule.fields)}
               searchPlaceholder="Search fields..."
               allowCustom
@@ -428,7 +437,9 @@ export function FilesPanel({
           <FormField label="Label">
             <SearchableSelect
               value={watch('attached_to_label')}
-              onChange={(value)=>setValue('attached_to_label',value)}
+              onChange={(value) => {
+                setValue("attached_to_label", value);
+              }}
               options={rule.labels.map((label) => ({ value: label, label }))}
               searchPlaceholder="Search labels..."
               allowCustom
@@ -437,7 +448,9 @@ export function FilesPanel({
           <FormField label="Folder">
             <SearchableSelect
               value={watch('folder')}
-              onChange={(value)=>setValue('folder',value)}
+              onChange={(value) => {
+                setValue("folder", value);
+              }}
               options={rule.folders.map((name) => ({
                 value: name,
                 label: name,
@@ -545,11 +558,7 @@ export function FilesPanel({
                   </td>
                   <td className="pr-4 flex items-center">
                     <a
-                      href={
-                        file.file_url?.startsWith("/uploads/")
-                          ? `${UPLOADS_BASE}${file.file_url}`
-                          : file.file_url
-                      }
+                      href={uploadAssetUrl(file.file_url)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-semibold text-xs text-blue-700 underline"

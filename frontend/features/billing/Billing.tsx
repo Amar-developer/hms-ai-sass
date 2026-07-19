@@ -13,6 +13,7 @@ import {
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { apiBlob, apiFetch } from "@/lib/api";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 import { paymentMethodOptions } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
 import {
@@ -248,9 +249,9 @@ export function Billing({
   }, [page, safePage]);
   useEffect(() => {
     if (!apiSession || typeof window === "undefined") return;
-    const invoiceId = window.sessionStorage.getItem(
-      "medizinhub.billingInvoiceId",
-    );
+    const invoiceId =
+      window.sessionStorage.getItem("medizinhub.billingInvoiceId") ||
+      readNotificationTarget("invoice")?.resourceId;
     if (!invoiceId) return;
     window.sessionStorage.removeItem("medizinhub.billingInvoiceId");
     openInvoiceDetail({ id: invoiceId });

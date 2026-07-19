@@ -10,7 +10,8 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { UPLOADS_BASE, apiFetch, apiUpload } from "@/lib/api";
+import { apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { admissionLabel, chargeableDays, defaultRooms, isClosedAdmission } from "./helpers";
 import { IPCareWorkspace } from "./components/IPCareWorkspace";
@@ -149,6 +150,17 @@ export function IPAdmission({
     if (!selectedId && (activeAdmissions[0] || ipAdmissions[0]))
       setSelectedId((activeAdmissions[0] || ipAdmissions[0]).id);
   }, [activeAdmissions.length, ipAdmissions, selectedId]);
+  useEffect(() => {
+    const target = readNotificationTarget("ip_admission");
+    if (
+      !target ||
+      !departmentAdmissions.some((row: any) => row.id === target.resourceId)
+    )
+      return;
+    setAdmissionFilter("all");
+    setSelectedId(target.resourceId);
+    setView("detail");
+  }, [apiSession?.tenantId, departmentId, departmentAdmissions.length]);
   useEffect(() => {
     setAdmissionPage(1);
   }, [admissionFilter]);
@@ -834,7 +846,7 @@ export function IPAdmission({
                 </div>
                 {selectedAdmission.admission_document_url ? (
                   <a
-                    href={`${UPLOADS_BASE}${selectedAdmission.admission_document_url}`}
+                    href={uploadAssetUrl(selectedAdmission.admission_document_url)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-1 inline-flex break-all text-sm font-bold text-blue-700 underline"

@@ -22,6 +22,7 @@ import {
 } from "./helpers";
 import { Insight } from "./components/Insight";
 import { QuickAccess } from "./components/QuickAccess";
+import { NotificationWidget } from "./components/NotificationWidget";
 
 export function Dashboard({
   scopedAppointments,
@@ -32,6 +33,7 @@ export function Dashboard({
   livePractitioners = [],
   setActive,
   enabled,
+  apiSession,
 }: any) {
   const today = new Date().toISOString().slice(0, 10);
   const currentMonth = today.slice(0, 7);
@@ -178,6 +180,7 @@ export function Dashboard({
           </button>
         ))}
       </div>
+      <NotificationWidget apiSession={apiSession} setActive={setActive} />
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>

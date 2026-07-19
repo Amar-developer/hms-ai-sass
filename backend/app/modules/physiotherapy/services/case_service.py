@@ -186,7 +186,7 @@ class PhysiotherapyCaseService:
             existing_files = []
         uploaded_files = []
         for upload_file in files:
-            saved_filename, url_path, _ct = await save_upload(
+            saved_filename, url_path, verified_content_type = await save_upload(
                 upload_file, f"physio_consent_{case_id[:12]}"
             )
             record_file_document(
@@ -196,7 +196,7 @@ class PhysiotherapyCaseService:
                 patient_id=case.patient_id,
                 file_name=upload_file.filename or saved_filename,
                 file_url=url_path,
-                content_type=upload_file.content_type,
+                content_type=verified_content_type,
                 category="consent",
                 source_module="physiotherapy",
                 attached_to_doctype="PhysiotherapyCase",

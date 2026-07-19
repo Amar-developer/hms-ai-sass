@@ -48,6 +48,11 @@ jobs:
             git checkout main
             git pull --ff-only origin main
 
+            # VERSION is the release identity used by the image and runtime.
+            export MEDIZINHUB_APP_VERSION="$(tr -d '\r\n' < VERSION)"
+            export MEDIZINHUB_BUILD_COMMIT="$(git rev-parse --short=12 HEAD)"
+            export MEDIZINHUB_BUILD_TIME="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
             # Check disk before deploy
             docker system df
 

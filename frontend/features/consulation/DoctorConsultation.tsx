@@ -18,6 +18,7 @@ import {
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
 import { humanizeOptionLabel } from "@/lib/options";
 import { displayDate, displayDate as formatDisplayDate } from "@/utils/helper";
@@ -208,6 +209,33 @@ export function DoctorConsultation({
   const [selectedDate, setSelectedDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
   );
+
+  useEffect(() => {
+    const target = readNotificationTarget("consultation");
+    if (!target) return;
+    const appointment = scopedAppointments.find(
+      (row: any) =>
+        (row.consultationId || row.consultation_id) === target.resourceId,
+    );
+    if (!appointment) return;
+    const appointmentId = appointment.id;
+    const practitionerId =
+      appointment.doctorId || appointment.practitioner_id || "";
+    setSelectedAppointmentId(appointmentId);
+    sessionStorage.setItem(
+      "medizinhub.consultationAppointmentId",
+      appointmentId,
+    );
+    if (practitionerId) {
+      setDoctorId(practitionerId);
+      sessionStorage.setItem(
+        "medizinhub.consultationDoctorId",
+        practitionerId,
+      );
+    }
+    const appointmentDate = appointmentDateKey(appointment);
+    if (appointmentDate) setSelectedDate(appointmentDate);
+  }, [apiSession?.tenantId, scopedAppointments.length]);
 
   const [dashboardFilter, setDashboardFilter] = useState<
     "booked" | "waiting" | "completed" | "seen"

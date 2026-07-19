@@ -1,15 +1,30 @@
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+
+from app.core.config import Settings
 
 
-def test_health_contract(client: TestClient):
-    response = client.get("/api/v1/health")
+def test_health_contract(unauthenticated_client: TestClient):
+    response = unauthenticated_client.get("/api/v1/health")
 
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
     assert body["service"] == "MedizinHub HMS API"
     assert body["version"] == "0.1.0"
+    assert body["build_commit"] == "unknown"
+    assert body["built_at"] is None
+    assert body["environment"] == "local"
     assert "checked_at" in body
+
+
+def test_application_version_requires_semantic_versioning():
+    assert Settings(app_version="1.2.44").app_version == "1.2.44"
+    assert Settings(app_version="1.3.0-rc.1").app_version == "1.3.0-rc.1"
+
+    with pytest.raises(ValidationError, match="Semantic Versioning"):
+        Settings(app_version="release-12")
 
 
 def test_readiness_contract_starts_without_external_dependencies(client: TestClient):

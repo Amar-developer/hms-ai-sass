@@ -172,11 +172,17 @@ docker compose up -d --build frontend
 
 ## 10. Useful Operations
 
-Stop containers but keep database data:
+Stop containers but keep database and uploaded-file data:
 
 ```bash
 docker compose down
 ```
+
+Production uploads are stored in the `medizinhub_uploads_data` named volume
+and staging uploads in `medizinhub_uploads_data_staging`. Container rebuilds
+keep these files. Never use `docker compose down -v` in an environment whose
+database or uploads must be retained, and include both named volumes in the
+server backup plan.
 
 Restart:
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 import { humanizeOptionLabel } from "@/lib/options";
 import { today } from "@/utils/helper";
 import { emptyLine, homeCareHourPrices } from "./constants";
@@ -137,6 +138,13 @@ export function HomeCare({
   useEffect(() => {
     load();
   }, [apiSession?.tenantId, branchId]);
+  useEffect(() => {
+    const target = readNotificationTarget("home_care_booking");
+    if (!target || !bookings.some((row: any) => row.id === target.resourceId))
+      return;
+    setSelectedId(target.resourceId);
+    setView("view");
+  }, [apiSession?.tenantId, bookings.length]);
   useEffect(() => {
     setPage(1);
   }, [filters.query, filters.status]);

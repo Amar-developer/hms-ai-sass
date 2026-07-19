@@ -26,6 +26,15 @@ class AuditEventRead(AuditEventCreate):
 
 class CommentCreate(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
+    mentioned_user_ids: list[str] = Field(default_factory=list, max_length=20)
+
+
+class MentionUserRead(BaseModel):
+    id: str
+    name: str
+    email: str
+    user_type: str
+    branch_id: str | None = None
 
 
 class CommentRead(BaseModel):
@@ -39,6 +48,7 @@ class CommentRead(BaseModel):
     author_name: str | None = None
     author_email: str | None = None
     body: str
+    mentions: list[MentionUserRead] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

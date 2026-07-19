@@ -1,3 +1,5 @@
+import { uploadAssetUrl } from "@/lib/api";
+
 export type PrescriptionClinic = {
   name?: string;
   legal_name?: string;
@@ -211,7 +213,7 @@ function PrescriptionPage({
               <div className="flex items-center gap-12">
                 <img
                   className="block w-[98px] h-[98px] shrink-0"
-                  src={clinic.logo_url || "/clinic_logo.png"}
+                  src={uploadAssetUrl(clinic.logo_url) || "/clinic_logo.png"}
                   alt=""
                 />
                 <div className="flex-1 min-w-0 pt-[5px]">
@@ -356,7 +358,7 @@ function PrescriptionPage({
           <div className="absolute right-[49px] bottom-[196px] w-[192px] flex flex-col items-center gap-[4px]">
             {doctor.signatureUrl && (
               <img
-                src={doctor.signatureUrl}
+                src={uploadAssetUrl(doctor.signatureUrl)}
                 alt="Doctor signature"
                 className="h-[53px] w-[151px] object-contain"
               />
