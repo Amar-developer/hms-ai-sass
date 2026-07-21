@@ -257,6 +257,12 @@ export function InvoiceDetailPage({
         subtotal,
     );
   }
+  function itemMrpTotal(item: any) {
+    return numberValue(item.mrp_amount) * numberValue(item.quantity);
+  }
+  function itemMrpMarkdown(item: any) {
+    return Math.max(itemMrpTotal(item) - numberValue(item.total_amount), 0);
+  }
   const itemTableColSpan =
     7 + (showItemVendor ? 2 : 0) + (showItemPricing ? 1 : 0);
   const currentUserRoles = Array.isArray(currentUser?.roles)
@@ -518,6 +524,11 @@ export function InvoiceDetailPage({
                     )}
                     {items.map((item: any, index: number) => {
                       const allocatedDiscount = itemInvoiceDiscount(item);
+                      const mrpMarkdown = itemMrpMarkdown(item);
+                      const mrpTotal = itemMrpTotal(item);
+                      const displayDiscount = mrpMarkdown + allocatedDiscount;
+                      const discountBase =
+                        mrpTotal > 0 ? mrpTotal : numberValue(item.total_amount);
                       const itemSupplierOptions =
                         supplierOptions[item.id] || [];
                       const vendorName =
@@ -601,14 +612,11 @@ export function InvoiceDetailPage({
                             {money(itemRate(item))}
                           </td>
                           <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                            {percentLabel(
-                              allocatedDiscount,
-                              item.total_amount,
-                            )}
+                            {percentLabel(displayDiscount, discountBase)}
                           </td>
                           <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-emerald-700">
-                            {allocatedDiscount > 0
-                              ? `-${money(allocatedDiscount)}`
+                            {displayDiscount > 0
+                              ? `-${money(displayDiscount)}`
                               : money(0)}
                           </td>
                           <td className="border-t border-slate-200 px-3 py-2.5 text-right font-black tabular-nums text-slate-900">
