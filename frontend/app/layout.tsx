@@ -3,6 +3,9 @@ import './globals.css';
 export const metadata = {
   title: 'MedizinHub HMS',
   description: 'Plug and play healthcare SaaS workspace',
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({

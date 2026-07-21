@@ -439,7 +439,7 @@ The billing workflow should support:
 - Doctor settlement reports based on consultation revenue share.
 - GST/tax rules by tenant and branch where applicable.
 - Discount approval before discounted invoices are generated.
-- Receipt PDF download after invoice/payment activity.
+- Frontend-rendered invoice printing and browser PDF saving after invoice/payment activity.
 - Due collection, branch revenue, doctor revenue, and department revenue reports.
 - Finalized doctor settlement records that preserve the settlement period, amount, and finalizing user.
 

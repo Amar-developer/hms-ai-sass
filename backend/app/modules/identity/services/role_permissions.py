@@ -11,6 +11,7 @@ from app.modules.identity.repositories import (
     IdentityUserRoleRepository,
 )
 from app.modules.identity.services.bootstrap import TENANT_ADMIN_DEFAULT_PERMISSION_KEYS
+from app.modules.identity.services.user_helpers import normalize_role_key
 
 
 def ensure_permission(session: Session, key: str) -> Permission:
@@ -75,6 +76,11 @@ def resolve_role_for_user_assignment(
 ) -> Role | None:
     roles = IdentityRoleRepository(session)
     role = roles.get_by_key_for_tenant(tenant_id, role_key)
+    if role:
+        canonical_role = roles.get_by_key_for_tenant(
+            tenant_id, normalize_role_key(role.name)
+        )
+        return canonical_role or role
     if role or role_key != "tenant_admin" or not current_user.is_super_admin:
         return role
 

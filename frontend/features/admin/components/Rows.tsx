@@ -12,6 +12,7 @@ import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
 export function UserRow({
   user,
+  roles = [],
   branches,
   canCopyIds = false,
   onEdit,
@@ -64,7 +65,7 @@ export function UserRow({
       </td>
 
       <td className="px-4 py-3">
-        <RoleList labels={userRoleLabels(user)} />
+        <RoleList labels={userRoleLabels(user, roles)} />
       </td>
 
       <td className="px-4 py-3">{user.email}</td>

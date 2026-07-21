@@ -151,6 +151,15 @@ class IdentityRoleRepository:
             ).all()
         )
 
+    def list_by_name_for_tenant(self, tenant_id: str, name: str) -> list[Role]:
+        return list(
+            self.session.exec(
+                select(Role)
+                .where(Role.tenant_id == tenant_id, Role.name == name)
+                .order_by(Role.updated_at.desc(), Role.created_at.desc())
+            ).all()
+        )
+
 
 class IdentityRolePermissionRepository:
     def __init__(self, session: Session):

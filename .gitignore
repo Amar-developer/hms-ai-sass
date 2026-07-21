@@ -49,6 +49,15 @@ __pycache__/
 *.sqlite
 *.sqlite3
 
+# Local editor and AI-assistant configuration
+.claude/
+.vscode/
+
+# Temporary invoice design/debug artifacts
+frontend/debug.png
+frontend/small.pdf
+frontend/_inspect_tmp.js
+
 # Runtime uploads
 uploads/
 backend/uploads/

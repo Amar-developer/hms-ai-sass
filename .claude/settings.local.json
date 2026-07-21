@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cat \"C:/Users/ADMIN/AppData/Local/Temp/next-dev.log\")",
-      "Read(//c/Users/ADMIN/AppData/Local/Temp/**)"
-    ]
-  }
-}

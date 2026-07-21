@@ -304,17 +304,17 @@ export function ErrorLogs({ apiSession }: any) {
           <div className="rounded-xl bg-rose-50 p-3">
             <CircleAlert className="text-rose-600" size={18} />
             <p className="mt-2 text-2xl font-bold">{summary.errors}</p>
-            <p className="text-xs text-slate-500">Errors</p>
+            <p className="text-xs text-slate-500">Open errors</p>
           </div>
           <div className="rounded-xl bg-amber-50 p-3">
             <AlertTriangle className="text-amber-600" size={18} />
             <p className="mt-2 text-2xl font-bold">{summary.warnings}</p>
-            <p className="text-xs text-slate-500">Warnings</p>
+            <p className="text-xs text-slate-500">Open warnings</p>
           </div>
           <div className="rounded-xl bg-blue-50 p-3">
             <CheckCircle2 className="text-blue-600" size={18} />
             <p className="mt-2 text-2xl font-bold">{summary.permission}</p>
-            <p className="text-xs text-slate-500">Permission issues</p>
+            <p className="text-xs text-slate-500">Open permission issues</p>
           </div>
         </div>
 

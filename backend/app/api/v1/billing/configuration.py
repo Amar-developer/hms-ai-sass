@@ -196,7 +196,12 @@ def request_discount_approval_endpoint(
     payload: DiscountApprovalCreate,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_DISCOUNTS_REQUEST,
+        )
+    ),
 ) -> DiscountApproval:
     return request_discount_approval(
         session, tenant_id=tenant_id, payload=payload, actor=current_user
@@ -211,7 +216,12 @@ def decide_discount_approval_endpoint(
     payload: DiscountApprovalDecision,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_DISCOUNTS_APPROVE,
+        )
+    ),
 ) -> DiscountApproval:
     return decide_discount_approval(
         session,

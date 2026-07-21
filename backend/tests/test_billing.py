@@ -456,7 +456,7 @@ def test_discount_requires_approved_request(client: TestClient):
     )
 
 
-def test_tax_rule_applies_gst_to_invoice_and_receipt_pdf(client: TestClient):
+def test_tax_rule_applies_gst_to_invoice(client: TestClient):
     data = setup_signed_consultation(client, "op")
     tenant_id = data["tenant"]["id"]
     create_fee_rule(client, tenant_id, "op", 1000, doctor_share_percentage=60)
@@ -474,18 +474,11 @@ def test_tax_rule_applies_gst_to_invoice_and_receipt_pdf(client: TestClient):
             "tax_rule_id": tax_rule["id"],
         },
     )
-    receipt = client.get(
-        f"/api/v1/billing/invoices/{response.json()['invoice']['id']}/receipt.pdf",
-        headers={"X-Tenant-ID": tenant_id},
-    )
-
     assert response.status_code == 201
     assert response.json()["invoice"]["tax_amount"] == 180
     assert response.json()["invoice"]["total_amount"] == 1180
     assert response.json()["invoice"]["doctor_share_amount"] == 600
     assert response.json()["invoice"]["clinic_share_amount"] == 580
-    assert receipt.status_code == 200
-    assert receipt.headers["content-type"] == "application/pdf"
 
 
 def test_percentage_offer_is_applied_before_percentage_tax(client: TestClient):

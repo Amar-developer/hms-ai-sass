@@ -64,10 +64,18 @@ def test_client_error_logs_are_sanitized_deduplicated_and_manageable(
 
     visible_after_resolve = client.get("/api/v1/error-logs")
     assert visible_after_resolve.status_code == 200
+    visible_body = visible_after_resolve.json()
     assert any(
         item["id"] == row["id"] and item["is_resolved"] is True
-        for item in visible_after_resolve.json()["items"]
+        for item in visible_body["items"]
     )
+    assert visible_body["summary"]["errors"] == 0
+
+    resolved_only = client.get("/api/v1/error-logs?resolved=true")
+    assert resolved_only.status_code == 200
+    resolved_body = resolved_only.json()
+    assert any(item["id"] == row["id"] for item in resolved_body["items"])
+    assert resolved_body["summary"]["errors"] == 0
 
     deleted = client.delete(f"/api/v1/error-logs/{row['id']}")
     assert deleted.status_code == 204

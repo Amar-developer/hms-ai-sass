@@ -22,12 +22,6 @@ from app.modules.settings.models import SettingKey, SettingScope
 from app.modules.settings.service import upsert_setting
 from app.modules.tenants.models import Tenant, now_utc
 
-# Billing PDF rendering currently supports local PNG/JPEG logos only.
-# Any other image type (GIF/WEBP) uploads and previews fine in the browser but
-# is silently dropped from the printed invoice, so reject it up front instead.
-_LOGO_FIELDS = {"logo_url", "invoice.logo_url", "invoice_logo_url"}
-_LOGO_CONTENT_TYPES = {"image/png", "image/jpeg"}
-
 # Maps an upload filename prefix (without the 12-char id suffix) to the entity
 # that owns the file. Order matters: longest prefix first to avoid greedy match.
 _UPLOAD_PREFIX_RULES: list[dict] = [
@@ -302,16 +296,6 @@ class FileService:
         saved_filename, url_path, verified_content_type = await save_upload(
             file, f"file_{tenant_id[:12]}"
         )
-        if (
-            attached_to_doctype == "Tenant"
-            and (attached_to_field or "").strip().lower() in _LOGO_FIELDS
-            and verified_content_type not in _LOGO_CONTENT_TYPES
-        ):
-            (UPLOADS_DIR / saved_filename).unlink(missing_ok=True)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invoice logo must be a PNG or JPEG image (GIF/WEBP display in the browser but cannot be printed on the invoice).",
-            )
         previous = FileDocumentRepository(self.session).find_attachment(
             tenant_id=tenant_id,
             file_url="",

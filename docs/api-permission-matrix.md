@@ -310,7 +310,6 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/from-pharmacy-issue` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
-| `GET` | `/api/v1/billing/invoices/{invoice_id}/receipt.pdf` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
@@ -415,7 +414,7 @@ Lab APIs enforce module entitlement and branch scope for catalog, packages, temp
 | `GET` | `/api/v1/physiotherapy/cases/{case_id}/invoice` | `billing.manage` |
 | `POST` | `/api/v1/physiotherapy/cases/{case_id}/invoice` | `billing.manage` |
 
-Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, multiple consent-file upload, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection and receipt PDFs use the shared billing endpoints.
+Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, multiple consent-file upload, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection uses the shared billing endpoints, while the frontend renders printable invoices from invoice detail data.
 
 ## Home Care
 

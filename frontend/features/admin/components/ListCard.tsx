@@ -1,4 +1,3 @@
-import { Empty } from "@/app/components/common/Empty";
 import { FilterSection } from "@/app/components/common/FilterSection";
 import { Pagination } from "@/app/components/common/Pagination";
 import { Card, RefreshButton } from "@/app/components/common/ui";
@@ -102,7 +101,16 @@ export function ListCard({
           {/* ROWS */}
           <tbody className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
-              <Empty text="No records match your search." />
+              <tr>
+                <td
+                  colSpan={columns.length}
+                  className="px-4 py-4 text-xs text-slate-500 lg:text-sm"
+                >
+                  <div className="rounded-lg bg-slate-50 p-4">
+                    No records match your search.
+                  </div>
+                </td>
+              </tr>
             )}
 
             {pageRows.map((row: any, index: number) => render(row, index))}

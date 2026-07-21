@@ -175,7 +175,17 @@ class RoleService:
             permissions.IDENTITY_USERS_EDIT,
         )
         roles = self.roles.list_for_tenant(tenant_id)
-        return [role_read(self.session, role) for role in roles]
+        canonical_by_name = {
+            role.name: role
+            for role in roles
+            if role.key == normalize_role_key(role.name)
+        }
+        visible_roles = [
+            role
+            for role in roles
+            if canonical_by_name.get(role.name, role).id == role.id
+        ]
+        return [role_read(self.session, role) for role in visible_roles]
 
     def update_role(
         self, *, tenant_id: str, role_id: str, payload: RoleUpdate, actor: User
@@ -217,7 +227,16 @@ class RoleService:
             assert_grantable_permission_keys(
                 self.session, actor, tenant_id, updates["permission_keys"]
             )
-            replace_role_permissions(self.session, role, updates["permission_keys"])
+            matching_roles = self.roles.list_by_name_for_tenant(tenant_id, role.name)
+            if not any(match.id == role.id for match in matching_roles):
+                matching_roles.append(role)
+            for matching_role in matching_roles:
+                replace_role_permissions(
+                    self.session, matching_role, updates["permission_keys"]
+                )
+                matching_role.updated_by_user_id = actor.id
+                matching_role.updated_at = now_utc()
+                self.roles.add(matching_role)
         role.updated_by_user_id = actor.id
         role.updated_at = now_utc()
         self.roles.add(role)

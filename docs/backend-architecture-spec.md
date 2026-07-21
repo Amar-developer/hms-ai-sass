@@ -320,7 +320,7 @@ Paid/Partially Paid -> Refunded
 
 Payment methods should support cash, credit card, debit card, UPI, GPay, Paytm, bank transfer, and mixed partial payments.
 
-Revenue-grade billing now includes tenant/branch tax rules, approved discount requests, receipt PDF generation, credit notes, refund audit events, due collection reporting, branch/doctor/department revenue reporting, and finalized doctor settlement records.
+Revenue-grade billing now includes tenant/branch tax rules, approved discount requests, frontend-rendered printable invoices, credit notes, refund audit events, due collection reporting, branch/doctor/department revenue reporting, and finalized doctor settlement records.
 
 ## Patient 360 Backend Model
 

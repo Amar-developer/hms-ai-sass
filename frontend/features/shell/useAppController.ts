@@ -322,7 +322,7 @@ export function useAppController() {
       apiFetchIfAllowed<any[]>(
         "/practitioners/schedules?is_active=true",
         session,
-        [...referenceReadPermissions, "practitioners.create"],
+        ["scheduling.manage", "scheduling.read", "practitioners.manage"],
         [],
       ),
       entitlementsPromise,

@@ -398,7 +398,7 @@ export function TenantBranchSettings({
               Accounts & Bank Details
             </h4>
             <p className="text-xs text-slate-500 lg:text-sm">
-              Tenant bank account details shown in invoice receipt PDFs.
+              Tenant bank account details shown on printable invoices.
             </p>
           </div>
           <Badge

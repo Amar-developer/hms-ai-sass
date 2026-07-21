@@ -666,8 +666,8 @@ export function useTenantAdminActions({
         apiFetch("/settings", apiSession, {
           method: "PUT",
           body: JSON.stringify({
-            // Tenant scoped so it stays in sync with the super admin screen and
-            // the receipt PDF, which read bank details at tenant scope.
+            // Tenant scoped so the admin screens and printable invoice use the
+            // same account details.
             scope: "tenant",
             module: "accounts",
             key: "accounts.bank_details",

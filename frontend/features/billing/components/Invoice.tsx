@@ -27,21 +27,23 @@ export default function Invoice({
   footerNote = "Thanks for your order! We look forward to working with you again soon.",
   currencySymbol = "₹",
   subTotal,
-  total
+  discountAmount = 0,
+  taxableAmount,
+  taxAmount = 0,
+  taxLabel = "Tax",
+  total,
 }: InvoiceProps) {
   const totals = items.reduce(
     (acc, item) => {
       acc.qty += toNumber(item.qty);
-      acc.mrp += toNumber(item.mrp);
+      acc.mrp += toNumber(item.mrp) * toNumber(item.qty);
       acc.rate += toNumber(item.rate);
       return acc;
     },
     { qty: 0, mrp: 0, rate: 0 },
   );
 
-  const grandTotal = hsnSummary?.length
-    ? hsnSummary.reduce((sum, row) => sum + toNumber(row.total), 0)
-    : totals.rate;
+  const grandTotal = toNumber(total);
 
   const grandTotalWords = `${currencySymbol === "₹" ? "Rupees " : ""}${numberToWordsIndian(
     Math.floor(grandTotal),
@@ -52,7 +54,6 @@ export default function Invoice({
     pages.push(items.slice(i, i + ROWS_PER_PAGE));
   }
   if (pages.length === 0) pages.push([]);
-  console.log(total,'total')
   return (
     <div className="mx-auto w-full max-w-[900px] bg-white text-slate-900 print:max-w-full">
       {pages.map((pageItems, pageIndex) => {
@@ -147,6 +148,26 @@ export default function Invoice({
                     <div className="col-span-7 p-2 text-right border-r border-emerald-400">Sub Total</div>
                     <div className="p-2 text-right">{formatMoney(subTotal, currencySymbol)}</div>
                   </div>
+
+                  {toNumber(discountAmount) > 0 && (
+                    <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-x-2 border-b-2 border-emerald-400 font-bold">
+                      <div className="col-span-7 p-2 text-right border-r border-emerald-400">Discount</div>
+                      <div className="p-2 text-right">-{formatMoney(discountAmount, currencySymbol)}</div>
+                    </div>
+                  )}
+
+                  {toNumber(taxAmount) > 0 && (
+                    <>
+                      <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-x-2 border-b-2 border-emerald-400 font-bold">
+                        <div className="col-span-7 p-2 text-right border-r border-emerald-400">Taxable Amount</div>
+                        <div className="p-2 text-right">{formatMoney(taxableAmount, currencySymbol)}</div>
+                      </div>
+                      <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-x-2 border-b-2 border-emerald-400 font-bold">
+                        <div className="col-span-7 p-2 text-right border-r border-emerald-400">{taxLabel}</div>
+                        <div className="p-2 text-right">{formatMoney(taxAmount, currencySymbol)}</div>
+                      </div>
+                    </>
+                  )}
 
                   <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-2 border-b border-emerald-400 font-bold">
                     <div className="col-span-4  w-full border-r border-emerald-400 p-2 text-center"><p className="w-full flex justify-between"><span>{invoiceDate}</span><span>Total</span></p></div>

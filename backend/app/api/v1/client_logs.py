@@ -144,7 +144,7 @@ def list_error_logs(
         level=level,
         source=source,
         category=category,
-        resolved=resolved,
+        resolved=False,
         status_code=status_code,
         query=q,
     )

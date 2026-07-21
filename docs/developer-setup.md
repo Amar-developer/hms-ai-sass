@@ -13,7 +13,7 @@ Install these tools first:
 
 | Tool | Recommended Version | Used For |
 | --- | --- | --- |
-| Node.js | 24 (see `.nvmrc`; 20+ supported) | Frontend |
+| Node.js | 24 (see `.nvmrc`; required) | Frontend |
 | npm | 10 or newer | Frontend dependencies |
 | Python | 3.10 or newer | Backend |
 | Git | Latest stable | Source control |

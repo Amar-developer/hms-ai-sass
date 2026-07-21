@@ -56,6 +56,10 @@ export interface InvoiceProps {
   signatoryLine?: string; // e.g. "For MedizinHub Healthcare Service Pvt.Ltd"
   footerNote?: string;
   currencySymbol?: string;
-  subTotal: number
-  total:number
+  subTotal: number;
+  discountAmount?: number;
+  taxableAmount?: number;
+  taxAmount?: number;
+  taxLabel?: string;
+  total: number;
 }

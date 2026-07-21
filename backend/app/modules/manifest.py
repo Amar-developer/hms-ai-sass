@@ -313,8 +313,11 @@ MODULES = [
         "is_core": False,
         "dependencies": ["billing_basic"],
         "permissions": [
+            "billing.discounts.request",
             "billing.discounts.approve",
+            "billing.refunds.request",
             "billing.refunds.manage",
+            "invoices.amend_request",
             "reports.revenue.read",
         ],
         "settings": ["gst_rules", "discount_approval", "refund_guardrails"],

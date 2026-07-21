@@ -12,7 +12,7 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { apiBlob, apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { paymentMethodOptions } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
@@ -515,83 +515,13 @@ export function Billing({
     }
   }
 
-  // async function openReceipt(invoice: any) {
-  //   if (!apiSession) return;
-  //   // Open synchronously, in the same tick as the click, then navigate it to
-  //   // the blob URL once the PDF is fetched — same-tick opening avoids popup
-  //   // blockers dropping a tab opened after an awaited fetch. Deliberately
-  //   // omit noopener/noreferrer here: per spec both force the new tab into a
-  //   // separate browsing-context group, and a blob: URL is only resolvable
-  //   // within the context group that created it — with either flag set, the
-  //   // tab loads with no opener and the blob URL is unreachable, showing a
-  //   // blank page. Safe without them since we only ever navigate this tab to
-  //   // a blob URL we created, never an external URL.
-  //   const win = window.open("", "_blank");
-  //   setBusy(invoice.id);
-  //   try {
-  //     const blob = await apiBlob(
-  //       `/billing/invoices/${invoice.id}/receipt.pdf`,
-  //       apiSession,
-  //     );
-  //     const url = URL.createObjectURL(blob);
-  //     if (win) {
-  //       win.location.href = url;
-  //     } else {
-  //       window.open(url, "_blank");
-  //     }
-  //     setTimeout(() => URL.revokeObjectURL(url), 30000);
-  //   } catch (err: any) {
-  //     win?.close();
-  //     setMessage(err.message || "Could not open receipt.");
-  //   } finally {
-  //     setBusy("");
-  //   }
-  // }
-
-
   function openReceipt(invoice: any) {
     if (!invoice?.id) return;
-    window.open(`/billing/invoices/receipt?id=${invoice.id}`, "_blank");
-  }
-
-  async function downloadReceipt(invoice: any) {
-    if (!apiSession) return;
-    setBusy(`download-${invoice.id}`);
-    try {
-      const blob = await apiBlob(
-        `/billing/invoices/${invoice.id}/receipt.pdf`,
-        apiSession,
-      );
-      const patient: any = patientMap.get(invoice.patient_id);
-      const patientName =
-        invoice.patient_name ||
-        patient?.full_name ||
-        patient?.name ||
-        "Patient";
-      // Build "<Patient Name>-<Invoice Number>.pdf". The download attribute
-      // controls the saved filename (a blob preview tab cannot).
-      const safe = (value: string) =>
-        String(value || "")
-          .trim()
-          .replace(/[^a-zA-Z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "");
-      const fileName =
-        [safe(patientName), safe(invoice.invoice_number)]
-          .filter(Boolean)
-          .join("-") || "receipt";
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${fileName}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (err: any) {
-      setMessage(err.message || "Could not download receipt.");
-    } finally {
-      setBusy("");
-    }
+    window.open(
+      `/billing/invoices/receipt?id=${encodeURIComponent(invoice.id)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
   }
 
   async function updateInvoiceItemSupplier(
@@ -986,7 +916,6 @@ export function Billing({
         }}
         applyMembershipBenefit={applyMembershipBenefit}
         openReceipt={openReceipt}
-        downloadReceipt={downloadReceipt}
         issueCreditNote={issueCreditNote}
         cancelInvoice={cancelInvoice}
         amendInvoice={amendInvoice}

@@ -2,12 +2,12 @@ ARG APP_VERSION=0.1.0
 ARG BUILD_COMMIT=unknown
 ARG BUILD_TIME
 
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 WORKDIR /app
 ARG NEXT_PUBLIC_MEDIZINHUB_API_URL=http://localhost:8080/api/v1
 ARG NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS=false
@@ -21,7 +21,7 @@ COPY . .
 # not required (or incorrectly resolved as /scripts inside the image).
 RUN NEXT_PRIVATE_BUILD_WORKER=0 ./node_modules/.bin/next build
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 ARG APP_VERSION
 ARG BUILD_COMMIT
 ARG BUILD_TIME

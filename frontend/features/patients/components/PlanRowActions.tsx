@@ -19,7 +19,6 @@ export function PlanRowActions({
     fn?.();
     setOpen(false);
   };
-  console.log(canDeletePlans,'canDeleteplans')
   return (
     <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
       {/* 3-dot button */}

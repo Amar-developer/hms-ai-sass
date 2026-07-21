@@ -5,7 +5,7 @@ import { CheckboxList } from "../components/CheckboxList";
 import { UserFormValues, userSchema } from "../settings.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo } from "react";
-import { filterRolesForBranch } from "../helpers";
+import { tenantRoleOptions } from "../helpers";
 import { canResetTenantUserPassword } from "../permissions";
 import { Card,Field,Input, SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
@@ -134,7 +134,7 @@ export function UserForm({
 
   const roleOptions = useMemo(
     () =>
-      filterRolesForBranch(roles, branches, selectedBranch, selectedRoleKeys),
+      tenantRoleOptions(roles, branches, selectedBranch, selectedRoleKeys),
     [roles, branches, selectedBranch, selectedRoleKeys],
   );
 

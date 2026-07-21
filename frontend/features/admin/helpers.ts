@@ -1,5 +1,5 @@
 import { serviceScopes } from "./constants";
-import { humanizeOptionLabel,normalizeOptionLabel } from "@/lib/options";
+import { humanizeOptionLabel, normalizeOptionLabel } from "@/lib/options";
 import { uploadAssetUrl } from "@/lib/api";
 import { displayDate } from "@/utils/helper";
 
@@ -148,58 +148,23 @@ export function groupDepartmentsByName(departments: any[], branches: any[]) {
   });
 }
 
-export function roleBranchToken(branch: any) {
-  const code = String(branch?.code || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  const name = String(branch?.name || "")
-    .toLowerCase()
-    .replace(/sunrise|centre|center|clinic|branch|wing/g, " ")
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-  return [code, name].filter(Boolean);
-}
-
-export function roleMatchesBranch(role: any, branch: any) {
-  if (!branch) return true;
-  const key = String(role.key || "").toLowerCase();
-  const tokens = roleBranchToken(branch);
-  if (tokens.length === 0) return true;
-  const hasBranchToken = tokens.some((token) => token && key.includes(token));
-  const isBranchSpecific =
-    /(_main_|_north_|_south_|_east_|_west_|main_|north_|south_|east_|west_)/.test(
-      `_${key}_`,
-    );
-  return hasBranchToken || !isBranchSpecific;
-}
-
-export function filterRolesForBranch(
+export function tenantRoleOptions(
   roles: any[],
-  branches: any[],
-  selectedBranchId: string,
+  _branches: any[],
+  _selectedBranchId: string,
   selectedKeys: string[],
 ) {
-  const branch = branches.find((row: any) => row.id === selectedBranchId);
   const selectedSet = new Set(selectedKeys || []);
   const byName = new Map<string, any>();
   for (const role of roles || []) {
-    if (!roleMatchesBranch(role, branch) && !selectedSet.has(role.key))
-      continue;
-    const key = normalizeOptionLabel(role.name || role.key);
-    const next = { ...role, branchLabel: selectedBranchId ? branch?.name : "" };
+    const roleKey = String(role?.key || "").trim();
+    if (!roleKey) continue;
+    const roleName = String(role.name || roleKeyLabel(roleKey)).trim();
+    const key = normalizeOptionLabel(roleName);
+    if (!key) continue;
+    const next = { ...role, name: roleName, branchLabel: "" };
     const existing = byName.get(key);
-    if (!existing) {
-      byName.set(key, next);
-      continue;
-    }
-    const existingSelected = selectedSet.has(existing.key);
-    const nextSelected = selectedSet.has(role.key);
-    if (existingSelected && !nextSelected) continue;
-    if (
-      nextSelected !== existingSelected ||
-      (!roleMatchesBranch(existing, branch) && roleMatchesBranch(role, branch))
-    ) {
+    if (!existing || selectedSet.has(roleKey)) {
       byName.set(key, next);
     }
   }
@@ -215,15 +180,29 @@ export function permissionModuleTitle(module: string) {
     "identity.roles": "Roles",
     "platform.tenants": "Tenant Management",
     "platform.subscriptions": "Subscription Management",
+    billing: "Billing",
+    "billing.discounts": "Billing Discounts",
+    "billing.refunds": "Billing Refunds",
+    invoices: "Invoices",
     patient_subscriptions: "Patient Membership",
     home_care: "Home Care",
     ip: "IP Admission",
   };
   if (labels[module]) return labels[module];
-  return title(module.replaceAll("_", " "));
+  return title(module.replaceAll("_", " ").replaceAll(".", " "));
 }
 
-export function userRoleLabels(user: any) {
+export function userRoleLabels(user: any, tenantRoles: any[] = []) {
+  const roleLabelByValue = new Map<string, string>();
+  for (const role of tenantRoles || []) {
+    const label = String(role?.name || roleKeyLabel(role?.key)).trim();
+    if (!label) continue;
+    [role?.key, role?.id, role?.name]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+      .forEach((value) => roleLabelByValue.set(value, label));
+  }
+
   const rawRoles = Array.isArray(user?.roles)
     ? user.roles
     : String(user?.roles || "").split(",");
@@ -232,7 +211,9 @@ export function userRoleLabels(user: any) {
     .filter(Boolean);
   const fallback = String(user?.user_type || "").trim();
   const unique = Array.from(
-    new Set(roles.length ? roles : fallback ? [fallback] : []),
+    new Set<string>(roles.length ? roles : fallback ? [fallback] : []),
   );
-  return unique.map((role) => humanizeOptionLabel(role, "Staff"));
+  return unique.map(
+    (role) => roleLabelByValue.get(role) || roleKeyLabel(role) || "Staff",
+  );
 }

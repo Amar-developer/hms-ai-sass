@@ -208,7 +208,7 @@ export function SettingsPanel(props: any) {
                         </button>
                       )}
                       <span className="text-[11px] text-slate-500">
-                        Shown on invoice print &amp; PDF.
+                        Shown on the printable invoice.
                       </span>
                     </>
                   )}
@@ -312,7 +312,7 @@ export function SettingsPanel(props: any) {
       <Card>
         <h3 className="card-title font-bold">Accounts & Bank Details</h3>
         <p className="card-desc text-slate-500">
-          Maintain tenant bank account details shown on invoice receipts.
+          Maintain tenant bank account details shown on printable invoices.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           <FormField label="Account Name">

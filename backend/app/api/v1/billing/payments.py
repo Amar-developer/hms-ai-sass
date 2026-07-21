@@ -1,7 +1,11 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
 
-from app.core.auth import require_any_permission, require_permission
+from app.core.auth import (
+    require_any_permission,
+    require_permission,
+    user_permission_keys,
+)
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import (
@@ -16,6 +20,7 @@ from app.modules.billing.schemas import (
     PaymentCreate,
     RefundRequest,
 )
+from app.modules.billing.models import BillingAdjustmentType
 from app.modules.billing.services.adjustment_requests import (
     amend_invoice,
     approve_billing_adjustment_request,
@@ -40,6 +45,25 @@ from app.modules.identity import permissions
 from app.modules.identity.models import User
 
 router = APIRouter(prefix="/billing")
+
+
+def _require_billing_adjustment_request_permission(
+    session: Session, current_user: User, request_type: BillingAdjustmentType
+) -> None:
+    if current_user.is_super_admin:
+        return
+    required_by_type = {
+        BillingAdjustmentType.DISCOUNT: permissions.BILLING_DISCOUNTS_REQUEST,
+        BillingAdjustmentType.FULL_REFUND: permissions.BILLING_REFUNDS_REQUEST,
+        BillingAdjustmentType.PARTIAL_REFUND: permissions.BILLING_REFUNDS_REQUEST,
+        BillingAdjustmentType.CANCEL: permissions.INVOICES_CANCEL_REQUEST,
+    }
+    allowed = {
+        permissions.BILLING_MANAGE,
+        required_by_type[request_type],
+    }
+    if not allowed.intersection(user_permission_keys(session, current_user)):
+        raise HTTPException(status_code=403, detail="Permission denied")
 
 
 @router.post(
@@ -105,12 +129,15 @@ def create_billing_adjustment_request_endpoint(
     current_user: User = Depends(
         require_any_permission(
             permissions.BILLING_MANAGE,
-            permissions.INVOICES_READ,
-            permissions.INVOICES_EDIT,
-            permissions.PAYMENTS_MANAGE,
+            permissions.BILLING_DISCOUNTS_REQUEST,
+            permissions.BILLING_REFUNDS_REQUEST,
+            permissions.INVOICES_CANCEL_REQUEST,
         )
     ),
 ) -> BillingAdjustmentRequestRead:
+    _require_billing_adjustment_request_permission(
+        session, current_user, payload.request_type
+    )
     return create_billing_adjustment_request(
         session,
         tenant_id=tenant_id,
@@ -129,7 +156,13 @@ def approve_billing_adjustment_request_endpoint(
     payload: BillingAdjustmentDecision,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_DISCOUNTS_APPROVE,
+            permissions.BILLING_REFUNDS_MANAGE,
+        )
+    ),
 ) -> BillingAdjustmentRequestRead:
     return approve_billing_adjustment_request(
         session,
@@ -149,7 +182,13 @@ def reject_billing_adjustment_request_endpoint(
     payload: BillingAdjustmentDecision,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_DISCOUNTS_APPROVE,
+            permissions.BILLING_REFUNDS_MANAGE,
+        )
+    ),
 ) -> BillingAdjustmentRequestRead:
     return reject_billing_adjustment_request(
         session,
@@ -169,7 +208,13 @@ def execute_billing_adjustment_request_endpoint(
     payload: BillingAdjustmentDecision,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_DISCOUNTS_APPROVE,
+            permissions.BILLING_REFUNDS_MANAGE,
+        )
+    ),
 ) -> InvoiceDetailRead:
     return execute_billing_adjustment_request(
         session,
@@ -203,7 +248,12 @@ def cancel_invoice_endpoint(
     payload: CancelInvoiceRequest,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.INVOICES_CANCEL_REQUEST,
+        )
+    ),
 ) -> InvoiceDetailRead:
     return cancel_invoice(
         session,
@@ -220,7 +270,12 @@ def amend_invoice_endpoint(
     payload: AmendInvoiceRequest,
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.INVOICES_AMEND_REQUEST,
+        )
+    ),
 ) -> InvoiceDetailRead:
     return amend_invoice(
         session,

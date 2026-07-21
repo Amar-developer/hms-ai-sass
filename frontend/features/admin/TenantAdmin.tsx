@@ -41,6 +41,16 @@ import { useTenantAdminActions } from "./api/useTenantAdminActions";
 import { Role } from "./types";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
+function uniqueRoleFilterOptions(roles: any[]) {
+  const byName = new Map<string, any>();
+  for (const role of roles || []) {
+    const name = String(role?.name || "").trim();
+    if (!name || byName.has(name)) continue;
+    byName.set(name, role);
+  }
+  return Array.from(byName.values());
+}
+
 export function TenantAdmin({
   apiSession,
   clinic,
@@ -173,7 +183,7 @@ export function TenantAdmin({
 
       // Role
       if (userFilters.role !== "all") {
-        const labels = userRoleLabels(user);
+        const labels = userRoleLabels(user, data.roles);
 
         if (!labels.includes(userFilters.role)) {
           return false;
@@ -182,7 +192,7 @@ export function TenantAdmin({
 
       return true;
     });
-  }, [data.users, userFilters]);
+  }, [data.users, data.roles, userFilters]);
 
   const filterdRoles = useMemo(() => {
     return data.roles.filter((role: any) => {
@@ -380,7 +390,7 @@ export function TenantAdmin({
               label: "Role",
               options: [
                 { value: "all", label: "All Roles" },
-                ...data.roles.map((role: any) => ({
+                ...uniqueRoleFilterOptions(data.roles).map((role: any) => ({
                   value: role.name,
                   label: role.name,
                 })),
@@ -409,6 +419,7 @@ export function TenantAdmin({
             <UserRow
               key={user.id}
               user={user}
+              roles={data.roles}
               branches={data.branches}
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("identity.users", "edit")}

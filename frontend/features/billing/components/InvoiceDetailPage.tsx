@@ -30,7 +30,6 @@ export function InvoiceDetailPage({
   refreshConsultationInvoice,
   applyMembershipBenefit,
   openReceipt,
-  downloadReceipt,
   issueCreditNote,
   cancelInvoice,
   amendInvoice,
@@ -63,6 +62,18 @@ export function InvoiceDetailPage({
     "invoices.create",
   );
   const canEditInvoices = hasPermission("billing.manage", "invoices.edit");
+  const canRequestDiscountPermission = hasPermission(
+    "billing.manage",
+    "billing.discounts.request",
+  );
+  const canRequestRefundPermission = hasPermission(
+    "billing.manage",
+    "billing.refunds.request",
+  );
+  const canRequestCancelPermission = hasPermission(
+    "billing.manage",
+    "invoices.cancel_request",
+  );
   const canRecordPayments = hasPermission(
     "payments.manage",
     "payments.create",
@@ -147,7 +158,6 @@ export function InvoiceDetailPage({
           }`
         : membershipBenefit?.reason || "No membership benefit applied";
   const taxableAmount = numberValue(invoice.taxable_amount);
-  console.log(invoice,'invoice')
   const taxAmount = numberValue(invoice.tax_amount);
   const canRefresh =
     canCreateInvoices &&
@@ -187,7 +197,7 @@ export function InvoiceDetailPage({
   // request until payment. Membership savings are exclusive so the patient
   // cannot receive a second request-based or promotional reduction.
   const canRequestDiscountBase = Boolean(
-    canEditInvoices &&
+    canRequestDiscountPermission &&
     numberValue(invoice.paid_amount) <= 0 &&
     !invoiceHasAppliedMembershipBenefit(invoice) &&
     !["cancelled", "refunded"].includes(String(invoice.status)),
@@ -269,9 +279,13 @@ export function InvoiceDetailPage({
   );
   const canRequestAdjustment = !hasOpenAdjustment && !adjustmentClosed;
   const canRequestCancel =
-    canRequestAdjustment && numberValue(invoice.paid_amount) <= 0;
+    canRequestAdjustment &&
+    canRequestCancelPermission &&
+    numberValue(invoice.paid_amount) <= 0;
   const canRequestRefund =
-    canRequestAdjustment && numberValue(invoice.paid_amount) > 0;
+    canRequestAdjustment &&
+    canRequestRefundPermission &&
+    numberValue(invoice.paid_amount) > 0;
   const canRequestDiscount = canRequestAdjustment && canRequestDiscountBase;
   const paymentClosedStatuses = ["cancelled", "refunded", "partially_refunded"];
   const isPaymentClosed = paymentClosedStatuses.includes(
@@ -917,18 +931,8 @@ export function InvoiceDetailPage({
                       </ActionButton>
                     )}
                     <ActionButton onClick={() => openReceipt(invoice)}>
-                      Receipt
+                      Print Invoice
                     </ActionButton>
-                    {downloadReceipt && (
-                      <ActionButton
-                        onClick={() => downloadReceipt(invoice)}
-                        disabled={busy === `download-${invoice.id}`}
-                      >
-                        {busy === `download-${invoice.id}`
-                          ? "Downloading..."
-                          : "Download"}
-                      </ActionButton>
-                    )}
                     {canApproveAdjustments && (
                       <ActionButton onClick={() => issueCreditNote(invoice)}>
                         Credit Note
@@ -1026,10 +1030,10 @@ export function InvoiceDetailPage({
             <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h4 className="card-title font-bold">
-                  Refund & Cancellation Requests
+                  Discount, Refund & Cancellation Requests
                 </h4>
                 <p className="table-data text-slate-500">
-                  Request, approve, and execute invoice reversals.
+                  Request, approve, and execute invoice adjustments.
                 </p>
               </div>
               <ActionGroup className="justify-start">
