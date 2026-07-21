@@ -286,7 +286,7 @@ function PrescriptionPage({
                 </p>
                 <p className="m-0 mt-[9px] flex flex-wrap items-center gap-[10px] text-[#00B36F] text-[12px] font-semibold font-['Poppins'] leading-none tracking-[0.8px]">
                   {doctor.registrationNumber && (
-                    <span>Reg.No: {doctor.registrationNumber} moses</span>
+                    <span>Reg.No: {doctor.registrationNumber}</span>
                   )}
                   {doctor.registrationNumber && doctor.specialty && (
                     <span className="inline-block h-[14px] w-0 border-l-[1px] border-[#0175A7]" />
