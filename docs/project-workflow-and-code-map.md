@@ -433,7 +433,7 @@ Backend:
 | --- | --- |
 | Login fails | `features/shell/useAppController.ts`, `backend/app/api/v1/identity.py`, `backend/app/modules/identity/security.py` |
 | API URL wrong | `lib/api.ts`, `.env`, `.env.example`, Docker compose env |
-| User cannot see module | `features/shell/useAppController.ts`, `lib/navigation.ts`, `lib/moduleAccess.ts`, `backend/app/modules/identity/permissions.py` |
+| User cannot see module | `lib/permissionNavigation.ts`, `features/shell/useAppController.ts`, `lib/moduleAccess.ts`, `backend/app/modules/identity/permissions.py` |
 | 403 Forbidden | Backend router permission dependency, user role permissions, tenant module entitlement |
 | Wrong tenant/branch data | `useAppController.loadLiveData()`, `X-Tenant-ID`, `require_tenant_id`, branch access helpers |
 | Doctor sees wrong department | Practitioner mapping in `practitioners/models.py`, `useAppController` doctor scope logic |
@@ -454,7 +454,7 @@ Backend:
 | Sidebar/global scroll wrong | `features/shell/AppShell.tsx`, `app/globals.css` layout and `.scrollbar-hidden` |
 | UI design/alignment messy | `features/shell/AppShell.tsx`, `components/common/ui.tsx`, active feature component CSS classes |
 | Permission works in UI but API returns 403 | Backend `require_permission`, seeded role permissions, API permission matrix |
-| API works but UI hides module | `lib/navigation.ts`, `useAppController.ts` permission-to-module mapping |
+| API works but UI hides module | `lib/permissionNavigation.ts`, `lib/moduleAccess.ts`, and the user's effective role permissions |
 
 ## 12. Adding A New Module
 
@@ -467,7 +467,7 @@ Backend:
 7. Add Alembic migration.
 8. Add frontend screen in `features/<module>/<Module>.tsx`.
 9. Add nav entry and role modules in `lib/navigation.ts`.
-10. Add module access mapping in `features/shell/useAppController.ts`.
+10. Add the permission-prefix-to-navigation mapping in `lib/permissionNavigation.ts`.
 11. Add tests in `backend/tests/` and/or `__tests__/`.
 12. Update docs.
 

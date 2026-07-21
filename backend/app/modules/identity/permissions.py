@@ -11,6 +11,8 @@ IDENTITY_ROLES_CREATE = "identity.roles.create"
 IDENTITY_ROLES_READ = "identity.roles.read"
 IDENTITY_ROLES_EDIT = "identity.roles.edit"
 IDENTITY_ROLES_DELETE = "identity.roles.delete"
+DASHBOARD_READ = "dashboard.read"
+DASHBOARD_ACCESS = "dashboard.access"
 SETTINGS_MANAGE = "settings.manage"
 SETTINGS_CREATE = "settings.create"
 SETTINGS_READ = "settings.read"
@@ -67,15 +69,24 @@ CONSULTATIONS_SIGN = "consultations.sign"
 BILLING_MANAGE = "billing.manage"
 BILLING_READ = "billing.read"
 BILLING_CREATE = "billing.create"
+BILLING_DISCOUNTS_REQUEST = "billing.discounts.request"
 BILLING_DISCOUNTS_APPROVE = "billing.discounts.approve"
 BILLING_REFUNDS_MANAGE = "billing.refunds.manage"
 INVOICES_CREATE = "invoices.create"
 INVOICES_READ = "invoices.read"
 INVOICES_EDIT = "invoices.edit"
 INVOICES_DELETE = "invoices.delete"
+INVOICES_CANCEL_REQUEST = "invoices.cancel_request"
+INVOICES_AMEND_REQUEST = "invoices.amend_request"
+BILLING_REFUNDS_REQUEST = "billing.refunds.request"
 PAYMENTS_MANAGE = "payments.manage"
 PAYMENTS_CREATE = "payments.create"
 SETTLEMENTS_READ = "settlements.read"
+SERVICE_ITEMS_MANAGE = "service_items.manage"
+SERVICE_ITEMS_CREATE = "service_items.create"
+SERVICE_ITEMS_READ = "service_items.read"
+SERVICE_ITEMS_EDIT = "service_items.edit"
+SERVICE_ITEMS_DELETE = "service_items.delete"
 LAB_MANAGE = "lab.manage"
 LAB_CREATE = "lab.create"
 LAB_READ = "lab.read"
@@ -122,6 +133,8 @@ AI_ASSIST_MANAGE = "ai.assist.manage"
 AI_ASSIST_USE = "ai.assist.use"
 AUDIT_READ = "audit.read"
 AUDIT_EXPORT = "audit.export"
+ERROR_LOGS_READ = "error_logs.read"
+ERROR_LOGS_MANAGE = "error_logs.manage"
 REPORTS_READ = "reports.read"
 REPORTS_MANAGE = "reports.manage"
 REPORTS_CREATE = "reports.create"
@@ -154,6 +167,8 @@ PERMISSION_CATALOG = [
     IDENTITY_ROLES_READ,
     IDENTITY_ROLES_EDIT,
     IDENTITY_ROLES_DELETE,
+    DASHBOARD_READ,
+    DASHBOARD_ACCESS,
     SETTINGS_MANAGE,
     SETTINGS_CREATE,
     SETTINGS_READ,
@@ -210,15 +225,24 @@ PERMISSION_CATALOG = [
     BILLING_MANAGE,
     BILLING_READ,
     BILLING_CREATE,
+    BILLING_DISCOUNTS_REQUEST,
     BILLING_DISCOUNTS_APPROVE,
     BILLING_REFUNDS_MANAGE,
     INVOICES_CREATE,
     INVOICES_READ,
     INVOICES_EDIT,
     INVOICES_DELETE,
+    INVOICES_CANCEL_REQUEST,
+    INVOICES_AMEND_REQUEST,
+    BILLING_REFUNDS_REQUEST,
     PAYMENTS_MANAGE,
     PAYMENTS_CREATE,
     SETTLEMENTS_READ,
+    SERVICE_ITEMS_MANAGE,
+    SERVICE_ITEMS_CREATE,
+    SERVICE_ITEMS_READ,
+    SERVICE_ITEMS_EDIT,
+    SERVICE_ITEMS_DELETE,
     LAB_MANAGE,
     LAB_CREATE,
     LAB_READ,
@@ -265,6 +289,8 @@ PERMISSION_CATALOG = [
     AI_ASSIST_USE,
     AUDIT_READ,
     AUDIT_EXPORT,
+    ERROR_LOGS_READ,
+    ERROR_LOGS_MANAGE,
     REPORTS_READ,
     REPORTS_MANAGE,
     REPORTS_CREATE,
@@ -283,3 +309,52 @@ PERMISSION_CATALOG = [
     DISCOUNTS_EDIT,
     DISCOUNTS_DELETE,
 ]
+
+
+# Product-facing names for every permission family. The completeness test keeps
+# backend key names from silently becoming undiscoverable role modules.
+PERMISSION_MODULE_LABELS = {
+    "platform.tenants": "Tenant Management",
+    "platform.subscriptions": "Subscription Management",
+    "subscriptions.reports": "Subscription Reports",
+    "identity.users": "Users",
+    "identity.roles": "Roles",
+    "dashboard": "Dashboard / Overview",
+    "settings": "Tenant & Branch Settings",
+    "files": "Files",
+    "departments": "Medical Departments",
+    "branches": "Branches",
+    "practitioners": "Doctors & Practitioners",
+    "scheduling": "Doctor Scheduling",
+    "patients": "EMR / Patient Management",
+    "patient_subscriptions": "Patient Membership",
+    "appointments": "Appointments",
+    "queue": "Token Queue",
+    "consultations": "Doctor Workspace & Consultations",
+    "billing": "Billing",
+    "billing.discounts": "Billing Discounts",
+    "billing.refunds": "Billing Refunds",
+    "invoices": "Invoices & Receipts",
+    "payments": "Payments",
+    "settlements": "Doctor Settlements",
+    "service_items": "Items / Service Catalog",
+    "lab": "Lab & Services",
+    "lab.results": "Lab Results",
+    "pharmacy": "Pharmacy / Prescriptions",
+    "suppliers": "Suppliers",
+    "ip": "IP Admission",
+    "physiotherapy": "Physiotherapy",
+    "home_care": "Home Care Visit Booking",
+    "notifications": "Notifications",
+    "communications": "Communications",
+    "communications.whatsapp": "WhatsApp Communications",
+    "communications.sms": "SMS Communications",
+    "communications.voice": "Voice Communications",
+    "ai.assist": "AI Assist",
+    "audit": "Audit & Compliance",
+    "error_logs": "Error Logs",
+    "reports": "Reports",
+    "reports.revenue": "Revenue Reports",
+    "tax": "Tax",
+    "discounts": "Discounts & Offers",
+}

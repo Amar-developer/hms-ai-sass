@@ -2,15 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
-import { Card } from "@/app/components/common/ui";
+import { Card, SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
 import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
 import { TenantAdmin } from "@/features/admin/TenantAdmin";
-import { canUseTenantAdminSection } from "@/utils/tenantAdmin/permissions";
-import { tenantAdminSections } from "@/utils/tenantAdmin/constants";
+import { canUseTenantAdminSection } from "../admin/permissions";
+import { tenantAdminSections } from "../admin/constants";
 import { Billing } from "@/features/billing/Billing";
 import { Dashboard } from "@/features/dashboard/Dashboard";
-import { DoctorConsultation } from "@/features/doctor/DoctorConsultation";
+import { DoctorConsultation } from "@/features/consulation/DoctorConsultation";
 import { IPAdmission } from "@/features/ip/IPAdmission";
 import { HomeCare } from "@/features/home-care/HomeCare";
 import { Items } from "@/features/items/Items";
@@ -21,15 +21,18 @@ import { Physiotherapy } from "@/features/physiotherapy/Physiotherapy";
 import {
   SuperAdminDashboard,
   superAdminSections,
-} from "@/features/platform/SuperAdminDashboard";
+} from "@/features/superAdmin/SuperAdminDashboard";
 import { Doctors } from "@/features/doctors/Doctors";
 import { TokenQueue } from "@/features/queue/TokenQueue";
-import { Reports, reportSections } from "@/features/reports/Reports";
+import { Reports } from "@/features/reports/Reports";
+import { reportSections } from "@/features/reports/constants";
 import { Scheduling } from "@/features/scheduling/Scheduling";
 import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
+import { activeTenantOptions } from "@/utils/helper";
+import { ErrorLogs } from "@/features/error-logs/ErrorLogs";
 
 export function AppShell(props: any) {
   const {
@@ -65,11 +68,15 @@ export function AppShell(props: any) {
   const visibleNav = nav.filter(
     ([id]: any) => enabled(id) && !(isSuperAdmin && id === "admin"),
   );
-  const activePage = visibleNav.some(([id]: any) => id === active)
-    ? active
-    : isSuperAdmin
-      ? "superadmin"
-      : visibleNav[0]?.[0] || "dashboard";
+  const canAccessErrorLogs = enabled("error_logs");
+  const activePage =
+    active === "error_logs" && canAccessErrorLogs
+      ? active
+      : visibleNav.some(([id]: any) => id === active)
+        ? active
+        : isSuperAdmin
+          ? "superadmin"
+          : visibleNav[0]?.[0] || "dashboard";
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
     demoUsers.find((u: any) => u[0] === primaryRole)?.[1] ||
@@ -102,16 +109,23 @@ export function AppShell(props: any) {
     allowedDepartments || [],
     departmentId,
   );
-  const departmentName =
-    departmentOptions.find((d: any) => d.id === departmentId)?.name ||
-    departmentOptions[0]?.name ||
-    "Assigned medical department";
+  const departmentNames = departmentOptions
+    .map((department: any) => department.name)
+    .filter(Boolean);
   const displayClinicName = clinic.name || "Hospital / Clinic";
   const visibleTenantOptions = activeTenantOptions(tenants);
   const tenantOptions = isSuperAdmin
     ? visibleTenantOptions.length
-      ? visibleTenantOptions
-      : [{ id: apiSession?.tenantId || clinic.id, name: displayClinicName }]
+      ? visibleTenantOptions.map((tenant: any) => ({
+          value: tenant.id,
+          label: tenant.name || tenant.id,
+        }))
+      : [
+          {
+            value: apiSession?.tenantId || clinic.id,
+            label: displayClinicName,
+          },
+        ]
     : clinics;
   const [superAdminSection, setSuperAdminSection] = useState("overview");
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
@@ -120,6 +134,11 @@ export function AppShell(props: any) {
   const visibleTenantAdminSections = tenantAdminSections.filter(
     ([sectionId]: any) => canUseTenantAdminSection(sectionId, apiSession?.user),
   );
+  const activeTenantAdminSection = visibleTenantAdminSections.some(
+    ([sectionId]: any) => sectionId === tenantAdminSection,
+  )
+    ? tenantAdminSection
+    : visibleTenantAdminSections[0]?.[0] || tenantAdminSection;
   const [pageHistory, setPageHistory] = useState<string[]>([activePage]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -127,10 +146,13 @@ export function AppShell(props: any) {
   const [reportsSection, setReportsSection] = useState("metrix");
   const [sideBarOpen, setSidebarOpen] = useState(true);
   const [tabletCollapsed, setTabletCollapsed] = useState(true);
+  const [isDesktop, setIsDesktop] = useState(false);
   const profileOpenRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeNavLabel =
-    visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
+    activePage === "error_logs"
+      ? "Error Logs"
+      : visibleNav.find(([id]: any) => id === activePage)?.[1] || "Dashboard";
 
   const activeSectionLabel =
     activePage === "superadmin"
@@ -142,7 +164,7 @@ export function AppShell(props: any) {
       : activePage === "admin"
         ? String(
             tenantAdminSections.find(
-              ([id]: any) => id === tenantAdminSection,
+              ([id]: any) => id === activeTenantAdminSection,
             )?.[1] ?? "",
           )
         : activePage === "reports"
@@ -162,6 +184,18 @@ export function AppShell(props: any) {
       keywords: `${label} page form list`,
       action: () => navigatePage(id),
     })),
+    ...(canAccessErrorLogs
+      ? [
+          {
+            id: "module-error_logs",
+            label: "Error Logs",
+            description: "Module",
+            keywords:
+              "errors warnings api permission denied frontend backend logs",
+            action: () => navigatePage("error_logs"),
+          },
+        ]
+      : []),
     ...tenantAdminSections
       .filter(([sectionId]: any) =>
         visibleTenantAdminSections.some(([id]: any) => id === sectionId),
@@ -238,8 +272,10 @@ export function AppShell(props: any) {
       if (window.innerWidth >= 1024) {
         setSidebarOpen(true);
         setTabletCollapsed(false);
+        setIsDesktop(true);
       } else {
         setTabletCollapsed(true);
+        setIsDesktop(false);
       }
     };
 
@@ -252,21 +288,21 @@ export function AppShell(props: any) {
     };
   }, []);
 
-  useEffect(()=>{
-    function handleClickOutside(event: MouseEvent){
-      if(
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
         profileOpen &&
         profileOpenRef.current &&
         !profileOpenRef.current.contains(event.target as Node)
-      ){
-        setProfileOpen(false)
+      ) {
+        setProfileOpen(false);
       }
     }
-    document.addEventListener('mousedown',handleClickOutside)
-    return ()=>{
-      document.addEventListener('mousedown',handleClickOutside )
-    }
-  },[profileOpen])
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.addEventListener("mousedown", handleClickOutside);
+    };
+  }, [profileOpen]);
 
   function renderPage() {
     switch (activePage) {
@@ -333,14 +369,22 @@ export function AppShell(props: any) {
         return (
           <TenantAdmin
             {...ctx}
-            section={tenantAdminSection}
+            section={activeTenantAdminSection}
             setSection={setTenantAdminSection}
           />
         );
       case "subscriptions":
         return <PatientSubscriptions {...ctx} />;
       case "reports":
-        return <Reports {...ctx} section={reportsSection} />;
+        return (
+          <Reports
+            {...ctx}
+            section={reportsSection}
+            setActive={navigatePage}
+          />
+        );
+      case "error_logs":
+        return <ErrorLogs apiSession={apiSession} />;
       default:
         return (
           <Card>
@@ -356,59 +400,20 @@ export function AppShell(props: any) {
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
       {/* Sidebar */}
-      <div
-        className={`
+      {!isDesktop && (
+        <div
+          className={`
     fixed left-0 top-0 z-40 h-screen bg-white border-r border-slate-200
     transition-all duration-300
 
     md:w-14
     ${!tabletCollapsed ? "md:w-64" : ""}
 
-    lg:w-50
+    lg:hidden lg:w-50
   `}
-      >
-        {/* Tablet view Sidebar */}
-        <div className="w-fit scrollbar-hidden h-full overflow-y-auto  ">
-          <Sidebar
-            visibleNav={visibleNav}
-            activePage={activePage}
-            navigatePage={navigatePage}
-            isSuperAdmin={isSuperAdmin}
-            reportsOpen={reportsOpen}
-            setReportsOpen={setReportsOpen}
-            reportsSection={reportsSection}
-            setReportsSection={setReportsSection}
-            tenantAdminSettingsOpen={tenantAdminSettingsOpen}
-            setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
-            tenantAdminSection={tenantAdminSection}
-            setTenantAdminSection={setTenantAdminSection}
-            superAdminSettingsOpen={superAdminSettingsOpen}
-            setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
-            superAdminSection={superAdminSection}
-            setSuperAdminSection={setSuperAdminSection}
-            visibleTenantAdminSections={visibleTenantAdminSections}
-            enabled={enabled}
-            clinic={clinic}
-            setSidebarOpen={setSidebarOpen}
-            sideBarOpen={sideBarOpen}
-            reportSections={reportSections}
-            reportSection={reportsSection}
-            superAdminSections={superAdminSections}
-            tabletCollapsed={tabletCollapsed}
-            setTabletCollapsed={setTabletCollapsed}
-          />
-        </div>
-      </div>
-      <div className="h-full lg:flex">
-        <aside
-          className={`scrollbar-hidden hidden h-screen w-64 lg:w-50  shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block`}
         >
-          {/* Desktop view */}
-          <div
-            className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-50 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
-              sideBarOpen ? "translate-x-0" : "-translate-x-full"
-            }`}
-          >
+          {/* Tablet view Sidebar */}
+          <div className="w-fit scrollbar-hidden h-full overflow-y-auto  ">
             <Sidebar
               visibleNav={visibleNav}
               activePage={activePage}
@@ -420,7 +425,7 @@ export function AppShell(props: any) {
               setReportsSection={setReportsSection}
               tenantAdminSettingsOpen={tenantAdminSettingsOpen}
               setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
-              tenantAdminSection={tenantAdminSection}
+              tenantAdminSection={activeTenantAdminSection}
               setTenantAdminSection={setTenantAdminSection}
               superAdminSettingsOpen={superAdminSettingsOpen}
               setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
@@ -438,6 +443,49 @@ export function AppShell(props: any) {
               setTabletCollapsed={setTabletCollapsed}
             />
           </div>
+        </div>
+      )}
+      <div className="h-full lg:flex">
+        <aside
+          className={`scrollbar-hidden hidden h-screen w-64 lg:w-50  shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4 lg:block`}
+        >
+          {/* Desktop view */}
+          {isDesktop && (
+            <div
+              className={`fixed left-0 top-0 z-40 h-screen w-64 lg:w-50 transform bg-white transition-transform duration-300 lg:static lg:translate-x-0 ${
+                sideBarOpen ? "translate-x-0" : "-translate-x-full"
+              }`}
+            >
+              <Sidebar
+                visibleNav={visibleNav}
+                activePage={activePage}
+                navigatePage={navigatePage}
+                isSuperAdmin={isSuperAdmin}
+                reportsOpen={reportsOpen}
+                setReportsOpen={setReportsOpen}
+                reportsSection={reportsSection}
+                setReportsSection={setReportsSection}
+                tenantAdminSettingsOpen={tenantAdminSettingsOpen}
+                setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
+                tenantAdminSection={activeTenantAdminSection}
+                setTenantAdminSection={setTenantAdminSection}
+                superAdminSettingsOpen={superAdminSettingsOpen}
+                setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
+                superAdminSection={superAdminSection}
+                setSuperAdminSection={setSuperAdminSection}
+                visibleTenantAdminSections={visibleTenantAdminSections}
+                enabled={enabled}
+                clinic={clinic}
+                setSidebarOpen={setSidebarOpen}
+                sideBarOpen={sideBarOpen}
+                reportSections={reportSections}
+                reportSection={reportsSection}
+                superAdminSections={superAdminSections}
+                tabletCollapsed={tabletCollapsed}
+                setTabletCollapsed={setTabletCollapsed}
+              />
+            </div>
+          )}
           <div className="mt-8 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
               {isSuperAdmin ? "Primary Tenant" : clinic.type}
@@ -469,8 +517,9 @@ export function AppShell(props: any) {
             setBranchId={setBranchId}
             clinic={clinic}
             canChangeBranch={canChangeBranch}
+            isDoctorUser={isDoctorUser}
             branchName={branchName}
-            departmentName={departmentName}
+            departmentNames={departmentNames}
             displayClinicName={displayClinicName}
             searchItems={searchItems}
             profileOpen={profileOpen}
@@ -480,6 +529,7 @@ export function AppShell(props: any) {
             handleLogout={handleLogout}
             setShowPassword={setShowPassword}
             setReportsOpen={setReportsOpen}
+            navigatePage={navigatePage}
             // setTabletCollapsed={setTabletCollapsed}
           />
 
@@ -499,7 +549,7 @@ export function AppShell(props: any) {
                     type="button"
                     onClick={() => goHistory(-1)}
                     disabled={!canGoBack}
-                    title="Back"
+                    title="Previous page"
                     className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
                   >
                     <ArrowLeft size={14} />
@@ -557,20 +607,21 @@ export function AppShell(props: any) {
                     <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
                       Tenant Admin
                     </span>
-                    <select
-                      value={tenantAdminSection}
-                      onChange={(event) => {
+                    <SearchableSelect
+                      value={activeTenantAdminSection}
+                      onChange={(value: string) => {
                         setTenantAdminSettingsOpen(true);
-                        setTenantAdminSection(event.target.value);
+                        setTenantAdminSection(value);
                       }}
-                      className="h-9 min-w-[190px] rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition  bg-white"
-                    >
-                      {visibleTenantAdminSections.map(([id, label]: any) => (
-                        <option key={id} value={id}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
+                      options={visibleTenantAdminSections.map(
+                        ([id, label]: any) => ({
+                          label,
+                          value: id,
+                        }),
+                      )}
+                      searchable={false}
+                      className="min-w-[200px] scrollbar-thin"
+                    />
                   </div>
                 )}
 
@@ -579,18 +630,18 @@ export function AppShell(props: any) {
                   <span className="hidden text-[11px] font-bold uppercase tracking-wide text-slate-400 md:inline">
                     Department
                   </span>
-                  <select
+                  <SearchableSelect
                     value={departmentId}
-                    onChange={(event) => setDepartmentId(event.target.value)}
+                    onChange={(value) => setDepartmentId(value)}
+                    options={departmentOptions.map((department: any) => ({
+                      value: department.id,
+                      label: department.name,
+                    }))}
                     disabled={!canChangeDepartment}
-                    className="h-9 min-w-[190px] rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
-                  >
-                    {departmentOptions.map((department: any) => (
-                      <option key={department.id} value={department.id}>
-                        {department.name}
-                      </option>
-                    ))}
-                  </select>
+                    // className="h-9 min-w-[190px] rounded-lg  border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                    placeholder="Select department"
+                    searchable={false}
+                  />
                 </div>
               )}
             </div>
@@ -629,17 +680,4 @@ export function BrandBlock({
       </div>
     </div>
   );
-}
-
-function activeTenantOptions(tenants: any[]) {
-  const seen = new Set<string>();
-  return (tenants || []).filter((tenant: any) => {
-    if (tenant.status === "suspended") return false;
-    const key = String(tenant.name || tenant.id || "")
-      .trim()
-      .toLowerCase();
-    if (key && seen.has(key)) return false;
-    if (key) seen.add(key);
-    return true;
-  });
 }

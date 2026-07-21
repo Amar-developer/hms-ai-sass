@@ -1,15 +1,168 @@
 import logging
 import re
 import time
+import traceback
+from contextlib import contextmanager
+from http.cookies import SimpleCookie
+from types import GeneratorType
 from typing import Callable
 from uuid import uuid4
 
+from sqlmodel import Session, select
+
 from app.core.config import get_settings
+from app.core.database import engine, get_session
 from app.core.logging import request_id_context, tenant_id_context
+from app.modules.error_logs.service import record_error_log
+from app.modules.identity.models import AuthSession, User
+from app.modules.identity.security import hash_token
+from app.modules.tenants.models import Branch, Tenant
 
 
 request_logger = logging.getLogger("medizinhub.request")
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
+
+
+@contextmanager
+def _request_session(scope: dict):
+    app = scope.get("app")
+    override = getattr(app, "dependency_overrides", {}).get(get_session)
+    if override:
+        resource = override()
+        if isinstance(resource, GeneratorType):
+            try:
+                yield next(resource)
+            finally:
+                resource.close()
+            return
+        with resource as session:
+            yield session
+        return
+    with Session(engine) as session:
+        yield session
+
+
+def _header_token(headers: dict[bytes, bytes]) -> str | None:
+    authorization = headers.get(b"authorization", b"").decode(errors="ignore")
+    if authorization.lower().startswith("bearer "):
+        return authorization.split(" ", 1)[1].strip()
+    cookie_header = headers.get(b"cookie", b"").decode(errors="ignore")
+    if not cookie_header:
+        return None
+    cookie = SimpleCookie()
+    try:
+        cookie.load(cookie_header)
+    except Exception:
+        return None
+    return cookie.get("access_token").value if cookie.get("access_token") else None
+
+
+def _request_identity(
+    session: Session,
+    headers: dict[bytes, bytes],
+    tenant_id: str | None,
+    branch_id: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    valid_tenant_id = (
+        tenant_id if tenant_id and session.get(Tenant, tenant_id) else None
+    )
+    branch = session.get(Branch, branch_id) if branch_id else None
+    valid_branch_id = (
+        branch_id if branch and branch.tenant_id == valid_tenant_id else None
+    )
+    token = _header_token(headers)
+    if not token:
+        return valid_tenant_id, valid_branch_id, None
+    auth_session = session.exec(
+        select(AuthSession).where(
+            AuthSession.token_hash == hash_token(token),
+            AuthSession.revoked_at.is_(None),
+        )
+    ).first()
+    user = session.get(User, auth_session.user_id) if auth_session else None
+    return valid_tenant_id, valid_branch_id, user.id if user else None
+
+
+def _request_category(status_code: int | None, *, slow: bool = False) -> str:
+    if slow:
+        return "performance"
+    if status_code in (401, 403):
+        return "permission"
+    if status_code == 404:
+        return "not_found"
+    if status_code == 409:
+        return "conflict"
+    if status_code == 422:
+        return "validation"
+    if status_code and status_code >= 500:
+        return "api"
+    return "request"
+
+
+def _persist_request_issue(
+    scope: dict,
+    *,
+    headers: dict[bytes, bytes],
+    tenant_id: str | None,
+    branch_id: str | None,
+    request_id: str,
+    method: str,
+    path: str,
+    status_code: int | None,
+    duration_ms: float,
+    stack_trace: str | None = None,
+    slow: bool = False,
+) -> None:
+    try:
+        with _request_session(scope) as session:
+            valid_tenant_id, valid_branch_id, user_id = _request_identity(
+                session, headers, tenant_id, branch_id
+            )
+            level = (
+                "error"
+                if stack_trace or (status_code is not None and status_code >= 500)
+                else "warning"
+            )
+            event = (
+                "request.unhandled_error"
+                if stack_trace
+                else "request.slow"
+                if slow
+                else "request.failed"
+            )
+            status_text = f" returned HTTP {status_code}" if status_code else " failed"
+            message = (
+                f"{method} {path}{status_text}"
+                if not slow
+                else f"{method} {path} completed slowly in {duration_ms:.2f} ms"
+            )
+            record_error_log(
+                session,
+                tenant_id=valid_tenant_id,
+                branch_id=valid_branch_id,
+                user_id=user_id,
+                source="backend_api",
+                level=level,
+                category=_request_category(status_code, slow=slow),
+                event=event,
+                message=message,
+                module=(
+                    path.removeprefix("/api/v1/").split("/", 1)[0]
+                    if path.startswith("/api/v1/")
+                    else "api"
+                ),
+                route=path,
+                method=method,
+                status_code=status_code,
+                request_id=request_id,
+                stack_trace=stack_trace,
+                metadata_json={"duration_ms": duration_ms},
+            )
+    except Exception:
+        request_logger.exception(
+            "error_log.persistence_failed",
+            extra={"request_id": request_id, "path": path},
+        )
 
 
 class ObservabilityMiddleware:
@@ -32,6 +185,7 @@ class ObservabilityMiddleware:
             else str(uuid4())
         )
         tenant_id = headers.get(b"x-tenant-id", b"").decode(errors="ignore")
+        branch_id = headers.get(b"x-branch-id", b"").decode(errors="ignore")
         method = str(scope.get("method") or "")
         path = str(scope.get("path") or "")
         started = time.perf_counter()
@@ -56,6 +210,7 @@ class ObservabilityMiddleware:
             await self.app(scope, receive, send_with_request_id)
         except Exception:
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
+            stack_trace = traceback.format_exc()
             request_logger.exception(
                 "request.unhandled_error",
                 extra={
@@ -65,6 +220,18 @@ class ObservabilityMiddleware:
                     "tenant_id": tenant_id or None,
                     "duration_ms": duration_ms,
                 },
+            )
+            _persist_request_issue(
+                scope,
+                headers=headers,
+                tenant_id=tenant_id or None,
+                branch_id=branch_id or None,
+                request_id=request_id,
+                method=method,
+                path=path,
+                status_code=500,
+                duration_ms=duration_ms,
+                stack_trace=stack_trace,
             )
             request_id_context.reset(request_context_token)
             tenant_id_context.reset(tenant_context_token)
@@ -92,6 +259,19 @@ class ObservabilityMiddleware:
                 "duration_ms": duration_ms,
             },
         )
+        if response_status >= 400 or duration_ms >= self.slow_request_ms:
+            _persist_request_issue(
+                scope,
+                headers=headers,
+                tenant_id=tenant_id or None,
+                branch_id=branch_id or None,
+                request_id=request_id,
+                method=method,
+                path=path,
+                status_code=response_status,
+                duration_ms=duration_ms,
+                slow=duration_ms >= self.slow_request_ms and response_status < 400,
+            )
         request_id_context.reset(request_context_token)
         tenant_id_context.reset(tenant_context_token)
 

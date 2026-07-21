@@ -1,18 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  Activity,
-  FileText,
-  Receipt,
-  Users,
-  FlaskConical,
-  Home,
-} from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import {
-  money,
   numberValue,
   dateKey,
   normalized,
@@ -32,126 +23,33 @@ import {
   titledHtmlTable,
   parseEmailList,
   isEmail,
-} from "./utils";
-import Header from "@/app/components/reports/Header";
-import InvoiceReport from "@/app/components/reports/InvoiceReport";
-import MetricsReport from "./MetricsReport";
-import PharmacyReports from "./PharmacyReports";
-import AppointmentReports from "./AppointmentReports";
-import LabReports from "./LabReports";
-import HomeCareReports from "./HomeCareReports";
-
-export const reportSections = [
-  ["metrix", "Metrics Report", Activity],
-  ["invoice", "Invoice Report", Receipt],
-  ["lab", "Lab Report", FlaskConical],
-  ["appointments", "Appointments Report", FileText],
-  ["pharmacy", "Pharmacy Report", Users],
-  ["home_care", "Home Care / Visit Report", Home],
-];
-
-const defaultEmailReportSections = [
-  "overall",
-  "consultation",
-  "lab",
-  "service",
-  "home_visit",
-  "home_care",
-  "pharmacy",
-  "ip",
-  "physiotherapy",
-];
-
-function aggregateInvoiceMetrics(
-  list: any[],
-  homeVisitBookingIds: Set<string> = new Set(),
-  homeVisitInvoiceIds: Set<string> = new Set(),
-) {
-  return list.reduce(
-    (acc: any, invoice: any) => {
-      const total = numberValue(invoice.total_amount);
-      const paid = numberValue(invoice.paid_amount);
-      const balance = numberValue(invoice.balance_amount);
-      const doctorShare = numberValue(invoice.doctor_share_amount);
-      const settlement = settlementPaidBasis(invoice);
-      acc.invoices += 1;
-      acc.grossRevenue += total;
-      acc.paidRevenue += paid;
-      acc.balance += balance;
-      acc.doctorFee += doctorShare;
-      acc.settlement += settlement;
-      acc.clinicFee +=
-        numberValue(invoice.clinic_share_amount) ||
-        Math.max(total - doctorShare, 0);
-      acc.tax += numberValue(invoice.tax_amount);
-      acc.membershipDiscount += numberValue(invoice.membership_discount_amount);
-      if (
-        invoice.patient_subscription_enrollment_id ||
-        invoice.patient_subscription_plan_id
-      )
-        acc.membershipPurchases += 1;
-      const isPlanPurchase = Boolean(
-        (invoice.patient_subscription_enrollment_id ||
-          invoice.patient_subscription_plan_id) &&
-          !invoice.lab_order_id &&
-          !invoice.pharmacy_issue_id &&
-          !invoice.consultation_id &&
-          !invoice.ip_admission_id &&
-          !invoice.physiotherapy_case_id &&
-          !invoice.home_care_booking_id,
-      );
-      if (isPlanPurchase) {
-        acc.membershipEnrollCount += 1;
-        acc.membershipEnrollAmount += paid;
-      }
-      const type = invoiceType(invoice);
-      if (type === "lab") acc.labRevenue += paid;
-      if (type === "pharmacy") acc.pharmacyRevenue += paid;
-      if (type === "consultation") acc.consultationRevenue += paid;
-      if (type === "home_care") {
-        if (
-          homeVisitInvoiceIds.has(invoice.id) ||
-          homeVisitBookingIds.has(invoice.home_care_booking_id)
-        )
-          acc.homeVisitRevenue += paid;
-        else acc.homeCareRevenue += paid;
-      }
-      const membershipClaim = numberValue(invoice.membership_discount_amount);
-      if (membershipClaim > 0) {
-        const claimRow = acc.membershipClaims[type] || {
-          type,
-          label: invoiceTypeLabel(type),
-          invoices: 0,
-          claimedAmount: 0,
-        };
-        claimRow.invoices += 1;
-        claimRow.claimedAmount += membershipClaim;
-        acc.membershipClaims[type] = claimRow;
-      }
-      return acc;
-    },
-    {
-      invoices: 0,
-      grossRevenue: 0,
-      paidRevenue: 0,
-      balance: 0,
-      doctorFee: 0,
-      settlement: 0,
-      clinicFee: 0,
-      tax: 0,
-      membershipDiscount: 0,
-      membershipPurchases: 0,
-      membershipEnrollCount: 0,
-      membershipEnrollAmount: 0,
-      consultationRevenue: 0,
-      labRevenue: 0,
-      pharmacyRevenue: 0,
-      homeCareRevenue: 0,
-      homeVisitRevenue: 0,
-      membershipClaims: {},
-    },
-  );
-}
+  aggregateInvoiceMetrics,
+} from "./helpers";
+import { money } from "@/utils/helper";
+import Header from "./components/Header";
+import InvoiceReport from "./components/InvoiceReport";
+import MetricsReport from "./components/MetricsReport";
+import PharmacyReports from "./components/PharmacyReports";
+import AppointmentReports from "./components/AppointmentReports";
+import LabReports from "./components/LabReports";
+import HomeCareReports from "./components/HomeCareReports";
+import ReportTotals from "./components/ReportTotals";
+import {
+  allocateReportValues,
+  membershipBenefitUsage,
+  realizedGrossProfit,
+  recognizedInvoiceRevenue,
+  recognizedInvoiceTax,
+  reportPaymentMode,
+  reportedInvoiceTotal,
+} from "./financials";
+import {
+  defaultEmailReportSections,
+  invoiceHeaders,
+  labSettlementHeaders,
+  pharmacySettlementHeaders,
+  settlementHeaders,
+} from "@/features/reports/constants";
 
 export function Reports({
   scopedAppointments,
@@ -163,6 +61,7 @@ export function Reports({
   livePractitioners = [],
   section,
   setSection,
+  setActive,
   loadLiveData,
 }: any) {
   const [period, setPeriod] = useState("monthly");
@@ -184,7 +83,12 @@ export function Reports({
     homeCare: true,
   });
   const [invoicePage, setInvoicePage] = useState(1);
+  const [invoicePickerIds, setInvoicePickerIds] = useState<string[]>([]);
   const [monthlySnapshots, setMonthlySnapshots] = useState<any[]>([]);
+  const [recalculatingSnapshotId, setRecalculatingSnapshotId] = useState<
+    string | null
+  >(null);
+  const [snapshotMessage, setSnapshotMessage] = useState("");
   const [sendBusy, setSendBusy] = useState(false);
   const [sendMessage, setSendMessage] = useState("");
   const [sendError, setSendError] = useState("");
@@ -236,7 +140,7 @@ export function Reports({
           row.id,
           row.full_name || row.name || row.id,
         ]),
-    ),
+      ),
     [livePractitioners],
   );
   const userById = useMemo(() => {
@@ -278,7 +182,72 @@ export function Reports({
     new Map([...branchDoctorOptions, ...appointmentDoctorOptions]).entries(),
   ).sort((a: any, b: any) => String(a[1]).localeCompare(String(b[1])));
 
-  const filteredInvoices = liveInvoices.filter((invoice: any) => {
+  const invoiceSupplierIds = useMemo(() => {
+    const result = new Map<string, Set<string>>();
+    for (const detail of invoiceDetails) {
+      const invoiceId = detail?.invoice?.id;
+      if (!invoiceId) continue;
+      const ids = new Set<string>();
+      for (const item of detail?.items || []) {
+        if (item.supplier_id) ids.add(item.supplier_id);
+      }
+      result.set(`invoice:${invoiceId}`, ids);
+    }
+    const labCatalog = new Map(
+      labTests.map((row: any) => [row.id, row]),
+    );
+    for (const detail of labOrderDetails) {
+      const orderId = detail?.order?.id;
+      if (!orderId) continue;
+      const ids = new Set<string>();
+      for (const item of detail?.items || []) {
+        const supplierId =
+          item.supplier_id || labCatalog.get(item.test_id)?.supplier_id;
+        if (supplierId) ids.add(supplierId);
+      }
+      result.set(`lab:${orderId}`, ids);
+    }
+    const medicineCatalog = new Map(
+      medicineRows.map((row: any) => [row.id, row]),
+    );
+    for (const detail of pharmacyIssueDetails) {
+      const issueId = detail?.issue?.id;
+      if (!issueId) continue;
+      const ids = new Set<string>();
+      for (const item of detail?.items || []) {
+        const supplierId = medicineCatalog.get(item.medicine_id)?.supplier_id;
+        if (supplierId) ids.add(supplierId);
+      }
+      result.set(`pharmacy:${issueId}`, ids);
+    }
+    return result;
+  }, [
+    invoiceDetails,
+    labOrderDetails,
+    labTests,
+    medicineRows,
+    pharmacyIssueDetails,
+  ]);
+
+  function invoiceMatchesSupplier(invoice: any) {
+    if (supplierFilter === "all") return true;
+    const type = invoiceType(invoice);
+    const sourceId =
+      type === "lab"
+        ? invoice.lab_order_id
+        : type === "pharmacy"
+          ? invoice.pharmacy_issue_id
+          : null;
+    if (!sourceId) return false;
+    const supplierIds = invoiceSupplierIds.has(`invoice:${invoice.id}`)
+      ? invoiceSupplierIds.get(`invoice:${invoice.id}`)!
+      : invoiceSupplierIds.get(`${type}:${sourceId}`) || new Set<string>();
+    return supplierFilter === "none"
+      ? supplierIds.size === 0
+      : supplierIds.has(supplierFilter);
+  }
+
+  const baseFilteredInvoices = liveInvoices.filter((invoice: any) => {
     const invoiceDate = rowDateKey(invoice);
     const appointment = appointmentById.get(invoice.appointment_id);
     const invoiceDoctorId =
@@ -289,7 +258,6 @@ export function Reports({
       invoice.branch_id || appointment?.branchId || appointment?.branch_id;
     const type = invoiceType(invoice);
     return (
-      isPaidInvoice(invoice) &&
       (!branchId || invoiceBranchId === branchId) &&
       (!fromDate || invoiceDate >= fromDate) &&
       (!toDate || invoiceDate <= toDate) &&
@@ -297,6 +265,8 @@ export function Reports({
       (typeFilter === "overall" || type === typeFilter)
     );
   });
+  const reportInvoices = baseFilteredInvoices.filter(invoiceMatchesSupplier);
+  const filteredInvoices = reportInvoices.filter(isPaidInvoice);
 
   const totalInvoicePages = Math.max(
     1,
@@ -310,14 +280,46 @@ export function Reports({
     safeInvoicePage * pageSize,
   );
   const filteredInvoiceIds = useMemo(
-    () => filteredInvoices.map((invoice: any) => invoice.id).filter(Boolean),
-    [filteredInvoices],
+    () => baseFilteredInvoices.map((invoice: any) => invoice.id).filter(Boolean),
+    [baseFilteredInvoices],
   );
+  const invoiceById = useMemo(
+    () => new Map<string, any>(liveInvoices.map((row: any) => [row.id, row])),
+    [liveInvoices],
+  );
+  const invoiceDetailById = useMemo(
+    () =>
+      new Map(
+        invoiceDetails
+          .filter((detail: any) => detail?.invoice?.id)
+          .map((detail: any) => [detail.invoice.id, detail]),
+      ),
+    [invoiceDetails],
+  );
+
+  function openInvoice(invoiceId: string) {
+    if (!invoiceId || typeof window === "undefined") return;
+    window.sessionStorage.setItem("medizinhub.billingInvoiceId", invoiceId);
+    setInvoicePickerIds([]);
+    setActive?.("billing");
+  }
+
+  function openLinkedInvoices(value: any) {
+    const ids = Array.from(
+      new Set<string>(
+        (value instanceof Set ? Array.from(value) : Array.isArray(value) ? value : [value])
+          .filter(Boolean)
+          .map(String),
+      ),
+    );
+    if (ids.length === 1) openInvoice(ids[0]);
+    else if (ids.length > 1) setInvoicePickerIds(ids);
+  }
   const filteredInvoiceIdsKey = filteredInvoiceIds.join("|");
 
   useEffect(() => {
     setInvoicePage(1);
-  }, [fromDate, toDate, doctorId, typeFilter, branchId]);
+  }, [fromDate, toDate, doctorId, typeFilter, supplierFilter, branchId]);
 
   // The Metrics tab hides the shared filter/export header and always shows a
   // current-month snapshot, so reset the range/filters to this month on entry.
@@ -329,6 +331,7 @@ export function Reports({
     setToDate(end);
     setDoctorId("all");
     setTypeFilter("overall");
+    setSupplierFilter("all");
   }, [section]);
 
   useEffect(() => {
@@ -457,6 +460,28 @@ export function Reports({
     };
   }, [apiSession?.tenantId, branchId, refreshTick]);
 
+  async function recalculateMonthlySnapshot(snapshot: any) {
+    if (!apiSession?.tenantId || !snapshot) return;
+    setSnapshotMessage("");
+    setRecalculatingSnapshotId(snapshot.id);
+    try {
+      await apiFetch("/reports/monthly-snapshots/archive", apiSession, {
+        method: "POST",
+        body: JSON.stringify({
+          year: snapshot.period_year,
+          month: snapshot.period_month,
+          overwrite: true,
+        }),
+      });
+      setSnapshotMessage(`${snapshot.period_label} recalculated`);
+      await refreshReports();
+    } catch (error: any) {
+      setSnapshotMessage(error?.message || "Recalculate failed");
+    } finally {
+      setRecalculatingSnapshotId(null);
+    }
+  }
+
   useEffect(() => {
     if (!apiSession?.tenantId) return;
     let cancelled = false;
@@ -493,11 +518,7 @@ export function Reports({
     return () => {
       cancelled = true;
     };
-  }, [
-    apiSession?.tenantId,
-    homeCareInvoiceIdsKey,
-    refreshTick,
-  ]);
+  }, [apiSession?.tenantId, homeCareInvoiceIdsKey, refreshTick]);
 
   useEffect(() => {
     if (!apiSession?.tenantId) return;
@@ -595,24 +616,58 @@ export function Reports({
     return ids;
   }, [homeCareInvoiceDetails]);
 
+  const labTestById = useMemo(
+    () => new Map(labTests.map((row: any) => [row.id, row])),
+    [labTests],
+  );
+  const labPackageById = useMemo(
+    () => new Map(labPackages.map((row: any) => [row.id, row])),
+    [labPackages],
+  );
+  const medicineById = useMemo(
+    () => new Map(medicineRows.map((row: any) => [row.id, row])),
+    [medicineRows],
+  );
+  const labOrderDetailById = useMemo(
+    () =>
+      new Map(labOrderDetails.map((detail: any) => [detail.order?.id, detail])),
+    [labOrderDetails],
+  );
+  const pharmacyIssueDetailById = useMemo(
+    () =>
+      new Map(
+        pharmacyIssueDetails.map((detail: any) => [detail.issue?.id, detail]),
+      ),
+    [pharmacyIssueDetails],
+  );
+
   const totals = aggregateInvoiceMetrics(
     filteredInvoices,
     homeVisitBookingIds,
     homeVisitInvoiceIds,
+    invoiceSettlementAmount,
   );
   const membershipClaimRows = Object.values(totals.membershipClaims).sort(
     (a: any, b: any) => b.claimedAmount - a.claimedAmount,
   );
 
-  const grossProfit = Math.max(totals.grossRevenue - totals.doctorFee, 0);
-  const finalProfit = Math.max(totals.paidRevenue - totals.settlement, 0);
+  const chargeableGrossRevenue = Math.max(
+    totals.grossRevenue - totals.membershipDiscount,
+    0,
+  );
+  const grossProfit =
+    chargeableGrossRevenue - totals.tax - totals.doctorFee - totals.settlement;
+  const finalProfit =
+    totals.paidRevenue - totals.paidTax - totals.doctorFee - totals.settlement;
 
   // Previous calendar month aggregation, used only for the Metrics dashboard
   // month-over-month comparison lines. Branch-scoped but independent of the
   // active filters (the Metrics tab always reflects the current month).
   const previousTotals = useMemo(() => {
     const now = new Date();
-    const startKey = toInputDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+    const startKey = toInputDate(
+      new Date(now.getFullYear(), now.getMonth() - 1, 1),
+    );
     const endKey = toInputDate(new Date(now.getFullYear(), now.getMonth(), 0));
     const previousMonthInvoices = liveInvoices.filter((invoice: any) => {
       if (!isPaidInvoice(invoice)) return false;
@@ -627,6 +682,7 @@ export function Reports({
       previousMonthInvoices,
       homeVisitBookingIds,
       homeVisitInvoiceIds,
+      invoiceSettlementAmount,
     );
   }, [
     liveInvoices,
@@ -635,19 +691,22 @@ export function Reports({
     homeVisitBookingIds,
     homeVisitInvoiceIds,
   ]);
-  const previousFinalProfit = Math.max(
-    previousTotals.paidRevenue - previousTotals.settlement,
-    0,
-  );
-  const consultationSettlementInvoices = filteredInvoices.filter((invoice: any) => {
-    if (invoiceType(invoice) !== "consultation") return false;
-    const appointment: any = appointmentById.get(invoice.appointment_id);
-    return Boolean(
-      appointment?.doctorId ||
+  const previousFinalProfit =
+    previousTotals.paidRevenue -
+    previousTotals.paidTax -
+    previousTotals.doctorFee -
+    previousTotals.settlement;
+  const consultationSettlementInvoices = filteredInvoices.filter(
+    (invoice: any) => {
+      if (invoiceType(invoice) !== "consultation") return false;
+      const appointment: any = appointmentById.get(invoice.appointment_id);
+      return Boolean(
+        appointment?.doctorId ||
         appointment?.practitioner_id ||
         invoice.practitioner_id,
-    );
-  });
+      );
+    },
+  );
 
   const doctorRows = Array.from(
     consultationSettlementInvoices
@@ -663,40 +722,69 @@ export function Reports({
           doctor: appointment?.doctor || doctorById.get(key) || "Unassigned",
           invoices: 0,
           consultations: 0,
+          consultationIds: new Set<string>(),
+          invoiceIds: new Set<string>(),
+          paymentModes: new Set<string>(),
           grossRevenue: 0,
           paidRevenue: 0,
+          paidTax: 0,
+          balance: 0,
           doctorFee: 0,
-          settlement: 0,
+          membershipBenefit: 0,
           clinicFee: 0,
           finalProfit: 0,
         };
-        const total = numberValue(invoice.total_amount);
-        const paid = numberValue(invoice.paid_amount);
-        const doctorFee = numberValue(invoice.doctor_share_amount);
-        const settlement = settlementPaidBasis(invoice);
+        const total = reportedInvoiceTotal(invoice);
+        const paid = recognizedInvoiceRevenue(invoice);
+        const doctorFee = invoiceDoctorFeeAmount(invoice);
         row.invoices += 1;
+        row.invoiceIds.add(invoice.id);
+        row.paymentModes.add(invoicePaymentMode(invoice));
+        row.consultationIds.add(
+          invoice.appointment_id || invoice.consultation_id || invoice.id,
+        );
         row.grossRevenue += total;
         row.paidRevenue += paid;
+        row.paidTax += recognizedInvoiceTax(invoice);
+        row.balance += numberValue(invoice.balance_amount);
         row.doctorFee += doctorFee;
-        row.settlement += settlement;
+        row.membershipBenefit += membershipBenefitUsage(invoice);
         row.clinicFee +=
           numberValue(invoice.clinic_share_amount) ||
-          Math.max(total - doctorFee, 0);
-        row.finalProfit += Math.max(paid - settlement, 0);
+          Math.max(total - membershipBenefitUsage(invoice) - doctorFee, 0);
+        row.finalProfit += realizedGrossProfit(invoice, doctorFee);
         acc.set(key, row);
         return acc;
       }, new Map<string, any>())
       .values(),
   )
-    .map((row: any) => ({
-      ...row,
-      consultations: completedAppointments.filter(
-        (appointment: any) =>
-          (appointment.doctorId ||
-            appointment.practitioner_id ||
-            "unassigned") === row.id,
-      ).length,
-    }))
+    .map((row: any) => {
+      const consultationIds = new Set(row.consultationIds);
+      completedAppointments
+        .filter(
+          (appointment: any) =>
+            (appointment.doctorId ||
+              appointment.practitioner_id ||
+              "unassigned") === row.id,
+        )
+        .forEach((appointment: any) =>
+          consultationIds.add(
+            appointment.id ||
+              appointment.appointment_id ||
+              `completed:${row.id}:${consultationIds.size}`,
+          ),
+        );
+      return {
+        ...row,
+        consultationIds,
+        consultations: consultationIds.size,
+        paymentMode:
+          Array.from(row.paymentModes)
+            .filter((value: any) => value && value !== "-")
+            .join(" + ") || "-",
+        doctorFeePercent: percent(row.doctorFee, row.paidRevenue),
+      };
+    })
     .sort((a: any, b: any) => b.finalProfit - a.finalProfit);
 
   function changePeriod(nextPeriod: string) {
@@ -708,28 +796,20 @@ export function Reports({
     }
   }
 
-  const settlementHeaders = [
-    "Doctor",
-    "Consultations",
-    "Invoices",
-    "Gross Revenue",
-    "Paid Revenue",
-    "Doctor Fee",
-    "Settlement",
-    "Clinic Fee",
-    "Gross Profit %",
-    "Final Profit",
-  ];
   const settlementRows = doctorRows.map((row: any) => [
     row.doctor,
     row.consultations,
     row.invoices,
     row.grossRevenue,
     row.paidRevenue,
+    row.balance,
+    row.membershipBenefit,
+    row.paymentMode,
+    row.paidTax,
     row.doctorFee,
-    row.settlement,
+    row.doctorFeePercent,
     row.clinicFee,
-    percent(Math.max(row.grossRevenue - row.doctorFee, 0), row.grossRevenue),
+    percent(row.finalProfit, row.paidRevenue - row.paidTax),
     row.finalProfit,
   ]);
   const settlementExportRows = settlementRows.length
@@ -754,18 +834,49 @@ export function Reports({
             0,
           ),
           doctorRows.reduce(
-            (sum: number, row: any) => sum + numberValue(row.doctorFee),
+            (sum: number, row: any) => sum + numberValue(row.balance),
             0,
           ),
           doctorRows.reduce(
-            (sum: number, row: any) => sum + numberValue(row.settlement),
+            (sum: number, row: any) =>
+              sum + numberValue(row.membershipBenefit),
             0,
+          ),
+          "Multiple",
+          doctorRows.reduce(
+            (sum: number, row: any) => sum + numberValue(row.paidTax),
+            0,
+          ),
+          doctorRows.reduce(
+            (sum: number, row: any) => sum + numberValue(row.doctorFee),
+            0,
+          ),
+          percent(
+            doctorRows.reduce(
+              (sum: number, row: any) => sum + numberValue(row.doctorFee),
+              0,
+            ),
+            doctorRows.reduce(
+              (sum: number, row: any) =>
+                sum + numberValue(row.paidRevenue) - numberValue(row.paidTax),
+              0,
+            ),
           ),
           doctorRows.reduce(
             (sum: number, row: any) => sum + numberValue(row.clinicFee),
             0,
           ),
-          percent(grossProfit, totals.grossRevenue),
+          percent(
+            doctorRows.reduce(
+              (sum: number, row: any) => sum + numberValue(row.finalProfit),
+              0,
+            ),
+            doctorRows.reduce(
+              (sum: number, row: any) =>
+                sum + numberValue(row.paidRevenue) - numberValue(row.paidTax),
+              0,
+            ),
+          ),
           doctorRows.reduce(
             (sum: number, row: any) => sum + numberValue(row.finalProfit),
             0,
@@ -774,26 +885,9 @@ export function Reports({
       ]
     : settlementRows;
 
-  const labTestById = useMemo(
-    () => new Map(labTests.map((row: any) => [row.id, row])),
-    [labTests],
-  );
-  const labPackageById = useMemo(
-    () => new Map(labPackages.map((row: any) => [row.id, row])),
-    [labPackages],
-  );
-  const medicineById = useMemo(
-    () => new Map(medicineRows.map((row: any) => [row.id, row])),
-    [medicineRows],
-  );
   const supplierById = useMemo(
     () => new Map(suppliers.map((row: any) => [row.id, row.name])),
     [suppliers],
-  );
-  const labOrderDetailById = useMemo(
-    () =>
-      new Map(labOrderDetails.map((detail: any) => [detail.order?.id, detail])),
-    [labOrderDetails],
   );
   const homeCareBookingById = useMemo(
     () => new Map(homeCareBookings.map((row: any) => [row.id, row])),
@@ -802,15 +896,6 @@ export function Reports({
   const ipAdmissionById = useMemo(
     () => new Map(ipAdmissions.map((row: any) => [row.id, row])),
     [ipAdmissions],
-  );
-  const invoiceDetailById = useMemo(
-    () =>
-      new Map(
-        invoiceDetails
-          .filter((detail: any) => detail?.invoice?.id)
-          .map((detail: any) => [detail.invoice.id, detail]),
-      ),
-    [invoiceDetails],
   );
   const labSettlementRows = Array.from(
     filteredInvoices
@@ -822,15 +907,63 @@ export function Reports({
         const detail: any = labOrderDetailById.get(invoice.lab_order_id);
         const items = detail?.items?.length
           ? detail.items
-          : [{ test_name: "Unmapped Lab Invoice", price: invoice.paid_amount }];
-        for (const item of items) {
-          if (item.package_id || !item.test_id) continue;
+          : [
+              {
+                test_id: "unmapped",
+                test_name: "Unmapped Lab Invoice",
+                price: invoice.subtotal_amount,
+              },
+            ];
+        const reportItems = items.filter(
+          (item: any) => !item.package_id && item.test_id,
+        );
+        const lineAmounts = reportItems.map((item: any) =>
+          numberValue(item.price),
+        );
+        const invoiceSubtotal = numberValue(invoice.subtotal_amount);
+        const allocatedRevenues = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          recognizedInvoiceRevenue(invoice),
+        );
+        const allocatedMemberships = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          membershipBenefitUsage(invoice),
+        );
+        const allocatedBalances = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          numberValue(invoice.balance_amount),
+        );
+        const allocatedTaxes = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          recognizedInvoiceTax(invoice),
+        );
+        reportItems.forEach((item: any, itemIndex: number) => {
           const catalogItem = labTestById.get(item.test_id);
-          const supplierId = item.supplier_id || catalogItem?.supplier_id || "none";
-          const purchaseCost = supplierId === "none"
-            ? 0
-            : numberValue(item.buying_price || catalogItem?.purchase_price);
+          const billedItems = invoiceDetailById.get(invoice.id)?.items || [];
+          const billedItem =
+            billedItems.find(
+              (row: any) =>
+                row.external_item_code === item.test_id ||
+                row.description === item.test_name,
+            ) || billedItems[itemIndex];
+          const supplierId =
+            billedItem?.supplier_id ||
+            item.supplier_id ||
+            catalogItem?.supplier_id ||
+            "none";
+          const purchaseCost =
+            billedItem !== undefined
+              ? numberValue(billedItem.buying_amount) *
+                numberValue(billedItem.quantity || 1)
+              : numberValue(item.buying_price || catalogItem?.purchase_price);
           const key = `${supplierId}:${item.test_name || item.id}`;
+          const lineAmount = numberValue(item.price);
+          const allocatedRevenue = allocatedRevenues[itemIndex];
+          const allocatedMembership = allocatedMemberships[itemIndex];
           const row = acc.get(key) || {
             id: key,
             supplierId,
@@ -841,15 +974,25 @@ export function Reports({
             item: item.test_name || catalogItem?.name || "Lab item",
             orders: new Set(),
             invoices: new Set(),
+            paymentModes: new Set<string>(),
+            total: 0,
             revenue: 0,
+            balance: 0,
+            membershipBenefit: 0,
+            tax: 0,
             purchaseCost: 0,
           };
           row.orders.add(invoice.lab_order_id);
           row.invoices.add(invoice.id);
-          row.revenue += numberValue(item.price);
+          row.paymentModes.add(invoicePaymentMode(invoice));
+          row.total += lineAmount;
+          row.revenue += allocatedRevenue;
+          row.balance += allocatedBalances[itemIndex];
+          row.membershipBenefit += allocatedMembership;
+          row.tax += allocatedTaxes[itemIndex];
           row.purchaseCost += purchaseCost;
           acc.set(key, row);
-        }
+        });
         return acc;
       }, new Map<string, any>())
       .values(),
@@ -858,20 +1001,18 @@ export function Reports({
       ...row,
       orderCount: row.orders.size,
       invoiceCount: row.invoices.size,
-      profit: Math.max(row.revenue - row.purchaseCost, 0),
+      profit: row.revenue - row.tax - row.purchaseCost,
+      paymentMode:
+        Array.from(row.paymentModes)
+          .filter((value: any) => value && value !== "-")
+          .join(" + ") || "-",
+      settlementPercent: percent(row.purchaseCost, row.revenue - row.tax),
     }))
     .filter(
       (row: any) =>
         supplierFilter === "all" || row.supplierId === supplierFilter,
     )
     .sort((a: any, b: any) => b.profit - a.profit);
-  const pharmacyIssueDetailById = useMemo(
-    () =>
-      new Map(
-        pharmacyIssueDetails.map((detail: any) => [detail.issue?.id, detail]),
-      ),
-    [pharmacyIssueDetails],
-  );
   const pharmacySettlementRows = Array.from(
     filteredInvoices
       .filter(
@@ -887,19 +1028,58 @@ export function Reports({
           : [
               {
                 medicine_name: "Unmapped Pharmacy Invoice",
-                unit_price: invoice.paid_amount,
+                unit_price: invoice.subtotal_amount,
                 quantity: 1,
               },
             ];
-        for (const item of items) {
+        const lineAmounts = items.map((item: any) => {
+          const quantity = numberValue(
+            item.dispensed_quantity || item.quantity || 1,
+          );
+          return numberValue(item.unit_price) * quantity;
+        });
+        const invoiceSubtotal = numberValue(invoice.subtotal_amount);
+        const allocatedRevenues = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          recognizedInvoiceRevenue(invoice),
+        );
+        const allocatedMemberships = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          membershipBenefitUsage(invoice),
+        );
+        const allocatedBalances = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          numberValue(invoice.balance_amount),
+        );
+        const allocatedTaxes = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          recognizedInvoiceTax(invoice),
+        );
+        items.forEach((item: any, itemIndex: number) => {
           const medicine = medicineById.get(item.medicine_id);
-          const supplierId = medicine?.supplier_id || "none";
+          const billedItems = invoiceDetailById.get(invoice.id)?.items || [];
+          const billedItem =
+            billedItems.find(
+              (row: any) => row.description === item.medicine_name,
+            ) || billedItems[itemIndex];
+          const supplierId =
+            billedItem?.supplier_id || medicine?.supplier_id || "none";
           const key = `${supplierId}:${item.medicine_name || item.id}`;
           const quantity = numberValue(
             item.dispensed_quantity || item.quantity || 1,
           );
-          const revenue = numberValue(item.unit_price) * quantity;
-          const purchaseCost = numberValue(medicine?.purchase_price) * quantity;
+          const revenue = lineAmounts[itemIndex];
+          const allocatedRevenue = allocatedRevenues[itemIndex];
+          const allocatedMembership = allocatedMemberships[itemIndex];
+          const purchaseCost =
+            billedItem !== undefined
+              ? numberValue(billedItem.buying_amount) *
+                numberValue(billedItem.quantity || quantity)
+              : numberValue(medicine?.purchase_price) * quantity;
           const row = acc.get(key) || {
             id: key,
             supplierId,
@@ -907,17 +1087,27 @@ export function Reports({
             item: item.medicine_name || medicine?.name || "Medicine",
             issues: new Set(),
             invoices: new Set(),
+            paymentModes: new Set<string>(),
             quantity: 0,
+            total: 0,
             revenue: 0,
+            balance: 0,
+            membershipBenefit: 0,
+            tax: 0,
             purchaseCost: 0,
           };
           row.issues.add(invoice.pharmacy_issue_id);
           row.invoices.add(invoice.id);
+          row.paymentModes.add(invoicePaymentMode(invoice));
           row.quantity += quantity;
-          row.revenue += revenue;
+          row.total += revenue;
+          row.revenue += allocatedRevenue;
+          row.balance += allocatedBalances[itemIndex];
+          row.membershipBenefit += allocatedMembership;
+          row.tax += allocatedTaxes[itemIndex];
           row.purchaseCost += purchaseCost;
           acc.set(key, row);
-        }
+        });
         return acc;
       }, new Map<string, any>())
       .values(),
@@ -926,41 +1116,35 @@ export function Reports({
       ...row,
       issueCount: row.issues.size,
       invoiceCount: row.invoices.size,
-      profit: Math.max(row.revenue - row.purchaseCost, 0),
+      profit: row.revenue - row.tax - row.purchaseCost,
+      paymentMode:
+        Array.from(row.paymentModes)
+          .filter((value: any) => value && value !== "-")
+          .join(" + ") || "-",
+      settlementPercent: percent(row.purchaseCost, row.revenue - row.tax),
     }))
     .filter(
       (row: any) =>
         supplierFilter === "all" || row.supplierId === supplierFilter,
     )
     .sort((a: any, b: any) => b.profit - a.profit);
-  const labSettlementHeaders = [
-    "Supplier",
-    "Lab Test / Package",
-    "Orders",
-    "Invoices",
-    "Revenue",
-    "Purchase Cost",
-    "Lab Profit",
-  ];
+
   const labSettlementExportRows = labSettlementRows.map((row: any) => [
     row.supplier,
     row.item,
     row.orderCount,
     row.invoiceCount,
+    row.total,
     row.revenue,
+    row.balance,
+    row.membershipBenefit,
+    row.paymentMode,
+    row.tax,
     row.purchaseCost,
+    row.settlementPercent,
     row.profit,
   ]);
-  const pharmacySettlementHeaders = [
-    "Supplier",
-    "Medicine",
-    "Issues",
-    "Invoices",
-    "Qty",
-    "Revenue",
-    "Purchase Cost",
-    "Pharmacy Profit",
-  ];
+
   const pharmacySettlementExportRows = pharmacySettlementRows.map(
     (row: any) => [
       row.supplier,
@@ -968,8 +1152,14 @@ export function Reports({
       row.issueCount,
       row.invoiceCount,
       row.quantity,
+      row.total,
       row.revenue,
+      row.balance,
+      row.membershipBenefit,
+      row.paymentMode,
+      row.tax,
       row.purchaseCost,
+      row.settlementPercent,
       row.profit,
     ],
   );
@@ -981,7 +1171,10 @@ export function Reports({
   const labSettlementSummary = {
     revenue: labSettlementRevenue,
     purchaseCost: labSettlementPurchaseCost,
-    profit: Math.max(labSettlementRevenue - labSettlementPurchaseCost, 0),
+    profit: labSettlementRows.reduce(
+      (sum: number, row: any) => sum + numberValue(row.profit),
+      0,
+    ),
   };
   const pharmacySettlementSummary = pharmacySettlementRows.reduce(
     (acc: any, row: any) => ({
@@ -993,6 +1186,16 @@ export function Reports({
   );
   function invoiceSettlementAmount(invoice: any) {
     const type = invoiceType(invoice);
+    if (type === "consultation") return 0;
+    const frozenItems = invoiceDetailById.get(invoice.id)?.items || [];
+    if ((type === "lab" || type === "pharmacy") && frozenItems.length) {
+      return frozenItems.reduce(
+        (sum: number, item: any) =>
+          sum +
+          numberValue(item.buying_amount) * numberValue(item.quantity || 1),
+        0,
+      );
+    }
     if (type === "lab" && invoice.lab_order_id) {
       const detail: any = labOrderDetailById.get(invoice.lab_order_id);
       const items = detail?.items || [];
@@ -1008,7 +1211,9 @@ export function Reports({
       }, 0);
     }
     if (type === "pharmacy" && invoice.pharmacy_issue_id) {
-      const detail: any = pharmacyIssueDetailById.get(invoice.pharmacy_issue_id);
+      const detail: any = pharmacyIssueDetailById.get(
+        invoice.pharmacy_issue_id,
+      );
       const items = detail?.items || [];
       return items.reduce((sum: number, item: any) => {
         const medicine = medicineById.get(item.medicine_id);
@@ -1019,6 +1224,12 @@ export function Reports({
       }, 0);
     }
     return settlementPaidBasis(invoice);
+  }
+
+  function invoiceDoctorFeeAmount(invoice: any) {
+    return invoiceType(invoice) === "consultation"
+      ? settlementPaidBasis(invoice)
+      : 0;
   }
 
   function invoiceDoctorStaffName(invoice: any) {
@@ -1035,12 +1246,16 @@ export function Reports({
       if (orderedBy && userById.get(orderedBy)) return userById.get(orderedBy);
     }
     if (type === "pharmacy" && invoice.pharmacy_issue_id) {
-      const detail: any = pharmacyIssueDetailById.get(invoice.pharmacy_issue_id);
+      const detail: any = pharmacyIssueDetailById.get(
+        invoice.pharmacy_issue_id,
+      );
       const issuedBy = detail?.issue?.issued_by_user_id;
       if (issuedBy && userById.get(issuedBy)) return userById.get(issuedBy);
     }
     if (type === "home_care" && invoice.home_care_booking_id) {
-      const booking: any = homeCareBookingById.get(invoice.home_care_booking_id);
+      const booking: any = homeCareBookingById.get(
+        invoice.home_care_booking_id,
+      );
       const createdBy = booking?.created_by_user_id;
       if (createdBy && userById.get(createdBy)) return userById.get(createdBy);
     }
@@ -1049,7 +1264,10 @@ export function Reports({
       const createdBy = admission?.created_by_user_id;
       if (createdBy && userById.get(createdBy)) return userById.get(createdBy);
     }
-    if (invoice.created_by_user_id && userById.get(invoice.created_by_user_id)) {
+    if (
+      invoice.created_by_user_id &&
+      userById.get(invoice.created_by_user_id)
+    ) {
       return userById.get(invoice.created_by_user_id);
     }
     return "Unassigned";
@@ -1057,66 +1275,84 @@ export function Reports({
 
   function invoicePaymentMode(invoice: any) {
     const detail: any = invoiceDetailById.get(invoice.id);
-    const listModes = Array.isArray(invoice.payment_methods)
-      ? invoice.payment_methods
-      : [];
-    const payments = (detail?.payments || []).filter(
-      (payment: any) => numberValue(payment.amount) > 0,
+    return reportPaymentMode(
+      invoice,
+      detail?.payments || [],
+      humanizeOptionLabel,
     );
-    const modes = Array.from(
-      new Set(
-        [
-          ...listModes,
-          ...payments.map((payment: any) => payment.method),
-        ]
-          .filter(Boolean)
-          .map((method: string) => humanizeOptionLabel(method)),
-      ),
-    );
-    if (modes.length > 0) return modes.join(" + ");
-    if (
-      numberValue(invoice.paid_amount) <= 0 &&
-      numberValue(invoice.membership_discount_amount) > 0
-    ) {
-      return "Membership Benefit";
-    }
-    return "-";
   }
 
   function invoiceGrossProfit(invoice: any) {
-    return Math.max(
-      numberValue(invoice.paid_amount) - invoiceSettlementAmount(invoice),
-      0,
+    return realizedGrossProfit(
+      invoice,
+      invoiceDoctorFeeAmount(invoice) + invoiceSettlementAmount(invoice),
     );
   }
 
   function invoiceGrossProfitPercent(invoice: any) {
-    return percent(invoiceGrossProfit(invoice), numberValue(invoice.paid_amount));
+    return percent(
+      invoiceGrossProfit(invoice),
+      numberValue(invoice.paid_amount) - recognizedInvoiceTax(invoice),
+    );
   }
+
+  const activeReportInvoices = reportInvoices.filter(
+    (invoice: any) =>
+      !["cancelled", "refunded"].includes(
+        String(invoice.status || "").toLowerCase(),
+      ),
+  );
+  const sectionReportInvoices = activeReportInvoices.filter((invoice: any) => {
+    const type = invoiceType(invoice);
+    if (section === "lab") return type === "lab";
+    if (section === "pharmacy") return type === "pharmacy";
+    if (section === "home_care") return type === "home_care";
+    if (section === "appointments") return type === "consultation";
+    return true;
+  });
+  const sectionPaidInvoices = sectionReportInvoices.filter(isPaidInvoice);
+  const reportCardTotals = {
+    grandTotal: sectionReportInvoices.reduce(
+      (sum: number, invoice: any) => sum + reportedInvoiceTotal(invoice),
+      0,
+    ),
+    invoiceCount: sectionReportInvoices.length,
+    doctorFee: sectionPaidInvoices.reduce(
+      (sum: number, invoice: any) => sum + invoiceDoctorFeeAmount(invoice),
+      0,
+    ),
+    settlement: sectionPaidInvoices.reduce(
+      (sum: number, invoice: any) => sum + invoiceSettlementAmount(invoice),
+      0,
+    ),
+    due: sectionReportInvoices.reduce(
+      (sum: number, invoice: any) => sum + numberValue(invoice.balance_amount),
+      0,
+    ),
+    grossProfit: sectionPaidInvoices.reduce(
+      (sum: number, invoice: any) => sum + invoiceGrossProfit(invoice),
+      0,
+    ),
+    membershipBenefit: sectionReportInvoices.reduce(
+      (sum: number, invoice: any) =>
+        sum + membershipBenefitUsage(invoice),
+      0,
+    ),
+  };
 
   const invoiceSettlementTotal = filteredInvoices.reduce(
     (sum: number, invoice: any) => sum + invoiceSettlementAmount(invoice),
     0,
   );
-  const invoiceClinicProfitTotal = filteredInvoices.reduce(
-    (sum: number, invoice: any) =>
-      sum +
-      invoiceGrossProfit(invoice),
+  const invoiceDoctorFeeTotal = filteredInvoices.reduce(
+    (sum: number, invoice: any) => sum + invoiceDoctorFeeAmount(invoice),
     0,
   );
-  const invoiceHeaders = [
-    "Invoice",
-    "Date",
-    "Type",
-    "Patient",
-    "Doctor / Staff",
-    "Status",
-    "Paid Amount",
-    "Mode of Payment",
-    "Settlement",
-    "Gross Profit",
-    "Gross Profit %",
-  ];
+  const invoiceClinicProfitTotal = filteredInvoices.reduce(
+    (sum: number, invoice: any) => sum + invoiceGrossProfit(invoice),
+    0,
+  );
+
   const invoiceRows = filteredInvoices.map((invoice: any) => {
     const patient: any = patientById.get(invoice.patient_id);
     const settlement = invoiceSettlementAmount(invoice);
@@ -1131,9 +1367,15 @@ export function Reports({
         publicDisplayValue(invoice.patient_id),
       invoiceDoctorStaffName(invoice),
       humanizeOptionLabel(invoice.status),
+      reportedInvoiceTotal(invoice),
       paid,
+      numberValue(invoice.balance_amount),
+      membershipBenefitUsage(invoice),
       invoicePaymentMode(invoice),
+      recognizedInvoiceTax(invoice),
+      invoiceDoctorFeeAmount(invoice),
       settlement,
+      percent(settlement, paid),
       invoiceGrossProfit(invoice),
       invoiceGrossProfitPercent(invoice),
     ];
@@ -1156,9 +1398,17 @@ export function Reports({
           invoice.patient_name ||
           publicDisplayValue(invoice.patient_id),
         staff: invoiceDoctorStaffName(invoice),
+        invoiceIds: new Set([invoice.id]),
+        totalAmount: reportedInvoiceTotal(invoice),
         paidAmount: numberValue(invoice.paid_amount),
+        balance: numberValue(invoice.balance_amount),
+        membershipBenefit: membershipBenefitUsage(invoice),
         paymentMode: invoicePaymentMode(invoice),
         settlement: invoiceSettlementAmount(invoice),
+        settlementPercent: percent(
+          invoiceSettlementAmount(invoice),
+          numberValue(invoice.paid_amount),
+        ),
         grossProfit: invoiceGrossProfit(invoice),
         grossProfitPercent: invoiceGrossProfitPercent(invoice),
       };
@@ -1173,17 +1423,39 @@ export function Reports({
           "",
           "",
           "",
+          totals.grossRevenue,
           totals.paidRevenue,
+          totals.balance,
+          totals.membershipDiscount,
           "",
+          totals.paidTax,
+          invoiceDoctorFeeTotal,
           invoiceSettlementTotal,
+          percent(invoiceSettlementTotal, totals.paidRevenue),
           invoiceClinicProfitTotal,
-          percent(invoiceClinicProfitTotal, totals.paidRevenue),
+          percent(
+            invoiceClinicProfitTotal,
+            totals.paidRevenue - totals.paidTax,
+          ),
         ],
       ]
     : invoiceRows;
+  const reportedConsultationIds = new Set(
+    completedAppointments.map(
+      (appointment: any) => appointment.id || appointment.appointment_id,
+    ),
+  );
+  consultationSettlementInvoices.forEach((invoice: any) =>
+    reportedConsultationIds.add(
+      invoice.appointment_id || invoice.consultation_id || invoice.id,
+    ),
+  );
+  reportedConsultationIds.delete(undefined);
+
   const summaryRows = [
     ["Gross Revenue", totals.grossRevenue],
     ["Paid Revenue", totals.paidRevenue],
+    ["GST from Paid Revenue", totals.paidTax],
     ["Consultation Revenue", totals.consultationRevenue],
     ["Lab Revenue", totals.labRevenue],
     ["Pharmacy Revenue", totals.pharmacyRevenue],
@@ -1198,10 +1470,10 @@ export function Reports({
     ["Settlement", invoiceSettlementTotal],
     ["Clinic Fee", totals.clinicFee],
     ["Gross Profit", grossProfit],
-    ["Gross Profit %", percent(grossProfit, totals.grossRevenue)],
-    ["Final Profit", invoiceClinicProfitTotal],
-    ["Final Profit %", percent(invoiceClinicProfitTotal, totals.paidRevenue)],
-    ["Completed Consultations", completedAppointments.length],
+    ["Gross Profit %", percent(grossProfit, chargeableGrossRevenue)],
+    ["Final Profit", finalProfit],
+    ["Final Profit %", percent(finalProfit, totals.paidRevenue)],
+    ["Completed Consultations", reportedConsultationIds.size],
   ];
   const exportName = `healthcare-profit-report-${fromDate || "start"}-${toDate || "end"}-${typeFilter}`;
   const canSendEmail = Boolean(
@@ -1370,6 +1642,7 @@ export function Reports({
             setOpenSections={setOpenSections}
             money={money}
             percent={percent}
+            onOpenInvoices={openLinkedInvoices}
           />
         );
 
@@ -1385,6 +1658,7 @@ export function Reports({
             invoiceGrossProfit={invoiceGrossProfit}
             invoiceGrossProfitPercent={invoiceGrossProfitPercent}
             invoiceSettlementAmount={invoiceSettlementAmount}
+            invoiceDoctorFeeAmount={invoiceDoctorFeeAmount}
             numberValue={numberValue}
             doctorById={doctorById}
             rowDate={rowDate}
@@ -1398,6 +1672,7 @@ export function Reports({
             total={filteredInvoices}
             setInvoicePage={setInvoicePage}
             pageSize={pageSize}
+            onOpenInvoices={openLinkedInvoices}
           />
         );
 
@@ -1408,6 +1683,7 @@ export function Reports({
             openSections={openSections}
             setOpenSections={setOpenSections}
             money={money}
+            onOpenInvoices={openLinkedInvoices}
           />
         );
 
@@ -1418,6 +1694,7 @@ export function Reports({
             openSections={openSections}
             setOpenSections={setOpenSections}
             money={money}
+            onOpenInvoices={openLinkedInvoices}
           />
         );
 
@@ -1428,6 +1705,7 @@ export function Reports({
             openSections={openSections}
             setOpenSections={setOpenSections}
             money={money}
+            onOpenInvoices={openLinkedInvoices}
           />
         );
 
@@ -1442,6 +1720,9 @@ export function Reports({
             labSettlementSummary={labSettlementSummary}
             membershipClaimRows={membershipClaimRows}
             snapshots={monthlySnapshots}
+            recalculatingSnapshotId={recalculatingSnapshotId}
+            snapshotMessage={snapshotMessage}
+            onRecalculateSnapshot={recalculateMonthlySnapshot}
             money={money}
             percent={percent}
           />
@@ -1455,49 +1736,105 @@ export function Reports({
   return (
     <div className="space-y-6">
       {section !== "metrix" && (
-      <Header
-        apiSession={apiSession}
-        onRefresh={refreshReports}
-        exportCsv={exportCsv}
-        exportExcel={exportExcel}
-        exportPdf={exportPdf}
-        canSendEmail={canSendEmail}
-        sendPanelOpen={sendPanelOpen}
-        setSendPanelOpen={setSendPanelOpen}
-        sendMessage={sendMessage}
-        setSendMessage={setSendMessage}
-        sendError={sendError}
-        setSendError={setSendError}
-        recipientInput={recipientInput}
-        setRecipientInput={setRecipientInput}
-        recentEmails={recentEmails}
-        addRecipientSuggestion={addRecipientSuggestion}
-        emailReportSections={emailReportSections}
-        setEmailReportSections={setEmailReportSections}
-        emailLabSupplierIds={emailLabSupplierIds}
-        setEmailLabSupplierIds={setEmailLabSupplierIds}
-        sendEmailReport={sendEmailReport}
-        sendBusy={sendBusy}
-        period={period}
-        changePeriod={changePeriod}
-        fromDate={fromDate}
-        setFromDate={setFromDate}
-        toDate={toDate}
-        setToDate={setToDate}
-        doctorId={doctorId}
-        setDoctorId={setDoctorId}
-        doctorOptions={doctorOptions}
-        typeFilter={typeFilter}
-        setTypeFilter={setTypeFilter}
-        supplierFilter={supplierFilter}
-        setSupplierFilter={setSupplierFilter}
-        suppliers={suppliers}
-        setPeriod={setPeriod}
-      />
+        <Header
+          apiSession={apiSession}
+          onRefresh={refreshReports}
+          exportCsv={exportCsv}
+          exportExcel={exportExcel}
+          exportPdf={exportPdf}
+          canSendEmail={canSendEmail}
+          sendPanelOpen={sendPanelOpen}
+          setSendPanelOpen={setSendPanelOpen}
+          sendMessage={sendMessage}
+          setSendMessage={setSendMessage}
+          sendError={sendError}
+          setSendError={setSendError}
+          recipientInput={recipientInput}
+          setRecipientInput={setRecipientInput}
+          recentEmails={recentEmails}
+          addRecipientSuggestion={addRecipientSuggestion}
+          emailReportSections={emailReportSections}
+          setEmailReportSections={setEmailReportSections}
+          emailLabSupplierIds={emailLabSupplierIds}
+          setEmailLabSupplierIds={setEmailLabSupplierIds}
+          sendEmailReport={sendEmailReport}
+          sendBusy={sendBusy}
+          period={period}
+          changePeriod={changePeriod}
+          fromDate={fromDate}
+          setFromDate={setFromDate}
+          toDate={toDate}
+          setToDate={setToDate}
+          doctorId={doctorId}
+          setDoctorId={setDoctorId}
+          doctorOptions={doctorOptions}
+          typeFilter={typeFilter}
+          setTypeFilter={setTypeFilter}
+          supplierFilter={supplierFilter}
+          setSupplierFilter={setSupplierFilter}
+          suppliers={suppliers}
+          setPeriod={setPeriod}
+        />
       )}
+
+      <ReportTotals totals={reportCardTotals} money={money} section={section} />
 
       {/* DYNAMIC CONTENT */}
       {renderReportSection(section)}
+
+      {invoicePickerIds.length > 1 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
+          <div className="max-h-[80vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-950">
+                  Select linked invoice
+                </h3>
+                <p className="text-sm text-slate-500">
+                  This report row combines {invoicePickerIds.length} invoices.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold"
+                onClick={() => setInvoicePickerIds([])}
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {invoicePickerIds.map((invoiceId) => {
+                const invoice: any = invoiceById.get(invoiceId);
+                return (
+                  <button
+                    key={invoiceId}
+                    type="button"
+                    className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 px-4 py-3 text-left hover:bg-slate-50"
+                    onClick={() => openInvoice(invoiceId)}
+                  >
+                    <span>
+                      <span className="block font-bold text-slate-950">
+                        {invoice?.invoice_number || publicDisplayValue(invoiceId)}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {invoice ? invoicePaymentMode(invoice) : "-"}
+                      </span>
+                    </span>
+                    <span className="text-right text-sm">
+                      <span className="block font-bold">
+                        {money(invoice ? reportedInvoiceTotal(invoice) : 0)}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        Paid {money(invoice?.paid_amount || 0)}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

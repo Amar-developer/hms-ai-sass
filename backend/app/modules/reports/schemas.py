@@ -1,0 +1,102 @@
+from datetime import date
+
+from pydantic import BaseModel, Field
+
+from app.modules.reports.models import ReportJobStatus
+
+
+class MonthlyReportFilters(BaseModel):
+    overall: bool = True
+    doctor: bool = True
+    department: bool = True
+    invoice: bool = True
+
+
+class MonthlyReportConfigRead(BaseModel):
+    enabled: bool = False
+    recipients: list[str] = Field(default_factory=list)
+    cc: list[str] = Field(default_factory=list)
+    send_day: int = 1
+    filters: MonthlyReportFilters = Field(default_factory=MonthlyReportFilters)
+    last_sent_period: str = ""
+
+
+class MonthlyReportConfigUpdate(BaseModel):
+    enabled: bool = False
+    recipients: list[str] = Field(default_factory=list)
+    cc: list[str] = Field(default_factory=list)
+    send_day: int = Field(default=1, ge=1, le=28)
+    filters: MonthlyReportFilters = Field(default_factory=MonthlyReportFilters)
+
+
+class MonthlyReportSendRequest(BaseModel):
+    recipients: list[str] | None = None
+    cc: list[str] | None = None
+    from_date: date | None = None
+    to_date: date | None = None
+    filters: MonthlyReportFilters | None = None
+
+
+class ProfitReportEmailRequest(BaseModel):
+    recipients: list[str] | None = None
+    cc: list[str] = Field(default_factory=list)
+    from_date: date
+    to_date: date
+    doctor_id: str | None = None
+    invoice_type: str = "overall"
+    supplier_id: str | None = None
+    supplier_ids: list[str] = Field(default_factory=list)
+    report_sections: list[str] = Field(default_factory=list)
+    branch_id: str | None = None
+
+
+class ProfitReportEmailRead(BaseModel):
+    sent: bool
+    recipients: list[str]
+    cc: list[str]
+    attachment_filenames: list[str]
+    provider_message_id: str
+
+
+class ReportJobRead(BaseModel):
+    id: str
+    tenant_id: str
+    branch_id: str | None
+    status: ReportJobStatus
+    report_type: str
+    period_start: str
+    period_end: str
+    recipients: list[str]
+    cc: list[str]
+    filters: dict
+    attachment_filename: str | None
+    provider_message_id: str | None
+    failure_reason: str | None
+    queued_by_user_id: str | None
+    created_at: str
+    updated_at: str
+    started_at: str | None
+    sent_at: str | None
+
+
+class MonthlySnapshotRead(BaseModel):
+    id: str
+    branch_id: str | None
+    period_year: int
+    period_month: int
+    period_start: str
+    period_end: str
+    period_label: str
+    invoice_count: int
+    gross_revenue: int
+    paid_revenue: int
+    final_profit: int
+    metrics: dict
+    created_at: str
+    updated_at: str
+
+
+class MonthlySnapshotArchiveRequest(BaseModel):
+    year: int | None = None
+    month: int | None = Field(default=None, ge=1, le=12)
+    overwrite: bool = False

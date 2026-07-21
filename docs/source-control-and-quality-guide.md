@@ -58,6 +58,7 @@ Allowed types:
 Run once after cloning:
 
 ```bash
+cd frontend
 npm run hooks:install
 ```
 
@@ -75,6 +76,7 @@ Before opening a pull request:
 ```bash
 backend/.venv/bin/ruff check backend/app backend/tests
 backend/.venv/bin/pytest backend/tests -q
+cd frontend
 npm test
 npm run build
 ```
@@ -82,7 +84,32 @@ npm run build
 Or run the combined command:
 
 ```bash
+cd frontend
 npm run quality
+```
+
+`npm run quality` (and the pre-push hook) cover backend lint, backend unit
+tests, frontend unit tests, typecheck, and build — but **not** E2E. Backend
+E2E (`backend/e2e/`) and frontend E2E (Playwright, `frontend/e2e/`) only run
+in GitHub Actions unless you run them yourself, which is why an E2E-only
+regression can pass every local check and still fail in CI.
+
+Before pushing a branch touching booking, billing, queue, or consultation
+flows — or any change likely to affect E2E — run everything CI runs, in one
+command:
+
+```bash
+bash scripts/verify_all.sh          # everything, same order as CI
+bash scripts/verify_all.sh --fast   # skip both E2E suites, quick iteration
+```
+
+One-time setup (see `backend/README.md`):
+
+```bash
+docker compose up -d postgres redis
+PGPASSWORD=medizinhub_dev createdb -h 127.0.0.1 -p 5433 -U medizinhub medizinhub_e2e
+PGPASSWORD=medizinhub_dev createdb -h 127.0.0.1 -p 5433 -U medizinhub medizinhub_frontend_e2e
+cd frontend && npx playwright install --with-deps chromium firefox webkit
 ```
 
 ## Ignore And Environment Rules

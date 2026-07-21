@@ -6,26 +6,29 @@ import {
   Badge,
   Button,
   Card,
+  Input,
   RefreshButton,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
-import {
-  FormField,
-  NumberField,
-  SelectField,
-  SearchableSelectField,
-  TextField,
-  DateField,
-} from "@/app/components/FormElements";
+import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { Column, DataTable } from "@/app/components/reports/DataTable";
 import { displayDate, displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
-import { isBilledIssue, isCancelledIssue, isDispensed } from "@/utils/pharmacy/helpers";
-import { ConsultPrescriptionModal, MedicineDetailModal } from "@/app/components/pharmacy/Shared";
-import { isActivePatientRecord, patientPickerLabel } from "@/utils/patient/helpers";
+import {
+  isBilledIssue,
+  isCancelledIssue,
+  isDispensed,
+} from "@/features/pharmacy/helpers";
+import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
+import { MedicineDetailModal } from "./components/MedicineDetailModal";
+import { isActivePatientRecord,patientPickerLabel, } from "../patients/helpers";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 const pageSize = 10;
 
@@ -37,6 +40,7 @@ export function Pharmacy({
   loadLiveData,
   liveInvoices = [],
 }: any) {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [issues, setIssues] = useState<any[]>([]);
   const [issuesLoaded, setIssuesLoaded] = useState(false);
   const [medicines, setMedicines] = useState<any[]>([]);
@@ -208,6 +212,31 @@ export function Pharmacy({
       window.clearTimeout(timer);
     };
   }, [apiSession, apiSession?.tenantId, branchId, medicineSearch]);
+
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreatePharmacyIssue = hasPermission(
+    "pharmacy.manage",
+    "pharmacy.create",
+  );
+  const canDispensePharmacyIssue = hasPermission(
+    "pharmacy.manage",
+    "pharmacy.dispense",
+  );
+  const canEditPharmacyIssue = hasPermission(
+    "pharmacy.manage",
+    "pharmacy.edit",
+  );
+  const canBillPharmacyIssue = hasPermission(
+    "billing.manage",
+    "billing.create",
+    "invoices.create",
+  );
 
   const medicineOptions = availableMedicines.map((m: any) => ({
     value: m.id || m.slug || m.name,
@@ -386,6 +415,14 @@ export function Pharmacy({
   async function createDirect(e: any) {
     e.preventDefault();
     if (!apiSession) return;
+    if (!branchId || !patientId) {
+      setMessage("Branch and patient are required.");
+      return;
+    }
+    if (source === "external_prescription" && !externalPrescriber.trim()) {
+      setMessage("External prescriber is required.");
+      return;
+    }
     setBusy("create");
     setMessage("");
     const fallback = buildIssueItem();
@@ -616,37 +653,55 @@ export function Pharmacy({
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
+      {canCreatePharmacyIssue && (
       <Card>
-        <h3 className="card-desc font-bold">Create Pharmacy Issue</h3>
+        <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
         <form
           onSubmit={createDirect}
           className="mt-4 grid gap-3 md:grid-cols-4"
         >
-          <SearchableSelectField
-            label="Patient"
-            value={patientId}
-            onChange={setPatientId}
-            options={activePatients.map((p: any) => ({
-              value: p.id,
-              label: patientPickerLabel(p),
-              sublabel: p.mobile || p.patient_number || p.id,
-            }))}
-            placeholder="Select patient"
-            searchPlaceholder="Search patient by name, mobile, or number"
-          />
-          <SelectField
-            label="Source"
-            value={source}
-            onChange={setSource}
-            options={[
-              { value: "op_direct", label: "OP Direct" },
-              {
-                value: "external_prescription",
-                label: "External Prescription",
-              },
-            ]}
-          />
-          <FormField label="Medicine">
+          <FormField label="Patient" required>
+            <SearchableSelect
+              required
+              value={patientId}
+              onChange={setPatientId}
+              options={activePatients.map((p: any) => ({
+                value: p.id,
+                label: patientPickerLabel(p),
+                sublabel: p.mobile || p.patient_number || p.id,
+              }))}
+              placeholder="Select patient"
+              searchPlaceholder="Search patient by name, mobile, or number"
+            />
+          </FormField>
+
+          <FormField label="Source">
+            <SearchableSelect
+              name="source"
+              value={source}
+              onChange={setSource}
+              options={[
+                { value: "op_direct", label: "OP Direct" },
+                {
+                  value: "external_prescription",
+                  label: "External Prescription",
+                },
+              ]}
+              placeholder="Select source"
+              searchable={false}
+            />
+          </FormField>
+          {source === "external_prescription" && (
+            <FormField label="External Prescriber" required>
+              <Input
+                value={externalPrescriber}
+                onChange={(event: any) => setExternalPrescriber(event.target.value)}
+                required
+                placeholder="Enter prescriber name"
+              />
+            </FormField>
+          )}
+          <FormField label="Medicine" required>
             <SearchPicker
               value={selectedMedicineId}
               inputValue={medicineSearch}
@@ -685,21 +740,19 @@ export function Pharmacy({
             onChange={setQuantity}
             min={1}
           />
-          {/* <div className="md:col-span-1">
-            <TextField
-              label="External Prescriber"
-              value={externalPrescriber}
-              onChange={setExternalPrescriber}
-              disabled={source !== "external_prescription"}
-              className="search-input"
-            />
-          </div> */}
           <div className="flex items-end gap-2 w-full lg:w-[80%]">
-            <button type="button" onClick={addIssueItem} className='close-button font-bold'>
+            <button
+              type="button"
+              onClick={addIssueItem}
+              className="close-button font-bold"
+            >
               Add
             </button>
-            <Button disabled={busy === "create"} className='w-[130px] px-1 py-3 lg:px-2 py-2.5'>
-              {busy === "create" ? "Saving..." : "Create Issue"}
+            <Button
+              disabled={busy === "create"}
+              className="w-[130px] px-1 lg:px-2 py-2.5"
+            >
+              {busy === "create" ? "Saving..." : "Create Order"}
             </Button>
           </div>
           {issueItems.length > 0 && (
@@ -719,69 +772,86 @@ export function Pharmacy({
           )}
         </form>
       </Card>
+      )}
       <Card>
         <h3 className="card-title font-bold">Doctor Prescriptions</h3>
-        <div className="mt-4 grid gap-3">
+        <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
           {(() => {
             const visible = prescriptionReady.filter(
               (a: any) => !dismissedConsultations.includes(a.consultationId),
             );
             return (
-              <>
-                {visible.length === 0 && (
-                  <div className="rounded-lg bg-slate-50 p-4 text-xs text-slate-500">
-                    No signed prescriptions ready.
-                  </div>
-                )}
-                {visible.slice(0, 6).map((a: any) => (
-                  <div
-                    key={a.id}
-                    className="flex flex-col justify-between gap-3 rounded-lg border p-4 md:flex-row md:items-center"
-                  >
-                    <div>
-                      <b className="card-title">
-                        {a.token} · {a.patient}
-                      </b>
-                      <p className="card-desc text-slate-500">
-                        Signed prescription ready
-                        {a.doctor && a.doctor !== "Unassigned" ? (
-                          <>
-                            {" · Signed by "}
-                            <span className="font-semibold text-slate-700">
-                              {a.doctor}
-                            </span>
-                          </>
-                        ) : null}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <ActionButton onClick={() => loadConsultDetail(a)} className='close-button'>
-                        View Rx
-                      </ActionButton>
-                      <Button
-                        disabled={busy === a.consultationId}
-                        onClick={() => createFromConsultation(a)}
-                        className='rounded-lg px-2 py-2.5 lg:px-4 lg:py-2 text-xs'
-                      >
-                        {busy === a.consultationId
-                          ? "Creating..."
-                          : "Create Pharmacy Issue"}
-                      </Button>
-                      <ActionButton
-                        onClick={() =>
-                          setDismissedConsultations((ids: string[]) => [
-                            ...ids,
-                            a.consultationId,
-                          ])
-                        }
-                        className='close-button'
-                      >
-                        Remove
-                      </ActionButton>
-                    </div>
-                  </div>
-                ))}
-              </>
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Prescription</th>
+                    <th className="px-4 py-3">Patient</th>
+                    <th className="px-4 py-3">Doctor</th>
+                    <th className="px-4 py-3">Date &amp; Time</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {visible.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-5 text-slate-500">
+                        No completed prescriptions ready.
+                      </td>
+                    </tr>
+                  ) : (
+                    visible.slice(0, 6).map((a: any) => (
+                      <tr key={a.id}>
+                        <td className="px-4 py-3 font-bold">{a.token || "-"}</td>
+                        <td className="px-4 py-3 font-semibold">{a.patient}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {a.doctor && a.doctor !== "Unassigned"
+                            ? a.doctor
+                            : "-"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                          {displayDateTime(
+                            a.consultationSignedAt ||
+                              a.consultationCreatedAt ||
+                              a.appointmentDate,
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            <ActionButton
+                              onClick={() => loadConsultDetail(a)}
+                              className="close-button"
+                            >
+                              View
+                            </ActionButton>
+                            {canCreatePharmacyIssue && (
+                              <Button
+                                disabled={busy === a.consultationId}
+                                onClick={() => createFromConsultation(a)}
+                                className="rounded-lg px-2 py-2 text-xs lg:px-4"
+                              >
+                                {busy === a.consultationId
+                                  ? "Creating..."
+                                  : "Create Issue"}
+                              </Button>
+                            )}
+                            <ActionButton
+                              onClick={() =>
+                                setDismissedConsultations((ids: string[]) => [
+                                  ...ids,
+                                  a.consultationId,
+                                ])
+                              }
+                              className="close-button"
+                            >
+                              Remove
+                            </ActionButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             );
           })()}
         </div>
@@ -807,7 +877,10 @@ export function Pharmacy({
             <tbody className="divide-y">
               {issues.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="card-desc px-4 py-4 text-slate-500">
+                  <td
+                    colSpan={7}
+                    className="card-desc px-4 py-4 text-slate-500"
+                  >
                     No pharmacy issues yet.
                   </td>
                 </tr>
@@ -851,14 +924,30 @@ export function Pharmacy({
                       </p>
                     </td>
                     <td className="text-xs">
-                      {p?.name ||
-                        publicDisplayValue(issue.patient_id, "Patient")}
+                      <div className="flex items-center gap-2">
+                        <span>
+                          {p?.name ||
+                            publicDisplayValue(issue.patient_id, "Patient")}
+                        </span>
+                        <CopyIdButton
+                          value={issue.id}
+                          label="Pharmacy Issue ID"
+                          allowed={canCopyIds}
+                        />
+                      </div>
                     </td>
                     <td>
-                      <Badge className="table-status w-[70%] text-xs px-2">{humanizeOptionLabel(issue.source)}</Badge>
+                      <Badge className="table-status w-[70%] text-xs px-2">
+                        {humanizeOptionLabel(issue.source)}
+                      </Badge>
                     </td>
                     <td>
-                      <Badge tone={statusTone as any} className="table-status w-[60%] text-xs">{statusLabel}</Badge>
+                      <Badge
+                        tone={statusTone as any}
+                        className="table-status w-[60%] text-xs"
+                      >
+                        {statusLabel}
+                      </Badge>
                     </td>
                     <td onClick={(event) => event.stopPropagation()}>
                       {editingAmountId === issue.id ? (
@@ -902,14 +991,16 @@ export function Pharmacy({
                       ) : (
                         <div className="flex items-center gap-2">
                           <b>₹{issue.amount}</b>
-                          <button
-                            type="button"
-                            disabled={cancelled || billed}
-                            onClick={() => startEditAmount(issue)}
-                            className="rounded-xl border px-2 py-1 text-xs font-bold disabled:bg-slate-50 disabled:text-slate-300"
-                          >
-                            Edit
-                          </button>
+                          {canEditPharmacyIssue && (
+                            <button
+                              type="button"
+                              disabled={cancelled || billed}
+                              onClick={() => startEditAmount(issue)}
+                              className="rounded-xl border px-2 py-1 text-xs font-bold disabled:bg-slate-50 disabled:text-slate-300"
+                            >
+                              Edit
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -920,7 +1011,9 @@ export function Pharmacy({
                       <div className="ml-auto w-[190px]">
                         <select
                           value=""
-                          disabled={rowBusy || invoiceBusy || cancelled || invoiced}
+                          disabled={
+                            rowBusy || invoiceBusy || cancelled || invoiced
+                          }
                           onChange={(event: any) =>
                             handleIssueAction(issue, event.target.value)
                           }
@@ -931,27 +1024,33 @@ export function Pharmacy({
                               ? "Updating..."
                               : "Select action"}
                           </option>
-                          <option
-                            value="partial"
-                            disabled={dispensed || cancelled || invoiced}
-                          >
-                            Partial dispense
-                          </option>
-                          <option
-                            value="dispense"
-                            disabled={dispensed || cancelled || invoiced}
-                          >
-                            Dispense
-                          </option>
-                          {!invoiced && (
+                          {canDispensePharmacyIssue && (
+                            <option
+                              value="partial"
+                              disabled={dispensed || cancelled || invoiced}
+                            >
+                              Partial dispense
+                            </option>
+                          )}
+                          {canDispensePharmacyIssue && (
+                            <option
+                              value="dispense"
+                              disabled={dispensed || cancelled || invoiced}
+                            >
+                              Dispense
+                            </option>
+                          )}
+                          {!invoiced && canBillPharmacyIssue && (
                             <option value="invoice">Generate invoice</option>
                           )}
-                          <option
-                            value="cancel"
-                            disabled={dispensed || cancelled || invoiced}
-                          >
-                            Cancel order
-                          </option>
+                          {canDispensePharmacyIssue && (
+                            <option
+                              value="cancel"
+                              disabled={dispensed || cancelled || invoiced}
+                            >
+                              Cancel order
+                            </option>
+                          )}
                         </select>
                       </div>
                     </td>

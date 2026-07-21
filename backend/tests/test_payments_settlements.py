@@ -1,3 +1,22 @@
+from datetime import date, datetime
+
+from sqlmodel import Session
+
+from app.modules.billing.models import (
+    BillingLedgerEntry,
+    DiscountOffer,
+    DiscountType,
+    Invoice,
+    InvoiceStatus,
+    Payment,
+    PaymentMethod,
+    TaxRule,
+)
+from app.modules.billing.repositories.settlement_report_repository import (
+    BillingSettlementReportRepository,
+)
+from app.modules.billing.services.invoice_amounts import apply_generic_invoice_discount
+from app.modules.billing.services.rules import calculate_offer_discount
 from test_billing import create_fee_rule, setup_signed_consultation
 
 
@@ -15,6 +34,120 @@ def create_invoice(
         json={"consultation_id": data["consultation"]["id"]},
     ).json()["invoice"]
     return data, invoice
+
+
+def test_collection_report_repository_uses_payment_and_refund_event_dates(test_engine):
+    with Session(test_engine) as session:
+        session.add(
+            Invoice(
+                id="invoice_from_june",
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                patient_id="patient_collection_period",
+                invoice_number="INV-JUNE",
+                total_amount=400,
+                balance_amount=400,
+                created_at=datetime(2026, 6, 20, 10, 0),
+            )
+        )
+        session.add(
+            Invoice(
+                id="invoice_from_july",
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                patient_id="patient_collection_period",
+                invoice_number="INV-JULY",
+                total_amount=300,
+                balance_amount=300,
+                created_at=datetime(2026, 7, 5, 10, 0),
+            )
+        )
+        session.add(
+            Payment(
+                id="payment_july",
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                invoice_id="invoice_from_june",
+                method=PaymentMethod.CASH,
+                amount=1000,
+                collected_at=datetime(2026, 7, 10, 10, 0),
+            )
+        )
+        session.add(
+            Payment(
+                id="payment_august",
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                invoice_id="invoice_from_july",
+                method=PaymentMethod.UPI,
+                amount=600,
+                collected_at=datetime(2026, 8, 2, 10, 0),
+            )
+        )
+        session.add(
+            BillingLedgerEntry(
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                invoice_id="invoice_from_june",
+                invoice_number="INV-JUNE",
+                entry_type="payment_partially_refunded",
+                description="Payment partially refunded",
+                paid_amount_delta=-250,
+                status_after=InvoiceStatus.PARTIALLY_REFUNDED,
+                created_at=datetime(2026, 7, 20, 10, 0),
+            )
+        )
+        session.add(
+            BillingLedgerEntry(
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                invoice_id="invoice_from_july",
+                invoice_number="INV-JULY",
+                entry_type="payment_refunded",
+                description="Payment refunded in the following month",
+                paid_amount_delta=-100,
+                status_after=InvoiceStatus.PARTIALLY_REFUNDED,
+                created_at=datetime(2026, 8, 5, 10, 0),
+            )
+        )
+        session.commit()
+
+        repository = BillingSettlementReportRepository(session)
+        july_payments = repository.list_collected_payments(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+            from_date=date(2026, 7, 1),
+            to_date=date(2026, 7, 31),
+        )
+        july_refunds = repository.list_refund_entries(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+            from_date=date(2026, 7, 1),
+            to_date=date(2026, 7, 31),
+        )
+        all_due = repository.list_due_collection_invoices(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+        )
+        july_due = repository.list_due_collection_invoices(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+            from_date=date(2026, 7, 1),
+            to_date=date(2026, 7, 31),
+        )
+        august_refunds = repository.list_refund_entries(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+            from_date=date(2026, 8, 1),
+            to_date=date(2026, 8, 31),
+        )
+
+    assert [payment.id for payment in july_payments] == ["payment_july"]
+    assert sum(payment.amount for payment in july_payments) == 1000
+    assert sum(abs(entry.paid_amount_delta) for entry in july_refunds) == 250
+    assert sum(abs(entry.paid_amount_delta) for entry in august_refunds) == 100
+    assert sum(invoice.balance_amount for invoice in all_due) == 700
+    assert [invoice.id for invoice in july_due] == ["invoice_from_july"]
 
 
 def test_partial_cash_and_upi_payments_mark_invoice_partially_then_paid(client):
@@ -109,6 +242,220 @@ def test_paid_invoice_cannot_be_cancelled_until_refunded(client):
     assert refund.json()["payments"][0]["status"] == "refunded"
 
 
+def test_discount_request_reduces_invoice_after_approval_and_execution(client):
+    data, invoice = create_invoice(client, "home_visit", 1000, doctor_pct=60)
+    tenant_id = data["tenant"]["id"]
+
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "discount",
+            "amount": 100,
+            "reason": "Goodwill discount",
+        },
+    ).json()
+    approved = client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/approve",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+    executed = client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/execute",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+
+    assert request["status"] == "pending"
+    assert approved.status_code == 200
+    assert approved.json()["status"] == "approved"
+    assert executed.status_code == 200
+    invoice_after = executed.json()["invoice"]
+    assert invoice_after["subtotal_amount"] == 1000
+    assert invoice_after["discount_amount"] == 100
+    assert invoice_after["total_amount"] == 900
+    assert invoice_after["balance_amount"] == 900
+    assert invoice_after["doctor_share_amount"] == 540
+    assert executed.json()["credit_notes"][0]["amount"] == 100
+    discount_entry = next(
+        entry
+        for entry in executed.json()["ledger_entries"]
+        if entry["entry_type"] == "invoice_discount_applied"
+    )
+    assert discount_entry["credit_amount"] == 100
+    assert discount_entry["invoice_total_delta"] == -100
+    assert discount_entry["balance_amount_delta"] == -100
+
+
+def test_discount_request_blocked_after_payment_recorded(client):
+    data, invoice = create_invoice(client, "home_visit", 1000, doctor_pct=60)
+    tenant_id = data["tenant"]["id"]
+    client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"method": "cash", "amount": 1000},
+    )
+
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "discount",
+            "amount": 100,
+            "reason": "Too late discount",
+        },
+    )
+
+    assert request.status_code == 409
+    assert "refund" in request.json()["detail"].lower()
+
+
+def test_discount_request_allowed_for_op_consultation_invoice(client):
+    # OP consultations used to be excluded from the old direct "edit amount"
+    # feature; discount requests are available for every invoice type now.
+    data, invoice = create_invoice(client, "op", 1000, doctor_pct=60)
+    tenant_id = data["tenant"]["id"]
+
+    request = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/adjustment-requests",
+        headers={"X-Tenant-ID": tenant_id},
+        json={
+            "request_type": "discount",
+            "amount": 100,
+            "reason": "OP goodwill discount",
+        },
+    ).json()
+    client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/approve",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+    executed = client.post(
+        f"/api/v1/billing/adjustment-requests/{request['id']}/execute",
+        headers={"X-Tenant-ID": tenant_id},
+        json={},
+    )
+
+    assert executed.status_code == 200
+    invoice_after = executed.json()["invoice"]
+    assert invoice_after["subtotal_amount"] == 1000
+    assert invoice_after["discount_amount"] == 100
+    assert invoice_after["total_amount"] == 900
+    assert invoice_after["balance_amount"] == 900
+    assert invoice_after["doctor_share_amount"] == 540
+
+
+def test_generic_discount_reduces_non_consultation_invoice_total(test_engine):
+    # Lab/pharmacy/physiotherapy/home-care/direct invoices don't have the
+    # consultation fee-rule structure — the generic discount path just knocks
+    # the amount straight off total/balance instead of recomputing tax/share.
+    with Session(test_engine) as session:
+        invoice = Invoice(
+            tenant_id="tenant_generic_discount",
+            branch_id="branch_main",
+            patient_id="patient_generic",
+            lab_order_id="laborder_generic",
+            invoice_number="MHB-INV-GENERIC",
+            subtotal_amount=800,
+            taxable_amount=800,
+            total_amount=800,
+            paid_amount=0,
+            balance_amount=800,
+            status=InvoiceStatus.ISSUED,
+        )
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+
+        updated = apply_generic_invoice_discount(
+            session,
+            invoice=invoice,
+            discount_amount=200,
+            actor_user_id="tenant_admin",
+        )
+        total_amount = updated.total_amount
+        balance_amount = updated.balance_amount
+        discount_amount = updated.discount_amount
+        result_status = updated.status
+
+    assert total_amount == 600
+    assert balance_amount == 600
+    assert discount_amount == 200
+    assert result_status == InvoiceStatus.ISSUED
+
+
+def test_generic_discount_recomputes_percentage_tax(test_engine):
+    with Session(test_engine) as session:
+        tax_rule = TaxRule(
+            id="taxrule_generic_18",
+            tenant_id="tenant_generic_tax",
+            branch_id="branch_main",
+            name="GST 18",
+            tax_percentage=18,
+            service_scope="lab",
+        )
+        invoice = Invoice(
+            tenant_id="tenant_generic_tax",
+            branch_id="branch_main",
+            patient_id="patient_generic_tax",
+            lab_order_id="laborder_generic_tax",
+            invoice_number="MHB-INV-GENERIC-TAX",
+            subtotal_amount=1000,
+            discount_amount=100,
+            taxable_amount=900,
+            tax_amount=162,
+            tax_rule_id=tax_rule.id,
+            total_amount=1062,
+            paid_amount=0,
+            balance_amount=1062,
+            status=InvoiceStatus.ISSUED,
+        )
+        session.add(tax_rule)
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+
+        updated = apply_generic_invoice_discount(
+            session,
+            invoice=invoice,
+            discount_amount=100,
+            actor_user_id="tenant_admin",
+        )
+
+        assert updated.discount_amount == 200
+        assert updated.taxable_amount == 800
+        assert updated.tax_amount == 144
+        assert updated.total_amount == 944
+        assert updated.balance_amount == 944
+
+
+def test_offer_percentage_uses_gross_subtotal_once(test_engine):
+    with Session(test_engine) as session:
+        offer = DiscountOffer(
+            tenant_id="tenant_offer_percentage",
+            branch_id="branch_main",
+            name="Ten Percent",
+            service_scope="lab",
+            discount_type=DiscountType.PERCENTAGE,
+            value=10,
+        )
+        session.add(offer)
+        session.commit()
+        session.refresh(offer)
+
+        discount, selected = calculate_offer_discount(
+            session,
+            tenant_id=offer.tenant_id,
+            branch_id=offer.branch_id,
+            service_scope="lab",
+            subtotal=1000,
+            discount_offer_id=offer.id,
+        )
+
+        assert selected and selected.id == offer.id
+        assert discount == 100
+
+
 def test_credit_note_can_be_issued_for_invoice(client):
     data, invoice = create_invoice(client)
     tenant_id = data["tenant"]["id"]
@@ -131,12 +478,54 @@ def test_credit_note_can_be_issued_for_invoice(client):
         headers={"X-Tenant-ID": tenant_id},
     )
     assert detail.status_code == 200
-    assert detail.json()["invoice"]["status"] == "partially_refunded"
-    assert detail.json()["invoice"]["balance_amount"] == 900
-    assert any(
-        entry["entry_type"] == "credit_note_issued"
+    assert detail.json()["invoice"]["status"] == "issued"
+    assert detail.json()["invoice"]["total_amount"] == 1000
+    assert detail.json()["invoice"]["paid_amount"] == 0
+    assert detail.json()["invoice"]["balance_amount"] == 1000
+    credit_entry = next(
+        entry
         for entry in detail.json()["ledger_entries"]
+        if entry["entry_type"] == "credit_note_issued"
     )
+    assert credit_entry["debit_amount"] == 0
+    assert credit_entry["credit_amount"] == 0
+    assert credit_entry["invoice_total_delta"] == 0
+    assert credit_entry["paid_amount_delta"] == 0
+    assert credit_entry["balance_amount_delta"] == 0
+
+
+def test_credit_note_does_not_mark_paid_invoice_as_refunded(client):
+    data, invoice = create_invoice(client, fee=75)
+    tenant_id = data["tenant"]["id"]
+    paid = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/payments",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"method": "cash", "amount": 75},
+    )
+
+    credit = client.post(
+        f"/api/v1/billing/invoices/{invoice['id']}/credit-notes",
+        headers={"X-Tenant-ID": tenant_id},
+        json={"amount": 75, "reason": "Billing credit"},
+    )
+    detail = client.get(
+        f"/api/v1/billing/invoices/{invoice['id']}",
+        headers={"X-Tenant-ID": tenant_id},
+    )
+
+    assert paid.status_code == 201
+    assert credit.status_code == 201
+    assert detail.status_code == 200
+    assert detail.json()["invoice"]["status"] == "paid"
+    assert detail.json()["invoice"]["paid_amount"] == 75
+    assert detail.json()["invoice"]["balance_amount"] == 0
+    credit_entry = next(
+        entry
+        for entry in detail.json()["ledger_entries"]
+        if entry["entry_type"] == "credit_note_issued"
+    )
+    assert credit_entry["status_after"] == "paid"
+    assert credit_entry["balance_amount_delta"] == 0
 
 
 def test_unpaid_invoice_can_be_cancelled(client):
@@ -192,6 +581,10 @@ def test_doctor_settlement_finalization_and_reports(client):
         "/api/v1/billing/reports/revenue?group_by=doctor",
         headers={"X-Tenant-ID": tenant_id},
     )
+    collections = client.get(
+        "/api/v1/billing/reports/collections",
+        headers={"X-Tenant-ID": tenant_id},
+    )
     finalized = client.post(
         "/api/v1/billing/doctor-settlements/finalize",
         headers={"X-Tenant-ID": tenant_id},
@@ -201,7 +594,12 @@ def test_doctor_settlement_finalization_and_reports(client):
     assert due.status_code == 200
     assert due.json()["total_due_amount"] == 300
     assert revenue.status_code == 200
+    assert revenue.json()["total_billed_amount"] == 1000
     assert revenue.json()["total_invoice_amount"] == 1000
+    assert collections.status_code == 200
+    assert collections.json()["collected_amount"] == 700
+    assert collections.json()["refunded_amount"] == 0
+    assert collections.json()["net_collected_amount"] == 700
     assert finalized.status_code == 200
     assert finalized.json()["settlement_amount"] == 420
     assert finalized.json()["status"] == "finalized"
@@ -363,11 +761,20 @@ def test_partial_refund_updates_net_revenue_report(client):
         "/api/v1/billing/reports/revenue?group_by=doctor",
         headers={"X-Tenant-ID": tenant_id},
     )
+    collections = client.get(
+        "/api/v1/billing/reports/collections",
+        headers={"X-Tenant-ID": tenant_id},
+    )
 
     assert executed.status_code == 200
     assert executed.json()["invoice"]["status"] == "partially_refunded"
     assert executed.json()["invoice"]["paid_amount"] == 750
     assert revenue.status_code == 200
+    assert revenue.json()["total_billed_amount"] == 1000
     assert revenue.json()["total_invoice_amount"] == 750
     assert revenue.json()["total_paid_amount"] == 750
     assert revenue.json()["total_doctor_share"] == 450
+    assert collections.status_code == 200
+    assert collections.json()["collected_amount"] == 1000
+    assert collections.json()["refunded_amount"] == 250
+    assert collections.json()["net_collected_amount"] == 750

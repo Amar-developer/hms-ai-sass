@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
+from sqlalchemy import Index, text
 from sqlmodel import Field, SQLModel
 
 from app.modules.appointments.models import AppointmentType
@@ -41,6 +42,7 @@ class BillingAdjustmentType(str, Enum):
     CANCEL = "cancel"
     FULL_REFUND = "full_refund"
     PARTIAL_REFUND = "partial_refund"
+    DISCOUNT = "discount"
 
 
 class BillingAdjustmentStatus(str, Enum):
@@ -102,6 +104,40 @@ class DoctorFeeRule(SQLModel, table=True):
 
 
 class Invoice(SQLModel, table=True):
+    # NULL is not considered equal to NULL by a unique index in either
+    # SQLite or Postgres, so these still allow unlimited invoices with a
+    # NULL consultation_id/physiotherapy_case_id (lab, pharmacy, subscription,
+    # etc. invoices) while guaranteeing at most one invoice per consultation
+    # or physiotherapy case, closing the check-then-insert race in those flows.
+    # CHANGED: uq_invoice_consultation_id is scoped to "pure" consultation
+    # invoices (matching ConsultationBillingReferenceRepository.
+    # has_existing_consultation_invoice's filter) because a lab-order or
+    # pharmacy-issue invoice legitimately copies the same consultation_id
+    # onto its own row when the order/issue is linked to that consultation;
+    # an unscoped unique index would reject that valid coexistence.
+    __table_args__ = (
+        Index(
+            "uq_invoice_consultation_id",
+            "consultation_id",
+            unique=True,
+            postgresql_where=text(
+                "lab_order_id IS NULL AND pharmacy_issue_id IS NULL "
+                "AND ip_admission_id IS NULL AND physiotherapy_case_id IS NULL"
+            ),
+            sqlite_where=text(
+                "lab_order_id IS NULL AND pharmacy_issue_id IS NULL "
+                "AND ip_admission_id IS NULL AND physiotherapy_case_id IS NULL"
+            ),
+        ),
+        Index("uq_invoice_physiotherapy_case_id", "physiotherapy_case_id", unique=True),
+        Index(
+            "ix_invoice_tenant_branch_created_at",
+            "tenant_id",
+            "branch_id",
+            "created_at",
+        ),
+    )
+
     id: str = Field(default_factory=lambda: new_id("invoice"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
@@ -138,6 +174,9 @@ class Invoice(SQLModel, table=True):
     subtotal_amount: int = Field(default=0, ge=0)
     discount_amount: int = Field(default=0, ge=0)
     membership_discount_amount: int = Field(default=0, ge=0)
+    membership_free_items_amount: int = Field(default=0, ge=0)
+    membership_item_discount_amount: int = Field(default=0, ge=0)
+    membership_regular_items_amount: int = Field(default=0, ge=0)
     taxable_amount: int = Field(default=0, ge=0)
     tax_amount: int = Field(default=0, ge=0)
     tax_rule_id: str | None = Field(default=None, index=True)
@@ -165,6 +204,8 @@ class InvoiceItem(SQLModel, table=True):
     quantity: int = Field(default=1, ge=1)
     unit_amount: int = Field(ge=0)
     total_amount: int = Field(ge=0)
+    discount_amount: int | None = Field(default=None, ge=0)
+    membership_discount_amount: int | None = Field(default=None, ge=0)
     mrp_amount: int = Field(default=0, ge=0)
     selling_amount: int = Field(default=0, ge=0)
     buying_amount: int = Field(default=0, ge=0)

@@ -70,6 +70,20 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     service_body = service.json()
     assert service_body["code"].startswith("HC-NURSIN-")
 
+    duplicate_service = client.post(
+        "/api/v1/home-care/services",
+        headers=headers,
+        json={
+            "branch_id": branch_id,
+            "name": "  nursing visit  ",
+            "default_price": 900,
+        },
+    )
+    assert duplicate_service.status_code == 409
+    assert duplicate_service.json()["detail"] == (
+        'An item named "nursing visit" already exists.'
+    )
+
     service_update = client.patch(
         f"/api/v1/home-care/services/{service_body['id']}",
         headers=headers,
@@ -92,7 +106,10 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
             "patient_id": patient_id,
             "assigned_staff_name": "Nurse Lakshmi",
             "staff_type": "nurse",
+            "booking_type": "home_care",
             "recurrence": "Daily",
+            "start_date": date.today().isoformat(),
+            "end_date": date.today().isoformat(),
             "location": "12 Home Street, Chennai",
             "complaints": "Post-discharge support",
             "services": [
@@ -176,7 +193,7 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
         },
     )
     assert completed_visit.status_code == 201
-    assert completed_visit.json()["total_amount"] == 1000
+    assert completed_visit.json()["total_amount"] == 500
 
     bookings = client.get(
         f"/api/v1/home-care/bookings?branch_id={branch_id}&patient_id={patient_id}&status_filter=scheduled",
@@ -186,18 +203,32 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     assert [row["id"] for row in bookings.json()] == [booking_body["id"]]
     assert len(bookings.json()[0]["visit_logs"]) == 2
 
+    offer = client.post(
+        "/api/v1/billing/discount-offers",
+        headers=headers,
+        json={
+            "branch_id": branch_id,
+            "name": "Home Care Concession",
+            "service_scope": "home_care",
+            "discount_type": "fixed",
+            "value": 100,
+        },
+    )
+    assert offer.status_code == 201
+
     invoice = client.post(
         f"/api/v1/home-care/bookings/{booking_body['id']}/invoice",
         headers=headers,
-        json={"discount_amount": 100},
+        json={"discount_offer_id": offer.json()["id"]},
     )
     assert invoice.status_code == 201
     invoice_body = invoice.json()
     assert invoice_body["invoice"]["home_care_booking_id"] == booking_body["id"]
-    assert invoice_body["invoice"]["subtotal_amount"] == 1000
+    assert invoice_body["invoice"]["subtotal_amount"] == 500
     assert invoice_body["invoice"]["discount_amount"] == 100
-    assert invoice_body["invoice"]["total_amount"] == 900
+    assert invoice_body["invoice"]["total_amount"] == 400
     assert invoice_body["items"][0]["item_type"] == "home_care"
+    assert invoice_body["items"][0]["total_amount"] == 500
     assert invoice_body["items"][0]["external_slug"] == "home_care_service"
     assert (
         invoice_body["items"][0]["external_item_code"] == completed_visit.json()["id"]
@@ -219,7 +250,7 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     payment = client.post(
         f"/api/v1/billing/invoices/{invoice_body['invoice']['id']}/payments",
         headers=headers,
-        json={"method": "cash", "amount": 900},
+        json={"method": "cash", "amount": 400},
     )
     assert payment.status_code == 201
 

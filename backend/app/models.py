@@ -1,7 +1,7 @@
 """Import all SQLModel tables so metadata is complete for migrations."""
 
 from app.modules.appointments.models import Appointment
-from app.modules.audit.models import AuditEvent
+from app.modules.audit.models import AuditEvent, DocumentComment, DocumentCommentMention
 from app.modules.billing.models import (
     BillingAdjustmentRequest,
     CreditNote,
@@ -22,6 +22,7 @@ from app.modules.consultations.models import (
     ConsultationMedicine,
 )
 from app.modules.consultations.models import ConsultationReferral, ConsultationVital
+from app.modules.error_logs.models import ErrorLog
 from app.modules.home_care.models import (
     HomeCareBooking,
     HomeCareBookingItem,
@@ -56,7 +57,11 @@ from app.modules.lab.models import (
     LabSample,
 )
 from app.modules.lab.models import LabTestCatalog, LabTestPackage, LabTestPackageItem
-from app.modules.notifications.models import NotificationEvent
+from app.modules.notifications.models import (
+    InAppNotification,
+    NotificationEvent,
+    ProductAnnouncement,
+)
 from app.modules.patients.models import Patient, PatientAlert, PatientContact
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
@@ -105,6 +110,8 @@ __all__ = [
     "AdminSetting",
     "Appointment",
     "AuditEvent",
+    "DocumentComment",
+    "DocumentCommentMention",
     "AuthSession",
     "Branch",
     "BillingAdjustmentRequest",
@@ -123,6 +130,7 @@ __all__ = [
     "HomeCareService",
     "HomeCareVisitLog",
     "DoctorSettlement",
+    "ErrorLog",
     "DiscountApproval",
     "DiscountOffer",
     "CreditNote",
@@ -147,6 +155,7 @@ __all__ = [
     "LabTestPackage",
     "LabTestPackageItem",
     "NotificationEvent",
+    "InAppNotification",
     "Patient",
     "PatientAlert",
     "PatientContact",
@@ -177,6 +186,7 @@ __all__ = [
     "QueueEntry",
     "QueueEvent",
     "ReportJob",
+    "ProductAnnouncement",
     "Role",
     "RolePermission",
     "SubscriptionPlan",

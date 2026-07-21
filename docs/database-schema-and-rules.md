@@ -614,7 +614,7 @@ require_user_branch_access(current_user, payload.branch_id)
 | Tenant/branch access denied | `backend/app/core/auth.py`, `backend/app/core/access_control.py` |
 | UI sends wrong field | `features/<module>/*.tsx` |
 | Frontend API headers | `lib/api.ts` |
-| Seeded demo data wrong | `backend/scripts/seed_demo_new.py` |
+| Seeded demo data wrong | `backend/scripts/seed_demo.py` |
 
 ## Backend Verification Commands
 
@@ -754,8 +754,8 @@ MEDIZINHUB_SMTP_USE_TLS=true
 Docker services:
 
 ```bash
-sudo docker compose -f docker-compose.dev.yml up -d --force-recreate backend report-worker
-sudo docker compose -f docker-compose.dev.yml logs -f report-worker
+sudo docker compose -f docker-compose.local.yml up -d --force-recreate backend report-worker
+sudo docker compose -f docker-compose.local.yml logs -f report-worker
 ```
 
 ## Source Control Hygiene

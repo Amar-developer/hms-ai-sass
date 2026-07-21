@@ -1,0 +1,24 @@
+import { describe, expect, it } from "vitest";
+
+import { findDuplicateItem, itemEndpoint, normalizeItemName } from "./helpers";
+
+describe("item catalog helpers", () => {
+  it("detects duplicate names across item types, ignoring case and whitespace", () => {
+    const rows = [
+      { id: "medicine-one", type: "medicine", name: "Nursing Support" },
+    ];
+
+    expect(normalizeItemName("  NURSING   support ")).toBe("nursing support");
+    expect(findDuplicateItem(rows, " nursing support ")?.id).toBe(
+      "medicine-one",
+    );
+    expect(findDuplicateItem(rows, "Nursing Support", "medicine-one")).toBeNull();
+  });
+
+  it("routes Service items to the lab package API", () => {
+    expect(itemEndpoint("lab_package")).toBe("/lab/catalog/packages");
+    expect(itemEndpoint("lab_package", "package-one")).toBe(
+      "/lab/catalog/packages/package-one",
+    );
+  });
+});

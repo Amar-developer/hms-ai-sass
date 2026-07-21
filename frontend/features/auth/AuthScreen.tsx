@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { authSchema, AuthFormValues } from "@/features/auth/auth.schema";
 import { Eye, EyeOff, HeartPulse, Lock, ShieldCheck } from "lucide-react";
 import { Button, Card, Field, Input } from "@/app/components/common/ui";
 
@@ -17,10 +20,18 @@ export function AuthScreen({
     process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "true" ||
     process.env.NODE_ENV !== "production";
   const preset = loginPresets[role] || loginPresets.tenant_admin;
-  const [email, setEmail] = useState(showDemoCredentials ? preset.email : "");
-  const [password, setPassword] = useState(
-    showDemoCredentials ? preset.password : "",
-  );
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    formState: { errors },
+  } = useForm<AuthFormValues>({
+    resolver: zodResolver(authSchema),
+    defaultValues: {
+      email: showDemoCredentials ? preset.email : "",
+      password: showDemoCredentials ? preset.password : "",
+    },
+  });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showDemo, setShowDemo] = useState(false);
@@ -29,23 +40,27 @@ export function AuthScreen({
   function fillDemo(id: string) {
     const next = loginPresets[id] || loginPresets.tenant_admin;
     setRole(id);
-    setEmail(next.email);
-    setPassword(next.password);
+    setValue("email", next.email, {
+      shouldValidate: true,
+    });
+    setValue("password", next.password, {
+      shouldValidate: true,
+    });
     setError("");
   }
 
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  const submit = async (data: AuthFormValues) => {
     setError("");
     setLoading(true);
+
     try {
-      await onLogin({ email, password });
+      await onLogin(data);
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   return (
     <main className="min-h-screen bg-slate-100 px-4 py-6 text-slate-900 sm:px-6 lg:px-8">
@@ -107,39 +122,44 @@ export function AuthScreen({
               </div>
             </div>
 
-            <form onSubmit={submit} className="grid gap-4">
+            <form onSubmit={handleSubmit(submit)} className="grid gap-4">
               <Field label="Username / Email">
                 <Input
                   autoComplete="username"
-                  value={email}
-                  onChange={(e: any) => setEmail(e.target.value)}
                   placeholder="name@clinic.com"
-                  required
-                  className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
+                  className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+                  {...register("email")}
                 />
+                {errors.email && (
+                  <p className="mt-1 text-xs text-red-500">
+                    {errors.email.message}
+                  </p>
+                )}
               </Field>
               <Field label="Password">
                 <div className="relative">
                   <Input
                     autoComplete="current-password"
                     type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e: any) => setPassword(e.target.value)}
                     placeholder="Enter password"
-                    required
-                     className='rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm'
+                    className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
+                    {...register("password")}
                   />
+
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    aria-label={
-                      showPassword ? "Hide password" : "Show password"
-                    }
-                    className="absolute right-3 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-xl text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                    className="absolute right-3 top-1/2 -translate-y-1/2"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+
+                {errors.password && (
+                  <p className="mt-1 text-xs text-red-500">
+                    {errors.password.message}
+                  </p>
+                )}
               </Field>
               {error && (
                 <div className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-700">

@@ -7,21 +7,47 @@ import {
   Field,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiFetch } from "@/lib/api";
-import { SelectField, TextField } from "@/app/components/FormElements";
+import { apiFetch, apiUpload } from "@/lib/api";
+import {
+  FormField,
+  SelectField,
+  TextField,
+} from "@/app/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
-import { doctorTypes } from "@/utils/doctors/constants";
-import { Empty,Pagination,ConfirmModal,DoctorRow } from "@/app/components/doctors/Shared";
-import { activeTenantOptions } from "@/utils/doctors/helpers";
-import { DoctorForm } from "@/app/components/doctors/Forms";
+import { doctorTypes } from "./constants";
+import { Empty } from "@/app/components/common/Empty";
+import { DoctorRow } from "./components/DoctorRow";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { activeTenantOptions } from "@/utils/helper";
+import { DoctorForm } from "@/features/doctors/forms/DoctorForm";
+import { Pagination } from "@/app/components/common/Pagination";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
 const pageSize = 10;
 
-export function Doctors({ apiSession, clinic }: any) {
+export function Doctors({ apiSession, clinic, setLivePractitioners }: any) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      isSuperAdmin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreateDoctor = hasPermission(
+    "practitioners.manage",
+    "practitioners.create",
+  );
+  const canEditDoctor = hasPermission("practitioners.manage", "practitioners.edit");
+  const canDeleteDoctor = hasPermission(
+    "practitioners.manage",
+    "practitioners.delete",
+  );
   const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
@@ -41,6 +67,17 @@ export function Doctors({ apiSession, clinic }: any) {
   const selected = rows.find((row: any) => row.id === selectedId);
   const scopedSession =
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
+
+  function syncSharedPractitioner(practitioner: any) {
+    if (!setLivePractitioners || !practitioner?.id) return;
+    setLivePractitioners((previous: any[]) =>
+      previous.some((row: any) => row.id === practitioner.id)
+        ? previous.map((row: any) =>
+            row.id === practitioner.id ? practitioner : row,
+          )
+        : [practitioner, ...previous],
+    );
+  }
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
@@ -86,7 +123,6 @@ export function Doctors({ apiSession, clinic }: any) {
       setBusy(false);
     }
   }
-
   useEffect(() => {
     if (apiSession) {
       loadTenants();
@@ -203,6 +239,7 @@ export function Doctors({ apiSession, clinic }: any) {
         created,
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
+      syncSharedPractitioner(created);
       open("list");
       await loadData(tenantId);
       setMessage(`Doctor created: ${created.full_name}`);
@@ -247,11 +284,52 @@ export function Doctors({ apiSession, clinic }: any) {
         updated,
         ...previous.filter((row: any) => row.id !== updated.id),
       ]);
+      syncSharedPractitioner(updated);
       open("list");
       await loadData(tenantId);
       setMessage("Doctor updated.");
     } catch (err: any) {
       setMessage(err.message || "Could not update doctor.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadDoctorSignature(practitionerId: string, file: File) {
+    if (!scopedSession || !file) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const upload = new FormData();
+      upload.append("file", file);
+      upload.append("category", "signature");
+      upload.append("source_module", "practitioners");
+      upload.append("attached_to_doctype", "Practitioner");
+      upload.append("attached_to_name", practitionerId);
+      upload.append("attached_to_field", "signature_url");
+      upload.append("attached_to_label", "Doctor Signature");
+      upload.append("folder", "Signatures");
+      const created = await apiUpload("/files", scopedSession, upload);
+      setRows((previous: any[]) =>
+        previous.map((row: any) =>
+          row.id === practitionerId
+            ? { ...row, signature_url: created.file_url }
+            : row,
+        ),
+      );
+      if (setLivePractitioners) {
+        setLivePractitioners((previous: any[]) =>
+          previous.map((row: any) =>
+            row.id === practitionerId
+              ? { ...row, signature_url: created.file_url }
+              : row,
+          ),
+        );
+      }
+      await loadData(tenantId);
+      setMessage("Signature uploaded.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not upload signature.");
     } finally {
       setBusy(false);
     }
@@ -279,6 +357,7 @@ export function Doctors({ apiSession, clinic }: any) {
         updated,
         ...previous.filter((item: any) => item.id !== updated.id),
       ]);
+      syncSharedPractitioner(updated);
       setMessage(
         `Doctor ${updated.status === "active" ? "activated" : "deactivated"}.`,
       );
@@ -303,6 +382,13 @@ export function Doctors({ apiSession, clinic }: any) {
           item.id === row.id ? { ...item, status: "inactive" } : item,
         ),
       );
+      if (setLivePractitioners) {
+        setLivePractitioners((previous: any[]) =>
+          previous.map((item: any) =>
+            item.id === row.id ? { ...item, status: "inactive" } : item,
+          ),
+        );
+      }
       setMessage("Doctor deleted/deactivated.");
     } catch (err: any) {
       setMessage(err.message || "Could not delete doctor.");
@@ -311,7 +397,6 @@ export function Doctors({ apiSession, clinic }: any) {
       setConfirm(null);
     }
   }
-
   if (!apiSession)
     return (
       <Card>
@@ -322,7 +407,7 @@ export function Doctors({ apiSession, clinic }: any) {
       </Card>
     );
 
-  if (view === "create")
+  if (view === "create" && canCreateDoctor)
     return (
       <DoctorForm
         title="Create Doctor"
@@ -348,10 +433,12 @@ export function Doctors({ apiSession, clinic }: any) {
         feeRules={feeRules}
         busy={busy}
         onSubmit={updateDoctor}
+        onUploadSignature={(file: File) =>
+          uploadDoctorSignature(selected.id, file)
+        }
         back={() => open("list")}
       />
     );
-
   const filtered = rows
     .filter((row: any) => {
       const text = [
@@ -394,14 +481,16 @@ export function Doctors({ apiSession, clinic }: any) {
         </div>
         <div className="flex justify-start items-center gap-2">
           <RefreshButton onRefresh={() => loadData(tenantId)} />
-          <button
-            type="button"
-            onClick={() => open("create")}
-            className="inline-flex items-center justify-center gap-2 rounded-lg lg:w-full bg-slate-900 px-4 py-3 text-xs  font-bold text-white"
-          >
-            <Plus size={16} />
-            Create Doctor
-          </button>
+          {canCreateDoctor && (
+            <button
+              type="button"
+              onClick={() => open("create")}
+              className="inline-flex items-center justify-center gap-2 rounded-lg lg:w-full bg-slate-900 px-4 py-3 text-xs  font-bold text-white"
+            >
+              <Plus size={16} />
+              Create Doctor
+            </button>
+          )}
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
@@ -414,45 +503,49 @@ export function Doctors({ apiSession, clinic }: any) {
             options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
           />
         )}
-        <TextField
-          label="Search"
-          value={query}
-          onChange={(v) => {
-            setQuery(v);
-            setPage(1);
-          }}
-          placeholder="Name, specialty, mobile, email"
-          className="search-filter text-xs placeholder:text-xs"
-        />
-        <SelectField
-          label="Type"
-          value={type}
-          onChange={(v) => {
-            setType(v);
-            setPage(1);
-          }}
-          options={[
-            { value: "all", label: "All types" },
-            ...doctorTypes.map(([value, label]) => ({ value, label })),
-          ]}
-        />
-        <SelectField
-          label="Status"
-          value={status}
-          onChange={(v) => {
-            setStatus(v);
-            setPage(1);
-          }}
-          options={[
-            { value: "all", label: "All status" },
-            { value: "active", label: "Active" },
-            { value: "inactive", label: "Inactive" },
-          ]}
-        />
+        <FormField  label="Search">
+          <Input
+            value={query}
+            onChange={(event: any) => {
+              setQuery(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Name, specialty, mobile, email"
+          />
+        </FormField>
+        <FormField label="Type">
+          <SearchableSelect
+            value={type}
+            onChange={(v) => {
+              setType(v);
+              setPage(1);
+            }}
+            options={[
+              { value: "all", label: "All types" },
+              ...doctorTypes.map(([value, label]) => ({ value, label })),
+            ]}
+            searchable={false}
+          />
+        </FormField>
+        <FormField label="Status">
+          <SearchableSelect
+            value={status}
+            onChange={(v) => {
+              setStatus(v);
+              setPage(1);
+            }}
+            options={[
+              { value: "all", label: "All status" },
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+            ]}
+            searchable={false}
+          />
+        </FormField>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1280px]">
-          <div className="hidden md:grid grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_1.45fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
+          <div className="hidden md:grid grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_.65fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span className="text-sm">Doctor</span>
             <span className="text-sm">Type</span>
             <span className="text-sm">Branches</span>
@@ -460,7 +553,7 @@ export function Doctors({ apiSession, clinic }: any) {
             <span className="text-sm">Contact</span>
             <span className="text-sm">Fee</span>
             <span className="text-sm text-center">Status</span>
-            <span className="text-sm text-center lg:text-right">Actions</span>
+            <span className="text-sm text-center">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
@@ -474,12 +567,21 @@ export function Doctors({ apiSession, clinic }: any) {
               <DoctorRow
                 key={row.id}
                 row={row}
+                canCopyIds={canCopyIds}
                 branches={branches}
                 departments={departments}
                 feeRules={feeRules}
                 onEdit={() => open("edit", row.id)}
-                onStatus={() => setConfirm({ kind: "status", row })}
-                onDelete={() => setConfirm({ kind: "delete", row })}
+                onStatus={
+                  canEditDoctor
+                    ? () => setConfirm({ kind: "status", row })
+                    : undefined
+                }
+                onDelete={
+                  canDeleteDoctor
+                    ? () => setConfirm({ kind: "delete", row })
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -494,8 +596,8 @@ export function Doctors({ apiSession, clinic }: any) {
       {confirm && (
         <ConfirmModal
           busy={busy}
-          confirm={confirm}
-          onClose={() => setConfirm(null)}
+          action={confirm}
+          onCancel={() => setConfirm(null)}
           onConfirm={() =>
             confirm.kind === "delete"
               ? deleteDoctor(confirm.row)

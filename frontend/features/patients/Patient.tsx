@@ -2,30 +2,36 @@
 
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { ConfirmModal, Empty, Pagination } from "@/app/components/patient/Shared";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { Empty } from "@/app/components/common/Empty";
+import { Pagination } from "@/app/components/common/Pagination";
 import {
   Button,
   Card,
+  Input,
   RefreshButton,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import {apiFetch, apiUpload, type ApiSession } from "@/lib/api";
+import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 import {
-  DateField,
-  SelectField,
-  TextField,
+  FormField,
 } from "@/app/components/FormElements";
-import { patientSearchText, toRow } from "@/utils/patient/helpers";
-import { PatientForm } from "@/app/components/patient/Forms";
-import { PatientDetail } from "@/app/components/patient/PatientDetail";
-import { activeTenantOptions } from "@/utils/doctors/helpers";
-import { PatientRow } from "@/app/components/patient/PatientRow";
+import { patientSearchText,toRow } from "./helpers";
+import { PatientForm } from "@/features/patients/forms/PatientForms";
+import { PatientDetail } from "./components/PatientDetail";
+import { activeTenantOptions } from "@/utils/helper";
+import { PatientRow } from "./components/PatientRow";
+import { mapPatient } from "@/lib/liveData";
+import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
 type PatientProps = {
   apiSession: ApiSession | null;
   branchId?: string;
   loadLiveData?: (session: ApiSession) => void | Promise<unknown>;
   setActive?: (page: string) => void;
+  setPatients?: (updater: (prev: any[]) => any[]) => void;
 };
 
 const pageSize = 10;
@@ -36,8 +42,25 @@ const genders = [
   ["unknown", "Unknown"],
 ] as const;
 
-export function Patient({ apiSession, branchId, loadLiveData, setActive }: PatientProps) {
+export function Patient({
+  apiSession,
+  branchId,
+  loadLiveData,
+  setActive,
+  setPatients,
+}: PatientProps) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      isSuperAdmin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreatePatient = hasPermission("patients.write", "patients.create");
+  const canEditPatient = hasPermission("patients.edit");
+  const canDeletePatient = hasPermission("patients.delete");
   const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
@@ -68,6 +91,16 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
   const selected =
     selectedDetail || rows.find((row: any) => row.id === selectedId);
+
+  function syncSharedPatient(patient: any) {
+    if (!setPatients || !patient?.id) return;
+    const mapped = mapPatient(patient);
+    setPatients((previous: any[]) =>
+      previous.some((row: any) => row.id === mapped.id)
+        ? previous.map((row: any) => (row.id === mapped.id ? mapped : row))
+        : [mapped, ...previous],
+    );
+  }
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
@@ -196,7 +229,9 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
 
   useEffect(() => {
     if (!apiSession || !tenantId || typeof window === "undefined") return;
-    const pendingPatientId = sessionStorage.getItem("medizinhub.patientId");
+    const pendingPatientId =
+      sessionStorage.getItem("medizinhub.patientId") ||
+      readNotificationTarget("patient")?.resourceId;
     if (!pendingPatientId) return;
     sessionStorage.removeItem("medizinhub.patientId");
     setSelectedId(pendingPatientId);
@@ -228,10 +263,9 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
         "alternate_mobile" in selectedDetail &&
         "address" in selectedDetail &&
         "blood_group" in selectedDetail;
-      const detail =
-        hasCompleteEditRecord
-          ? selectedDetail
-          : await apiFetch(`/patients/${id}`, scopedSession);
+      const detail = hasCompleteEditRecord
+        ? selectedDetail
+        : await apiFetch(`/patients/${id}`, scopedSession);
       setSelectedId(id);
       setSelectedDetail(detail);
       setView("edit");
@@ -272,6 +306,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
         toRow(created),
         ...previous.filter((row: any) => row.id !== created.id),
       ]);
+      syncSharedPatient(created);
       setSelectedId(created.id);
       await loadData(tenantId);
       open("detail", created.id);
@@ -311,6 +346,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
         toRow(updated),
         ...previous.filter((row: any) => row.id !== updated.id),
       ]);
+      syncSharedPatient(updated);
       setSelectedDetail(updated);
       await loadData(tenantId);
       open("detail", updated.id);
@@ -339,6 +375,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
         toRow(updated),
         ...previous.filter((row: any) => row.id !== updated.id),
       ]);
+      syncSharedPatient(updated);
       setMessage("Photo uploaded.");
     } catch (err: any) {
       setMessage(err.message || "Could not upload photo.");
@@ -360,6 +397,13 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
           item.id === row.id ? { ...item, status: "inactive" } : item,
         ),
       );
+      if (setPatients) {
+        setPatients((previous: any[]) =>
+          previous.map((item: any) =>
+            item.id === row.id ? { ...item, status: "inactive" } : item,
+          ),
+        );
+      }
       if (selectedId === row.id)
         setSelectedDetail({ ...selectedDetail, status: "inactive" });
       setMessage("Patient deleted/deactivated.");
@@ -371,11 +415,35 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
     }
   }
 
+  async function activatePatient(row: any) {
+    if (!scopedSession) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const updated = await apiFetch(`/patients/${row.id}`, scopedSession, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "active" }),
+      });
+      setRows((previous: any[]) =>
+        previous.map((item: any) =>
+          item.id === row.id ? { ...item, status: updated.status } : item,
+        ),
+      );
+      syncSharedPatient(updated);
+      if (selectedId === row.id) setSelectedDetail(updated);
+      setMessage("Patient activated.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not activate patient.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function enrollMembership(data: any) {
-    if (!scopedSession || !selectedId) return;
+    if (!scopedSession || !selectedId) return false;
     if (!data.planId) {
       setMessage("Select membership plan.");
-      return;
+      return false;
     }
     setBusy(true);
     setMessage("");
@@ -396,8 +464,10 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
       await loadPatientDetail(selectedId);
       if (loadLiveData) await loadLiveData(scopedSession);
       setMessage("Patient membership enrolled and purchase invoice created.");
+      return true;
     } catch (err: any) {
       setMessage(err.message || "Could not enroll membership.");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -413,7 +483,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
       </Card>
     );
 
-  if (view === "create")
+  if (view === "create" && canCreatePatient)
     return (
       <PatientForm
         title="Create Patient"
@@ -424,10 +494,10 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
         back={() => open("list")}
       />
     );
-  if (view === "edit" && selected)
+  if (view === "edit" && selected && canEditPatient)
     return (
       <PatientForm
-        key={`${selected.id}:${selected.updated_at || ""}`}
+        key={selected.id}
         title="Edit Patient"
         patient={selected}
         branches={branches}
@@ -465,7 +535,7 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
 
   const filtered = rows
     .filter((row: any) => {
-      const search = query.trim().toLowerCase();
+      const search = String(query || "").trim().toLowerCase();
       const created = row.created_at ? new Date(row.created_at).getTime() : 0;
       const from = fromDate ? new Date(fromDate).getTime() : 0;
       const to = toDate
@@ -506,14 +576,16 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
         </div>
         <div className="flex items-center gap-2">
           <RefreshButton onRefresh={() => loadData(tenantId)} />
-          <button
-            type="button"
-            onClick={() => open("create")}
-            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
-          >
-            <Plus size={16} />
-            Create Patient
-          </button>
+          {canCreatePatient && (
+            <button
+              type="button"
+              onClick={() => open("create")}
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-slate-800"
+            >
+              <Plus size={16} />
+              Create Patient
+            </button>
+          )}
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
@@ -522,68 +594,64 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
           className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "md:grid-cols-4 lg:grid-cols-4"}`}
         >
           {isSuperAdmin && (
-            <SelectField
-              label="Tenant"
-              value={tenantId}
-              onChange={setTenantId}
-              options={tenants.map((t: any) => ({
-                value: t.id,
-                label: t.name,
-              }))}
-            />
+            <FormField label="Tenant">
+              <SearchableSelect
+                searchable={false}
+                value={tenantId}
+                onChange={setTenantId}
+                options={tenants.map((t: any) => ({
+                  value: t.id,
+                  label: t.name,
+                }))}
+              />
+            </FormField>
           )}
-          <TextField
-            label="Patient / Mobile"
-            value={query}
-            onChange={(value) => {
-              setQuery(value);
-              setPage(1);
-            }}
-            placeholder="Name, mobile, area"
-            className="text-xs search-filter placeholder:text-xs"
-          />
-          <SelectField
-            label="Branch"
-            value={branchFilter}
-            onChange={(v) => {
-              setBranchFilter(v);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All branches" },
-              ...branches.map((b: any) => ({ value: b.id, label: b.name })),
-            ]}
+          <FormField label="Patient / Mobile">
+            <Input
+              value={query}
+              onChange={(event: any) => {
+                setQuery(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Name, mobile, area"
+            />
+          </FormField>
+          <FormField label="Branch">
+            <SearchableSelect
+              name="branch"
+              value={branchFilter}
+              onChange={(v: string) => {
+                setBranchFilter(v);
+                setPage(1);
+              }}
+              options={[
+                { value: "all", label: "All branches" },
+                ...branches.map((b: any) => ({
+                  value: b.id,
+                  label: b.name,
+                })),
+              ]}
+              placeholder="Select branch"
+              searchable={branches.length > 8}
+            />
+          </FormField>
+          <FormField label="Status">
+            <SearchableSelect
+              value={status}
+              onChange={(v) => {
+                setStatus(v);
+                setPage(1);
+              }}
+              options={[
+                { value: "all", label: "All status" },
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+                { value: "deceased", label: "Deceased" },
+              ]}
+              searchable={false}
+            />
+          </FormField>
 
-          />
-          {/* <SelectField
-            label="Gender"
-            value={gender}
-            onChange={(v) => {
-              setGender(v);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All gender" },
-              ...genders.map(([value, label]) => ({ value, label })),
-            ]}
-          /> */}
-          <SelectField
-            label="Status"
-            value={status}
-            onChange={(v) => {
-              setStatus(v);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All status" },
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-              { value: "deceased", label: "Deceased" },
-            ]}
-            className="text-xs"
-          />
-          {/* <DateField label="From" value={fromDate} onChange={setFromDate} />
-          <DateField label="To" value={toDate} onChange={setToDate} /> */}
           <div className="flex items-end gap-2">
             <Button
               // className="min-h-[46px] px-5  rounded-lg text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
@@ -592,11 +660,11 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
                 loadData(tenantId);
               }}
               disabled={busy}
-              className='save-button'
+              className="save-button"
             >
               {busy ? "Searching..." : "Search"}
             </Button>
-            <button
+            <Button
               type="button"
               onClick={() => {
                 setQuery("");
@@ -608,25 +676,25 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
                 setPage(1);
                 setTimeout(() => loadData(tenantId), 0);
               }}
-              className="close-button border-slate-200 bg-white font-bold text-slate-700 hover:bg-slate-50"
+              className="save-button"
             >
               Reset
-            </button>
+            </Button>
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin">
         <div className="min-w-[1120px]">
-          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr]  lg:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
+          <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr]  lg:grid grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span className="text-sm">Patient</span>
             <span className="text-sm">Mobile</span>
             <span className="text-sm">Branch</span>
             <span className="text-sm">Gender / Age</span>
             <span className="text-sm">Plan</span>
             <span className="text-sm text-center">Status</span>
-            <span className="text-sm text-right">Actions</span>
+            <span className="text-sm text-center">Actions</span>
           </div>
-          <div className="divide-y divide-slate-200">
+          <div className="divide-y divide-slate-200 z-0">
             {pageRows.length === 0 && (
               <Empty
                 text={
@@ -641,9 +709,11 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
                 key={row.id}
                 row={row}
                 branches={branches}
+                canCopyIds={canCopyIds}
                 onView={() => open("detail", row.id)}
-                onEdit={() => openPatientEdit(row.id)}
-                onDelete={() => setConfirm({ row })}
+                onEdit={canEditPatient ? () => openPatientEdit(row.id) : undefined}
+                onDelete={canDeletePatient ? () => setConfirm({ row }) : undefined}
+                onActivate={canEditPatient ? () => activatePatient(row) : undefined}
               />
             ))}
           </div>
@@ -658,8 +728,8 @@ export function Patient({ apiSession, branchId, loadLiveData, setActive }: Patie
       {confirm && (
         <ConfirmModal
           busy={busy}
-          row={confirm.row}
-          onClose={() => setConfirm(null)}
+          action={confirm.row}
+          onCancel={() => setConfirm(null)}
           onConfirm={() => deactivatePatient(confirm.row)}
         />
       )}

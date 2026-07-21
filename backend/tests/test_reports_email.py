@@ -34,7 +34,8 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine, monkeypa
             return "message-1"
 
         monkeypatch.setattr(
-            "app.modules.reports.service.send_report_email", fake_send_report_email
+            "app.modules.reports.services.job_service.send_report_email",
+            fake_send_report_email,
         )
 
         processed = process_report_job(session, job.id)
@@ -54,3 +55,15 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine, monkeypa
     assert any(
         filename.startswith("invoice-profit-details-") for filename in attachment_names
     )
+    report_files = {
+        filename: content.decode("utf-8")
+        for filename, content in sent["attachments"]
+        if filename.endswith(".xls")
+    }
+    for filename, content in report_files.items():
+        assert "Mode of Payment" in content, filename
+        if filename.startswith("doctor-settlement-"):
+            assert "Doctor Fee %" in content, filename
+            assert "Settlement %" not in content, filename
+        elif not filename.startswith("monthly-revenue-report-"):
+            assert "Settlement %" in content, filename

@@ -7,35 +7,30 @@ import {
   Button,
   Card,
   RefreshButton,
-  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiBlob, apiFetch } from "@/lib/api";
-import {
-  FormField,
-  SelectField,
-  SearchableSelectField,
-  TextField,
-} from "@/app/components/FormElements";
-import { SearchPicker } from "@/app/components/clinicalRows";
+import { apiBlob, apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDate } from "@/utils/helper";
-import { pageSize } from "@/utils/lab/constants";
+import { displayDate, displayDateTime, formatPrice } from "@/utils/helper";
+import { pageSize } from "./constants";
 import {
   downloadBlob,
   isCancelled,
   isReleased,
   splitList,
-} from "@/utils/lab/helpers";
-import {
-  ConsultReferralModal,
-  WorklistDetailModal,
-} from "@/app/components/lab/Shared";
+} from "@/features/lab/helpers";
+import { ConsultReferralModal } from "./components/ConsultReferralModal";
+import { WorklistDetailModal } from "./components/WorklistDetailModal";
 import { Pagination } from "@/app/components/common/Pagination";
+import { isActivePatientRecord, patientPickerLabel, } from "../patients/helpers";
+import { LabOrderForm } from "@/features/lab/forms/LabForms";
+import { LabOrderFormValues } from "@/features/lab/lab.schema";
+import { DataTable } from "../reports/components/DataTable";
+import { Column } from "../reports/types";
 import {
-  isActivePatientRecord,
-  patientPickerLabel,
-} from "@/utils/patient/helpers";
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "@/app/components/common/CopyIdButton";
 
 export function Lab({
   apiSession,
@@ -45,6 +40,7 @@ export function Lab({
   loadLiveData,
   liveInvoices = [],
 }: any) {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [orders, setOrders] = useState<any[]>([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [consultationReferrals, setConsultationReferrals] = useState<any[]>([]);
@@ -54,11 +50,6 @@ export function Lab({
   const [templates, setTemplates] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [patientId, setPatientId] = useState(
-    patients.find(isActivePatientRecord)?.id || "",
-  );
-  const [source, setSource] = useState("op_direct");
-  const [externalReferrer, setExternalReferrer] = useState("");
   const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
   const [availableTests, setAvailableTests] = useState<any[]>([]);
   const [testSearch, setTestSearch] = useState("");
@@ -86,12 +77,31 @@ export function Lab({
   const [reportFiles, setReportFiles] = useState<Record<string, File | null>>(
     {},
   );
+  const [reportDocuments, setReportDocuments] = useState<Record<string, any>>(
+    {},
+  );
   const [localInvoicedOrderIds, setLocalInvoicedOrderIds] = useState<string[]>(
     [],
   );
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [consultDetail, setConsultDetail] = useState<any>(null);
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canCreateLabOrder = hasPermission("lab.manage", "lab.create");
+  const canEditLabOrder = hasPermission("lab.manage", "lab.edit");
+  const canBillLabOrder = hasPermission(
+    "billing.manage",
+    "billing.create",
+    "invoices.create",
+    "lab.manage",
+    "lab.edit",
+  );
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
   const orderedConsultationIds = useMemo(
@@ -116,7 +126,9 @@ export function Lab({
                 token: row.token_number || "",
                 tokenType: "Normal",
                 patient: row.patient_name || row.patient_id,
+                doctor: row.practitioner_name || "Unassigned",
                 referrals: row.referrals || [],
+                referralDate: row.signed_at || row.created_at,
               }))
             : appointments
           ).filter(
@@ -145,6 +157,16 @@ export function Lab({
     () => patients.filter(isActivePatientRecord),
     [patients],
   );
+  const defaultPatientId = activePatients[0]?.id || "";
+  const patientOptions = useMemo(
+    () =>
+      activePatients.map((p: any) => ({
+        value: p.id,
+        label: patientPickerLabel(p),
+        sublabel: p.mobile || p.patient_number || p.id,
+      })),
+    [activePatients],
+  );
   const invoicedOrderIds = useMemo(
     () =>
       new Set([
@@ -156,14 +178,6 @@ export function Lab({
     [liveInvoices, localInvoicedOrderIds],
   );
 
-  useEffect(() => {
-    if (
-      (!patientId ||
-        !activePatients.some((patient: any) => patient.id === patientId)) &&
-      activePatients[0]?.id
-    )
-      setPatientId(activePatients[0].id);
-  }, [activePatients, patientId]);
   useEffect(() => {
     load();
   }, [apiSession?.tenantId]);
@@ -280,8 +294,6 @@ export function Lab({
       selectedAvailableTest?.purchase_price ||
       0,
   );
-  const formatPrice = (value: number) =>
-    value > 0 ? `₹${value.toLocaleString("en-IN")}` : "";
 
   async function load() {
     if (!apiSession) {
@@ -297,6 +309,7 @@ export function Lab({
         packageRows,
         templateRows,
         supplierRows,
+        reportRows,
       ] = await Promise.all([
         apiFetch("/lab/orders", apiSession),
         apiFetch("/lab/consultation-referrals", apiSession).catch(() => []),
@@ -304,6 +317,9 @@ export function Lab({
         apiFetch("/lab/catalog/packages", apiSession),
         apiFetch("/lab/result-templates", apiSession),
         apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
+        apiFetch("/files?category=lab_report&limit=500", apiSession).catch(
+          () => [],
+        ),
       ]);
       setOrders(orderRows);
       setConsultationReferrals(referralRows || []);
@@ -311,6 +327,20 @@ export function Lab({
       setPackages(packageRows);
       setTemplates(templateRows);
       setSuppliers(supplierRows || []);
+      const documentsByOrder: Record<string, any> = {};
+      const urlsByOrder: Record<string, string> = {};
+      for (const file of reportRows || []) {
+        if (
+          file.attached_to_doctype !== "LabOrder" ||
+          !file.attached_to_name ||
+          documentsByOrder[file.attached_to_name]
+        )
+          continue;
+        documentsByOrder[file.attached_to_name] = file;
+        urlsByOrder[file.attached_to_name] = file.file_url;
+      }
+      setReportDocuments(documentsByOrder);
+      setReportUrl(urlsByOrder);
     } catch (err: any) {
       setMessage(err.message || "Could not load lab workspace.");
     } finally {
@@ -397,9 +427,8 @@ export function Lab({
     }
   }
 
-  async function createDirect(e: any) {
-    e.preventDefault();
-    if (!apiSession) return;
+  async function handleCreateOrder(data: LabOrderFormValues) {
+    if (!apiSession) return false;
     setBusy("create");
     setMessage("");
     const selectedNames = orderTests.map((t: any) => t.name).filter(Boolean);
@@ -413,21 +442,21 @@ export function Lab({
     if (!testsText) {
       setMessage("Select at least one lab test.");
       setBusy("");
-      return;
+      return false;
     }
     try {
       await apiFetch("/lab/orders", apiSession, {
         method: "POST",
         body: JSON.stringify({
           branch_id: branchId,
-          patient_id: patientId,
-          source,
+          patient_id: data.patient_id,
+          source: data.source,
           tests: testsText,
           test_ids: localTestIds,
           package_ids: packageIds,
           external_items: [],
           external_referrer:
-            source === "external_referral" ? externalReferrer : null,
+            data.source === "external_referral" ? data.external_referrer : null,
           amount: 0,
           ordered_by_user_id: apiSession.user?.id,
         }),
@@ -436,9 +465,11 @@ export function Lab({
       setSelectedAvailableTestId("");
       setTestSearch("");
       await load();
-      setMessage("Lab / Service order created.");
+      setMessage("Lab & Service order created.");
+      return true;
     } catch (err: any) {
       setMessage(err.message || "Could not create lab / service order.");
+      return false;
     } finally {
       setBusy("");
     }
@@ -540,10 +571,42 @@ export function Lab({
     }
   }
 
+  async function uploadReport(order: any, file: File | null) {
+    if (!file || !apiSession) return;
+    setBusy(`report-${order.id}`);
+    setMessage("");
+    setReportFiles((current) => ({ ...current, [order.id]: file }));
+    try {
+      const upload = new FormData();
+      upload.append("file", file);
+      upload.append("branch_id", order.branch_id || branchId || "");
+      upload.append("patient_id", order.patient_id);
+      upload.append("category", "lab_report");
+      upload.append("source_module", "lab");
+      upload.append("attached_to_doctype", "LabOrder");
+      upload.append("attached_to_name", order.id);
+      upload.append("attached_to_field", "report_url");
+      upload.append("attached_to_label", "Lab Report");
+      const document = await apiUpload("/files", apiSession, upload);
+      setReportDocuments((current) => ({ ...current, [order.id]: document }));
+      setReportUrl((current) => ({
+        ...current,
+        [order.id]: document.file_url,
+      }));
+      setReportFiles((current) => ({ ...current, [order.id]: null }));
+      setMessage(`Report uploaded: ${document.file_name}`);
+    } catch (err: any) {
+      setMessage(err.message || "Could not upload report.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function releaseResult(order: any) {
     setBusy(order.id);
     setMessage("");
     const reportFile = reportFiles[order.id];
+    const reportDocument = reportDocuments[order.id];
     try {
       await apiFetch(`/lab/orders/${order.id}/results`, apiSession, {
         method: "POST",
@@ -552,7 +615,8 @@ export function Lab({
           result_summary: "Result released from MedizinHub lab screen.",
           abnormal_flag: false,
           report_url: reportUrl[order.id] || null,
-          report_file_name: reportFile?.name || null,
+          report_file_name:
+            reportDocument?.file_name || reportFile?.name || null,
           released_by_user_id: apiSession.user?.id,
         }),
       });
@@ -569,11 +633,26 @@ export function Lab({
 
   async function openReport(order: any) {
     setBusy(order.id);
+    // Open synchronously, in the same tick as the click, then navigate it once
+    // the report URL is known. Popup blockers (Brave in particular) drop new
+    // tabs opened after an awaited fetch, leaving a blank tab.
+    const win = window.open("", "_blank", "noopener,noreferrer");
     try {
       // 1. If user uploaded a file in this session, download it directly
       const localFile = reportFiles[order.id];
       if (localFile) {
+        win?.close();
         downloadBlob(localFile, localFile.name);
+        return;
+      }
+      const storedDocument = reportDocuments[order.id];
+      if (storedDocument?.id) {
+        win?.close();
+        const blob = await apiBlob(
+          `/files/${storedDocument.id}/download`,
+          apiSession,
+        );
+        downloadBlob(blob, storedDocument.file_name || "lab-report");
         return;
       }
       // 2. Check if a report_url was stored on the released result
@@ -583,19 +662,25 @@ export function Lab({
           (r: any) => r.report_url,
         );
         if (resultWithUrl?.report_url) {
-          window.open(resultWithUrl.report_url, "_blank");
+          if (win) {
+            win.location.href = uploadAssetUrl(resultWithUrl.report_url);
+          } else {
+            window.open(uploadAssetUrl(resultWithUrl.report_url), "_blank");
+          }
           return;
         }
       } catch (_) {
         /* fall through to generated PDF */
       }
       // 3. Fallback: download backend-generated PDF
+      win?.close();
       const blob = await apiBlob(
         `/lab/orders/${order.id}/report.pdf`,
         apiSession,
       );
       downloadBlob(blob, `lab-report-${order.id}.pdf`);
     } catch (err: any) {
+      win?.close();
       setMessage(err.message || "Could not download report.");
     } finally {
       setBusy("");
@@ -661,7 +746,177 @@ export function Lab({
       setLoadingDetail(false);
     }
   }
+  const worklistColumns: Column<any>[] = [
+    {
+      key: "index",
+      header: "#",
+      width: "80px",
+      render: (_, index) => <b>{(safePage - 1) * pageSize + index + 1}</b>,
+    },
 
+    {
+      key: "created_at",
+      header: "Date & Time",
+      width: "170px",
+      render: (o) => (
+        <>
+          <b>{displayDate(o.created_at)}</b>
+          <p className="text-xs text-slate-500">
+            {new Date(o.created_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+        </>
+      ),
+    },
+
+    {
+      key: "patient",
+      header: "Patient",
+      width: "130px",
+      render: (o) => {
+        const p: any = patientMap.get(o.patient_id);
+
+        return (
+          <div className="flex items-center gap-2">
+            <span>{p?.name || publicDisplayValue(o.patient_id, "Patient")}</span>
+            <CopyIdButton
+              value={o.id}
+              label="Lab / Service Order ID"
+              allowed={canCopyIds}
+            />
+          </div>
+        );
+      },
+    },
+
+    {
+      key: "source",
+      header: "Source",
+      width: "150px",
+      render: (o) => (
+        <Badge className="normal-badge w-[70%]">
+          {humanizeOptionLabel(o.source)}
+        </Badge>
+      ),
+    },
+
+    {
+      key: "status",
+      header: "Status",
+      width: "150px",
+      render: (o) => {
+        const released = isReleased(o);
+        const cancelled = isCancelled(o);
+        const invoiced = invoicedOrderIds.has(o.id);
+
+        const statusLabel = invoiced ? "Billed" : humanizeOptionLabel(o.status);
+
+        const statusTone = invoiced
+          ? "green"
+          : released
+            ? "green"
+            : cancelled
+              ? "red"
+              : "amber";
+
+        return (
+          <Badge tone={statusTone as any} className="normal-badge w-[70%]">
+            {statusLabel}
+          </Badge>
+        );
+      },
+    },
+
+    {
+      key: "amount",
+      header: "Amount",
+      width: "90px",
+      render: (o) => <>₹{o.amount}</>,
+    },
+
+    {
+      key: "report",
+      header: "Report",
+      width: "170px",
+      disableRowClick: true,
+      render: (o) => {
+        const released = isReleased(o);
+        const cancelled = isCancelled(o);
+
+        return (
+          <label
+            className={`flex cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${
+              released || cancelled
+                ? "cursor-not-allowed bg-slate-50 text-slate-300"
+                : "bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <input
+              type="file"
+              className="hidden"
+              accept="application/pdf,image/*"
+              disabled={
+                released || cancelled || busy === `report-${o.id}`
+              }
+              onChange={(e) => uploadReport(o, e.target.files?.[0] || null)}
+            />
+
+            {busy === `report-${o.id}`
+              ? "Uploading..."
+              : reportFiles[o.id]?.name ||
+                reportDocuments[o.id]?.file_name ||
+                "Upload report"}
+          </label>
+        );
+      },
+    },
+
+    {
+      key: "action",
+      header: "Action",
+      width: "210px",
+      disableRowClick: true,
+      render: (o) => {
+        const released = isReleased(o);
+        const cancelled = isCancelled(o);
+        const invoiced = invoicedOrderIds.has(o.id);
+
+        const rowBusy = busy === o.id;
+        const invoiceBusy = busy === `invoice-${o.id}`;
+
+        return (
+          <select
+            value=""
+            disabled={rowBusy || invoiceBusy}
+            onChange={(e) => handleOrderAction(o, e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm"
+          >
+            <option value="">
+              {rowBusy || invoiceBusy ? "Updating..." : "Select action"}
+            </option>
+
+            {canBillLabOrder && (
+              <option value="invoice" disabled={cancelled || invoiced}>
+                Generate invoice
+              </option>
+            )}
+
+            <option value="pdf" disabled={cancelled}>
+              Download Report
+            </option>
+
+            {canEditLabOrder && (
+              <option value="cancel" disabled={cancelled || invoiced}>
+                Cancel order
+              </option>
+            )}
+          </select>
+        );
+      },
+    },
+  ];
   if (!apiSession)
     return (
       <Card>
@@ -684,6 +939,7 @@ export function Lab({
           createdAt={selectedOrder.created_at}
           items={splitList(selectedOrder.tests)}
           onClose={() => setSelectedOrder(null)}
+          apiSession={apiSession}
         />
       )}
       {viewConsult && (
@@ -700,201 +956,132 @@ export function Lab({
         />
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
+      {canCreateLabOrder && (
       <Card>
-        <h3 className="card-title font-bold">Create Lab / Service Order</h3>
-        <form
-          onSubmit={createDirect}
-          className="mt-4 grid gap-3 md:grid-cols-[1.5fr_1fr_2fr_1fr_1fr_1fr]"
-        >
-          <FormField label="Patient">
-            <SearchableSelect
-              value={patientId}
-              onChange={setPatientId}
-              searchable={true}
-              placeholder="Select patient"
-              searchPlaceholder="Search patient by name, mobile, or number"
-              className="text-xs md:col-span-2"
-              options={activePatients.map((p: any) => ({
-                value: p.id,
-                label: patientPickerLabel(p),
-                sublabel: p.mobile || p.patient_number || p.id,
-              }))}
-            />
-          </FormField>
-          <FormField label="Source">
-            <SearchableSelect
-              value={source}
-              onChange={setSource}
-              searchable={false}
-              options={[
-                { value: "op_direct", label: "OP Direct" },
-                { value: "external_referral", label: "External Referral" },
-              ]}
-            />
-          </FormField>
-          <FormField label="Lab Test / Service" className="md:col-span-2">
-            <SearchPicker
-              value={selectedAvailableTestId}
-              inputValue={testSearch}
-              onInputValueChange={(text: string) => {
-                setTestSearch(text);
-                if (!text) setSelectedAvailableTestId("");
-              }}
-              onChange={(id: string, test: any) => {
-                setSelectedAvailableTestId(id);
-                setTestSearch(test?.item_name || test?.name || "");
-              }}
-              options={testOptions}
-              placeholder="Type lab test name"
-              onUseTyped={(text: string) => {
-                setSelectedAvailableTestId("");
-                setTestSearch(text);
-              }}
-              getSearchText={(test: any) =>
-                [
-                  test?.item_name,
-                  test?.name,
-                  test?.sample_type,
-                  test?.category,
-                  test?.kind,
-                  test?.description,
-                  test?.code,
-                  test?.slug,
-                ]
-                  .filter(Boolean)
-                  .join(" ")
-              }
-              loading={testLoading}
-            />
-          </FormField>
-          <TextField
-            label="Supplier"
-            value={selectedSupplierName}
-            onChange={() => undefined}
-            disabled
-            className="search-input bg-slate-50"
-          />
-          <TextField
-            label="Supplier Price"
-            value={formatPrice(selectedSupplierPrice)}
-            onChange={() => undefined}
-            disabled
-            className="search-input bg-slate-50"
-          />
-          <TextField
-            label="MRP"
-            value={formatPrice(selectedTestMrp)}
-            onChange={() => undefined}
-            disabled
-            className="search-input bg-slate-50"
-          />
-          <TextField
-            label="Rate"
-            value={formatPrice(selectedTestSelling)}
-            onChange={() => undefined}
-            disabled
-            className="search-input bg-slate-50"
-          />
-          <div className="flex items-end gap-2  rounded-lg w-fit">
-            <ActionButton
-              type="button"
-              onClick={addOrderTest}
-              className="close-button"
-            >
-              Add
-            </ActionButton>
-
-            <Button
-              type="submit"
-              disabled={busy === "create"}
-              className="save-button"
-            >
-              {busy === "create" ? "Saving..." : "Create Order"}
-            </Button>
-          </div>
-
-          {orderTests.length > 0 && (
-            <div className="md:col-span-8 flex flex-wrap gap-2">
-              {orderTests.map((test: any, index: number) => (
-                <button
-                  key={`${test.name}-${index}`}
-                  type="button"
-                  onClick={() => removeOrderTest(index)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
-                >
-                  {test.name} ×
-                </button>
-              ))}
-            </div>
-          )}
-        </form>
+        <h3 className="card-title font-bold">Create Lab & Service Order</h3>
+        <LabOrderForm
+          patientOptions={patientOptions}
+          defaultPatientId={defaultPatientId}
+          busy={busy === "create"}
+          testOptions={testOptions}
+          testSearch={testSearch}
+          selectedAvailableTestId={selectedAvailableTestId}
+          onTestSearchChange={(text: string) => {
+            setTestSearch(text);
+            if (!text) setSelectedAvailableTestId("");
+          }}
+          onTestSelect={(id: string, test: any) => {
+            setSelectedAvailableTestId(id);
+            setTestSearch(test?.item_name || test?.name || "");
+          }}
+          onUseTypedTest={(text: string) => {
+            setSelectedAvailableTestId("");
+            setTestSearch(text);
+          }}
+          getTestSearchText={(test: any) =>
+            [
+              test?.item_name,
+              test?.name,
+              test?.sample_type,
+              test?.category,
+              test?.kind,
+              test?.description,
+              test?.code,
+              test?.slug,
+            ]
+              .filter(Boolean)
+              .join(" ")
+          }
+          testLoading={testLoading}
+          selectedSupplierName={selectedSupplierName}
+          selectedSupplierPrice={formatPrice(selectedSupplierPrice)}
+          selectedTestMrp={formatPrice(selectedTestMrp)}
+          selectedTestSelling={formatPrice(selectedTestSelling)}
+          onAddTest={addOrderTest}
+          orderTests={orderTests}
+          onRemoveTest={removeOrderTest}
+          onSubmit={handleCreateOrder}
+        />
       </Card>
+      )}
       <Card>
         <h3 className="card-title font-bold">Consultation Referrals</h3>
-        <div className="mt-4 grid gap-3">
+        <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
           {(() => {
             const visible = labReady.filter(
               (a: any) => !dismissedConsultations.includes(a.consultationId),
             );
             return (
-              <>
-                {visible.length === 0 && (
-                  <div className="rounded-lg  bg-slate-50 p-4 card-desc text-slate-500">
-                    No signed consultation referrals ready.
-                  </div>
-                )}
-                {visible.slice(0, 6).map((a: any) => (
-                  <div
-                    key={a.id}
-                    className="flex flex-col justify-between gap-3 rounded-2xl border p-4 md:flex-row md:items-center"
-                  >
-                    <div>
-                      <b className="text-base lg:text-lg">
-                        {a.token} · {a.patient}
-                      </b>
-                      <p className="text-xs text-slate-500">
-                        Signed consultation referral
-                        {a.doctor && a.doctor !== "Unassigned" ? (
-                          <>
-                            {" · Signed by "}
-                            <span className="font-semibold text-slate-700">
-                              {a.doctor}
-                            </span>
-                          </>
-                        ) : null}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <ActionButton
-                        onClick={() => loadConsultDetail(a)}
-                        className="close-button"
-                      >
-                        View Tests
-                      </ActionButton>
-                      <Button
-                        disabled={busy === a.consultationId}
-                        onClick={() => createFromConsultation(a)}
-                        className="rounded-lg px-2 py-2 lg:px-4 lg:py-2 text-xs"
-                      >
-                        {busy === a.consultationId
-                          ? "Creating..."
-                          : "Create Lab / Service Order"}
-                      </Button>
-                      <ActionButton
-                        onClick={() =>
-                          setDismissedConsultations((ids: string[]) => [
-                            ...ids,
-                            a.consultationId,
-                          ])
-                        }
-                        className="close-button"
-                      >
-                        Remove
-                      </ActionButton>
-                    </div>
-                  </div>
-                ))}
-              </>
+              <table className="w-full min-w-[850px] text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">Referral</th>
+                    <th className="px-4 py-3">Patient</th>
+                    <th className="px-4 py-3">Doctor</th>
+                    <th className="px-4 py-3">Date &amp; Time</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {visible.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-5 text-slate-500">
+                        No completed consultation referrals ready.
+                      </td>
+                    </tr>
+                  ) : (
+                    visible.slice(0, 6).map((a: any) => (
+                      <tr key={a.id}>
+                        <td className="px-4 py-3 font-bold">{a.token || "-"}</td>
+                        <td className="px-4 py-3 font-semibold">{a.patient}</td>
+                        <td className="px-4 py-3 text-slate-600">
+                          {a.doctor && a.doctor !== "Unassigned"
+                            ? a.doctor
+                            : "-"}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                          {displayDateTime(
+                            a.referralDate ||
+                              a.consultationSignedAt ||
+                              a.consultationCreatedAt ||
+                              a.appointmentDate,
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex justify-end gap-2">
+                            <ActionButton
+                              onClick={() => loadConsultDetail(a)}
+                              className="close-button"
+                            >
+                              View Tests
+                            </ActionButton>
+                            {canCreateLabOrder && (
+                              <Button
+                                disabled={busy === a.consultationId}
+                                onClick={() => createFromConsultation(a)}
+                                className="rounded-lg px-2 py-2 text-xs lg:px-4"
+                              >
+                                {busy === a.consultationId ? "Creating..." : "Create Order"}
+                              </Button>
+                            )}
+                            <ActionButton
+                              onClick={() =>
+                                setDismissedConsultations((ids: string[]) => [
+                                  ...ids,
+                                  a.consultationId,
+                                ])
+                              }
+                              className="close-button"
+                            >
+                              Remove
+                            </ActionButton>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             );
           })()}
         </div>
@@ -904,146 +1091,13 @@ export function Lab({
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
-        <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="w-[80px] px-4 py-3">#</th>
-                <th className="w-[170px]">Date & Time</th>
-                <th className="w-[130px]">Patient</th>
-                <th className="w-[150px]">Source</th>
-                <th className="w-[150px]">Status</th>
-                <th className="w-[90px]">Amount</th>
-                <th className="w-[150px] text-center pr-4">Report</th>
-                <th className="w-[210px] pr-4 text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {orders.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={8}
-                    className="px-4 py-4 card-desc text-slate-500"
-                  >
-                    No lab orders yet.
-                  </td>
-                </tr>
-              )}
-              {labPageRows.map((o: any, index: number) => {
-                const p: any = patientMap.get(o.patient_id);
-                const selected = selectedOrder?.id === o.id;
-                const released = isReleased(o);
-                const cancelled = isCancelled(o);
-                const invoiced = invoicedOrderIds.has(o.id);
-                const rowBusy = busy === o.id;
-                const invoiceBusy = busy === `invoice-${o.id}`;
-                const statusLabel = invoiced
-                  ? "Billed"
-                  : humanizeOptionLabel(o.status);
-                const statusTone = invoiced
-                  ? "green"
-                  : released
-                    ? "green"
-                    : cancelled
-                      ? "red"
-                      : "amber";
-                return (
-                  <tr
-                    key={o.id}
-                    onClick={() => setSelectedOrder(o)}
-                    className={`cursor-pointer transition hover:bg-slate-50 ${selected ? "bg-slate-50" : ""} h-20`}
-                  >
-                    <td className="px-4 py-4">
-                      <b>{(safePage - 1) * pageSize + index + 1}</b>
-                    </td>
-                    <td>
-                      <b>{displayDate(o.created_at)}</b>
-                      <p className="text-xs text-slate-500">
-                        {new Date(o.created_at).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </p>
-                    </td>
-                    <td>
-                      {p?.name || publicDisplayValue(o.patient_id, "Patient")}
-                    </td>
-                    <td>
-                      <Badge className="normal-badge w-[70%]">
-                        {humanizeOptionLabel(o.source)}
-                      </Badge>
-                    </td>
-                    <td>
-                      <Badge
-                        tone={statusTone as any}
-                        className="normal-badge w-[70%]"
-                      >
-                        {statusLabel}
-                      </Badge>
-                    </td>
-                    <td>₹{o.amount}</td>
-                    <td onClick={(event) => event.stopPropagation()}>
-                      <div className="flex min-w-[230px] items-center gap-2">
-                        <label
-                          className={`flex min-w-[120px] cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold ${released || cancelled ? "cursor-not-allowed bg-slate-50 text-slate-300" : "bg-white text-slate-700 hover:bg-slate-50"}`}
-                        >
-                          <input
-                            type="file"
-                            accept="application/pdf,image/*"
-                            className="hidden file:rounded-lg "
-                            disabled={released || cancelled}
-                            onChange={(event: any) =>
-                              setReportFiles({
-                                ...reportFiles,
-                                [o.id]: event.target.files?.[0] || null,
-                              })
-                            }
-                          />
-                          {reportFiles[o.id]?.name || "Upload report"}
-                        </label>
-                      </div>
-                    </td>
-                    <td
-                      className="pr-4"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <div className="ml-auto w-[190px]">
-                        <select
-                          value=""
-                          disabled={rowBusy || invoiceBusy}
-                          onChange={(event: any) =>
-                            handleOrderAction(o, event.target.value)
-                          }
-                          className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
-                        >
-                          <option value="">
-                            {rowBusy || invoiceBusy
-                              ? "Updating..."
-                              : "Select action"}
-                          </option>
-                          <option
-                            value="invoice"
-                            disabled={cancelled || invoiced}
-                          >
-                            Generate invoice
-                          </option>
-                          <option value="pdf" disabled={cancelled}>
-                            Download PDF
-                          </option>
-                          <option
-                            value="cancel"
-                            disabled={cancelled || invoiced}
-                          >
-                            Cancel order
-                          </option>
-                        </select>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <DataTable
+            columns={worklistColumns}
+            data={labPageRows}
+            emptyMessage="No lab orders yet."
+            onRowClick={setSelectedOrder}
+          />
         </div>
         <Pagination
           page={safePage}

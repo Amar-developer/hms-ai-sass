@@ -7,13 +7,17 @@ export function userInitials(user: any, email: string) {
   );
 }
 
+export function capitalizeFirst(str: string): string {
+  if (!str) return "";
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
 export function displayDate(value: any, fallback = "-") {
   if (!value) return fallback;
   const raw = String(value);
-  const date =
-    /^\d{4}-\d{2}-\d{2}/.test(raw)
-      ? new Date(`${raw.slice(0, 10)}T00:00:00`)
-      : new Date(value);
+  const date = /^\d{4}-\d{2}-\d{2}/.test(raw)
+    ? new Date(`${raw.slice(0, 10)}T00:00:00`)
+    : new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
   return [
     String(date.getDate()).padStart(2, "0"),
@@ -57,7 +61,7 @@ export function displayToIsoDate(value: any) {
 // local UTC offset. Treat a designator-less date-time as UTC so it converts to
 // the viewer's local time correctly. Values that already carry a Z/offset (or
 // are plain dates) are left untouched.
-function parseInstant(value: any) {
+export function parseInstant(value: any) {
   const raw = String(value).trim();
   if (
     /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/.test(raw) &&
@@ -81,4 +85,58 @@ export function displayDateTime(value: any, fallback = "-") {
     hour: "2-digit",
     minute: "2-digit",
   })}`;
+}
+
+export function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function splitRows(value: string) {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+export function appendLine(value: string, line: string) {
+  return [...splitRows(value), line].join("\n");
+}
+
+export function inr(value: any) {
+  return `₹. ${Number(value || 0).toLocaleString("en-IN")}`;
+}
+
+export function patientName(p: any) {
+  return p?.name || p?.full_name || p?.patient_name || p?.id || "Patient";
+}
+
+export function money(value: any) {
+  const amount = Number(value || 0);
+  const sign = amount < 0 ? "-" : "";
+  return `${sign}₹${Math.abs(amount).toLocaleString("en-IN")}`;
+}
+
+export const formatPrice = (value: number) =>
+    value > 0 ? `₹${value.toLocaleString("en-IN")}` : "";
+
+
+export function activeTenantOptions(tenants: any[]) {
+  const seen = new Set<string>();
+  return (tenants || []).filter((tenant: any) => {
+    if (tenant.status === "suspended") return false;
+    const key = String(tenant.name || tenant.id || "")
+      .trim()
+      .toLowerCase();
+    if (key && seen.has(key)) return false;
+    if (key) seen.add(key);
+    return true;
+  });
+}
+
+export function roleKeyFromName(value: string) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
 }

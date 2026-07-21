@@ -1,33 +1,55 @@
 {
+  "name": "medizinhub-frontend",
+  "private": true,
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "next dev",
-    "prebuild": "if [ ! -e .next-build ]; then exit 0; fi; mv .next-build .next-build-stale-$(date +%s)-$$",
+    "clean:build": "node ../scripts/clean_frontend_build.mjs --all",
+    "prebuild": "node ../scripts/clean_frontend_build.mjs",
     "build": "NEXT_PRIVATE_BUILD_WORKER=0 next build",
     "start": "next start",
     "test": "vitest run --cache=false --passWithNoTests",
+    "test:e2e": "bash ../scripts/run_frontend_e2e.sh --project=chromium --grep @critical",
+    "test:e2e:install": "playwright install --with-deps chromium firefox webkit",
+    "test:e2e:extended": "bash ../scripts/run_frontend_e2e.sh --project=chromium --grep @extended",
+    "test:e2e:cross-browser": "bash ../scripts/run_frontend_e2e.sh --project=chromium --grep @critical && bash ../scripts/run_frontend_e2e.sh --project=firefox --grep @critical && bash ../scripts/run_frontend_e2e.sh --project=webkit --grep @critical",
+    "test:e2e:ui": "bash ../scripts/run_frontend_e2e.sh --project=chromium --ui",
+    "pretypecheck": "node ../scripts/clean_frontend_build.mjs",
     "typecheck": "tsc --noEmit",
     "quality": "npm run quality:backend && npm run quality:frontend",
-    "quality:backend": "backend/.venv/bin/ruff check backend/app backend/tests && backend/.venv/bin/pytest backend/tests -q",
+    "quality:backend": "../backend/.venv/bin/ruff check ../backend/app ../backend/tests ../backend/e2e ../backend/scripts && ../backend/.venv/bin/pytest ../backend/tests -q",
     "quality:frontend": "npm test && npm run typecheck && npm run build",
-    "hooks:install": "backend/.venv/bin/pre-commit install --install-hooks"
+    "hooks:install": "../backend/.venv/bin/pre-commit install --install-hooks"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.4.0",
     "lucide-react": "^0.468.0",
-    "next": "14.2.16",
+    "next": "15.5.20",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "react-hook-form": "^7.81.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
+    "@playwright/test": "^1.61.1",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@types/node": "25.6.0",
     "@types/react": "19.2.14",
-    "@vitejs/plugin-react": "latest",
     "autoprefixer": "10.4.20",
     "jsdom": "^25.0.1",
-    "postcss": "8.4.49",
+    "postcss": "8.5.10",
     "tailwindcss": "3.4.17",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.4"
+    "vitest": "^3.2.7"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "8.5.10"
+    }
   }
 }

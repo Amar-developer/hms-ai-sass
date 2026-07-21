@@ -39,19 +39,29 @@ Current enforced guardrails:
 | `consultations.write` | Draft consultation edits and addendums |
 | `consultations.sign` | Sign/lock consultation |
 | `billing.manage` | Fee rules, invoice creation/listing/cancel |
+| `billing.discounts.approve` | Approve discount requests on invoices |
+| `billing.refunds.manage` | Full refund authority (approve/execute) |
+| `billing.refunds.request` | Raise a refund request for approval, without refund authority |
 | `invoices.create/read/edit/delete` | Granular invoice controls |
+| `invoices.cancel_request` | Request invoice cancellation for admin approval, without delete authority |
 | `payments.manage` | Payment collection and refund |
 | `settlements.read` | Doctor settlement reports |
 | `lab.manage` | Lab orders/results |
 | `lab.create/read/edit/delete` | Granular lab workflow controls |
+| `lab.results.manage` | Update and publish lab results |
 | `pharmacy.manage` | Pharmacy issues/status |
 | `pharmacy.create/read/edit/delete` | Granular pharmacy workflow controls |
+| `pharmacy.dispense` | Dispense medicines against a prescription/issue |
+| `service_items.manage` | Full control of shared service/item master data used on invoices |
+| `service_items.create/read/edit/delete` | Granular service/item master data controls |
 | `physiotherapy.manage` | Physiotherapy case, session, equipment, and billing workflow controls |
 | `physiotherapy.create/read/edit/delete` | Granular physiotherapy workflow controls |
 | `home_care.manage` | Home-care service catalog, booking, and billing workflow controls |
 | `home_care.create/read/edit/delete` | Granular home-care service and booking controls |
 | `notifications.manage` | Notification queue create/list |
 | `audit.read` | Audit event create/list/detail |
+| `error_logs.read` | View and search tenant error logs |
+| `error_logs.manage` | Resolve, reopen, and delete tenant error logs |
 | `reports.read` | Subscription active/entitlement reads and future reports |
 
 ## Public and Auth APIs
@@ -66,7 +76,19 @@ Current enforced guardrails:
 | `GET` | `/api/v1/auth/me` | Authenticated | Current user, roles, permissions |
 | `POST` | `/api/v1/auth/logout` | Authenticated | Revokes current session |
 | `POST` | `/api/v1/auth/change-password` | Authenticated | Changes current user's password |
-| `POST` | `/api/v1/client-logs` | Public | Accepts frontend client log events |
+| `POST` | `/api/v1/client-logs` | Authenticated tenant user | Legacy frontend error/warning capture path |
+| `POST` | `/api/v1/error-logs/client` | Authenticated tenant user | Persistent frontend error/warning capture path |
+
+## Error Logs
+
+Error Logs is intentionally hidden from the sidebar. Users with `error_logs.read` or `error_logs.manage` open it through the global module search.
+
+| Method | Endpoint | Permission |
+| --- | --- | --- |
+| `GET` | `/api/v1/error-logs` | `error_logs.read` or `error_logs.manage` |
+| `GET` | `/api/v1/error-logs/{error_log_id}` | `error_logs.read` or `error_logs.manage` |
+| `PATCH` | `/api/v1/error-logs/{error_log_id}` | `error_logs.manage` |
+| `DELETE` | `/api/v1/error-logs/{error_log_id}` | `error_logs.manage` |
 
 ## Tenant and Platform
 
@@ -75,6 +97,7 @@ Current enforced guardrails:
 | `POST` | `/api/v1/tenants` | `platform.tenants.manage` |
 | `POST` | `/api/v1/tenants/onboard` | Super admin only; creates customer tenant, branches, subscription, and tenant admin |
 | `GET` | `/api/v1/tenants` | `platform.tenants.manage` |
+| `GET` | `/api/v1/tenants/current/branding` | Authenticated tenant user; own-tenant letterhead branding |
 | `GET` | `/api/v1/tenants/{tenant_id}` | `platform.tenants.manage` |
 | `PATCH` | `/api/v1/tenants/{tenant_id}` | `platform.tenants.manage` |
 | `DELETE` | `/api/v1/tenants/{tenant_id}` | `platform.tenants.manage` |
@@ -287,11 +310,9 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/from-pharmacy-issue` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
-| `GET` | `/api/v1/billing/invoices/{invoice_id}/receipt.pdf` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply` | `billing.manage` |
-| `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `billing.manage` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
-| `PATCH` | `/api/v1/billing/invoices/{invoice_id}/amount` | `billing.manage` |
 | `POST` | `/api/v1/billing/payments/{payment_id}/refund` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/adjustment-requests` | Any of `billing.manage`, `invoices.read`, `invoices.edit`, `payments.manage` |
 | `POST` | `/api/v1/billing/adjustment-requests/{request_id}/approve` | `billing.manage` |
@@ -305,8 +326,11 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/doctor-settlements/finalize` | `billing.manage` |
 | `GET` | `/api/v1/billing/reports/due-collection` | `reports.read` |
 | `GET` | `/api/v1/billing/reports/revenue` | `reports.read` |
+| `GET` | `/api/v1/billing/reports/collections` | `billing.manage` or `reports.revenue.read` |
 
 Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, payments, refunds, credit notes, and cancellations. Invoice generation, discount approval, settlement finalization, and revenue reporting enforce `billing_advanced`. Branch-scoped users can access only branch-matching invoices, payments, fee rules, tax rules, credit notes, reports, and settlements. Doctor settlement summary returns paid-basis doctor share, finalized settlement amount, remaining payable amount, and `can_finalize`; duplicate finalization is rejected after the payable amount reaches zero.
+
+`adjustment-requests` accepts `request_type` of `cancel`, `full_refund`, `partial_refund`, or `discount`. The old direct "edit invoice amount" action is gone — a `discount` request now works for any invoice type (consultation, OP or non-OP, lab, pharmacy, physiotherapy, home care, IP, or direct) as long as no payment has been recorded yet, through the same request → approve → execute flow as `full_refund`/`partial_refund`, approved/rejected/executed with the identical `billing.manage` gate. For a consultation invoice, execution recomputes subtotal/tax/doctor-share from the lower fee, exactly as the old direct edit did; for every other invoice type it knocks the discount straight off the total/balance without touching per-item tax, the same coarse-grained way cancel/refund already adjust an invoice's top-level totals. Credit notes remain a separate, immediate, informational-only action (`POST .../credit-notes`) — issuing one records a note against the invoice and does not change its total, balance, or paid amount; a `discount`/refund execution additionally creates a `CreditNote` as part of its own audit trail.
 
 ## Monthly Email Reports
 
@@ -391,7 +415,7 @@ Lab APIs enforce module entitlement and branch scope for catalog, packages, temp
 | `GET` | `/api/v1/physiotherapy/cases/{case_id}/invoice` | `billing.manage` |
 | `POST` | `/api/v1/physiotherapy/cases/{case_id}/invoice` | `billing.manage` |
 
-Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, multiple consent-file upload, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection and receipt PDFs use the shared billing endpoints.
+Physiotherapy APIs enforce physiotherapy entitlement and branch scope for OP/IP physio cases, equipment catalog, IFT/ultrasound/TENS/laser/SWD/CPM/muscle stimulation sessions, exercises, home program, progress tracking, multiple consent-file upload, and case-level invoice generation. Physiotherapy invoice generation links the invoice to the patient, source appointment, IP admission, and physiotherapy case. It includes billable session line items, discount-before-tax calculation, active branch/global tax rule resolution, payment history in invoice detail responses, and audit events for generated invoices. Payment collection uses the shared billing endpoints, while the frontend renders printable invoices from invoice detail data.
 
 ## Home Care
 
@@ -418,36 +442,49 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | --- | --- | --- |
 | `POST` | `/api/v1/files` | Authenticated tenant user |
 | `GET` | `/api/v1/files` | Authenticated tenant user |
+| `GET` | `/api/v1/files/{file_id}/download` | Authenticated tenant user |
 | `PATCH` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `DELETE` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `POST` | `/api/v1/files/sync-uploads` | Authenticated tenant user |
+| `GET` | `/api/v1/files/invoice-logo` | `invoices.read`, `settings.manage`, `settings.read`, `files.manage`, or `files.read` |
 | `PUT` | `/api/v1/settings` | `settings.manage` |
 | `GET` | `/api/v1/settings` | `settings.manage` |
 | `GET` | `/api/v1/settings/resolve` | `settings.manage` |
 | `GET` | `/api/v1/settings/bundle` | `settings.manage` |
-| `GET` | `/api/v1/settings/sidebar-modules` | Authenticated tenant user |
 | `POST` | `/api/v1/notifications` | `notifications.manage` |
 | `GET` | `/api/v1/notifications` | `notifications.manage` |
+| `GET` | `/api/v1/notifications/in-app` | Authenticated tenant user; current user's inbox only |
+| `PATCH` | `/api/v1/notifications/in-app/{notification_id}` | Authenticated tenant user; current user's notification only |
+| `POST` | `/api/v1/notifications/in-app/read-all` | Authenticated tenant user; current user's inbox only |
+| `POST` | `/api/v1/notifications/in-app/announcements` | Tenant Admin for own tenant; Super Admin may publish platform-wide |
 | `POST` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events/{event_id}` | `audit.read` |
+| `GET` | `/api/v1/activity/mention-users` | Authenticated tenant user; active users in current tenant only |
+| `GET` | `/api/v1/activity/{resource_type}/{resource_id}` | Authenticated tenant user |
+| `POST` | `/api/v1/activity/{resource_type}/{resource_id}/comments` | Authenticated tenant user |
 
-## Suggested Default Role Bundles
-
-These are current practical role bundles for demo and team testing.
+## Default Clinical Role Templates
 
 The primary platform tenant is `MedizinHub HMS`. Users with `is_super_admin=true` belong to this primary tenant and bypass tenant-scoped permission checks so they can manage all customer tenants. The primary tenant record is protected: it cannot be deleted, suspended, renamed away from `MedizinHub HMS`, or changed to a customer tenant type.
 
-| Role | Suggested Permissions |
+Tenant isolation: every protected tenant API requires `X-Tenant-ID` and rejects requests where `current_user.tenant_id != X-Tenant-ID` (`app/core/auth.py`, `require_permission`/`require_any_permission`). Roles, users, and permission grants are always scoped to a single tenant row (`Role.tenant_id`, `UserRole.tenant_id`) — there is no cross-tenant permission bleed except for `is_super_admin` users and explicit template copy/assign endpoints, which are super-admin-only. Tenant Admins can edit role permission checkboxes only for roles belonging to their own tenant (`_assert_tenant_admin` in `app/api/v1/identity.py`).
+
+Five standard roles are seeded as global templates on the primary tenant (`app/api/v1/identity.py: CLINICAL_ROLE_TEMPLATES`, `_ensure_clinical_role_templates`) so a new tenant can clone them at onboarding via `role_template_ids`, and are backfilled onto matching existing tenant roles by migration `20260705_0068_clinical_role_permissions.py`. Tenant Admins remain free to add or remove individual checkboxes per tenant after cloning — these are starting defaults, not hard-coded restrictions.
+
+| Role | Permission keys granted |
 | --- | --- |
-| Primary Tenant Super Admin | All permissions through `is_super_admin`; tenant CRUD, subscription setup, department setup, role/user/branch management, platform reports |
-| Tenant Admin | All non-platform permissions |
-| Reception | `patients.read`, `patients.write`, `appointments.manage`, `queue.manage`, `notifications.manage` |
-| Doctor | `patients.read`, `queue.manage`, `consultations.read`, `consultations.write`, `consultations.sign`, `lab.manage`, `pharmacy.manage` as needed |
-| Lab Technician | `patients.read`, `lab.manage`, `notifications.manage` |
-| Pharmacy User | `patients.read`, `pharmacy.manage`, `billing.manage` |
-| Billing Staff | `patients.read`, `billing.manage`, `payments.manage`, `settlements.read` |
-| Back Office | `reports.read`, `audit.read`, `settlements.read`, `billing.manage` |
+| **Tenant Admin** | Every non-`platform.*` permission in `PERMISSION_CATALOG` (full control within own tenant: users, roles, branches, settings, appointments, billing, invoices, reports, doctors, pharmacy, lab, home care, queue, tax, membership, scheduling, notifications) |
+| **Receptionist** | `patients.create/edit/read/write`, `appointments.create/edit/read`, `queue.manage`, `queue.read`, `practitioners.read`, `consultations.read`, `lab.create`, `physiotherapy.create`, `home_care.manage/create/read/edit`, `invoices.create/read`, `invoices.cancel_request`, `payments.create`, `billing.read`, `billing.refunds.request`, `service_items.manage/create/read/edit`, `reports.read` |
+| **Doctor** | `appointments.read/edit`, `consultations.read/write/create/edit/sign`, `lab.create/read`, `home_care.create/read`, `billing.read`, `invoices.read`, `reports.read` |
+| **Lab Technician** | `lab.manage/create/read/edit`, `lab.results.manage`, `patients.read`, `appointments.read`, `reports.read` |
+| **Pharmacist** | `pharmacy.manage/create/read/edit/dispense`, `consultations.read` (view prescriptions), `invoices.create/read`, `billing.read`, `reports.read` |
+
+Notes on scoping decisions:
+- Doctor and Receptionist do not get `appointments.delete`/`appointments.cancel` or `invoices.delete`/`billing.refunds.manage` — cancellation and refunds route through the `*.cancel_request`/`*.refunds.request` approval permissions, with the Tenant Admin (or a Billing Staff role granted `billing.refunds.manage`) approving.
+- Doctor is further scoped in code to their own linked practitioner profile for appointment, queue, and consultation actions regardless of the permission keys held (see "Current enforced guardrails" above).
+- Lab Technician and Pharmacist get `reports.read` for their own operational reports, not `reports.revenue.read` or `reports.manage`.
+- "Manage service and item master data" (Receptionist) maps to the new `service_items.*` permission group, since the existing catalog had no dedicated key for shared billing service/item master data.
 
 ## Rules for Future APIs
 

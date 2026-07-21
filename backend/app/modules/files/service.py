@@ -1,6 +1,7 @@
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.modules.files.models import FileDocument
+from app.modules.files.repositories import FileDocumentRepository
 from app.modules.tenants.models import now_utc
 
 
@@ -25,17 +26,16 @@ def record_file_document(
     uploaded_by_user_id: str | None = None,
     is_private: bool = False,
 ) -> FileDocument:
-    existing = session.exec(
-        select(FileDocument).where(
-            FileDocument.tenant_id == tenant_id,
-            FileDocument.file_url == file_url,
-            FileDocument.attached_to_doctype == attached_to_doctype,
-            FileDocument.attached_to_name == attached_to_name,
-            FileDocument.attached_to_field == attached_to_field,
-        )
-    ).first()
+    existing = FileDocumentRepository(session).find_attachment(
+        tenant_id=tenant_id,
+        file_url=file_url,
+        attached_to_doctype=attached_to_doctype,
+        attached_to_name=attached_to_name,
+        attached_to_field=attached_to_field,
+    )
     if existing:
         existing.file_name = file_name or existing.file_name
+        existing.file_url = file_url or existing.file_url
         existing.branch_id = branch_id or existing.branch_id
         existing.patient_id = patient_id or existing.patient_id
         existing.content_type = content_type or existing.content_type

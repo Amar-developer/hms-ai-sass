@@ -7,7 +7,7 @@ This guide defines how the MedizinHub HMS team should add or enhance modules wit
 Read these documents first:
 
 - `docs/developer-setup.md`: local setup for macOS, Windows, and Linux.
-- `docs/developer-handover-pack.md`: current project status, run commands, fresh super admin setup, and code map.
+- `docs/project-workflow-and-code-map.md`: current project workflow, code map, and common change paths.
 - `docs/development-master-prompt.md`: engineering rules that every module must follow.
 - `docs/backend-architecture-spec.md`: backend architecture, tenant isolation, RBAC, audit, and integration boundaries.
 - `docs/api-permission-matrix.md`: API permission and entitlement expectations.
@@ -141,13 +141,13 @@ Minimum frontend checks:
 Recommended commands:
 
 ```bash
-cd /Users/balaji/dev/medizinhub_hms/backend
+cd backend
 .venv/bin/ruff check app tests
 .venv/bin/pytest
 ```
 
 ```bash
-cd /Users/balaji/dev/medizinhub_hms
+cd frontend
 npm test
 npm run build
 ```

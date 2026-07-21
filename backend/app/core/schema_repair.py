@@ -24,22 +24,6 @@ def _ensure_table(session: Session, table_name: str, ddl: str) -> None:
     session.exec(text(ddl))
 
 
-def ensure_settingkey_enum_values(session: Session) -> None:
-    """Add missing PostgreSQL settingkey enum values for upgraded deployments."""
-    bind = session.get_bind()
-    if bind.dialect.name != "postgresql":
-        return
-    with bind.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
-        connection.execute(
-            text("ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'SIDEBAR_ROLE_MODULES'")
-        )
-        connection.execute(
-            text(
-                "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'ACCOUNTS_BANK_DETAILS'"
-            )
-        )
-
-
 def ensure_upload_schema(session: Session) -> None:
     """Repair dev databases after hot-reload when Alembic has not rerun yet."""
     if session.get_bind().dialect.name == "postgresql":

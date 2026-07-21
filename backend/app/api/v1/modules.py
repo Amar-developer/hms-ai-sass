@@ -23,6 +23,10 @@ class ModuleManifestItem(BaseModel):
     description: str
 
 
-@router.get("/modules", response_model=list[ModuleManifestItem])
+@router.get(
+    "/modules",
+    response_model=list[ModuleManifestItem],
+    summary="List product modules",
+)
 def list_modules() -> list[ModuleManifestItem]:
     return [ModuleManifestItem(**module) for module in MODULES]

@@ -5,8 +5,9 @@ These helpers freeze a finished month's income dashboard into
 what the live dashboard renders in ``frontend/features/reports`` (the
 ``aggregateInvoiceMetrics`` totals plus the gross/final profit and lab
 settlement summary), so a stored month can be re-opened in the same card
-layout. Snapshots are frozen once written: a later refund of a closed month's
-invoice affects the current month, never the archived period.
+layout. Snapshots are billed-cohort profitability records and are frozen once
+written. Cash collection and refund event months are reported separately by
+the billing collections dashboard.
 """
 
 from calendar import monthrange
@@ -14,11 +15,17 @@ from datetime import date, datetime
 
 from sqlmodel import Session, select
 
+from app.core.config import get_settings
 from app.modules.billing.models import Invoice, InvoiceItem
 from app.modules.home_care.models import HomeCareBooking
-from app.modules.lab.models import LabOrderItem, LabTestCatalog
 from app.modules.reports.models import MonthlyRevenueSnapshot
-from app.modules.reports.service import is_paid_invoice, settlement_paid_basis
+from app.modules.reports.services.calculations import (
+    invoice_report_total,
+    is_paid_invoice,
+    report_doctor_fee,
+    report_settlement,
+    tax_paid_basis,
+)
 from app.modules.tenants.models import Tenant, now_utc
 
 
@@ -69,7 +76,27 @@ def _invoice_type(invoice: Invoice) -> str:
         return "home_care"
     if invoice.ip_admission_id:
         return "ip"
+    if _is_membership_plan_invoice(invoice):
+        return "membership"
     return "consultation"
+
+
+def _is_membership_plan_invoice(invoice: Invoice) -> bool:
+    has_membership_reference = bool(
+        invoice.patient_subscription_enrollment_id
+        or invoice.patient_subscription_plan_id
+    )
+    return has_membership_reference and not any(
+        [
+            invoice.lab_order_id,
+            invoice.pharmacy_issue_id,
+            invoice.consultation_id,
+            invoice.appointment_id,
+            invoice.ip_admission_id,
+            invoice.physiotherapy_case_id,
+            invoice.home_care_booking_id,
+        ]
+    )
 
 
 def _type_label(value: str) -> str:
@@ -79,6 +106,7 @@ def _type_label(value: str) -> str:
         "physiotherapy": "Physiotherapy",
         "home_care": "Home Care / Visit",
         "ip": "IP Billing",
+        "membership": "Membership",
     }.get(value, "Consultation")
 
 
@@ -113,6 +141,17 @@ def compute_dashboard_metrics(
         if is_paid_invoice(invoice)
         and (branch_id is None or invoice.branch_id == branch_id)
     ]
+    invoice_items_by_invoice: dict[str, list[InvoiceItem]] = {
+        invoice.id: [] for invoice in paid
+    }
+    if paid:
+        for item in session.exec(
+            select(InvoiceItem).where(
+                InvoiceItem.tenant_id == tenant_id,
+                InvoiceItem.invoice_id.in_([invoice.id for invoice in paid]),
+            )
+        ).all():
+            invoice_items_by_invoice.setdefault(item.invoice_id, []).append(item)
 
     # Home visit vs home care split. A home_care invoice counts as a home visit
     # when its booking is typed as one, or its line items carry home-visit
@@ -135,19 +174,10 @@ def compute_dashboard_metrics(
                 home_visit_booking_ids.add(booking.id)
     home_visit_invoice_ids: set[str] = set()
     if home_care_invoices:
-        items = session.exec(
-            select(InvoiceItem).where(
-                InvoiceItem.tenant_id == tenant_id,
-                InvoiceItem.invoice_id.in_([inv.id for inv in home_care_invoices]),
-            )
-        ).all()
-        items_by_invoice: dict[str, list[InvoiceItem]] = {}
-        for item in items:
-            items_by_invoice.setdefault(item.invoice_id, []).append(item)
         for invoice in home_care_invoices:
             blob = " ".join(
                 f"{item.external_slug or ''} {item.item_type or ''} {item.description or ''}"
-                for item in items_by_invoice.get(invoice.id, [])
+                for item in invoice_items_by_invoice.get(invoice.id, [])
             ).lower()
             if any(marker in blob for marker in _HOME_VISIT_MARKERS):
                 home_visit_invoice_ids.add(invoice.id)
@@ -161,6 +191,7 @@ def compute_dashboard_metrics(
         "settlement": 0,
         "clinicFee": 0,
         "tax": 0,
+        "paidTax": 0,
         "membershipDiscount": 0,
         "membershipPurchases": 0,
         "membershipEnrollCount": 0,
@@ -174,44 +205,35 @@ def compute_dashboard_metrics(
     membership_claims: dict[str, dict] = {}
 
     for invoice in paid:
-        total = int(invoice.total_amount or 0)
+        total = invoice_report_total(invoice)
         amount_paid = int(invoice.paid_amount or 0)
         balance = int(invoice.balance_amount or 0)
         doctor_share = int(invoice.doctor_share_amount or 0)
-        settlement = settlement_paid_basis(invoice)
+        kind = _invoice_type(invoice)
+        doctor_fee = report_doctor_fee(invoice, kind)
+        settlement = report_settlement(
+            invoice, kind, invoice_items_by_invoice.get(invoice.id, [])
+        )
         totals["invoices"] += 1
         totals["grossRevenue"] += total
         totals["paidRevenue"] += amount_paid
         totals["balance"] += balance
-        totals["doctorFee"] += doctor_share
+        totals["doctorFee"] += doctor_fee
         totals["settlement"] += settlement
         totals["clinicFee"] += int(invoice.clinic_share_amount or 0) or max(
-            total - doctor_share, 0
+            total - int(invoice.membership_discount_amount or 0) - doctor_share,
+            0,
         )
         totals["tax"] += int(invoice.tax_amount or 0)
+        totals["paidTax"] += tax_paid_basis(invoice)
         totals["membershipDiscount"] += int(invoice.membership_discount_amount or 0)
 
-        has_subscription = bool(
-            invoice.patient_subscription_enrollment_id
-            or invoice.patient_subscription_plan_id
-        )
-        if has_subscription:
-            totals["membershipPurchases"] += 1
-        is_plan_purchase = has_subscription and not any(
-            [
-                invoice.lab_order_id,
-                invoice.pharmacy_issue_id,
-                invoice.consultation_id,
-                invoice.ip_admission_id,
-                invoice.physiotherapy_case_id,
-                invoice.home_care_booking_id,
-            ]
-        )
+        is_plan_purchase = _is_membership_plan_invoice(invoice)
         if is_plan_purchase:
+            totals["membershipPurchases"] += 1
             totals["membershipEnrollCount"] += 1
             totals["membershipEnrollAmount"] += amount_paid
 
-        kind = _invoice_type(invoice)
         if kind == "lab":
             totals["labRevenue"] += amount_paid
         elif kind == "pharmacy":
@@ -247,16 +269,27 @@ def compute_dashboard_metrics(
         reverse=True,
     )
 
-    gross_profit = max(totals["grossRevenue"] - totals["doctorFee"], 0)
-    final_profit = max(totals["paidRevenue"] - totals["settlement"], 0)
+    chargeable_gross = max(totals["grossRevenue"] - totals["membershipDiscount"], 0)
+    total_cost = totals["doctorFee"] + totals["settlement"]
+    gross_profit = chargeable_gross - totals["tax"] - total_cost
+    final_profit = totals["paidRevenue"] - totals["paidTax"] - total_cost
 
-    lab_purchase_cost = _lab_settlement_purchase_cost(
-        session, tenant_id=tenant_id, invoices=paid
+    lab_purchase_cost = sum(
+        report_settlement(
+            invoice,
+            "lab",
+            invoice_items_by_invoice.get(invoice.id, []),
+        )
+        for invoice in paid
+        if _invoice_type(invoice) == "lab"
+    )
+    lab_paid_tax = sum(
+        tax_paid_basis(invoice) for invoice in paid if _invoice_type(invoice) == "lab"
     )
     lab_settlement = {
         "revenue": totals["labRevenue"],
         "purchaseCost": lab_purchase_cost,
-        "profit": max(totals["labRevenue"] - lab_purchase_cost, 0),
+        "profit": totals["labRevenue"] - lab_paid_tax - lab_purchase_cost,
     }
 
     return {
@@ -265,48 +298,6 @@ def compute_dashboard_metrics(
         "finalProfit": final_profit,
         "labSettlement": lab_settlement,
     }
-
-
-def _lab_settlement_purchase_cost(
-    session: Session, *, tenant_id: str, invoices: list[Invoice]
-) -> int:
-    lab_order_ids = [inv.lab_order_id for inv in invoices if inv.lab_order_id]
-    if not lab_order_ids:
-        return 0
-    items = list(
-        session.exec(
-            select(LabOrderItem).where(
-                LabOrderItem.tenant_id == tenant_id,
-                LabOrderItem.lab_order_id.in_(lab_order_ids),
-            )
-        ).all()
-    )
-    if not items:
-        return 0
-    catalog = {
-        row.id: row
-        for row in session.exec(
-            select(LabTestCatalog).where(LabTestCatalog.tenant_id == tenant_id)
-        ).all()
-    }
-    purchase_cost = 0
-    for item in items:
-        # Only mapped test lines contribute purchase cost; packages are skipped,
-        # matching the dashboard's lab settlement calculation.
-        if item.package_id or not item.test_id:
-            continue
-        catalog_item = catalog.get(item.test_id)
-        supplier_id = item.supplier_id or (
-            catalog_item.supplier_id if catalog_item else None
-        )
-        if not supplier_id:
-            continue
-        purchase_cost += int(
-            item.buying_price
-            or (catalog_item.purchase_price if catalog_item else 0)
-            or 0
-        )
-    return purchase_cost
 
 
 def branch_ids_for_period(
@@ -393,14 +384,24 @@ def archive_month(
     return saved
 
 
-def archive_due_months(session: Session) -> int:
-    """Archive the just-finished calendar month for every active tenant.
+def archive_due_months(session: Session, today: date | None = None) -> int:
+    """Archive the just-finished calendar month for every tenant.
 
-    Idempotent: tenants whose previous month is already frozen are skipped, so
-    this is safe to call from the per-second worker loop.
+    Safe to call from the worker loop. A month is frozen once it ends, but for
+    ``report_snapshot_grace_days`` days into the new month the snapshot is
+    re-frozen on each run so late same-period entries (an invoice generated last
+    month but paid a day into the new month, backdated invoices) are captured.
+    Historically this only archived once at the exact rollover instant, which
+    permanently missed any invoice created or paid afterwards. After the grace
+    window the frozen figures are left untouched.
     """
 
-    year, month = previous_calendar_month()
+    today = today or date.today()
+    year, month = previous_calendar_month(today)
+    _, period_end = month_range(year, month)
+    within_grace = (
+        today - period_end
+    ).days <= get_settings().report_snapshot_grace_days
     tenants = session.exec(select(Tenant)).all()
     archived = 0
     for tenant in tenants:
@@ -411,8 +412,16 @@ def archive_due_months(session: Session) -> int:
                 MonthlyRevenueSnapshot.period_month == month,
             )
         ).first()
-        if already:
+        # Once frozen and past the grace window the month is final; skip it.
+        if already and not within_grace:
             continue
-        archive_month(session, tenant_id=tenant.id, year=year, month=month)
+        # Inside the grace window overwrite so the frozen figures stay complete.
+        archive_month(
+            session,
+            tenant_id=tenant.id,
+            year=year,
+            month=month,
+            overwrite=within_grace,
+        )
         archived += 1
     return archived

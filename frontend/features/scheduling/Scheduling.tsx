@@ -1,27 +1,30 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
+import { FormField } from "@/app/components/FormElements";
 import {
-  ActionButton,
-  ActionGroup,
-  Badge,
-  Button,
   Card,
   Field,
   Input,
   RefreshButton,
-  Select,
+  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
 import { uniqueDepartmentRows } from "@/lib/options";
-import { activeTenantOptions, groupSchedules, selectedSchedulePayloads } from "@/utils/schedule/helpers";
-import { ScheduleForm } from "@/app/components/schedule/Forms";
-import { pageSize, weekdays } from "@/utils/schedule/constants";
-import { ConfirmModal, Empty, ScheduleRow } from "./Shared";
+import {
+  groupSchedules,
+  selectedSchedulePayloadsFromRHF,
+} from "@/features/scheduling/helpers";
+import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
+import { pageSize,weekdays } from "./constants";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { Empty } from "@/app/components/common/Empty";
+import { ScheduleRow } from "./components/ScheduleRow";
 import { Pagination } from "@/app/components/common/Pagination";
-
+import { ScheduleFormValues } from "./schedule.schema";
+import { activeTenantOptions } from "@/utils/helper";
 
 export function Scheduling({ apiSession, branchId }: any) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
@@ -50,7 +53,9 @@ export function Scheduling({ apiSession, branchId }: any) {
 
   async function loadTenants() {
     if (!apiSession?.user?.is_super_admin) return;
-    const tenantRows = activeTenantOptions(await apiFetch("/tenants", apiSession));
+    const tenantRows = activeTenantOptions(
+      await apiFetch("/tenants", apiSession),
+    );
     setTenants(tenantRows);
     if (!tenantId || !tenantRows.some((tenant: any) => tenant.id === tenantId))
       setTenantId(
@@ -107,22 +112,32 @@ export function Scheduling({ apiSession, branchId }: any) {
     );
   }
 
-  async function createSchedule(e: any) {
-    e.preventDefault();
+  async function createSchedule(data: ScheduleFormValues) {
     if (!scopedSession) return;
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const practitionerId = String(fd.get("practitionerId") || "");
+
+    const practitionerId = data.practitionerId;
     const doctorBranchIds =
       doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
     const doctorDepartmentIds =
       doctors.find((item: any) => item.id === practitionerId)?.department_ids ||
       [];
-    const schedulePayloads = selectedSchedulePayloads(fd, doctorBranchIds);
-    if (!practitionerId || schedulePayloads.length === 0) {
+
+    if (!practitionerId) {
+      setMessage("Select a doctor.");
+      return;
+    }
+
+    // Convert RHF data to backend payloads
+    const schedulePayloads = selectedSchedulePayloadsFromRHF(
+      data,
+      doctorBranchIds,
+    );
+
+    if (schedulePayloads.length === 0) {
       setMessage("Select a doctor and medical department.");
       return;
     }
+
     if (
       schedulePayloads.some(
         (item) =>
@@ -133,25 +148,31 @@ export function Scheduling({ apiSession, branchId }: any) {
       setMessage("Select a medical department mapped to this doctor.");
       return;
     }
+
     setBusy(true);
     setMessage("");
+
     try {
       const createdRows = await Promise.all(
         schedulePayloads.map((item) =>
           apiFetch(
             `/practitioners/${practitionerId}/schedules`,
             scopedSession,
-            { method: "POST", body: JSON.stringify(item) },
+            {
+              method: "POST",
+              body: JSON.stringify(item),
+            },
           ),
         ),
       );
+
       setRows((previous: any[]) => [
         ...createdRows,
         ...previous.filter(
           (row: any) => !createdRows.some((item: any) => item.id === row.id),
         ),
       ]);
-      form.reset();
+
       open("list");
       await loadData(tenantId);
       setMessage(
@@ -164,21 +185,26 @@ export function Scheduling({ apiSession, branchId }: any) {
     }
   }
 
-  async function updateSchedule(e: any) {
-    e.preventDefault();
+  async function updateSchedule(data: ScheduleFormValues) {
     if (!scopedSession || !selected) return;
-    const fd = new FormData(e.currentTarget);
-    const practitionerId = String(
-      fd.get("practitionerId") || selected.practitioner_id || "",
-    );
+    const practitionerId = data.practitionerId || selected.practitioner_id;
     const doctorBranchIds =
       doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
     const doctorDepartmentIds =
       doctors.find((item: any) => item.id === practitionerId)?.department_ids ||
       [];
-    const schedulePayloads = selectedSchedulePayloads(fd, doctorBranchIds);
+
+    const schedulePayloads = selectedSchedulePayloadsFromRHF(
+      data,
+      doctorBranchIds,
+    );
+
+    if (schedulePayloads.length === 0) {
+      setMessage("Select a medical department mapped to this doctor.");
+      return;
+    }
+
     if (
-      schedulePayloads.length === 0 ||
       schedulePayloads.some(
         (item) =>
           !item.department_id ||
@@ -188,14 +214,15 @@ export function Scheduling({ apiSession, branchId }: any) {
       setMessage("Select a medical department mapped to this doctor.");
       return;
     }
+
     const [firstPayload, ...extraPayloads] = schedulePayloads;
-    // Only reuse active rows. Soft-deleted (is_active=false) rows are ghosts:
-    // patching or counting them resurfaces removed ranges in the editor.
     const existingRows = (selected.schedules || [selected]).filter(
       (row: any) => row && row.is_active !== false,
     );
+
     setBusy(true);
     setMessage("");
+
     try {
       const updated = existingRows[0]
         ? await apiFetch(
@@ -220,25 +247,29 @@ export function Scheduling({ apiSession, branchId }: any) {
               }),
             },
           );
+
       const createdRows = await Promise.all(
         extraPayloads.map((item) =>
           apiFetch(
             `/practitioners/${practitionerId}/schedules`,
             scopedSession,
-            { method: "POST", body: JSON.stringify(item) },
+            {
+              method: "POST",
+              body: JSON.stringify(item),
+            },
           ),
         ),
       );
-      // Remove every other active row we just replaced.
+
+      // Delete old extra rows
       await Promise.all(
-        existingRows
-          .slice(1)
-          .map((row: any) =>
-            apiFetch(`/practitioners/schedules/${row.id}`, scopedSession, {
-              method: "DELETE",
-            }),
-          ),
+        existingRows.slice(1).map((row: any) =>
+          apiFetch(`/practitioners/schedules/${row.id}`, scopedSession, {
+            method: "DELETE",
+          }),
+        ),
       );
+
       setRows((previous: any[]) => [
         updated,
         ...createdRows,
@@ -248,8 +279,10 @@ export function Scheduling({ apiSession, branchId }: any) {
             !createdRows.some((item: any) => item.id === row.id),
         ),
       ]);
+
       open("list");
       await loadData(tenantId);
+
       setMessage(
         createdRows.length
           ? `Schedule updated and ${createdRows.length} extra ${createdRows.length === 1 ? "slot" : "slots"} created.`
@@ -336,7 +369,12 @@ export function Scheduling({ apiSession, branchId }: any) {
       const department = departments.find(
         (item: any) => item.id === row.department_id,
       );
-      const text = [doctor?.full_name, row.room_number, department?.name, row.id]
+      const text = [
+        doctor?.full_name,
+        row.room_number,
+        department?.name,
+        row.id,
+      ]
         .join(" ")
         .toLowerCase();
       return (
@@ -398,20 +436,19 @@ export function Scheduling({ apiSession, branchId }: any) {
       <div className="mt-4 grid gap-3 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5">
         {isSuperAdmin && (
           <Field label="Tenant">
-            <Select
+            <SearchableSelect
               value={tenantId}
-              onChange={(e: any) => setTenantId(e.target.value)}
-
-            >
-              {tenants.map((tenant: any) => (
-                <option key={tenant.id} value={tenant.id}>
-                  {tenant.name}
-                </option>
-              ))}
-            </Select>
+              onChange={setTenantId}
+              options={tenants.map((tenant: any) => ({
+                value: tenant.id,
+                label: tenant.name,
+              }))}
+              placeholder="Select Tenant"
+              searchable
+            />
           </Field>
         )}
-        <Field label="Search">
+        <FormField label="Search">
           <Input
             value={query}
             onChange={(e: any) => {
@@ -419,78 +456,85 @@ export function Scheduling({ apiSession, branchId }: any) {
               setPage(1);
             }}
             placeholder="Doctor, room, medical department"
-            // className='search-filter'
+          />
+        </FormField>
+        <Field label="Branch">
+          <SearchableSelect
+            value={filterBranch}
+            onChange={(value) => {
+              setFilterBranch(value);
+              setPage(1);
+            }}
+            options={[
+              { value: "all", label: "All branches" },
+              ...branches.map((branch: any) => ({
+                value: branch.id,
+                label: branch.name,
+              })),
+            ]}
+            placeholder="All branches"
+            searchable={false}
           />
         </Field>
-        <Field label="Branch">
-          <Select
-            value={filterBranch}
-            onChange={(e: any) => {
-              setFilterBranch(e.target.value);
-              setPage(1);
-            }}
-            className='select-filter'
-          >
-            <option value="all">All branches</option>
-            {branches.map((branch: any) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
+
         <Field label="Department">
-          <Select
+          <SearchableSelect
             value={filterDepartment}
-            onChange={(e: any) => {
-              setFilterDepartment(e.target.value);
+            onChange={(value) => {
+              setFilterDepartment(value);
               setPage(1);
             }}
-            className='select-filter'
-          >
-            <option value="all">All Departments</option>
-            {departments.map((department: any) => (
-              <option key={department.id} value={department.id}>
-                {department.name}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "all", label: "All Departments" },
+              ...departments.map((department: any) => ({
+                value: department.id,
+                label: department.name,
+              })),
+            ]}
+            placeholder="All Departments"
+            searchable={false}
+          />
         </Field>
+
         <Field label="Weekday">
-          <Select
+          <SearchableSelect
             value={filterWeekday}
-            onChange={(e: any) => {
-              setFilterWeekday(e.target.value);
+            onChange={(value) => {
+              setFilterWeekday(value);
               setPage(1);
             }}
-            className='select-filter'
-          >
-            <option value="all">All days</option>
-            {weekdays.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
+            options={[
+              { value: "all", label: "All days" },
+              ...weekdays.map(([value, label]) => ({
+                value,
+                label,
+              })),
+            ]}
+            placeholder="All days"
+            searchable={false}
+          />
         </Field>
+
         <Field label="Status">
-          <Select
+          <SearchableSelect
             value={filterStatus}
-            onChange={(e: any) => {
-              setFilterStatus(e.target.value);
+            onChange={(value) => {
+              setFilterStatus(value);
               setPage(1);
             }}
-            className='select-filter'
-          >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="all">All</option>
-          </Select>
+            options={[
+              { value: "active", label: "Active" },
+              { value: "inactive", label: "Inactive" },
+              { value: "all", label: "All" },
+            ]}
+            searchable={false}
+            placeholder="Status"
+          />
         </Field>
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1120px]">
-          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_1.2fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
+          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span>Doctor</span>
             <span>Branch</span>
             <span>Department</span>
@@ -498,7 +542,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             <span>Timing</span>
             <span>Slots</span>
             <span className="text-center">Status</span>
-            <span className="text-right">Actions</span>
+            <span className="text-center">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
             {pageRows.length === 0 && (
@@ -533,8 +577,8 @@ export function Scheduling({ apiSession, branchId }: any) {
       {confirm && (
         <ConfirmModal
           busy={busy}
-          row={confirm.row}
-          onClose={() => setConfirm(null)}
+          action={confirm.row}
+          onCancel={() => setConfirm(null)}
           onConfirm={() => deleteSchedule(confirm.row)}
         />
       )}

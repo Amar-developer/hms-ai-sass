@@ -1,10 +1,18 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.core.validation import (
+    BranchId,
+    DepartmentId,
+    PatientId,
+    PractitionerId,
+    UserId,
+)
 
 
 class PhysiotherapyEquipmentCreate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     name: str = Field(min_length=2, max_length=160)
     modality_type: str = Field(max_length=80)
     manufacturer: str | None = Field(default=None, max_length=120)
@@ -17,7 +25,7 @@ class PhysiotherapyEquipmentCreate(BaseModel):
 
 
 class PhysiotherapyEquipmentUpdate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     name: str | None = Field(default=None, min_length=2, max_length=160)
     modality_type: str | None = Field(default=None, max_length=80)
     manufacturer: str | None = Field(default=None, max_length=120)
@@ -41,26 +49,26 @@ class PhysiotherapyEquipmentRead(PhysiotherapyEquipmentCreate):
 
 
 class PhysiotherapyCaseCreate(BaseModel):
-    branch_id: str
-    patient_id: str
+    branch_id: BranchId
+    patient_id: PatientId
     source_appointment_id: str | None = None
     ip_admission_id: str | None = None
-    physiotherapist_id: str | None = None
-    department_id: str | None = None
+    physiotherapist_id: PractitionerId | None = None
+    department_id: DepartmentId | None = None
     care_context: str = Field(default="op", max_length=20)
-    assessment_date: date | None = None
-    body_region: str | None = Field(default=None, max_length=120)
-    condition: str | None = Field(default=None, max_length=500)
+    assessment_date: date
+    body_region: str = Field(min_length=2, max_length=120)
+    condition: str = Field(min_length=2, max_length=500)
     pain_score: int | None = Field(default=None, ge=0, le=10)
     range_of_motion: str | None = Field(default=None, max_length=500)
     muscle_strength: str | None = Field(default=None, max_length=500)
-    treatment_goal: str | None = Field(default=None, max_length=1000)
+    treatment_goal: str = Field(min_length=2, max_length=1000)
     planned_sessions: int = Field(default=1, ge=1)
     frequency: str | None = Field(default=None, max_length=120)
 
 
 class PhysiotherapyCaseUpdate(BaseModel):
-    physiotherapist_id: str | None = None
+    physiotherapist_id: PractitionerId | None = None
     body_region: str | None = Field(default=None, max_length=120)
     condition: str | None = Field(default=None, max_length=500)
     pain_score: int | None = Field(default=None, ge=0, le=10)
@@ -90,11 +98,11 @@ class PhysiotherapyCaseRead(PhysiotherapyCaseCreate):
 
 
 class PhysiotherapySessionCreate(BaseModel):
-    physiotherapist_id: str | None = None
-    session_date: date | None = None
+    physiotherapist_id: PractitionerId | None = None
+    session_date: date
     equipment_id: str | None = None
     modality_type: str = Field(max_length=80)
-    treatment_area: str | None = Field(default=None, max_length=160)
+    treatment_area: str = Field(min_length=2, max_length=160)
     intensity: str | None = Field(default=None, max_length=120)
     duration_minutes: int = Field(default=15, ge=1)
     pre_pain_score: int | None = Field(default=None, ge=0, le=10)
@@ -118,6 +126,8 @@ class PhysiotherapySessionRead(PhysiotherapySessionCreate):
 
 
 class PhysiotherapyInvoiceCreate(BaseModel):
-    discount_amount: int = Field(default=0, ge=0)
+    model_config = ConfigDict(extra="forbid")
+
     tax_rule_id: str | None = None
-    created_by_user_id: str | None = None
+    discount_offer_id: str | None = None
+    created_by_user_id: UserId | None = None

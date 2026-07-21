@@ -2,16 +2,18 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: medizinhub-postgres
+    env_file:
+      - .env
     environment:
-      POSTGRES_DB: medizinhub_hms
-      POSTGRES_USER: medizinhub
-      POSTGRES_PASSWORD: medizinhub_dev
+      POSTGRES_DB: ${POSTGRES_DB:-medizinhub_hms}
+      POSTGRES_USER: ${POSTGRES_USER:-medizinhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medizinhub_dev}
     ports:
       - "5433:5432"
     volumes:
       - medizinhub_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U medizinhub -d medizinhub_hms"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medizinhub} -d ${POSTGRES_DB:-medizinhub_hms}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -32,20 +34,32 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
       args:
-        NEXT_PUBLIC_MEDIZINHUB_API_URL: http://localhost:8080/api/v1
-        NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: "true"
+        NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
+        NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-true}
     container_name: medizinhub-frontend
     ports:
       - "3000:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    # The anonymous node_modules volume above can go stale after a rebuild
+    # (Compose reuses the old volume's contents instead of the freshly built
+    # image's node_modules). Installing here reconciles node_modules against
+    # the mounted package.json on every start, so newly added dependencies
+    # are always present without needing a manual `docker compose up -V`.
+    command: sh -c "npm install && npm run dev"
     depends_on:
-      - postgres
-      - redis
+      backend:
+        condition: service_healthy
     environment:
-      NEXT_PUBLIC_MEDIZINHUB_API_URL: http://localhost:8080/api/v1
-      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: "true"
+      NEXT_PUBLIC_MEDIZINHUB_API_URL: ${NEXT_PUBLIC_MEDIZINHUB_API_URL:-http://localhost:8080/api/v1}
+      NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS: ${NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   backend:
     build:
@@ -58,6 +72,7 @@ services:
       - "local.healthcare:host-gateway"
     volumes:
       - ./backend:/app
+      - ./VERSION:/VERSION:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +88,12 @@ services:
       alembic -c alembic/alembic.ini upgrade head &&
       uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
       "
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   report-worker:
     build:
@@ -83,10 +104,9 @@ services:
       - "local.healthcare:host-gateway"
     volumes:
       - ./backend:/app
+      - ./VERSION:/VERSION:ro
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
+      backend:
         condition: service_healthy
     env_file:
       - .env

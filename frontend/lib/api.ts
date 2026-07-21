@@ -6,6 +6,14 @@ export const API_BASE = (
 
 export const UPLOADS_BASE = API_BASE.replace(/\/api\/v1$/, "");
 
+export function uploadAssetUrl(value: string | null | undefined): string {
+  const path = String(value || "").trim();
+  if (!path) return "";
+  if (path.startsWith("/uploads/")) return `${UPLOADS_BASE}${path}`;
+  if (path.startsWith("uploads/")) return `${UPLOADS_BASE}/${path}`;
+  return path;
+}
+
 export type ApiSession = {
   tenantId: string;
   email: string;
@@ -13,6 +21,9 @@ export type ApiSession = {
 };
 
 export const AUTH_SESSION_EXPIRED_EVENT = "medizinhub.auth.sessionExpired";
+export const LIVE_DATA_CHANGED_EVENT = "medizinhub.liveData.changed";
+export const LIVE_DATA_CHANGED_STORAGE_KEY =
+  "medizinhub.liveData.changed.revision";
 
 const IDEMPOTENT_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const IDEMPOTENCY_KEY_TTL_MS = 2 * 60 * 1000;
@@ -24,16 +35,113 @@ function requestId() {
     : `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
-function apiError(path: string, detail: string, response: Response) {
+export type ApiErrorLike = Error & {
+  status?: number;
+  path?: string;
+  detail?: string;
+  requestId?: string | null;
+  permissionDenied?: boolean;
+};
+
+const GENERIC_FORBIDDEN =
+  /^(permission denied|forbidden|not allowed|access denied)\.?$/i;
+
+function friendlyMessage(status: number, detail: string): string {
+  // Permission problems get a clean, human sentence — never the raw route
+  // path or the correlation id, which read as scary "error" noise to staff.
+  if (status === 403) {
+    return GENERIC_FORBIDDEN.test(detail.trim())
+      ? "You do not have permission to perform this action. Ask a tenant admin to enable it for your role."
+      : detail;
+  }
+  if (status === 404) return detail;
+  return detail;
+}
+
+function apiError(
+  path: string,
+  detail: string,
+  response: Response,
+): ApiErrorLike {
   const correlationId = response.headers.get("x-request-id");
-  return new Error(
-    `${path}: ${detail}${correlationId ? ` [request ${correlationId}]` : ""}`,
-  );
+  const status = response.status;
+  // Keep the route path + request id on non-permission errors (developers rely
+  // on them for debugging); strip them from access errors shown to end users.
+  const message =
+    status === 403 || status === 401
+      ? friendlyMessage(status, detail)
+      : `${path}: ${detail}${correlationId ? ` [request ${correlationId}]` : ""}`;
+  const error = new Error(message) as ApiErrorLike;
+  error.status = status;
+  error.path = path;
+  error.detail = detail;
+  error.requestId = correlationId;
+  error.permissionDenied = status === 403;
+  return error;
 }
 
 function notifySessionExpired() {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent(AUTH_SESSION_EXPIRED_EVENT));
+}
+
+function notifyLiveDataChanged(
+  path: string,
+  session: ApiSession,
+  method: string,
+) {
+  if (typeof window === "undefined") return;
+  const detail = {
+    tenantId: session.tenantId,
+    path,
+    method,
+    revision: `${Date.now()}-${requestId()}`,
+  };
+  window.dispatchEvent(new CustomEvent(LIVE_DATA_CHANGED_EVENT, { detail }));
+  try {
+    // The custom event updates the current tab. Storage events notify other
+    // open HMS tabs without persisting any clinical or patient data.
+    localStorage.setItem(
+      LIVE_DATA_CHANGED_STORAGE_KEY,
+      JSON.stringify({ tenantId: detail.tenantId, revision: detail.revision }),
+    );
+  } catch {
+    // Same-tab refresh still works when storage is blocked or unavailable.
+  }
+}
+
+function reportApiFailure(
+  path: string,
+  status: number,
+  detail: string,
+  requestId: string | null,
+  method: string,
+  session: ApiSession,
+) {
+  reportClientError(
+    new Error(detail),
+    {
+      event:
+        status >= 500
+          ? "frontend.api_server_error"
+          : status === 401 || status === 403
+            ? "frontend.api_permission_error"
+            : "frontend.api_request_error",
+      module: "api",
+      category:
+        status === 401 || status === 403
+          ? "permission"
+          : status === 422
+            ? "validation"
+            : "api",
+      level: status >= 500 ? "error" : "warning",
+      requestId,
+      method,
+      statusCode: status,
+      metadata: { api_path: path },
+    },
+    session,
+  );
 }
 
 function cleanupIdempotencyKeys(now = Date.now()) {
@@ -111,17 +219,19 @@ export async function apiFetch(
   options: RequestInit = {},
 ) {
   let res: Response;
+  const method = String(options.method || "GET").toUpperCase();
   const idempotencyKey = idempotencyKeyFor(path, session, options);
   const correlationId = requestId();
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
-      credentials: 'include',
+      cache: options.cache ?? "no-store",
+      credentials: "include",
       headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-ID': session.tenantId,
-        'X-Request-ID': correlationId,
-        ...(idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {}),
+        "Content-Type": "application/json",
+        "X-Tenant-ID": session.tenantId,
+        "X-Request-ID": correlationId,
+        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
         ...(options.headers || {}),
       },
     });
@@ -131,6 +241,7 @@ export async function apiFetch(
       {
         event: "frontend.api_connection_failed",
         module: "api",
+        requestId: correlationId,
       },
       session,
     );
@@ -141,18 +252,18 @@ export async function apiFetch(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    if (res.status >= 500) {
-      reportClientError(
-        new Error(detail),
-        {
-          event: "frontend.api_server_error",
-          module: "api",
-          requestId: res.headers.get("x-request-id"),
-        },
-        session,
-      );
-    }
+    reportApiFailure(
+      path,
+      res.status,
+      detail,
+      res.headers.get("x-request-id"),
+      method,
+      session,
+    );
     throw apiError(path, detail, res);
+  }
+  if (IDEMPOTENT_METHODS.has(method)) {
+    notifyLiveDataChanged(path, session, method);
   }
   if (res.status === 204 || res.headers.get("content-length") === "0")
     return null;
@@ -169,10 +280,11 @@ export async function apiBlob(
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
-      credentials: 'include',
+      cache: options.cache ?? "no-store",
+      credentials: "include",
       headers: {
-        'X-Tenant-ID': session.tenantId,
-        'X-Request-ID': correlationId,
+        "X-Tenant-ID": session.tenantId,
+        "X-Request-ID": correlationId,
         ...(options.headers || {}),
       },
     });
@@ -192,18 +304,19 @@ export async function apiBlob(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    if (res.status >= 500) {
-      reportClientError(
-        new Error(detail),
-        {
-          event: "frontend.api_server_error",
-          module: "api",
-          requestId: res.headers.get("x-request-id"),
-        },
-        session,
-      );
-    }
+    reportApiFailure(
+      path,
+      res.status,
+      detail,
+      res.headers.get("x-request-id"),
+      String(options.method || "GET").toUpperCase(),
+      session,
+    );
     throw apiError(path, detail, res);
+  }
+  const method = String(options.method || "GET").toUpperCase();
+  if (IDEMPOTENT_METHODS.has(method)) {
+    notifyLiveDataChanged(path, session, method);
   }
   return res.blob();
 }
@@ -217,11 +330,12 @@ export async function apiUpload(
   const correlationId = requestId();
   try {
     res = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      credentials: 'include',
+      method: "POST",
+      cache: "no-store",
+      credentials: "include",
       headers: {
-        'X-Tenant-ID': session.tenantId,
-        'X-Request-ID': correlationId,
+        "X-Tenant-ID": session.tenantId,
+        "X-Request-ID": correlationId,
       },
       body: formData,
     });
@@ -241,24 +355,21 @@ export async function apiUpload(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    if (res.status >= 500) {
-      reportClientError(
-        new Error(detail),
-        {
-          event: "frontend.api_server_error",
-          module: "api",
-          requestId: res.headers.get("x-request-id"),
-        },
-        session,
-      );
-    }
+    reportApiFailure(
+      path,
+      res.status,
+      detail,
+      res.headers.get("x-request-id"),
+      "POST",
+      session,
+    );
     throw apiError(path, detail, res);
   }
+  notifyLiveDataChanged(path, session, "POST");
   return res.json();
 }
 
 export type PhysiotherapyInvoicePayload = {
-  discount_amount?: number;
   tax_rule_id?: string | null;
   created_by_user_id?: string | null;
 };

@@ -2,19 +2,23 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, Input, RefreshButton, Select, StatusToast } from "@/app/components/common/ui";
-import { FormField, NumberField } from "@/app/components/FormElements";
+import { FormField } from "@/app/components/FormElements";
 import {
-  UPLOADS_BASE,
   apiFetch,
   apiUpload,
+  uploadAssetUrl,
   generatePhysiotherapyInvoice,
   getPhysiotherapyInvoice,
 } from "@/lib/api";
-import { displayDate } from "@/utils/helper";
-import { activePhysiotherapyFeeRule, consentFiles, formatPhysiotherapistName, inr, patientName, today } from "@/utils/physiotherapy/helpers";
-import { Header, Info, SearchSelect } from "@/app/components/physiotherapy/Shared";
-import { modalities } from "@/utils/physiotherapy/constants";
-import { CaseForm, IPCaseForm } from "@/app/components/physiotherapy/Forms";
+import { displayDate,patientName,today,inr } from "@/utils/helper";
+import { activePhysiotherapyFeeRule,consentFiles,formatPhysiotherapistName } from "./helpers";
+import { Header } from "./components/Header";
+import { SearchSelect } from "./components/SearchSelect";
+import { modalities } from "./constants";
+import { CaseForm,IPCaseForm } from "@/features/physiotherapy/forms/PhysiotherapyForms";
+import { Info } from "@/app/components/common/Info";
+import { ActivityLog } from "@/app/components/common/ActivityLog";
+import { readNotificationTarget } from "@/lib/notificationTarget";
 
 type View = "list" | "op" | "ip" | "detail";
 
@@ -39,7 +43,6 @@ export function Physiotherapy({
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [invoiceDiscount, setInvoiceDiscount] = useState("0");
   const patientMap = useMemo(
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
@@ -86,6 +89,13 @@ export function Physiotherapy({
   useEffect(() => {
     if (!selectedId && cases[0]?.id) setSelectedId(cases[0].id);
   }, [cases, selectedId]);
+  useEffect(() => {
+    const target = readNotificationTarget("physiotherapy_case");
+    if (!target || !cases.some((row: any) => row.id === target.resourceId))
+      return;
+    setSelectedId(target.resourceId);
+    setView("detail");
+  }, [apiSession?.tenantId, cases.length]);
   useEffect(() => {
     setSessionPhysiotherapistId(selected?.physiotherapist_id || "");
   }, [selected?.id, selected?.physiotherapist_id]);
@@ -311,7 +321,6 @@ export function Physiotherapy({
         apiSession,
         selected.id,
         {
-          discount_amount: Number(invoiceDiscount || 0),
           created_by_user_id: apiSession.user?.id,
         },
       );
@@ -331,7 +340,7 @@ export function Physiotherapy({
     <div className="space-y-6">
       <Header view={view} setView={setView} />
       <StatusToast message={message} tone="success" onClose={() => setMessage("")} />
-      <StatusToast message={error} tone="error" onClose={() => setError("")} />
+      <StatusToast message={error} onClose={() => setError("")} />
 
       {view === "op" && (
         <CaseForm
@@ -447,7 +456,7 @@ export function Physiotherapy({
                       {consentFiles(selected).map((file:any,index:number)=>(
                         <a
                           key={`${file.url}-${index}`}
-                          href={`${UPLOADS_BASE}${file.url}`}
+                          href={uploadAssetUrl(file.url)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="block break-all text-sm font-semibold text-blue-700 underline"
@@ -513,15 +522,16 @@ export function Physiotherapy({
             <h4 className="text-lg font-bold">Record Therapy Session</h4>
             <form onSubmit={submitSession} className="mt-4 grid gap-3">
               <div className="grid gap-3 md:grid-cols-2">
-                <FormField label="Date">
+                <FormField label="Date" required>
                   <Input
                     name="session_date"
                     type="date"
                     defaultValue={today()}
+                    required
                   />
                 </FormField>
-                <FormField label="Modality">
-                  <Select name="modality_type">
+                <FormField label="Modality" required>
+                  <Select name="modality_type" required>
                     {modalities.map(([value, label]) => (
                       <option key={value} value={value}>
                         {label}
@@ -564,10 +574,11 @@ export function Physiotherapy({
                 </Select>
               </FormField>
               <div className="grid gap-3 md:grid-cols-3">
-                <FormField label="Treatment Area">
+                <FormField label="Treatment Area" required>
                   <Input
                     name="treatment_area"
                     defaultValue={selected.body_region || ""}
+                    required
                   />
                 </FormField>
                 <FormField label="Intensity">
@@ -685,13 +696,7 @@ export function Physiotherapy({
                 />
               </div>
               {!invoiceDetail ? (
-                <div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto] md:items-end">
-                  <NumberField
-                    label="Discount"
-                    value={invoiceDiscount}
-                    onChange={setInvoiceDiscount}
-                    min={0}
-                  />
+                <div className="mt-4 flex justify-end">
                   <Button
                     type="button"
                     onClick={generateInvoice}
@@ -740,6 +745,13 @@ export function Physiotherapy({
             </div>
           </Card>
         </div>
+      )}
+      {selected && view === "detail" && (
+        <ActivityLog
+          resourceType="physiotherapy_case"
+          resourceId={selected?.id}
+          apiSession={apiSession}
+        />
       )}
     </div>
   );

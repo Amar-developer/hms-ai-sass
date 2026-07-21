@@ -86,6 +86,7 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
             "branch_id": branch_id,
             "patient_id": patient_id,
             "care_context": "op",
+            "assessment_date": date.today().isoformat(),
             "body_region": "Knee",
             "condition": "Post injury stiffness",
             "pain_score": 7,
@@ -106,7 +107,14 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
                 "files",
                 ("physio-consent.pdf", BytesIO(b"%PDF-1.4 consent"), "application/pdf"),
             ),
-            ("files", ("guardian-consent.png", BytesIO(b"fake-png"), "image/png")),
+            (
+                "files",
+                (
+                    "guardian-consent.png",
+                    BytesIO(b"\x89PNG\r\n\x1a\nfake"),
+                    "image/png",
+                ),
+            ),
         ],
     )
     assert consent.status_code == 200
@@ -123,6 +131,7 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
         f"/api/v1/physiotherapy/cases/{case_body['id']}/sessions",
         headers=headers,
         json={
+            "session_date": date.today().isoformat(),
             "equipment_id": equipment.json()["id"],
             "modality_type": "muscle_stimulator",
             "treatment_area": "Knee",
@@ -136,10 +145,23 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
     assert session.status_code == 201
     assert session.json()["session_number"] == 1
 
+    offer = client.post(
+        "/api/v1/billing/discount-offers",
+        headers=headers,
+        json={
+            "branch_id": branch_id,
+            "name": "Physiotherapy Concession",
+            "service_scope": "physiotherapy",
+            "discount_type": "fixed",
+            "value": 100,
+        },
+    )
+    assert offer.status_code == 201
+
     invoice = client.post(
         f"/api/v1/physiotherapy/cases/{case_body['id']}/invoice",
         headers=headers,
-        json={"discount_amount": 100},
+        json={"discount_offer_id": offer.json()["id"]},
     )
     assert invoice.status_code == 201
     assert invoice.json()["invoice"]["physiotherapy_case_id"] == case_body["id"]
@@ -153,7 +175,9 @@ def test_physiotherapy_case_session_equipment_and_invoice(client, test_engine):
         f"/api/v1/physiotherapy/cases/{case_body['id']}/sessions",
         headers=headers,
         json={
+            "session_date": date.today().isoformat(),
             "modality_type": "exercise",
+            "treatment_area": "Knee",
             "duration_minutes": 15,
             "charge_amount": 200,
         },

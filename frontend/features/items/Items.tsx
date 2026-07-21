@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionButton,
   ActionGroup,
@@ -16,32 +16,24 @@ import {
   FormField,
   NumberField,
   SelectField,
-  TextField,
 } from "@/app/components/FormElements";
+import { Input } from "@/app/components/common/ui";
 import { humanizeOptionLabel } from "@/lib/options";
-
-const itemTypes = [
-  ["medicine", "Medicine"],
-  ["lab_test", "Lab Test"],
-  ["lab_package", "Service"],
-  ["physio_equipment", "Physiotherapy Equipment"],
-  ["home_care_service", "Home Care Service"],
-  ["home_visit_service", "Home Visit Service"],
-];
-
-const homeServiceTypes = ["home_care_service", "home_visit_service"];
-const serviceItemTypes = ["lab_package", ...homeServiceTypes];
-
-const modalities = [
-  ["ift", "IFT / Interferential Therapy"],
-  ["ultrasound", "Ultrasound Therapy"],
-  ["tens", "TENS Pain Relief"],
-  ["laser", "Laser Therapy"],
-  ["swd", "Shortwave Diathermy"],
-  ["cpm", "CPM Joint Rehabilitation"],
-  ["muscle_stimulator", "Muscle Stimulator / EMS"],
-  ["exercise", "Therapeutic Exercise"],
-];
+import {
+  homeServiceTypes,
+  itemTypes,
+  modalities,
+  price_options,
+  serviceItemTypes,
+  sort_type_options,
+} from "@/features/items/constants";
+import { ItemForm } from "@/features/items/forms/ItemForms";
+import { ItemFormValues, itemSchema } from "@/features/items/items.schema";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { RowActions } from "../admin/components/RowActions";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { findDuplicateItem, itemEndpoint } from "./helpers";
 
 function generatedItemCode(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -97,6 +89,31 @@ function createEmptyForm(type: string) {
 }
 
 export function Items({ apiSession, branchId }: any) {
+  const {
+    register,
+    handleSubmit,
+    control,
+    reset,
+    formState: { errors },
+  } = useForm<ItemFormValues>({
+    resolver: zodResolver(itemSchema),
+    defaultValues: {
+      name: "",
+      generic_name: "",
+      mrp_price: "",
+      price: "",
+      purchase_price: "",
+      supplier_id: "",
+      reorder_level: "",
+      sample_type: "",
+      description: "",
+      modality_type: "ift",
+      manufacturer: "",
+      model_number: "",
+      serial_number: "",
+      is_portable: "false",
+    },
+  });
   const [type, setType] = useState("medicine");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
@@ -107,6 +124,7 @@ export function Items({ apiSession, branchId }: any) {
   const [homeCareServices, setHomeCareServices] = useState<any[]>([]);
   const [packageTestIds, setPackageTestIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<any>(null);
+  const [confirmAction, setConfirmAction] = useState<any>(null);
   const [filters, setFilters] = useState({
     type: "all",
     query: "",
@@ -115,6 +133,7 @@ export function Items({ apiSession, branchId }: any) {
     sortBy: "name",
   });
   const [page, setPage] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 10;
   function setFiltersAndReset(f: any) {
     setFilters(f);
@@ -224,7 +243,9 @@ export function Items({ apiSession, branchId }: any) {
           return false;
         if (filters.priceBand === "free" && Number(row.price || 0) > 0)
           return false;
-        const query = filters.query.trim().toLowerCase();
+        const query = String(filters.query || "")
+          .trim()
+          .toLowerCase();
         if (
           query &&
           !`${row.kind} ${row.name} ${row.code} ${row.meta} ${row.id}`
@@ -285,6 +306,7 @@ export function Items({ apiSession, branchId }: any) {
 
   function resetItemForm(nextType = type) {
     setForm(createEmptyForm(nextType));
+    setPackageTestIds([]);
   }
 
   async function load() {
@@ -456,12 +478,113 @@ export function Items({ apiSession, branchId }: any) {
       }
       setMessage(wasEditing ? "Item updated." : "Item saved.");
     } catch (err: any) {
-      setMessage(err.message || "Could not save item.");
+      setMessage(err.detail || err.message || "Could not save item.");
     } finally {
       setBusy("");
     }
   }
+  async function handleItemSubmit(data: ItemFormValues) {
+    if (!apiSession) return;
 
+    const duplicate = findDuplicateItem(rows, data.name, editing?.id);
+    if (duplicate) {
+      setMessage(`An item named "${data.name.trim()}" already exists.`);
+      return false;
+    }
+
+    setBusy("save");
+    setMessage("");
+
+    try {
+      const isEditing = !!editing;
+      const method = isEditing ? "PATCH" : "POST";
+      const itemCode = isEditing
+        ? type === "physio_equipment"
+          ? editing.serial_number ||
+            editing.code ||
+            generatedItemCode(type, data.name)
+          : editing.code || generatedItemCode(type, data.name)
+        : generatedItemCode(type, data.name);
+
+      const endpoint = itemEndpoint(type, editing?.id);
+      let body: any = { code: itemCode, name: data.name };
+
+      if (type === "medicine") {
+        body = {
+          ...body,
+          generic_name: data.generic_name || null,
+          supplier_id: data.supplier_id || null,
+          mrp_price: Number(data.mrp_price || 0),
+          purchase_price: Number(data.purchase_price || 0),
+          default_sale_price: Number(data.price || 0),
+          reorder_level: Number(data.reorder_level || 0),
+        };
+      } else if (type === "lab_test") {
+        body = {
+          ...body,
+          supplier_id: data.supplier_id || null,
+          mrp_price: Number(data.mrp_price || 0),
+          purchase_price: Number(data.purchase_price || 0),
+          default_price: Number(data.price || 0),
+          sample_type: data.sample_type || null,
+        };
+      } else if (type === "lab_package") {
+        body = {
+          ...body,
+          description: data.description || null,
+          mrp_price: Number(data.mrp_price || 0),
+          purchase_price: 0,
+          package_price: Number(data.price || 0),
+          test_ids: packageTestIds,
+          ...(isEditing
+            ? { updated_by_user_id: apiSession.user?.id }
+            : { created_by_user_id: apiSession.user?.id }),
+        };
+      } else if (homeServiceTypes.includes(type)) {
+        body = {
+          ...body,
+          description: data.description || null,
+          mrp_price: Number(data.mrp_price || 0),
+          default_price: Number(data.price || 0),
+        };
+      } else if (type === "physio_equipment") {
+        body = {
+          ...body,
+          modality_type: data.modality_type,
+          supplier_id: data.supplier_id || null,
+          mrp_price: Number(data.mrp_price),
+          purchase_price: Number(data.purchase_price || 0),
+          manufacturer: data.manufacturer || null,
+          model_number: data.model_number || null,
+          serial_number: itemCode,
+          is_portable: data.is_portable === "true",
+        };
+      }
+
+      await apiFetch(endpoint, apiSession, {
+        method,
+        body: JSON.stringify(body),
+      });
+
+      // ✅ Refresh data
+      await load();
+
+      // ✅ Reset form + editing state
+      setEditing(null);
+      resetItemForm(type); // This should clear the form
+
+      setMessage(
+        isEditing ? "Item updated successfully." : "Item created successfully.",
+      );
+      return true;
+    } catch (err: any) {
+      console.error(err);
+      setMessage(err.detail || err.message || "Failed to save item.");
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
   function startEdit(row: any) {
     const raw = row.raw;
     setEditing(row);
@@ -529,7 +652,6 @@ export function Items({ apiSession, branchId }: any) {
         is_portable: String(Boolean(raw.is_portable)),
         branch_scope: raw.branch_id ? "branch" : "tenant",
       });
-    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function cancelEdit() {
@@ -538,10 +660,22 @@ export function Items({ apiSession, branchId }: any) {
     resetItemForm(type);
   }
 
-  async function deleteItem(row: any) {
-    if (!apiSession || !confirm(`Delete ${row.name}?`)) return;
+  function deleteItem(row: any) {
+    setConfirmAction({
+      kind: "delete",
+      entity: "item",
+      row,
+    });
+  }
+
+  async function confirmDelete() {
+    if (!apiSession || !confirmAction) return;
+
+    const row = confirmAction.row;
+
     setBusy(`delete-${row.id}`);
     setMessage("");
+
     const path =
       row.type === "medicine"
         ? `/pharmacy/medicines/${row.id}`
@@ -552,10 +686,16 @@ export function Items({ apiSession, branchId }: any) {
             : homeServiceTypes.includes(row.type)
               ? `/home-care/services/${row.id}`
               : `/physiotherapy/equipment/${row.id}`;
+
     try {
-      await apiFetch(path, apiSession, { method: "DELETE" });
+      await apiFetch(path, apiSession, {
+        method: "DELETE",
+      });
+
       await load();
+
       setMessage("Item deleted.");
+      setConfirmAction(null);
     } catch (err: any) {
       setMessage(err.message || "Could not delete item.");
     } finally {
@@ -567,7 +707,7 @@ export function Items({ apiSession, branchId }: any) {
   const pagedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 scroll-mt-24" ref={containerRef}>
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
@@ -585,171 +725,16 @@ export function Items({ apiSession, branchId }: any) {
           </div>
         </div>
         <StatusToast message={message} onClose={() => setMessage("")} />
-        <form onSubmit={createItem} className="mt-5 grid gap-3 md:grid-cols-4">
-          <FormField label="Item Type">
-            <SearchableSelect
-              value={type}
-              onChange={changeItemType}
-              searchable={false}
-              options={itemTypes.map(([value, label]) => ({
-                value,
-                label,
-              }))}
-            />
-          </FormField>
-          <TextField
-            label="Code / Serial"
-            value={autoCode}
-            onChange={() => {}}
-            disabled
-            placeholder="Auto generated from item type"
-            className="search-input "
-          />
-          <TextField
-            label={
-              serviceItemTypes.includes(type) ? "Service Name" : "Item Name"
-            }
-            value={form.name}
-            onChange={(v) => setField("name", v)}
-            required
-            placeholder={`please enter ${serviceItemTypes.includes(type) ? "Service Name" : "Item Name"}`}
-            className="search-input placeholder:text-xs"
-          />
-          <NumberField
-            label="MRP Price"
-            value={form.mrp_price}
-            onChange={(v) => setField("mrp_price", v)}
-            placeholder="Enter the MRP price"
-            min={0}
-          />
-          {type !== "physio_equipment" && (
-            <NumberField
-              label={
-                serviceItemTypes.includes(type) ? "Service Price" : "Price"
-              }
-              value={form.price}
-              onChange={(v) => setField("price", v)}
-              min={0}
-              required={serviceItemTypes.includes(type)}
-              placeholder="Enter the price"
-            />
-          )}
-          {!serviceItemTypes.includes(type) && (
-            <>
-              <FormField label="Supplier">
-                <SearchableSelect
-                  value={form.supplier_id}
-                  onChange={(v) => setField("supplier_id", v)}
-                  searchable={stockSuppliers.length > 8}
-                  options={[
-                    { value: "", label: "No supplier" },
-                    ...stockSuppliers.map((s: any) => ({
-                      value: s.id,
-                      label: s.name,
-                    })),
-                  ]}
-                />
-              </FormField>
-              <NumberField
-                label="Purchase Price"
-                value={form.purchase_price}
-                onChange={(v) => setField("purchase_price", v)}
-                min={0}
-                placeholder="Enter the purchase price"
-              />
-            </>
-          )}
-          {type === "medicine" && (
-            <>
-              <TextField
-                label="Generic"
-                value={form.generic_name}
-                onChange={(v) => setField("generic_name", v)}
-                className="search-input"
-                placeholder="Enter the generic name"
-              />
-              <NumberField
-                label="Reorder Level"
-                value={form.reorder_level}
-                onChange={(v) => setField("reorder_level", v)}
-                min={0}
-                placeholder="Enter the recorder level"
-              />
-            </>
-          )}
-          {type === "lab_test" && (
-            <TextField
-              label="Sample Type"
-              value={form.sample_type}
-              onChange={(v) => setField("sample_type", v)}
-              className="search-input placeholder:text-xs"
-              placeholder="Enter the sample type "
-            />
-          )}
-          {serviceItemTypes.includes(type) && (
-            <>
-              <TextField
-                label="Description"
-                value={form.description}
-                onChange={(v) => setField("description", v)}
-                className="search-input"
-                placeholder="Enter the description placeholder:text-xs"
-              />
-            </>
-          )}
-          {type === "physio_equipment" && (
-            <>
-              <FormField label="Modality">
-                <SearchableSelect
-                  value={form.modality_type}
-                  onChange={(v) => setField("modality_type", v)}
-                  searchable={false}
-                  options={modalities.map(([value, label]) => ({
-                    value,
-                    label,
-                  }))}
-                />
-              </FormField>
-              <TextField
-                label="Manufacturer"
-                value={form.manufacturer}
-                onChange={(v) => setField("manufacturer", v)}
-                className="search-input placeholder:text-xs"
-                placeholder="Enter the manufacturer name"
-              />
-              <TextField
-                label="Model"
-                value={form.model_number}
-                onChange={(v) => setField("model_number", v)}
-                className="search-input  placeholder:text-xs"
-                placeholder="Enter the model name"
-              />
-              <FormField label="Portable">
-                <SearchableSelect
-                  value={form.is_portable}
-                  onChange={(v) => setField("is_portable", v)}
-                  searchable={false}
-                  options={[
-                    { value: "false", label: "No" },
-                    { value: "true", label: "Yes" },
-                  ]}
-                />
-              </FormField>
-            </>
-          )}
-          <div className="flex items-end gap-2">
-            <Button disabled={busy === "save"} className="save-button">
-              {busy === "save"
-                ? "Saving..."
-                : editing
-                  ? "Update Item"
-                  : "Save Item"}
-            </Button>
-            {editing && (
-              <ActionButton onClick={cancelEdit}>Cancel</ActionButton>
-            )}
-          </div>
-        </form>
+        <ItemForm
+          type={type}
+          initialData={editing}
+          stockSuppliers={stockSuppliers}
+          busy={busy === "save"}
+          onSubmit={handleItemSubmit}
+          onCancel={cancelEdit}
+          editing={editing}
+          onTypeChange={changeItemType}
+        />
       </Card>
       <Card>
         <div className="flex flex-col gap-4">
@@ -760,13 +745,18 @@ export function Items({ apiSession, branchId }: any) {
             </p>
           </div>
           <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <TextField
-              label="Search"
-              value={filters.query}
-              onChange={(v) => setFiltersAndReset({ ...filters, query: v })}
-              placeholder="Name, code, type"
-              className="search-filter placeholder:text-xs"
-            />
+            <FormField label="Search">
+              <Input
+                value={filters.query}
+                onChange={(event: any) =>
+                  setFiltersAndReset({
+                    ...filters,
+                    query: event.target.value,
+                  })
+                }
+                placeholder="Name, code, type"
+              />
+            </FormField>
             <FormField label="Type">
               <SearchableSelect
                 value={filters.type}
@@ -786,14 +776,7 @@ export function Items({ apiSession, branchId }: any) {
                 value={filters.sortBy}
                 onChange={(v) => setFiltersAndReset({ ...filters, sortBy: v })}
                 searchable={false}
-                options={[
-                  { value: "name", label: "Name" },
-                  { value: "latest", label: "Latest" },
-                  { value: "type", label: "Type" },
-                  { value: "code", label: "Code" },
-                  { value: "mrp", label: "MRP" },
-                  { value: "price", label: "Sale Price" },
-                ]}
+                options={sort_type_options}
               />
             </FormField>
             <FormField label="Price">
@@ -803,26 +786,20 @@ export function Items({ apiSession, branchId }: any) {
                   setFiltersAndReset({ ...filters, priceBand: v })
                 }
                 searchable={false}
-                options={[
-                  { value: "all", label: "All prices" },
-                  { value: "priced", label: "Priced only" },
-                  { value: "free", label: "Free / zero" },
-                ]}
+                options={price_options}
               />
             </FormField>
           </div>
         </div>
         <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[1240px] text-left text-sm">
+          <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3 ">Type</th>
                 <th>Item</th>
-                <th>Code</th>
-                <th>Details</th>
                 <th>Supplier</th>
-                <th>Purchase</th>
                 <th>MRP</th>
+                <th>Purchase</th>
                 <th>Sale Price</th>
                 <th className="pr-4 text-right">Actions</th>
               </tr>
@@ -845,38 +822,61 @@ export function Items({ apiSession, branchId }: any) {
                   <td className="text-xs">
                     <b>{row.name}</b>
                   </td>
-                  <td className="text-xs">{row.code || "-"}</td>
-                  <td className="text-xs">{row.meta}</td>
                   <td className="text-xs">{row.supplier}</td>
+                  <td className="text-xs">
+                    {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
+                  </td>
                   <td className="text-xs">
                     {row.purchase_price === null
                       ? "-"
                       : `₹${row.purchase_price || 0}`}
                   </td>
-                  <td className="text-xs">
-                    {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
-                  </td>
+
                   <td className="text-xs text-center pr-2">
                     {row.price === null ? "-" : `₹${row.price}`}
                   </td>
                   <td className="pr-4">
-                    <ActionGroup className="justify-end">
-                      <ActionButton onClick={() => startEdit(row)}>
-                        Edit
-                      </ActionButton>
-                      <ActionButton
-                        tone="danger"
-                        disabled={busy === `delete-${row.id}`}
-                        onClick={() => deleteItem(row)}
-                      >
-                        {busy === `delete-${row.id}` ? "Deleting..." : "Delete"}
-                      </ActionButton>
-                    </ActionGroup>
+                    <div className="flex justify-end">
+                      <RowActions
+                        actions={[
+                          {
+                            label: "Edit",
+                            onClick: () => {
+                              startEdit(row);
+
+                              setTimeout(() => {
+                                containerRef.current?.scrollIntoView({
+                                  behavior: "smooth",
+                                  block: "start",
+                                });
+                              }, 100);
+                            },
+                          },
+                          {
+                            label:
+                              busy === `delete-${row.id}`
+                                ? "Deleting..."
+                                : "Delete",
+                            onClick: () => deleteItem(row),
+                            disabled: busy === `delete-${row.id}`,
+                            danger: true,
+                          },
+                        ]}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {confirmAction && (
+            <ConfirmModal
+              action={confirmAction}
+              busy={busy === `delete-${confirmAction.row.id}`}
+              onCancel={() => setConfirmAction(null)}
+              onConfirm={confirmDelete}
+            />
+          )}
         </div>
         <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
           <span className="text-slate-500">

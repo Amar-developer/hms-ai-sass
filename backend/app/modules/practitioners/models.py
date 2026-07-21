@@ -32,6 +32,7 @@ class Practitioner(SQLModel, table=True):
     registration_number: str | None = Field(default=None, index=True, max_length=120)
     mobile: str | None = Field(default=None, max_length=20)
     email: str | None = Field(default=None, max_length=220)
+    signature_url: str | None = Field(default=None, max_length=500)
     status: PractitionerStatus = Field(default=PractitionerStatus.ACTIVE, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)

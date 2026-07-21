@@ -4,13 +4,19 @@ import {
   CheckCircle2,
   ChevronDown,
   Info,
+  Lock,
   RefreshCw,
   X,
   XCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { displayToIsoDate, isoToDisplayDate } from "@/utils/helper";
-import { useDropdown } from "@/hooks/useDropdown";
+import { useEffect, useMemo, useRef, useState, forwardRef } from "react";
+import { createPortal } from "react-dom";
+import {
+  capitalizeFirst,
+  displayToIsoDate,
+  isoToDisplayDate,
+} from "@/utils/helper";
+import type { NoticeTone,SearchableSelectProps } from "@/features/admin/types";
 
 export function Card({
   children,
@@ -53,13 +59,23 @@ export function Badge({
   );
 }
 
-export type NoticeTone = "success" | "warning" | "delete" | "info" | "error";
-
 export function noticeTone(message: string): NoticeTone {
   const text = String(message || "").toLowerCase();
   if (!text) return "info";
+  // Client-side "please fill this in" validation prompts are a nudge, not a
+  // system failure, so they read as a calm warning rather than an alarming
+  // red error even though they mention "required"/"missing"/"select". Only
+  // "already exists" duplicate-name nudges match on "already" — other
+  // "already ..." messages (e.g. a booking conflict) are genuine failures
+  // and must fall through to the error check below.
   if (
-    /denied|not allowed|not assigned|unauthorized|forbidden|failed|could not|error|invalid|missing|required|does not|not found/.test(
+    /is required|are required|required\.$|missing|^add .+ before|select |enter the|choose |already exists|warning|queued|called|request/.test(
+      text,
+    )
+  )
+    return "warning";
+  if (
+    /denied|not allowed|not assigned|unauthorized|forbidden|failed|could not|error|invalid|does not|not found|already has/.test(
       text,
     )
   )
@@ -68,8 +84,6 @@ export function noticeTone(message: string): NoticeTone {
     /delete|deleted|deactivated|removed|suspended|cancelled|inactive/.test(text)
   )
     return "delete";
-  if (/already|choose|select|warning|queued|called|request/.test(text))
-    return "warning";
   if (
     /created|updated|saved|linked|assigned|uploaded|generated|recorded|success|activated|changed|complete|completed/.test(
       text,
@@ -145,13 +159,27 @@ export function StatusToast({
       label: "Error",
     },
   };
-  const current = styles[resolvedTone];
+  // Access/permission problems read as a calm "you can't do this" alert with a
+  // lock, not an alarming red system error (ERPNext-style insufficient-permission notice).
+  const isPermission =
+    /permission|not allowed|forbidden|access denied|only a tenant admin|tenant admin access required/i.test(
+      String(message || ""),
+    );
+  const current = isPermission
+    ? {
+        icon: Lock,
+        iconClass: "fill-warning-solid text-white",
+        bar: "bg-warning-solid",
+        label: "Access denied",
+      }
+    : styles[resolvedTone];
   const Icon = current.icon;
 
   return (
     <div className="pointer-events-none fixed bottom-5 right-5 z-[80] w-[calc(100vw-2rem)] max-w-sm">
       <div
-        role="status"
+        role={isPermission ? "alertdialog" : "status"}
+        aria-live={isPermission ? "assertive" : "polite"}
         className="pointer-events-auto overflow-hidden rounded bg-white text-slate-800 shadow-xl ring-1 ring-slate-900/10"
       >
         <div className="flex min-h-[58px] items-center gap-3 px-4 py-3">
@@ -191,14 +219,26 @@ export function StatusToast({
 export function Field({
   label,
   children,
+  required = false,
 }: {
   label: string;
   children: React.ReactNode;
+  required?: boolean;
 }) {
   return (
-    <label className="block">
+    <label className="group block">
       <span className="mb-1 block text-sm lg:text-xs font-bold uppercase tracking-wide text-slate-500">
         {label}
+        <span
+          aria-hidden="true"
+          className={`ml-1 text-red-500 ${
+            required
+              ? "inline"
+              : "hidden group-has-[:required]:inline group-has-[[aria-required='true']]:inline"
+          }`}
+        >
+          *
+        </span>
       </span>
       {children}
     </label>
@@ -518,67 +558,81 @@ export function DateInput({
   );
 }
 
-export function Input({
-  className = "rounded-lg px-2 py-2 lg:px-4 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
-  mobileNumber = false,
-  ...props
-}: any) {
-  const [error, setError] = useState("");
+export const Input = forwardRef<HTMLInputElement, any>(
+  (
+    {
+      className = "rounded-lg px-2 py-2 lg:px-2 lg:py-2.5 text-xs lg:text-xs placeholder:text-xs",
+      mobileNumber = false,
+      ...props
+    },
+    ref,
+  ) => {
+    if (props.type === "date") {
+      const { type: _type, ...dateProps } = props;
 
-  if (props.type === "date") {
-    const { type: _type, ...dateProps } = props;
-    return <DateInput {...dateProps} className={className} />;
-  }
+      return <DateInput {...dateProps} ref={ref} className={className} />;
+    }
 
-  return (
-    <>
-      <input
-        {...props}
-        onChange={(e) => {
-          let value = e.target.value;
+    return (
+      <>
+        <input
+          ref={ref}
+          {...props}
+          onChange={(e) => {
+            let value = e.target.value;
+            props.onChange?.(e);
+          }}
+          className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}
+        />
+      </>
+    );
+  },
+);
 
-          if (mobileNumber) {
-            value = value.replace(/\D/g, "").slice(0, 10);
-            e.target.value = value;
-
-            if (value.length > 0 && value.length < 10) {
-              setError("Mobile number must be 10 digits");
-            } else {
-              setError("");
-            }
-          }
-
-          props.onChange?.(e);
-        }}
-        className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}
-      />
-
-      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
-    </>
-  );
-}
+Input.displayName = "Input";
 
 export function SuggestionInput({
   suggestions = [],
   className = "",
   defaultValue = "",
+  value,
   onChange,
   disabled,
   ...props
 }: any) {
-  const [value, setValue] = useState(String(defaultValue || props.value || ""));
+  const [internalValue, setInternalValue] = useState(
+    String(value ?? defaultValue ?? ""),
+  );
+
   const [open, setOpen] = useState(false);
-  const query = value.trim().toLowerCase();
+
+  useEffect(() => {
+    if (value !== undefined) {
+      setInternalValue(String(value ?? ""));
+    }
+  }, [value]);
+
+  const currentValue =
+    value !== undefined ? String(value ?? "") : internalValue;
+
+  const query = currentValue.trim().toLowerCase();
+
   const filtered = suggestions
     .filter((item: string) => {
       if (!query) return true;
+
       return item.toLowerCase().includes(query);
     })
     .slice(0, 8);
 
   function setNext(next: string) {
-    setValue(next);
-    onChange?.({ target: { value: next } });
+    setInternalValue(next);
+
+    onChange?.({
+      target: {
+        value: next,
+      },
+    });
   }
 
   return (
@@ -586,16 +640,18 @@ export function SuggestionInput({
       <input
         {...props}
         disabled={disabled}
-        value={value}
+        value={currentValue}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 120)}
         onChange={(event: any) => {
           setNext(event.target.value);
+
           setOpen(true);
         }}
         autoComplete="off"
-        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-4 lg:py-2 text-xs  lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
+        className={`w-full rounded-lg border border-slate-200 px-2 py-3 lg:px-2 lg:py-2 text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 ${className}`}
       />
+
       {open && !disabled && filtered.length > 0 && (
         <div className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border border-slate-200 bg-white p-1 shadow-lg">
           {filtered.map((item: string) => (
@@ -604,7 +660,9 @@ export function SuggestionInput({
               type="button"
               onMouseDown={(event) => {
                 event.preventDefault();
+
                 setNext(item);
+
                 setOpen(false);
               }}
               className={`block w-full rounded-lg px-3 py-2 text-xs lg:text-sm text-left scrollbar-hidden hover:bg-slate-50 ${
@@ -635,26 +693,9 @@ export function Select({
   );
 }
 
-type SearchableOption = { value: string; label: string; sublabel?: string };
-type SearchableSelectProps<T = string> = {
-  name?: string;
-  value?: T;
-  onChange?: (value: T) => void;
-  options: SearchableOption[];
-  placeholder?: string;
-  disabled?: boolean;
-  allowCustom?: boolean;
-  searchPlaceholder?: string;
-  emptyText?: string;
-  maxOptions?: number;
-  className?: string;
-  searchable?: boolean;
-  required?: boolean;
-};
-
-export function SearchableSelect({
+export function SearchableSelect<T = string>({
   name,
-  value = "",
+  value = "" as T,
   onChange,
   options,
   placeholder = "Select...",
@@ -666,26 +707,78 @@ export function SearchableSelect({
   className = "",
   searchable = true,
   required = false,
-}: SearchableSelectProps) {
+  error,
+}: SearchableSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [menuPosition, setMenuPosition] = useState({
+    left: 0,
+    top: 0,
+    width: 0,
+  });
+
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
+
     function handleClick(event: MouseEvent) {
-      if (!wrapRef.current?.contains(event.target as Node)) {
+      if (
+        !wrapRef.current?.contains(event.target as Node) &&
+        !menuRef.current?.contains(event.target as Node)
+      ) {
         setOpen(false);
         setQuery("");
       }
     }
+
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+    };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function positionMenu() {
+      const rect = wrapRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const visibleOptionCount = Math.min(options.length, maxOptions);
+      const menuHeight = Math.min(
+        224,
+        Math.max(
+          44,
+          visibleOptionCount * 44 +
+            (searchable ? 58 : 0) +
+            (value && searchable ? 36 : 0) +
+            2,
+        ),
+      );
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const top =
+        spaceBelow >= menuHeight || rect.top < menuHeight
+          ? rect.bottom + 4
+          : Math.max(rect.top - menuHeight - 4, 8);
+      setMenuPosition({ left: rect.left, top, width: rect.width });
+    }
+
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [maxOptions, open, options.length, searchable, value]);
 
   const filtered = useMemo(() => {
     const trimmed = query.trim().toLowerCase();
+
     if (!trimmed) return options;
+
     return options.filter(
       (option) =>
         option.label.toLowerCase().includes(trimmed) ||
@@ -694,54 +787,63 @@ export function SearchableSelect({
     );
   }, [options, query]);
 
-  const selected = options.find((option) => option.value === value);
-  const displayLabel = selected?.label || (value && allowCustom ? value : "");
+  const selected = options.find((option) => option.value === String(value));
+
+  const displayLabel =
+    selected?.label || (allowCustom && value ? String(value) : "");
+
   const matchesExisting = filtered.some(
     (option) => option.value === query.trim(),
   );
 
-  function commit(next: string) {
-    onChange?.(next);
+  function commit(nextValue: string) {
+    onChange?.(nextValue as T);
+
     setOpen(false);
     setQuery("");
   }
 
   return (
     <div ref={wrapRef} className={`relative ${className}`}>
-      {name ? (
-        <input
-          type="hidden"
-          name={name}
-          value={value || ""}
-          required={required}
-        />
-      ) : null}
       <button
         type="button"
         disabled={disabled}
+        aria-required={required || undefined}
+        aria-invalid={Boolean(error) || undefined}
         onClick={() => setOpen((current) => !current)}
-        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white py-2 px-2 lg:px-2 lg:py-2 text-left text-xs lg:text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
+        className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:text-sm"
       >
         <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
-          {displayLabel || placeholder}
+          {capitalizeFirst(displayLabel) || placeholder}
         </span>
+
         <ChevronDown
-          className={`${open ? "rotate-180" : ""} h-4 w-4 text-black font-bold`}
+          className={`${open ? "rotate-180" : ""} h-4 w-4 font-bold text-black`}
         />
       </button>
-      {open && (
-        <div className="absolute z-30 mt-1 max-h-72 w-full scrollbar-thin  overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+
+      {open &&
+        typeof document !== "undefined" &&
+        createPortal(
+        <div
+          ref={menuRef}
+          style={menuPosition}
+          className="fixed z-[1000] max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin"
+        >
           {searchable && (
-            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2">
+            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2 pr-4">
               <input
                 autoFocus
                 value={query}
-                onChange={(event) => setQuery(event.target.value)}
+                onChange={(event) =>
+                  setQuery(capitalizeFirst(event.target.value))
+                }
                 placeholder={searchPlaceholder}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
               />
             </div>
           )}
+
           {value && searchable && (
             <button
               type="button"
@@ -751,134 +853,49 @@ export function SearchableSelect({
               Clear selection
             </button>
           )}
+
           {allowCustom && query.trim() && !matchesExisting && (
             <button
               type="button"
               onClick={() => commit(query.trim())}
               className="block w-full px-4 py-2 text-left text-sm font-bold text-blue-700 hover:bg-blue-50"
             >
-              Use “{query.trim()}”
+              Use "{query.trim()}"
             </button>
           )}
+
           {filtered.length === 0 && !allowCustom && (
             <div className="px-4 py-3 text-sm text-slate-500">{emptyText}</div>
           )}
+
           {filtered.slice(0, maxOptions).map((option) => (
             <button
               key={option.value}
               type="button"
               onClick={() => commit(option.value)}
-              className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${option.value === value ? "bg-slate-50 font-bold" : ""}`}
+              className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                option.value === String(value) ? "bg-slate-50 font-bold" : ""
+              }`}
             >
-              <span className="block truncate">{option.label}</span>
-              {option.sublabel ? (
+              <span className="block truncate">
+                {capitalizeFirst(option.label)}
+              </span>
+
+              {option.sublabel && (
                 <span className="block truncate text-xs text-slate-500">
                   {option.sublabel}
                 </span>
-              ) : null}
+              )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
+
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>
   );
 }
-
-// export function SearchableDropdown({
-//   value,
-//   options,
-//   onChange,
-//   placeholder = "Search...",
-// }: any) {
-//   const { open, setOpen, ref } = useDropdown();
-//   const [query, setQuery] = useState("");
-
-//   const filtered = useMemo(() => {
-//     const q = query.toLowerCase();
-//     return options.filter(
-//       (o: any) =>
-//         o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q),
-//     );
-//   }, [query, options]);
-
-//   const selected = options.find((o: any) => o.value === value);
-
-//   return (
-//     <div ref={ref} className="relative w-full">
-//       <button
-//         type="button"
-//         onClick={() => setOpen((p) => !p)}
-//         className="flex w-full justify-between rounded-lg border px-3 py-2"
-//       >
-//         <span>{selected?.label || "Select..."}</span>
-//         <ChevronDown className="h-4 w-4" />
-//       </button>
-
-//       {open && (
-//         <div className="absolute z-50 mt-1 w-full rounded-lg border bg-white shadow-lg">
-//           {/* Search */}
-//           <div className="p-2 border-b">
-//             <input
-//               autoFocus
-//               value={query}
-//               onChange={(e) => setQuery(e.target.value)}
-//               className="w-full rounded border px-2 py-1 text-sm"
-//               placeholder={placeholder}
-//             />
-//           </div>
-
-//           {/* Options */}
-//           {filtered.map((opt: any) => (
-//             <button
-//               key={opt.value}
-//               type="button"
-//               onClick={() => {
-//                 onChange(opt.value);
-//                 setOpen(false);
-//                 setQuery("");
-//               }}
-//               className="w-full px-3 py-2 text-left hover:bg-slate-50"
-//             >
-//               {opt.label}
-//             </button>
-//           ))}
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
-
-// type Option = {
-//   value: string;
-//   label: string;
-//   sublabel?: string;
-// };
-
-// export function Dropdown({
-//   open,
-//   setOpen,
-//   children,
-//   trigger,
-// }: {
-//   open: boolean;
-//   setOpen: React.Dispatch<React.SetStateAction<boolean>>;
-//   trigger: React.ReactNode;
-//   children: React.ReactNode;
-// }) {
-//   const { ref } = useDropdown();
-
-//   return (
-//     <div ref={ref} className="relative w-full">
-//       <div onClick={() => setOpen((p) => !p)}>{trigger}</div>
-
-//       {open && (
-//         <div className="absolute z-50 mt-1 w-full rounded-lg border bg-white shadow-lg">
-//           {children}
-//         </div>
-//       )}
-//     </div>
-//   );
-// }
 
 export function Button({
   children,

@@ -1,9 +1,15 @@
 import React from "react";
-import CompactControl from "./CompactControl";
-import { Bell, LogOut, KeyRound } from "lucide-react";
+import { LogOut, KeyRound } from "lucide-react";
 import ProfileRow from "../ProfileRow";
 import { userInitials } from "@/utils/helper";
 import { GlobalSearch } from "./GlobalSearch";
+import { SearchableSelect } from "./ui";
+import { FormField } from "../FormElements";
+import {
+  canCopyDatabaseIds,
+  CopyIdButton,
+} from "./CopyIdButton";
+import { NotificationCenter } from "./NotificationCenter";
 
 interface AppHeaderProps {
   isSuperAdmin: boolean;
@@ -16,9 +22,10 @@ interface AppHeaderProps {
   clinic: any;
 
   canChangeBranch: boolean;
+  isDoctorUser: boolean;
 
   branchName: string;
-  departmentName: string;
+  departmentNames: string[];
   displayClinicName: string;
 
   searchItems: any[];
@@ -31,6 +38,7 @@ interface AppHeaderProps {
   handleLogout: any;
   setShowPassword: any;
   setReportsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  navigatePage: (target: string | { id: string; section?: string }) => void;
 }
 
 const AppHeader = ({
@@ -42,8 +50,9 @@ const AppHeader = ({
   setBranchId,
   clinic,
   canChangeBranch,
+  isDoctorUser,
   branchName,
-  departmentName,
+  departmentNames,
   displayClinicName,
   searchItems,
   profileOpen,
@@ -53,31 +62,23 @@ const AppHeader = ({
   handleLogout,
   setShowPassword,
   setReportsOpen,
+  navigatePage,
 }: AppHeaderProps) => {
+  const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
       <div className="grid min-w-0 grid-cols-1 gap-2 md:grid-cols-[minmax(200px,1.15fr)_minmax(150px,.8fr)_minmax(220px,1fr)_auto] lg:grid-cols-[minmax(260px,1.15fr)_minmax(180px,.8fr)_minmax(280px,1fr)_auto] lg:items-center">
         <div className="min-w-0">
-          {/* {!isSuperAdmin && (
-            <div className="lg:hidden">
-              <BrandBlock compact setSidebarOpen={setReportsOpen} />
-            </div>
-          )} */}
-
           {isSuperAdmin && apiSession ? (
-            <CompactControl label="Tenant">
-              <select
-                value={apiSession.tenantId}
-                onChange={(e: any) => switchTenant(e.target.value)}
-                className="w-full bg-transparent text-xs lg:text-sm font-semibold outline-none"
-              >
-                {tenantOptions.map((tenant: any) => (
-                  <option key={tenant.id} value={tenant.id}>
-                    {tenant.name} moses
-                  </option>
-                ))}
-              </select>
-            </CompactControl>
+            <FormField label="Tenant">
+              <SearchableSelect
+                value={clinic?.id || ""}
+                onChange={(value: string) => switchTenant(value)}
+                searchable={false}
+                options={tenantOptions}
+              />
+            </FormField>
           ) : (
             <div className="grid h-11 content-center">
               <span className="text-[10px] font-bold uppercase leading-none text-slate-500">
@@ -89,33 +90,32 @@ const AppHeader = ({
             </div>
           )}
         </div>
-        <GlobalSearch items={searchItems} />
-        <CompactControl label="Branch" hideLabel>
+        <FormField label="Search">
+          <GlobalSearch items={searchItems} />
+        </FormField>
+        <FormField label="Branch">
           {canChangeBranch ? (
-            <select
+            <SearchableSelect
               value={branchId}
-              onChange={(e: any) => setBranchId(e.target.value)}
-              className="w-full bg-transparent text-xs  font-semibold outline-none"
-            >
-              {clinic.branches.map((b: any) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
+              onChange={(value: string) => setBranchId(value)}
+              searchable={false}
+              options={clinic.branches.map((b: any) => ({
+                label: b.name,
+                value: b.id,
+              }))}
+              className="border-0"
+            />
           ) : (
             <span className="truncate">{branchName}</span>
           )}
-        </CompactControl>
+        </FormField>
 
         <div className="flex shrink-0 items-start lg:items-center mt-3  gap-2">
-          <button
-            type="button"
-            className="grid h-10 w-10 place-items-center rounded-full border border-slate-200 text-slate-500"
-            title="Notifications"
-          >
-            <Bell size={18} />
-          </button>
+          <NotificationCenter
+            apiSession={apiSession}
+            navigatePage={navigatePage}
+            onOpen={() => setProfileOpen(false)}
+          />
           <div ref={profileOpenRef} className="relative">
             <button
               type="button"
@@ -132,9 +132,16 @@ const AppHeader = ({
                     {userInitials(apiSession?.user, apiSession?.email)}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate font-bold text-slate-900">
-                      {apiSession?.user?.name || roleLabel}
-                    </p>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <p className="truncate font-bold text-slate-900">
+                        {apiSession?.user?.name || roleLabel}
+                      </p>
+                      <CopyIdButton
+                        value={apiSession?.user?.id}
+                        label="User ID"
+                        allowed={canCopyIds}
+                      />
+                    </div>
                     <p className="truncate text-xs text-slate-500">
                       {apiSession?.email || "Not connected"}
                     </p>
@@ -144,13 +151,27 @@ const AppHeader = ({
                   <ProfileRow label="Role" value={roleLabel} />
                   <ProfileRow
                     label="Tenant"
-                    value={apiSession?.tenantId || clinic.id}
+                    value={displayClinicName}
+                    action={
+                      <CopyIdButton
+                        value={apiSession?.tenantId || clinic.id}
+                        label="Tenant ID"
+                        allowed={canCopyIds}
+                      />
+                    }
                   />
                   <ProfileRow label="Branch" value={branchName} />
-                  <ProfileRow
-                    label="Medical Department"
-                    value={departmentName}
-                  />
+                  {isDoctorUser && (
+                    <ProfileRow
+                      label="Medical Department"
+                      value={
+                        departmentNames.length
+                          ? departmentNames.join(", ")
+                          : "No assigned medical department"
+                      }
+                      wrap
+                    />
+                  )}
                 </div>
                 <div className="mt-4 grid gap-2 border-t border-slate-100 pt-3">
                   <button

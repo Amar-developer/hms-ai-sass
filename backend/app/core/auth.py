@@ -17,6 +17,27 @@ from app.modules.identity.security import hash_token
 from app.modules.tenants.models import Tenant, TenantStatus
 
 
+def _role_key_from_name(name: str) -> str:
+    return "_".join(
+        "".join(char.lower() if char.isalnum() else " " for char in name).split()
+    )
+
+
+def _canonical_tenant_role(session: Session, role: Role) -> Role:
+    if not role.tenant_id:
+        return role
+    canonical_key = _role_key_from_name(role.name)
+    canonical_role = session.exec(
+        select(Role).where(
+            Role.tenant_id == role.tenant_id,
+            Role.name == role.name,
+            Role.key == canonical_key,
+            Role.is_active == True,  # noqa: E712
+        )
+    ).first()
+    return canonical_role or role
+
+
 def _extract_token(
     authorization: str | None,
     access_token: str | None,
@@ -90,21 +111,33 @@ def user_role_keys(session: Session, user: User) -> list[str]:
         .where(UserRole.user_id == user.id, Role.is_active == True)  # noqa: E712
         .order_by(Role.key)
     ).all()
-    return [role.key for role in rows]
+    return list(
+        dict.fromkeys(_canonical_tenant_role(session, role).key for role in rows)
+    )
 
 
 def user_permission_keys(session: Session, user: User) -> list[str]:
     if user.is_super_admin:
         return ["*"]
+    assigned_roles = session.exec(
+        select(Role)
+        .join(UserRole, UserRole.role_id == Role.id)
+        .where(UserRole.user_id == user.id, Role.is_active == True)  # noqa: E712
+    ).all()
+    role_ids = list(
+        dict.fromkeys(
+            _canonical_tenant_role(session, role).id for role in assigned_roles
+        )
+    )
+    if not role_ids:
+        return []
     rows = session.exec(
         select(Permission)
         .join(RolePermission, RolePermission.permission_id == Permission.id)
-        .join(UserRole, UserRole.role_id == RolePermission.role_id)
-        .join(Role, Role.id == UserRole.role_id)
-        .where(UserRole.user_id == user.id, Role.is_active == True)  # noqa: E712
+        .where(RolePermission.role_id.in_(role_ids))
         .order_by(Permission.key)
     ).all()
-    return [permission.key for permission in rows]
+    return sorted({permission.key for permission in rows})
 
 
 def is_tenant_admin_user(session: Session, user: User) -> bool:
@@ -166,7 +199,10 @@ def require_permission(permission_key: str):
                 status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended"
             )
         if permission_key not in user_permission_keys(session, current_user):
-            if permission_key == "settings.manage" and is_tenant_admin_user(
+            # Tenant admins implicitly hold every non-platform permission — same
+            # rule as require_any_permission, unified here so a future single-
+            # permission endpoint behaves consistently and never leaks platform.*.
+            if not permission_key.startswith("platform.") and is_tenant_admin_user(
                 session, current_user
             ):
                 return current_user

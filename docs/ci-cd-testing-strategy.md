@@ -16,7 +16,7 @@ This project has:
 
 | Workflow | File | Purpose |
 | --- | --- | --- |
-| CI | `.github/workflows/ci.yml` | Runs frontend tests/build, backend lint/tests, and Docker Compose validation |
+| CI | `.github/workflows/ci.yml` | Runs frontend checks, backend unit/integration/API tests, backend E2E tests, and Docker builds |
 | CD | `.github/workflows/deploy-ec2.yml` | Deploys `main` to EC2 only after CI succeeds |
 
 ## Test Levels
@@ -28,7 +28,7 @@ Purpose: catch code quality and syntax issues early.
 Current backend command:
 
 ```bash
-ruff check backend/app backend/tests
+ruff check backend/app backend/tests backend/e2e
 ```
 
 Recommended future additions:
@@ -61,23 +61,44 @@ Current backend tests use SQLite test fixtures, so they are fast enough for ever
 
 Purpose: test real service wiring such as FastAPI routes, database sessions, auth, reports, billing, and module permissions.
 
-Current backend API tests already behave like lightweight integration tests because they use FastAPI `TestClient` and a real SQLModel test database.
+Current backend API tests behave like lightweight integration tests because
+they use FastAPI `TestClient`, dependency wiring, and a SQLModel test database.
+They remain in `backend/tests` and run on every pull request.
 
-Recommended next step:
+### 4. Backend End-to-End Tests
 
-```text
-Mark tests that require real PostgreSQL/Redis with pytest markers.
-Run those in a separate CI job with Docker service containers.
-```
+Purpose: prove critical workflows work through a live Uvicorn process, Alembic
+migrations, authentication middleware, RBAC, and PostgreSQL.
 
-Example future commands:
+Current command:
 
 ```bash
-pytest backend/tests -q -m "not external"
-pytest backend/tests -q -m "integration"
+bash backend/scripts/run_backend_e2e.sh
 ```
 
-### 4. Docker Build Test
+The suite is stored in `backend/e2e` and is marked `e2e`. It covers:
+
+- health, login, logout, and session revocation
+- tenant onboarding, tenant-admin access, granular permissions, and isolation
+- subscription-plan module entitlements and live plan upgrades
+- patient, appointment, queue, consultation, invoice, payment, and audit flow
+- patient membership purchase, activation, benefit application, and usage
+- advanced billing with partial payments, payment guardrails, and refunds
+- lab catalog, orders, samples, results, billing, and payment
+- pharmacy purchase, stock, dispensing, billing, and payment
+- home-care service, booking, visit, billing, and payment
+- inpatient admission, running charges, discharge, billing, and payment
+- physiotherapy equipment, case, session, billing, and payment
+- persisted backend errors, resolution status, and read/manage permissions
+
+The runner only accepts a database name ending in `_e2e`, resets that
+database's `public` schema, applies Alembic migrations, starts Uvicorn, waits
+for health, runs real HTTP tests, and cleans up the server.
+
+Redis, workers, email, and external APIs are intentionally outside the first
+backend E2E scope. Those integrations keep their focused integration tests.
+
+### 5. Docker Build Test
 
 Purpose: prove production containers can build before deployment.
 
@@ -95,7 +116,29 @@ docker compose build
 
 This is slower but catches missing production dependencies.
 
-### 5. Smoke Test After Deploy
+### 6. Frontend Browser End-to-End Tests
+
+The frontend keeps Vitest for unit/component tests and uses Playwright for
+browser workflows against a real Next.js server, FastAPI process, and isolated
+PostgreSQL database. The safe runner accepts only databases ending in
+`_e2e`, accepts only a local database host, creates the frontend E2E database
+when missing, applies Alembic migrations, starts both servers, and cleans them
+up. It also rejects occupied ports and serializes local runs so two suites
+cannot reset the shared database at the same time.
+
+```bash
+cd frontend
+npm run test:e2e:install         # one-time browser installation
+npm run test:e2e                 # Chromium critical suite
+npm run test:e2e:extended        # Chromium 21-test extended suite
+npm run test:e2e:cross-browser   # Critical Chromium/Firefox/WebKit suite
+npm run test:e2e:ui              # Local Playwright UI mode
+```
+
+CI uploads Playwright reports and traces only when a test fails. The dev
+deployment job depends on the critical frontend E2E job.
+
+### 7. Smoke Test After Deploy
 
 Purpose: confirm the deployed EC2 app is alive.
 
@@ -118,9 +161,11 @@ curl -f https://api.yourdomain.com/api/v1/health
 Use this rule:
 
 ```text
-Pull request: lint + unit tests + lightweight integration tests + frontend build
-Main branch: same CI checks
-Deploy: only after main CI succeeds
+Pull request: lint + unit + integration + API + backend E2E + frontend build + critical frontend Chromium E2E
+Main branch: same CI checks, including critical frontend Chromium E2E
+Nightly: 21 extended Chromium tests + critical Firefox/WebKit tests
+Manual: critical cross-browser tests, or the complete suite in all browsers when requested
+Deploy: only after main CI succeeds, including critical frontend E2E
 After deploy: smoke test
 ```
 
@@ -151,7 +196,8 @@ For `main`, enable:
 - require status checks to pass
 - require `CI / Frontend`
 - require `CI / Backend`
-- require `CI / Docker Compose Config`
+- require `CI / Backend E2E`
+- require `CI / Docker Images`
 - block force pushes
 
 This prevents code from reaching production without passing CI.
@@ -172,9 +218,7 @@ When a bug is found:
 
 Recommended when the app becomes more production-critical:
 
-- add Playwright end-to-end tests for login, appointment booking, billing, reports
-- add PostgreSQL/Redis integration test job in CI
-- add `docker compose build` to CI
+- add Redis/worker E2E only for workflows where process-boundary behavior is critical
 - add deployment smoke test in `deploy-ec2.yml`
 - add staging deployment before production
 - add database backup before each production deploy

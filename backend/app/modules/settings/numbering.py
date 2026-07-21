@@ -1,10 +1,10 @@
 import re
 from typing import Any
 
-from sqlalchemy import text
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from app.modules.settings.models import DocumentSequence, SettingKey
+from app.modules.settings.repositories import DocumentSequenceRepository
 from app.modules.settings.service import resolve_setting
 from app.modules.tenants.models import now_utc
 
@@ -21,6 +21,7 @@ DEFAULT_ENTITY_CODES: dict[str, str] = {
     "physiotherapy_case": "PHY",
     "home_care_booking": "HC",
     "supplier": "SUP",
+    "credit_note": "CN",
 }
 
 ENTITY_COLUMNS: dict[str, tuple[str, str, bool]] = {
@@ -35,6 +36,7 @@ ENTITY_COLUMNS: dict[str, tuple[str, str, bool]] = {
     "physiotherapy_case": ("physiotherapycase", "case_number", True),
     "home_care_booking": ("homecarebooking", "booking_number", True),
     "supplier": ("pharmacysupplier", "supplier_number", False),
+    "credit_note": ("creditnote", "credit_note_number", False),
 }
 
 
@@ -124,12 +126,13 @@ def _max_existing_number(
         )
     else:
         pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)$", re.IGNORECASE)
-    sql = f'select "{column_name}" from "{table_name}" where tenant_id = :tenant_id and "{column_name}" is not null'
-    params: dict[str, str] = {"tenant_id": tenant_id}
-    if branch_scoped and branch_id:
-        sql += ' and "branch_id" = :branch_id'
-        params["branch_id"] = branch_id
-    rows = session.exec(text(sql), params=params).all()
+    rows = DocumentSequenceRepository(session).max_existing_number(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        table_name=table_name,
+        column_name=column_name,
+        branch_scoped=branch_scoped,
+    )
     maximum = 0
     for row in rows:
         value = row[0] if isinstance(row, tuple) else row
@@ -167,13 +170,16 @@ def next_document_number(
         digits = 6
     table_name, column_name, branch_scoped = ENTITY_COLUMNS[entity]
     sequence_branch_id = branch_id if branch_scoped and branch_id else ""
-    sequence = session.exec(
-        select(DocumentSequence).where(
-            DocumentSequence.tenant_id == tenant_id,
-            DocumentSequence.branch_id == sequence_branch_id,
-            DocumentSequence.entity == entity,
-        )
-    ).first()
+    # Lock the sequence row so concurrent number generation is serialized —
+    # two invoices can never read the same current_value and mint a duplicate
+    # number. (FOR UPDATE is a no-op on SQLite test DBs, which are single-writer
+    # anyway.) The unique constraint on (tenant, branch, entity) covers the
+    # first-time creation race.
+    sequence = DocumentSequenceRepository(session).get_for_update(
+        tenant_id=tenant_id,
+        branch_id=sequence_branch_id,
+        entity=entity,
+    )
     if not sequence:
         sequence = DocumentSequence(
             tenant_id=tenant_id,

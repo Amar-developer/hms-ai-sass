@@ -8,6 +8,7 @@ import {
   Card,
   Input,
   RefreshButton,
+  SearchableSelect,
   Select,
   StatusToast,
 } from "@/app/components/common/ui";
@@ -15,74 +16,14 @@ import { FormField } from "@/app/components/FormElements";
 import { apiFetch, type ApiSession } from "@/lib/api";
 import { sortQueue } from "@/lib/hmsLogic";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
+import { QueueAction, TokenQueueProps } from "./types";
+import { dateKey, isActiveQueueAppointment, sortByQueuePosition, todayKey } from "./helpers";
+import { Pagination } from "@/app/components/common/Pagination";
+import { pageSize } from "@/utils/constants";
 
-type TokenQueueProps = {
-  scopedAppointments: any[];
-  appointments: any[];
-  setAppointments: (value: any[]) => void;
-  apiSession: ApiSession | null;
-  loadLiveData: (session: ApiSession) => Promise<void>;
-  departmentId: string;
-  doctorScope?: any;
-  setActive?: (page: string) => void;
-};
 
-type QueueAction = "call" | "skip" | "requeue" | "cancel";
 
-function dateKey(value: any) {
-  return String(value || "").slice(0, 10);
-}
 
-function todayKey() {
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${now.getFullYear()}-${month}-${day}`;
-}
-
-function tokenSortValue(row: any) {
-  return String(row.token_number || row.token || "").trim();
-}
-
-function sortByTokenNumber(rows: any[]) {
-  return [...rows].sort((a: any, b: any) =>
-    tokenSortValue(a).localeCompare(tokenSortValue(b), undefined, {
-      numeric: true,
-      sensitivity: "base",
-    }),
-  );
-}
-
-function isActiveQueueStatus(value: any) {
-  const status = String(value || "")
-    .trim()
-    .toLowerCase()
-    .replaceAll(" ", "_");
-  return ![
-    "cancelled",
-    "canceled",
-    "no_show",
-    "consultation_completed",
-    "billed",
-    "completed",
-    "done",
-  ].includes(status);
-}
-
-function isActiveQueueAppointment(appointment: any) {
-  return (
-    isActiveQueueStatus(appointment.queueStatus || appointment.queue_status) &&
-    isActiveQueueStatus(appointment.status) &&
-    isActiveQueueStatus(
-      appointment.consultationStatus || appointment.consultation_status,
-    ) &&
-    String(
-      appointment.consultationStatus || appointment.consultation_status || "",
-    )
-      .trim()
-      .toLowerCase() !== "signed"
-  );
-}
 
 export function TokenQueue({
   scopedAppointments,
@@ -105,7 +46,14 @@ export function TokenQueue({
   const [displayRows, setDisplayRows] = useState<any[]>([]);
   const today = todayKey();
   const [selectedDate, setSelectedDate] = useState(today);
-  const queue = sortByTokenNumber(
+  const [page, setPage] = useState(1);
+  const queueRevision = scopedAppointments
+    .map(
+      (row: any) =>
+        `${row.id}:${row.queueStatus || row.queue_status}:${row.queuePosition || row.queue_position || 0}`,
+    )
+    .join("|");
+  const queue = sortByQueuePosition(
     sortQueue(
       scopedAppointments.filter((appointment: any) => {
         if (
@@ -139,7 +87,13 @@ export function TokenQueue({
             appointment.queueStatus === "Called",
         )
       : queue;
-  const visibleDisplayRows = sortByTokenNumber(displayRows)
+  const totalPages = Math.max(1, Math.ceil(visibleQueue.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pagedQueue = visibleQueue.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
+  );
+  const visibleDisplayRows = sortByQueuePosition(displayRows)
     .map((row: any) => ({
       ...row,
       appointment: queue.find(
@@ -152,6 +106,7 @@ export function TokenQueue({
     let alive = true;
     async function loadDisplay() {
       if (!apiSession) return;
+      if (alive) setDisplayRows([]);
       try {
         const rows = await apiFetch(
           `/queue/display?display_mode=${displayMode}`,
@@ -170,8 +125,16 @@ export function TokenQueue({
     apiSession?.email,
     apiSession?.tenantId,
     displayMode,
-    scopedAppointments.length,
+    queueRevision,
   ]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedDate, displayMode, departmentId, doctorScope?.practitionerId]);
+
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   function updateAppointment(id: string, patch: any) {
     setAppointments(
@@ -332,13 +295,14 @@ export function TokenQueue({
                 : "Emergency tokens appear first. Skipped patients can be requeued."}
             </p>
           </div>
-          <div className="">
+          <div className="flex justify-center items-center">
             {apiSession ? (
               <RefreshButton onRefresh={() => loadLiveData(apiSession)} />
             ) : null}
           </div>
         </div>
-        <div className="grid gap-2 grid-cols-[1.5fr_1.7fr_1.5fr_2fr] ">
+        <div className="grid gap-2 md:grid-cols-[1.6fr_1.7fr_1.5fr_2fr]
+         lg:grid-cols-[1.6fr_1.7fr_1.5fr_2fr]">
           <FormField label="Date">
             <Input
               type="date"
@@ -346,29 +310,36 @@ export function TokenQueue({
               onChange={(event: any) =>
                 setSelectedDate(event.target.value || today)
               }
-              className="text-xs"
             />
           </FormField>
           <FormField label="Display Mode">
-            <Select
+            <SearchableSelect
               value={displayMode}
-              onChange={(e: any) => setDisplayMode(e.target.value)}
-              className="select-filter"
-            >
-              <option value="reception">Reception Queue</option>
-              <option value="called_only">Called Tokens</option>
-            </Select>
+              onChange={(value: string) =>
+                setDisplayMode(value as "reception" | "called_only")
+              }
+              options={[
+                { value: "reception", label: "Reception Queue" },
+                { value: "called_only", label: "Called Tokens" },
+              ]}
+              placeholder="Select display mode"
+              searchable={false}
+            />
           </FormField>
           <FormField label="Call Language">
-            <Select
+            <SearchableSelect
               value={tokenLanguage}
-              onChange={(e: any) => setTokenLanguage(e.target.value)}
-              className="select-filter"
-            >
-              <option value="english">English</option>
-              <option value="tamil">Tamil</option>
-              <option value="both">English + Tamil</option>
-            </Select>
+              onChange={(value: string) =>
+                setTokenLanguage(value as "english" | "tamil" | "both")
+              }
+              options={[
+                { value: "english", label: "English" },
+                { value: "tamil", label: "Tamil" },
+                { value: "both", label: "English + Tamil" },
+              ]}
+              placeholder="Select language"
+              searchable={false}
+            />
           </FormField>
           <FormField label="Day Close">
             <button
@@ -400,7 +371,7 @@ export function TokenQueue({
                   )}
                 </p> */}
                 <p className="text-xl font-black flex items-center">
-                  {item.token_number || item.token}{" "} -
+                  {item.token_number || item.token} -
                   <span className="mt-1 text-sm font-semibold text-white mb-1">
                     {appointment.patient ||
                       publicDisplayValue(item.patient_id, "Patient")}
@@ -434,7 +405,7 @@ export function TokenQueue({
             </tr>
           </thead>
           <tbody>
-            {visibleQueue.map((appointment: any) => (
+            {pagedQueue.map((appointment: any) => (
               <tr
                 key={appointment.id}
                 onClick={() => openConsultation(appointment)}
@@ -529,6 +500,12 @@ export function TokenQueue({
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={safePage}
+        totalPages={totalPages}
+        total={visibleQueue.length}
+        onPage={setPage}
+      />
     </Card>
   );
 }

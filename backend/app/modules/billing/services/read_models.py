@@ -1,0 +1,270 @@
+from collections.abc import Callable
+
+from sqlmodel import Session
+
+from app.modules.billing.models import (
+    BillingAdjustmentRequest,
+    BillingAdjustmentStatus,
+    BillingAdjustmentType,
+    DiscountType,
+    BillingLedgerEntry,
+    Invoice,
+    InvoiceItem,
+    InvoiceStatus,
+    PaymentMethod,
+    TaxRule,
+)
+from app.modules.billing.repositories.read_repository import BillingReadRepository
+from app.modules.billing.schemas import (
+    BillingAdjustmentRequestRead,
+    BillingLedgerEntryRead,
+    CreditNoteRead,
+    InvoiceDetailRead,
+    InvoiceItemRead,
+    InvoiceRead,
+    PaymentRead,
+)
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.membership import invoice_membership_benefit
+from app.modules.billing.services.source_sync import sync_invoice_source_after_reversal
+
+
+def actor_names(session: Session, user_ids: set[str | None]) -> dict[str, str]:
+    return BillingReadRepository(session).actor_names(user_ids)
+
+
+def invoice_payment_methods(session: Session, invoice: Invoice) -> list[PaymentMethod]:
+    payments = BillingReadRepository(session).list_recorded_positive_payments(invoice)
+    methods: list[PaymentMethod] = []
+    seen: set[PaymentMethod] = set()
+    for payment in payments:
+        if payment.method in seen:
+            continue
+        seen.add(payment.method)
+        methods.append(payment.method)
+    return methods
+
+
+def invoice_read(session: Session, invoice: Invoice) -> InvoiceRead:
+    invoice_response = InvoiceRead.model_validate(invoice, from_attributes=True)
+    invoice_response.payment_methods = invoice_payment_methods(session, invoice)
+    repo = BillingReadRepository(session)
+    if invoice.tax_rule_id:
+        tax_rule = session.get(TaxRule, invoice.tax_rule_id)
+        if tax_rule and tax_rule.tenant_id == invoice.tenant_id:
+            invoice_response.tax_percentage = int(tax_rule.tax_percentage or 0)
+            invoice_response.tax_label = tax_rule.tax_label
+    total_discount = int(invoice.discount_amount or 0)
+    membership_discount = min(
+        int(invoice.membership_discount_amount or 0), total_discount
+    )
+    approved_discount = sum(
+        int(row.amount or 0)
+        for row in repo.list_adjustment_requests(invoice)
+        if row.request_type == BillingAdjustmentType.DISCOUNT
+        and row.status == BillingAdjustmentStatus.EXECUTED
+    )
+    if invoice.discount_approval_id:
+        legacy_approval = repo.get_discount_approval(invoice.discount_approval_id)
+        if legacy_approval:
+            approved_discount += int(legacy_approval.requested_amount or 0)
+    approved_discount = min(
+        approved_discount, max(total_discount - membership_discount, 0)
+    )
+    offer_discount = 0
+    if invoice.discount_offer_id:
+        offer = repo.get_discount_offer(invoice.discount_offer_id)
+        if offer and offer.tenant_id == invoice.tenant_id:
+            invoice_response.offer_discount_name = offer.name
+            invoice_response.offer_discount_type = offer.discount_type
+            invoice_response.offer_discount_value = int(offer.value or 0)
+            offer_discount = (
+                int(offer.value or 0)
+                if offer.discount_type == DiscountType.FIXED
+                else round(
+                    int(invoice.subtotal_amount or 0) * int(offer.value or 0) / 100
+                )
+            )
+            if offer.max_discount_amount is not None:
+                offer_discount = min(offer_discount, offer.max_discount_amount)
+    remaining = max(total_discount - membership_discount - approved_discount, 0)
+    invoice_response.offer_discount_amount = min(offer_discount, remaining)
+    invoice_response.approved_discount_amount = approved_discount
+    if invoice.appointment_id:
+        appointment = BillingReadRepository(session).get_appointment(
+            invoice.appointment_id
+        )
+        if appointment and appointment.tenant_id == invoice.tenant_id:
+            invoice_response.appointment_type = appointment.appointment_type
+    return invoice_response
+
+
+def read_adjustment_request(
+    session: Session, row: BillingAdjustmentRequest
+) -> BillingAdjustmentRequestRead:
+    names = actor_names(
+        session,
+        {
+            row.requested_by_user_id,
+            row.approved_by_user_id,
+            row.executed_by_user_id,
+        },
+    )
+    read = BillingAdjustmentRequestRead.model_validate(row, from_attributes=True)
+    read.requested_by_user_name = names.get(str(row.requested_by_user_id or ""))
+    read.approved_by_user_name = names.get(str(row.approved_by_user_id or ""))
+    read.executed_by_user_name = names.get(str(row.executed_by_user_id or ""))
+    return read
+
+
+def invoice_adjustment_requests(
+    session: Session, invoice: Invoice
+) -> list[BillingAdjustmentRequestRead]:
+    rows = BillingReadRepository(session).list_adjustment_requests(invoice)
+    names = actor_names(
+        session,
+        {
+            user_id
+            for row in rows
+            for user_id in (
+                row.requested_by_user_id,
+                row.approved_by_user_id,
+                row.executed_by_user_id,
+            )
+        },
+    )
+    result = []
+    for row in rows:
+        read = BillingAdjustmentRequestRead.model_validate(row, from_attributes=True)
+        read.requested_by_user_name = names.get(str(row.requested_by_user_id or ""))
+        read.approved_by_user_name = names.get(str(row.approved_by_user_id or ""))
+        read.executed_by_user_name = names.get(str(row.executed_by_user_id or ""))
+        result.append(read)
+    return result
+
+
+def normalize_invoice_status(session: Session, invoice: Invoice) -> Invoice:
+    if invoice.status == InvoiceStatus.CANCELLED:
+        return invoice
+    if (
+        invoice.status in {InvoiceStatus.REFUNDED, InvoiceStatus.PARTIALLY_REFUNDED}
+        or int(invoice.total_amount or 0) <= 0
+        or int(invoice.balance_amount or 0) <= 0
+    ):
+        previous_status = invoice.status
+        invoice = update_invoice_payment_status(session, invoice)
+        if (
+            previous_status
+            in {InvoiceStatus.REFUNDED, InvoiceStatus.PARTIALLY_REFUNDED}
+            and invoice.status != previous_status
+        ):
+            # Repair source records that older credit-note behavior may have
+            # reopened or detached after falsely classifying an invoice as a
+            # refund.
+            sync_invoice_source_after_reversal(session, invoice)
+        return invoice
+    return invoice
+
+
+def read_invoice_detail(
+    session: Session,
+    invoice: Invoice,
+    *,
+    ensure_invoice_submit_ledger: Callable[[Session, Invoice], None],
+    ensure_invoice_membership_benefit_ledger: Callable[[Session, Invoice], None],
+) -> InvoiceDetailRead:
+    invoice = normalize_invoice_status(session, invoice)
+    ensure_invoice_submit_ledger(session, invoice)
+    ensure_invoice_membership_benefit_ledger(session, invoice)
+    read_repo = BillingReadRepository(session)
+    items = read_repo.list_invoice_items(invoice)
+    payments = read_repo.list_payments(invoice)
+    credit_notes = read_repo.list_credit_notes(invoice)
+    ledger_entries = read_repo.list_ledger_entries(invoice)
+    actor_ids = {entry.actor_user_id for entry in ledger_entries if entry.actor_user_id}
+    entry_actor_names: dict[str, str] = {}
+    if actor_ids:
+        entry_actor_names = read_repo.actor_names(actor_ids)
+    supplier_names = read_repo.supplier_names(
+        tenant_id=invoice.tenant_id,
+        supplier_ids={item.supplier_id for item in items if item.supplier_id},
+    )
+    consultation_vendor_name: str | None = None
+    if invoice.appointment_id:
+        appointment = read_repo.get_appointment(invoice.appointment_id)
+        if appointment and appointment.tenant_id == invoice.tenant_id:
+            if appointment.practitioner_id:
+                practitioner = read_repo.get_practitioner(appointment.practitioner_id)
+                if practitioner and practitioner.tenant_id == invoice.tenant_id:
+                    consultation_vendor_name = practitioner.full_name
+    consultation_vendor_amount = int(invoice.doctor_share_amount or 0)
+    home_care_booking = (
+        read_repo.get_home_care_booking(invoice.home_care_booking_id)
+        if invoice.home_care_booking_id
+        else None
+    )
+
+    def item_read(item: InvoiceItem) -> InvoiceItemRead:
+        read = InvoiceItemRead.model_validate(item, from_attributes=True)
+        if item.item_type == "consultation":
+            read.vendor_name = consultation_vendor_name or "Doctor"
+            read.vendor_amount = consultation_vendor_amount
+        elif item.item_type == "home_care":
+            visit = (
+                read_repo.get_home_care_visit_log(item.external_item_code)
+                if item.external_item_code
+                and item.external_slug == "home_visit_service"
+                else None
+            )
+            read.vendor_name = (
+                getattr(visit, "assigned_staff_name", None)
+                or getattr(home_care_booking, "assigned_staff_name", None)
+                or "-"
+            )
+            read.vendor_amount = 0
+        elif item.item_type in {"lab", "pharmacy"}:
+            read.vendor_name = (
+                supplier_names.get(str(item.supplier_id or ""))
+                or item.supplier_id
+                or None
+            )
+            read.vendor_amount = int(item.buying_amount or 0)
+        return read
+
+    def ledger_read(entry: BillingLedgerEntry) -> BillingLedgerEntryRead:
+        read = BillingLedgerEntryRead.model_validate(entry, from_attributes=True)
+        if entry.entry_type == "credit_note_issued":
+            # Older rows stored a credit note as a financial debit. Keep the
+            # audit entry but expose it as informational data.
+            read.debit_amount = 0
+            read.credit_amount = 0
+            read.invoice_total_delta = 0
+            read.paid_amount_delta = 0
+            read.balance_amount_delta = 0
+        elif entry.entry_type == "invoice_submitted":
+            # Issuing an invoice doesn't move any cash — Credit/Debit is only
+            # for payment, refund, or membership-benefit movement. Keep the
+            # invoice_total_delta/balance_amount_delta so Bill Amount/Balance
+            # still populate correctly on this first row.
+            read.debit_amount = 0
+            read.credit_amount = 0
+        read.actor_user_name = entry_actor_names.get(str(entry.actor_user_id or ""))
+        return read
+
+    invoice_response = invoice_read(session, invoice)
+    return InvoiceDetailRead(
+        status=invoice_response.status,
+        invoice=invoice_response,
+        items=[item_read(item) for item in items],
+        payments=[
+            PaymentRead.model_validate(payment, from_attributes=True)
+            for payment in payments
+        ],
+        credit_notes=[
+            CreditNoteRead.model_validate(credit_note, from_attributes=True)
+            for credit_note in credit_notes
+        ],
+        ledger_entries=[ledger_read(entry) for entry in ledger_entries],
+        adjustment_requests=invoice_adjustment_requests(session, invoice),
+        membership_benefit=invoice_membership_benefit(session, invoice),
+    )

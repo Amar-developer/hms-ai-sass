@@ -19,7 +19,9 @@ from app.modules.billing.models import (
     Invoice,
     PaymentMethod,
 )
-from app.modules.billing.service import create_consultation_invoice
+from app.modules.billing.services.consultation_invoice import (
+    create_consultation_invoice,
+)
 from app.modules.consultations.models import Consultation, ConsultationStatus
 from app.modules.identity import permissions
 from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole

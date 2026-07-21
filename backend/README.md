@@ -57,7 +57,7 @@ Alembic migrations live in `backend/alembic`.
 Background report worker:
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d redis report-worker
+docker compose -f docker-compose.local.yml up -d redis report-worker
 ```
 
 Monthly report email requires `MEDIZINHUB_SMTP_*` values in `.env`. Keep `.env.example` tracked as the template and never commit real credentials.
@@ -83,9 +83,23 @@ Open:
 Run these checks from the project root before pushing to GitHub:
 
 ```bash
-backend/.venv/bin/ruff check backend/app backend/tests
+backend/.venv/bin/ruff check backend/app backend/tests backend/e2e
 backend/.venv/bin/pytest backend/tests -q
 ```
+
+Run the PostgreSQL-backed live API E2E suite separately:
+
+```bash
+PGPASSWORD=medizinhub_dev createdb \
+  -h 127.0.0.1 -p 5433 -U medizinhub medizinhub_e2e
+MEDIZINHUB_E2E_DATABASE_URL="postgresql+psycopg://medizinhub:medizinhub_dev@127.0.0.1:5433/medizinhub_e2e" \
+  bash backend/scripts/run_backend_e2e.sh
+```
+
+The E2E runner intentionally drops and recreates the `public` schema. As a
+safety guard, it refuses any database whose name does not end in `_e2e`. It
+runs Alembic, starts a real Uvicorn process, calls the API through `httpx`, and
+stops the process when the suite finishes.
 
 ## Fresh SaaS Data
 
@@ -112,7 +126,7 @@ curl -X POST http://localhost:8000/api/v1/auth/bootstrap-super-admin \
 For a clean local development reset, delete all rows and recreate only the fresh SaaS setup:
 
 ```bash
-MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV python -m scripts.reset_fresh_data
+MEDIZINHUB_RESET_CONFIRM=RESET_MEDIZINHUB_DEV python -m scripts.reset_demo_data
 ```
 
 The reset script reads optional `MEDIZINHUB_SUPER_ADMIN_NAME`, `MEDIZINHUB_SUPER_ADMIN_EMAIL`, and `MEDIZINHUB_SUPER_ADMIN_PASSWORD` values. It does not create demo tenants, branches, patients, doctors, appointments, invoices, or staff users.
@@ -196,6 +210,18 @@ Default module entitlements:
 cd backend
 pytest
 ```
+
+Test layers:
+
+- `backend/tests`: unit, service integration, and FastAPI API contract tests.
+- `backend/e2e`: critical workflows against live Uvicorn and real PostgreSQL.
+
+The E2E tests do not import application services, override dependencies, or
+query the database directly. They verify behavior only through public HTTP
+endpoints. Current live coverage includes authentication, tenant RBAC and
+isolation, subscription entitlements, patient membership, appointments,
+queue, consultations, advanced billing, lab, pharmacy, home care, inpatient
+care, physiotherapy, audit events, and backend error-log permissions.
 
 ## Architecture Rule
 

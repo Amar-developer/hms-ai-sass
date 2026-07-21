@@ -4,19 +4,23 @@ import { useEffect, useRef, useState } from "react";
 import {
   API_BASE,
   AUTH_SESSION_EXPIRED_EVENT,
+  LIVE_DATA_CHANGED_EVENT,
+  LIVE_DATA_CHANGED_STORAGE_KEY,
   apiFetch,
   type ApiSession,
 } from "@/lib/api";
 import { demoUsers, loginPresets } from "@/lib/authPresets";
 import { type LiveSummary, mapAppointment, mapPatient } from "@/lib/liveData";
 import { canOpenModule } from "@/lib/moduleAccess";
-import { reportClientError, storedClientLogSession } from "@/lib/clientLogging";
-import { nav, roleModules } from "@/lib/navigation";
-import { uniqueDepartmentRows } from "@/lib/options";
 import {
-  normalizeSidebarModuleMap,
-  resolveSidebarModules,
-} from "@/lib/sidebarAccess";
+  formatClientLogArguments,
+  reportClientError,
+  storedClientLogSession,
+} from "@/lib/clientLogging";
+import { nav } from "@/lib/navigation";
+import { uniqueDepartmentRows } from "@/lib/options";
+import { navigationModulesForPermissions } from "@/lib/permissionNavigation";
+import { activeTenantOptions } from "@/utils/helper";
 
 const allModuleIds = nav.map(([id]) => id);
 const defaultEntitlementModuleIds = Array.from(
@@ -84,13 +88,14 @@ export function useAppController() {
   const [patients, setPatients] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
   const [ipAdmissions, setIpAdmissions] = useState<any[]>([]);
-  const [roleModuleOverrides, setRoleModuleOverrides] = useState<
-    Record<string, string[]>
-  >({});
   const activeRef = useRef(active);
   const branchIdRef = useRef(branchId);
   const liveBranchIdRef = useRef(liveBranchId);
   const departmentIdRef = useRef(departmentId);
+  const liveDataRequestRef = useRef(0);
+  const mutationRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   function updateActive(value: string) {
     activeRef.current = value;
@@ -153,7 +158,6 @@ export function useAppController() {
     setPatients([]);
     setAppointments([]);
     setIpAdmissions([]);
-    setRoleModuleOverrides({});
     activeRef.current = "dashboard";
     liveBranchIdRef.current = "";
     departmentIdRef.current = defaultDepartment.id;
@@ -164,6 +168,11 @@ export function useAppController() {
   }
 
   async function loadLiveData(session: ApiSession) {
+    if (mutationRefreshTimerRef.current) {
+      clearTimeout(mutationRefreshTimerRef.current);
+      mutationRefreshTimerRef.current = null;
+    }
+    const requestRevision = ++liveDataRequestRef.current;
     setLiveStatus("Loading seeded backend data...");
     const referenceReadPermissions = [
       "settings.manage",
@@ -203,6 +212,7 @@ export function useAppController() {
         [],
       ),
     ]);
+    if (requestRevision !== liveDataRequestRef.current) return;
     const activeTenant = tenantRows.find(
       (tenant: any) => tenant.id === session.tenantId,
     );
@@ -254,7 +264,6 @@ export function useAppController() {
       practitionerRows,
       scheduleRows,
       entitlements,
-      sidebarRoleMap,
     ] = await Promise.all([
       isPlatformPrimaryTenant
         ? Promise.resolve<any[]>([])
@@ -277,7 +286,7 @@ export function useAppController() {
         : apiFetchIfAllowed<any[]>(
             "/queue?include_completed=true",
             session,
-            "queue.manage",
+            ["queue.manage", "queue.read"],
             [],
           ),
       isPlatformPrimaryTenant
@@ -293,7 +302,7 @@ export function useAppController() {
         : apiFetchIfAllowed<any[]>(
             "/billing/invoices",
             session,
-            "billing.manage",
+            ["billing.manage", "billing.read", "invoices.read"],
             [],
           ),
       isPlatformPrimaryTenant
@@ -313,12 +322,15 @@ export function useAppController() {
       apiFetchIfAllowed<any[]>(
         "/practitioners/schedules?is_active=true",
         session,
-        [...referenceReadPermissions, "practitioners.create"],
+        ["scheduling.manage", "scheduling.read", "practitioners.manage"],
         [],
       ),
       entitlementsPromise,
-      apiFetch("/settings/sidebar-modules", session).catch(() => ({})),
     ]);
+    // Focus, navigation, and mutation events can request overlapping refreshes.
+    // Only the newest response may update shared state, otherwise a slower old
+    // request can overwrite a just-saved record with stale data.
+    if (requestRevision !== liveDataRequestRef.current) return;
 
     const linkedPractitioner = isDoctorUser
       ? practitionerRows.find(
@@ -417,7 +429,6 @@ export function useAppController() {
         ? entitlements.enabled_modules
         : defaultEntitlementModuleIds,
     );
-    setRoleModuleOverrides(normalizeSidebarModuleMap(sidebarRoleMap));
     setLiveSummary({
       patients: patientRows.length,
       appointments: appointmentRows.length,
@@ -432,6 +443,35 @@ export function useAppController() {
   }
 
   useEffect(() => {
+    const originalConsoleWarn = console.warn;
+    const originalConsoleError = console.error;
+    console.warn = (...values: unknown[]) => {
+      originalConsoleWarn(...values);
+      reportClientError(
+        new Error(formatClientLogArguments(values)),
+        {
+          event: "frontend.console_warning",
+          module: "console",
+          level: "warning",
+          category: "frontend",
+        },
+        storedClientLogSession(),
+      );
+    };
+    console.error = (...values: unknown[]) => {
+      originalConsoleError(...values);
+      reportClientError(
+        new Error(formatClientLogArguments(values)),
+        {
+          event: "frontend.console_error",
+          module: "console",
+          level: "error",
+          category: "frontend",
+        },
+        storedClientLogSession(),
+      );
+    };
+
     function handleUnhandled(event: PromiseRejectionEvent) {
       event.preventDefault();
       const reason = event.reason;
@@ -499,6 +539,8 @@ export function useAppController() {
     }
 
     return () => {
+      console.warn = originalConsoleWarn;
+      console.error = originalConsoleError;
       window.removeEventListener("unhandledrejection", handleUnhandled);
       window.removeEventListener("error", handleWindowError);
       window.removeEventListener(
@@ -510,28 +552,75 @@ export function useAppController() {
 
   useEffect(() => {
     if (!apiSession) return;
+    const refreshCurrentUser = async () => {
+      try {
+        const freshUser = await apiFetch("/auth/me", apiSession);
+        const next = { ...apiSession, user: freshUser };
+        localStorage.setItem("medizinhub.session", JSON.stringify(next));
+        setApiSession(next);
+      } catch {
+        // Session may have been revoked; loadLiveData below will surface any auth error.
+      }
+    };
     const refreshLiveData = () => {
       if (document.visibilityState === "hidden") return;
+      refreshCurrentUser();
       loadLiveData(apiSession).catch((err: any) => {
         setLiveStatus(
           err.message || "Connected, but live data could not be refreshed.",
         );
       });
     };
+    const scheduleMutationRefresh = () => {
+      if (document.visibilityState === "hidden") return;
+      if (mutationRefreshTimerRef.current) {
+        clearTimeout(mutationRefreshTimerRef.current);
+      }
+      // Most modules already call loadLiveData after their own save. The short
+      // delay lets that explicit refresh cancel this fallback while coalescing
+      // multi-request operations into one shared refresh.
+      mutationRefreshTimerRef.current = setTimeout(() => {
+        mutationRefreshTimerRef.current = null;
+        refreshLiveData();
+      }, 50);
+    };
+    const handleLiveDataChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ tenantId?: string }>).detail;
+      if (detail?.tenantId && detail.tenantId !== apiSession.tenantId) return;
+      scheduleMutationRefresh();
+    };
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === "medizinhub.entitlements.refresh") refreshLiveData();
+      if (event.key === "medizinhub.entitlements.refresh") {
+        scheduleMutationRefresh();
+        return;
+      }
+      if (event.key !== LIVE_DATA_CHANGED_STORAGE_KEY || !event.newValue)
+        return;
+      try {
+        const detail = JSON.parse(event.newValue);
+        if (detail?.tenantId && detail.tenantId !== apiSession.tenantId) return;
+        scheduleMutationRefresh();
+      } catch {
+        scheduleMutationRefresh();
+      }
     };
     window.addEventListener("focus", refreshLiveData);
     window.addEventListener("storage", handleStorage);
     window.addEventListener("medizinhub.entitlements.refresh", refreshLiveData);
+    window.addEventListener(LIVE_DATA_CHANGED_EVENT, handleLiveDataChanged);
     document.addEventListener("visibilitychange", refreshLiveData);
     return () => {
+      if (mutationRefreshTimerRef.current) {
+        clearTimeout(mutationRefreshTimerRef.current);
+        mutationRefreshTimerRef.current = null;
+      }
       window.removeEventListener("focus", refreshLiveData);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener(
         "medizinhub.entitlements.refresh",
         refreshLiveData,
       );
+      window.removeEventListener(LIVE_DATA_CHANGED_EVENT, handleLiveDataChanged);
       document.removeEventListener("visibilitychange", refreshLiveData);
     };
     // }, [apiSession?.tenantId]);
@@ -733,6 +822,7 @@ export function useAppController() {
     allowedDepartments,
     doctorScope,
     livePractitioners,
+    setLivePractitioners,
     patients,
     setPatients,
     appointments,
@@ -744,190 +834,11 @@ export function useAppController() {
     loadLiveData,
     liveInvoices,
   };
-  const permissionModules = new Set<string>();
   const permissionKeys = apiSession?.user?.permissions || [];
-  const navHasAnyPermission = (...keys: string[]) =>
-    Boolean(
-      apiSession?.user?.is_super_admin ||
-      permissionKeys.includes("*") ||
-      keys.some((key) => permissionKeys.includes(key)),
-    );
-  const isTenantAdminUser = Boolean(
-    !isSuperAdmin &&
-    (role === "tenant_admin" ||
-      apiSession?.user?.roles?.includes("tenant_admin") ||
-      apiSession?.user?.user_type === "tenant_admin"),
-  );
-  const canOpenTenantAdmin = Boolean(
-    !isSuperAdmin &&
-    navHasAnyPermission(
-      "identity.users.manage",
-      "identity.users.create",
-      "identity.users.read",
-      "identity.users.edit",
-      "identity.users.delete",
-      "identity.roles.manage",
-      "identity.roles.read",
-      "settings.manage",
-      "branches.manage",
-      "branches.read",
-      "departments.manage",
-      "departments.read",
-    ),
-  );
-  if (canOpenTenantAdmin) permissionModules.add("admin");
-  if (
-    navHasAnyPermission(
-      "appointments.manage",
-      "appointments.create",
-      "appointments.read",
-      "appointments.edit",
-    )
-  )
-    permissionModules.add("appointments");
-  if (navHasAnyPermission("queue.manage")) permissionModules.add("queue");
-  if (
-    navHasAnyPermission(
-      "patients.read",
-      "patients.write",
-      "patients.create",
-      "patients.edit",
-    )
-  )
-    permissionModules.add("patients");
-  if (
-    navHasAnyPermission(
-      "practitioners.manage",
-      "practitioners.read",
-      "practitioners.create",
-      "practitioners.edit",
-    )
-  )
-    permissionModules.add("practitioners");
-  if (
-    navHasAnyPermission(
-      "scheduling.manage",
-      "scheduling.read",
-      "scheduling.create",
-      "scheduling.edit",
-      "scheduling.delete",
-    )
-  )
-    permissionModules.add("scheduling");
-  if (
-    navHasAnyPermission(
-      "pharmacy.manage",
-      "pharmacy.read",
-      "pharmacy.create",
-      "pharmacy.edit",
-      "lab.manage",
-      "lab.read",
-      "lab.create",
-      "lab.edit",
-      "physiotherapy.manage",
-      "physiotherapy.read",
-      "physiotherapy.create",
-      "physiotherapy.edit",
-      "home_care.manage",
-      "home_care.read",
-      "home_care.create",
-      "home_care.edit",
-    )
-  )
-    permissionModules.add("items");
-  if (
-    navHasAnyPermission(
-      "ip.manage",
-      "ip.read",
-      "ip.create",
-      "ip.edit",
-      "ip.delete",
-    )
-  )
-    permissionModules.add("ip");
-  if (
-    navHasAnyPermission(
-      "consultations.read",
-      "consultations.write",
-      "consultations.sign",
-    )
-  ) {
-    permissionModules.add("doctor");
-    permissionModules.add("consultation");
-  }
-  if (navHasAnyPermission("lab.manage", "lab.read", "lab.create", "lab.edit"))
-    permissionModules.add("lab");
-  if (
-    navHasAnyPermission(
-      "pharmacy.manage",
-      "pharmacy.read",
-      "pharmacy.create",
-      "pharmacy.edit",
-    )
-  )
-    permissionModules.add("pharmacy");
-  if (
-    navHasAnyPermission(
-      "physiotherapy.manage",
-      "physiotherapy.read",
-      "physiotherapy.create",
-      "physiotherapy.edit",
-      "physiotherapy.delete",
-    )
-  )
-    permissionModules.add("physiotherapy");
-  if (
-    navHasAnyPermission(
-      "home_care.manage",
-      "home_care.read",
-      "home_care.create",
-      "home_care.edit",
-      "home_care.delete",
-    )
-  )
-    permissionModules.add("home_care");
-  if (
-    navHasAnyPermission(
-      "billing.manage",
-      "invoices.read",
-      "invoices.create",
-      "payments.manage",
-    )
-  )
-    permissionModules.add("billing");
-  if (
-    isTenantAdminUser ||
-    canOpenTenantAdmin ||
-    navHasAnyPermission(
-      "patient_subscriptions.manage",
-      "patient_subscriptions.read",
-      "patient_subscriptions.create",
-    )
-  )
-    permissionModules.add("subscriptions");
-  if (navHasAnyPermission("reports.read", "audit.read"))
-    permissionModules.add("reports");
-  const isTenantAdminDashboardUser = Boolean(
-    !isSuperAdmin &&
-    (role === "tenant_admin" ||
-      apiSession?.user?.roles?.includes("tenant_admin") ||
-      apiSession?.user?.user_type === "tenant_admin"),
-  );
-  // Role-based sidebar control is additive: users with multiple roles get the union
-  // of every assigned role's configured modules plus modules exposed by their
-  // combined permission set.
-  // Tenant-admin-configurable per-role sidebar modules override the built-in defaults
-  // (lib/navigation.ts). Unconfigured roles keep their defaults.
-  const roleAllowedModules = resolveSidebarModules({
-    user: apiSession?.user,
-    fallbackRole: role,
-    defaults: roleModules,
-    overrides: roleModuleOverrides,
-    permissionModules,
+  const roleAllowedModules = navigationModulesForPermissions(permissionKeys, {
+    isSuperAdmin,
   });
   const enabled = (id: string) => {
-    if (id === "dashboard") return isTenantAdminDashboardUser;
-    if (id === "reports") return canOpenModule(id, roleAllowedModules, clinic);
     return canOpenModule(id, roleAllowedModules, clinic);
   };
 
@@ -969,17 +880,4 @@ export function useAppController() {
       liveSummary,
     },
   };
-}
-
-function activeTenantOptions(tenants: any[]) {
-  const seen = new Set<string>();
-  return (tenants || []).filter((tenant: any) => {
-    if (tenant.status === "suspended") return false;
-    const key = String(tenant.name || tenant.id || "")
-      .trim()
-      .toLowerCase();
-    if (key && seen.has(key)) return false;
-    if (key) seen.add(key);
-    return true;
-  });
 }

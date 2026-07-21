@@ -13,18 +13,20 @@ This project now includes a practical documentation backbone for evolving the pr
 - [Product blueprint](./docs/product-blueprint.md)
 - [Development master prompt](./docs/development-master-prompt.md)
 - [Backend architecture spec](./docs/backend-architecture-spec.md)
-- [Plug-and-play architecture](./docs/plug-and-play-architecture.md)
 - [Source control and quality guide](./docs/source-control-and-quality-guide.md)
 - [Module catalog](./docs/module-catalog.md)
 - [Data, security, and India compliance](./docs/data-security-compliance.md)
-- [Technology strategy](./docs/technology-strategy.md)
 - [SaaS plans and roadmap](./docs/saas-plans-roadmap.md)
 
 ## Run
+
 ```bash
-npm install
+nvm use  # if nvm is installed; selects Node 24 from .nvmrc
+cd frontend
+npm ci
 npm run dev
 ```
+
 Open http://localhost:3000
 
 ## Before pushing to GitHub
@@ -32,12 +34,38 @@ Open http://localhost:3000
 Install the local Git hooks once after cloning the repo:
 
 ```bash
+cd frontend
 npm run hooks:install
 ```
 
-Run the full local quality gate from the project root before every push:
+The pre-push hook only runs backend lint, backend unit tests, frontend unit
+tests, typecheck, and build. It does **not** run backend E2E or frontend
+Playwright E2E — those only run in GitHub Actions unless you run them
+yourself, which is why an E2E-only bug can pass every local check and still
+fail in CI. To catch that locally before pushing, run everything CI runs
+with one command, from the repo root:
 
 ```bash
+bash scripts/verify_all.sh          # everything, same order as CI
+bash scripts/verify_all.sh --fast   # skip both E2E suites, for quick iteration
+```
+
+One-time setup this needs (see [backend/README.md](./backend/README.md)):
+
+```bash
+docker compose up -d postgres redis
+PGPASSWORD=medizinhub_dev createdb -h 127.0.0.1 -p 5433 -U medizinhub medizinhub_e2e
+cd frontend && npm run test:e2e:install
+```
+
+The frontend E2E runner creates `medizinhub_frontend_e2e` on its first run
+when the local PostgreSQL user has database-creation permission. It refuses
+non-local database hosts and database names that do not end in `_e2e`.
+
+Run the full local quality gate from the frontend package before every push:
+
+```bash
+cd frontend
 npm run quality
 ```
 
@@ -45,10 +73,10 @@ That command runs:
 
 ```bash
 # Backend linting
-backend/.venv/bin/ruff check backend/app backend/tests
+../backend/.venv/bin/ruff check ../backend/app ../backend/tests ../backend/e2e ../backend/scripts
 
 # Backend tests
-backend/.venv/bin/pytest backend/tests -q
+../backend/.venv/bin/pytest ../backend/tests -q
 
 # Frontend tests
 npm test
@@ -60,7 +88,27 @@ npm run typecheck
 npm run build
 ```
 
-GitHub Actions runs the same main checks on pull requests and pushes to `main`, `master`, and `develop`.
+`npm run quality` does **not** run E2E — use `bash scripts/verify_all.sh`
+above for that. The individual E2E commands it wraps, if you want to run
+one on its own:
+
+```bash
+npm run test:e2e               # frontend, chromium only, @critical
+npm run test:e2e:extended      # frontend, chromium only, 21 @extended tests
+npm run test:e2e:cross-browser # frontend, chromium + firefox + webkit, @critical
+bash ../backend/scripts/run_backend_e2e.sh   # backend, live API suite
+```
+
+GitHub Actions runs the same main checks on pull requests and pushes to
+`main`, `master`, and `develop`. It also runs the PostgreSQL-backed live
+backend and frontend E2E suites. Pull requests run the critical Chromium
+browser suite. The nightly workflow runs the 21 extended Chromium tests plus
+the critical Firefox and WebKit tests. A manual workflow can run the complete
+suite in all three browsers.
+
+```bash
+bash backend/scripts/run_backend_e2e.sh
+```
 
 ## Backend scaffold
 
@@ -140,13 +188,13 @@ Tenant admins and staff must log in with their customer `tenant_id`. The primary
 
 # FOR DEVELOPMENT
 # First time or after requirements.txt / package.json changes
-docker compose -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.local.yml up --build
 
 # Normal start (after first build)
-docker compose -f docker-compose.dev.yml up
+docker compose -f docker-compose.local.yml up
 
 # Stop everything
-docker compose -f docker-compose.dev.yml down
+docker compose -f docker-compose.local.yml down
 
 # FOR PRODUCTION
 # 1. Build all images fresh
@@ -171,7 +219,7 @@ docker compose down
 docker compose down -v
 
 # 8. Migration cmd
-docker compose -f docker-compose.dev.yml exec backend alembic -c alembic/alembic.ini upgrade head
+docker compose -f docker-compose.local.yml exec backend alembic -c alembic/alembic.ini upgrade head
 
 # Live Docker disk cleanup when deployment fails with "no space left on device"
 # Safe for production data: this removes stopped containers, unused images, and build cache, not named volumes.
@@ -528,6 +576,9 @@ docker compose down -v
 
 # NEVER - deletes database volume!
 docker volume rm medizinhub-hms_medizinhub_postgres_data
+
+# NEVER - deletes persistent patient/document uploads!
+docker volume rm medizinhub-hms_medizinhub_uploads_data
 
 # NEVER without backup - removes MariaDB data!
 sudo apt-get remove --purge mysql*

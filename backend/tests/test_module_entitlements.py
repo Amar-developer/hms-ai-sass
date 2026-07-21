@@ -22,13 +22,19 @@ def create_signed_consultation_on_trial(client):
             "patient_id": patient["id"],
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
+            "department_id": "general",
             "practitioner_id": "doctor_demo",
         },
     ).json()
     consultation = client.post(
         "/api/v1/consultations",
         headers={"X-Tenant-ID": tenant["id"]},
-        json={"appointment_id": booking["appointment"]["id"]},
+        json={
+            "appointment_id": booking["appointment"]["id"],
+            "chief_complaint": "Fever",
+            "diagnosis": "Viral fever",
+            "clinical_notes": "Hydration advised",
+        },
     ).json()
     signed = client.post(
         f"/api/v1/consultations/{consultation['id']}/sign",
@@ -68,7 +74,7 @@ def test_entitlements_include_enabled_modules_for_free_trial(client):
     assert "ip" not in modules
 
 
-def test_free_trial_blocks_advanced_billing_invoice_generation(client):
+def test_free_trial_allows_basic_consultation_invoice_generation(client):
     tenant, consultation = create_signed_consultation_on_trial(client)
 
     response = client.post(
@@ -77,11 +83,8 @@ def test_free_trial_blocks_advanced_billing_invoice_generation(client):
         json={"consultation_id": consultation["id"]},
     )
 
-    assert response.status_code == 403
-    assert (
-        response.json()["detail"]
-        == "Module billing_advanced is not enabled for plan Free Trial"
-    )
+    assert response.status_code == 201
+    assert response.json()["invoice"]["invoice_number"]
 
 
 def test_starter_entitlements_enable_advanced_billing(client):

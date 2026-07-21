@@ -3,13 +3,27 @@ from datetime import date, timedelta
 from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceStatus
-from app.modules.billing.service import update_invoice_payment_status
-from app.api.v1.billing import _normalize_invoice_status
-from app.api.v1.patient_subscriptions import _read_enrollment
+from app.modules.billing.repositories.read_repository import BillingReadRepository
+from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.ledger import (
+    ensure_invoice_membership_benefit_ledger,
+    ensure_invoice_submit_ledger,
+    record_billing_ledger,
+)
+from app.modules.billing.services.read_models import (
+    normalize_invoice_status as _normalize_invoice_status,
+)
+from app.modules.patient_subscriptions.service import (
+    read_enrollment as _read_enrollment,
+)
 from app.modules.lab.models import LabOrder, LabOrderItem
 from app.modules.patient_subscriptions.models import (
     PatientSubscriptionEnrollment,
+    PatientSubscriptionEnrollmentStatus,
     PatientSubscriptionPlan,
+)
+from app.modules.patient_subscriptions.services.eligibility import (
+    resolve_current_enrollment,
 )
 from app.modules.patient_subscriptions.service import (
     active_patient_enrollment,
@@ -21,6 +35,100 @@ from app.modules.patient_subscriptions.service import (
     sync_free_item_usage_from_invoices,
 )
 from app.modules.tenants.models import Department, Tenant
+
+
+def test_queued_membership_dates_follow_current_plan_and_actual_activation(
+    test_engine,
+):
+    today = date.today()
+    tenant_id = "tenant_queue_dates"
+    branch_id = "branch_queue_dates"
+    with Session(test_engine) as session:
+        current_plan = PatientSubscriptionPlan(
+            id="ptplan_queue_current",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            name="Current Plan",
+            duration_days=30,
+        )
+        queued_plan = PatientSubscriptionPlan(
+            id="ptplan_queue_next",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            name="Queued Plan",
+            duration_days=60,
+        )
+        current = PatientSubscriptionEnrollment(
+            id="ptsub_queue_current",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id="patient_queue_expected",
+            plan_id=current_plan.id,
+            starts_on=today,
+            activated_on=today,
+            ends_on=today + timedelta(days=9),
+            status=PatientSubscriptionEnrollmentStatus.ACTIVE,
+        )
+        queued = PatientSubscriptionEnrollment(
+            id="ptsub_queue_next",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=current.patient_id,
+            plan_id=queued_plan.id,
+            starts_on=today,
+            ends_on=today + timedelta(days=59),
+            status=PatientSubscriptionEnrollmentStatus.QUEUED,
+        )
+        expired = PatientSubscriptionEnrollment(
+            id="ptsub_queue_expired",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id="patient_queue_promote",
+            plan_id=current_plan.id,
+            starts_on=today - timedelta(days=30),
+            activated_on=today - timedelta(days=30),
+            ends_on=today - timedelta(days=1),
+            status=PatientSubscriptionEnrollmentStatus.ACTIVE,
+        )
+        promote = PatientSubscriptionEnrollment(
+            id="ptsub_queue_promote",
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=expired.patient_id,
+            plan_id=queued_plan.id,
+            starts_on=today + timedelta(days=5),
+            ends_on=today + timedelta(days=64),
+            status=PatientSubscriptionEnrollmentStatus.QUEUED,
+        )
+        session.add(current_plan)
+        session.add(queued_plan)
+        session.add(current)
+        session.add(queued)
+        session.add(expired)
+        session.add(promote)
+        session.commit()
+
+        resolved_current = resolve_current_enrollment(
+            session,
+            tenant_id=tenant_id,
+            patient_id=current.patient_id,
+        )
+        session.refresh(queued)
+        promoted = resolve_current_enrollment(
+            session,
+            tenant_id=tenant_id,
+            patient_id=expired.patient_id,
+        )
+
+        assert resolved_current is not None
+        assert queued.starts_on == current.ends_on + timedelta(days=1)
+        assert queued.ends_on == queued.starts_on + timedelta(days=59)
+        assert promoted is not None
+        assert promoted.id == promote.id
+        assert promoted.status == PatientSubscriptionEnrollmentStatus.ACTIVE
+        assert promoted.starts_on == today
+        assert promoted.activated_on == today
+        assert promoted.ends_on == today + timedelta(days=59)
 
 
 def test_patient_membership_respects_activation_delay(test_engine):
@@ -77,7 +185,6 @@ def test_patient_membership_respects_activation_delay(test_engine):
             active_patient_enrollment(
                 session,
                 tenant_id=tenant_id,
-                branch_id=branch_id,
                 patient_id=patient_id,
             )
             is None
@@ -85,7 +192,6 @@ def test_patient_membership_respects_activation_delay(test_engine):
         active = active_patient_enrollment(
             session,
             tenant_id=tenant_id,
-            branch_id=branch_id,
             patient_id=active_patient_id,
         )
 
@@ -283,7 +389,12 @@ def test_consultation_usage_reconciles_from_invoice_and_restores_on_cancel(
             tenant_id=enrollment.tenant_id,
             branch_id=enrollment.branch_id,
             patient_id=enrollment.patient_id,
-            consultation_id="consult_usage_1",
+            # Same clinical visit as `invoice` above (via appointment_id,
+            # since Invoice.consultation_id now carries a unique index and
+            # can't hold the same value twice) — this still exercises
+            # sync_free_item_usage_from_invoices' by-visit dedup, which
+            # falls back to appointment_id when consultation_id is unset.
+            appointment_id="consult_usage_1",
             patient_subscription_enrollment_id=enrollment.id,
             patient_subscription_plan_id=plan.id,
             invoice_number="MHB-INV-CONSULT-USAGE-DUP",
@@ -497,7 +608,10 @@ def test_free_lab_test_discount_uses_item_amount_and_quantity_limit():
         subtotal_amount=225,
     )
     assert first["free_item_ids"] == ["LABRBS"]
-    assert first["discount_amount"] == 75
+    assert first["free_items_amount"] == 75
+    assert first["item_discount_amount"] == 8
+    assert first["regular_items_amount"] == 0
+    assert first["discount_amount"] == 83
 
     consume_free_items(
         enrollment, service_type="lab", free_item_ids=first["free_item_ids"]
@@ -513,6 +627,112 @@ def test_free_lab_test_discount_uses_item_amount_and_quantity_limit():
 
     assert second["free_item_ids"] == []
     assert second["discount_amount"] == 4
+
+
+def test_lab_discount_applies_only_to_configured_eligible_item():
+    plan = PatientSubscriptionPlan(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        name="Selected Lab Discount",
+        lab_discount_percentage=10,
+        discounted_lab_test_ids_json='["LAB_ELIGIBLE"]',
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        patient_id="patient_mixed_lab",
+        plan_id=plan.id,
+        starts_on=date.today(),
+        ends_on=date.today() + timedelta(days=119),
+    )
+
+    result = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="lab",
+        item_ids=["LAB_ELIGIBLE", "LAB_REGULAR"],
+        item_amounts={"LAB_ELIGIBLE": 500, "LAB_REGULAR": 700},
+        subtotal_amount=1200,
+    )
+
+    assert result["discount_amount"] == 50
+    assert result["item_discount_amount"] == 50
+    assert result["free_items_amount"] == 0
+    assert result["regular_items_amount"] == 700
+    assert result["payable_amount"] == 1150
+
+
+def test_lab_invoice_combines_free_and_percentage_membership_items():
+    plan = PatientSubscriptionPlan(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        name="Mixed Lab Benefit Plan",
+        lab_discount_percentage=5,
+        free_lab_test_ids_json=free_items_to_json(["LAB_FREE"], {"LAB_FREE": 1}),
+        discounted_lab_test_ids_json='["LAB_DISCOUNTED"]',
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        patient_id="patient_mixed_lab_benefits",
+        plan_id=plan.id,
+        starts_on=date.today(),
+        ends_on=date.today() + timedelta(days=119),
+    )
+
+    result = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="lab",
+        item_ids=["LAB_FREE", "LAB_DISCOUNTED", "LAB_REGULAR"],
+        item_amounts={
+            "LAB_FREE": 500,
+            "LAB_DISCOUNTED": 1000,
+            "LAB_REGULAR": 200,
+        },
+        subtotal_amount=1700,
+    )
+
+    assert result["free_item_ids"] == ["LAB_FREE"]
+    assert result["discounted_item_ids"] == ["LAB_DISCOUNTED"]
+    assert result["free_items_amount"] == 500
+    assert result["item_discount_amount"] == 50
+    assert result["regular_items_amount"] == 200
+    assert result["discount_amount"] == 550
+    assert result["payable_amount"] == 1150
+
+
+def test_pharmacy_free_item_does_not_reduce_regular_item_price():
+    plan = PatientSubscriptionPlan(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        name="Free Medicine Plan",
+        pharmacy_discount_percentage=0,
+        free_medicine_ids_json=free_items_to_json(["MED_FREE"], {"MED_FREE": 1}),
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        patient_id="patient_mixed_pharmacy",
+        plan_id=plan.id,
+        starts_on=date.today(),
+        ends_on=date.today() + timedelta(days=119),
+    )
+
+    result = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="pharmacy",
+        item_ids=["MED_FREE", "MED_REGULAR"],
+        item_amounts={"MED_FREE": 500, "MED_REGULAR": 700},
+        subtotal_amount=1200,
+    )
+
+    assert result["free_items_amount"] == 500
+    assert result["item_discount_amount"] == 0
+    assert result["regular_items_amount"] == 700
+    assert result["discount_amount"] == 500
+    assert result["payable_amount"] == 700
 
 
 def test_previous_lab_benefit_invoices_count_against_free_quantity(test_engine):
@@ -615,6 +835,68 @@ def test_zero_total_membership_invoice_is_marked_paid(test_engine):
     assert updated.balance_amount == 0
     assert updated.paid_amount == 0
     assert updated.status == InvoiceStatus.PAID
+
+
+def test_membership_discount_ledger_nets_to_correct_balance_after_payment(
+    test_engine,
+):
+    """A membership discount is baked into total/balance at creation, then
+    ensure_invoice_membership_benefit_ledger records a *separate* entry that
+    subtracts it again to show the transition. The invoice_submitted entry
+    must use the gross (pre-discount) figure or the two entries double the
+    discount, leaving a negative running balance even after full payment.
+    """
+    with Session(test_engine) as session:
+        # State right after creation: membership discount already applied to
+        # total/balance, before any payment.
+        invoice = Invoice(
+            tenant_id="tenant_membership_ledger",
+            branch_id="branch_main",
+            patient_id="patient_ledger",
+            invoice_number="MHB-INV-LEDGER",
+            subtotal_amount=500,
+            discount_amount=150,
+            membership_discount_amount=150,
+            taxable_amount=350,
+            tax_amount=0,
+            total_amount=350,
+            paid_amount=0,
+            balance_amount=350,
+            status=InvoiceStatus.ISSUED,
+        )
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+
+        # Simulates the first detail read right after creation.
+        ensure_invoice_submit_ledger(session, invoice)
+        ensure_invoice_membership_benefit_ledger(session, invoice)
+
+        # Simulates a later full cash payment.
+        invoice.paid_amount = 350
+        invoice.balance_amount = 0
+        invoice.status = InvoiceStatus.PAID
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+        record_billing_ledger(
+            session,
+            invoice,
+            entry_type="payment_recorded",
+            description="Payment recorded",
+            credit_amount=350,
+            paid_amount_delta=350,
+            balance_amount_delta=-350,
+        )
+
+        entries = BillingReadRepository(session).list_ledger_entries(invoice)
+        running_total = sum(e.invoice_total_delta for e in entries)
+        running_paid = sum(e.paid_amount_delta for e in entries)
+        running_balance = sum(e.balance_amount_delta for e in entries)
+
+    assert running_total == 350
+    assert running_paid == 350
+    assert running_balance == 0
 
 
 def test_zero_total_invoice_read_normalizes_legacy_issued_status(test_engine):

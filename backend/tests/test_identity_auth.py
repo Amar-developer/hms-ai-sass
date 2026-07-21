@@ -1,6 +1,8 @@
 from datetime import date
 
-from app.api.v1.identity import _normalize_user_access
+from app.modules.identity.services.helpers import (
+    normalize_user_access as _normalize_user_access,
+)
 
 
 def bootstrap_super_admin(client):
@@ -510,6 +512,78 @@ def test_role_crud_metadata_and_latest_first_ordering(unauthenticated_client):
     deleted = client.delete(f"/api/v1/identity/roles/{second['id']}", headers=headers)
     assert deleted.status_code == 200
     assert deleted.json()["mode"] == "deactivated"
+
+
+def test_same_name_tenant_roles_share_permission_updates(unauthenticated_client):
+    client = unauthenticated_client
+    super_token = bootstrap_super_admin(client)
+    tenant = create_tenant_with_paid_plan(client, super_token)
+    headers = {"Authorization": f"Bearer {super_token}", "X-Tenant-ID": tenant["id"]}
+
+    base = client.post(
+        "/api/v1/identity/roles",
+        headers=headers,
+        json={
+            "name": "Receptionist",
+            "key": "receptionist",
+            "permission_keys": ["appointments.read"],
+        },
+    ).json()
+    branch = client.post(
+        "/api/v1/identity/roles",
+        headers=headers,
+        json={
+            "name": "Receptionist",
+            "key": "sun_main_receptionist",
+            "permission_keys": ["appointments.read"],
+        },
+    ).json()
+    client.post(
+        "/api/v1/identity/users",
+        headers=headers,
+        json={
+            "name": "Lavanya Kannan",
+            "email": "lavanya.receptionist@identity.test",
+            "password": "SecretPass123",
+            "user_type": "receptionist",
+            "role_keys": [branch["key"]],
+        },
+    )
+
+    updated = client.patch(
+        f"/api/v1/identity/roles/{base['id']}",
+        headers=headers,
+        json={
+            "permission_keys": [
+                "appointments.read",
+                "consultations.read",
+                "consultations.write",
+                "consultations.sign",
+            ],
+        },
+    )
+    assert updated.status_code == 200
+
+    login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "lavanya.receptionist@identity.test",
+            "password": "SecretPass123",
+        },
+    )
+    assert login.status_code == 200
+    me = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {login.cookies['access_token']}"},
+    ).json()
+    assert me["roles"] == ["receptionist"]
+    assert "consultations.write" in me["permissions"]
+    assert "consultations.sign" in me["permissions"]
+
+    roles = client.get("/api/v1/identity/roles", headers=headers).json()
+    assert branch["id"] not in {row["id"] for row in roles}
+    canonical = next(row for row in roles if row["id"] == base["id"])
+    assert "consultations.sign" in canonical["permission_keys"]
 
 
 def test_super_admin_can_assign_primary_role_template_to_customer_tenant(

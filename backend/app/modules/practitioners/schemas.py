@@ -2,34 +2,37 @@ from datetime import date, datetime, time
 
 from pydantic import BaseModel, Field
 
+from app.core.validation import BranchId, DepartmentId, UserId
 from app.modules.practitioners.models import PractitionerStatus, PractitionerType
 
 
 class PractitionerCreate(BaseModel):
-    user_id: str | None = None
+    user_id: UserId | None = None
     full_name: str = Field(min_length=2, max_length=180)
     practitioner_type: PractitionerType = PractitionerType.DOCTOR
     primary_specialty: str | None = Field(default=None, max_length=160)
     registration_number: str | None = Field(default=None, max_length=120)
     mobile: str | None = Field(default=None, max_length=20)
     email: str | None = Field(default=None, max_length=220)
-    branch_ids: list[str] = []
-    department_ids: list[str] = []
-    actor_user_id: str | None = None
+    signature_url: str | None = Field(default=None, max_length=500)
+    branch_ids: list[BranchId] = Field(min_length=1)
+    department_ids: list[DepartmentId] = Field(min_length=1)
+    actor_user_id: UserId | None = None
 
 
 class PractitionerUpdate(BaseModel):
-    user_id: str | None = None
+    user_id: UserId | None = None
     full_name: str | None = Field(default=None, min_length=2, max_length=180)
     practitioner_type: PractitionerType | None = None
     primary_specialty: str | None = Field(default=None, max_length=160)
     registration_number: str | None = Field(default=None, max_length=120)
     mobile: str | None = Field(default=None, max_length=20)
     email: str | None = Field(default=None, max_length=220)
+    signature_url: str | None = Field(default=None, max_length=500)
     status: PractitionerStatus | None = None
-    branch_ids: list[str] | None = None
-    department_ids: list[str] | None = None
-    actor_user_id: str | None = None
+    branch_ids: list[BranchId] | None = None
+    department_ids: list[DepartmentId] | None = None
+    actor_user_id: UserId | None = None
 
 
 class PractitionerRead(BaseModel):
@@ -43,6 +46,7 @@ class PractitionerRead(BaseModel):
     registration_number: str | None
     mobile: str | None
     email: str | None
+    signature_url: str | None = None
     status: PractitionerStatus
     created_at: datetime
     updated_at: datetime
@@ -59,8 +63,8 @@ class PractitionerEligibilityRead(BaseModel):
 
 
 class PractitionerScheduleCreate(BaseModel):
-    branch_id: str
-    department_id: str | None = None
+    branch_id: BranchId
+    department_id: DepartmentId | None = None
     weekday: int = Field(ge=0, le=6)
     start_time: time
     end_time: time
@@ -68,13 +72,13 @@ class PractitionerScheduleCreate(BaseModel):
     room_name: str | None = Field(default=None, max_length=120)
     room_number: str | None = Field(default=None, max_length=10)
     is_active: bool = True
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class PractitionerScheduleUpdate(BaseModel):
     practitioner_id: str | None = None
-    branch_id: str | None = None
-    department_id: str | None = None
+    branch_id: BranchId | None = None
+    department_id: DepartmentId | None = None
     weekday: int | None = Field(default=None, ge=0, le=6)
     start_time: time | None = None
     end_time: time | None = None
@@ -82,15 +86,18 @@ class PractitionerScheduleUpdate(BaseModel):
     room_name: str | None = Field(default=None, max_length=120)
     room_number: str | None = Field(default=None, max_length=10)
     is_active: bool | None = None
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class PractitionerScheduleRead(BaseModel):
     id: str
     tenant_id: str
     practitioner_id: str
+    practitioner_full_name: str | None = None
     branch_id: str
+    branch_name: str | None = None
     department_id: str | None
+    department_name: str | None = None
     weekday: int
     start_time: time
     end_time: time
@@ -103,13 +110,13 @@ class PractitionerScheduleRead(BaseModel):
 
 
 class PractitionerLeaveCreate(BaseModel):
-    branch_id: str | None = None
+    branch_id: BranchId | None = None
     start_date: date
     end_date: date
     start_time: time | None = None
     end_time: time | None = None
     reason: str | None = Field(default=None, max_length=300)
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class PractitionerLeaveRead(BaseModel):
@@ -128,14 +135,14 @@ class PractitionerLeaveRead(BaseModel):
 
 
 class PractitionerRoomAssignmentCreate(BaseModel):
-    branch_id: str
-    department_id: str | None = None
+    branch_id: BranchId
+    department_id: DepartmentId | None = None
     room_name: str = Field(min_length=1, max_length=120)
     assignment_date: date | None = None
     weekday: int | None = Field(default=None, ge=0, le=6)
     start_time: time
     end_time: time
-    actor_user_id: str | None = None
+    actor_user_id: UserId | None = None
 
 
 class PractitionerRoomAssignmentRead(BaseModel):

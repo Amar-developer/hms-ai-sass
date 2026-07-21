@@ -19,12 +19,18 @@ def create_branch(client: TestClient, tenant_id: str) -> dict:
 
 
 def create_patient(
-    client: TestClient, tenant_id: str, name: str = "Ravi Kumar"
+    client: TestClient,
+    tenant_id: str,
+    name: str = "Ravi Kumar",
+    mobile: str | None = None,
 ) -> dict:
+    payload = {"full_name": name, "age_years": 42}
+    if mobile:
+        payload["mobile"] = mobile
     response = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant_id},
-        json={"full_name": name, "mobile": "9876543210", "age_years": 42},
+        json=payload,
     )
     assert response.status_code == 201
     return response.json()
@@ -43,6 +49,8 @@ def book(
         json={
             "branch_id": branch_id,
             "patient_id": patient_id,
+            "department_id": "general",
+            "practitioner_id": "doctor_demo",
             "appointment_type": appointment_type,
             "appointment_date": date.today().isoformat(),
             "reason": "Fever",
@@ -69,6 +77,8 @@ def test_tokens_are_generated_per_selected_appointment_date(client: TestClient):
         json={
             "branch_id": branch["id"],
             "patient_id": future_patient["id"],
+            "department_id": "general",
+            "practitioner_id": "doctor_demo",
             "appointment_type": "op",
             "appointment_date": future_date.isoformat(),
             "reason": "Future appointment",
@@ -78,6 +88,30 @@ def test_tokens_are_generated_per_selected_appointment_date(client: TestClient):
     assert today["queue_entry"]["token_number"] == "N-001"
     assert future.status_code == 201
     assert future.json()["queue_entry"]["token_number"] == "N-001"
+
+
+def test_book_appointment_requires_department_and_doctor(client: TestClient):
+    tenant = create_tenant(client)
+    branch = create_branch(client, tenant["id"])
+    patient = create_patient(client, tenant["id"], "Required Doctor Patient")
+
+    response = client.post(
+        "/api/v1/appointments",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "appointment_date": date.today().isoformat(),
+        },
+    )
+
+    assert response.status_code == 422
+    missing_fields = {
+        ".".join(str(part) for part in error["loc"])
+        for error in response.json()["detail"]
+    }
+    assert "body.department_id" in missing_fields
+    assert "body.practitioner_id" in missing_fields
 
 
 def test_repeated_appointment_create_with_idempotency_key_replays_first_response(
@@ -90,6 +124,8 @@ def test_repeated_appointment_create_with_idempotency_key_replays_first_response
     payload = {
         "branch_id": branch["id"],
         "patient_id": patient["id"],
+        "department_id": "general",
+        "practitioner_id": "doctor_demo",
         "appointment_type": "op",
         "appointment_date": date.today().isoformat(),
         "reason": "Fever",
@@ -128,6 +164,7 @@ def test_list_appointments_supports_patient_search_date_and_department_filters(
             "branch_id": branch["id"],
             "patient_id": other_patient["id"],
             "department_id": "ortho",
+            "practitioner_id": "doctor_demo",
             "appointment_type": "op",
             "appointment_date": target_date.isoformat(),
         },
@@ -566,6 +603,8 @@ def test_booking_rejects_patient_from_other_tenant(client: TestClient):
         json={
             "branch_id": first_branch["id"],
             "patient_id": second_patient["id"],
+            "department_id": "general",
+            "practitioner_id": "doctor_demo",
             "appointment_type": "op",
             "appointment_date": date.today().isoformat(),
         },
@@ -577,7 +616,12 @@ def test_booking_rejects_patient_from_other_tenant(client: TestClient):
 
 def test_duplicate_patient_detection_blocks_exact_registration(client: TestClient):
     tenant = create_tenant(client)
-    create_patient(client, tenant["id"], "Duplicate Patient")
+    create_patient(
+        client,
+        tenant["id"],
+        "Duplicate Patient",
+        mobile="9876543210",
+    )
 
     duplicate_check = client.post(
         "/api/v1/patients/duplicates",
@@ -595,11 +639,15 @@ def test_duplicate_patient_detection_blocks_exact_registration(client: TestClien
     assert duplicate_create.status_code == 409
     assert (
         duplicate_create.json()["detail"]
-        == "Possible duplicate patient found. Search and select existing patient instead."
+        == "Mobile number is already used as the primary mobile number for "
+        "another patient. Use Alternate Phone Number for a shared family "
+        "contact."
     )
 
 
-def test_patient_registration_allows_shared_family_mobile_number(client: TestClient):
+def test_patient_registration_requires_shared_family_number_as_alternate(
+    client: TestClient,
+):
     tenant = create_tenant(client)
     client.post(
         "/api/v1/patients",
@@ -625,7 +673,7 @@ def test_patient_registration_allows_shared_family_mobile_number(client: TestCli
         headers={"X-Tenant-ID": tenant["id"]},
         json={
             "full_name": "Dakshiin B",
-            "mobile": "9876543210",
+            "alternate_mobile": "9876543210",
             "date_of_birth": "2018-09-15",
         },
     )
@@ -634,6 +682,8 @@ def test_patient_registration_allows_shared_family_mobile_number(client: TestCli
     assert duplicate_check.json()[0]["confidence"] == "medium"
     assert child_create.status_code == 201
     assert child_create.json()["full_name"] == "Dakshiin B"
+    assert child_create.json()["mobile"] is None
+    assert child_create.json()["alternate_mobile"] == "9876543210"
 
 
 def test_duplicate_patient_detection_uses_date_of_birth_for_high_confidence(
@@ -660,12 +710,18 @@ def test_duplicate_patient_detection_uses_date_of_birth_for_high_confidence(
             "date_of_birth": "1990-01-20",
         },
     )
+    # Uses guardian_mobile (not mobile) to reach the name+DOB duplicate
+    # scoring in PatientDuplicateService.candidates(): the primary-mobile
+    # uniqueness guard in _validate_mobile_numbers only inspects the
+    # `mobile` field, so reusing it here would always 409 regardless of
+    # date of birth and the confidence downgrade below would never be
+    # exercised.
     different_dob = client.post(
         "/api/v1/patients",
         headers={"X-Tenant-ID": tenant["id"]},
         json={
             "full_name": "Same Name",
-            "mobile": "9000000001",
+            "guardian_mobile": "9000000001",
             "date_of_birth": "2018-01-20",
         },
     )
@@ -683,6 +739,7 @@ def test_duplicate_appointment_prevention_by_patient_doctor_and_slot(
     payload = {
         "branch_id": branch["id"],
         "patient_id": patient["id"],
+        "department_id": "general",
         "practitioner_id": "doctor_demo",
         "appointment_type": "op",
         "appointment_date": date.today().isoformat(),
@@ -755,6 +812,8 @@ def test_review_and_fitness_visits_capture_purpose_billing_and_audit(
         json={
             "branch_id": branch["id"],
             "patient_id": patient["id"],
+            "department_id": source["appointment"]["department_id"],
+            "practitioner_id": source["appointment"]["practitioner_id"],
             "appointment_type": "doctor_review",
             "appointment_date": (date.today() + timedelta(days=1)).isoformat(),
             "visit_purpose": "doctor_review",
@@ -769,6 +828,8 @@ def test_review_and_fitness_visits_capture_purpose_billing_and_audit(
         json={
             "branch_id": branch["id"],
             "patient_id": patient["id"],
+            "department_id": source["appointment"]["department_id"],
+            "practitioner_id": source["appointment"]["practitioner_id"],
             "appointment_type": "fitness_certificate",
             "appointment_date": (date.today() + timedelta(days=2)).isoformat(),
             "visit_purpose": "fitness_certificate",
@@ -815,6 +876,8 @@ def test_doctor_review_inside_configured_validity_is_auto_free(client: TestClien
         json={
             "branch_id": branch["id"],
             "patient_id": patient["id"],
+            "department_id": source["appointment"]["department_id"],
+            "practitioner_id": source["appointment"]["practitioner_id"],
             "appointment_type": "doctor_review",
             "appointment_date": (date.today() + timedelta(days=3)).isoformat(),
             "visit_purpose": "doctor_review",

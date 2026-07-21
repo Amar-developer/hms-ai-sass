@@ -1,4 +1,4 @@
-import { Column } from "./tenantAdmin/types";
+import { Column } from "@/features/admin/types";
 
 export const pageSize = 10;
 
@@ -17,6 +17,7 @@ export const USER_COLUMNS: Column[] = [
 export const ROLE_COLUMNS: Column[] = [
   { label: "Role", width: "min-w-[200px]" },
   { label: "Key", width: "min-w-[180px]" },
+  { label: "Permissions", width: "min-w-[130px]" },
   { label: "Status", width: "min-w-[140px]" },
   { label: "Modified", width: "min-w-[140px]" },
   { label: "Actions", width: "min-w-[160px]" },
@@ -75,3 +76,19 @@ export const PLAN_COLUMNS: Column[] = [
   { label: "Status", width: "min-w-[140px]" },
   { label: "Actions", width: "min-w-[180px]" },
 ];
+
+
+export const STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "All Status" },
+  { value: "active", label: "Active" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+
+export const ValidationMessages = {
+  required: "This field is required.",
+  email: "Please enter a valid email address.",
+  passwordRequired: "Password is required.",
+  passwordMin: "Password must be at least 8 characters.",
+};

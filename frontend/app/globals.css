@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@500;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -16,7 +17,7 @@
   --brand-fg: #ffffff;
 
   /* Success */
-  --success-subtle: #ecfdf5; /* emerald-50  */
+  --success-subtle: #ecfdf5;
   --success-soft: #d1fae5;   /* emerald-100 */
   --success-border: #a7f3d0; /* emerald-200 */
   --success-solid: #10b981;  /* emerald-500 */
@@ -67,7 +68,7 @@
 }
 @layer components {
   .close-button {
-    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-base lg:text-xs border;
+    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-2.5 md:text-base lg:text-xs border font-bold;
   }
 }
 @layer components {
@@ -78,14 +79,14 @@
 
 @layer components {
   .save-button {
-    @apply rounded-lg px-4 py-2.5 lg:px-4 lg:py-3 md:text-sm lg:text-xs
+    @apply rounded-lg px-4 py-2 lg:px-4 lg:py-2.5 md:text-sm lg:text-xs
   }
 }
 
 
 @layer components {
   .search-input {
-    @apply px-2 py-2 lg:px-4 lg:py-2 md:text-base lg:text-sm md:placeholder:text-sm lg:placeholder:text-xs;
+    @apply px-2 py-1.5 lg:py-2 lg:px-4  md:text-base lg:text-sm md:placeholder:text-sm lg:placeholder:text-xs;
   }
 }
 @layer components {
@@ -188,4 +189,96 @@ body {
 
 .table-text {
   @apply block truncate w-full;
+}
+
+/* Printable documents (e.g. the doctor consultation prescription) render into
+   this portal target instead of the app tree, so a print action shows only
+   the document and never the surrounding app chrome. */
+#prescription-print-root {
+  display: none;
+}
+
+@media print {
+  /* :not(:has(.invoice-print)):not(:has(.token-print)) — the invoice receipt
+     page (app/billing/invoices/receipt) and the appointment token slip page
+     (app/appointments/token) render their printable content as normal page
+     content inside #app-shell rather than through a portal, unlike the
+     prescription. Hiding #app-shell unconditionally wiped those out too:
+     they had `display: block !important` but a `display: none !important`
+     ancestor hides descendants regardless of their own display value. */
+  #app-shell:not(:has(.invoice-print)):not(:has(.token-print)) {
+    display: none !important;
+  }
+  #prescription-print-root {
+    display: block !important;
+  }
+  #prescription-print-root * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+
+/* The prescription is laid out for A5 paper (148mm x 210mm), one page per
+   sheet, matching the PrescriptionDocument component's fixed mm dimensions.
+   This is the default (unnamed) page, so it must stay the plain @page rule —
+   named pages below opt in via the CSS `page` property instead of redefining
+   the default, otherwise whichever @page block appears last in the cascade
+   would silently win for every print in the app, prescription included. */
+
+/* Invoices print on A4 — opted into via `page: invoice-page` on .invoice-print
+   below, so it never overrides the prescription's default @page size. */
+@page invoice-page {
+  size: A4;
+  margin: 10mm;
+}
+
+/* The token slip is a small handout — A5, like the prescription — opted
+   into via `page: token-page` on .token-print. */
+@page token-page {
+  size: A5;
+  margin: 8mm;
+}
+
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .invoice-print {
+    display: block !important;
+    width: 100%;
+    page: invoice-page;
+  }
+
+  .token-print {
+    display: block !important;
+    width: 100%;
+    page: token-page;
+  }
+}
+
+@media print {
+  .invoice-container {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
 }
