@@ -1,20 +1,10 @@
 export interface InvoiceLineItem {
   srNo: number | string;
   name: string;
-  expDate?: string;
-  hsnSac?: string;
   qty: number | string;
   mrp: number | string;
   discPercent?: number | string;
   rate: number | string;
-}
-
-export interface HsnSummaryRow {
-  hsnSac: string;
-  taxableValue: number | string;
-  igstPercent: number | string;
-  igstAmount: number | string;
-  total: number | string;
 }
 
 export interface CustomerDetails {
@@ -49,7 +39,6 @@ export interface InvoiceProps {
   invoiceDate: string;
   customer: CustomerDetails;
   items: InvoiceLineItem[];
-  hsnSummary?: HsnSummaryRow[];
   bank?: BankDetails;
   terms?: string[];
   isPaid?: boolean;

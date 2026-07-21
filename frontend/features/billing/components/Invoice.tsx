@@ -15,7 +15,6 @@ export default function Invoice({
   invoiceDate,
   customer,
   items,
-  hsnSummary,
   bank,
   terms = [
     "Subject to Tamil Nadu Jurisdiction.",
@@ -86,11 +85,9 @@ export default function Invoice({
             <div className="flex-1 ">
               <div className="border border-emerald-400 overflow-hidden">
                 {/* Header */}
-                <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-y-2 border-emerald-400 text-[12.5px] font-bold bg-emerald-50">
+                <div className="grid grid-cols-[60px_minmax(0,2fr)_65px_95px_70px_105px] border-y-2 border-emerald-400 text-[12.5px] font-bold bg-emerald-50">
                   <div className="border-r border-emerald-400 p-2 text-center">Sr. No</div>
                   <div className="border-r border-emerald-400 p-2 text-center">Name of Product / Service</div>
-                  <div className="border-r border-emerald-400 p-2 text-center">Exp. Date</div>
-                  <div className="border-r border-emerald-400 p-2 text-center">HSN / SAC</div>
                   <div className="border-r border-emerald-400 p-2 text-center">Qty</div>
                   <div className="border-r border-emerald-400 p-2 text-center">MRP</div>
                   <div className="border-r border-emerald-400 p-2 text-center">Disc. %</div>
@@ -102,12 +99,10 @@ export default function Invoice({
                   {pageItems.map((item, idx) => (
                     <div
                       key={idx}
-                      className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] "
+                      className="grid grid-cols-[60px_minmax(0,2fr)_65px_95px_70px_105px] "
                     >
                       <div className="border-r border-emerald-400 p-2 text-center">{item.srNo}</div>
                       <div className="border-r border-emerald-400 p-2 break-words">{item.name}</div>
-                      <div className="border-r border-emerald-400 p-2 text-center">{item.expDate || ""}</div>
-                      <div className="border-r border-emerald-400 p-2 text-center">{item.hsnSac || ""}</div>
                       <div className="border-r border-emerald-400 p-2 text-center">{item.qty}</div>
                       <div className="border-r border-emerald-400 p-2 text-right">
                         {formatMoney(item.mrp, currencySymbol)}
@@ -115,7 +110,7 @@ export default function Invoice({
                       <div className="border-r border-emerald-400 p-2 text-center">
                         {item.discPercent ?? 0}%
                       </div>
-                      <div className="p-2 text-right border-r border-emerald-400">
+                      <div className="p-2 text-right">
                         {formatMoney(item.rate, currencySymbol)}
                       </div>
                     </div>
@@ -126,16 +121,14 @@ export default function Invoice({
                     Array.from({ length: Math.max(0, ROWS_PER_PAGE - pageItems.length) }).map((_, i) => (
                       <div
                         key={`pad-${i}`}
-                        className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px]  last:border-b-0 h-[38px]"
+                        className="grid grid-cols-[60px_minmax(0,2fr)_65px_95px_70px_105px] last:border-b-0 h-[38px]"
                       >
                         <div className="border-r border-emerald-400" />
                         <div className="border-r border-emerald-400" />
                         <div className="border-r border-emerald-400" />
                         <div className="border-r border-emerald-400" />
                         <div className="border-r border-emerald-400" />
-                        <div className="border-r border-emerald-400" />
-                        <div className="border-r border-emerald-400" />
-                        <div className="border-r border-emerald-400" />
+                        <div />
                       </div>
                     ))}
                 </div>
@@ -144,39 +137,39 @@ export default function Invoice({
               {/* Totals - Last Page Only */}
               {isLastPage && (
                 <div className="">
-                  <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-2 border-emerald-400 font-bold">
-                    <div className="col-span-7 p-2 text-right border-r border-emerald-400">Sub Total</div>
+                  <div className="grid grid-cols-[60px_minmax(0,2fr)_65px_95px_70px_105px] border-2 border-emerald-400 font-bold">
+                    <div className="col-span-5 p-2 text-right border-r border-emerald-400">Sub Total</div>
                     <div className="p-2 text-right">{formatMoney(subTotal, currencySymbol)}</div>
                   </div>
 
                   {toNumber(discountAmount) > 0 && (
-                    <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-x-2 border-b-2 border-emerald-400 font-bold">
-                      <div className="col-span-7 p-2 text-right border-r border-emerald-400">Discount</div>
+                    <div className="grid grid-cols-[60px_minmax(0,2fr)_65px_95px_70px_105px] border-x-2 border-b-2 border-emerald-400 font-bold">
+                      <div className="col-span-5 p-2 text-right border-r border-emerald-400">Discount</div>
                       <div className="p-2 text-right">-{formatMoney(discountAmount, currencySymbol)}</div>
                     </div>
                   )}
 
                   {toNumber(taxAmount) > 0 && (
                     <>
-                      <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-x-2 border-b-2 border-emerald-400 font-bold">
-                        <div className="col-span-7 p-2 text-right border-r border-emerald-400">Taxable Amount</div>
+                      <div className="grid grid-cols-[60px_minmax(0,2fr)_65px_95px_70px_105px] border-x-2 border-b-2 border-emerald-400 font-bold">
+                        <div className="col-span-5 p-2 text-right border-r border-emerald-400">Taxable Amount</div>
                         <div className="p-2 text-right">{formatMoney(taxableAmount, currencySymbol)}</div>
                       </div>
-                      <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-x-2 border-b-2 border-emerald-400 font-bold">
-                        <div className="col-span-7 p-2 text-right border-r border-emerald-400">{taxLabel}</div>
+                      <div className="grid grid-cols-[60px_minmax(0,2fr)_65px_95px_70px_105px] border-x-2 border-b-2 border-emerald-400 font-bold">
+                        <div className="col-span-5 p-2 text-right border-r border-emerald-400">{taxLabel}</div>
                         <div className="p-2 text-right">{formatMoney(taxAmount, currencySymbol)}</div>
                       </div>
                     </>
                   )}
 
-                  <div className="grid grid-cols-[60px_2fr_85px_85px_65px_85px_65px_95px] border-2 border-b border-emerald-400 font-bold">
-                    <div className="col-span-4  w-full border-r border-emerald-400 p-2 text-center"><p className="w-full flex justify-between"><span>{invoiceDate}</span><span>Total</span></p></div>
+                  <div className="grid grid-cols-[60px_minmax(0,2fr)_65px_95px_70px_105px] border-2 border-b border-emerald-400 font-bold">
+                    <div className="col-span-2 w-full border-r border-emerald-400 p-2 text-center"><p className="w-full flex justify-between"><span>{invoiceDate}</span><span>Total</span></p></div>
                     <div className="border-r border-emerald-400 p-2 text-center">{totals.qty}</div>
                     <div className="border-r border-emerald-400 p-2 text-right">
                       {formatMoney(totals.mrp, currencySymbol)}
                     </div>
                     <div className="border-r border-emerald-400 p-2" />
-                    <div className="p-2 flex flex-col text-right border-r border-emerald-400">
+                    <div className="p-2 flex flex-col text-right">
                       {formatMoney(total, currencySymbol)}
                       <span className="text-[8px]">(tax included) </span>
                     </div>

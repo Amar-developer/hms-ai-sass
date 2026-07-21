@@ -1,15 +1,21 @@
 import { MapPin, Phone } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const InvoiceHeader = ({company}) => {
+  const [logoFailed, setLogoFailed] = useState(false);
+
+  useEffect(() => setLogoFailed(false), [company.logoUrl]);
+
   return (
     <div className="flex items-center justify-around gap-4 px-6 py-2 border-b-2 border-emerald-400">
       <div className="flex items-center justify-center">
-        {company.logoUrl ? (
+        {company.logoUrl && !logoFailed ? (
           // eslint-disable-next-line @next/next/no-img-element
           <div className="flex justify-start ">
             <img
               src={company.logoUrl}
               alt={`${company.name} logo`}
+              onError={() => setLogoFailed(true)}
               className="h-20 w-20 object-contain"
             />
           </div>

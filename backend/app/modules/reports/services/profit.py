@@ -6,15 +6,15 @@ from app.modules.billing.models import InvoiceItem
 from app.modules.reports.repositories import ReportDataRepository
 from app.modules.reports.services.classification import ReportInvoiceClassifier
 from app.modules.reports.services.calculations import (
-    allocated_line_membership_benefit,
-    allocated_line_offer_discount,
-    allocated_line_revenue,
+    allocate_values,
     invoice_item_total,
     invoice_membership_benefit,
     invoice_offer_discount,
     invoice_report_total,
     is_paid_invoice,
-    settlement_paid_basis,
+    report_doctor_fee,
+    report_settlement,
+    tax_paid_basis,
 )
 from app.modules.reports.services.rendering import table as _table
 from app.modules.reports.services.rendering import xls_document as _xls_document
@@ -70,13 +70,6 @@ def build_profit_report_email_attachments(
         modes = sorted(value for value in values if value and value != "-")
         return " + ".join(modes) if modes else "-"
 
-    def allocated_balance(invoice, line_amount: int) -> int:
-        item_total = invoice_item_total(invoice)
-        balance = int(invoice.balance_amount or 0)
-        if not item_total or not line_amount or not balance:
-            return 0
-        return round((line_amount * balance) / item_total)
-
     invoice_items_by_invoice: dict[str, list[InvoiceItem]] = {
         invoice.id: [] for invoice in paid_invoices
     }
@@ -110,12 +103,13 @@ def build_profit_report_email_attachments(
     classifier = ReportInvoiceClassifier(invoice_items_by_invoice)
 
     def invoice_settlement(invoice) -> int:
-        if classifier.classify(invoice) in {"lab", "pharmacy"}:
-            return sum(
-                int(item.buying_amount or 0) * int(item.quantity or 1)
-                for item in invoice_items_by_invoice.get(invoice.id, [])
-            )
-        return settlement_paid_basis(invoice)
+        invoice_kind = classifier.classify(invoice)
+        return report_settlement(
+            invoice, invoice_kind, invoice_items_by_invoice.get(invoice.id, [])
+        )
+
+    def invoice_doctor_fee(invoice) -> int:
+        return report_doctor_fee(invoice, classifier.classify(invoice))
 
     if invoice_type in {
         "consultation",
@@ -215,14 +209,13 @@ def build_profit_report_email_attachments(
                 "membership": 0,
                 "payment_modes": set(),
                 "doctor_fee": 0,
-                "settlement": 0,
+                "tax": 0,
                 "clinic_fee": 0,
                 "final_profit": 0,
             },
         )
         paid = int(invoice.paid_amount or 0)
-        doctor_fee = int(invoice.doctor_share_amount or 0)
-        settlement = invoice_settlement(invoice)
+        doctor_fee = invoice_doctor_fee(invoice)
         bucket["invoices"] += 1
         bucket["consultation_ids"].add(
             invoice.appointment_id or invoice.consultation_id or invoice.id
@@ -234,14 +227,14 @@ def build_profit_report_email_attachments(
         bucket["membership"] += invoice_membership_benefit(invoice)
         bucket["payment_modes"].add(payment_mode(invoice))
         bucket["doctor_fee"] += doctor_fee
-        bucket["settlement"] += settlement
+        bucket["tax"] += tax_paid_basis(invoice)
         bucket["clinic_fee"] += int(invoice.clinic_share_amount or 0) or max(
             invoice_report_total(invoice)
             - invoice_membership_benefit(invoice)
             - doctor_fee,
             0,
         )
-        bucket["final_profit"] += max(paid - settlement, 0)
+        bucket["final_profit"] += paid - tax_paid_basis(invoice) - doctor_fee
     for appointment in completed_appointments:
         key = appointment.practitioner_id or "unassigned"
         doctor = doctors.get(key)
@@ -259,7 +252,7 @@ def build_profit_report_email_attachments(
                 "membership": 0,
                 "payment_modes": set(),
                 "doctor_fee": 0,
-                "settlement": 0,
+                "tax": 0,
                 "clinic_fee": 0,
                 "final_profit": 0,
             },
@@ -282,9 +275,9 @@ def build_profit_report_email_attachments(
         "Offer Discount",
         "Membership Benefit",
         "Mode of Payment",
+        "GST from Paid Revenue",
         "Doctor Fee",
-        "Settlement",
-        "Settlement %",
+        "Doctor Fee %",
         "Clinic Fee",
         "Gross Profit %",
         "Final Profit",
@@ -300,11 +293,11 @@ def build_profit_report_email_attachments(
             row["offer"],
             row["membership"],
             combined_payment_modes(row["payment_modes"]),
+            row["tax"],
             row["doctor_fee"],
-            row["settlement"],
-            percent(row["settlement"], row["paid"]),
+            percent(row["doctor_fee"], row["paid"] - row["tax"]),
             row["clinic_fee"],
-            percent(row["final_profit"], row["paid"]),
+            percent(row["final_profit"], row["paid"] - row["tax"]),
             row["final_profit"],
         ]
         for row in sorted(
@@ -327,18 +320,24 @@ def build_profit_report_email_attachments(
                 sum(int(row["offer"] or 0) for row in doctor_buckets.values()),
                 sum(int(row["membership"] or 0) for row in doctor_buckets.values()),
                 "Multiple",
+                sum(int(row["tax"] or 0) for row in doctor_buckets.values()),
                 total_doctor_fee,
-                sum(int(row["settlement"] or 0) for row in doctor_buckets.values()),
                 percent(
-                    sum(int(row["settlement"] or 0) for row in doctor_buckets.values()),
-                    sum(int(row["paid"] or 0) for row in doctor_buckets.values()),
+                    total_doctor_fee,
+                    sum(
+                        int(row["paid"] or 0) - int(row["tax"] or 0)
+                        for row in doctor_buckets.values()
+                    ),
                 ),
                 sum(int(row["clinic_fee"] or 0) for row in doctor_buckets.values()),
                 percent(
                     sum(
                         int(row["final_profit"] or 0) for row in doctor_buckets.values()
                     ),
-                    sum(int(row["paid"] or 0) for row in doctor_buckets.values()),
+                    sum(
+                        int(row["paid"] or 0) - int(row["tax"] or 0)
+                        for row in doctor_buckets.values()
+                    ),
                 ),
                 sum(int(row["final_profit"] or 0) for row in doctor_buckets.values()),
             ]
@@ -358,6 +357,7 @@ def build_profit_report_email_attachments(
         "Paid",
         "Balance",
         "Mode of Payment",
+        "GST from Paid Revenue",
         "Doctor Fee",
         "Settlement",
         "Settlement %",
@@ -373,7 +373,9 @@ def build_profit_report_email_attachments(
             else None
         )
         settlement = invoice_settlement(invoice)
+        doctor_fee = invoice_doctor_fee(invoice)
         paid = int(invoice.paid_amount or 0)
+        paid_tax = tax_paid_basis(invoice)
         invoice_rows.append(
             [
                 invoice.invoice_number,
@@ -391,10 +393,11 @@ def build_profit_report_email_attachments(
                 paid,
                 int(invoice.balance_amount or 0),
                 payment_mode(invoice),
-                int(invoice.doctor_share_amount or 0),
+                paid_tax,
+                doctor_fee,
                 settlement,
                 percent(settlement, paid),
-                max(paid - settlement, 0),
+                paid - paid_tax - doctor_fee - settlement,
             ]
         )
     if invoice_rows:
@@ -413,17 +416,18 @@ def build_profit_report_email_attachments(
                 sum(int(invoice.paid_amount or 0) for invoice in paid_invoices),
                 sum(int(invoice.balance_amount or 0) for invoice in paid_invoices),
                 "Multiple",
-                sum(int(invoice.doctor_share_amount or 0) for invoice in paid_invoices),
+                sum(tax_paid_basis(invoice) for invoice in paid_invoices),
+                sum(invoice_doctor_fee(invoice) for invoice in paid_invoices),
                 sum(invoice_settlement(invoice) for invoice in paid_invoices),
                 percent(
                     sum(invoice_settlement(invoice) for invoice in paid_invoices),
                     sum(int(invoice.paid_amount or 0) for invoice in paid_invoices),
                 ),
                 sum(
-                    max(
-                        int(invoice.paid_amount or 0) - invoice_settlement(invoice),
-                        0,
-                    )
+                    int(invoice.paid_amount or 0)
+                    - tax_paid_basis(invoice)
+                    - invoice_doctor_fee(invoice)
+                    - invoice_settlement(invoice)
                     for invoice in paid_invoices
                 ),
             ]
@@ -455,6 +459,34 @@ def build_profit_report_email_attachments(
         for invoice in lab_invoices
         if invoice.lab_order_id
     }
+    lab_allocations: dict[tuple[str, str], tuple[int, int, int, int, int]] = {}
+    for invoice in lab_invoices:
+        related_items = [
+            item for item in lab_items if item.lab_order_id == invoice.lab_order_id
+        ]
+        line_amounts = [int(item.price or 0) for item in related_items]
+        subtotal = invoice_item_total(invoice)
+        offer_values = allocate_values(
+            line_amounts, subtotal, invoice_offer_discount(invoice)
+        )
+        membership_values = allocate_values(
+            line_amounts, subtotal, invoice_membership_benefit(invoice)
+        )
+        revenue_values = allocate_values(
+            line_amounts, subtotal, int(invoice.paid_amount or 0)
+        )
+        balance_values = allocate_values(
+            line_amounts, subtotal, int(invoice.balance_amount or 0)
+        )
+        tax_values = allocate_values(line_amounts, subtotal, tax_paid_basis(invoice))
+        for index, item in enumerate(related_items):
+            lab_allocations[(invoice.id, item.id)] = (
+                offer_values[index],
+                membership_values[index],
+                revenue_values[index],
+                balance_values[index],
+                tax_values[index],
+            )
     lab_buckets: dict[tuple[str, str], dict] = {}
     for item in lab_items:
         invoice = lab_invoice_by_order.get(item.lab_order_id)
@@ -463,8 +495,22 @@ def build_profit_report_email_attachments(
             if item.package_id
             else lab_tests.get(item.test_id or "")
         )
+        billed_items = invoice_items_by_invoice.get(invoice.id, []) if invoice else []
+        billed_item = next(
+            (
+                row
+                for row in billed_items
+                if row.external_item_code in {item.test_id, item.package_id}
+                or row.description == item.test_name
+            ),
+            None,
+        )
         item_supplier_id = (
-            getattr(catalog_item, "supplier_id", None) if catalog_item else None
+            billed_item.supplier_id
+            if billed_item
+            else getattr(catalog_item, "supplier_id", None)
+            if catalog_item
+            else None
         )
         if (
             supplier_filter_ids
@@ -475,7 +521,11 @@ def build_profit_report_email_attachments(
             item_supplier_id or "", "Tenant Hospital / In-house"
         )
         purchase_price = (
-            int(getattr(catalog_item, "purchase_price", 0) or 0) if catalog_item else 0
+            int(billed_item.buying_amount or 0) * int(billed_item.quantity or 1)
+            if billed_item
+            else int(getattr(catalog_item, "purchase_price", 0) or 0)
+            if catalog_item
+            else 0
         )
         line_amount = int(item.price or 0)
         key = (item_supplier_id or "none", item.test_name)
@@ -493,24 +543,25 @@ def build_profit_report_email_attachments(
                 "balance": 0,
                 "payment_modes": set(),
                 "purchase": 0,
+                "tax": 0,
             },
         )
         bucket["orders"].add(item.lab_order_id)
+        allocation = (
+            lab_allocations.get((invoice.id, item.id), (0, 0, 0, 0, 0))
+            if invoice
+            else (0, 0, 0, 0, 0)
+        )
         if invoice:
             bucket["invoices"].add(invoice.id)
             bucket["payment_modes"].add(payment_mode(invoice))
         bucket["item_total"] += line_amount
-        bucket["offer"] += (
-            allocated_line_offer_discount(invoice, line_amount) if invoice else 0
-        )
-        bucket["membership"] += (
-            allocated_line_membership_benefit(invoice, line_amount) if invoice else 0
-        )
-        bucket["revenue"] += (
-            allocated_line_revenue(invoice, line_amount) if invoice else 0
-        )
-        bucket["balance"] += allocated_balance(invoice, line_amount) if invoice else 0
+        bucket["offer"] += allocation[0]
+        bucket["membership"] += allocation[1]
+        bucket["revenue"] += allocation[2]
+        bucket["balance"] += allocation[3]
         bucket["purchase"] += purchase_price
+        bucket["tax"] += allocation[4]
     lab_settlement_headers = [
         "Supplier",
         "Lab Test / Package",
@@ -522,6 +573,7 @@ def build_profit_report_email_attachments(
         "Net Revenue",
         "Balance",
         "Mode of Payment",
+        "GST from Paid Revenue",
         "Purchase Cost",
         "Settlement %",
         "Lab Profit",
@@ -538,13 +590,14 @@ def build_profit_report_email_attachments(
             row["revenue"],
             row["balance"],
             combined_payment_modes(row["payment_modes"]),
+            row["tax"],
             row["purchase"],
-            percent(row["purchase"], row["revenue"]),
-            max(row["revenue"] - row["purchase"], 0),
+            percent(row["purchase"], row["revenue"] - row["tax"]),
+            row["revenue"] - row["tax"] - row["purchase"],
         ]
         for row in sorted(
             lab_buckets.values(),
-            key=lambda item: item["revenue"] - item["purchase"],
+            key=lambda item: item["revenue"] - item["tax"] - item["purchase"],
             reverse=True,
         )
     ]
@@ -561,13 +614,19 @@ def build_profit_report_email_attachments(
                 sum(int(row["revenue"] or 0) for row in lab_buckets.values()),
                 sum(int(row["balance"] or 0) for row in lab_buckets.values()),
                 "Multiple",
+                sum(int(row["tax"] or 0) for row in lab_buckets.values()),
                 sum(int(row["purchase"] or 0) for row in lab_buckets.values()),
                 percent(
                     sum(int(row["purchase"] or 0) for row in lab_buckets.values()),
-                    sum(int(row["revenue"] or 0) for row in lab_buckets.values()),
+                    sum(
+                        int(row["revenue"] or 0) - int(row["tax"] or 0)
+                        for row in lab_buckets.values()
+                    ),
                 ),
                 sum(
-                    max(int(row["revenue"] or 0) - int(row["purchase"] or 0), 0)
+                    int(row["revenue"] or 0)
+                    - int(row["tax"] or 0)
+                    - int(row["purchase"] or 0)
                     for row in lab_buckets.values()
                 ),
             ]
@@ -593,11 +652,56 @@ def build_profit_report_email_attachments(
         for invoice in pharmacy_invoices
         if invoice.pharmacy_issue_id
     }
+    pharmacy_allocations: dict[tuple[str, str], tuple[int, int, int, int, int]] = {}
+    for invoice in pharmacy_invoices:
+        related_items = [
+            item
+            for item in pharmacy_items
+            if item.pharmacy_issue_id == invoice.pharmacy_issue_id
+        ]
+        line_amounts = [
+            int(item.unit_price or 0)
+            * int(item.dispensed_quantity or item.quantity or 1)
+            for item in related_items
+        ]
+        subtotal = invoice_item_total(invoice)
+        offer_values = allocate_values(
+            line_amounts, subtotal, invoice_offer_discount(invoice)
+        )
+        membership_values = allocate_values(
+            line_amounts, subtotal, invoice_membership_benefit(invoice)
+        )
+        revenue_values = allocate_values(
+            line_amounts, subtotal, int(invoice.paid_amount or 0)
+        )
+        balance_values = allocate_values(
+            line_amounts, subtotal, int(invoice.balance_amount or 0)
+        )
+        tax_values = allocate_values(line_amounts, subtotal, tax_paid_basis(invoice))
+        for index, item in enumerate(related_items):
+            pharmacy_allocations[(invoice.id, item.id)] = (
+                offer_values[index],
+                membership_values[index],
+                revenue_values[index],
+                balance_values[index],
+                tax_values[index],
+            )
     pharmacy_buckets: dict[tuple[str, str], dict] = {}
     for item in pharmacy_items:
         invoice = pharmacy_invoice_by_issue.get(item.pharmacy_issue_id)
         medicine = medicines.get(item.medicine_id or "")
-        item_supplier_id = getattr(medicine, "supplier_id", None) if medicine else None
+        billed_items = invoice_items_by_invoice.get(invoice.id, []) if invoice else []
+        billed_item = next(
+            (row for row in billed_items if row.description == item.medicine_name),
+            None,
+        )
+        item_supplier_id = (
+            billed_item.supplier_id
+            if billed_item
+            else getattr(medicine, "supplier_id", None)
+            if medicine
+            else None
+        )
         if (
             pharmacy_supplier_filter_ids
             and (item_supplier_id or "none") not in pharmacy_supplier_filter_ids
@@ -608,9 +712,16 @@ def build_profit_report_email_attachments(
         )
         quantity = int(item.dispensed_quantity or item.quantity or 1)
         line_amount = int(item.unit_price or 0) * quantity
-        revenue = allocated_line_revenue(invoice, line_amount) if invoice else 0
+        allocation = (
+            pharmacy_allocations.get((invoice.id, item.id), (0, 0, 0, 0, 0))
+            if invoice
+            else (0, 0, 0, 0, 0)
+        )
+        revenue = allocation[2]
         purchase = (
-            int(getattr(medicine, "purchase_price", 0) or 0) * quantity
+            int(billed_item.buying_amount or 0) * int(billed_item.quantity or quantity)
+            if billed_item
+            else int(getattr(medicine, "purchase_price", 0) or 0) * quantity
             if medicine
             else 0
         )
@@ -630,6 +741,7 @@ def build_profit_report_email_attachments(
                 "balance": 0,
                 "payment_modes": set(),
                 "purchase": 0,
+                "tax": 0,
             },
         )
         bucket["issues"].add(item.pharmacy_issue_id)
@@ -638,15 +750,12 @@ def build_profit_report_email_attachments(
             bucket["payment_modes"].add(payment_mode(invoice))
         bucket["quantity"] += quantity
         bucket["item_total"] += line_amount
-        bucket["offer"] += (
-            allocated_line_offer_discount(invoice, line_amount) if invoice else 0
-        )
-        bucket["membership"] += (
-            allocated_line_membership_benefit(invoice, line_amount) if invoice else 0
-        )
+        bucket["offer"] += allocation[0]
+        bucket["membership"] += allocation[1]
         bucket["revenue"] += revenue
-        bucket["balance"] += allocated_balance(invoice, line_amount) if invoice else 0
+        bucket["balance"] += allocation[3]
         bucket["purchase"] += purchase
+        bucket["tax"] += allocation[4]
     pharmacy_settlement_headers = [
         "Supplier",
         "Medicine",
@@ -659,6 +768,7 @@ def build_profit_report_email_attachments(
         "Net Revenue",
         "Balance",
         "Mode of Payment",
+        "GST from Paid Revenue",
         "Purchase Cost",
         "Settlement %",
         "Pharmacy Profit",
@@ -676,13 +786,14 @@ def build_profit_report_email_attachments(
             row["revenue"],
             row["balance"],
             combined_payment_modes(row["payment_modes"]),
+            row["tax"],
             row["purchase"],
-            percent(row["purchase"], row["revenue"]),
-            max(row["revenue"] - row["purchase"], 0),
+            percent(row["purchase"], row["revenue"] - row["tax"]),
+            row["revenue"] - row["tax"] - row["purchase"],
         ]
         for row in sorted(
             pharmacy_buckets.values(),
-            key=lambda item: item["revenue"] - item["purchase"],
+            key=lambda item: item["revenue"] - item["tax"] - item["purchase"],
             reverse=True,
         )
     ]

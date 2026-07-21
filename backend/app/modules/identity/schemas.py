@@ -127,6 +127,7 @@ class RoleRead(BaseModel):
 class PermissionRead(BaseModel):
     key: str
     module: str
+    module_label: str
     action: str
     description: str
 

@@ -14,6 +14,33 @@ from app.modules.identity.models import User
 router = APIRouter(prefix="/files")
 
 
+@router.get("/invoice-logo", summary="Load the current tenant invoice logo")
+def invoice_logo(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.INVOICES_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.FILES_MANAGE,
+            permissions.FILES_READ,
+        )
+    ),
+) -> FileResponse:
+    row, resolved = FileService(session).prepare_invoice_logo(
+        tenant_id=tenant_id,
+        branch_id=current_user.branch_id,
+        actor=current_user,
+    )
+    return FileResponse(
+        path=str(resolved),
+        media_type=row.content_type or "application/octet-stream",
+        filename=row.file_name or resolved.name,
+        content_disposition_type="inline",
+    )
+
+
 @router.get("/{file_id}/download", summary="Download a file (authorized)")
 def download_file(
     file_id: str,

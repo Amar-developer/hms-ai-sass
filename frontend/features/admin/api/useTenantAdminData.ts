@@ -99,7 +99,7 @@ export function useTenantAdminData(apiSession: any, clinic: any) {
         safeFetch("/billing/tax-rules", canTax),
         safeFetch("/billing/discount-offers", canOffers),
         safeFetch("/settings", canSettings),
-        safeFetch("/files?limit=200", canFiles),
+        safeFetch("/files?limit=200", canFiles || canSettings),
         apiFetch("/identity/permissions", scoped),
         canSettings
           ? apiFetch("/reports/monthly-email/config", scoped).catch(() => null)

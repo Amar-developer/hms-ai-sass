@@ -19,7 +19,7 @@ from app.modules.patients.models import Patient
 from app.modules.physiotherapy.models import PhysiotherapyCase
 from app.modules.practitioners.models import Practitioner
 from app.modules.settings.models import SettingKey, SettingScope
-from app.modules.settings.service import upsert_setting
+from app.modules.settings.service import resolve_setting, upsert_setting
 from app.modules.tenants.models import Tenant, now_utc
 
 # Maps an upload filename prefix (without the 12-char id suffix) to the entity
@@ -273,6 +273,50 @@ class FileService:
             purpose="file_access",
         )
         return row, resolved
+
+    def prepare_invoice_logo(
+        self, *, tenant_id: str, branch_id: str | None, actor: User
+    ) -> tuple[FileDocument, Path]:
+        configured, _scope, _scope_id = resolve_setting(
+            self.session,
+            tenant_id=tenant_id,
+            module="invoice",
+            key=SettingKey.INVOICE_LOGO_URL,
+            branch_id=branch_id,
+        )
+        configured_url = str(configured or "").strip()
+        candidates = self.files.list_active(
+            tenant_id=tenant_id,
+            category="logo",
+            attached_to_doctype="Tenant",
+            attached_to_name=tenant_id,
+            limit=100,
+        )
+
+        def rank(row: FileDocument) -> int:
+            if configured_url and row.file_url == configured_url:
+                return 0
+            field = (row.attached_to_field or "").strip().lower()
+            if field in {"invoice.logo_url", "invoice_logo_url"}:
+                return 1
+            if field == "logo_url":
+                return 2
+            return 3
+
+        for row in sorted(candidates, key=rank):
+            if not (row.content_type or "").lower().startswith("image/"):
+                continue
+            try:
+                return self.prepare_download(
+                    tenant_id=tenant_id, file_id=row.id, actor=actor
+                )
+            except HTTPException as exc:
+                if exc.status_code != status.HTTP_404_NOT_FOUND:
+                    raise
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invoice logo not found",
+        )
 
     async def upload_file(
         self,

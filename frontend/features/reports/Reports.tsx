@@ -35,10 +35,11 @@ import LabReports from "./components/LabReports";
 import HomeCareReports from "./components/HomeCareReports";
 import ReportTotals from "./components/ReportTotals";
 import {
-  allocatedReportValue,
+  allocateReportValues,
   membershipBenefitUsage,
   realizedGrossProfit,
   recognizedInvoiceRevenue,
+  recognizedInvoiceTax,
   reportPaymentMode,
   reportedInvoiceTotal,
 } from "./financials";
@@ -615,10 +616,36 @@ export function Reports({
     return ids;
   }, [homeCareInvoiceDetails]);
 
+  const labTestById = useMemo(
+    () => new Map(labTests.map((row: any) => [row.id, row])),
+    [labTests],
+  );
+  const labPackageById = useMemo(
+    () => new Map(labPackages.map((row: any) => [row.id, row])),
+    [labPackages],
+  );
+  const medicineById = useMemo(
+    () => new Map(medicineRows.map((row: any) => [row.id, row])),
+    [medicineRows],
+  );
+  const labOrderDetailById = useMemo(
+    () =>
+      new Map(labOrderDetails.map((detail: any) => [detail.order?.id, detail])),
+    [labOrderDetails],
+  );
+  const pharmacyIssueDetailById = useMemo(
+    () =>
+      new Map(
+        pharmacyIssueDetails.map((detail: any) => [detail.issue?.id, detail]),
+      ),
+    [pharmacyIssueDetails],
+  );
+
   const totals = aggregateInvoiceMetrics(
     filteredInvoices,
     homeVisitBookingIds,
     homeVisitInvoiceIds,
+    invoiceSettlementAmount,
   );
   const membershipClaimRows = Object.values(totals.membershipClaims).sort(
     (a: any, b: any) => b.claimedAmount - a.claimedAmount,
@@ -628,8 +655,10 @@ export function Reports({
     totals.grossRevenue - totals.membershipDiscount,
     0,
   );
-  const grossProfit = Math.max(chargeableGrossRevenue - totals.doctorFee, 0);
-  const finalProfit = Math.max(totals.paidRevenue - totals.settlement, 0);
+  const grossProfit =
+    chargeableGrossRevenue - totals.tax - totals.doctorFee - totals.settlement;
+  const finalProfit =
+    totals.paidRevenue - totals.paidTax - totals.doctorFee - totals.settlement;
 
   // Previous calendar month aggregation, used only for the Metrics dashboard
   // month-over-month comparison lines. Branch-scoped but independent of the
@@ -653,6 +682,7 @@ export function Reports({
       previousMonthInvoices,
       homeVisitBookingIds,
       homeVisitInvoiceIds,
+      invoiceSettlementAmount,
     );
   }, [
     liveInvoices,
@@ -661,10 +691,11 @@ export function Reports({
     homeVisitBookingIds,
     homeVisitInvoiceIds,
   ]);
-  const previousFinalProfit = Math.max(
-    previousTotals.paidRevenue - previousTotals.settlement,
-    0,
-  );
+  const previousFinalProfit =
+    previousTotals.paidRevenue -
+    previousTotals.paidTax -
+    previousTotals.doctorFee -
+    previousTotals.settlement;
   const consultationSettlementInvoices = filteredInvoices.filter(
     (invoice: any) => {
       if (invoiceType(invoice) !== "consultation") return false;
@@ -696,17 +727,16 @@ export function Reports({
           paymentModes: new Set<string>(),
           grossRevenue: 0,
           paidRevenue: 0,
+          paidTax: 0,
           balance: 0,
           doctorFee: 0,
           membershipBenefit: 0,
-          settlement: 0,
           clinicFee: 0,
           finalProfit: 0,
         };
         const total = reportedInvoiceTotal(invoice);
         const paid = recognizedInvoiceRevenue(invoice);
-        const doctorFee = numberValue(invoice.doctor_share_amount);
-        const settlement = settlementPaidBasis(invoice);
+        const doctorFee = invoiceDoctorFeeAmount(invoice);
         row.invoices += 1;
         row.invoiceIds.add(invoice.id);
         row.paymentModes.add(invoicePaymentMode(invoice));
@@ -715,14 +745,14 @@ export function Reports({
         );
         row.grossRevenue += total;
         row.paidRevenue += paid;
+        row.paidTax += recognizedInvoiceTax(invoice);
         row.balance += numberValue(invoice.balance_amount);
         row.doctorFee += doctorFee;
         row.membershipBenefit += membershipBenefitUsage(invoice);
-        row.settlement += settlement;
         row.clinicFee +=
           numberValue(invoice.clinic_share_amount) ||
           Math.max(total - membershipBenefitUsage(invoice) - doctorFee, 0);
-        row.finalProfit += realizedGrossProfit(invoice, settlement);
+        row.finalProfit += realizedGrossProfit(invoice, doctorFee);
         acc.set(key, row);
         return acc;
       }, new Map<string, any>())
@@ -752,7 +782,7 @@ export function Reports({
           Array.from(row.paymentModes)
             .filter((value: any) => value && value !== "-")
             .join(" + ") || "-",
-        settlementPercent: percent(row.settlement, row.paidRevenue),
+        doctorFeePercent: percent(row.doctorFee, row.paidRevenue),
       };
     })
     .sort((a: any, b: any) => b.finalProfit - a.finalProfit);
@@ -775,10 +805,11 @@ export function Reports({
     row.balance,
     row.membershipBenefit,
     row.paymentMode,
-    row.settlement,
-    row.settlementPercent,
+    row.paidTax,
+    row.doctorFee,
+    row.doctorFeePercent,
     row.clinicFee,
-    percent(row.finalProfit, row.paidRevenue),
+    percent(row.finalProfit, row.paidRevenue - row.paidTax),
     row.finalProfit,
   ]);
   const settlementExportRows = settlementRows.length
@@ -813,21 +844,39 @@ export function Reports({
           ),
           "Multiple",
           doctorRows.reduce(
-            (sum: number, row: any) => sum + numberValue(row.settlement),
+            (sum: number, row: any) => sum + numberValue(row.paidTax),
+            0,
+          ),
+          doctorRows.reduce(
+            (sum: number, row: any) => sum + numberValue(row.doctorFee),
             0,
           ),
           percent(
             doctorRows.reduce(
-              (sum: number, row: any) => sum + numberValue(row.settlement),
+              (sum: number, row: any) => sum + numberValue(row.doctorFee),
               0,
             ),
-            totals.paidRevenue,
+            doctorRows.reduce(
+              (sum: number, row: any) =>
+                sum + numberValue(row.paidRevenue) - numberValue(row.paidTax),
+              0,
+            ),
           ),
           doctorRows.reduce(
             (sum: number, row: any) => sum + numberValue(row.clinicFee),
             0,
           ),
-          percent(grossProfit, chargeableGrossRevenue),
+          percent(
+            doctorRows.reduce(
+              (sum: number, row: any) => sum + numberValue(row.finalProfit),
+              0,
+            ),
+            doctorRows.reduce(
+              (sum: number, row: any) =>
+                sum + numberValue(row.paidRevenue) - numberValue(row.paidTax),
+              0,
+            ),
+          ),
           doctorRows.reduce(
             (sum: number, row: any) => sum + numberValue(row.finalProfit),
             0,
@@ -836,26 +885,9 @@ export function Reports({
       ]
     : settlementRows;
 
-  const labTestById = useMemo(
-    () => new Map(labTests.map((row: any) => [row.id, row])),
-    [labTests],
-  );
-  const labPackageById = useMemo(
-    () => new Map(labPackages.map((row: any) => [row.id, row])),
-    [labPackages],
-  );
-  const medicineById = useMemo(
-    () => new Map(medicineRows.map((row: any) => [row.id, row])),
-    [medicineRows],
-  );
   const supplierById = useMemo(
     () => new Map(suppliers.map((row: any) => [row.id, row.name])),
     [suppliers],
-  );
-  const labOrderDetailById = useMemo(
-    () =>
-      new Map(labOrderDetails.map((detail: any) => [detail.order?.id, detail])),
-    [labOrderDetails],
   );
   const homeCareBookingById = useMemo(
     () => new Map(homeCareBookings.map((row: any) => [row.id, row])),
@@ -882,28 +914,56 @@ export function Reports({
                 price: invoice.subtotal_amount,
               },
             ];
-        for (const item of items) {
-          if (item.package_id || !item.test_id) continue;
+        const reportItems = items.filter(
+          (item: any) => !item.package_id && item.test_id,
+        );
+        const lineAmounts = reportItems.map((item: any) =>
+          numberValue(item.price),
+        );
+        const invoiceSubtotal = numberValue(invoice.subtotal_amount);
+        const allocatedRevenues = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          recognizedInvoiceRevenue(invoice),
+        );
+        const allocatedMemberships = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          membershipBenefitUsage(invoice),
+        );
+        const allocatedBalances = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          numberValue(invoice.balance_amount),
+        );
+        const allocatedTaxes = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          recognizedInvoiceTax(invoice),
+        );
+        reportItems.forEach((item: any, itemIndex: number) => {
           const catalogItem = labTestById.get(item.test_id);
+          const billedItems = invoiceDetailById.get(invoice.id)?.items || [];
+          const billedItem =
+            billedItems.find(
+              (row: any) =>
+                row.external_item_code === item.test_id ||
+                row.description === item.test_name,
+            ) || billedItems[itemIndex];
           const supplierId =
-            item.supplier_id || catalogItem?.supplier_id || "none";
+            billedItem?.supplier_id ||
+            item.supplier_id ||
+            catalogItem?.supplier_id ||
+            "none";
           const purchaseCost =
-            supplierId === "none"
-              ? 0
+            billedItem !== undefined
+              ? numberValue(billedItem.buying_amount) *
+                numberValue(billedItem.quantity || 1)
               : numberValue(item.buying_price || catalogItem?.purchase_price);
           const key = `${supplierId}:${item.test_name || item.id}`;
           const lineAmount = numberValue(item.price);
-          const invoiceSubtotal = numberValue(invoice.subtotal_amount);
-          const allocatedRevenue = allocatedReportValue(
-            lineAmount,
-            invoiceSubtotal,
-            recognizedInvoiceRevenue(invoice),
-          );
-          const allocatedMembership = allocatedReportValue(
-            lineAmount,
-            invoiceSubtotal,
-            membershipBenefitUsage(invoice),
-          );
+          const allocatedRevenue = allocatedRevenues[itemIndex];
+          const allocatedMembership = allocatedMemberships[itemIndex];
           const row = acc.get(key) || {
             id: key,
             supplierId,
@@ -919,6 +979,7 @@ export function Reports({
             revenue: 0,
             balance: 0,
             membershipBenefit: 0,
+            tax: 0,
             purchaseCost: 0,
           };
           row.orders.add(invoice.lab_order_id);
@@ -926,15 +987,12 @@ export function Reports({
           row.paymentModes.add(invoicePaymentMode(invoice));
           row.total += lineAmount;
           row.revenue += allocatedRevenue;
-          row.balance += allocatedReportValue(
-            lineAmount,
-            invoiceSubtotal,
-            numberValue(invoice.balance_amount),
-          );
+          row.balance += allocatedBalances[itemIndex];
           row.membershipBenefit += allocatedMembership;
+          row.tax += allocatedTaxes[itemIndex];
           row.purchaseCost += purchaseCost;
           acc.set(key, row);
-        }
+        });
         return acc;
       }, new Map<string, any>())
       .values(),
@@ -943,25 +1001,18 @@ export function Reports({
       ...row,
       orderCount: row.orders.size,
       invoiceCount: row.invoices.size,
-      profit: Math.max(row.revenue - row.purchaseCost, 0),
+      profit: row.revenue - row.tax - row.purchaseCost,
       paymentMode:
         Array.from(row.paymentModes)
           .filter((value: any) => value && value !== "-")
           .join(" + ") || "-",
-      settlementPercent: percent(row.purchaseCost, row.revenue),
+      settlementPercent: percent(row.purchaseCost, row.revenue - row.tax),
     }))
     .filter(
       (row: any) =>
         supplierFilter === "all" || row.supplierId === supplierFilter,
     )
     .sort((a: any, b: any) => b.profit - a.profit);
-  const pharmacyIssueDetailById = useMemo(
-    () =>
-      new Map(
-        pharmacyIssueDetails.map((detail: any) => [detail.issue?.id, detail]),
-      ),
-    [pharmacyIssueDetails],
-  );
   const pharmacySettlementRows = Array.from(
     filteredInvoices
       .filter(
@@ -981,26 +1032,54 @@ export function Reports({
                 quantity: 1,
               },
             ];
-        for (const item of items) {
+        const lineAmounts = items.map((item: any) => {
+          const quantity = numberValue(
+            item.dispensed_quantity || item.quantity || 1,
+          );
+          return numberValue(item.unit_price) * quantity;
+        });
+        const invoiceSubtotal = numberValue(invoice.subtotal_amount);
+        const allocatedRevenues = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          recognizedInvoiceRevenue(invoice),
+        );
+        const allocatedMemberships = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          membershipBenefitUsage(invoice),
+        );
+        const allocatedBalances = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          numberValue(invoice.balance_amount),
+        );
+        const allocatedTaxes = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          recognizedInvoiceTax(invoice),
+        );
+        items.forEach((item: any, itemIndex: number) => {
           const medicine = medicineById.get(item.medicine_id);
-          const supplierId = medicine?.supplier_id || "none";
+          const billedItems = invoiceDetailById.get(invoice.id)?.items || [];
+          const billedItem =
+            billedItems.find(
+              (row: any) => row.description === item.medicine_name,
+            ) || billedItems[itemIndex];
+          const supplierId =
+            billedItem?.supplier_id || medicine?.supplier_id || "none";
           const key = `${supplierId}:${item.medicine_name || item.id}`;
           const quantity = numberValue(
             item.dispensed_quantity || item.quantity || 1,
           );
-          const revenue = numberValue(item.unit_price) * quantity;
-          const invoiceSubtotal = numberValue(invoice.subtotal_amount);
-          const allocatedRevenue = allocatedReportValue(
-            revenue,
-            invoiceSubtotal,
-            recognizedInvoiceRevenue(invoice),
-          );
-          const allocatedMembership = allocatedReportValue(
-            revenue,
-            invoiceSubtotal,
-            membershipBenefitUsage(invoice),
-          );
-          const purchaseCost = numberValue(medicine?.purchase_price) * quantity;
+          const revenue = lineAmounts[itemIndex];
+          const allocatedRevenue = allocatedRevenues[itemIndex];
+          const allocatedMembership = allocatedMemberships[itemIndex];
+          const purchaseCost =
+            billedItem !== undefined
+              ? numberValue(billedItem.buying_amount) *
+                numberValue(billedItem.quantity || quantity)
+              : numberValue(medicine?.purchase_price) * quantity;
           const row = acc.get(key) || {
             id: key,
             supplierId,
@@ -1014,6 +1093,7 @@ export function Reports({
             revenue: 0,
             balance: 0,
             membershipBenefit: 0,
+            tax: 0,
             purchaseCost: 0,
           };
           row.issues.add(invoice.pharmacy_issue_id);
@@ -1022,15 +1102,12 @@ export function Reports({
           row.quantity += quantity;
           row.total += revenue;
           row.revenue += allocatedRevenue;
-          row.balance += allocatedReportValue(
-            revenue,
-            invoiceSubtotal,
-            numberValue(invoice.balance_amount),
-          );
+          row.balance += allocatedBalances[itemIndex];
           row.membershipBenefit += allocatedMembership;
+          row.tax += allocatedTaxes[itemIndex];
           row.purchaseCost += purchaseCost;
           acc.set(key, row);
-        }
+        });
         return acc;
       }, new Map<string, any>())
       .values(),
@@ -1039,12 +1116,12 @@ export function Reports({
       ...row,
       issueCount: row.issues.size,
       invoiceCount: row.invoices.size,
-      profit: Math.max(row.revenue - row.purchaseCost, 0),
+      profit: row.revenue - row.tax - row.purchaseCost,
       paymentMode:
         Array.from(row.paymentModes)
           .filter((value: any) => value && value !== "-")
           .join(" + ") || "-",
-      settlementPercent: percent(row.purchaseCost, row.revenue),
+      settlementPercent: percent(row.purchaseCost, row.revenue - row.tax),
     }))
     .filter(
       (row: any) =>
@@ -1062,6 +1139,7 @@ export function Reports({
     row.balance,
     row.membershipBenefit,
     row.paymentMode,
+    row.tax,
     row.purchaseCost,
     row.settlementPercent,
     row.profit,
@@ -1079,6 +1157,7 @@ export function Reports({
       row.balance,
       row.membershipBenefit,
       row.paymentMode,
+      row.tax,
       row.purchaseCost,
       row.settlementPercent,
       row.profit,
@@ -1092,7 +1171,10 @@ export function Reports({
   const labSettlementSummary = {
     revenue: labSettlementRevenue,
     purchaseCost: labSettlementPurchaseCost,
-    profit: Math.max(labSettlementRevenue - labSettlementPurchaseCost, 0),
+    profit: labSettlementRows.reduce(
+      (sum: number, row: any) => sum + numberValue(row.profit),
+      0,
+    ),
   };
   const pharmacySettlementSummary = pharmacySettlementRows.reduce(
     (acc: any, row: any) => ({
@@ -1104,6 +1186,16 @@ export function Reports({
   );
   function invoiceSettlementAmount(invoice: any) {
     const type = invoiceType(invoice);
+    if (type === "consultation") return 0;
+    const frozenItems = invoiceDetailById.get(invoice.id)?.items || [];
+    if ((type === "lab" || type === "pharmacy") && frozenItems.length) {
+      return frozenItems.reduce(
+        (sum: number, item: any) =>
+          sum +
+          numberValue(item.buying_amount) * numberValue(item.quantity || 1),
+        0,
+      );
+    }
     if (type === "lab" && invoice.lab_order_id) {
       const detail: any = labOrderDetailById.get(invoice.lab_order_id);
       const items = detail?.items || [];
@@ -1132,6 +1224,12 @@ export function Reports({
       }, 0);
     }
     return settlementPaidBasis(invoice);
+  }
+
+  function invoiceDoctorFeeAmount(invoice: any) {
+    return invoiceType(invoice) === "consultation"
+      ? settlementPaidBasis(invoice)
+      : 0;
   }
 
   function invoiceDoctorStaffName(invoice: any) {
@@ -1185,13 +1283,16 @@ export function Reports({
   }
 
   function invoiceGrossProfit(invoice: any) {
-    return realizedGrossProfit(invoice, invoiceSettlementAmount(invoice));
+    return realizedGrossProfit(
+      invoice,
+      invoiceDoctorFeeAmount(invoice) + invoiceSettlementAmount(invoice),
+    );
   }
 
   function invoiceGrossProfitPercent(invoice: any) {
     return percent(
       invoiceGrossProfit(invoice),
-      numberValue(invoice.paid_amount),
+      numberValue(invoice.paid_amount) - recognizedInvoiceTax(invoice),
     );
   }
 
@@ -1216,6 +1317,10 @@ export function Reports({
       0,
     ),
     invoiceCount: sectionReportInvoices.length,
+    doctorFee: sectionPaidInvoices.reduce(
+      (sum: number, invoice: any) => sum + invoiceDoctorFeeAmount(invoice),
+      0,
+    ),
     settlement: sectionPaidInvoices.reduce(
       (sum: number, invoice: any) => sum + invoiceSettlementAmount(invoice),
       0,
@@ -1237,6 +1342,10 @@ export function Reports({
 
   const invoiceSettlementTotal = filteredInvoices.reduce(
     (sum: number, invoice: any) => sum + invoiceSettlementAmount(invoice),
+    0,
+  );
+  const invoiceDoctorFeeTotal = filteredInvoices.reduce(
+    (sum: number, invoice: any) => sum + invoiceDoctorFeeAmount(invoice),
     0,
   );
   const invoiceClinicProfitTotal = filteredInvoices.reduce(
@@ -1263,6 +1372,8 @@ export function Reports({
       numberValue(invoice.balance_amount),
       membershipBenefitUsage(invoice),
       invoicePaymentMode(invoice),
+      recognizedInvoiceTax(invoice),
+      invoiceDoctorFeeAmount(invoice),
       settlement,
       percent(settlement, paid),
       invoiceGrossProfit(invoice),
@@ -1317,10 +1428,15 @@ export function Reports({
           totals.balance,
           totals.membershipDiscount,
           "",
+          totals.paidTax,
+          invoiceDoctorFeeTotal,
           invoiceSettlementTotal,
           percent(invoiceSettlementTotal, totals.paidRevenue),
           invoiceClinicProfitTotal,
-          percent(invoiceClinicProfitTotal, totals.paidRevenue),
+          percent(
+            invoiceClinicProfitTotal,
+            totals.paidRevenue - totals.paidTax,
+          ),
         ],
       ]
     : invoiceRows;
@@ -1339,6 +1455,7 @@ export function Reports({
   const summaryRows = [
     ["Gross Revenue", totals.grossRevenue],
     ["Paid Revenue", totals.paidRevenue],
+    ["GST from Paid Revenue", totals.paidTax],
     ["Consultation Revenue", totals.consultationRevenue],
     ["Lab Revenue", totals.labRevenue],
     ["Pharmacy Revenue", totals.pharmacyRevenue],
@@ -1354,8 +1471,8 @@ export function Reports({
     ["Clinic Fee", totals.clinicFee],
     ["Gross Profit", grossProfit],
     ["Gross Profit %", percent(grossProfit, chargeableGrossRevenue)],
-    ["Final Profit", invoiceClinicProfitTotal],
-    ["Final Profit %", percent(invoiceClinicProfitTotal, totals.paidRevenue)],
+    ["Final Profit", finalProfit],
+    ["Final Profit %", percent(finalProfit, totals.paidRevenue)],
     ["Completed Consultations", reportedConsultationIds.size],
   ];
   const exportName = `healthcare-profit-report-${fromDate || "start"}-${toDate || "end"}-${typeFilter}`;
@@ -1541,6 +1658,7 @@ export function Reports({
             invoiceGrossProfit={invoiceGrossProfit}
             invoiceGrossProfitPercent={invoiceGrossProfitPercent}
             invoiceSettlementAmount={invoiceSettlementAmount}
+            invoiceDoctorFeeAmount={invoiceDoctorFeeAmount}
             numberValue={numberValue}
             doctorById={doctorById}
             rowDate={rowDate}
@@ -1659,7 +1777,7 @@ export function Reports({
         />
       )}
 
-      <ReportTotals totals={reportCardTotals} money={money} />
+      <ReportTotals totals={reportCardTotals} money={money} section={section} />
 
       {/* DYNAMIC CONTENT */}
       {renderReportSection(section)}

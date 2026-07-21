@@ -3,10 +3,11 @@ from datetime import date
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
-from app.core.auth import require_permission
+from app.core.auth import require_any_permission, require_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import (
+    CollectionReport,
     DoctorSettlementFinalize,
     DoctorSettlementRead,
     DoctorSettlementSummary,
@@ -14,6 +15,7 @@ from app.modules.billing.schemas import (
     RevenueReport,
 )
 from app.modules.billing.services.settlements_reports import (
+    collection_report,
     doctor_settlement_summary,
     due_collection_report,
     finalize_doctor_settlement,
@@ -31,7 +33,12 @@ def doctor_settlement_summary_endpoint(
     practitioner_id: str | None = None,
     branch_id: str | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.SETTLEMENTS_READ)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.SETTLEMENTS_READ,
+            permissions.BILLING_MANAGE,
+        )
+    ),
 ) -> DoctorSettlementSummary:
     return doctor_settlement_summary(
         session,
@@ -58,11 +65,23 @@ def finalize_doctor_settlement_endpoint(
 def due_collection_report_endpoint(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.REPORTS_REVENUE_READ,
+        )
+    ),
 ) -> DueCollectionReport:
     return due_collection_report(
-        session, tenant_id=tenant_id, branch_id=branch_id, actor=current_user
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        actor=current_user,
+        from_date=from_date,
+        to_date=to_date,
     )
 
 
@@ -76,12 +95,41 @@ def revenue_report_endpoint(
     from_date: date | None = None,
     to_date: date | None = None,
     session: Session = Depends(get_session),
-    current_user: User = Depends(require_permission(permissions.BILLING_MANAGE)),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.REPORTS_REVENUE_READ,
+        )
+    ),
 ) -> RevenueReport:
     return revenue_report(
         session,
         tenant_id=tenant_id,
         group_by=group_by,
+        branch_id=branch_id,
+        from_date=from_date,
+        to_date=to_date,
+        actor=current_user,
+    )
+
+
+@router.get("/reports/collections", response_model=CollectionReport)
+def collection_report_endpoint(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.REPORTS_REVENUE_READ,
+        )
+    ),
+) -> CollectionReport:
+    return collection_report(
+        session,
+        tenant_id=tenant_id,
         branch_id=branch_id,
         from_date=from_date,
         to_date=to_date,

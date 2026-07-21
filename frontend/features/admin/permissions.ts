@@ -22,9 +22,11 @@ export function canUseTenantAdminSection(section: string, user: any) {
     return true;
   }
   const prefixes = SECTION_PERMISSION_PREFIXES[section] || [];
-  return permissions.some((permission: string) =>
+  const matching = permissions.filter((permission: string) =>
     prefixes.some((prefix) => permission.startsWith(`${prefix}.`)),
   );
+  const isRead = (permission: string) => permission.split(".").at(-1) === "read";
+  return matching.some(isRead) && matching.some((permission: string) => !isRead(permission));
 }
 
 function isTenantAdminAccount(user: any) {

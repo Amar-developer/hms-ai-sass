@@ -18,6 +18,8 @@ TENANT_ADMIN_DEFAULT_PERMISSION_KEYS = [
 ]
 
 RECEPTIONIST_DEFAULT_PERMISSION_KEYS = [
+    permissions.DASHBOARD_READ,
+    permissions.DASHBOARD_ACCESS,
     permissions.PATIENTS_CREATE,
     permissions.PATIENTS_EDIT,
     permissions.PATIENTS_READ,
@@ -53,6 +55,8 @@ RECEPTIONIST_DEFAULT_PERMISSION_KEYS = [
 ]
 
 DOCTOR_DEFAULT_PERMISSION_KEYS = [
+    permissions.DASHBOARD_READ,
+    permissions.DASHBOARD_ACCESS,
     permissions.PATIENTS_READ,
     permissions.APPOINTMENTS_READ,
     permissions.APPOINTMENTS_EDIT,
@@ -76,6 +80,8 @@ DOCTOR_DEFAULT_PERMISSION_KEYS = [
 ]
 
 LAB_TECHNICIAN_DEFAULT_PERMISSION_KEYS = [
+    permissions.DASHBOARD_READ,
+    permissions.DASHBOARD_ACCESS,
     permissions.LAB_MANAGE,
     permissions.LAB_CREATE,
     permissions.LAB_READ,
@@ -87,6 +93,8 @@ LAB_TECHNICIAN_DEFAULT_PERMISSION_KEYS = [
 ]
 
 PHARMACIST_DEFAULT_PERMISSION_KEYS = [
+    permissions.DASHBOARD_READ,
+    permissions.DASHBOARD_ACCESS,
     permissions.PHARMACY_MANAGE,
     permissions.PHARMACY_CREATE,
     permissions.PHARMACY_READ,

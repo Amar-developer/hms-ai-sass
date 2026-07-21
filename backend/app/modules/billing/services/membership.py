@@ -14,6 +14,7 @@ from app.modules.billing.services.discount_policy import (
 )
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceMembershipBenefitRead
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
 from app.modules.billing.services.rules import find_tax_rule
 from app.modules.identity.models import User
 
@@ -278,6 +279,12 @@ def apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invo
             free_item_ids=preview["free_item_ids"],
         )
         session.add(enrollment)
+    sync_invoice_item_discounts(
+        session,
+        invoice,
+        free_item_ids=preview.get("free_item_ids"),
+        discounted_item_ids=preview.get("discounted_item_ids"),
+    )
     session.add(invoice)
     session.commit()
     session.refresh(invoice)

@@ -81,6 +81,9 @@ export function useSuperAdminData(apiSession: any) {
   async function loadTenantAccess(tenantId: string) {
     if (!apiSession || !tenantId) return;
     const requestSequence = ++tenantAccessLoadSequence.current;
+    // Never display one tenant's grantable catalog while another tenant is
+    // loading. Primary-tenant catalogs can contain platform-only permissions.
+    setPermissionCatalog([]);
     try {
       const scoped = { ...apiSession, tenantId };
       const [
@@ -114,6 +117,7 @@ export function useSuperAdminData(apiSession: any) {
       setDepartments([]);
       setTenantBranches([]);
       setTenantSubscriptions([]);
+      setPermissionCatalog([]);
     }
   }
 

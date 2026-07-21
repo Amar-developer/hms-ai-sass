@@ -62,5 +62,8 @@ def test_monthly_report_email_sends_settlement_attachments(test_engine, monkeypa
     }
     for filename, content in report_files.items():
         assert "Mode of Payment" in content, filename
-        if not filename.startswith("monthly-revenue-report-"):
+        if filename.startswith("doctor-settlement-"):
+            assert "Doctor Fee %" in content, filename
+            assert "Settlement %" not in content, filename
+        elif not filename.startswith("monthly-revenue-report-"):
             assert "Settlement %" in content, filename

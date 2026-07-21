@@ -5,6 +5,7 @@ from sqlmodel import Session
 
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.billing.services.discount_policy import compose_invoice_discounts
+from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
 from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.billing.services.rules import calculate_offer_discount, find_tax_rule
 
@@ -57,6 +58,7 @@ def create_service_invoice(
     membership_free_items_amount = 0
     membership_item_discount_amount = 0
     membership_regular_items_amount = 0
+    membership_preview: dict | None = None
     try:
         from app.modules.patient_subscriptions.service import (
             active_patient_enrollment,
@@ -90,6 +92,7 @@ def create_service_invoice(
                 else None,
                 session=session,
             )
+            membership_preview = preview
             membership_discount = int(preview["discount_amount"] or 0)
             membership_free_items_amount = int(preview["free_items_amount"] or 0)
             membership_item_discount_amount = int(preview["item_discount_amount"] or 0)
@@ -207,6 +210,13 @@ def create_service_invoice(
                 external_item_code=str(row.get("external_item_code") or "") or None,
             )
         )
+    session.flush()
+    sync_invoice_item_discounts(
+        session,
+        invoice,
+        free_item_ids=(membership_preview or {}).get("free_item_ids"),
+        discounted_item_ids=(membership_preview or {}).get("discounted_item_ids"),
+    )
     session.commit()
     session.refresh(invoice)
     record_billing_ledger(

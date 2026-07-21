@@ -229,3 +229,24 @@ def test_file_registry_invoice_logo_attachment_updates_invoice_logo_setting(
         assert tenant_row.logo_url in (None, "")
         assert setting is not None
         assert decode_value(setting.value_json) == file_url
+
+    logo = client.get("/api/v1/files/invoice-logo", headers=headers)
+    assert logo.status_code == 200
+    assert logo.headers["content-type"] == "image/png"
+    assert logo.content.startswith(PNG_SIGNATURE)
+
+    # A stale saved URL must fall back to the active registered invoice logo.
+    with Session(test_engine) as db:
+        setting = db.exec(
+            select(AdminSetting).where(
+                AdminSetting.tenant_id == tenant["id"],
+                AdminSetting.key == SettingKey.INVOICE_LOGO_URL,
+            )
+        ).one()
+        setting.value_json = '"/uploads/missing-logo.png"'
+        db.add(setting)
+        db.commit()
+
+    fallback_logo = client.get("/api/v1/files/invoice-logo", headers=headers)
+    assert fallback_logo.status_code == 200
+    assert fallback_logo.content.startswith(PNG_SIGNATURE)

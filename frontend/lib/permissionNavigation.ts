@@ -1,4 +1,5 @@
 const NAV_PERMISSION_PREFIXES: Record<string, string[]> = {
+  dashboard: ["dashboard"],
   admin: [
     "identity.users",
     "identity.roles",
@@ -44,17 +45,18 @@ export function navigationModulesForPermissions(
   const modules = new Set<string>();
 
   for (const [moduleId, prefixes] of Object.entries(NAV_PERMISSION_PREFIXES)) {
-    if (
-      hasAllPermissions ||
-      keys.some((permission) =>
-        prefixes.some((prefix) => permissionMatchesPrefix(permission, prefix)),
-      )
-    ) {
+    const matchingPermissions = keys.filter((permission) =>
+      prefixes.some((prefix) => permissionMatchesPrefix(permission, prefix)),
+    );
+    const hasMatch =
+      moduleId === "dashboard"
+        ? matchingPermissions.includes("dashboard.access")
+        : matchingPermissions.length > 0;
+    if (hasAllPermissions || hasMatch) {
       modules.add(moduleId);
     }
   }
 
-  if (modules.has("admin")) modules.add("dashboard");
   if (isSuperAdmin) modules.add("superadmin");
 
   return Array.from(modules);

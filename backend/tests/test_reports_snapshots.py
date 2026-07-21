@@ -2,7 +2,7 @@ from datetime import date, datetime
 
 from sqlmodel import Session, select
 
-from app.modules.billing.models import Invoice, InvoiceStatus
+from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.reports.models import MonthlyRevenueSnapshot
 from app.modules.reports.snapshots import (
     archive_due_months,
@@ -97,7 +97,9 @@ def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
     assert totals["grossRevenue"] == 2000
     assert totals["paidRevenue"] == 1800
     assert totals["consultationRevenue"] == 1800
-    assert metrics["finalProfit"] == 1800 - (200 + 160)  # settlement scaled by paid
+    assert totals["doctorFee"] == 200 + 160
+    assert totals["settlement"] == 0
+    assert metrics["finalProfit"] == 1800 - (200 + 160)
 
 
 def test_membership_claim_is_usage_not_revenue_or_profit(test_engine):
@@ -158,9 +160,206 @@ def test_membership_claim_is_usage_not_revenue_or_profit(test_engine):
             "claimedAmount": 600,
         }
     ]
-    assert totals["settlement"] == 360
+    assert totals["doctorFee"] == 360
+    assert totals["settlement"] == 0
     assert metrics["grossProfit"] == 240
     assert metrics["finalProfit"] == 240
+
+
+def test_profit_separates_consultation_doctor_fee_from_supplier_settlement(
+    test_engine,
+):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Mixed Cost Report Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        consultation = _invoice(
+            tenant.id,
+            invoice_number="INV-CONSULT",
+            total_amount=1000,
+            paid_amount=1000,
+            doctor_share_amount=600,
+            clinic_share_amount=400,
+        )
+        lab = _invoice(
+            tenant.id,
+            invoice_number="INV-LAB",
+            lab_order_id="lab-order-1",
+            total_amount=500,
+            paid_amount=500,
+            doctor_share_amount=0,
+            clinic_share_amount=500,
+        )
+        session.add(consultation)
+        session.add(lab)
+        session.commit()
+        session.refresh(lab)
+        session.add(
+            InvoiceItem(
+                tenant_id=tenant.id,
+                invoice_id=lab.id,
+                item_type="lab_test",
+                description="External lab test",
+                quantity=1,
+                unit_amount=500,
+                total_amount=500,
+                buying_amount=200,
+            )
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    assert metrics["totals"]["doctorFee"] == 600
+    assert metrics["totals"]["settlement"] == 200
+    assert metrics["finalProfit"] == 700
+
+
+def test_report_preserves_supplier_loss_instead_of_hiding_it(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Loss Report Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        lab = _invoice(
+            tenant.id,
+            invoice_number="INV-LOSS",
+            lab_order_id="lab-order-loss",
+            total_amount=1000,
+            paid_amount=1000,
+            doctor_share_amount=0,
+            clinic_share_amount=1000,
+        )
+        session.add(lab)
+        session.commit()
+        session.refresh(lab)
+        session.add(
+            InvoiceItem(
+                tenant_id=tenant.id,
+                invoice_id=lab.id,
+                item_type="lab_test",
+                description="Loss-making lab test",
+                quantity=1,
+                unit_amount=1000,
+                total_amount=1000,
+                buying_amount=1200,
+            )
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    assert metrics["totals"]["settlement"] == 1200
+    assert metrics["finalProfit"] == -200
+
+
+def test_report_excludes_collected_gst_from_profit(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="GST Profit Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-GST",
+                total_amount=1180,
+                paid_amount=590,
+                tax_amount=180,
+                doctor_share_amount=200,
+                clinic_share_amount=980,
+            )
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    # Half the invoice was collected, so ₹90 of the ₹180 GST is a liability.
+    # Paid-basis doctor fee is ₹100, leaving ₹400 realized clinic profit.
+    assert metrics["totals"]["paidTax"] == 90
+    assert metrics["finalProfit"] == 400
+
+
+def test_membership_benefit_invoice_is_not_counted_as_a_plan_purchase(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Membership Source Report Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-PLAN-PURCHASE",
+                patient_subscription_enrollment_id="enrollment-1",
+                patient_subscription_plan_id="plan-1",
+                subtotal_amount=599,
+                total_amount=599,
+                paid_amount=599,
+                clinic_share_amount=599,
+                doctor_share_amount=0,
+            )
+        )
+        session.add(
+            _invoice(
+                tenant.id,
+                invoice_number="INV-COVERED-CONSULTATION",
+                appointment_id="appointment-1",
+                consultation_id="consultation-1",
+                patient_subscription_enrollment_id="enrollment-1",
+                patient_subscription_plan_id="plan-1",
+                subtotal_amount=600,
+                discount_amount=600,
+                membership_discount_amount=600,
+                total_amount=0,
+                paid_amount=0,
+                clinic_share_amount=0,
+                doctor_share_amount=0,
+            )
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    totals = metrics["totals"]
+    assert totals["membershipPurchases"] == 1
+    assert totals["membershipEnrollCount"] == 1
+    assert totals["membershipEnrollAmount"] == 599
+    assert totals["membershipClaims"] == [
+        {
+            "type": "consultation",
+            "label": "Consultation",
+            "invoices": 1,
+            "claimedAmount": 600,
+        }
+    ]
 
 
 def test_archive_month_freezes_and_is_idempotent(test_engine):

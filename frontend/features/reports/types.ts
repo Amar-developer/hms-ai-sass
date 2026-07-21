@@ -45,6 +45,7 @@ export type InvoiceProps = {
   invoiceGrossProfit: any;
   invoiceGrossProfitPercent: any;
   invoiceSettlementAmount: any;
+  invoiceDoctorFeeAmount: any;
   numberValue: any;
   doctorById: any;
   rowDate: any;

@@ -78,6 +78,8 @@ class InvoiceItemRead(BaseModel):
     quantity: int
     unit_amount: int
     total_amount: int
+    discount_amount: int | None = None
+    membership_discount_amount: int | None = None
     mrp_amount: int = 0
     selling_amount: int = 0
     buying_amount: int = 0
@@ -284,6 +286,7 @@ class DoctorSettlementSummary(BaseModel):
     doctor_share_paid_basis: int
     finalized_settlement_amount: int = 0
     payable_settlement_amount: int = 0
+    settlement_recovery_amount: int = 0
     pending_doctor_share: int
     can_finalize: bool = False
     latest_finalized_at: datetime | None = None
@@ -415,10 +418,20 @@ class RevenueReport(BaseModel):
     tenant_id: str
     group_by: str
     rows: list[dict]
+    total_billed_amount: int = 0
     total_invoice_amount: int
     total_paid_amount: int
     total_tax_amount: int
     total_doctor_share: int
+
+
+class CollectionReport(BaseModel):
+    tenant_id: str
+    branch_id: str | None
+    payment_count: int
+    collected_amount: int
+    refunded_amount: int
+    net_collected_amount: int
 
 
 class DoctorSettlementFinalize(BaseModel):

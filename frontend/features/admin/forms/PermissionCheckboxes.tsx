@@ -66,6 +66,9 @@ export function PermissionCheckboxes({
           <p className="card-desc text-slate-500">
             Assign module access by action. Create and legacy Write permissions
             share one column; module-specific workflow actions remain separate.
+            A sidebar module appears only when Read and at least one additional
+            action are selected.
+            {` ${modules.length} modules and ${catalog.length} permission actions are available.`}
           </p>
         </div>
         <Badge tone="slate" className="normal-badge whitespace-nowrap">
@@ -98,7 +101,8 @@ export function PermissionCheckboxes({
               return (
                 <tr key={module} className="align-top hover:bg-slate-50">
                   <th className="px-4 py-3 text-sm font-bold text-slate-900">
-                    {permissionModuleTitle(module)}
+                    {grouped[module][0]?.module_label ||
+                      permissionModuleTitle(module)}
                     <span className="mt-0.5 block break-all text-[10px] font-medium text-slate-400">
                       {module}
                     </span>

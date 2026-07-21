@@ -1,14 +1,33 @@
 import { displayDate,money } from "@/utils/helper";
 import { a, b } from "./contants";
 
+const OPERATIONAL_INVOICE_LINKS = [
+  "lab_order_id",
+  "pharmacy_issue_id",
+  "physiotherapy_case_id",
+  "home_care_booking_id",
+  "ip_admission_id",
+  "consultation_id",
+  "appointment_id",
+] as const;
+
+export function isMembershipPlanInvoice(invoice: any) {
+  const hasMembershipPurchaseReference = Boolean(
+    invoice?.patient_subscription_enrollment_id ||
+      invoice?.patient_subscription_plan_id,
+  );
+  if (!hasMembershipPurchaseReference) return false;
+  return !OPERATIONAL_INVOICE_LINKS.some((key) => Boolean(invoice?.[key]));
+}
+
 export function invoiceSourceKey(invoice: any) {
-  if (invoice.patient_subscription_plan_id) return "membership";
   if (invoice.lab_order_id) return "lab_scan";
   if (invoice.pharmacy_issue_id) return "pharmacy";
   if (invoice.physiotherapy_case_id) return "physiotherapy";
   if (invoice.home_care_booking_id) return "home_care";
   if (invoice.ip_admission_id) return "ip_billing";
   if (invoice.consultation_id || invoice.appointment_id) return "consultation";
+  if (isMembershipPlanInvoice(invoice)) return "membership";
   return "direct";
 }
 
@@ -30,7 +49,6 @@ export function invoiceSource(invoice: any) {
 }
 
 export function invoiceLinkedRecord(invoice: any) {
-  if (invoice.patient_subscription_plan_id) return "Membership plan purchase";
   if (invoice.ip_admission_id) return "IP admission";
   if (invoice.physiotherapy_case_id) return "Physiotherapy case";
   if (invoice.home_care_booking_id) return "Home care / visit booking";
@@ -38,6 +56,7 @@ export function invoiceLinkedRecord(invoice: any) {
   if (invoice.lab_order_id) return "Lab & Service order";
   if (invoice.consultation_id) return "Consultation";
   if (invoice.appointment_id) return "Appointment";
+  if (isMembershipPlanInvoice(invoice)) return "Membership plan purchase";
   return "Direct invoice";
 }
 
@@ -66,13 +85,9 @@ export function invoiceHasAppliedMembershipBenefit(invoice: any) {
 }
 
 export function invoiceMembershipLabel(invoice: any) {
-  if (numberValue(invoice.membership_discount_amount) > 0)
+  if (invoiceHasAppliedMembershipBenefit(invoice))
     return "Membership benefit applied";
-  if (
-    invoice.patient_subscription_enrollment_id ||
-    invoice.patient_subscription_plan_id
-  )
-    return "Membership plan invoice";
+  if (isMembershipPlanInvoice(invoice)) return "Membership plan invoice";
   return "";
 }
 

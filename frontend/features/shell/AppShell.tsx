@@ -134,6 +134,11 @@ export function AppShell(props: any) {
   const visibleTenantAdminSections = tenantAdminSections.filter(
     ([sectionId]: any) => canUseTenantAdminSection(sectionId, apiSession?.user),
   );
+  const activeTenantAdminSection = visibleTenantAdminSections.some(
+    ([sectionId]: any) => sectionId === tenantAdminSection,
+  )
+    ? tenantAdminSection
+    : visibleTenantAdminSections[0]?.[0] || tenantAdminSection;
   const [pageHistory, setPageHistory] = useState<string[]>([activePage]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -159,7 +164,7 @@ export function AppShell(props: any) {
       : activePage === "admin"
         ? String(
             tenantAdminSections.find(
-              ([id]: any) => id === tenantAdminSection,
+              ([id]: any) => id === activeTenantAdminSection,
             )?.[1] ?? "",
           )
         : activePage === "reports"
@@ -364,7 +369,7 @@ export function AppShell(props: any) {
         return (
           <TenantAdmin
             {...ctx}
-            section={tenantAdminSection}
+            section={activeTenantAdminSection}
             setSection={setTenantAdminSection}
           />
         );
@@ -420,7 +425,7 @@ export function AppShell(props: any) {
               setReportsSection={setReportsSection}
               tenantAdminSettingsOpen={tenantAdminSettingsOpen}
               setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
-              tenantAdminSection={tenantAdminSection}
+              tenantAdminSection={activeTenantAdminSection}
               setTenantAdminSection={setTenantAdminSection}
               superAdminSettingsOpen={superAdminSettingsOpen}
               setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
@@ -462,7 +467,7 @@ export function AppShell(props: any) {
                 setReportsSection={setReportsSection}
                 tenantAdminSettingsOpen={tenantAdminSettingsOpen}
                 setTenantAdminSettingsOpen={setTenantAdminSettingsOpen}
-                tenantAdminSection={tenantAdminSection}
+                tenantAdminSection={activeTenantAdminSection}
                 setTenantAdminSection={setTenantAdminSection}
                 superAdminSettingsOpen={superAdminSettingsOpen}
                 setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
@@ -603,7 +608,7 @@ export function AppShell(props: any) {
                       Tenant Admin
                     </span>
                     <SearchableSelect
-                      value={tenantAdminSection}
+                      value={activeTenantAdminSection}
                       onChange={(value: string) => {
                         setTenantAdminSettingsOpen(true);
                         setTenantAdminSection(value);

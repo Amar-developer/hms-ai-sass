@@ -11,18 +11,14 @@ import {
 import { useEffect, useState } from "react";
 import { Camera } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
-import {
-  assetUrl,
-  listValue,
-  settingLabel,
-  settingValueLabel,
-} from "../helpers";
+import { listValue, settingLabel, settingValueLabel } from "../helpers";
 import { MultiCheckSelect } from "./MultiCheckSelect";
 import { humanizeOptionLabel, paymentMethodOptions } from "@/lib/options";
 import { defaultNumberingEntities } from "../constants";
 import { displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
+import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
 
 export function SettingsPanel(props: any) {
   const {
@@ -36,6 +32,8 @@ export function SettingsPanel(props: any) {
     bankDetails,
     setBankDetails,
     tenantLogoUrl,
+    files,
+    apiSession,
     uploadInvoiceLogo,
     requeueAfter,
     setRequeueAfter,
@@ -84,6 +82,30 @@ export function SettingsPanel(props: any) {
   }, [reportPage, safeReportPage]);
   const [invoiceLogoFile, setInvoiceLogoFile] = useState<File | null>(null);
   const effectiveInvoiceLogoUrl = invoiceLogoUrl || tenantLogoUrl || "";
+  const [resolvedInvoiceLogoUrl, setResolvedInvoiceLogoUrl] = useState("");
+
+  useEffect(() => {
+    let disposed = false;
+    let release: () => void = () => undefined;
+    setResolvedInvoiceLogoUrl("");
+    if (!apiSession) return;
+    void resolveInvoiceLogoAsset(
+      effectiveInvoiceLogoUrl,
+      files || [],
+      apiSession,
+    ).then((asset) => {
+      if (disposed) {
+        asset.release();
+        return;
+      }
+      release = asset.release;
+      setResolvedInvoiceLogoUrl(asset.url);
+    });
+    return () => {
+      disposed = true;
+      release();
+    };
+  }, [apiSession, effectiveInvoiceLogoUrl, files]);
   const toggleReportFilter = (key: string) => (event: any) =>
     setReportFilters({ ...reportFilters, [key]: event.target.checked });
   const setRule = (key: string, value: any) =>
@@ -142,9 +164,9 @@ export function SettingsPanel(props: any) {
                       alt="Selected logo"
                       className="h-full w-full object-contain p-1.5"
                     />
-                  ) : effectiveInvoiceLogoUrl ? (
+                  ) : resolvedInvoiceLogoUrl ? (
                     <img
-                      src={assetUrl(effectiveInvoiceLogoUrl)}
+                      src={resolvedInvoiceLogoUrl}
                       alt="Invoice logo"
                       className="h-full w-full object-contain p-1.5"
                     />

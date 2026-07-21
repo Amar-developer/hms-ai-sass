@@ -1,6 +1,7 @@
 import {
   test,
   expect,
+  fieldContainer,
   openModule,
   chooseFieldOption,
   patientListRow,
@@ -33,6 +34,15 @@ test.describe("patient membership", () => {
     );
     await page.getByRole("button", { name: "Enroll & Create Invoice" }).click();
     await expect(page.getByText(/membership enrolled/i)).toBeVisible();
+    await expect(
+      fieldContainer(page, "Plan").getByRole("button").first(),
+    ).toContainText("Select plan");
+    await expect(fieldContainer(page, "Amount Paid Now").locator("input")).toHaveValue(
+      "",
+    );
+    await expect(
+      fieldContainer(page, "Payment Method").getByRole("button").first(),
+    ).toContainText("Cash");
 
     const enrollments = await expectApi<any[]>(
       await adminApi.get("/patient-subscriptions/enrollments", {

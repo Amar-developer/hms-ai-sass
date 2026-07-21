@@ -10,6 +10,7 @@ from app.modules.billing.repositories.settlement_report_repository import (
     BillingSettlementReportRepository,
 )
 from app.modules.billing.schemas import (
+    CollectionReport,
     DoctorSettlementFinalize,
     DoctorSettlementRead,
     DoctorSettlementSummary,
@@ -28,6 +29,7 @@ def doctor_settlement_summary(
     practitioner_id: str | None,
     branch_id: str | None,
     actor: User,
+    lock_rows: bool = False,
 ) -> DoctorSettlementSummary:
     enforce_module_enabled(session, tenant_id, "billing_advanced")
     branch_id = scoped_branch_id(actor, branch_id)
@@ -36,6 +38,7 @@ def doctor_settlement_summary(
         tenant_id=tenant_id,
         branch_id=branch_id,
         practitioner_id=practitioner_id,
+        for_update=lock_rows,
     )
     invoice_count = len(rows)
     total_invoice_amount = sum(invoice.total_amount for invoice, _appointment in rows)
@@ -56,6 +59,7 @@ def doctor_settlement_summary(
     )
     finalized_amount = sum(row.settlement_amount for row in settlements)
     payable_amount = max(doctor_share_paid_basis - finalized_amount, 0)
+    recovery_amount = max(finalized_amount - doctor_share_paid_basis, 0)
     latest_finalized_at = max((row.finalized_at for row in settlements), default=None)
     return DoctorSettlementSummary(
         tenant_id=tenant_id,
@@ -68,6 +72,7 @@ def doctor_settlement_summary(
         doctor_share_paid_basis=doctor_share_paid_basis,
         finalized_settlement_amount=finalized_amount,
         payable_settlement_amount=payable_amount,
+        settlement_recovery_amount=recovery_amount,
         pending_doctor_share=max(total_doctor_share - doctor_share_paid_basis, 0),
         can_finalize=payable_amount > 0,
         latest_finalized_at=latest_finalized_at,
@@ -87,7 +92,34 @@ def finalize_doctor_settlement(
         practitioner_id=payload.practitioner_id,
         branch_id=payload.branch_id,
         actor=actor,
+        lock_rows=True,
     )
+    existing_scopes = BillingSettlementReportRepository(
+        session
+    ).list_all_finalized_settlements(tenant_id=tenant_id)
+    for existing in existing_scopes:
+        branch_overlaps = (
+            existing.branch_id is None
+            or summary.branch_id is None
+            or existing.branch_id == summary.branch_id
+        )
+        practitioner_overlaps = (
+            existing.practitioner_id is None
+            or payload.practitioner_id is None
+            or existing.practitioner_id == payload.practitioner_id
+        )
+        same_scope = (
+            existing.branch_id == summary.branch_id
+            and existing.practitioner_id == payload.practitioner_id
+        )
+        if branch_overlaps and practitioner_overlaps and not same_scope:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Settlement scope overlaps an already finalized branch or "
+                    "doctor scope. Continue using the same settlement scope."
+                ),
+            )
     if summary.payable_settlement_amount <= 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -102,7 +134,7 @@ def finalize_doctor_settlement(
         total_paid_amount=summary.total_paid_amount,
         total_doctor_share=summary.total_doctor_share,
         settlement_amount=summary.payable_settlement_amount,
-        finalized_by_user_id=payload.finalized_by_user_id,
+        finalized_by_user_id=actor.id,
     )
     session.add(settlement)
     session.commit()
@@ -110,8 +142,8 @@ def finalize_doctor_settlement(
     record_audit_event(
         session,
         tenant_id=tenant_id,
-        branch_id=payload.branch_id,
-        actor_user_id=payload.finalized_by_user_id,
+        branch_id=summary.branch_id,
+        actor_user_id=actor.id,
         action="doctor_settlement.finalized",
         resource_type="doctor_settlement",
         resource_id=settlement.id,
@@ -136,13 +168,21 @@ def finalize_doctor_settlement(
 
 
 def due_collection_report(
-    session: Session, *, tenant_id: str, branch_id: str | None, actor: User
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    actor: User,
+    from_date: date | None = None,
+    to_date: date | None = None,
 ) -> DueCollectionReport:
     enforce_entitlement(session, tenant_id, "billing_basic")
     branch_id = scoped_branch_id(actor, branch_id)
     invoices = BillingSettlementReportRepository(session).list_due_collection_invoices(
         tenant_id=tenant_id,
         branch_id=branch_id,
+        from_date=from_date,
+        to_date=to_date,
     )
     return DueCollectionReport(
         tenant_id=tenant_id,
@@ -161,6 +201,44 @@ def due_collection_report(
             }
             for invoice in invoices
         ],
+    )
+
+
+def collection_report(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    from_date: date | None,
+    to_date: date | None,
+    actor: User,
+) -> CollectionReport:
+    enforce_module_enabled(session, tenant_id, "billing_advanced")
+    branch_id = scoped_branch_id(actor, branch_id)
+    report_repo = BillingSettlementReportRepository(session)
+    payments = report_repo.list_collected_payments(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    refund_entries = report_repo.list_refund_entries(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    collected_amount = sum(int(payment.amount or 0) for payment in payments)
+    refunded_amount = sum(
+        abs(min(int(entry.paid_amount_delta or 0), 0)) for entry in refund_entries
+    )
+    return CollectionReport(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        payment_count=len(payments),
+        collected_amount=collected_amount,
+        refunded_amount=refunded_amount,
+        net_collected_amount=collected_amount - refunded_amount,
     )
 
 
@@ -202,6 +280,7 @@ def revenue_report(
             {
                 "key": key,
                 "invoice_count": 0,
+                "billed_amount": 0,
                 "invoice_amount": 0,
                 "paid_amount": 0,
                 "tax_amount": 0,
@@ -226,6 +305,7 @@ def revenue_report(
             else 1
         )
         bucket["invoice_count"] += 1
+        bucket["billed_amount"] += int(invoice.total_amount or 0)
         bucket["invoice_amount"] += net_invoice_amount
         bucket["paid_amount"] += invoice.paid_amount
         bucket["tax_amount"] += round(int(invoice.tax_amount or 0) * net_ratio)
@@ -237,6 +317,7 @@ def revenue_report(
         tenant_id=tenant_id,
         group_by=group_by,
         rows=report_rows,
+        total_billed_amount=sum(row["billed_amount"] for row in report_rows),
         total_invoice_amount=sum(row["invoice_amount"] for row in report_rows),
         total_paid_amount=sum(row["paid_amount"] for row in report_rows),
         total_tax_amount=sum(row["tax_amount"] for row in report_rows),

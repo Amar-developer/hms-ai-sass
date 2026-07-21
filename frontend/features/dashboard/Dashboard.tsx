@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 import {
   CalendarDays,
   IndianRupee,
@@ -7,12 +9,12 @@ import {
   Users,
 } from "lucide-react";
 import { Badge, Card } from "@/app/components/common/ui";
+import { isMembershipPlanInvoice } from "@/features/billing/helpers";
 import {
   topRows,
   dateKey,
   invoiceAmount,
   invoiceBalance,
-  invoiceItemTotal,
   invoiceMembershipBenefit,
   invoiceOfferDiscount,
   isCompletedAppointment,
@@ -23,6 +25,7 @@ import {
 import { Insight } from "./components/Insight";
 import { QuickAccess } from "./components/QuickAccess";
 import { NotificationWidget } from "./components/NotificationWidget";
+import { apiFetch } from "@/lib/api";
 
 export function Dashboard({
   scopedAppointments,
@@ -34,9 +37,56 @@ export function Dashboard({
   setActive,
   enabled,
   apiSession,
+  branchId,
 }: any) {
-  const today = new Date().toISOString().slice(0, 10);
+  const [monthlyCollections, setMonthlyCollections] = useState<any>(null);
+  const [allDueReport, setAllDueReport] = useState<any>(null);
+  const [monthlyDueReport, setMonthlyDueReport] = useState<any>(null);
+  const now = new Date();
+  const today = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0"),
+  ].join("-");
   const currentMonth = today.slice(0, 7);
+  const monthStart = `${currentMonth}-01`;
+  const monthEndDate = new Date(
+    Number(currentMonth.slice(0, 4)),
+    Number(currentMonth.slice(5, 7)),
+    0,
+  );
+  const monthEnd = `${currentMonth}-${String(monthEndDate.getDate()).padStart(2, "0")}`;
+  const monthlyParams = new URLSearchParams({
+    from_date: monthStart,
+    to_date: monthEnd,
+  });
+  if (branchId) monthlyParams.set("branch_id", branchId);
+  const branchQuery = branchId
+    ? `?branch_id=${encodeURIComponent(branchId)}`
+    : "";
+  useEffect(() => {
+    if (!apiSession) return;
+    let active = true;
+    Promise.all([
+      apiFetch(`/billing/reports/collections?${monthlyParams}`, apiSession).catch(
+        () => null,
+      ),
+      apiFetch(`/billing/reports/due-collection${branchQuery}`, apiSession).catch(
+        () => null,
+      ),
+      apiFetch(`/billing/reports/due-collection?${monthlyParams}`, apiSession).catch(
+        () => null,
+      ),
+    ]).then(([collections, allDue, monthlyDue]) => {
+      if (!active) return;
+      setMonthlyCollections(collections);
+      setAllDueReport(allDue);
+      setMonthlyDueReport(monthlyDue);
+    });
+    return () => {
+      active = false;
+    };
+  }, [apiSession?.tenantId, branchId, monthStart, monthEnd]);
   const todayAppointments = scopedAppointments.filter(
     (row: any) =>
       dateKey(row.appointmentDate || row.appointment_date) === today,
@@ -50,22 +100,38 @@ export function Dashboard({
       row.created_at || row.invoice_date || row.updated_at || row.paid_at;
     return monthKey(sourceDate) === currentMonth;
   });
-  const monthlyRevenue = monthlyInvoices.reduce(
-    (sum: number, row: any) => sum + invoiceAmount(row),
+  const activeMonthlyInvoices = monthlyInvoices.filter(
+    (row: any) =>
+      normalized(row.status) !== "cancelled",
+  );
+  const monthlyRevenue = activeMonthlyInvoices.reduce(
+    (sum: number, row: any) => sum + Number(row.total_amount || 0),
     0,
   );
-  const monthlyItemTotal = monthlyInvoices.reduce(
-    (sum: number, row: any) => sum + invoiceItemTotal(row),
-    0,
-  );
-  const monthlyDue = monthlyInvoices.reduce(
+  const fallbackMonthlyDue = activeMonthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceBalance(row),
     0,
   );
+  const fallbackAllDue = liveInvoices
+    .filter(
+      (row: any) =>
+        !["cancelled", "refunded"].includes(normalized(row.status)),
+    )
+    .reduce((sum: number, row: any) => sum + invoiceBalance(row), 0);
+  const monthlyDue = Number(
+    monthlyDueReport?.total_due_amount ?? fallbackMonthlyDue,
+  );
+  const allDue = Number(allDueReport?.total_due_amount ?? fallbackAllDue);
+  const carriedDue = Math.max(allDue - monthlyDue, 0);
+  const monthlyPaid = Number(
+    monthlyCollections?.net_collected_amount ??
+      activeMonthlyInvoices.reduce(
+        (sum: number, row: any) => sum + invoiceAmount(row),
+        0,
+      ),
+  );
   const membershipPurchaseInvoices = monthlyInvoices.filter(
-    (row: any) =>
-      row.patient_subscription_enrollment_id ||
-      row.patient_subscription_plan_id,
+    isMembershipPlanInvoice,
   );
   const membershipSavings = monthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceMembershipBenefit(row),
@@ -137,14 +203,14 @@ export function Dashboard({
     {
       title: "Monthly Revenue",
       value: rupees(monthlyRevenue),
-      detail: `Collected from ${rupees(monthlyItemTotal)}`,
+      detail: `Net collections ${rupees(monthlyPaid)}`,
       icon: IndianRupee,
       target: "billing",
     },
     {
       title: "Monthly Due",
-      value: rupees(monthlyDue || liveSummary?.invoiceBalance || 0),
-      detail: "Outstanding balance",
+      value: rupees(monthlyDue),
+      detail: `Carried ${rupees(carriedDue)} · Total ${rupees(allDue)}`,
       icon: ReceiptIndianRupee,
       target: "billing",
     },

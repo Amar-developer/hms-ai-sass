@@ -58,6 +58,11 @@ const LabReports = ({
       width: "140px",
     },
     {
+      key: "tax",
+      header: "GST",
+      render: (row: any) => money(row.tax),
+    },
+    {
       key: "purchaseCost",
       header: "Purchase Cost",
       width: '160px',
@@ -80,7 +85,7 @@ const LabReports = ({
     <div>
       <CollapsibleReportSection
         title="Lab Test Settlement & Profitability"
-        subtitle="Supplier tests use purchase cost from setup. In-house tenant hospital tests show zero purchase cost."
+        subtitle="Supplier cost is frozen on each invoice line; legacy invoices fall back to catalog setup."
         badge={`${labSettlementRows.length} lab items`}
         isOpen={openSections.lab}
         onToggle={() =>

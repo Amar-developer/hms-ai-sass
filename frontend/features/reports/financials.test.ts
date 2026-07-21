@@ -1,14 +1,23 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  allocateReportValues,
   membershipBenefitUsage,
   realizedGrossProfit,
+  recognizedInvoiceTax,
   recognizedInvoiceRevenue,
   reportPaymentMode,
   reportedInvoiceTotal,
 } from "./financials";
 
 describe("membership report accounting", () => {
+  it("allocates every rupee across multiple invoice lines", () => {
+    const allocated = allocateReportValues([1, 1, 1], 3, 100);
+
+    expect(allocated).toEqual([34, 33, 33]);
+    expect(allocated.reduce((sum, value) => sum + value, 0)).toBe(100);
+  });
+
   it("shows a fully covered item as benefit usage, not revenue or profit", () => {
     const invoice = {
       subtotal_amount: 500,
@@ -34,6 +43,17 @@ describe("membership report accounting", () => {
     expect(reportedInvoiceTotal(invoice)).toBe(1200);
     expect(recognizedInvoiceRevenue(invoice)).toBe(700);
     expect(realizedGrossProfit(invoice, 200)).toBe(500);
+  });
+
+  it("preserves a real loss instead of changing it to zero", () => {
+    expect(realizedGrossProfit({ paid_amount: 1000 }, 1200)).toBe(-200);
+  });
+
+  it("does not count collected GST as clinic profit", () => {
+    const invoice = { total_amount: 1180, paid_amount: 590, tax_amount: 180 };
+
+    expect(recognizedInvoiceTax(invoice)).toBe(90);
+    expect(realizedGrossProfit(invoice, 200)).toBe(300);
   });
 
   it("shows split payment and membership modes without refunded payments", () => {

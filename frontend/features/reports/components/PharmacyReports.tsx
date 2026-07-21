@@ -64,6 +64,11 @@ const PharmacyReports = ({
       width: "140px",
     },
     {
+      key: "tax",
+      header: "GST",
+      render: (row: any) => money(row.tax),
+    },
+    {
       key: "purchaseCost",
       header: "Purchase Cost",
       render: (row: any) => money(row.purchaseCost),
@@ -85,7 +90,7 @@ const PharmacyReports = ({
     <div>
       <CollapsibleReportSection
         title="Pharmacy Settlement & Profitability"
-        subtitle="Medicine purchase cost is taken from each medicine supplier setup."
+        subtitle="Medicine cost is frozen on each invoice line; legacy invoices fall back to catalog setup."
         badge={`${pharmacySettlementRows.length} medicines`}
         isOpen={openSections.pharmacy}
         onToggle={() =>

@@ -936,6 +936,7 @@ export function TenantAdmin({
           bankDetails={data.bankDetails}
           setBankDetails={data.setBankDetails}
           tenantLogoUrl={clinic?.logo_url || ""}
+          files={data.files}
           uploadInvoiceLogo={actions.uploadInvoiceLogo}
           requeueAfter={data.requeueAfter}
           setRequeueAfter={data.setRequeueAfter}

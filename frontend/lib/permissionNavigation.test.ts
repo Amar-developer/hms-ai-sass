@@ -3,12 +3,17 @@ import { describe, expect, it } from "vitest";
 import { navigationModulesForPermissions } from "./permissionNavigation";
 
 describe("navigationModulesForPermissions", () => {
-  it("shows a module when the role has any action for that module", () => {
+  it("shows a module when any of its permissions are granted", () => {
     const modules = navigationModulesForPermissions([
       "appointments.read",
+      "appointments.create",
+      "patients.read",
       "patients.create",
+      "pharmacy.read",
       "pharmacy.dispense",
+      "billing.read",
       "billing.refunds.request",
+      "reports.read",
       "reports.export",
     ]);
 
@@ -23,22 +28,58 @@ describe("navigationModulesForPermissions", () => {
     );
   });
 
-  it("does not show modules without a matching permission", () => {
-    const modules = navigationModulesForPermissions(["appointments.read"]);
+  it("shows a module for a read-only role and hides unrelated modules", () => {
+    const modules = navigationModulesForPermissions([
+      "appointments.read",
+      "patients.create",
+    ]);
 
     expect(modules).toContain("appointments");
-    expect(modules).not.toContain("patients");
+    expect(modules).toContain("patients");
     expect(modules).not.toContain("lab");
     expect(modules).not.toContain("billing");
   });
 
   it("derives administration navigation from administration permissions", () => {
-    const modules = navigationModulesForPermissions(["identity.roles.read"]);
+    const modules = navigationModulesForPermissions([
+      "identity.roles.read",
+      "dashboard.read",
+      "dashboard.access",
+    ]);
 
-    expect(modules).toEqual(expect.arrayContaining(["admin", "dashboard"]));
+    expect(modules).toContain("dashboard");
+    expect(modules).toContain("admin");
+
+    expect(
+      navigationModulesForPermissions([
+        "identity.roles.read",
+        "identity.roles.edit",
+      ]),
+    ).toContain("admin");
   });
 
-  it("shows error logs only when its role permission is assigned", () => {
+  it("controls dashboard explicitly instead of inheriting it from admin access", () => {
+    expect(navigationModulesForPermissions(["dashboard.read"])).not.toContain(
+      "dashboard",
+    );
+    expect(
+      navigationModulesForPermissions([
+        "dashboard.read",
+        "dashboard.access",
+      ]),
+    ).toContain("dashboard");
+    expect(
+      navigationModulesForPermissions(["identity.roles.read"]),
+    ).not.toContain("dashboard");
+  });
+
+  it("shows error logs only when its own permission is granted", () => {
+    expect(
+      navigationModulesForPermissions([
+        "error_logs.read",
+        "error_logs.manage",
+      ]),
+    ).toContain("error_logs");
     expect(
       navigationModulesForPermissions(["error_logs.read"]),
     ).toContain("error_logs");
@@ -54,5 +95,13 @@ describe("navigationModulesForPermissions", () => {
     expect(
       navigationModulesForPermissions([], { isSuperAdmin: true }),
     ).toContain("superadmin");
+  });
+
+  it("allows wildcard permission to open every module", () => {
+    const modules = navigationModulesForPermissions(["*"]);
+
+    expect(modules).toEqual(
+      expect.arrayContaining(["dashboard", "appointments", "billing", "reports"]),
+    );
   });
 });

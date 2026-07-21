@@ -6,6 +6,7 @@ from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.billing.services.discount_policy import compose_invoice_discounts
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.numbering import next_invoice_number
+from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
 from app.modules.billing.services.rules import (
     calculate_offer_discount,
     calculate_fee_split,
@@ -219,6 +220,8 @@ def create_consultation_invoice(
         total_amount=subtotal,
     )
     session.add(item)
+    session.flush()
+    sync_invoice_item_discounts(session, invoice)
     session.commit()
     session.refresh(item)
     session.refresh(invoice)

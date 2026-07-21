@@ -368,10 +368,25 @@ export function MembershipEnrollForm({
     setPaidAmount(String(Number(selectedPlan.price_amount || 0)));
   }, [selectedPlan]);
 
-  function handleSubmit(e: any) {
+  function resetForm() {
+    setPlanId("");
+    setBranchId(patient?.branch_id || "");
+    setStartsOn(new Date().toISOString().slice(0, 10));
+    setPaidAmount("");
+    setPaymentMethod("cash");
+  }
+
+  async function handleSubmit(e: any) {
     e.preventDefault();
     if (!selectedPlan || loading) return;
-    onSubmit({ planId, branchId, startsOn, paidAmount, paymentMethod });
+    const enrolled = await onSubmit({
+      planId,
+      branchId,
+      startsOn,
+      paidAmount,
+      paymentMethod,
+    });
+    if (enrolled) resetForm();
   }
 
   return (

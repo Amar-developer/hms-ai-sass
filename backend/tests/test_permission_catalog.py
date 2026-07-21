@@ -17,6 +17,7 @@ def test_permission_catalog_has_unique_keys_and_all_application_modules():
         "billing",
         "branches",
         "consultations",
+        "dashboard",
         "departments",
         "discounts",
         "error_logs",
@@ -47,11 +48,24 @@ def test_permission_catalog_has_unique_keys_and_all_application_modules():
     assert _permission_read("identity.users.edit").model_dump() == {
         "key": "identity.users.edit",
         "module": "identity.users",
+        "module_label": "Users",
         "action": "edit",
-        "description": "Identity Users Edit",
+        "description": "Users Edit",
     }
     assert _permission_read("platform.subscriptions.manage").module == (
         "platform.subscriptions"
+    )
+
+
+def test_every_permission_module_has_a_product_facing_label():
+    modules = {_permission_read(key).module for key in permissions.PERMISSION_CATALOG}
+
+    assert modules <= set(permissions.PERMISSION_MODULE_LABELS)
+    assert _permission_read("practitioners.read").module_label == (
+        "Doctors & Practitioners"
+    )
+    assert _permission_read("consultations.sign").module_label == (
+        "Doctor Workspace & Consultations"
     )
 
 

@@ -11,6 +11,8 @@ IDENTITY_ROLES_CREATE = "identity.roles.create"
 IDENTITY_ROLES_READ = "identity.roles.read"
 IDENTITY_ROLES_EDIT = "identity.roles.edit"
 IDENTITY_ROLES_DELETE = "identity.roles.delete"
+DASHBOARD_READ = "dashboard.read"
+DASHBOARD_ACCESS = "dashboard.access"
 SETTINGS_MANAGE = "settings.manage"
 SETTINGS_CREATE = "settings.create"
 SETTINGS_READ = "settings.read"
@@ -165,6 +167,8 @@ PERMISSION_CATALOG = [
     IDENTITY_ROLES_READ,
     IDENTITY_ROLES_EDIT,
     IDENTITY_ROLES_DELETE,
+    DASHBOARD_READ,
+    DASHBOARD_ACCESS,
     SETTINGS_MANAGE,
     SETTINGS_CREATE,
     SETTINGS_READ,
@@ -305,3 +309,52 @@ PERMISSION_CATALOG = [
     DISCOUNTS_EDIT,
     DISCOUNTS_DELETE,
 ]
+
+
+# Product-facing names for every permission family. The completeness test keeps
+# backend key names from silently becoming undiscoverable role modules.
+PERMISSION_MODULE_LABELS = {
+    "platform.tenants": "Tenant Management",
+    "platform.subscriptions": "Subscription Management",
+    "subscriptions.reports": "Subscription Reports",
+    "identity.users": "Users",
+    "identity.roles": "Roles",
+    "dashboard": "Dashboard / Overview",
+    "settings": "Tenant & Branch Settings",
+    "files": "Files",
+    "departments": "Medical Departments",
+    "branches": "Branches",
+    "practitioners": "Doctors & Practitioners",
+    "scheduling": "Doctor Scheduling",
+    "patients": "EMR / Patient Management",
+    "patient_subscriptions": "Patient Membership",
+    "appointments": "Appointments",
+    "queue": "Token Queue",
+    "consultations": "Doctor Workspace & Consultations",
+    "billing": "Billing",
+    "billing.discounts": "Billing Discounts",
+    "billing.refunds": "Billing Refunds",
+    "invoices": "Invoices & Receipts",
+    "payments": "Payments",
+    "settlements": "Doctor Settlements",
+    "service_items": "Items / Service Catalog",
+    "lab": "Lab & Services",
+    "lab.results": "Lab Results",
+    "pharmacy": "Pharmacy / Prescriptions",
+    "suppliers": "Suppliers",
+    "ip": "IP Admission",
+    "physiotherapy": "Physiotherapy",
+    "home_care": "Home Care Visit Booking",
+    "notifications": "Notifications",
+    "communications": "Communications",
+    "communications.whatsapp": "WhatsApp Communications",
+    "communications.sms": "SMS Communications",
+    "communications.voice": "Voice Communications",
+    "ai.assist": "AI Assist",
+    "audit": "Audit & Compliance",
+    "error_logs": "Error Logs",
+    "reports": "Reports",
+    "reports.revenue": "Revenue Reports",
+    "tax": "Tax",
+    "discounts": "Discounts & Offers",
+}

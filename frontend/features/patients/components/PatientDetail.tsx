@@ -4,7 +4,10 @@ import { DataTable } from "@/features/reports/components/DataTable";
 import { Column } from "@/features/reports/types";
 import { MembershipEnrollForm } from "../forms/PatientForms";
 import { CompactMetric } from "./CompactMetric";
-import { invoiceSource } from "@/features/billing/helpers";
+import {
+  invoiceSource,
+  isMembershipPlanInvoice,
+} from "@/features/billing/helpers";
 import { StatusBadge } from "./StatusBadge";
 import { Card, StatusToast,Badge,Button } from "@/app/components/common/ui";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
@@ -91,18 +94,7 @@ export function PatientDetail({
     (issue: any) => issue.medicine_text,
   );
 
-  const isPlanPurchaseInvoice = (invoice: any) =>
-    Boolean(
-      invoice.patient_subscription_enrollment_id ||
-      invoice.patient_subscription_plan_id,
-    ) &&
-    !invoice.lab_order_id &&
-    !invoice.pharmacy_issue_id &&
-    !invoice.consultation_id &&
-    !invoice.ip_admission_id &&
-    !invoice.physiotherapy_case_id &&
-    !invoice.home_care_booking_id;
-  const membershipInvoices = patientInvoices.filter(isPlanPurchaseInvoice);
+  const membershipInvoices = patientInvoices.filter(isMembershipPlanInvoice);
   const purchaseInvoiceFor = (enrollment: any) =>
     membershipInvoices.find(
       (invoice: any) => invoice.id === enrollment.purchase_invoice_id,

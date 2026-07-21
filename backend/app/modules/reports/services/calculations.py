@@ -10,6 +10,31 @@ def settlement_paid_basis(invoice: Invoice) -> int:
     return min(round((doctor_share * paid) / total), paid)
 
 
+def tax_paid_basis(invoice: Invoice) -> int:
+    total = int(invoice.total_amount or 0)
+    paid = int(invoice.paid_amount or 0)
+    tax = int(invoice.tax_amount or 0)
+    if not total or not paid or not tax:
+        return 0
+    return min(round((tax * paid) / total), paid, tax)
+
+
+def report_doctor_fee(invoice: Invoice, invoice_type: str) -> int:
+    """Paid-basis doctor cost, exclusively for consultation invoices."""
+    return settlement_paid_basis(invoice) if invoice_type == "consultation" else 0
+
+
+def report_settlement(invoice: Invoice, invoice_type: str, items=()) -> int:
+    """Non-consultation cost; never duplicates the consultation doctor fee."""
+    if invoice_type == "consultation":
+        return 0
+    if invoice_type in {"lab", "pharmacy"}:
+        return sum(
+            int(item.buying_amount or 0) * int(item.quantity or 1) for item in items
+        )
+    return settlement_paid_basis(invoice)
+
+
 def invoice_item_total(invoice: Invoice) -> int:
     return int(invoice.subtotal_amount or invoice.total_amount or 0)
 
@@ -51,6 +76,27 @@ def allocated_line_membership_benefit(invoice: Invoice, line_amount: int) -> int
     if not item_total or not line_amount or not membership_benefit:
         return 0
     return round((line_amount * membership_benefit) / item_total)
+
+
+def allocate_values(
+    line_amounts: list[int], invoice_subtotal: int, invoice_value: int
+) -> list[int]:
+    """Allocate an integer invoice value without losing a rupee to rounding."""
+    subtotal = max(int(invoice_subtotal or 0), 0)
+    value = max(int(invoice_value or 0), 0)
+    weights = [max(int(line or 0), 0) for line in line_amounts]
+    if not subtotal or not value or not weights:
+        return [0 for _weight in weights]
+    target = min(value, round(sum(weights) * value / subtotal))
+    allocations = [(weight * value) // subtotal for weight in weights]
+    remainder = target - sum(allocations)
+    ranked = sorted(
+        range(len(weights)),
+        key=lambda index: (-(weights[index] * value % subtotal), index),
+    )
+    for index in ranked[:remainder]:
+        allocations[index] += 1
+    return allocations
 
 
 def is_paid_invoice(invoice: Invoice) -> bool:

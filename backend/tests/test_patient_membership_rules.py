@@ -662,6 +662,46 @@ def test_lab_discount_applies_only_to_configured_eligible_item():
     assert result["payable_amount"] == 1150
 
 
+def test_lab_invoice_combines_free_and_percentage_membership_items():
+    plan = PatientSubscriptionPlan(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        name="Mixed Lab Benefit Plan",
+        lab_discount_percentage=5,
+        free_lab_test_ids_json=free_items_to_json(["LAB_FREE"], {"LAB_FREE": 1}),
+        discounted_lab_test_ids_json='["LAB_DISCOUNTED"]',
+    )
+    enrollment = PatientSubscriptionEnrollment(
+        tenant_id="tenant_membership",
+        branch_id="branch_main",
+        patient_id="patient_mixed_lab_benefits",
+        plan_id=plan.id,
+        starts_on=date.today(),
+        ends_on=date.today() + timedelta(days=119),
+    )
+
+    result = benefit_preview(
+        plan=plan,
+        enrollment=enrollment,
+        service_type="lab",
+        item_ids=["LAB_FREE", "LAB_DISCOUNTED", "LAB_REGULAR"],
+        item_amounts={
+            "LAB_FREE": 500,
+            "LAB_DISCOUNTED": 1000,
+            "LAB_REGULAR": 200,
+        },
+        subtotal_amount=1700,
+    )
+
+    assert result["free_item_ids"] == ["LAB_FREE"]
+    assert result["discounted_item_ids"] == ["LAB_DISCOUNTED"]
+    assert result["free_items_amount"] == 500
+    assert result["item_discount_amount"] == 50
+    assert result["regular_items_amount"] == 200
+    assert result["discount_amount"] == 550
+    assert result["payable_amount"] == 1150
+
+
 def test_pharmacy_free_item_does_not_reduce_regular_item_price():
     plan = PatientSubscriptionPlan(
         tenant_id="tenant_membership",

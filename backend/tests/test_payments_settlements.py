@@ -1,11 +1,19 @@
+from datetime import date, datetime
+
 from sqlmodel import Session
 
 from app.modules.billing.models import (
+    BillingLedgerEntry,
     DiscountOffer,
     DiscountType,
     Invoice,
     InvoiceStatus,
+    Payment,
+    PaymentMethod,
     TaxRule,
+)
+from app.modules.billing.repositories.settlement_report_repository import (
+    BillingSettlementReportRepository,
 )
 from app.modules.billing.services.invoice_amounts import apply_generic_invoice_discount
 from app.modules.billing.services.rules import calculate_offer_discount
@@ -26,6 +34,120 @@ def create_invoice(
         json={"consultation_id": data["consultation"]["id"]},
     ).json()["invoice"]
     return data, invoice
+
+
+def test_collection_report_repository_uses_payment_and_refund_event_dates(test_engine):
+    with Session(test_engine) as session:
+        session.add(
+            Invoice(
+                id="invoice_from_june",
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                patient_id="patient_collection_period",
+                invoice_number="INV-JUNE",
+                total_amount=400,
+                balance_amount=400,
+                created_at=datetime(2026, 6, 20, 10, 0),
+            )
+        )
+        session.add(
+            Invoice(
+                id="invoice_from_july",
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                patient_id="patient_collection_period",
+                invoice_number="INV-JULY",
+                total_amount=300,
+                balance_amount=300,
+                created_at=datetime(2026, 7, 5, 10, 0),
+            )
+        )
+        session.add(
+            Payment(
+                id="payment_july",
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                invoice_id="invoice_from_june",
+                method=PaymentMethod.CASH,
+                amount=1000,
+                collected_at=datetime(2026, 7, 10, 10, 0),
+            )
+        )
+        session.add(
+            Payment(
+                id="payment_august",
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                invoice_id="invoice_from_july",
+                method=PaymentMethod.UPI,
+                amount=600,
+                collected_at=datetime(2026, 8, 2, 10, 0),
+            )
+        )
+        session.add(
+            BillingLedgerEntry(
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                invoice_id="invoice_from_june",
+                invoice_number="INV-JUNE",
+                entry_type="payment_partially_refunded",
+                description="Payment partially refunded",
+                paid_amount_delta=-250,
+                status_after=InvoiceStatus.PARTIALLY_REFUNDED,
+                created_at=datetime(2026, 7, 20, 10, 0),
+            )
+        )
+        session.add(
+            BillingLedgerEntry(
+                tenant_id="tenant_collection_period",
+                branch_id="branch_collection_period",
+                invoice_id="invoice_from_july",
+                invoice_number="INV-JULY",
+                entry_type="payment_refunded",
+                description="Payment refunded in the following month",
+                paid_amount_delta=-100,
+                status_after=InvoiceStatus.PARTIALLY_REFUNDED,
+                created_at=datetime(2026, 8, 5, 10, 0),
+            )
+        )
+        session.commit()
+
+        repository = BillingSettlementReportRepository(session)
+        july_payments = repository.list_collected_payments(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+            from_date=date(2026, 7, 1),
+            to_date=date(2026, 7, 31),
+        )
+        july_refunds = repository.list_refund_entries(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+            from_date=date(2026, 7, 1),
+            to_date=date(2026, 7, 31),
+        )
+        all_due = repository.list_due_collection_invoices(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+        )
+        july_due = repository.list_due_collection_invoices(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+            from_date=date(2026, 7, 1),
+            to_date=date(2026, 7, 31),
+        )
+        august_refunds = repository.list_refund_entries(
+            tenant_id="tenant_collection_period",
+            branch_id="branch_collection_period",
+            from_date=date(2026, 8, 1),
+            to_date=date(2026, 8, 31),
+        )
+
+    assert [payment.id for payment in july_payments] == ["payment_july"]
+    assert sum(payment.amount for payment in july_payments) == 1000
+    assert sum(abs(entry.paid_amount_delta) for entry in july_refunds) == 250
+    assert sum(abs(entry.paid_amount_delta) for entry in august_refunds) == 100
+    assert sum(invoice.balance_amount for invoice in all_due) == 700
+    assert [invoice.id for invoice in july_due] == ["invoice_from_july"]
 
 
 def test_partial_cash_and_upi_payments_mark_invoice_partially_then_paid(client):
@@ -459,6 +581,10 @@ def test_doctor_settlement_finalization_and_reports(client):
         "/api/v1/billing/reports/revenue?group_by=doctor",
         headers={"X-Tenant-ID": tenant_id},
     )
+    collections = client.get(
+        "/api/v1/billing/reports/collections",
+        headers={"X-Tenant-ID": tenant_id},
+    )
     finalized = client.post(
         "/api/v1/billing/doctor-settlements/finalize",
         headers={"X-Tenant-ID": tenant_id},
@@ -468,7 +594,12 @@ def test_doctor_settlement_finalization_and_reports(client):
     assert due.status_code == 200
     assert due.json()["total_due_amount"] == 300
     assert revenue.status_code == 200
+    assert revenue.json()["total_billed_amount"] == 1000
     assert revenue.json()["total_invoice_amount"] == 1000
+    assert collections.status_code == 200
+    assert collections.json()["collected_amount"] == 700
+    assert collections.json()["refunded_amount"] == 0
+    assert collections.json()["net_collected_amount"] == 700
     assert finalized.status_code == 200
     assert finalized.json()["settlement_amount"] == 420
     assert finalized.json()["status"] == "finalized"
@@ -630,11 +761,20 @@ def test_partial_refund_updates_net_revenue_report(client):
         "/api/v1/billing/reports/revenue?group_by=doctor",
         headers={"X-Tenant-ID": tenant_id},
     )
+    collections = client.get(
+        "/api/v1/billing/reports/collections",
+        headers={"X-Tenant-ID": tenant_id},
+    )
 
     assert executed.status_code == 200
     assert executed.json()["invoice"]["status"] == "partially_refunded"
     assert executed.json()["invoice"]["paid_amount"] == 750
     assert revenue.status_code == 200
+    assert revenue.json()["total_billed_amount"] == 1000
     assert revenue.json()["total_invoice_amount"] == 750
     assert revenue.json()["total_paid_amount"] == 750
     assert revenue.json()["total_doctor_share"] == 450
+    assert collections.status_code == 200
+    assert collections.json()["collected_amount"] == 1000
+    assert collections.json()["refunded_amount"] == 250
+    assert collections.json()["net_collected_amount"] == 750

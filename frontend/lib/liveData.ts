@@ -8,6 +8,10 @@ export type LiveSummary = {
 
 export function mapPatient(row: any) {
   return {
+    // Preserve the complete API patient record for downstream workflows such
+    // as Home Care location autofill, while retaining the legacy camel-case
+    // aliases used by the workspace UI.
+    ...row,
     id: row.id,
     patientNumber: row.patient_number,
     name: row.full_name,
@@ -17,6 +21,7 @@ export function mapPatient(row: any) {
     guardian: row.guardian_name,
     guardianMobile: row.guardian_mobile,
     area: row.area,
+    address: row.address,
     blood: row.blood_group || "",
     allergies: row.critical_alert_count ? "Important alerts available" : "",
     medicalHistory: "",

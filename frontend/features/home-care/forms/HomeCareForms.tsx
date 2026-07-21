@@ -174,7 +174,9 @@ export function BookingForm({
     const location = patientLocation(patient);
     setLookupPatient(patient);
     setValue("patient_id", patient.id);
-    if (location) setValue("location", location);
+    // Always replace the previous patient's location. An empty address must
+    // clear stale location data rather than retaining another patient's home.
+    setValue("location", location);
     setPatientSearch(patientSearchLabel(patient));
   }
 

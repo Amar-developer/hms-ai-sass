@@ -4,12 +4,15 @@ from html import escape
 from sqlmodel import Session
 
 from app.modules.reports.repositories import ReportDataRepository
+from app.modules.reports.services.classification import ReportInvoiceClassifier
 from app.modules.reports.services.calculations import (
     invoice_item_total,
     invoice_membership_benefit,
     invoice_offer_discount,
     is_paid_invoice,
-    settlement_paid_basis,
+    report_doctor_fee,
+    report_settlement,
+    tax_paid_basis,
 )
 from app.modules.reports.services.rendering import money as _money
 from app.modules.reports.services.rendering import table as _table
@@ -32,6 +35,23 @@ def build_monthly_revenue_report(
         end_at=datetime.combine(end, datetime.max.time()),
     )
     paid_invoices = [invoice for invoice in invoices if is_paid_invoice(invoice)]
+    invoice_items_by_invoice = {invoice.id: [] for invoice in paid_invoices}
+    for item in repo.list_invoice_items_by_invoice_ids(
+        tenant_id=tenant_id,
+        invoice_ids=[invoice.id for invoice in paid_invoices],
+    ):
+        invoice_items_by_invoice.setdefault(item.invoice_id, []).append(item)
+    classifier = ReportInvoiceClassifier(invoice_items_by_invoice)
+
+    def invoice_doctor_fee(invoice) -> int:
+        return report_doctor_fee(invoice, classifier.classify(invoice))
+
+    def invoice_settlement(invoice) -> int:
+        invoice_kind = classifier.classify(invoice)
+        return report_settlement(
+            invoice, invoice_kind, invoice_items_by_invoice.get(invoice.id, [])
+        )
+
     payment_modes_by_invoice: dict[str, set[str]] = {
         invoice.id: set() for invoice in paid_invoices
     }
@@ -85,11 +105,10 @@ def build_monthly_revenue_report(
     total_membership = sum(
         invoice_membership_benefit(invoice) for invoice in paid_invoices
     )
-    total_doctor = sum(
-        int(invoice.doctor_share_amount or 0) for invoice in paid_invoices
-    )
-    total_settlement = sum(settlement_paid_basis(invoice) for invoice in paid_invoices)
-    total_profit = max(total_paid - total_settlement, 0)
+    total_doctor = sum(invoice_doctor_fee(invoice) for invoice in paid_invoices)
+    total_settlement = sum(invoice_settlement(invoice) for invoice in paid_invoices)
+    total_paid_tax = sum(tax_paid_basis(invoice) for invoice in paid_invoices)
+    total_profit = total_paid - total_paid_tax - total_doctor - total_settlement
     sections: list[str] = []
     if filters.get("overall", True):
         sections.append(
@@ -111,6 +130,7 @@ def build_monthly_revenue_report(
                     ],
                     ["Net Invoice Revenue", _money(total_invoice)],
                     ["Paid Revenue", _money(total_paid)],
+                    ["GST from Paid Revenue", _money(total_paid_tax)],
                     ["Doctor Fee", _money(total_doctor)],
                     ["Settlement", _money(total_settlement)],
                     [
@@ -153,6 +173,7 @@ def build_monthly_revenue_report(
                     "payment_modes": set(),
                     "doctor": 0,
                     "settlement": 0,
+                    "tax": 0,
                 },
             )
             bucket["invoices"] += 1
@@ -163,8 +184,9 @@ def build_monthly_revenue_report(
             bucket["paid"] += int(invoice.paid_amount or 0)
             bucket["balance"] += int(invoice.balance_amount or 0)
             bucket["payment_modes"].add(payment_mode(invoice))
-            bucket["doctor"] += int(invoice.doctor_share_amount or 0)
-            bucket["settlement"] += settlement_paid_basis(invoice)
+            bucket["doctor"] += invoice_doctor_fee(invoice)
+            bucket["settlement"] += invoice_settlement(invoice)
+            bucket["tax"] += tax_paid_basis(invoice)
         return [
             [
                 row["label"],
@@ -176,12 +198,13 @@ def build_monthly_revenue_report(
                 _money(row["paid"]),
                 _money(row["balance"]),
                 combined_payment_modes(row["payment_modes"]),
+                _money(row["tax"]),
                 _money(row["doctor"]),
                 _money(row["settlement"]),
                 "0%"
                 if not row["paid"]
                 else f"{round((row['settlement'] / row['paid']) * 100)}%",
-                _money(max(row["paid"] - row["settlement"], 0)),
+                _money(row["paid"] - row["tax"] - row["doctor"] - row["settlement"]),
             ]
             for row in sorted(
                 buckets.values(), key=lambda item: item["paid"], reverse=True
@@ -198,6 +221,7 @@ def build_monthly_revenue_report(
         "Paid Revenue",
         "Balance",
         "Mode of Payment",
+        "GST from Paid Revenue",
         "Doctor Fee",
         "Settlement",
         "Settlement %",
@@ -230,8 +254,10 @@ def build_monthly_revenue_report(
                 if appointment and appointment.department_id
                 else None
             )
-            settlement = settlement_paid_basis(invoice)
+            doctor_fee = invoice_doctor_fee(invoice)
+            settlement = invoice_settlement(invoice)
             paid = int(invoice.paid_amount or 0)
+            paid_tax = tax_paid_basis(invoice)
             invoice_rows.append(
                 [
                     invoice.invoice_number,
@@ -246,10 +272,11 @@ def build_monthly_revenue_report(
                     _money(paid),
                     _money(int(invoice.balance_amount or 0)),
                     payment_mode(invoice),
-                    _money(int(invoice.doctor_share_amount or 0)),
+                    _money(paid_tax),
+                    _money(doctor_fee),
                     _money(settlement),
                     "0%" if not paid else f"{round((settlement / paid) * 100)}%",
-                    _money(max(paid - settlement, 0)),
+                    _money(paid - paid_tax - doctor_fee - settlement),
                 ]
             )
         sections.append(
@@ -268,6 +295,7 @@ def build_monthly_revenue_report(
                     "Paid",
                     "Balance",
                     "Mode of Payment",
+                    "GST from Paid Revenue",
                     "Doctor Fee",
                     "Settlement",
                     "Settlement %",
@@ -293,7 +321,7 @@ def build_monthly_revenue_report(
       <body>
         <h1>Monthly Revenue and Settlement Report</h1>
         <p>{escape(tenant.name if tenant else tenant_id)} · {start.isoformat()} to {end.isoformat()}</p>
-        {''.join(sections)}
+        {"".join(sections)}
       </body>
     </html>
     """

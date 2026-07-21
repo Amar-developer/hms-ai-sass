@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Invoice from "@/features/billing/components/Invoice";
 import type { InvoiceProps } from "@/features/billing/types";
 import { apiFetch, type ApiSession, uploadAssetUrl } from "@/lib/api";
+import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
 
 function readSession(): ApiSession | null {
   const raw = window.localStorage.getItem("medizinhub.session");
@@ -66,14 +67,25 @@ function toInvoiceProps(
       whatsapp: patient?.alternate_mobile || "",
       address: patient?.address || "",
     },
-    items: (detail.items || []).map((item: any, index: number) => ({
-      srNo: index + 1,
-      name: item.description || item.item_type || "Item",
-      hsnSac: item.external_item_code || "",
-      qty: item.quantity || 1,
-      mrp: item.mrp_amount || item.selling_amount || item.unit_amount || 0,
-      rate: item.total_amount || 0,
-    })),
+    items: (detail.items || []).map((item: any, index: number) => {
+      const lineTotal = Number(item.total_amount || 0);
+      const lineDiscount =
+        item.discount_amount === null || item.discount_amount === undefined
+          ? Math.round(
+              (lineTotal * Number(invoice.discount_amount || 0)) /
+                Math.max(Number(invoice.subtotal_amount || 0), 1),
+            )
+          : Number(item.discount_amount || 0);
+      return {
+        srNo: index + 1,
+        name: item.description || item.item_type || "Item",
+        qty: item.quantity || 1,
+        mrp: item.mrp_amount || item.selling_amount || item.unit_amount || 0,
+        discPercent:
+          lineTotal > 0 ? Math.round((lineDiscount * 100) / lineTotal) : 0,
+        rate: lineTotal,
+      };
+    }),
     bank: {
       name: String(bank.account_name || ""),
       branch: String(bank.branch_name || ""),
@@ -111,6 +123,7 @@ export default function ReceiptPage() {
     }
 
     let cancelled = false;
+    let releaseLogo: () => void = () => undefined;
     void (async () => {
       try {
         const detail = await apiFetch(
@@ -118,30 +131,46 @@ export default function ReceiptPage() {
           session,
         );
         const patientId = detail.invoice?.patient_id;
-        const [patient, branding, logoSetting, bankSetting] = await Promise.all([
-          patientId
-            ? apiFetch(
-                `/patients/${encodeURIComponent(patientId)}`,
-                session,
-              ).catch(() => null)
-            : Promise.resolve(null),
-          apiFetch("/tenants/current/branding", session).catch(() => null),
-          apiFetch(
-            "/settings/resolve?module=invoice&key=invoice.logo_url",
-            session,
-          ).catch(() => null),
-          apiFetch(
-            "/settings/resolve?module=accounts&key=accounts.bank_details",
-            session,
-          ).catch(() => null),
-        ]);
+        const [patient, branding, logoSetting, bankSetting, logoFiles] =
+          await Promise.all([
+            patientId
+              ? apiFetch(
+                  `/patients/${encodeURIComponent(patientId)}`,
+                  session,
+                ).catch(() => null)
+              : Promise.resolve(null),
+            apiFetch("/tenants/current/branding", session).catch(() => null),
+            apiFetch(
+              "/settings/resolve?module=invoice&key=invoice.logo_url",
+              session,
+            ).catch(() => null),
+            apiFetch(
+              "/settings/resolve?module=accounts&key=accounts.bank_details",
+              session,
+            ).catch(() => null),
+            apiFetch(
+              "/files?category=logo&attached_to_doctype=Tenant&limit=20",
+              session,
+            ).catch(() => []),
+          ]);
         if (cancelled) return;
+
+        const resolvedLogo = await resolveInvoiceLogoAsset(
+          logoSetting?.value || branding?.logo_url || "",
+          logoFiles || [],
+          session,
+        );
+        if (cancelled) {
+          resolvedLogo.release();
+          return;
+        }
+        releaseLogo = resolvedLogo.release;
 
         const props = toInvoiceProps(
           detail,
           patient,
           branding,
-          logoSetting?.value,
+          resolvedLogo.url,
           bankSetting?.value,
         );
         document.title =
@@ -158,6 +187,7 @@ export default function ReceiptPage() {
 
     return () => {
       cancelled = true;
+      releaseLogo();
     };
   }, []);
 

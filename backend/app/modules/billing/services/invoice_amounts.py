@@ -10,6 +10,7 @@ from app.modules.billing.services.discount_policy import (
     ensure_invoice_allows_additional_discount,
 )
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
+from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
 from app.modules.billing.services.rules import (
     calculate_offer_discount,
     calculate_fee_split,
@@ -151,6 +152,7 @@ def apply_consultation_invoice_discount(
     session.add(invoice)
     # Keep the original invoice item and appointment fee intact. The approved
     # reduction belongs in invoice.discount_amount, not in the service rate.
+    sync_invoice_item_discounts(session, invoice)
     session.commit()
     session.refresh(invoice)
     invoice = update_invoice_payment_status(session, invoice)
@@ -230,6 +232,7 @@ def apply_generic_invoice_discount(
     invoice.doctor_share_amount = min(doctor_share, total)
     invoice.clinic_share_amount = max(total - invoice.doctor_share_amount, 0)
     session.add(invoice)
+    sync_invoice_item_discounts(session, invoice)
     session.commit()
     session.refresh(invoice)
     invoice = update_invoice_payment_status(session, invoice)

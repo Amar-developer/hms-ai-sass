@@ -1,5 +1,5 @@
 import { displayDateTime, money } from "@/utils/helper";
-import { claimedDetail, invoiceDiscountParts, invoiceHasAppliedMembershipBenefit, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, itemTypeLabel, numberValue, percentLabel } from "../helpers";
+import { claimedDetail, invoiceDiscountParts, invoiceHasAppliedMembershipBenefit, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, isMembershipPlanInvoice, itemTypeLabel, numberValue, percentLabel } from "../helpers";
 import { useEffect, useState } from "react";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Input, SearchableSelect } from "@/app/components/common/ui";
@@ -79,7 +79,7 @@ export function InvoiceDetailPage({
     "payments.create",
   );
   const source = invoiceSource(invoice);
-  const isMembershipInvoice = Boolean(invoice.patient_subscription_plan_id);
+  const isMembershipInvoice = isMembershipPlanInvoice(invoice);
   const sourceUsesVendor = Boolean(
     invoice.consultation_id ||
       invoice.appointment_id ||
@@ -125,17 +125,6 @@ export function InvoiceDetailPage({
       ? invoice.membership_item_discount_amount
       : membershipBenefit?.item_discount_amount,
   );
-  const membershipRegularItems = numberValue(
-    membershipBenefit?.is_applied
-      ? invoice.membership_regular_items_amount
-      : membershipBenefit?.regular_items_amount,
-  );
-  const hasItemMembershipBreakdown = Boolean(
-    (invoice.lab_order_id || invoice.pharmacy_issue_id) &&
-      (membershipFreeItems > 0 ||
-        membershipItemDiscount > 0 ||
-        membershipRegularItems > 0),
-  );
   const membershipEffectiveSaving = invoiceTaxAdjustedDiscount(
     invoice,
     discountParts.membershipDiscount,
@@ -144,9 +133,17 @@ export function InvoiceDetailPage({
     membershipEffectiveSaving - discountParts.membershipDiscount,
     0,
   );
+  const itemBenefitParts = [
+    membershipFreeItems > 0
+      ? `${money(membershipFreeItems)} eligible free items`
+      : "",
+    membershipItemDiscount > 0
+      ? `${money(membershipItemDiscount)} eligible-item discount`
+      : "",
+  ].filter(Boolean);
   const membershipBenefitNote =
-    discountParts.membershipDiscount > 0 && invoice.lab_order_id
-      ? `${membershipLabel} · ${money(discountParts.membershipDiscount)} free lab membership benefit`
+    discountParts.membershipDiscount > 0 && itemBenefitParts.length > 0
+      ? `${membershipLabel} · ${itemBenefitParts.join(" + ")}`
       : discountParts.membershipDiscount > 0
         ? `${membershipLabel} · ${
             membershipTaxSaving > 0
@@ -250,6 +247,9 @@ export function InvoiceDetailPage({
     return numberValue(item.selling_amount) || numberValue(item.unit_amount);
   }
   function itemInvoiceDiscount(item: any) {
+    if (item.discount_amount !== undefined && item.discount_amount !== null) {
+      return numberValue(item.discount_amount);
+    }
     const subtotal = numberValue(invoice.subtotal_amount);
     if (subtotal <= 0) return 0;
     return Math.round(
@@ -694,33 +694,8 @@ export function InvoiceDetailPage({
                         : "No request-based discount approved"
                     }
                   />
-                  {hasItemMembershipBreakdown && (
-                    <BillLine
-                      label="Membership free items"
-                      value={`-${money(membershipFreeItems)}`}
-                      muted={membershipFreeItems <= 0}
-                      savings={membershipFreeItems > 0}
-                      note="Original value of eligible items covered fully by membership"
-                    />
-                  )}
-                  {hasItemMembershipBreakdown && (
-                    <BillLine
-                      label="Membership discount"
-                      value={`-${money(membershipItemDiscount)}`}
-                      muted={membershipItemDiscount <= 0}
-                      savings={membershipItemDiscount > 0}
-                      note="Discount applied only to eligible non-free items"
-                    />
-                  )}
-                  {hasItemMembershipBreakdown && (
-                    <BillLine
-                      label="Regular chargeable items"
-                      value={money(membershipRegularItems)}
-                      note="Non-eligible items charged at their normal price"
-                    />
-                  )}
                   <BillLine
-                    label={hasItemMembershipBreakdown ? "Total membership benefit" : "Membership benefit"}
+                    label="Membership benefit"
                     value={`-${money(discountParts.membershipDiscount)}`}
                     muted={discountParts.membershipDiscount <= 0}
                     savings={discountParts.membershipDiscount > 0}

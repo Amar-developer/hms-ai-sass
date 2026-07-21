@@ -326,6 +326,7 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/doctor-settlements/finalize` | `billing.manage` |
 | `GET` | `/api/v1/billing/reports/due-collection` | `reports.read` |
 | `GET` | `/api/v1/billing/reports/revenue` | `reports.read` |
+| `GET` | `/api/v1/billing/reports/collections` | `billing.manage` or `reports.revenue.read` |
 
 Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, payments, refunds, credit notes, and cancellations. Invoice generation, discount approval, settlement finalization, and revenue reporting enforce `billing_advanced`. Branch-scoped users can access only branch-matching invoices, payments, fee rules, tax rules, credit notes, reports, and settlements. Doctor settlement summary returns paid-basis doctor share, finalized settlement amount, remaining payable amount, and `can_finalize`; duplicate finalization is rejected after the payable amount reaches zero.
 
@@ -445,6 +446,7 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `PATCH` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `DELETE` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `POST` | `/api/v1/files/sync-uploads` | Authenticated tenant user |
+| `GET` | `/api/v1/files/invoice-logo` | `invoices.read`, `settings.manage`, `settings.read`, `files.manage`, or `files.read` |
 | `PUT` | `/api/v1/settings` | `settings.manage` |
 | `GET` | `/api/v1/settings` | `settings.manage` |
 | `GET` | `/api/v1/settings/resolve` | `settings.manage` |

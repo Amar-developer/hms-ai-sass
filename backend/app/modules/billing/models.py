@@ -204,6 +204,8 @@ class InvoiceItem(SQLModel, table=True):
     quantity: int = Field(default=1, ge=1)
     unit_amount: int = Field(ge=0)
     total_amount: int = Field(ge=0)
+    discount_amount: int | None = Field(default=None, ge=0)
+    membership_discount_amount: int | None = Field(default=None, ge=0)
     mrp_amount: int = Field(default=0, ge=0)
     selling_amount: int = Field(default=0, ge=0)
     buying_amount: int = Field(default=0, ge=0)

@@ -48,14 +48,14 @@ const AppointmentReports = ({
       render: (row: any) => money(row.doctorFee),
     },
     {
-      key: "settlement",
-      header: "Settlement",
-      width:'120px',
-      render: (row: any) => money(row.settlement),
+      key: "paidTax",
+      header: "GST from Paid",
+      width: "120px",
+      render: (row: any) => money(row.paidTax),
     },
     {
-      key: "settlementPercent",
-      header: "Settlement %",
+      key: "doctorFeePercent",
+      header: "Doctor Fee %",
       width: "120px",
     },
     {
@@ -66,12 +66,12 @@ const AppointmentReports = ({
     },
     {
       key: "grossProfitPercentage",
-      header: "Gross Profit %",
+      header: "Profit %",
       width:'150px',
       render: (row: any) =>
         percent(
-          Math.max(row.grossRevenue - row.doctorFee, 0),
-          row.grossRevenue,
+          row.finalProfit,
+          row.paidRevenue - row.paidTax,
         ),
     },
     {
@@ -86,8 +86,8 @@ const AppointmentReports = ({
   return (
     <div>
       <CollapsibleReportSection
-        title="Doctor Settlement & Profitability"
-        subtitle="Profit and settlement use only fully paid invoices, so issued or due invoices do not overstate doctor payout or clinic profit."
+        title="Doctor Fee & Profitability"
+        subtitle="Doctor fee and profit use only fully paid consultation invoices, so the doctor cost is deducted exactly once."
         badge={`${doctorRows.length} doctors`}
         isOpen={openSections.doctor}
         onToggle={() =>

@@ -1,10 +1,17 @@
 import { Card } from "@/app/components/common/ui";
 
-export default function ReportTotals({ totals, money }: any) {
+export default function ReportTotals({ totals, money, section }: any) {
+  const costLabel = section === "appointments" ? "Doctor Fee" : "Settlement";
+  const costValue =
+    section === "appointments"
+      ? totals.doctorFee
+      : section === "invoice" || section === "metrix"
+        ? Number(totals.doctorFee || 0) + Number(totals.settlement || 0)
+        : totals.settlement;
   const cards = [
     ["Grand Total", money(totals.grandTotal)],
     ["Total Invoices", Number(totals.invoiceCount || 0).toLocaleString("en-IN")],
-    ["Settlement", money(totals.settlement)],
+    [section === "invoice" || section === "metrix" ? "Total Costs" : costLabel, money(costValue)],
     ["Due", money(totals.due)],
     ["Gross Profit", money(totals.grossProfit)],
     ["Membership Benefit", money(totals.membershipBenefit)],

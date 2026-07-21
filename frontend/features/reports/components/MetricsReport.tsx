@@ -107,7 +107,7 @@ function DashboardCards({
           icon={Activity}
           label="Final Profit"
           value={money(finalProfit)}
-          hint={`${percent(finalProfit, totals.paidRevenue)} of paid · Gross ${money(grossProfit)} (${percent(grossProfit, Math.max(totals.grossRevenue - totals.membershipDiscount, 0))})`}
+          hint={`${percent(finalProfit, totals.paidRevenue - totals.paidTax)} of paid excl. GST · Gross ${money(grossProfit)} (${percent(grossProfit, Math.max(totals.grossRevenue - totals.membershipDiscount - totals.tax, 0))})`}
           trend={changeLine(finalProfit, previousFinalProfit)}
         />
       </div>

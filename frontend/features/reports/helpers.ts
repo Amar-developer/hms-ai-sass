@@ -1,7 +1,9 @@
 import { displayDate } from "@/utils/helper";
+import { isMembershipPlanInvoice } from "@/features/billing/helpers";
 import {
   membershipBenefitUsage,
   recognizedInvoiceRevenue,
+  recognizedInvoiceTax,
   reportedInvoiceTotal,
 } from "./financials";
 
@@ -62,7 +64,11 @@ export function currentRange(period: string) {
 }
 
 export function toInputDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
 }
 
 export function percent(value: number, total: number) {
@@ -79,7 +85,12 @@ export function settlementPaidBasis(invoice: any) {
 }
 
 export function rowDateKey(invoice: any) {
-  return dateKey(invoice.created_at || invoice.invoice_date || invoice.updated_at);
+  return dateKey(
+    invoice.invoice_date ||
+      invoice.created_at ||
+      invoice.updated_at ||
+      invoice.paid_at,
+  );
 }
 
 export function rowDate(invoice: any) {
@@ -99,6 +110,7 @@ export function invoiceType(invoice: any) {
   if (invoice.physiotherapy_case_id) return "physiotherapy";
   if (invoice.home_care_booking_id) return "home_care";
   if (invoice.ip_admission_id) return "ip";
+  if (isMembershipPlanInvoice(invoice)) return "membership";
   return "consultation";
 }
 
@@ -108,6 +120,7 @@ export function invoiceTypeLabel(type: string) {
   if (type === "physiotherapy") return "Physiotherapy";
   if (type === "home_care") return "Home Care / Visit";
   if (type === "ip") return "IP Billing";
+  if (type === "membership") return "Membership";
   return "Consultation";
 }
 
@@ -208,6 +221,7 @@ export function aggregateInvoiceMetrics(
   list: any[],
   homeVisitBookingIds: Set<string> = new Set(),
   homeVisitInvoiceIds: Set<string> = new Set(),
+  nonConsultationSettlement: (invoice: any) => number = settlementPaidBasis,
 ) {
   return list.reduce(
     (acc: any, invoice: any) => {
@@ -215,38 +229,29 @@ export function aggregateInvoiceMetrics(
       const paid = recognizedInvoiceRevenue(invoice);
       const balance = numberValue(invoice.balance_amount);
       const doctorShare = numberValue(invoice.doctor_share_amount);
-      const settlement = settlementPaidBasis(invoice);
+      const type = invoiceType(invoice);
+      const doctorFee =
+        type === "consultation" ? settlementPaidBasis(invoice) : 0;
+      const settlement =
+        type === "consultation" ? 0 : nonConsultationSettlement(invoice);
       acc.invoices += 1;
       acc.grossRevenue += total;
       acc.paidRevenue += paid;
+      acc.paidTax += recognizedInvoiceTax(invoice);
       acc.balance += balance;
-      acc.doctorFee += doctorShare;
+      acc.doctorFee += doctorFee;
       acc.settlement += settlement;
       acc.clinicFee +=
         numberValue(invoice.clinic_share_amount) ||
         Math.max(total - membershipBenefitUsage(invoice) - doctorShare, 0);
       acc.tax += numberValue(invoice.tax_amount);
       acc.membershipDiscount += membershipBenefitUsage(invoice);
-      if (
-        invoice.patient_subscription_enrollment_id ||
-        invoice.patient_subscription_plan_id
-      )
-        acc.membershipPurchases += 1;
-      const isPlanPurchase = Boolean(
-        (invoice.patient_subscription_enrollment_id ||
-          invoice.patient_subscription_plan_id) &&
-          !invoice.lab_order_id &&
-          !invoice.pharmacy_issue_id &&
-          !invoice.consultation_id &&
-          !invoice.ip_admission_id &&
-          !invoice.physiotherapy_case_id &&
-          !invoice.home_care_booking_id,
-      );
+      const isPlanPurchase = isMembershipPlanInvoice(invoice);
       if (isPlanPurchase) {
+        acc.membershipPurchases += 1;
         acc.membershipEnrollCount += 1;
         acc.membershipEnrollAmount += paid;
       }
-      const type = invoiceType(invoice);
       if (type === "lab") acc.labRevenue += paid;
       if (type === "pharmacy") acc.pharmacyRevenue += paid;
       if (type === "consultation") acc.consultationRevenue += paid;
@@ -276,6 +281,7 @@ export function aggregateInvoiceMetrics(
       invoices: 0,
       grossRevenue: 0,
       paidRevenue: 0,
+      paidTax: 0,
       balance: 0,
       doctorFee: 0,
       settlement: 0,

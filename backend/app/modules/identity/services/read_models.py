@@ -1,6 +1,7 @@
 from sqlmodel import Session
 
 from app.core.auth import user_permission_keys, user_role_keys
+from app.modules.identity import permissions
 from app.modules.identity.models import Role, User
 from app.modules.identity.repositories import (
     IdentityRolePermissionRepository,
@@ -59,9 +60,13 @@ def permission_read(key: str) -> PermissionRead:
     parts = key.split(".")
     module = ".".join(parts[:-1]) if len(parts) > 1 else parts[0]
     action = parts[-1] if len(parts) > 1 else "manage"
+    module_label = permissions.PERMISSION_MODULE_LABELS.get(
+        module, module.replace("_", " ").replace(".", " ").title()
+    )
     return PermissionRead(
         key=key,
         module=module,
+        module_label=module_label,
         action=action,
-        description=key.replace(".", " ").title(),
+        description=f"{module_label} {action.replace('_', ' ').title()}",
     )

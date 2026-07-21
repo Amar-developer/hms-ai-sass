@@ -39,6 +39,7 @@ export function Billing({
   appointments,
   patients,
   liveInvoices,
+  branchId,
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [busy, setBusy] = useState("");
@@ -50,7 +51,9 @@ export function Billing({
   );
   const [references, setReferences] = useState<Record<string, string>>({});
   const [dueReport, setDueReport] = useState<any>(null);
+  const [currentMonthDueReport, setCurrentMonthDueReport] = useState<any>(null);
   const [revenueReport, setRevenueReport] = useState<any>(null);
+  const [collectionReport, setCollectionReport] = useState<any>(null);
   const [settlement, setSettlement] = useState<any>(null);
   const [detail, setDetail] = useState<any>(null);
   const [supplierOptions, setSupplierOptions] = useState<Record<string, any[]>>(
@@ -77,6 +80,27 @@ export function Billing({
     "billing.create",
     "invoices.create",
   );
+  const canViewRevenueSummary = hasPermission(
+    "billing.manage",
+    "reports.revenue.read",
+  );
+  const canViewSettlementSummary = hasPermission(
+    "billing.manage",
+    "settlements.read",
+  );
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const monthEnd = `${monthEndDate.getFullYear()}-${String(monthEndDate.getMonth() + 1).padStart(2, "0")}-${String(monthEndDate.getDate()).padStart(2, "0")}`;
+  const monthlyReportParams = new URLSearchParams({
+    from_date: monthStart,
+    to_date: monthEnd,
+  });
+  if (branchId) monthlyReportParams.set("branch_id", branchId);
+  const monthlyReportQuery = monthlyReportParams.toString();
+  const branchReportQuery = branchId
+    ? `?branch_id=${encodeURIComponent(branchId)}`
+    : "";
 
   const patientMap = useMemo(
     () => new Map(patients.map((p: any) => [p.id, p])),
@@ -188,15 +212,12 @@ export function Billing({
   // consultation_id/appointment_id as the originating consultation (so their
   // billing can be traced back to it), so only a *pure* consultation invoice
   // — not just any invoice referencing that consultation — can mean the
-  // consultation-fee invoice was actually generated. A membership-covered
-  // consultation is auto-invoiced (₹0/discounted, paid via the plan benefit)
-  // the moment it's signed — invoiceSourceKey reports that as "membership",
-  // not "consultation", but it's still the consultation's actual invoice, so
-  // it must count here too or an already-billed free visit never leaves this
-  // list.
+  // consultation-fee invoice was actually generated. Membership benefits do
+  // not change this source classification: a covered visit remains a
+  // consultation invoice.
   const consultationInvoices = invoices.filter((i: any) => {
     const key = invoiceSourceKey(i);
-    return key === "consultation" || key === "membership";
+    return key === "consultation";
   });
   const invoicedConsultations = new Set(
     consultationInvoices.map((i: any) => i.consultation_id).filter(Boolean),
@@ -228,13 +249,24 @@ export function Billing({
   const finalizedSettlement = Number(
     settlement?.finalized_settlement_amount ?? 0,
   );
-  const canFinalizeSettlement = Boolean(
-    settlement?.can_finalize ?? payableSettlement > 0,
+  const settlementRecovery = Number(
+    settlement?.settlement_recovery_amount ?? 0,
   );
+  const canFinalizeSettlement =
+    hasPermission("billing.manage") &&
+    Boolean(settlement?.can_finalize ?? payableSettlement > 0);
 
   useEffect(() => {
     if (apiSession) loadReports();
-  }, [apiSession?.tenantId, invoices.length]);
+  }, [
+    apiSession?.tenantId,
+    invoices.length,
+    branchId,
+    monthStart,
+    monthEnd,
+    canViewRevenueSummary,
+    canViewSettlementSummary,
+  ]);
   useEffect(() => {
     setPage(1);
   }, [
@@ -273,16 +305,44 @@ export function Billing({
 
   async function loadReports() {
     if (!apiSession) return;
-    try {
-      const [due, revenue, summary] = await Promise.all([
-        apiFetch("/billing/reports/due-collection", apiSession),
-        apiFetch("/billing/reports/revenue?group_by=doctor", apiSession),
-        apiFetch("/billing/doctor-settlements/summary", apiSession),
-      ]);
-      setDueReport(due);
-      setRevenueReport(revenue);
-      setSettlement(summary);
-    } catch {}
+    const [due, currentMonthDue, revenue, collections, summary] =
+      await Promise.all([
+      canViewRevenueSummary
+        ? apiFetch(
+            `/billing/reports/due-collection${branchReportQuery}`,
+            apiSession,
+          ).catch(() => null)
+        : Promise.resolve(null),
+      canViewRevenueSummary
+        ? apiFetch(
+            `/billing/reports/due-collection?${monthlyReportQuery}`,
+            apiSession,
+          ).catch(() => null)
+        : Promise.resolve(null),
+      canViewRevenueSummary
+        ? apiFetch(
+            `/billing/reports/revenue?group_by=doctor&${monthlyReportQuery}`,
+            apiSession,
+          ).catch(() => null)
+        : Promise.resolve(null),
+      canViewRevenueSummary
+        ? apiFetch(
+            `/billing/reports/collections?${monthlyReportQuery}`,
+            apiSession,
+          ).catch(() => null)
+        : Promise.resolve(null),
+      canViewSettlementSummary
+        ? apiFetch(
+            `/billing/doctor-settlements/summary${branchReportQuery}`,
+            apiSession,
+          ).catch(() => null)
+        : Promise.resolve(null),
+    ]);
+    setDueReport(due);
+    setCurrentMonthDueReport(currentMonthDue);
+    setRevenueReport(revenue);
+    setCollectionReport(collections);
+    setSettlement(summary);
   }
 
   async function refreshBillingData() {
@@ -752,7 +812,10 @@ export function Billing({
         apiSession,
         {
           method: "POST",
-          body: JSON.stringify({ finalized_by_user_id: apiSession.user?.id }),
+          body: JSON.stringify({
+            finalized_by_user_id: apiSession.user?.id,
+            branch_id: branchId || null,
+          }),
         },
       );
       setSettlement(saved);
@@ -807,7 +870,7 @@ export function Billing({
             tone={source.tone as any}
             className="table-status text-sm text-center "
           >
-            {source.label == "Direct" ? "Membership" : source.label}
+            {source.label}
           </Badge>
         );
       },
@@ -934,63 +997,102 @@ export function Billing({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 grid-cols-4 lg:grid-cols-4">
-        <Card>
-          <p className="text-xs lg:text-sm text-slate-500">Due Collection</p>
-          <p className="mt-1 text-xl lg:text-2xl font-bold">
-            {money(dueReport?.total_due_amount)}
-          </p>
-          <p className="text-[10px] lg:text-xs text-slate-500">
-            {dueReport?.invoice_count ?? 0} invoices
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs lg:text-sm text-slate-500">Revenue</p>
-          <p className="mt-1 text-xl lg:text-2xl font-bold">
-            {money(revenueReport?.total_invoice_amount)}
-          </p>
-          <p className="text-[10px] lg:text-xs text-slate-500">
-            Collected invoice value
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs lg:text-sm text-slate-500">Paid</p>
-          <p className="mt-1 text-xl lg:text-2xl font-bold">
-            {money(revenueReport?.total_paid_amount)}
-          </p>
-          <p className="text-[10px] lg:text-xs text-slate-500">
-            Settlement {money(revenueReport?.total_doctor_share)}
-          </p>
-        </Card>
-        <Card>
-          <p className="text-xs lg:text-sm text-slate-500">Settlement</p>
-          <p className="mt-1 text-xl lg:text-2xl   font-bold">
-            {money(payableSettlement)}
-          </p>
-          <p className="text-[10px] lg:text-xs text-slate-500">
-            {finalizedSettlement > 0
-              ? `Finalized ${money(finalizedSettlement)}`
-              : "No finalized settlement yet"}
-          </p>
-          {canFinalizeSettlement ? (
-            <button
-              type="button"
-              onClick={finalizeSettlement}
-              className="mt-2 rounded-lg border px-3 py-2 text-xs font-bold"
-              disabled={busy === "settlement"}
-            >
-              {busy === "settlement" ? "Finalizing..." : "Finalize"}
-            </button>
-          ) : (
-            <Badge
-              tone="green"
-              className="inline table-status rounded-lg text-[11px] lg:text-sm w-2/3"
-            >
-              Finalized
-            </Badge>
+      {(canViewRevenueSummary || canViewSettlementSummary) && (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {canViewRevenueSummary && (
+            <Card>
+              <p className="text-xs lg:text-sm text-slate-500">
+                Due Collection
+              </p>
+              <p className="mt-1 text-xl lg:text-2xl font-bold">
+                {money(dueReport?.total_due_amount)}
+              </p>
+              <p className="text-[10px] lg:text-xs text-slate-500">
+                Current month {money(currentMonthDueReport?.total_due_amount)} ·
+                Carried forward{" "}
+                {money(
+                  Math.max(
+                    Number(dueReport?.total_due_amount || 0) -
+                      Number(currentMonthDueReport?.total_due_amount || 0),
+                    0,
+                  ),
+                )}
+              </p>
+              <p className="text-[10px] lg:text-xs text-slate-500">
+                {dueReport?.invoice_count ?? 0} outstanding invoices
+              </p>
+            </Card>
           )}
-        </Card>
-      </div>
+          {canViewRevenueSummary && (
+            <Card>
+              <p className="text-xs lg:text-sm text-slate-500">Revenue</p>
+              <p className="mt-1 text-xl lg:text-2xl font-bold">
+                {money(
+                  revenueReport?.total_billed_amount ??
+                    revenueReport?.total_invoice_amount,
+                )}
+              </p>
+              <p className="text-[10px] lg:text-xs text-slate-500">
+                Current-month billed value
+              </p>
+            </Card>
+          )}
+          {canViewRevenueSummary && (
+            <Card>
+              <p className="text-xs lg:text-sm text-slate-500">Paid</p>
+              <p className="mt-1 text-xl lg:text-2xl font-bold">
+                {money(collectionReport?.net_collected_amount)}
+              </p>
+              <p className="text-[10px] lg:text-xs text-slate-500">
+                Collected {money(collectionReport?.collected_amount)} · Refunds{" "}
+                {money(collectionReport?.refunded_amount)}
+              </p>
+            </Card>
+          )}
+          {canViewSettlementSummary && (
+            <Card>
+              <p className="text-xs lg:text-sm text-slate-500">Settlement</p>
+              <p className="mt-1 text-xl font-bold lg:text-2xl">
+                {money(payableSettlement)}
+              </p>
+              <p className="text-[10px] lg:text-xs text-slate-500">
+                {settlementRecovery > 0
+                  ? `Recover ${money(settlementRecovery)} after refunds`
+                  : finalizedSettlement > 0
+                  ? `Finalized ${money(finalizedSettlement)}`
+                  : "No finalized settlement yet"}
+              </p>
+              {canFinalizeSettlement ? (
+                <button
+                  type="button"
+                  onClick={finalizeSettlement}
+                  className="mt-2 rounded-lg border px-3 py-2 text-xs font-bold"
+                  disabled={busy === "settlement"}
+                >
+                  {busy === "settlement" ? "Finalizing..." : "Finalize"}
+                </button>
+              ) : (
+                <Badge
+                  tone={
+                    settlementRecovery > 0
+                      ? "red"
+                      : payableSettlement > 0
+                        ? "amber"
+                        : "green"
+                  }
+                  className="inline w-2/3 rounded-lg text-[11px] table-status lg:text-sm"
+                >
+                  {settlementRecovery > 0
+                    ? "Recovery due"
+                    : payableSettlement > 0
+                      ? "Pending finalization"
+                      : "Finalized"}
+                </Badge>
+              )}
+            </Card>
+          )}
+        </div>
+      )}
 
       {canCreateInvoices && (
         <Card>

@@ -440,10 +440,10 @@ export function Patient({
   }
 
   async function enrollMembership(data: any) {
-    if (!scopedSession || !selectedId) return;
+    if (!scopedSession || !selectedId) return false;
     if (!data.planId) {
       setMessage("Select membership plan.");
-      return;
+      return false;
     }
     setBusy(true);
     setMessage("");
@@ -464,8 +464,10 @@ export function Patient({
       await loadPatientDetail(selectedId);
       if (loadLiveData) await loadLiveData(scopedSession);
       setMessage("Patient membership enrolled and purchase invoice created.");
+      return true;
     } catch (err: any) {
       setMessage(err.message || "Could not enroll membership.");
+      return false;
     } finally {
       setBusy(false);
     }

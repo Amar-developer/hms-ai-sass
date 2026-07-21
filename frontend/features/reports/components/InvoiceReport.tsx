@@ -1,7 +1,7 @@
 import React from "react";
 import { Card,Badge } from "@/app/components/common/ui";
 import { DataTable } from "./DataTable";
-import { reportedInvoiceTotal } from "../financials";
+import { recognizedInvoiceTax, reportedInvoiceTotal } from "../financials";
 import { Pagination } from "@/app/components/common/Pagination";
 import { InvoiceProps } from "../types";
 
@@ -13,7 +13,10 @@ const InvoiceReport = ({
   appointmentById,
   patientById,
   invoiceSettlementAmount,
+  invoiceDoctorFeeAmount,
   invoicePaymentMode,
+  invoiceGrossProfit,
+  invoiceGrossProfitPercent,
   numberValue,
   doctorById,
   rowDate,
@@ -133,6 +136,18 @@ const InvoiceReport = ({
     render: (row: any) => invoicePaymentMode(row),
   },
   {
+    key: "doctor_fee",
+    header: "Doctor Fee",
+    width:'100px',
+    render: (row: any) => money(invoiceDoctorFeeAmount(row)),
+  },
+  {
+    key: "tax_amount",
+    header: "GST from Paid",
+    width: "110px",
+    render: (row: any) => money(recognizedInvoiceTax(row)),
+  },
+  {
     key: "settlement",
     header: "Settlement",
     width:'100px',
@@ -151,15 +166,18 @@ const InvoiceReport = ({
     header: "Clinic Profit",
     width:'140px',
     render: (row: any) => {
-      const paid = numberValue(row.paid_amount);
-      const settlement = invoiceSettlementAmount(row);
-
       return (
         <span className="font-bold ">
-          {money(Math.max(paid - settlement, 0))}
+          {money(invoiceGrossProfit(row))}
         </span>
       );
     },
+  },
+  {
+    key: "clinic_profit_percentage",
+    header: "Profit %",
+    width: "100px",
+    render: (row: any) => invoiceGrossProfitPercent(row),
   },
 ];
   return (

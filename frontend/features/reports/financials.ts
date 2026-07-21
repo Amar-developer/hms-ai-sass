@@ -11,6 +11,14 @@ export function membershipBenefitUsage(invoice: any) {
   return Math.max(amount(invoice?.membership_discount_amount), 0);
 }
 
+export function recognizedInvoiceTax(invoice: any) {
+  const total = Math.max(amount(invoice?.total_amount), 0);
+  const paid = recognizedInvoiceRevenue(invoice);
+  const tax = Math.max(amount(invoice?.tax_amount), 0);
+  if (!total || !paid || !tax) return 0;
+  return Math.min(Math.round((tax * paid) / total), paid, tax);
+}
+
 // Report totals show the full value delivered: the net invoice amount plus
 // the portion consumed from the patient's membership. Paid revenue remains
 // separate and is the only basis for settlement and realized profit.
@@ -47,7 +55,11 @@ export function reportPaymentMode(
 }
 
 export function realizedGrossProfit(invoice: any, settlementOrCost: number) {
-  return Math.max(recognizedInvoiceRevenue(invoice) - amount(settlementOrCost), 0);
+  return (
+    recognizedInvoiceRevenue(invoice) -
+    recognizedInvoiceTax(invoice) -
+    amount(settlementOrCost)
+  );
 }
 
 export function allocatedReportValue(
@@ -57,4 +69,44 @@ export function allocatedReportValue(
 ) {
   if (lineAmount <= 0 || invoiceSubtotal <= 0 || invoiceValue <= 0) return 0;
   return Math.round((lineAmount * invoiceValue) / invoiceSubtotal);
+}
+
+export function allocateReportValues(
+  lineAmounts: number[],
+  invoiceSubtotal: number,
+  invoiceValue: number,
+) {
+  const subtotal = Math.max(Math.round(amount(invoiceSubtotal)), 0);
+  const value = Math.max(Math.round(amount(invoiceValue)), 0);
+  const weights = lineAmounts.map((line) =>
+    Math.max(Math.round(amount(line)), 0),
+  );
+  if (!subtotal || !value || weights.length === 0)
+    return weights.map(() => 0);
+
+  const target = Math.min(
+    value,
+    Math.round(
+      (weights.reduce((sum, weight) => sum + weight, 0) * value) / subtotal,
+    ),
+  );
+  const allocations = weights.map((weight) =>
+    Math.floor((weight * value) / subtotal),
+  );
+  let remainder = target - allocations.reduce((sum, row) => sum + row, 0);
+  const ranked = weights
+    .map((weight, index) => ({
+      index,
+      remainder: (weight * value) % subtotal,
+    }))
+    .sort(
+      (left, right) =>
+        right.remainder - left.remainder || left.index - right.index,
+    );
+  for (const row of ranked) {
+    if (remainder <= 0) break;
+    allocations[row.index] += 1;
+    remainder -= 1;
+  }
+  return allocations;
 }

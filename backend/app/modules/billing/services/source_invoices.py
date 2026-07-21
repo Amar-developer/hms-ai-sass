@@ -112,100 +112,6 @@ def _sync_lab_order_item_catalog_prices(
             session.refresh(item)
 
 
-def _sync_lab_invoice_item_catalog_prices(
-    session: Session,
-    invoice: Invoice,
-    lab_items: list,
-    source_repo: BillingSourceRepository,
-) -> None:
-    invoice_items = source_repo.list_invoice_items_for_type(
-        invoice=invoice,
-        item_type="lab",
-    )
-    changed = False
-    for invoice_item, lab_item in zip(invoice_items, lab_items, strict=False):
-        item_changed = False
-        mrp_amount = int(lab_item.mrp_price or 0)
-        selling_amount = int(lab_item.selling_price or lab_item.price or 0)
-        buying_amount = int(lab_item.buying_price or 0)
-        if invoice_item.mrp_amount != mrp_amount:
-            invoice_item.mrp_amount = mrp_amount
-            item_changed = True
-        if invoice_item.selling_amount != selling_amount:
-            invoice_item.selling_amount = selling_amount
-            item_changed = True
-        if invoice_item.buying_amount != buying_amount:
-            invoice_item.buying_amount = buying_amount
-            item_changed = True
-        if invoice_item.supplier_id != lab_item.supplier_id:
-            invoice_item.supplier_id = lab_item.supplier_id
-            item_changed = True
-        if invoice_item.external_source != lab_item.external_source:
-            invoice_item.external_source = lab_item.external_source
-            item_changed = True
-        if invoice_item.external_slug != lab_item.external_slug:
-            invoice_item.external_slug = lab_item.external_slug
-            item_changed = True
-        if invoice_item.external_item_code != lab_item.external_item_code:
-            invoice_item.external_item_code = lab_item.external_item_code
-            item_changed = True
-        if int(invoice_item.unit_amount or 0) <= 0 and int(lab_item.price or 0) > 0:
-            invoice_item.unit_amount = int(lab_item.price or 0)
-            invoice_item.total_amount = int(lab_item.price or 0)
-            item_changed = True
-        if item_changed:
-            session.add(invoice_item)
-            changed = True
-    if changed:
-        session.commit()
-        session.refresh(invoice)
-
-
-def _sync_pharmacy_invoice_item_catalog_prices(
-    session: Session,
-    invoice: Invoice,
-    issue_items: list,
-    medicine_by_id: dict,
-    source_repo: BillingSourceRepository,
-) -> None:
-    invoice_items = source_repo.list_invoice_items_for_type(
-        invoice=invoice,
-        item_type="pharmacy",
-    )
-    changed = False
-    for invoice_item, issue_item in zip(invoice_items, issue_items, strict=False):
-        item_changed = False
-        medicine = medicine_by_id.get(issue_item.medicine_id or "")
-        selling_amount = int(
-            issue_item.unit_price or getattr(medicine, "default_sale_price", 0) or 0
-        )
-        mrp_amount = int(getattr(medicine, "mrp_price", 0) or selling_amount)
-        buying_amount = int(getattr(medicine, "purchase_price", 0) or 0)
-        supplier_id = getattr(medicine, "supplier_id", None)
-        if invoice_item.mrp_amount != mrp_amount:
-            invoice_item.mrp_amount = mrp_amount
-            item_changed = True
-        if invoice_item.selling_amount != selling_amount:
-            invoice_item.selling_amount = selling_amount
-            item_changed = True
-        if invoice_item.buying_amount != buying_amount:
-            invoice_item.buying_amount = buying_amount
-            item_changed = True
-        if invoice_item.supplier_id != supplier_id:
-            invoice_item.supplier_id = supplier_id
-            item_changed = True
-        if int(invoice_item.unit_amount or 0) <= 0 and selling_amount > 0:
-            invoice_item.unit_amount = selling_amount
-            invoice_item.total_amount = int(issue_item.quantity or 1) * selling_amount
-            item_changed = True
-        if item_changed:
-            session.add(invoice_item)
-            changed = True
-    if changed:
-        session.commit()
-        session.refresh(invoice)
-
-
 def create_invoice_from_lab_order_source(
     session: Session,
     *,
@@ -234,16 +140,15 @@ def create_invoice_from_lab_order_source(
         tenant_id=tenant_id,
         lab_order_id=order.id,
     )
-    _sync_lab_order_item_catalog_prices(session, tenant_id, order, items, source_repo)
     existing = source_repo.get_lab_order_invoice(
         tenant_id=tenant_id,
         lab_order_id=order.id,
     )
     if existing:
-        _sync_lab_invoice_item_catalog_prices(session, existing, items, source_repo)
         return read_invoice_detail(
             session, update_invoice_payment_status(session, existing)
         )
+    _sync_lab_order_item_catalog_prices(session, tenant_id, order, items, source_repo)
 
     appointment_id = None
     if order.consultation_id:
@@ -356,9 +261,6 @@ def create_invoice_from_pharmacy_issue_source(
         issue.billing_invoice_id = existing.id
         session.add(issue)
         session.commit()
-        _sync_pharmacy_invoice_item_catalog_prices(
-            session, existing, items, medicine_by_id, source_repo
-        )
         return read_invoice_detail(
             session, update_invoice_payment_status(session, existing)
         )
@@ -403,6 +305,7 @@ def create_invoice_from_pharmacy_issue_source(
             "selling_amount": selling_amount,
             "buying_amount": buying_amount,
             "supplier_id": medicine.supplier_id if medicine else None,
+            "external_item_code": item.medicine_id,
         }
 
     invoice = create_service_invoice(
