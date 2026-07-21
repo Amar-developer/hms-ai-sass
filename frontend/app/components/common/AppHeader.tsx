@@ -1,5 +1,4 @@
 import React from "react";
-import CompactControl from "./CompactControl";
 import { LogOut, KeyRound } from "lucide-react";
 import ProfileRow from "../ProfileRow";
 import { userInitials } from "@/utils/helper";

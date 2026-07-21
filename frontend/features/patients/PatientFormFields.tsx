@@ -161,7 +161,6 @@ export function PatientFormFields({
           value={ageYears}
           onChange={(event: any) => setAgeYears(event.target.value)}
           placeholder="Age"
-
         />
       </Field>
       <Field label="Guardian Name">
@@ -169,7 +168,6 @@ export function PatientFormFields({
           name="guardianName"
           defaultValue={patientField(patient, "guardian_name", "guardianName")}
           placeholder="Enter guardian name"
-
         />
       </Field>
       <Field label="Guardian Mobile">
@@ -181,7 +179,6 @@ export function PatientFormFields({
             "guardianMobile",
           )}
           placeholder="Enter guardian mobile"
-
         />
       </Field>
       <Field label="Alternate Phone Number">
@@ -204,7 +201,6 @@ export function PatientFormFields({
           type="email"
           defaultValue={patientField(patient, "email")}
           placeholder="Enter patient email"
-
         />
       </Field>
       <Field label="Area">
@@ -212,7 +208,6 @@ export function PatientFormFields({
           name="area"
           defaultValue={patientField(patient, "area")}
           placeholder="Enter patient area"
-
         />
       </Field>
       <Field label="Blood Group">
