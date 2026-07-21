@@ -17,6 +17,7 @@ const LabReports = ({
       key: "supplier",
       header: "Supplier",
       render: (row: any) => <b>{row.supplier}</b>,
+      width: '120px'
     },
     {
       key: "item",
@@ -26,56 +27,51 @@ const LabReports = ({
     {
       key: "orderCount",
       header: "Orders",
+      width: '90px'
     },
     {
       key: "invoiceCount",
       header: "Invoices",
+      width: '90px'
     },
     {
       key: "total",
       header: "Total",
       render: (row: any) => money(row.total),
+      width: '90px'
     },
     {
       key: "revenue",
-      header: "Paid Revenue",
+      header: "Revenue",
       render: (row: any) => money(row.revenue),
+      width: '90px'
     },
     {
       key: "balance",
       header: "Balance",
       render: (row: any) => money(row.balance),
+      width: '90px'
     },
     {
       key: "membershipBenefit",
-      header: "Membership Benefit",
-      width: '160px',
+      header: "Membership",
+      width: '120px',
       render: (row: any) => money(row.membershipBenefit),
     },
     {
       key: "paymentMode",
-      header: "Mode of Payment",
-      width: "140px",
-    },
-    {
-      key: "tax",
-      header: "GST",
-      render: (row: any) => money(row.tax),
+      header: "M.O.P",
+      width: "90px",
     },
     {
       key: "purchaseCost",
       header: "Purchase Cost",
-      width: '160px',
+      width: '150px',
       render: (row: any) => money(row.purchaseCost),
     },
     {
-      key: "settlementPercent",
-      header: "Settlement %",
-      width: "120px",
-    },
-    {
       key: "profit",
-      header: "Lab Profit",
+      header: "Profit",
       render: (row: any) => (
         <span className="font-bold">{money(row.profit)}</span>
       ),
@@ -93,51 +89,13 @@ const LabReports = ({
         }
       >
         <div className="mt-4 overflow-auto rounded-2xl border">
-          {/* <table className="w-full min-w-[1120px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3 text-[10px] lg:text-xs">Supplier</th>
-                <th className="text-[10px] lg:text-xs">Lab Test / Package</th>
-                <th className="text-[10px] lg:text-xs">Orders</th>
-                <th className="text-[10px] lg:text-xs">Invoices</th>
-                <th className="text-[10px] lg:text-xs">Revenue</th>
-                <th className="text-[10px] lg:text-xs">Purchase Cost</th>
-                <th className="text-[10px] lg:text-xs">Lab Profit</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {labSettlementRows.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-4 text-xs lg:text-sm text-slate-500"
-                  >
-                    No paid lab invoices match this filter.
-                  </td>
-                </tr>
-              )}
-              {labSettlementRows.map((row: any) => (
-                <tr key={row.id}>
-                  <td className="px-4 py-4">
-                    <b>{row.supplier}</b>
-                  </td>
-                  <td>{row.item}</td>
-                  <td>{row.orderCount}</td>
-                  <td>{row.invoiceCount}</td>
-                  <td>{money(row.revenue)}</td>
-                  <td>{money(row.purchaseCost)}</td>
-                  <td className="font-bold">{money(row.profit)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table> */}
           <DataTable
             columns={columns}
             data={labSettlementRows}
             onRowClick={(row: any) => onOpenInvoices(row.invoices)}
             paginate
             emptyMessage="No paid lab invoices match this filter"
-            className='w-full min-w-[1120px] text-left text-sm'
+            className='w-full min-w-[920px] text-left text-sm'
           />
         </div>
       </CollapsibleReportSection>

@@ -201,22 +201,22 @@ function PrescriptionPage({
       : "";
 
   return (
-    <section className="relative w-[794px] h-[1122px] mx-auto bg-white overflow-hidden break-after-page last:break-after-auto">
+    <section className="relative w-[794px] h-[1040px] bg-white overflow-hidden break-after-page last:break-after-auto">
       {isFirstPage && (
         <>
           {/* Everything above the signature/footer strip flows naturally
               top-to-bottom so variable-length clinic address / doctor name /
               specialty never collides with fixed positions below it. */}
-          <div className="max-h-[888px] overflow-hidden flex flex-col">
+          <div className="overflow-hidden flex flex-col  ">
             {/* Header */}
-            <div className="px-[49px] pt-[27px] pb-[11px] border-b-[1px] border-[#0175A7]/70 bg-white">
-              <div className="flex items-center gap-12">
+            <div className="px-[49px] pt-[20px] pb-[11px] border-b-[1px] border-[#0175A7]/70 bg-white">
+              <div className="flex items-center justify-center gap-12 ">
                 <img
                   className="block w-[98px] h-[98px] shrink-0"
                   src={uploadAssetUrl(clinic.logo_url) || "/clinic_logo.png"}
                   alt=""
                 />
-                <div className="flex-1 min-w-0 pt-[5px]">
+                <div className="flex-1 min-w-0 pt-[5px] items-center justify-center">
                   <h1 className="m-0 leading-none whitespace-nowrap ">
                     <span className="text-5xl font-extrabold font-['Poppins'] tracking-[0.917px] text-[#0175A7]">
                       {clinicNamePrimary}
@@ -274,7 +274,7 @@ function PrescriptionPage({
             </div>
 
             {/* Doctor info + Patient name / Date + vitals */}
-            <div className="px-[49px] pt-[26px] grid grid-cols-[1fr_129px] gap-[30px] items-start">
+            <div className="px-[20px] pt-[26px] grid grid-cols-[1fr_129px] gap-[30px] items-start">
               <div className="min-w-0">
                 <p className="m-0 text-[#0175A7] text-[21px] font-bold font-['Poppins'] leading-none tracking-[0.6px]">
                   {doctorDisplayName(doctor.name || "-")}{" "}
@@ -335,7 +335,7 @@ function PrescriptionPage({
             </div>
 
             {/* Doctor Notes */}
-            <div className="relative flex-1 min-h-[265px] px-[49px] pt-[26px]">
+            <div className="relative flex-1 min-h-[265px] px-[20px] pt-[26px]">
               <p className="m-0 text-[#111827] text-[16px] font-semibold font-['Poppins'] underline underline-offset-[2px]">
                 Doctor Notes:
               </p>
@@ -352,7 +352,7 @@ function PrescriptionPage({
           </div>
 
           {/* Page number + signature */}
-          <span className="absolute left-[33px] bottom-[204px] text-[#0175A7] text-[14px] font-semibold font-['Poppins'] tracking-[0.6px]">
+          <span className="absolute left-[33px] bottom-[196px] text-[#0175A7] text-[14px] font-semibold font-['Poppins'] tracking-[0.6px]">
             Page Number: {pageNumber} of {totalPages}
           </span>
           <div className="absolute right-[49px] bottom-[196px] w-[192px] flex flex-col items-center gap-[4px]">
@@ -371,7 +371,7 @@ function PrescriptionPage({
 
           {/* Footer */}
 
-          <div className="absolute left-0 right-0 bottom-0 border-t-[1px] border-[#0175A7]/70 px-[49px] pt-[11px] pb-[11px] grid grid-cols-[1fr_283px] gap-[30px] items-start bg-white">
+          <div className="absolute left-0 right-0 -bottom-2 border-t-[1px] border-[#0175A7]/70 px-[20px] pt-2   grid grid-cols-[1fr_283px] gap-[30px] items-start bg-white">
             <div className="flex items-start gap-[20px]">
               <img
                 className="block w-[76px] h-auto shrink-0"
@@ -442,7 +442,7 @@ function PrescriptionPage({
       )}
 
       {!isFirstPage && (
-        <div className="absolute right-0 left-0 top-0 h-[1122px] flex flex-col  px-[20px] pb-[11px] pt-[53px] overflow-hidden">
+        <div className="absolute right-0 left-0 top-0 h-[1050px] flex flex-col  px-[5px] pb-[11px] pt-[53px] overflow-hidden">
           <section className="pt-[8px] px-[30px] pb-0 text-[#111827]">
             {medicineRows.length > 0 && (
               <>

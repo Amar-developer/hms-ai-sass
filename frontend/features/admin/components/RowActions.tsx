@@ -5,6 +5,7 @@ import { MoreHorizontal } from "lucide-react";
 export function RowActions({
   actions,
   className = "right-7 -bottom-5",
+  width='24'
 }: RowActionsProps) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -35,7 +36,7 @@ export function RowActions({
 
       {open && (
         <div
-          className={`absolute ${className}  mb-2 w-24 rounded-lg border bg-white shadow-lg z-50`}
+          className={`absolute ${className}  mb-2 ${width} rounded-lg border bg-white shadow-lg z-50`}
         >
           {actions
             .filter((a) => !a.hidden)

@@ -33,6 +33,7 @@ import { STATUS_FILTER_OPTIONS } from "@/utils/constants";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { Info } from "@/app/components/common/Info";
 import { Pagination } from "@/app/components/common/Pagination";
+import { RowActions } from "@/features/admin/components/RowActions";
 import { useAppointmentBookingData } from "./api/useAppointmentBookingData";
 import { useAppointmentBookingActions } from "./api/useAppointmentBookingActions";
 import {
@@ -66,6 +67,48 @@ function formatDisplayTime(value: any) {
   const period = hour >= 12 ? "PM" : "AM";
   const hour12 = hour % 12 || 12;
   return `${hour12}:${minuteText.padStart(2, "0")} ${period}`;
+}
+
+// Parses the comma-separated "Name=value" intake_vitals string (see
+// combinedIntakeVitals in useAppointmentBookingActions.ts) back into a
+// lookup by lowercase field name.
+function parseIntakeVitalsText(vitals: string) {
+  const byName: Record<string, string> = {};
+  String(vitals || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((item) => {
+      const [name, ...rest] = item.split("=");
+      if (!name?.trim()) return;
+      byName[name.trim().toLowerCase()] = rest.join("=").trim();
+    });
+  return byName;
+}
+
+// Click-to-fill hint shown under an intake field when the patient has a
+// previously recorded value for it. Never writes to the input on its own —
+// staff must click it, so a stale prior reading is never silently recorded
+// as this visit's vitals.
+function IntakeSuggestionChip({
+  value,
+  currentValue,
+  onApply,
+}: {
+  value?: string;
+  currentValue: string;
+  onApply: () => void;
+}) {
+  if (!value || value === currentValue) return null;
+  return (
+    <button
+      type="button"
+      onClick={onApply}
+      className="mt-1 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+    >
+      Use previous: {value}
+    </button>
+  );
 }
 
 // Normalizes an appointment (clinic or platform shape) into a display status
@@ -147,6 +190,10 @@ export function AppointmentCalendarBooking(props: Props) {
   const [intakeTemp, setIntakeTemp] = useState("");
   const [intakeHeight, setIntakeHeight] = useState("");
   const [intakeWeight, setIntakeWeight] = useState("");
+  const [previousIntake, setPreviousIntake] = useState<Record<
+    string,
+    string
+  > | null>(null);
   const [booked, setBooked] = useState<any>(null);
   const [busy, setBusy] = useState(false);
   const bookingInFlightRef = useRef(false);
@@ -395,6 +442,43 @@ export function AppointmentCalendarBooking(props: Props) {
     [platformTenantId, platformDepartment, platformRows.length],
   );
 
+  // Surface the patient's most recent recorded vitals/complaints as
+  // click-to-fill suggestions (never auto-filled into the inputs) so
+  // front-desk staff can reuse them without accidentally recording stale
+  // vitals as the new visit's readings.
+  useEffect(() => {
+    if (!selectedPatient?.id) {
+      setPreviousIntake(null);
+      return;
+    }
+    const previous = appointments
+      .filter(
+        (appointment: any) =>
+          (appointment.patientId || appointment.patient_id) ===
+            selectedPatient.id &&
+          (appointment.intakeVitals || appointment.intakeComplaints),
+      )
+      .sort((a: any, b: any) => {
+        const aKey = `${a.appointmentDate || ""} ${a.appointmentTime || a.appointment_time || ""}`;
+        const bKey = `${b.appointmentDate || ""} ${b.appointmentTime || b.appointment_time || ""}`;
+        return bKey.localeCompare(aKey);
+      })[0];
+    if (!previous) {
+      setPreviousIntake(null);
+      return;
+    }
+    const byName = parseIntakeVitalsText(previous.intakeVitals || "");
+    setPreviousIntake({
+      bp: byName.bp || "",
+      pulse: byName.pulse || "",
+      spo2: byName.spo2 || "",
+      temp: byName.temp || "",
+      height: byName.height || "",
+      weight: byName.weight || "",
+      complaints: previous.intakeComplaints || "",
+    });
+  }, [selectedPatient?.id]);
+
   function openBooking() {
     setMode("book");
     setBookingStep("appointment");
@@ -414,6 +498,100 @@ export function AppointmentCalendarBooking(props: Props) {
     setIntakeTemp("");
     setIntakeHeight("");
     setIntakeWeight("");
+    setPreviousIntake(null);
+  }
+
+  // Opens the token slip as its own printable page (app/appointments/token),
+  // matching the invoice receipt flow instead of printing the whole booking
+  // screen. Unlike invoices, the token number and denormalized doctor/
+  // department names aren't re-fetchable from GET /appointments/:id, so the
+  // slip data is handed off via sessionStorage rather than re-queried there.
+  function openTokenPrintWindow(
+    appointmentId: string,
+    payload: Record<string, unknown>,
+  ) {
+    sessionStorage.setItem(
+      `medizinhub.tokenPrint.${appointmentId}`,
+      JSON.stringify(payload),
+    );
+    window.open(`/appointments/token?id=${appointmentId}`, "_blank");
+  }
+
+  function printTokenSlip() {
+    const appointmentId = booked?.appointment?.id;
+    if (!appointmentId) return;
+    openTokenPrintWindow(appointmentId, {
+      patientName:
+        selectedPatient?.full_name || booked?.appointment?.patient || "-",
+      patientNumber: selectedPatient?.patient_number || "",
+      patientId: selectedPatient?.id || booked?.appointment?.patient_id || "",
+      age: selectedPatient?.age_years ?? selectedPatient?.age ?? null,
+      gender: selectedPatient?.gender || "",
+      mobile: selectedPatient?.mobile || "",
+      tokenNumber:
+        booked?.queue_entry?.token_number ||
+        booked?.queue_entry?.token ||
+        booked?.appointment?.token ||
+        "-",
+      appointmentDate:
+        booked?.appointment?.appointment_date ||
+        booked?.appointment?.appointmentDate ||
+        appointmentDate,
+      appointmentTime: booked?.appointment?.appointment_time ||
+      booked?.appointment?.appointmentTime
+        ? formatDisplayTime(
+            booked.appointment.appointment_time ||
+              booked.appointment.appointmentTime,
+          )
+        : "",
+      department: selectedDepartmentName,
+      doctor: doctor?.full_name || doctor?.name || "",
+      visitLabel: appointmentType.replaceAll("_", " ").toUpperCase(),
+      billingStatus: isBillable ? "Chargeable" : "Free Review",
+      intakeBp,
+      intakePulse,
+      intakeSpo2,
+      intakeTemp,
+      intakeHeight,
+      intakeWeight,
+      intakeComplaints,
+    });
+  }
+
+  // Same slip, sourced from an already-booked row in the appointments list
+  // (its "..." row action) instead of the fresh booking-success state above.
+  function printTokenSlipForRow(appointment: any) {
+    if (!appointment?.id) return;
+    const patient = patientMap.get(appointment.patientId);
+    const byName = parseIntakeVitalsText(appointment.intakeVitals || "");
+    const appointmentTime =
+      appointment.appointmentTime || appointment.appointment_time;
+    openTokenPrintWindow(appointment.id, {
+      patientName: appointment.patient || patient?.name || "-",
+      patientNumber: patient?.patientNumber || "",
+      patientId: appointment.patientId || "",
+      age: patient?.age ?? null,
+      gender: patient?.gender || "",
+      mobile: patient?.mobile || appointment.patientMobile || "",
+      tokenNumber: appointment.token || "-",
+      appointmentDate: appointment.appointmentDate || "",
+      appointmentTime: appointmentTime ? formatDisplayTime(appointmentTime) : "",
+      department:
+        departmentOptions.find((d: any) => d.id === appointment.departmentId)
+          ?.name || publicDisplayValue(appointment.departmentId),
+      doctor: appointment.doctor || "",
+      visitLabel: String(appointment.appointmentType || "op")
+        .replaceAll("_", " ")
+        .toUpperCase(),
+      billingStatus: appointment.isBillable ? "Chargeable" : "Free Review",
+      intakeBp: byName.bp || "",
+      intakePulse: byName.pulse || "",
+      intakeSpo2: byName.spo2 || "",
+      intakeTemp: byName.temp || "",
+      intakeHeight: byName.height || "",
+      intakeWeight: byName.weight || "",
+      intakeComplaints: appointment.intakeComplaints || "",
+    });
   }
 
   const { refreshAppointmentList, savePatient, bookAppointment } =
@@ -843,6 +1021,11 @@ export function AppointmentCalendarBooking(props: Props) {
                         onChange={(e: any) => setIntakeBp(e.target.value)}
                         placeholder="120/80 mmHg"
                       />
+                      <IntakeSuggestionChip
+                        value={previousIntake?.bp}
+                        currentValue={intakeBp}
+                        onApply={() => setIntakeBp(previousIntake!.bp)}
+                      />
                     </FormField>
 
                     <FormField label="Pulse / PR">
@@ -850,6 +1033,11 @@ export function AppointmentCalendarBooking(props: Props) {
                         value={intakePulse}
                         onChange={(e: any) => setIntakePulse(e.target.value)}
                         placeholder="78 bpm"
+                      />
+                      <IntakeSuggestionChip
+                        value={previousIntake?.pulse}
+                        currentValue={intakePulse}
+                        onApply={() => setIntakePulse(previousIntake!.pulse)}
                       />
                     </FormField>
 
@@ -859,6 +1047,11 @@ export function AppointmentCalendarBooking(props: Props) {
                         onChange={(e: any) => setIntakeSpo2(e.target.value)}
                         placeholder="98%"
                       />
+                      <IntakeSuggestionChip
+                        value={previousIntake?.spo2}
+                        currentValue={intakeSpo2}
+                        onApply={() => setIntakeSpo2(previousIntake!.spo2)}
+                      />
                     </FormField>
 
                     <FormField label="Temp">
@@ -866,6 +1059,11 @@ export function AppointmentCalendarBooking(props: Props) {
                         value={intakeTemp}
                         onChange={(e: any) => setIntakeTemp(e.target.value)}
                         placeholder="98.6°F"
+                      />
+                      <IntakeSuggestionChip
+                        value={previousIntake?.temp}
+                        currentValue={intakeTemp}
+                        onApply={() => setIntakeTemp(previousIntake!.temp)}
                       />
                     </FormField>
 
@@ -875,6 +1073,11 @@ export function AppointmentCalendarBooking(props: Props) {
                         onChange={(e: any) => setIntakeHeight(e.target.value)}
                         placeholder="170cm"
                       />
+                      <IntakeSuggestionChip
+                        value={previousIntake?.height}
+                        currentValue={intakeHeight}
+                        onApply={() => setIntakeHeight(previousIntake!.height)}
+                      />
                     </FormField>
 
                     <FormField label="Weight">
@@ -883,17 +1086,36 @@ export function AppointmentCalendarBooking(props: Props) {
                         onChange={(e: any) => setIntakeWeight(e.target.value)}
                         placeholder="65kg"
                       />
+                      <IntakeSuggestionChip
+                        value={previousIntake?.weight}
+                        currentValue={intakeWeight}
+                        onApply={() => setIntakeWeight(previousIntake!.weight)}
+                      />
                     </FormField>
-                    <TextareaField
-                      label="Complaint Rows"
-                      value={intakeComplaints}
-                      onChange={setIntakeComplaints}
-                      placeholder={
-                        "Fever | 2 days | medium\nCough | 1 day | mild"
-                      }
-                      rows={3}
-                      className="placeholder:text-xs px-2 py-2"
-                    />
+                    <div>
+                      <TextareaField
+                        label="Complaint Rows"
+                        value={intakeComplaints}
+                        onChange={setIntakeComplaints}
+                        placeholder={
+                          "Fever | 2 days | medium\nCough | 1 day | mild"
+                        }
+                        rows={3}
+                        className="placeholder:text-xs px-2 py-2"
+                      />
+                      {previousIntake?.complaints &&
+                        previousIntake.complaints !== intakeComplaints && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setIntakeComplaints(previousIntake!.complaints)
+                            }
+                            className="mt-1 inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700 hover:bg-blue-100"
+                          >
+                            Use previous complaints
+                          </button>
+                        )}
+                    </div>
                   </div>
                 </div>
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -976,7 +1198,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <div className="mt-5 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={printTokenSlip}
                 className="close-button font-bold"
               >
                 Print Token
@@ -1081,9 +1303,9 @@ export function AppointmentCalendarBooking(props: Props) {
         )}
       </div>
       <div className="mt-4 rounded-lg border border-slate-200 overflow-x-auto">
-        <div className="min-w-[1300px]">
+        <div className="min-w-[1150px]">
           <div
-            className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[220px_70px_220px_140px_150px_180px_180px_120px]" : "grid-cols-[120px_70px_140px_140px_150px_180px_120px_280px]"}`}
+            className={`hidden gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 md:grid ${isSuperAdmin ? "grid-cols-[220px_70px_220px_140px_150px_180px_180px_120px]" : "grid-cols-[120px_70px_140px_140px_150px_180px_120px_120px]"}`}
           >
             {isSuperAdmin && <span>Tenant</span>}
             <span className="text-sm">Patient</span>
@@ -1094,7 +1316,7 @@ export function AppointmentCalendarBooking(props: Props) {
             <span className="text-sm lg:text-left ">Date</span>
             <span className=" text-sm text-center">Status</span>
             {!isSuperAdmin && (
-              <span className=" text-sm md:text-center pr-4">Links</span>
+              <span className=" text-sm md:text-center pr-4">Actions</span>
             )}
           </div>
           <div className="divide-y divide-slate-200">
@@ -1167,7 +1389,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       openConsultation(appointment);
                     }
                   }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_70px_140px_140px_150px_180px_120px_280px] md:items-center"
+                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_70px_140px_140px_150px_180px_120px_120px] md:items-center"
                 >
                   <div>
                     <div className="flex items-center gap-2">
@@ -1212,24 +1434,21 @@ export function AppointmentCalendarBooking(props: Props) {
                   >
                     {appointmentStatusInfo(appointment).label}
                   </Badge>
-                  <div
-                    className="flex flex-wrap lg:flex-nowrap items-center justify-center gap-2"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => openConsultation(appointment)}
-                      className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-xs  font-bold hover:bg-slate-50"
-                    >
-                      Consultation
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openPatient(appointment)}
-                      className="whitespace-nowrap rounded-lg border px-1 py-1 lg:px-3 lg:py-2 text-xs font-bold hover:bg-slate-50"
-                    >
-                      Patient Details
-                    </button>
+                  <div className="flex items-center justify-center">
+                    <RowActions
+                      actions={[
+                        {
+                          label: "Patient Details",
+                          onClick: () => openPatient(appointment),
+                        },
+                        {
+                          label: "Print Token",
+                          onClick: () => printTokenSlipForRow(appointment),
+                        },
+                      ]}
+                      className="right-0 -bottom-5"
+                      width="w-36"
+                    />
                   </div>
                 </div>
               );

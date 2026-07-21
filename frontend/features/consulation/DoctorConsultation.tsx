@@ -1263,7 +1263,7 @@ export function DoctorConsultation({
                 Select any waiting patient for consultation.
               </p>
             </div>
-            <div className="flex items-center gap-3 w-[50%] lg:w-[40%]">
+            <div className="flex items-center gap-3 w-[30%] lg:w-[25%]">
               <FormField label="Doctor">
                 <SearchableSelect
                   value={doctorId}
@@ -1280,9 +1280,7 @@ export function DoctorConsultation({
                   }))}
                 />
               </FormField>
-              <Badge className="normal-badge text-center w-[50%]" tone="blue">
-                {branch.name}
-              </Badge>
+
             </div>
           </div>
           <StatusToast message={message} onClose={() => setMessage("")} />

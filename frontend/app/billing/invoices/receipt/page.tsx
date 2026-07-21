@@ -102,6 +102,7 @@ function toInvoiceProps(
     taxAmount: Number(invoice.tax_amount || 0),
     taxLabel: invoice.tax_label || "Tax",
     total: Number(invoice.total_amount || 0),
+    tax_amount:Number(invoice.tax_amount || 0)
   };
 }
 

@@ -2,8 +2,6 @@ import { AppointmentReportsProps } from "../types";
 import CollapsibleReportSection from "./CollapsibleReportSection";
 import { DataTable } from "./DataTable";
 
-
-
 const AppointmentReports = ({
   doctorRows,
   openSections,
@@ -16,71 +14,61 @@ const AppointmentReports = ({
     {
       key: "doctor",
       header: "Doctor",
-      width:'80px',
+      width: "80px",
       render: (row: any) => <b>{row.doctor}</b>,
     },
     {
       key: "consultations",
       header: "Consultations",
-      width: '140px'
+      width: "140px",
     },
     {
       key: "invoices",
       header: "Invoices",
-      width:'80px'
+      width: "80px",
     },
     {
       key: "grossRevenue",
-      width:'150px',
-      header: "Gross Revenue",
+      width: "90px",
+      header: "Revenue",
       render: (row: any) => money(row.grossRevenue),
     },
     {
       key: "paidRevenue",
       header: "Paid",
-      width:'80px',
+      width: "80px",
       render: (row: any) => money(row.paidRevenue),
     },
     {
       key: "doctorFee",
       header: "Doctor Fee",
-      width:'120px',
+      width: "120px",
       render: (row: any) => money(row.doctorFee),
-    },
-    {
-      key: "paidTax",
-      header: "GST from Paid",
-      width: "120px",
-      render: (row: any) => money(row.paidTax),
-    },
-    {
-      key: "doctorFeePercent",
-      header: "Doctor Fee %",
-      width: "120px",
     },
     {
       key: "clinicFee",
       header: "Clinic Fee",
-      width:'110px',
+      width: "110px",
       render: (row: any) => money(row.clinicFee),
+    },
+
+    {
+      key: "finalProfit",
+      header: "Final Profit",
+      width: "130px",
+      render: (row: any) => (
+        <span className="font-bold">{money(row.finalProfit)}</span>
+      ),
     },
     {
       key: "grossProfitPercentage",
-      header: "Profit %",
-      width:'150px',
+      header: "Gross Profit %",
+      width: "150px",
       render: (row: any) =>
         percent(
           row.finalProfit,
           row.paidRevenue - row.paidTax,
         ),
-    },
-    {
-      key: "finalProfit",
-      header: "Final Profit",
-      width:'130px',
-      render: (row: any) => (
-        <span className="font-bold">{money(row.finalProfit)}</span>
-      ),
     },
   ];
   return (
@@ -96,12 +84,12 @@ const AppointmentReports = ({
       >
         <div className="mt-4 overflow-auto rounded-2xl border">
           <DataTable
-          columns={columns}
-          data={doctorRows}
-          onRowClick={(row: any) => onOpenInvoices(row.invoiceIds)}
-          paginate
-          className="w-full min-w-[1280px] text-left text-sm"
-          emptyMessage="No healthcare invoices match this filter."
+            columns={columns}
+            data={doctorRows}
+            onRowClick={(row: any) => onOpenInvoices(row.invoiceIds)}
+            paginate
+            className="w-full min-w-[1280px] text-left text-sm"
+            emptyMessage="No healthcare invoices match this filter."
           />
         </div>
       </CollapsibleReportSection>

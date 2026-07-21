@@ -41,6 +41,7 @@ export type Action = {
 export type RowActionsProps = {
   actions: Action[];
   className?: string;
+  width?:string
 };
 
 export type Role = {

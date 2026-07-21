@@ -32,55 +32,51 @@ const PharmacyReports = ({
     {
       key: "invoiceCount",
       header: "Invoices",
+       width:'90px',
     },
     {
       key: "quantity",
       header: "Qty",
+       width:'90px',
     },
     {
       key: "total",
       header: "Total",
       render: (row: any) => money(row.total),
+       width:'90px',
     },
     {
       key: "revenue",
-      header: "Paid Revenue",
+      header: "Revenue",
       render: (row: any) => money(row.revenue),
+       width:'90px',
     },
     {
       key: "balance",
       header: "Balance",
       render: (row: any) => money(row.balance),
+       width:'90px',
     },
     {
       key: "membershipBenefit",
-      header: "Membership Benefit",
-      width: '160px',
+      header: "Membership",
+      width: '130px',
       render: (row: any) => money(row.membershipBenefit),
     },
     {
       key: "paymentMode",
-      header: "Mode of Payment",
-      width: "140px",
-    },
-    {
-      key: "tax",
-      header: "GST",
-      render: (row: any) => money(row.tax),
+      header: "M.O.P",
+      width: "90px",
     },
     {
       key: "purchaseCost",
       header: "Purchase Cost",
       render: (row: any) => money(row.purchaseCost),
-    },
-    {
-      key: "settlementPercent",
-      header: "Settlement %",
-      width: "120px",
+       width:'160px',
     },
     {
       key: "profit",
-      header: "Pharmacy Profit",
+      header: "Profit",
       render: (row: any) => (
         <span className="font-bold">{money(row.profit)}</span>
       ),

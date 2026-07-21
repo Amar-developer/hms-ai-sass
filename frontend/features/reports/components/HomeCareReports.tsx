@@ -22,52 +22,58 @@ const HomeCareReports = ({
           <p className="text-xs text-slate-500">{row.date}</p>
         </>
       ),
+      width:'120px'
     },
     {
       key: "type",
       header: "Type",
+      width:'120px'
     },
     {
       key: "patient",
       header: "Patient",
       render: (row: any) => <b>{row.patient}</b>,
+      width:'120px'
     },
     {
       key: "staff",
       header: "Staff",
+      width:'90px'
     },
     {
       key: "totalAmount",
       header: "Total",
       render: (row: any) => money(row.totalAmount),
+      width:'90px'
     },
     {
       key: "paidAmount",
-      header: "Paid Amount",
+      header: "Paid",
       render: (row: any) => money(row.paidAmount),
+      width:'90px'
     },
     {
       key: "balance",
       header: "Balance",
       render: (row: any) => money(row.balance),
+      width:'90px'
     },
     {
       key: "membershipBenefit",
-      header: "Membership Benefit",
+      header: "Membership",
       render: (row: any) => money(row.membershipBenefit),
+      width:'120px'
     },
     {
       key: "paymentMode",
-      header: "Mode of Payment",
+      header: "M.O.P",
+      width:'90px'
     },
     {
       key: "settlement",
       header: "Settlement",
       render: (row: any) => money(row.settlement),
-    },
-    {
-      key: "settlementPercent",
-      header: "Settlement %",
+      width:'120px'
     },
     {
       key: "grossProfit",
@@ -75,10 +81,12 @@ const HomeCareReports = ({
       render: (row: any) => (
         <span className="font-bold">{money(row.grossProfit)}</span>
       ),
+      width:'90px'
     },
     {
       key: "grossProfitPercent",
       header: "Gross Profit %",
+      width:'120px'
     },
   ];
 

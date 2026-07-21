@@ -15,8 +15,7 @@ const InvoiceHeader = ({company}) => {
             <img
               src={company.logoUrl}
               alt={`${company.name} logo`}
-              onError={() => setLogoFailed(true)}
-              className="h-20 w-20 object-contain"
+              className="h-28 w-36 object-contain"
             />
           </div>
         ) : (

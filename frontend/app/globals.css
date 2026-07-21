@@ -199,12 +199,14 @@ body {
 }
 
 @media print {
-  /* :not(:has(.invoice-print)) — the invoice receipt page (app/billing/invoices/receipt)
-     renders its printable content as normal page content inside #app-shell rather than
-     through a portal, unlike the prescription. Hiding #app-shell unconditionally wiped out
-     the invoice too: it had `display: block !important` but a `display: none !important`
+  /* :not(:has(.invoice-print)):not(:has(.token-print)) — the invoice receipt
+     page (app/billing/invoices/receipt) and the appointment token slip page
+     (app/appointments/token) render their printable content as normal page
+     content inside #app-shell rather than through a portal, unlike the
+     prescription. Hiding #app-shell unconditionally wiped those out too:
+     they had `display: block !important` but a `display: none !important`
      ancestor hides descendants regardless of their own display value. */
-  #app-shell:not(:has(.invoice-print)) {
+  #app-shell:not(:has(.invoice-print)):not(:has(.token-print)) {
     display: none !important;
   }
   #prescription-print-root {
@@ -230,6 +232,13 @@ body {
   margin: 10mm;
 }
 
+/* The token slip is a small handout — A5, like the prescription — opted
+   into via `page: token-page` on .token-print. */
+@page token-page {
+  size: A5;
+  margin: 8mm;
+}
+
 @media print {
   body {
     margin: 0;
@@ -243,6 +252,12 @@ body {
     display: block !important;
     width: 100%;
     page: invoice-page;
+  }
+
+  .token-print {
+    display: block !important;
+    width: 100%;
+    page: token-page;
   }
 }
 

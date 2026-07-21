@@ -131,8 +131,8 @@ const InvoiceReport = ({
   },
   {
     key: "payment_mode",
-    header: "Mode of Payment",
-    width: "130px",
+    header: "M.O.P",
+    width: "90px",
     render: (row: any) => invoicePaymentMode(row),
   },
   {
@@ -154,17 +154,11 @@ const InvoiceReport = ({
     render: (row: any) =>
       money(invoiceSettlementAmount(row)),
   },
-  {
-    key: "settlement_percentage",
-    header: "Settlement %",
-    width: "110px",
-    render: (row: any) =>
-      `${numberValue(row.paid_amount) > 0 ? Math.round((invoiceSettlementAmount(row) / numberValue(row.paid_amount)) * 100) : 0}%`,
-  },
+
   {
     key: "clinic_profit",
-    header: "Clinic Profit",
-    width:'140px',
+    header: "Profit",
+    width:'90px',
     render: (row: any) => {
       return (
         <span className="font-bold ">
