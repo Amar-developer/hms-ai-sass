@@ -515,37 +515,43 @@ export function Billing({
     }
   }
 
-  async function openReceipt(invoice: any) {
-    if (!apiSession) return;
-    // Open synchronously, in the same tick as the click, then navigate it to
-    // the blob URL once the PDF is fetched — same-tick opening avoids popup
-    // blockers dropping a tab opened after an awaited fetch. Deliberately
-    // omit noopener/noreferrer here: per spec both force the new tab into a
-    // separate browsing-context group, and a blob: URL is only resolvable
-    // within the context group that created it — with either flag set, the
-    // tab loads with no opener and the blob URL is unreachable, showing a
-    // blank page. Safe without them since we only ever navigate this tab to
-    // a blob URL we created, never an external URL.
-    const win = window.open("", "_blank");
-    setBusy(invoice.id);
-    try {
-      const blob = await apiBlob(
-        `/billing/invoices/${invoice.id}/receipt.pdf`,
-        apiSession,
-      );
-      const url = URL.createObjectURL(blob);
-      if (win) {
-        win.location.href = url;
-      } else {
-        window.open(url, "_blank");
-      }
-      setTimeout(() => URL.revokeObjectURL(url), 30000);
-    } catch (err: any) {
-      win?.close();
-      setMessage(err.message || "Could not open receipt.");
-    } finally {
-      setBusy("");
-    }
+  // async function openReceipt(invoice: any) {
+  //   if (!apiSession) return;
+  //   // Open synchronously, in the same tick as the click, then navigate it to
+  //   // the blob URL once the PDF is fetched — same-tick opening avoids popup
+  //   // blockers dropping a tab opened after an awaited fetch. Deliberately
+  //   // omit noopener/noreferrer here: per spec both force the new tab into a
+  //   // separate browsing-context group, and a blob: URL is only resolvable
+  //   // within the context group that created it — with either flag set, the
+  //   // tab loads with no opener and the blob URL is unreachable, showing a
+  //   // blank page. Safe without them since we only ever navigate this tab to
+  //   // a blob URL we created, never an external URL.
+  //   const win = window.open("", "_blank");
+  //   setBusy(invoice.id);
+  //   try {
+  //     const blob = await apiBlob(
+  //       `/billing/invoices/${invoice.id}/receipt.pdf`,
+  //       apiSession,
+  //     );
+  //     const url = URL.createObjectURL(blob);
+  //     if (win) {
+  //       win.location.href = url;
+  //     } else {
+  //       window.open(url, "_blank");
+  //     }
+  //     setTimeout(() => URL.revokeObjectURL(url), 30000);
+  //   } catch (err: any) {
+  //     win?.close();
+  //     setMessage(err.message || "Could not open receipt.");
+  //   } finally {
+  //     setBusy("");
+  //   }
+  // }
+
+
+  function openReceipt(invoice: any) {
+    if (!invoice?.id) return;
+    window.open(`/billing/invoices/receipt?id=${invoice.id}`, "_blank");
   }
 
   async function downloadReceipt(invoice: any) {
@@ -906,13 +912,11 @@ export function Billing({
           }
           className="table-status text-sm text-center"
         >
-
-            {invoice.status === "partially_paid"
-              ? "Partially Paid"
-              : invoice.status === "partially_refunded"
-                ? "Partially Refunded"
-                : invoice.status}
-
+          {invoice.status === "partially_paid"
+            ? "Partially Paid"
+            : invoice.status === "partially_refunded"
+              ? "Partially Refunded"
+              : invoice.status}
         </Badge>
       ),
     },

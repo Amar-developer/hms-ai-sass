@@ -147,6 +147,7 @@ export function InvoiceDetailPage({
           }`
         : membershipBenefit?.reason || "No membership benefit applied";
   const taxableAmount = numberValue(invoice.taxable_amount);
+  console.log(invoice,'invoice')
   const taxAmount = numberValue(invoice.tax_amount);
   const canRefresh =
     canCreateInvoices &&

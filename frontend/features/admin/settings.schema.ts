@@ -172,7 +172,7 @@ export const planSchema = z.object({
 
   durationDays: z.number().min(1,'Duration days is required'),
 
-  activationAfterDays: z.number().min(1,"Activation After days is required"),
+  activationAfterDays: z.number().min(0,"Activation After days is required"),
 
   freeConsultations: z.number().min(0),
 

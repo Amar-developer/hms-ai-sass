@@ -1,4 +1,5 @@
 import { displayDate,money } from "@/utils/helper";
+import { a, b } from "./contants";
 
 export function invoiceSourceKey(invoice: any) {
   if (invoice.patient_subscription_plan_id) return "membership";
@@ -39,8 +40,6 @@ export function invoiceLinkedRecord(invoice: any) {
   if (invoice.appointment_id) return "Appointment";
   return "Direct invoice";
 }
-
-
 
 export function numberValue(value: any) {
   return Number(value || 0);
@@ -144,4 +143,46 @@ export function itemTypeLabel(type: any) {
   return (
     labels[String(type || "")] || String(type || "Service").replaceAll("_", " ")
   );
+}
+
+export const toNumber = (v: number | string | undefined): number => {
+  if (v === undefined || v === "") return 0;
+  const n = typeof v === "number" ? v : parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+export const formatMoney = (v: number | string | undefined, symbol: string) => {
+  const n = toNumber(v);
+  return `${symbol}${n.toFixed(2)}`;
+};
+
+export function numberToWordsIndian(num: number): string {
+  if (num === 0) return "Zero";
+
+
+  const twoDigits = (n: number): string => {
+    if (n < 20) return a[n];
+    return `${b[Math.floor(n / 10)]} ${a[n % 10]}`.trim();
+  };
+
+  const threeDigits = (n: number): string => {
+    if (n < 100) return twoDigits(n);
+    return `${a[Math.floor(n / 100)]} Hundred ${twoDigits(n % 100)}`.trim();
+  };
+
+  let result = "";
+  const crore = Math.floor(num / 10000000);
+  num %= 10000000;
+  const lakh = Math.floor(num / 100000);
+  num %= 100000;
+  const thousand = Math.floor(num / 1000);
+  num %= 1000;
+  const hundred = Math.floor(num);
+
+  if (crore) result += `${threeDigits(crore)} Crore `;
+  if (lakh) result += `${threeDigits(lakh)} Lakh `;
+  if (thousand) result += `${threeDigits(thousand)} Thousand `;
+  if (hundred) result += `${threeDigits(hundred)}`;
+
+  return result.trim();
 }

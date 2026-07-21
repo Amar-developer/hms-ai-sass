@@ -199,7 +199,12 @@ body {
 }
 
 @media print {
-  #app-shell {
+  /* :not(:has(.invoice-print)) — the invoice receipt page (app/billing/invoices/receipt)
+     renders its printable content as normal page content inside #app-shell rather than
+     through a portal, unlike the prescription. Hiding #app-shell unconditionally wiped out
+     the invoice too: it had `display: block !important` but a `display: none !important`
+     ancestor hides descendants regardless of their own display value. */
+  #app-shell:not(:has(.invoice-print)) {
     display: none !important;
   }
   #prescription-print-root {
@@ -212,8 +217,53 @@ body {
 }
 
 /* The prescription is laid out for A5 paper (148mm x 210mm), one page per
-   sheet, matching the PrescriptionDocument component's fixed mm dimensions. */
-@page {
-  size: 148mm 210mm;
-  margin: 0;
+   sheet, matching the PrescriptionDocument component's fixed mm dimensions.
+   This is the default (unnamed) page, so it must stay the plain @page rule —
+   named pages below opt in via the CSS `page` property instead of redefining
+   the default, otherwise whichever @page block appears last in the cascade
+   would silently win for every print in the app, prescription included. */
+
+/* Invoices print on A4 — opted into via `page: invoice-page` on .invoice-print
+   below, so it never overrides the prescription's default @page size. */
+@page invoice-page {
+  size: A4;
+  margin: 10mm;
+}
+
+@media print {
+  body {
+    margin: 0;
+    padding: 0;
+    background: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .invoice-print {
+    display: block !important;
+    width: 100%;
+    page: invoice-page;
+  }
+}
+
+@media print {
+  .invoice-container {
+    width: 100%;
+    max-width: 100%;
+    overflow: visible !important;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  table {
+    page-break-inside: auto;
+  }
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
 }

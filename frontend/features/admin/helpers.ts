@@ -189,10 +189,16 @@ export function filterRolesForBranch(
     const key = normalizeOptionLabel(role.name || role.key);
     const next = { ...role, branchLabel: selectedBranchId ? branch?.name : "" };
     const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, next);
+      continue;
+    }
+    const existingSelected = selectedSet.has(existing.key);
+    const nextSelected = selectedSet.has(role.key);
+    if (existingSelected && !nextSelected) continue;
     if (
-      !existing ||
-      selectedSet.has(role.key) ||
-      roleMatchesBranch(role, branch)
+      nextSelected !== existingSelected ||
+      (!roleMatchesBranch(existing, branch) && roleMatchesBranch(role, branch))
     ) {
       byName.set(key, next);
     }

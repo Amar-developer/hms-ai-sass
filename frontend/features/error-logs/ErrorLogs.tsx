@@ -23,6 +23,7 @@ import {
 import { apiFetch } from "@/lib/api";
 import { pageSize } from "@/utils/constants";
 import { displayDateTime } from "@/utils/helper";
+import { category_options, error_level_options, source_options, status_options } from "./constants";
 
 function levelTone(level: string) {
   if (level === "critical" || level === "error") return "red";
@@ -336,12 +337,7 @@ export function ErrorLogs({ apiSession }: any) {
                 setLevel(value);
               }}
               searchable={false}
-              options={[
-                { value: "all", label: "All levels" },
-                { value: "error", label: "Error" },
-                { value: "critical", label: "Critical" },
-                { value: "warning", label: "Warning" },
-              ]}
+              options={error_level_options}
             />
           </FormField>
           <FormField label="Source">
@@ -352,11 +348,7 @@ export function ErrorLogs({ apiSession }: any) {
                 setSource(value);
               }}
               searchable={false}
-              options={[
-                { value: "all", label: "All sources" },
-                { value: "backend_api", label: "Backend API" },
-                { value: "frontend", label: "Frontend" },
-              ]}
+              options={source_options}
             />
           </FormField>
           <FormField label="Category">
@@ -367,15 +359,7 @@ export function ErrorLogs({ apiSession }: any) {
                 setCategory(value);
               }}
               searchable={false}
-              options={[
-                { value: "all", label: "All categories" },
-                { value: "api", label: "API" },
-                { value: "permission", label: "Permission" },
-                { value: "validation", label: "Validation" },
-                { value: "performance", label: "Performance" },
-                { value: "frontend", label: "Frontend" },
-                { value: "not_found", label: "Not found" },
-              ]}
+              options={category_options}
             />
           </FormField>
           <FormField label="Status">
@@ -386,11 +370,7 @@ export function ErrorLogs({ apiSession }: any) {
                 setResolved(value);
               }}
               searchable={false}
-              options={[
-                { value: "all", label: "All" },
-                { value: "open", label: "Open" },
-                { value: "resolved", label: "Resolved" },
-              ]}
+              options={status_options}
             />
           </FormField>
           <Button onClick={applySearch}>Search</Button>
@@ -430,7 +410,7 @@ export function ErrorLogs({ apiSession }: any) {
                   className="cursor-pointer transition hover:bg-slate-50"
                 >
                   <td className="px-4 py-4">
-                    <Badge tone={levelTone(row.level) as any}>{row.level}</Badge>
+                    <Badge tone={levelTone(row.level) as any} className="normal-badge">{row.level}</Badge>
                   </td>
                   <td className="max-w-[420px] py-4 pr-4">
                     <p className="truncate font-bold text-slate-900">
@@ -448,7 +428,7 @@ export function ErrorLogs({ apiSession }: any) {
                     <p className="text-xs text-slate-500">{row.category}</p>
                   </td>
                   <td className="py-4 pr-4">
-                    <Badge tone={row.is_resolved ? "green" : "amber"}>
+                    <Badge tone={row.is_resolved ? "green" : "amber"} className="normal-badge">
                       {row.is_resolved ? "Resolved" : statusLabel(row)}
                     </Badge>
                   </td>
