@@ -22,7 +22,15 @@ import {
 import PrescriptionDocument, {
   type PrescriptionReferral,
 } from "./PrescriptionDocument";
+import { exportPrescriptionPdf } from "../exportPrescriptionPdf";
 import { treatment_type_options, vitalFields } from "../constants";
+
+function safeFilename(value: unknown) {
+  return String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 function parseVitalText(value: string) {
   const rows = String(value || "")
@@ -159,6 +167,8 @@ export function ConsultationWorkspace(props: any) {
   const [popularMedicines, setPopularMedicines] = useState<any[]>([]);
   const [popularLabTests, setPopularLabTests] = useState<any[]>([]);
   const [showPrescriptionPrint, setShowPrescriptionPrint] = useState(false);
+  const [isExportingPrescription, setIsExportingPrescription] =
+    useState(false);
   // The `patient` prop can arrive without `patient_number` (e.g. it hasn't
   // finished loading in the parent yet). Fetch it directly so the printed
   // Patient ID always matches the same patient_number shown on invoices,
@@ -212,10 +222,10 @@ export function ConsultationWorkspace(props: any) {
   ];
 
   // Renders PrescriptionDocument into the #prescription-print-root portal
-  // (see app/layout.tsx) and calls window.print() directly on the current
-  // page — no new tab/window, so there's nothing for a popup blocker to
-  // intercept, and the print stylesheet already hides the rest of the app.
-  // Clinic letterhead content is static (PrescriptionDocument's default), not
+  // (see app/layout.tsx), then captures it to a PDF via exportPrescriptionPdf
+  // and downloads it directly — same approach as the invoice receipt page,
+  // so there's no browser print dialog and no print header/footer. Clinic
+  // letterhead content is static (PrescriptionDocument's default), not
   // fetched per print.
   function handlePrintPrescription() {
     setShowPrescriptionPrint(true);
@@ -223,12 +233,42 @@ export function ConsultationWorkspace(props: any) {
 
   useEffect(() => {
     if (!showPrescriptionPrint) return;
-    const timer = window.setTimeout(() => window.print(), 80);
-    const handleAfterPrint = () => setShowPrescriptionPrint(false);
-    window.addEventListener("afterprint", handleAfterPrint);
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      const root = document.getElementById("prescription-print-root");
+      if (!root) {
+        if (!cancelled) setShowPrescriptionPrint(false);
+        return;
+      }
+      setIsExportingPrescription(true);
+      try {
+        await document.fonts?.ready;
+        await Promise.all(
+          Array.from(document.images).map((img) =>
+            img.complete
+              ? Promise.resolve()
+              : img.decode().catch(() => undefined),
+          ),
+        );
+        if (cancelled) return;
+        const filename =
+          [
+            safeFilename(patient?.name || selected?.patient),
+            safeFilename(patient?.patient_number || patientNumberFallback),
+          ]
+            .filter(Boolean)
+            .join("-") || "prescription";
+        await exportPrescriptionPdf(root, filename);
+      } finally {
+        if (!cancelled) {
+          setIsExportingPrescription(false);
+          setShowPrescriptionPrint(false);
+        }
+      }
+    }, 150);
     return () => {
+      cancelled = true;
       window.clearTimeout(timer);
-      window.removeEventListener("afterprint", handleAfterPrint);
     };
   }, [showPrescriptionPrint]);
   // A signed consultation is a locked clinical record — only the addendum may
@@ -1266,9 +1306,10 @@ export function ConsultationWorkspace(props: any) {
               <Button
                 type="button"
                 onClick={handlePrintPrescription}
+                disabled={isExportingPrescription}
                 className="text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
               >
-                Print Prescription
+                {isExportingPrescription ? "Generating…" : "Print Prescription"}
               </Button>
               <button
                 onClick={() => requeuePatient("end")}

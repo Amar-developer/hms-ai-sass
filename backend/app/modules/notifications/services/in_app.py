@@ -274,7 +274,9 @@ def notify_billing_request_created(
         permission_keys=(
             "billing.manage",
             "billing.discounts.approve",
+            "billing.refunds.approve",
             "billing.refunds.manage",
+            "invoices.cancel_approve",
         ),
         exclude_user_ids={actor.id},
     )

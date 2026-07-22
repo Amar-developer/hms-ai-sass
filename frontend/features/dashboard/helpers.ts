@@ -67,9 +67,18 @@ export function invoiceMembershipBenefit(row: any) {
 }
 
 export function invoiceOfferDiscount(row: any) {
-  return Math.max(
-    Number(row.discount_amount || 0) - invoiceMembershipBenefit(row),
-    0,
+  return Math.max(Number(row.offer_discount_amount || 0), 0);
+}
+
+export function invoiceApprovedDiscount(row: any) {
+  return Math.max(Number(row.approved_discount_amount || 0), 0);
+}
+
+export function invoiceBillingDiscount(row: any) {
+  return (
+    invoiceMembershipBenefit(row) +
+    invoiceOfferDiscount(row) +
+    invoiceApprovedDiscount(row)
   );
 }
 

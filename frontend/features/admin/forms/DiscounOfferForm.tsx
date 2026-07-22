@@ -116,14 +116,14 @@ export function DiscountOfferForm({
           />
         </FormField>
         <FormField label="Value" required>
-          <Input {...register("value")} />
+          <Input {...register("value")} type="number" min="0" step="0.01" />
           {errors.value && <FormError error={errors.value?.message} />}
         </FormField>
         <FormField label="Minimum Bill Amount">
-          <Input {...register("minimumBillAmount")} />
+          <Input {...register("minimumBillAmount")} type="number" min="0" step="0.01" />
         </FormField>
         <FormField label="Max Discount">
-          <Input {...register("maxDiscountAmount")} />
+          <Input {...register("maxDiscountAmount")} type="number" min="0" step="0.01" />
         </FormField>
         <FormField label="Valid From">
           <Input {...register("validFrom")} type="date" />

@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 from enum import Enum
 
-from sqlalchemy import Index, text
+from sqlalchemy import Index, Numeric, text
 from sqlmodel import Field, SQLModel
 
 from app.modules.appointments.models import AppointmentType
@@ -78,7 +79,9 @@ class TaxRule(SQLModel, table=True):
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
     name: str = Field(min_length=2, max_length=120)
-    tax_percentage: int = Field(default=0, ge=0, le=100)
+    tax_percentage: Decimal = Field(
+        default=Decimal("0"), ge=0, le=100, sa_type=Numeric(7, 4)
+    )
     tax_label: str = Field(default="GST", max_length=40)
     service_scope: str = Field(default="all", index=True, max_length=40)
     is_active: bool = Field(default=True, index=True)
@@ -94,10 +97,14 @@ class DoctorFeeRule(SQLModel, table=True):
     practitioner_id: str | None = Field(default=None, index=True)
     appointment_type: AppointmentType = Field(index=True)
     treatment_type: str | None = Field(default=None, index=True, max_length=80)
-    fee_amount: int = Field(ge=0)
+    fee_amount: Decimal = Field(ge=0, sa_type=Numeric(14, 2))
     share_type: FeeShareType = Field(default=FeeShareType.PERCENTAGE, index=True)
-    doctor_share_percentage: int | None = Field(default=None, ge=0, le=100)
-    doctor_fixed_amount: int | None = Field(default=None, ge=0)
+    doctor_share_percentage: Decimal | None = Field(
+        default=None, ge=0, le=100, sa_type=Numeric(7, 4)
+    )
+    doctor_fixed_amount: Decimal | None = Field(
+        default=None, ge=0, sa_type=Numeric(14, 2)
+    )
     share_tax_with_doctor: bool = Field(default=False, index=True)
     is_active: bool = Field(default=True, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
@@ -171,20 +178,32 @@ class Invoice(SQLModel, table=True):
     )
     invoice_number: str = Field(index=True, min_length=3, max_length=60)
     status: InvoiceStatus = Field(default=InvoiceStatus.ISSUED, index=True)
-    subtotal_amount: int = Field(default=0, ge=0)
-    discount_amount: int = Field(default=0, ge=0)
-    membership_discount_amount: int = Field(default=0, ge=0)
-    membership_free_items_amount: int = Field(default=0, ge=0)
-    membership_item_discount_amount: int = Field(default=0, ge=0)
-    membership_regular_items_amount: int = Field(default=0, ge=0)
-    taxable_amount: int = Field(default=0, ge=0)
-    tax_amount: int = Field(default=0, ge=0)
+    subtotal_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    discount_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    membership_discount_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    membership_free_items_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    membership_item_discount_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    membership_regular_items_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    taxable_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    tax_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
     tax_rule_id: str | None = Field(default=None, index=True)
-    total_amount: int = Field(default=0, ge=0)
-    paid_amount: int = Field(default=0, ge=0)
-    balance_amount: int = Field(default=0, ge=0)
-    doctor_share_amount: int = Field(default=0, ge=0)
-    clinic_share_amount: int = Field(default=0, ge=0)
+    total_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    paid_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    balance_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    doctor_share_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    clinic_share_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
     fee_rule_id: str | None = Field(
         default=None, index=True, foreign_key="doctorfeerule.id"
     )
@@ -202,13 +221,15 @@ class InvoiceItem(SQLModel, table=True):
     item_type: str = Field(default="consultation", max_length=80)
     description: str = Field(max_length=260)
     quantity: int = Field(default=1, ge=1)
-    unit_amount: int = Field(ge=0)
-    total_amount: int = Field(ge=0)
-    discount_amount: int | None = Field(default=None, ge=0)
-    membership_discount_amount: int | None = Field(default=None, ge=0)
-    mrp_amount: int = Field(default=0, ge=0)
-    selling_amount: int = Field(default=0, ge=0)
-    buying_amount: int = Field(default=0, ge=0)
+    unit_amount: Decimal = Field(ge=0, sa_type=Numeric(14, 2))
+    total_amount: Decimal = Field(ge=0, sa_type=Numeric(14, 2))
+    discount_amount: Decimal | None = Field(default=None, ge=0, sa_type=Numeric(14, 2))
+    membership_discount_amount: Decimal | None = Field(
+        default=None, ge=0, sa_type=Numeric(14, 2)
+    )
+    mrp_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    selling_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    buying_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
     supplier_id: str | None = Field(default=None, index=True)
     external_source: str | None = Field(default=None, max_length=80)
     external_slug: str | None = Field(default=None, max_length=220)
@@ -224,11 +245,11 @@ class BillingLedgerEntry(SQLModel, table=True):
     invoice_number: str = Field(index=True, max_length=60)
     entry_type: str = Field(index=True, max_length=60)
     description: str = Field(max_length=500)
-    debit_amount: int = Field(default=0, ge=0)
-    credit_amount: int = Field(default=0, ge=0)
-    invoice_total_delta: int = Field(default=0)
-    paid_amount_delta: int = Field(default=0)
-    balance_amount_delta: int = Field(default=0)
+    debit_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    credit_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
+    invoice_total_delta: Decimal = Field(default=Decimal("0"), sa_type=Numeric(14, 2))
+    paid_amount_delta: Decimal = Field(default=Decimal("0"), sa_type=Numeric(14, 2))
+    balance_amount_delta: Decimal = Field(default=Decimal("0"), sa_type=Numeric(14, 2))
     status_after: InvoiceStatus = Field(index=True)
     reason: str | None = Field(default=None, max_length=500)
     related_payment_id: str | None = Field(default=None, index=True)
@@ -243,8 +264,8 @@ class Payment(SQLModel, table=True):
     branch_id: str = Field(index=True, foreign_key="branch.id")
     invoice_id: str = Field(index=True, foreign_key="invoice.id")
     method: PaymentMethod = Field(index=True)
-    amount: int = Field(gt=0)
-    refunded_amount: int = Field(default=0, ge=0)
+    amount: Decimal = Field(gt=0, sa_type=Numeric(14, 2))
+    refunded_amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
     reference_number: str | None = Field(default=None, max_length=120)
     status: PaymentStatus = Field(default=PaymentStatus.RECORDED, index=True)
     collected_by_user_id: str | None = Field(default=None, index=True)
@@ -259,7 +280,7 @@ class BillingAdjustmentRequest(SQLModel, table=True):
     branch_id: str = Field(index=True, foreign_key="branch.id")
     invoice_id: str = Field(index=True, foreign_key="invoice.id")
     request_type: BillingAdjustmentType = Field(index=True)
-    amount: int = Field(default=0, ge=0)
+    amount: Decimal = Field(default=Decimal("0"), ge=0, sa_type=Numeric(14, 2))
     reason: str = Field(min_length=2, max_length=500)
     status: BillingAdjustmentStatus = Field(
         default=BillingAdjustmentStatus.PENDING, index=True
@@ -282,7 +303,7 @@ class DiscountApproval(SQLModel, table=True):
     branch_id: str = Field(index=True, foreign_key="branch.id")
     appointment_id: str | None = Field(default=None, index=True)
     consultation_id: str | None = Field(default=None, index=True)
-    requested_amount: int = Field(ge=1)
+    requested_amount: Decimal = Field(gt=0, sa_type=Numeric(14, 2))
     reason: str = Field(min_length=2, max_length=500)
     status: ApprovalStatus = Field(default=ApprovalStatus.PENDING, index=True)
     requested_by_user_id: str | None = Field(default=None, index=True)
@@ -299,9 +320,13 @@ class DiscountOffer(SQLModel, table=True):
     code: str | None = Field(default=None, index=True, max_length=40)
     service_scope: str = Field(default="all", index=True, max_length=40)
     discount_type: DiscountType = Field(default=DiscountType.PERCENTAGE, index=True)
-    value: int = Field(ge=0)
-    minimum_bill_amount: int = Field(default=0, ge=0)
-    max_discount_amount: int | None = Field(default=None, ge=0)
+    value: Decimal = Field(ge=0, sa_type=Numeric(14, 4))
+    minimum_bill_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    max_discount_amount: Decimal | None = Field(
+        default=None, ge=0, sa_type=Numeric(14, 2)
+    )
     valid_from: datetime | None = Field(default=None, index=True)
     valid_until: datetime | None = Field(default=None, index=True)
     is_active: bool = Field(default=True, index=True)
@@ -315,7 +340,7 @@ class CreditNote(SQLModel, table=True):
     branch_id: str = Field(index=True, foreign_key="branch.id")
     invoice_id: str = Field(index=True, foreign_key="invoice.id")
     credit_note_number: str = Field(index=True, min_length=3, max_length=60)
-    amount: int = Field(gt=0)
+    amount: Decimal = Field(gt=0, sa_type=Numeric(14, 2))
     reason: str = Field(min_length=2, max_length=500)
     status: CreditNoteStatus = Field(default=CreditNoteStatus.ISSUED, index=True)
     created_by_user_id: str | None = Field(default=None, index=True)
@@ -328,10 +353,18 @@ class DoctorSettlement(SQLModel, table=True):
     branch_id: str | None = Field(default=None, index=True)
     practitioner_id: str | None = Field(default=None, index=True)
     invoice_count: int = Field(default=0, ge=0)
-    total_invoice_amount: int = Field(default=0, ge=0)
-    total_paid_amount: int = Field(default=0, ge=0)
-    total_doctor_share: int = Field(default=0, ge=0)
-    settlement_amount: int = Field(default=0, ge=0)
+    total_invoice_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    total_paid_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    total_doctor_share: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
+    settlement_amount: Decimal = Field(
+        default=Decimal("0"), ge=0, sa_type=Numeric(14, 2)
+    )
     status: SettlementStatus = Field(default=SettlementStatus.FINALIZED, index=True)
     finalized_by_user_id: str | None = Field(default=None, index=True)
     finalized_at: datetime = Field(default_factory=now_utc, index=True)

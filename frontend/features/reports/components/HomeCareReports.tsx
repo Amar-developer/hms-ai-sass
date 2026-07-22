@@ -59,9 +59,27 @@ const HomeCareReports = ({
       width:'90px'
     },
     {
+      key: "approvedDiscount",
+      header: "Approved Discount",
+      render: (row: any) => money(row.approvedDiscount),
+      width:'130px'
+    },
+    {
+      key: "offerDiscount",
+      header: "Offer Discount",
+      render: (row: any) => money(row.offerDiscount),
+      width:'120px'
+    },
+    {
       key: "membershipBenefit",
       header: "Membership",
       render: (row: any) => money(row.membershipBenefit),
+      width:'120px'
+    },
+    {
+      key: "billingDiscount",
+      header: "Total Discount",
+      render: (row: any) => money(row.billingDiscount),
       width:'120px'
     },
     {

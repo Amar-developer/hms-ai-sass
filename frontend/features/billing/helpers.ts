@@ -96,7 +96,7 @@ export function percentLabel(amount: any, base: any) {
   const total = numberValue(base);
   if (value <= 0 || total <= 0) return "0%";
   const percent = (value * 100) / total;
-  return `${Number(percent.toFixed(1)).toLocaleString("en-IN")}%`;
+  return `${Math.round(percent).toLocaleString("en-IN")}%`;
 }
 
 export function claimedDetail(amount: any, base: any, verb = "claimed") {
@@ -109,7 +109,11 @@ export function invoiceTaxAdjustedDiscount(invoice: any, amount: any) {
   const taxable = numberValue(invoice?.taxable_amount);
   const tax = numberValue(invoice?.tax_amount);
   if (taxable <= 0 || tax <= 0) return discount;
-  return discount + Math.round(discount * (tax / taxable));
+  return (
+    Math.round(
+      (discount + discount * (tax / taxable) + Number.EPSILON) * 100,
+    ) / 100
+  );
 }
 
 export function invoiceDateKey(invoice: any) {
@@ -168,8 +172,17 @@ export const toNumber = (v: number | string | undefined): number => {
 
 export const formatMoney = (v: number | string | undefined, symbol: string) => {
   const n = toNumber(v);
-  return `${symbol}${n.toFixed(2)}`;
+  const sign = n < 0 ? "-" : "";
+  return `${sign}${symbol}${Math.round(Math.abs(n)).toLocaleString("en-IN")}`;
 };
+
+export const formatPercentage = (
+  value: number | string | undefined,
+): string => Math.round(toNumber(value)).toLocaleString("en-IN");
+
+export const formatDiscountPercentage = (
+  value: number | string | undefined,
+): string => formatPercentage(value);
 
 export function numberToWordsIndian(num: number): string {
   if (num === 0) return "Zero";
@@ -200,4 +213,61 @@ export function numberToWordsIndian(num: number): string {
   if (hundred) result += `${threeDigits(hundred)}`;
 
   return result.trim();
+}
+
+/**
+ * Resolve the customer-facing price reduction for one invoice line.
+ *
+ * InvoiceItem.total_amount is the gross amount charged by the source module
+ * before invoice-level benefits.  A catalog MRP can be higher than that amount
+ * (the normal selling-price markdown), while item.discount_amount contains the
+ * allocated offer, membership, or approved-request discount.  Receipts and the
+ * billing detail must show both reductions together without subtracting the MRP
+ * markdown from invoice totals a second time.
+ */
+export function invoiceItemPriceBreakdown(item: any, invoice: any) {
+  const quantity = Math.max(numberValue(item?.quantity), 1);
+  const lineAmount = numberValue(item?.total_amount);
+  const mrpUnit =
+    numberValue(item?.mrp_amount) ||
+    numberValue(item?.selling_amount) ||
+    numberValue(item?.unit_amount);
+  const mrpTotal = mrpUnit * quantity;
+
+  let allocatedInvoiceDiscount: number;
+  if (item?.discount_amount !== undefined && item?.discount_amount !== null) {
+    allocatedInvoiceDiscount = numberValue(item.discount_amount);
+  } else {
+    const subtotal = numberValue(invoice?.subtotal_amount);
+    allocatedInvoiceDiscount =
+      subtotal > 0
+        ? Math.round(
+            ((lineAmount * numberValue(invoice?.discount_amount)) / subtotal +
+              Number.EPSILON) *
+              100,
+          ) / 100
+        : 0;
+  }
+  allocatedInvoiceDiscount = Math.min(
+    Math.max(allocatedInvoiceDiscount, 0),
+    lineAmount,
+  );
+
+  const mrpMarkdown = Math.max(mrpTotal - lineAmount, 0);
+  const effectiveDiscount = mrpMarkdown + allocatedInvoiceDiscount;
+  const discountBase = mrpTotal > 0 ? mrpTotal : lineAmount;
+
+  return {
+    mrpUnit,
+    mrpTotal,
+    lineAmount,
+    allocatedInvoiceDiscount,
+    mrpMarkdown,
+    effectiveDiscount,
+    discountPercent:
+      discountBase > 0
+        ? Number(((effectiveDiscount * 100) / discountBase).toFixed(2))
+        : 0,
+    payableAmount: Math.max(lineAmount - allocatedInvoiceDiscount, 0),
+  };
 }

@@ -13,6 +13,7 @@ export interface CustomerDetails {
   whatsapp?: string;
   gstin?: string;
   address?: string;
+  patientId?: string;
 }
 
 export interface BankDetails {
@@ -50,6 +51,7 @@ export interface InvoiceProps {
   taxableAmount?: number;
   taxAmount?: number;
   taxLabel?: string;
+  taxPercentage?: number;
   total: number;
   tax_amount?: number;
 }

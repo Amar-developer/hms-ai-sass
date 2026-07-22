@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from decimal import Decimal
 from sqlmodel import Session
 
 from app.modules.appointments.models import Appointment, AppointmentType
@@ -6,6 +7,7 @@ from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
 from app.modules.billing.services.discount_policy import compose_invoice_discounts
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.numbering import next_invoice_number
+from app.modules.billing.services.money import money_value, percentage_amount
 from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
 from app.modules.billing.services.rules import (
     calculate_offer_discount,
@@ -63,7 +65,7 @@ def create_consultation_invoice(
     *,
     appointment: Appointment,
     consultation_id: str,
-    discount_amount: int = 0,
+    discount_amount: Decimal | int = 0,
     created_by_user_id: str | None,
     discount_approval_id: str | None = None,
     discount_offer_id: str | None = None,
@@ -86,7 +88,7 @@ def create_consultation_invoice(
                 fee_rule = find_fee_rule(session, appointment, treatment_type)
             except HTTPException:
                 fee_rule = None
-            subtotal = int(custom_amount)
+            subtotal = money_value(custom_amount)
             calculation = calculate_fee_split(fee_rule, subtotal) if fee_rule else None
             fee_rule_id = fee_rule.id if fee_rule else None
         else:
@@ -126,7 +128,7 @@ def create_consultation_invoice(
             department_id=appointment.department_id,
             session=session,
         )
-        membership_discount = int(preview["discount_amount"] or 0)
+        membership_discount = money_value(preview["discount_amount"])
         if membership_discount > 0:
             membership_enrollment_id = enrollment.id
             membership_plan_id = plan.id
@@ -161,11 +163,13 @@ def create_consultation_invoice(
         service_scope="consultation",
         tax_rule_id=tax_rule_id,
     )
-    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    tax_amount = percentage_amount(taxable, tax_rule.tax_percentage if tax_rule else 0)
     total = taxable + tax_amount
     if subtotal and calculation:
         share_basis = total if calculation.fee_rule.share_tax_with_doctor else taxable
-        doctor_share = round(calculation.doctor_share_amount * share_basis / subtotal)
+        doctor_share = money_value(
+            calculation.doctor_share_amount * share_basis / subtotal
+        )
     else:
         doctor_share = 0
     clinic_share = total - doctor_share

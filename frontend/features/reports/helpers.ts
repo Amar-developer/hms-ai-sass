@@ -1,7 +1,10 @@
 import { displayDate } from "@/utils/helper";
 import { isMembershipPlanInvoice } from "@/features/billing/helpers";
 import {
+  approvedDiscountUsage,
+  billingDiscountUsage,
   membershipBenefitUsage,
+  offerDiscountUsage,
   recognizedInvoiceRevenue,
   recognizedInvoiceTax,
   reportedInvoiceTotal,
@@ -246,6 +249,9 @@ export function aggregateInvoiceMetrics(
         Math.max(total - membershipBenefitUsage(invoice) - doctorShare, 0);
       acc.tax += numberValue(invoice.tax_amount);
       acc.membershipDiscount += membershipBenefitUsage(invoice);
+      acc.approvedDiscount += approvedDiscountUsage(invoice);
+      acc.offerDiscount += offerDiscountUsage(invoice);
+      acc.billingDiscount += billingDiscountUsage(invoice);
       const isPlanPurchase = isMembershipPlanInvoice(invoice);
       if (isPlanPurchase) {
         acc.membershipPurchases += 1;
@@ -288,6 +294,9 @@ export function aggregateInvoiceMetrics(
       clinicFee: 0,
       tax: 0,
       membershipDiscount: 0,
+      approvedDiscount: 0,
+      offerDiscount: 0,
+      billingDiscount: 0,
       membershipPurchases: 0,
       membershipEnrollCount: 0,
       membershipEnrollAmount: 0,

@@ -5,7 +5,9 @@ import { PermissionCheckboxes } from "./PermissionCheckboxes";
 
 export function RolePermissions({
   role,
+  roles,
   permissionCatalog,
+  onRoleChange,
   busy,
   updateRole,
   back,
@@ -48,6 +50,11 @@ export function RolePermissions({
         <PermissionCheckboxes
           permissions={permissionCatalog}
           selected={role.permission_keys || []}
+          roleName={role.name}
+          roleId={role.id}
+          roleOptions={roles}
+          onRoleChange={onRoleChange}
+          showHeading={false}
         />
         <div className="flex flex-wrap gap-2">
           <Button disabled={busy}>

@@ -111,8 +111,10 @@ export function patientName(p: any) {
 
 export function money(value: any) {
   const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return "₹0";
   const sign = amount < 0 ? "-" : "";
-  return `${sign}₹${Math.abs(amount).toLocaleString("en-IN")}`;
+  const rounded = Math.round(Math.abs(amount));
+  return `${sign}₹${rounded.toLocaleString("en-IN")}`;
 }
 
 export const formatPrice = (value: number) =>

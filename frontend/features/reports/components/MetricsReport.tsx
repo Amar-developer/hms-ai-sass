@@ -201,6 +201,52 @@ function DashboardCards({
         />
       </div>
 
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        <Metric
+          icon={ReceiptIndianRupee}
+          label="Total Billing Discounts"
+          value={money(totals.billingDiscount)}
+          hint="Approved + offers + membership"
+          trend={changeLine(
+            totals.billingDiscount,
+            previousTotals.billingDiscount,
+          )}
+        />
+
+        <Metric
+          icon={ReceiptIndianRupee}
+          label="Admin Approved Discounts"
+          value={money(totals.approvedDiscount)}
+          hint="Executed discount requests only"
+          trend={changeLine(
+            totals.approvedDiscount,
+            previousTotals.approvedDiscount,
+          )}
+        />
+
+        <Metric
+          icon={ReceiptIndianRupee}
+          label="Offer Discounts"
+          value={money(totals.offerDiscount)}
+          hint="Promotional invoice offers only"
+          trend={changeLine(
+            totals.offerDiscount,
+            previousTotals.offerDiscount,
+          )}
+        />
+
+        <Metric
+          icon={ReceiptIndianRupee}
+          label="Membership Discounts"
+          value={money(totals.membershipDiscount)}
+          hint="Membership benefit usage only"
+          trend={changeLine(
+            totals.membershipDiscount,
+            previousTotals.membershipDiscount,
+          )}
+        />
+      </div>
+
       <div className="rounded-lg border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
           <h4 className="text-sm font-bold text-slate-950">

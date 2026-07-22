@@ -46,4 +46,30 @@ describe("report cost accounting", () => {
         totals.settlement,
     ).toBe(1000);
   });
+
+  it("aggregates approved and offer discounts without MRP markdown", () => {
+    const totals = aggregateInvoiceMetrics([
+      {
+        total_amount: 400,
+        paid_amount: 400,
+        approved_discount_amount: 100,
+        offer_discount_amount: 0,
+        membership_discount_amount: 0,
+        mrp_amount: 600,
+        selling_amount: 500,
+      },
+      {
+        total_amount: 450,
+        paid_amount: 450,
+        approved_discount_amount: 0,
+        offer_discount_amount: 25,
+        membership_discount_amount: 25,
+      },
+    ]);
+
+    expect(totals.approvedDiscount).toBe(100);
+    expect(totals.offerDiscount).toBe(25);
+    expect(totals.membershipDiscount).toBe(25);
+    expect(totals.billingDiscount).toBe(150);
+  });
 });

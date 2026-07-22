@@ -52,6 +52,7 @@ class RoleService:
     def create_role(
         self, *, tenant_id: str, payload: RoleCreate, actor: User
     ) -> RoleRead:
+        permission_keys = list(dict.fromkeys(payload.permission_keys))
         assert_tenant_permission(
             self.session,
             actor,
@@ -60,7 +61,7 @@ class RoleService:
             permissions.IDENTITY_ROLES_CREATE,
         )
         assert_grantable_permission_keys(
-            self.session, actor, tenant_id, payload.permission_keys
+            self.session, actor, tenant_id, permission_keys
         )
         role = Role(
             tenant_id=tenant_id,
@@ -75,7 +76,7 @@ class RoleService:
         self.roles.add(role)
         self.session.commit()
         self.session.refresh(role)
-        for permission_key in payload.permission_keys:
+        for permission_key in permission_keys:
             permission = ensure_permission(self.session, permission_key)
             self.role_permissions.add(
                 RolePermission(role_id=role.id, permission_id=permission.id)
@@ -175,6 +176,12 @@ class RoleService:
             permissions.IDENTITY_USERS_EDIT,
         )
         roles = self.roles.list_for_tenant(tenant_id)
+        tenant = self.tenants.get(tenant_id)
+        roles = [
+            role
+            for role in roles
+            if role.key != "super_admin" or bool(tenant and tenant.is_primary)
+        ]
         canonical_by_name = {
             role.name: role
             for role in roles

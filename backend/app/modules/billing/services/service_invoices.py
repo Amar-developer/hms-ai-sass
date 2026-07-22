@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlmodel import Session
@@ -8,6 +9,7 @@ from app.modules.billing.services.discount_policy import compose_invoice_discoun
 from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
 from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.billing.services.rules import calculate_offer_discount, find_tax_rule
+from app.modules.billing.services.money import money_value, percentage_amount
 
 LedgerRecorder = Callable[..., object]
 MembershipLedgerEnsurer = Callable[..., None]
@@ -23,19 +25,20 @@ def create_service_invoice(
     consultation_id: str | None,
     item_type: str,
     description: str,
-    amount: int,
+    amount: Decimal | int,
     created_by_user_id: str | None,
     service_scope: str,
     record_billing_ledger: LedgerRecorder,
     ensure_invoice_membership_benefit_ledger: MembershipLedgerEnsurer,
     lab_order_id: str | None = None,
     pharmacy_issue_id: str | None = None,
-    line_items: list[dict[str, int | str | None]] | None = None,
+    line_items: list[dict[str, Decimal | int | str | None]] | None = None,
     tax_rule_id: str | None = None,
     discount_offer_id: str | None = None,
     benefit_item_ids: list[str] | None = None,
-    benefit_item_amounts: dict[str, int] | None = None,
+    benefit_item_amounts: dict[str, Decimal | int] | None = None,
 ) -> Invoice:
+    amount = money_value(amount)
     discount_amount, offer = calculate_offer_discount(
         session,
         tenant_id=tenant_id,
@@ -93,10 +96,14 @@ def create_service_invoice(
                 session=session,
             )
             membership_preview = preview
-            membership_discount = int(preview["discount_amount"] or 0)
-            membership_free_items_amount = int(preview["free_items_amount"] or 0)
-            membership_item_discount_amount = int(preview["item_discount_amount"] or 0)
-            membership_regular_items_amount = int(preview["regular_items_amount"] or 0)
+            membership_discount = money_value(preview["discount_amount"])
+            membership_free_items_amount = money_value(preview["free_items_amount"])
+            membership_item_discount_amount = money_value(
+                preview["item_discount_amount"]
+            )
+            membership_regular_items_amount = money_value(
+                preview["regular_items_amount"]
+            )
             if membership_discount > 0:
                 membership_enrollment_id = enrollment.id
                 membership_plan_id = plan.id
@@ -121,8 +128,8 @@ def create_service_invoice(
             if membership_discount > 0:
                 offer = None
             taxable_amount = amount - discount_amount
-            tax_amount = round(
-                taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100
+            tax_amount = percentage_amount(
+                taxable_amount, tax_rule.tax_percentage if tax_rule else 0
             )
             total_amount = taxable_amount + tax_amount
     except HTTPException:
@@ -143,8 +150,8 @@ def create_service_invoice(
     if membership_discount > 0:
         offer = None
     taxable_amount = amount - discount_amount
-    tax_amount = round(
-        taxable_amount * (tax_rule.tax_percentage if tax_rule else 0) / 100
+    tax_amount = percentage_amount(
+        taxable_amount, tax_rule.tax_percentage if tax_rule else 0
     )
     total_amount = taxable_amount + tax_amount
     invoice = Invoice(
@@ -197,13 +204,13 @@ def create_service_invoice(
                 item_type=str(row.get("item_type") or item_type),
                 description=str(row.get("description") or description),
                 quantity=int(row.get("quantity") or 1),
-                unit_amount=int(row.get("unit_amount") or 0),
-                total_amount=int(row.get("total_amount") or 0),
-                mrp_amount=int(row.get("mrp_amount") or 0),
-                selling_amount=int(
+                unit_amount=money_value(row.get("unit_amount")),
+                total_amount=money_value(row.get("total_amount")),
+                mrp_amount=money_value(row.get("mrp_amount")),
+                selling_amount=money_value(
                     row.get("selling_amount") or row.get("unit_amount") or 0
                 ),
-                buying_amount=int(row.get("buying_amount") or 0),
+                buying_amount=money_value(row.get("buying_amount")),
                 supplier_id=str(row.get("supplier_id") or "") or None,
                 external_source=str(row.get("external_source") or "") or None,
                 external_slug=str(row.get("external_slug") or "") or None,

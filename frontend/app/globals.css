@@ -191,42 +191,22 @@ body {
   @apply block truncate w-full;
 }
 
-/* Printable documents (e.g. the doctor consultation prescription) render into
-   this portal target instead of the app tree, so a print action shows only
-   the document and never the surrounding app chrome. */
+/* The doctor consultation prescription renders into this portal target
+   instead of the app tree, then gets captured to a PDF via html2canvas (see
+   exportPrescriptionPdf) and downloaded directly — no window.print() dialog,
+   so there's no browser print header/footer to strip. It's positioned off
+   the visible page rather than `display: none` because html2canvas can't
+   capture a display:none subtree. */
 #prescription-print-root {
-  display: none;
+  position: fixed;
+  top: 0;
+  left: -10000px;
+  z-index: -1;
 }
-
-@media print {
-  /* :not(:has(.invoice-print)):not(:has(.token-print)) — the invoice receipt
-     page (app/billing/invoices/receipt) and the appointment token slip page
-     (app/appointments/token) render their printable content as normal page
-     content inside #app-shell rather than through a portal, unlike the
-     prescription. Hiding #app-shell unconditionally wiped those out too:
-     they had `display: block !important` but a `display: none !important`
-     ancestor hides descendants regardless of their own display value. */
-  #app-shell:not(:has(.invoice-print)):not(:has(.token-print)) {
-    display: none !important;
-  }
-  #prescription-print-root {
-    display: block !important;
-  }
-  #prescription-print-root * {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
-
-/* The prescription is laid out for A5 paper (148mm x 210mm), one page per
-   sheet, matching the PrescriptionDocument component's fixed mm dimensions.
-   This is the default (unnamed) page, so it must stay the plain @page rule —
-   named pages below opt in via the CSS `page` property instead of redefining
-   the default, otherwise whichever @page block appears last in the cascade
-   would silently win for every print in the app, prescription included. */
 
 /* Invoices print on A4 — opted into via `page: invoice-page` on .invoice-print
-   below, so it never overrides the prescription's default @page size. */
+   below (used only as a window.print() fallback; the normal download path is
+   exportInvoicePdf, which bypasses @page sizing entirely). */
 @page invoice-page {
   size: A4;
   margin: 10mm;

@@ -22,15 +22,53 @@ from app.modules.identity.schemas import (
     RoleCreate,
     RoleRead,
     RoleUpdate,
+    SuperAdminCreate,
+    SuperAdminStatusUpdate,
     UserCreate,
     UserRead,
     UserUpdate,
 )
 from app.modules.identity.services.auth_service import AuthService, secure_cookie
 from app.modules.identity.services.role_service import RoleService
+from app.modules.identity.services.super_admin_service import SuperAdminService
 from app.modules.identity.services.user_service import UserService
 
 router = APIRouter()
+
+
+@router.get("/identity/super-admins", response_model=list[UserRead])
+def list_super_admins(
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> list[UserRead]:
+    return SuperAdminService(session).list_super_admins(actor=current_user)
+
+
+@router.post(
+    "/identity/super-admins",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_super_admin(
+    payload: SuperAdminCreate,
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> UserRead:
+    return SuperAdminService(session).create_super_admin(
+        payload=payload, actor=current_user
+    )
+
+
+@router.post("/identity/super-admins/{user_id}/status", response_model=UserRead)
+def change_super_admin_status(
+    user_id: str,
+    payload: SuperAdminStatusUpdate,
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> UserRead:
+    return SuperAdminService(session).change_status(
+        user_id=user_id, payload=payload, actor=current_user
+    )
 
 
 @router.post(

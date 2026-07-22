@@ -6,6 +6,8 @@ from sqlmodel import Session
 from app.modules.reports.repositories import ReportDataRepository
 from app.modules.reports.services.classification import ReportInvoiceClassifier
 from app.modules.reports.services.calculations import (
+    invoice_approved_discount,
+    invoice_billing_discount,
     invoice_item_total,
     invoice_membership_benefit,
     invoice_offer_discount,
@@ -14,6 +16,7 @@ from app.modules.reports.services.calculations import (
     report_settlement,
     tax_paid_basis,
 )
+from app.modules.billing.services.read_models import invoice_read
 from app.modules.reports.services.rendering import money as _money
 from app.modules.reports.services.rendering import table as _table
 
@@ -35,6 +38,9 @@ def build_monthly_revenue_report(
         end_at=datetime.combine(end, datetime.max.time()),
     )
     paid_invoices = [invoice for invoice in invoices if is_paid_invoice(invoice)]
+    report_invoice_by_id = {
+        invoice.id: invoice_read(session, invoice) for invoice in paid_invoices
+    }
     invoice_items_by_invoice = {invoice.id: [] for invoice in paid_invoices}
     for item in repo.list_invoice_items_by_invoice_ids(
         tenant_id=tenant_id,
@@ -101,9 +107,20 @@ def build_monthly_revenue_report(
     total_paid = sum(int(invoice.paid_amount or 0) for invoice in paid_invoices)
     total_invoice = sum(int(invoice.total_amount or 0) for invoice in paid_invoices)
     total_item = sum(invoice_item_total(invoice) for invoice in paid_invoices)
-    total_offer = sum(invoice_offer_discount(invoice) for invoice in paid_invoices)
+    total_approved = sum(
+        invoice_approved_discount(report_invoice_by_id[invoice.id])
+        for invoice in paid_invoices
+    )
+    total_offer = sum(
+        invoice_offer_discount(report_invoice_by_id[invoice.id])
+        for invoice in paid_invoices
+    )
     total_membership = sum(
         invoice_membership_benefit(invoice) for invoice in paid_invoices
+    )
+    total_billing_discount = sum(
+        invoice_billing_discount(report_invoice_by_id[invoice.id])
+        for invoice in paid_invoices
     )
     total_doctor = sum(invoice_doctor_fee(invoice) for invoice in paid_invoices)
     total_settlement = sum(invoice_settlement(invoice) for invoice in paid_invoices)
@@ -120,8 +137,10 @@ def build_monthly_revenue_report(
                     ["Period", f"{start.isoformat()} to {end.isoformat()}"],
                     ["Settled Invoices", len(paid_invoices)],
                     ["Item Total", _money(total_item)],
+                    ["Admin Approved Discounts", _money(total_approved)],
                     ["Offer Discounts Used", _money(total_offer)],
                     ["Membership Benefits Used", _money(total_membership)],
+                    ["Total Billing Discounts", _money(total_billing_discount)],
                     [
                         "Payment Modes",
                         combined_payment_modes(
@@ -166,6 +185,8 @@ def build_monthly_revenue_report(
                     "invoices": 0,
                     "item": 0,
                     "offer": 0,
+                    "approved": 0,
+                    "billing_discount": 0,
                     "membership": 0,
                     "invoice": 0,
                     "paid": 0,
@@ -178,7 +199,10 @@ def build_monthly_revenue_report(
             )
             bucket["invoices"] += 1
             bucket["item"] += invoice_item_total(invoice)
-            bucket["offer"] += invoice_offer_discount(invoice)
+            report_invoice = report_invoice_by_id[invoice.id]
+            bucket["approved"] += invoice_approved_discount(report_invoice)
+            bucket["offer"] += invoice_offer_discount(report_invoice)
+            bucket["billing_discount"] += invoice_billing_discount(report_invoice)
             bucket["membership"] += invoice_membership_benefit(invoice)
             bucket["invoice"] += int(invoice.total_amount or 0)
             bucket["paid"] += int(invoice.paid_amount or 0)
@@ -192,8 +216,10 @@ def build_monthly_revenue_report(
                 row["label"],
                 row["invoices"],
                 _money(row["item"]),
+                _money(row["approved"]),
                 _money(row["offer"]),
                 _money(row["membership"]),
+                _money(row["billing_discount"]),
                 _money(row["invoice"]),
                 _money(row["paid"]),
                 _money(row["balance"]),
@@ -215,8 +241,10 @@ def build_monthly_revenue_report(
         "Name",
         "Settled Invoices",
         "Item Total",
+        "Admin Approved Discount",
         "Offer Discount",
         "Membership Benefit",
+        "Total Billing Discount",
         "Net Invoice Revenue",
         "Paid Revenue",
         "Balance",
@@ -258,6 +286,7 @@ def build_monthly_revenue_report(
             settlement = invoice_settlement(invoice)
             paid = int(invoice.paid_amount or 0)
             paid_tax = tax_paid_basis(invoice)
+            report_invoice = report_invoice_by_id[invoice.id]
             invoice_rows.append(
                 [
                     invoice.invoice_number,
@@ -266,8 +295,10 @@ def build_monthly_revenue_report(
                     doctor.full_name if doctor else "Unassigned",
                     department.name if department else "Unassigned",
                     _money(invoice_item_total(invoice)),
-                    _money(invoice_offer_discount(invoice)),
+                    _money(invoice_approved_discount(report_invoice)),
+                    _money(invoice_offer_discount(report_invoice)),
                     _money(invoice_membership_benefit(invoice)),
+                    _money(invoice_billing_discount(report_invoice)),
                     _money(int(invoice.total_amount or 0)),
                     _money(paid),
                     _money(int(invoice.balance_amount or 0)),
@@ -289,8 +320,10 @@ def build_monthly_revenue_report(
                     "Doctor",
                     "Medical Department",
                     "Item Total",
+                    "Admin Approved Discount",
                     "Offer Discount",
                     "Membership Benefit",
+                    "Total Billing Discount",
                     "Net Total",
                     "Paid",
                     "Balance",

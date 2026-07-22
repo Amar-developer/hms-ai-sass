@@ -1,7 +1,13 @@
 import React from "react";
 import { Card,Badge } from "@/app/components/common/ui";
 import { DataTable } from "./DataTable";
-import { recognizedInvoiceTax, reportedInvoiceTotal } from "../financials";
+import {
+  approvedDiscountUsage,
+  billingDiscountUsage,
+  offerDiscountUsage,
+  recognizedInvoiceTax,
+  reportedInvoiceTotal,
+} from "../financials";
 import { Pagination } from "@/app/components/common/Pagination";
 import { InvoiceProps } from "../types";
 
@@ -123,11 +129,29 @@ const InvoiceReport = ({
     render: (row: any) => money(row.balance_amount),
   },
   {
+    key: "approved_discount_amount",
+    header: "Approved Discount",
+    width:'115px',
+    render: (row: any) => money(approvedDiscountUsage(row)),
+  },
+  {
+    key: "offer_discount_amount",
+    header: "Offer Discount",
+    width:'105px',
+    render: (row: any) => money(offerDiscountUsage(row)),
+  },
+  {
     key: "membership_discount_amount",
     header: "Membership",
     width:'100px',
     render: (row: any) =>
       money(row.membership_discount_amount),
+  },
+  {
+    key: "billing_discount_amount",
+    header: "Total Discount",
+    width:'105px',
+    render: (row: any) => money(billingDiscountUsage(row)),
   },
   {
     key: "payment_mode",

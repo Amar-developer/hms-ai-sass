@@ -53,10 +53,28 @@ const LabReports = ({
       width: '90px'
     },
     {
+      key: "approvedDiscount",
+      header: "Approved Discount",
+      width: '130px',
+      render: (row: any) => money(row.approvedDiscount),
+    },
+    {
+      key: "offerDiscount",
+      header: "Offer Discount",
+      width: '120px',
+      render: (row: any) => money(row.offerDiscount),
+    },
+    {
       key: "membershipBenefit",
       header: "Membership",
       width: '120px',
       render: (row: any) => money(row.membershipBenefit),
+    },
+    {
+      key: "billingDiscount",
+      header: "Total Discount",
+      width: '120px',
+      render: (row: any) => money(row.billingDiscount),
     },
     {
       key: "paymentMode",

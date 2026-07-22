@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PermissionCheckboxes } from "./PermissionCheckboxes";
 
@@ -27,6 +27,20 @@ const catalog = [
     action: "manage",
     description: "Tenant Management Manage",
   },
+  {
+    key: "billing.refunds.approve",
+    module: "billing.refunds",
+    module_label: "Billing Refunds",
+    action: "approve",
+    description: "Billing Refunds Approve",
+  },
+  {
+    key: "invoices.cancel_approve",
+    module: "invoices",
+    module_label: "Invoices & Receipts",
+    action: "cancel_approve",
+    description: "Invoices & Receipts Cancel Approve",
+  },
 ];
 
 describe("Super Admin permission catalog", () => {
@@ -42,6 +56,14 @@ describe("Super Admin permission catalog", () => {
 
     expect(screen.getByText("Doctors & Practitioners")).toBeTruthy();
     expect(screen.getByText("Dashboard / Overview")).toBeTruthy();
+    expect(screen.getByText("Billing Refunds")).toBeTruthy();
+    expect(screen.getAllByText("Module Type")).toHaveLength(2);
+    expect(screen.queryByText("Document Type")).toBeNull();
+    expect(screen.queryByText("Level")).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Approve" })).toBeTruthy();
+    expect(
+      screen.getByRole("checkbox", { name: "Cancel Approve" }),
+    ).toBeTruthy();
     expect(screen.getByText("1 selected")).toBeTruthy();
     expect(screen.getByText(/Primary tenant scope/i)).toBeTruthy();
 
@@ -83,5 +105,45 @@ describe("Super Admin permission catalog", () => {
     );
 
     expect(screen.getByText(/Customer tenant scope/i)).toBeTruthy();
+  });
+
+  it("can hide its heading when the page already provides one", () => {
+    render(
+      <PermissionCheckboxes
+        permissions={catalog}
+        selected={[]}
+        showHeading={false}
+      />,
+    );
+
+    expect(screen.queryByText("Role Permissions")).toBeNull();
+  });
+
+  it("lists all roles and switches the selected role", () => {
+    const onRoleChange = vi.fn();
+    render(
+      <PermissionCheckboxes
+        permissions={catalog}
+        selected={[]}
+        roleName="Doctor"
+        roleId="role_doctor"
+        roleOptions={[
+          { id: "role_doctor", name: "Doctor", key: "doctor" },
+          {
+            id: "role_receptionist",
+            name: "Receptionist",
+            key: "receptionist",
+          },
+        ]}
+        onRoleChange={onRoleChange}
+      />,
+    );
+
+    const roleSelect = screen.getByRole("combobox", { name: "Role" });
+    expect(screen.getByRole("option", { name: "Doctor" })).toBeTruthy();
+    expect(screen.getByRole("option", { name: "Receptionist" })).toBeTruthy();
+
+    fireEvent.change(roleSelect, { target: { value: "role_receptionist" } });
+    expect(onRoleChange).toHaveBeenCalledWith("role_receptionist");
   });
 });
