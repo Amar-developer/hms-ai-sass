@@ -4,7 +4,13 @@ import React from "react";
 import InvoiceHeader from "./InvoiceHeader";
 import { FieldRow } from "./FieldRow";
 import CustomerDetails from "./CustomerDetails";
-import { numberToWordsIndian, toNumber } from "../helpers";
+import {
+  formatMoney,
+  formatDiscountPercentage,
+  formatPercentage,
+  numberToWordsIndian,
+  toNumber,
+} from "../helpers";
 import { InvoiceProps } from "../types";
 
 const ROWS_PER_PAGE = 8;
@@ -28,11 +34,16 @@ export default function Invoice({
   subTotal,
   discountAmount = 0,
   total,
-  tax_amount = 0,
+  taxAmount,
+  tax_amount,
+  taxLabel = "Tax",
+  taxPercentage = 0,
 }: InvoiceProps) {
   const grandTotal = toNumber(total);
+  const resolvedTaxAmount = toNumber(taxAmount ?? tax_amount);
+  const wholeAmount = Math.round(grandTotal);
   const grandTotalWords = `${currencySymbol === "₹" ? "Rupees " : ""}${numberToWordsIndian(
-    Math.floor(grandTotal),
+    wholeAmount,
   )} Only`;
 
   const pages: (typeof items)[] = [];
@@ -40,11 +51,6 @@ export default function Invoice({
     pages.push(items.slice(i, i + ROWS_PER_PAGE));
   }
   if (pages.length === 0) pages.push([]);
-
-  const formatMoney = (v: number | string | undefined, symbol: string) => {
-    const n = toNumber(v);
-    return `${symbol}${n.toFixed(0)}`;
-  };
 
   return (
     <div className="mx-auto w-full max-w-[900px] bg-white text-slate-900 print:max-w-full">
@@ -103,7 +109,7 @@ export default function Invoice({
                         {formatMoney(item.mrp, currencySymbol)}
                       </div>
                       <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">
-                        {item.discPercent ?? 0}%
+                        {formatDiscountPercentage(item.discPercent)}%
                       </div>
                       <div className="flex justify-end items-center p-1.5 border-r border-[#25FF46]">
                         {formatMoney(item.rate, currencySymbol)}
@@ -136,10 +142,12 @@ export default function Invoice({
                   </div>
 
                   {/* Tax (conditional) */}
-                  {toNumber(tax_amount) > 0 && (
+                  {resolvedTaxAmount > 0 && (
                     <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
-                      <div className="col-span-5 flex justify-end items-center p-2 pb-5 border-r-2 border-[#25FF46]">Tax</div>
-                      <div className="flex justify-end items-center  p-2 pb-5">{formatMoney(tax_amount, currencySymbol)}</div>
+                      <div className="col-span-5 flex justify-end items-center p-2 pb-5 border-r-2 border-[#25FF46]">
+                        {taxLabel}{taxPercentage > 0 ? ` (${formatPercentage(taxPercentage)}%)` : ""}
+                      </div>
+                      <div className="flex justify-end items-center  p-2 pb-5">{formatMoney(resolvedTaxAmount, currencySymbol)}</div>
                     </div>
                   )}
 

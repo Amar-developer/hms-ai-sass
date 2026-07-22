@@ -1,6 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import Field, field_serializer, model_validator
 
 from app.core.validation import (
     AppointmentId,
@@ -24,6 +26,15 @@ from app.modules.billing.models import (
     PaymentStatus,
 )
 from app.modules.billing.models import SettlementStatus
+from app.modules.billing.services.money import decimal_values_to_json
+
+
+class BaseModel(PydanticBaseModel):
+    """Billing schema base that keeps decimal API fields JSON-numeric."""
+
+    @field_serializer("*", when_used="json", check_fields=False)
+    def serialize_decimal_fields(self, value):
+        return decimal_values_to_json(value)
 
 
 class DoctorFeeRuleCreate(BaseModel):
@@ -32,10 +43,12 @@ class DoctorFeeRuleCreate(BaseModel):
     practitioner_id: PractitionerId | None = None
     appointment_type: AppointmentType
     treatment_type: str | None = Field(default=None, max_length=80)
-    fee_amount: int = Field(ge=0)
+    fee_amount: Decimal = Field(ge=0, decimal_places=2)
     share_type: FeeShareType = FeeShareType.PERCENTAGE
-    doctor_share_percentage: int | None = Field(default=None, ge=0, le=100)
-    doctor_fixed_amount: int | None = Field(default=None, ge=0)
+    doctor_share_percentage: Decimal | None = Field(
+        default=None, ge=0, le=100, decimal_places=4
+    )
+    doctor_fixed_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     share_tax_with_doctor: bool = False
 
 
@@ -48,7 +61,7 @@ class DoctorFeeRuleRead(DoctorFeeRuleCreate):
 
 class InvoiceCreateFromConsultation(BaseModel):
     consultation_id: ConsultationId
-    discount_amount: int = Field(default=0, ge=0)
+    discount_amount: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
     discount_approval_id: str | None = None
     discount_offer_id: str | None = None
     tax_rule_id: str | None = None
@@ -76,16 +89,16 @@ class InvoiceItemRead(BaseModel):
     item_type: str
     description: str
     quantity: int
-    unit_amount: int
-    total_amount: int
-    discount_amount: int | None = None
-    membership_discount_amount: int | None = None
-    mrp_amount: int = 0
-    selling_amount: int = 0
-    buying_amount: int = 0
+    unit_amount: Decimal
+    total_amount: Decimal
+    discount_amount: Decimal | None = None
+    membership_discount_amount: Decimal | None = None
+    mrp_amount: Decimal = Decimal("0")
+    selling_amount: Decimal = Decimal("0")
+    buying_amount: Decimal = Decimal("0")
     supplier_id: str | None = None
     vendor_name: str | None = None
-    vendor_amount: int = 0
+    vendor_amount: Decimal = Decimal("0")
     external_source: str | None = None
     external_slug: str | None = None
     external_item_code: str | None = None
@@ -99,7 +112,7 @@ class InvoiceItemSupplierUpdate(BaseModel):
 class InvoiceItemSupplierOptionRead(BaseModel):
     supplier: str
     supplier_name: str
-    buying_price: int = 0
+    buying_price: Decimal = Decimal("0")
 
 
 class InvoiceRead(BaseModel):
@@ -119,30 +132,30 @@ class InvoiceRead(BaseModel):
     patient_subscription_plan_id: str | None = None
     invoice_number: str
     status: InvoiceStatus
-    subtotal_amount: int
-    discount_amount: int
-    membership_discount_amount: int = 0
-    membership_free_items_amount: int = 0
-    membership_item_discount_amount: int = 0
-    membership_regular_items_amount: int = 0
-    taxable_amount: int
-    tax_amount: int
+    subtotal_amount: Decimal
+    discount_amount: Decimal
+    membership_discount_amount: Decimal = Decimal("0")
+    membership_free_items_amount: Decimal = Decimal("0")
+    membership_item_discount_amount: Decimal = Decimal("0")
+    membership_regular_items_amount: Decimal = Decimal("0")
+    taxable_amount: Decimal
+    tax_amount: Decimal
     tax_rule_id: str | None
-    tax_percentage: int = 0
+    tax_percentage: Decimal = Decimal("0")
     tax_label: str | None = None
-    total_amount: int
-    paid_amount: int
-    balance_amount: int
-    doctor_share_amount: int
-    clinic_share_amount: int
+    total_amount: Decimal
+    paid_amount: Decimal
+    balance_amount: Decimal
+    doctor_share_amount: Decimal
+    clinic_share_amount: Decimal
     fee_rule_id: str | None
     discount_approval_id: str | None
     discount_offer_id: str | None = None
-    offer_discount_amount: int = 0
+    offer_discount_amount: Decimal = Decimal("0")
     offer_discount_name: str | None = None
     offer_discount_type: DiscountType | None = None
-    offer_discount_value: int = 0
-    approved_discount_amount: int = 0
+    offer_discount_value: Decimal = Decimal("0")
+    approved_discount_amount: Decimal = Decimal("0")
     payment_methods: list[PaymentMethod] = Field(default_factory=list)
     created_by_user_id: str | None
     created_at: datetime
@@ -156,11 +169,11 @@ class InvoiceMembershipBenefitRead(BaseModel):
     service_type: str | None = None
     plan_id: str | None = None
     plan_name: str | None = None
-    discount_amount: int = 0
-    free_items_amount: int = 0
-    item_discount_amount: int = 0
-    regular_items_amount: int = 0
-    payable_amount: int = 0
+    discount_amount: Decimal = Decimal("0")
+    free_items_amount: Decimal = Decimal("0")
+    item_discount_amount: Decimal = Decimal("0")
+    regular_items_amount: Decimal = Decimal("0")
+    payable_amount: Decimal = Decimal("0")
     reason: str | None = None
 
 
@@ -177,7 +190,7 @@ class InvoiceDetailRead(BaseModel):
 
 class PaymentCreate(BaseModel):
     method: PaymentMethod
-    amount: int = Field(gt=0)
+    amount: Decimal = Field(gt=0, decimal_places=2)
     reference_number: str | None = Field(default=None, max_length=120)
     collected_by_user_id: UserId | None = None
 
@@ -188,7 +201,7 @@ class PaymentRead(BaseModel):
     branch_id: str
     invoice_id: str
     method: PaymentMethod
-    amount: int
+    amount: Decimal
     reference_number: str | None
     status: PaymentStatus
     collected_by_user_id: str | None
@@ -205,11 +218,11 @@ class BillingLedgerEntryRead(BaseModel):
     invoice_number: str
     entry_type: str
     description: str
-    debit_amount: int
-    credit_amount: int
-    invoice_total_delta: int
-    paid_amount_delta: int
-    balance_amount_delta: int
+    debit_amount: Decimal
+    credit_amount: Decimal
+    invoice_total_delta: Decimal
+    paid_amount_delta: Decimal
+    balance_amount_delta: Decimal
     status_after: InvoiceStatus
     reason: str | None
     related_payment_id: str | None
@@ -221,7 +234,7 @@ class BillingLedgerEntryRead(BaseModel):
 
 class RefundRequest(BaseModel):
     reason: str = Field(min_length=2, max_length=500)
-    amount: int | None = Field(default=None, ge=1)
+    amount: Decimal | None = Field(default=None, gt=0, decimal_places=2)
     payment_method: PaymentMethod | None = None
     payment_reference: str | None = Field(default=None, max_length=120)
     actor_user_id: UserId | None = None
@@ -234,7 +247,7 @@ class CancelInvoiceRequest(BaseModel):
 
 class BillingAdjustmentRequestCreate(BaseModel):
     request_type: BillingAdjustmentType
-    amount: int | None = Field(default=None, ge=0)
+    amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     reason: str = Field(min_length=2, max_length=500)
     requested_by_user_id: UserId | None = None
     payment_method: PaymentMethod | None = None
@@ -252,7 +265,7 @@ class BillingAdjustmentRequestRead(BaseModel):
     branch_id: str
     invoice_id: str
     request_type: BillingAdjustmentType
-    amount: int
+    amount: Decimal
     reason: str
     status: BillingAdjustmentStatus
     requested_by_user_id: str | None
@@ -280,14 +293,14 @@ class DoctorSettlementSummary(BaseModel):
     practitioner_id: str | None
     branch_id: str | None = None
     invoice_count: int
-    total_invoice_amount: int
-    total_paid_amount: int
-    total_doctor_share: int
-    doctor_share_paid_basis: int
-    finalized_settlement_amount: int = 0
-    payable_settlement_amount: int = 0
-    settlement_recovery_amount: int = 0
-    pending_doctor_share: int
+    total_invoice_amount: Decimal
+    total_paid_amount: Decimal
+    total_doctor_share: Decimal
+    doctor_share_paid_basis: Decimal
+    finalized_settlement_amount: Decimal = Decimal("0")
+    payable_settlement_amount: Decimal = Decimal("0")
+    settlement_recovery_amount: Decimal = Decimal("0")
+    pending_doctor_share: Decimal
     can_finalize: bool = False
     latest_finalized_at: datetime | None = None
 
@@ -295,7 +308,9 @@ class DoctorSettlementSummary(BaseModel):
 class TaxRuleCreate(BaseModel):
     branch_id: BranchId | None = None
     name: str = Field(min_length=2, max_length=120)
-    tax_percentage: int = Field(default=0, ge=0, le=100)
+    tax_percentage: Decimal = Field(
+        default=Decimal("0"), ge=0, le=100, decimal_places=4
+    )
     tax_label: str = Field(default="GST", max_length=40)
     service_scope: str = Field(default="all", max_length=40)
     created_by_user_id: UserId | None = None
@@ -311,7 +326,7 @@ class TaxRuleRead(TaxRuleCreate):
 class TaxRuleUpdate(BaseModel):
     branch_id: BranchId | None = None
     name: str | None = Field(default=None, min_length=2, max_length=120)
-    tax_percentage: int | None = Field(default=None, ge=0, le=100)
+    tax_percentage: Decimal | None = Field(default=None, ge=0, le=100, decimal_places=4)
     tax_label: str | None = Field(default=None, max_length=40)
     service_scope: str | None = Field(default=None, max_length=40)
     is_active: bool | None = None
@@ -323,9 +338,9 @@ class DiscountOfferCreate(BaseModel):
     code: str | None = Field(default=None, max_length=40)
     service_scope: str = Field(default="all", max_length=40)
     discount_type: DiscountType = DiscountType.PERCENTAGE
-    value: int = Field(ge=0)
-    minimum_bill_amount: int = Field(default=0, ge=0)
-    max_discount_amount: int | None = Field(default=None, ge=0)
+    value: Decimal = Field(ge=0, decimal_places=4)
+    minimum_bill_amount: Decimal = Field(default=Decimal("0"), ge=0, decimal_places=2)
+    max_discount_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     valid_from: datetime | None = None
     valid_until: datetime | None = None
     created_by_user_id: UserId | None = None
@@ -343,9 +358,9 @@ class DiscountOfferUpdate(BaseModel):
     code: str | None = Field(default=None, max_length=40)
     service_scope: str | None = Field(default=None, max_length=40)
     discount_type: DiscountType | None = None
-    value: int | None = Field(default=None, ge=0)
-    minimum_bill_amount: int | None = Field(default=None, ge=0)
-    max_discount_amount: int | None = Field(default=None, ge=0)
+    value: Decimal | None = Field(default=None, ge=0, decimal_places=4)
+    minimum_bill_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
+    max_discount_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
     valid_from: datetime | None = None
     valid_until: datetime | None = None
     is_active: bool | None = None
@@ -362,7 +377,7 @@ class DiscountApprovalCreate(BaseModel):
     branch_id: BranchId
     appointment_id: AppointmentId | None = None
     consultation_id: ConsultationId | None = None
-    requested_amount: int = Field(ge=1)
+    requested_amount: Decimal = Field(gt=0, decimal_places=2)
     reason: str = Field(min_length=2, max_length=500)
     requested_by_user_id: UserId | None = None
 
@@ -388,7 +403,7 @@ class DiscountApprovalRead(DiscountApprovalCreate):
 
 
 class CreditNoteCreate(BaseModel):
-    amount: int = Field(gt=0)
+    amount: Decimal = Field(gt=0, decimal_places=2)
     reason: str = Field(min_length=2, max_length=500)
     created_by_user_id: UserId | None = None
 
@@ -399,7 +414,7 @@ class CreditNoteRead(BaseModel):
     branch_id: str
     invoice_id: str
     credit_note_number: str
-    amount: int
+    amount: Decimal
     reason: str
     status: CreditNoteStatus
     created_by_user_id: str | None
@@ -410,7 +425,7 @@ class DueCollectionReport(BaseModel):
     tenant_id: str
     branch_id: str | None
     invoice_count: int
-    total_due_amount: int
+    total_due_amount: Decimal
     rows: list[dict]
 
 
@@ -418,20 +433,24 @@ class RevenueReport(BaseModel):
     tenant_id: str
     group_by: str
     rows: list[dict]
-    total_billed_amount: int = 0
-    total_invoice_amount: int
-    total_paid_amount: int
-    total_tax_amount: int
-    total_doctor_share: int
+    total_billed_amount: Decimal = Decimal("0")
+    total_invoice_amount: Decimal
+    total_paid_amount: Decimal
+    total_tax_amount: Decimal
+    total_doctor_share: Decimal
+    total_discount_amount: Decimal = Decimal("0")
+    total_approved_discount_amount: Decimal = Decimal("0")
+    total_offer_discount_amount: Decimal = Decimal("0")
+    total_membership_discount_amount: Decimal = Decimal("0")
 
 
 class CollectionReport(BaseModel):
     tenant_id: str
     branch_id: str | None
     payment_count: int
-    collected_amount: int
-    refunded_amount: int
-    net_collected_amount: int
+    collected_amount: Decimal
+    refunded_amount: Decimal
+    net_collected_amount: Decimal
 
 
 class DoctorSettlementFinalize(BaseModel):
@@ -443,7 +462,7 @@ class DoctorSettlementFinalize(BaseModel):
 class DoctorSettlementRead(DoctorSettlementSummary):
     id: str
     branch_id: str | None
-    settlement_amount: int
+    settlement_amount: Decimal
     status: SettlementStatus
     finalized_by_user_id: str | None
     finalized_at: datetime

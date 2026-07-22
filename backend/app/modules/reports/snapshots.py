@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 
 from app.core.config import get_settings
 from app.modules.billing.models import Invoice, InvoiceItem
+from app.modules.billing.services.read_models import invoice_read
 from app.modules.home_care.models import HomeCareBooking
 from app.modules.reports.models import MonthlyRevenueSnapshot
 from app.modules.reports.services.calculations import (
@@ -193,6 +194,9 @@ def compute_dashboard_metrics(
         "tax": 0,
         "paidTax": 0,
         "membershipDiscount": 0,
+        "approvedDiscount": 0,
+        "offerDiscount": 0,
+        "billingDiscount": 0,
         "membershipPurchases": 0,
         "membershipEnrollCount": 0,
         "membershipEnrollAmount": 0,
@@ -226,7 +230,16 @@ def compute_dashboard_metrics(
         )
         totals["tax"] += int(invoice.tax_amount or 0)
         totals["paidTax"] += tax_paid_basis(invoice)
-        totals["membershipDiscount"] += int(invoice.membership_discount_amount or 0)
+        discount_read = invoice_read(session, invoice)
+        membership_discount = float(invoice.membership_discount_amount or 0)
+        approved_discount = float(discount_read.approved_discount_amount or 0)
+        offer_discount = float(discount_read.offer_discount_amount or 0)
+        totals["membershipDiscount"] += membership_discount
+        totals["approvedDiscount"] += approved_discount
+        totals["offerDiscount"] += offer_discount
+        totals["billingDiscount"] += (
+            membership_discount + approved_discount + offer_discount
+        )
 
         is_plan_purchase = _is_membership_plan_invoice(invoice)
         if is_plan_purchase:

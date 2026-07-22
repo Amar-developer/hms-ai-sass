@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlmodel import Session
@@ -15,14 +16,15 @@ from app.modules.billing.models import (
 from app.modules.billing.repositories.reference_repository import (
     BillingReferenceRepository,
 )
+from app.modules.billing.services.money import ZERO, money_value, percentage_amount
 
 
 @dataclass(frozen=True)
 class FeeCalculation:
     fee_rule: DoctorFeeRule
-    consultation_amount: int
-    doctor_share_amount: int
-    clinic_share_amount: int
+    consultation_amount: Decimal
+    doctor_share_amount: Decimal
+    clinic_share_amount: Decimal
 
 
 def find_fee_rule(
@@ -78,11 +80,11 @@ def find_fee_rule(
 
 
 def calculate_fee_split(
-    fee_rule: DoctorFeeRule, amount: int | None = None
+    fee_rule: DoctorFeeRule, amount: Decimal | int | None = None
 ) -> FeeCalculation:
     """Splits a billed amount between doctor and clinic per the fee rule's
     share type (fixed amount vs. percentage)."""
-    fee = fee_rule.fee_amount if amount is None else amount
+    fee = money_value(fee_rule.fee_amount if amount is None else amount)
     if fee_rule.share_type == FeeShareType.FIXED:
         doctor_share = min(fee_rule.doctor_fixed_amount or 0, fee)
     else:
@@ -91,7 +93,7 @@ def calculate_fee_split(
             if fee_rule.doctor_share_percentage is not None
             else 0
         )
-        doctor_share = round(fee * percentage / 100)
+        doctor_share = percentage_amount(fee, percentage)
     clinic_share = fee - doctor_share
     return FeeCalculation(
         fee_rule=fee_rule,
@@ -149,7 +151,7 @@ def find_tax_rule(
     return matching_rules[0]
 
 
-def _offer_discount_value(offer: DiscountOffer, subtotal: int) -> int:
+def _offer_discount_value(offer: DiscountOffer, subtotal: Decimal) -> Decimal:
     now = datetime.now(timezone.utc)
     valid_from = (
         offer.valid_from.replace(tzinfo=timezone.utc)
@@ -162,19 +164,19 @@ def _offer_discount_value(offer: DiscountOffer, subtotal: int) -> int:
         else offer.valid_until
     )
     if valid_from and valid_from > now:
-        return 0
+        return ZERO
     if valid_until and valid_until < now:
-        return 0
+        return ZERO
     if subtotal < offer.minimum_bill_amount:
-        return 0
+        return ZERO
     discount = (
-        offer.value
+        money_value(offer.value)
         if offer.discount_type == DiscountType.FIXED
-        else round(subtotal * offer.value / 100)
+        else percentage_amount(subtotal, offer.value)
     )
     if offer.max_discount_amount is not None:
         discount = min(discount, offer.max_discount_amount)
-    return max(min(discount, subtotal), 0)
+    return max(min(money_value(discount), subtotal), ZERO)
 
 
 def calculate_offer_discount(
@@ -183,11 +185,12 @@ def calculate_offer_discount(
     tenant_id: str,
     branch_id: str,
     service_scope: str,
-    subtotal: int,
+    subtotal: Decimal | int,
     discount_offer_id: str | None,
-) -> tuple[int, DiscountOffer | None]:
+) -> tuple[Decimal, DiscountOffer | None]:
+    subtotal = money_value(subtotal)
     if subtotal <= 0:
-        return 0, None
+        return ZERO, None
     repository = BillingReferenceRepository(session)
     if discount_offer_id:
         offer = repository.get_discount_offer(discount_offer_id)
@@ -198,11 +201,11 @@ def calculate_offer_discount(
             or not _service_matches(offer.service_scope, service_scope)
             or (offer.branch_id and offer.branch_id != branch_id)
         ):
-            return 0, None
+            return ZERO, None
         discount = _offer_discount_value(offer, subtotal)
-        return (discount, offer) if discount > 0 else (0, None)
+        return (discount, offer) if discount > 0 else (ZERO, None)
     best_offer = None
-    best_discount = 0
+    best_discount = ZERO
     for offer in repository.list_active_discount_offers(tenant_id=tenant_id):
         if not _service_matches(offer.service_scope, service_scope):
             continue
@@ -211,4 +214,4 @@ def calculate_offer_discount(
         discount = _offer_discount_value(offer, subtotal)
         if discount > best_discount:
             best_discount, best_offer = discount, offer
-    return (best_discount, best_offer) if best_offer else (0, None)
+    return (best_discount, best_offer) if best_offer else (ZERO, None)

@@ -573,13 +573,17 @@ export const Input = forwardRef<HTMLInputElement, any>(
       return <DateInput {...dateProps} ref={ref} className={className} />;
     }
 
+    const normalizedProps =
+      Object.prototype.hasOwnProperty.call(props, "value") && props.value == null
+        ? { ...props, value: "" }
+        : props;
+
     return (
       <>
         <input
           ref={ref}
-          {...props}
+          {...normalizedProps}
           onChange={(e) => {
-            let value = e.target.value;
             props.onChange?.(e);
           }}
           className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}

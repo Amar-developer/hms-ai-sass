@@ -7,7 +7,102 @@ import {
   invoiceSource,
   invoiceSourceKey,
   isMembershipPlanInvoice,
+  invoiceItemPriceBreakdown,
+  formatMoney,
+  formatDiscountPercentage,
+  formatPercentage,
 } from "./helpers";
+
+describe("billing precision formatting", () => {
+  it("shows billing prices as rounded whole values", () => {
+    expect(formatMoney(180, "₹")).toBe("₹180");
+    expect(formatMoney(160.98, "₹")).toBe("₹161");
+    expect(formatMoney(205.7, "₹")).toBe("₹206");
+  });
+
+  it("shows all billing percentages as rounded whole values", () => {
+    expect(formatPercentage(10)).toBe("10");
+    expect(formatPercentage(10.57)).toBe("11");
+    expect(formatPercentage(31.43)).toBe("31");
+  });
+
+  it("shows discount percentages as rounded whole values", () => {
+    expect(formatDiscountPercentage(10.57)).toBe("11");
+    expect(formatDiscountPercentage(31.43)).toBe("31");
+  });
+
+  it("allocates legacy line discounts to paise", () => {
+    expect(
+      invoiceItemPriceBreakdown(
+        { quantity: 1, mrp_amount: 180, total_amount: 180 },
+        { subtotal_amount: 180, discount_amount: 18.54 },
+      ),
+    ).toMatchObject({
+      allocatedInvoiceDiscount: 18.54,
+      discountPercent: 10.3,
+      payableAmount: 161.46,
+    });
+  });
+});
+
+describe("invoice item price breakdown", () => {
+  it("includes the selling-price markdown from MRP", () => {
+    expect(
+      invoiceItemPriceBreakdown(
+        {
+          quantity: 1,
+          mrp_amount: 500,
+          selling_amount: 300,
+          total_amount: 300,
+          discount_amount: null,
+        },
+        { subtotal_amount: 1200, discount_amount: 0 },
+      ),
+    ).toMatchObject({
+      mrpTotal: 500,
+      mrpMarkdown: 200,
+      allocatedInvoiceDiscount: 0,
+      effectiveDiscount: 200,
+      discountPercent: 40,
+      payableAmount: 300,
+    });
+  });
+
+  it("combines MRP markdown with an allocated invoice discount", () => {
+    expect(
+      invoiceItemPriceBreakdown(
+        {
+          quantity: 2,
+          mrp_amount: 500,
+          total_amount: 800,
+          discount_amount: 80,
+        },
+        { subtotal_amount: 800, discount_amount: 80 },
+      ),
+    ).toMatchObject({
+      mrpTotal: 1000,
+      mrpMarkdown: 200,
+      allocatedInvoiceDiscount: 80,
+      effectiveDiscount: 280,
+      discountPercent: 28,
+      payableAmount: 720,
+    });
+  });
+
+  it("falls back to proportional allocation for legacy lines", () => {
+    expect(
+      invoiceItemPriceBreakdown(
+        { quantity: 1, mrp_amount: 500, total_amount: 400 },
+        { subtotal_amount: 800, discount_amount: 80 },
+      ),
+    ).toMatchObject({
+      mrpMarkdown: 100,
+      allocatedInvoiceDiscount: 40,
+      discountPercent: 28,
+      payableAmount: 360,
+    });
+  });
+});
 
 describe("membership discount exclusivity", () => {
   it("locks separate discounts for membership savings and free items", () => {

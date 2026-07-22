@@ -35,8 +35,11 @@ import LabReports from "./components/LabReports";
 import HomeCareReports from "./components/HomeCareReports";
 import ReportTotals from "./components/ReportTotals";
 import {
+  approvedDiscountUsage,
   allocateReportValues,
+  billingDiscountUsage,
   membershipBenefitUsage,
+  offerDiscountUsage,
   realizedGrossProfit,
   recognizedInvoiceRevenue,
   recognizedInvoiceTax,
@@ -731,6 +734,9 @@ export function Reports({
           balance: 0,
           doctorFee: 0,
           membershipBenefit: 0,
+          approvedDiscount: 0,
+          offerDiscount: 0,
+          billingDiscount: 0,
           clinicFee: 0,
           finalProfit: 0,
         };
@@ -749,6 +755,9 @@ export function Reports({
         row.balance += numberValue(invoice.balance_amount);
         row.doctorFee += doctorFee;
         row.membershipBenefit += membershipBenefitUsage(invoice);
+        row.approvedDiscount += approvedDiscountUsage(invoice);
+        row.offerDiscount += offerDiscountUsage(invoice);
+        row.billingDiscount += billingDiscountUsage(invoice);
         row.clinicFee +=
           numberValue(invoice.clinic_share_amount) ||
           Math.max(total - membershipBenefitUsage(invoice) - doctorFee, 0);
@@ -803,7 +812,10 @@ export function Reports({
     row.grossRevenue,
     row.paidRevenue,
     row.balance,
+    row.approvedDiscount,
+    row.offerDiscount,
     row.membershipBenefit,
+    row.billingDiscount,
     row.paymentMode,
     row.paidTax,
     row.doctorFee,
@@ -838,8 +850,20 @@ export function Reports({
             0,
           ),
           doctorRows.reduce(
+            (sum: number, row: any) => sum + numberValue(row.approvedDiscount),
+            0,
+          ),
+          doctorRows.reduce(
+            (sum: number, row: any) => sum + numberValue(row.offerDiscount),
+            0,
+          ),
+          doctorRows.reduce(
             (sum: number, row: any) =>
               sum + numberValue(row.membershipBenefit),
+            0,
+          ),
+          doctorRows.reduce(
+            (sum: number, row: any) => sum + numberValue(row.billingDiscount),
             0,
           ),
           "Multiple",
@@ -931,6 +955,21 @@ export function Reports({
           invoiceSubtotal,
           membershipBenefitUsage(invoice),
         );
+        const allocatedApprovedDiscounts = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          approvedDiscountUsage(invoice),
+        );
+        const allocatedOfferDiscounts = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          offerDiscountUsage(invoice),
+        );
+        const allocatedBillingDiscounts = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          billingDiscountUsage(invoice),
+        );
         const allocatedBalances = allocateReportValues(
           lineAmounts,
           invoiceSubtotal,
@@ -979,6 +1018,9 @@ export function Reports({
             revenue: 0,
             balance: 0,
             membershipBenefit: 0,
+            approvedDiscount: 0,
+            offerDiscount: 0,
+            billingDiscount: 0,
             tax: 0,
             purchaseCost: 0,
           };
@@ -989,6 +1031,9 @@ export function Reports({
           row.revenue += allocatedRevenue;
           row.balance += allocatedBalances[itemIndex];
           row.membershipBenefit += allocatedMembership;
+          row.approvedDiscount += allocatedApprovedDiscounts[itemIndex];
+          row.offerDiscount += allocatedOfferDiscounts[itemIndex];
+          row.billingDiscount += allocatedBillingDiscounts[itemIndex];
           row.tax += allocatedTaxes[itemIndex];
           row.purchaseCost += purchaseCost;
           acc.set(key, row);
@@ -1049,6 +1094,21 @@ export function Reports({
           invoiceSubtotal,
           membershipBenefitUsage(invoice),
         );
+        const allocatedApprovedDiscounts = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          approvedDiscountUsage(invoice),
+        );
+        const allocatedOfferDiscounts = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          offerDiscountUsage(invoice),
+        );
+        const allocatedBillingDiscounts = allocateReportValues(
+          lineAmounts,
+          invoiceSubtotal,
+          billingDiscountUsage(invoice),
+        );
         const allocatedBalances = allocateReportValues(
           lineAmounts,
           invoiceSubtotal,
@@ -1093,6 +1153,9 @@ export function Reports({
             revenue: 0,
             balance: 0,
             membershipBenefit: 0,
+            approvedDiscount: 0,
+            offerDiscount: 0,
+            billingDiscount: 0,
             tax: 0,
             purchaseCost: 0,
           };
@@ -1104,6 +1167,9 @@ export function Reports({
           row.revenue += allocatedRevenue;
           row.balance += allocatedBalances[itemIndex];
           row.membershipBenefit += allocatedMembership;
+          row.approvedDiscount += allocatedApprovedDiscounts[itemIndex];
+          row.offerDiscount += allocatedOfferDiscounts[itemIndex];
+          row.billingDiscount += allocatedBillingDiscounts[itemIndex];
           row.tax += allocatedTaxes[itemIndex];
           row.purchaseCost += purchaseCost;
           acc.set(key, row);
@@ -1137,7 +1203,10 @@ export function Reports({
     row.total,
     row.revenue,
     row.balance,
+    row.approvedDiscount,
+    row.offerDiscount,
     row.membershipBenefit,
+    row.billingDiscount,
     row.paymentMode,
     row.tax,
     row.purchaseCost,
@@ -1155,7 +1224,10 @@ export function Reports({
       row.total,
       row.revenue,
       row.balance,
+      row.approvedDiscount,
+      row.offerDiscount,
       row.membershipBenefit,
+      row.billingDiscount,
       row.paymentMode,
       row.tax,
       row.purchaseCost,
@@ -1338,6 +1410,18 @@ export function Reports({
         sum + membershipBenefitUsage(invoice),
       0,
     ),
+    approvedDiscount: sectionReportInvoices.reduce(
+      (sum: number, invoice: any) => sum + approvedDiscountUsage(invoice),
+      0,
+    ),
+    offerDiscount: sectionReportInvoices.reduce(
+      (sum: number, invoice: any) => sum + offerDiscountUsage(invoice),
+      0,
+    ),
+    billingDiscount: sectionReportInvoices.reduce(
+      (sum: number, invoice: any) => sum + billingDiscountUsage(invoice),
+      0,
+    ),
   };
 
   const invoiceSettlementTotal = filteredInvoices.reduce(
@@ -1370,7 +1454,10 @@ export function Reports({
       reportedInvoiceTotal(invoice),
       paid,
       numberValue(invoice.balance_amount),
+      approvedDiscountUsage(invoice),
+      offerDiscountUsage(invoice),
       membershipBenefitUsage(invoice),
+      billingDiscountUsage(invoice),
       invoicePaymentMode(invoice),
       recognizedInvoiceTax(invoice),
       invoiceDoctorFeeAmount(invoice),
@@ -1402,7 +1489,10 @@ export function Reports({
         totalAmount: reportedInvoiceTotal(invoice),
         paidAmount: numberValue(invoice.paid_amount),
         balance: numberValue(invoice.balance_amount),
+        approvedDiscount: approvedDiscountUsage(invoice),
+        offerDiscount: offerDiscountUsage(invoice),
         membershipBenefit: membershipBenefitUsage(invoice),
+        billingDiscount: billingDiscountUsage(invoice),
         paymentMode: invoicePaymentMode(invoice),
         settlement: invoiceSettlementAmount(invoice),
         settlementPercent: percent(
@@ -1426,7 +1516,10 @@ export function Reports({
           totals.grossRevenue,
           totals.paidRevenue,
           totals.balance,
+          totals.approvedDiscount,
+          totals.offerDiscount,
           totals.membershipDiscount,
+          totals.billingDiscount,
           "",
           totals.paidTax,
           invoiceDoctorFeeTotal,
@@ -1461,6 +1554,9 @@ export function Reports({
     ["Pharmacy Revenue", totals.pharmacyRevenue],
     ["Membership Purchases", totals.membershipPurchases],
     ["Membership Discounts Used", totals.membershipDiscount],
+    ["Admin Approved Discounts", totals.approvedDiscount],
+    ["Offer Discounts", totals.offerDiscount],
+    ["Total Billing Discounts", totals.billingDiscount],
     ...membershipClaimRows.map((row: any) => [
       `Membership Claimed - ${row.label}`,
       row.claimedAmount,

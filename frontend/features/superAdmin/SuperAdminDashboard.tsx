@@ -15,6 +15,7 @@ import { RolePermissions } from "./components/roles/RolePermissions";
 import { TenantUsers } from "./components/users/TenantUsers";
 import { CreateUser } from "./components/users/CreateUser";
 import { EditUser } from "./components/users/EditUser";
+import { PlatformAdmins } from "./components/users/PlatformAdmins";
 import { DepartmentsManagement } from "./components/departments/DepartmentsManagement";
 import { CreateDepartment } from "./components/departments/CreateDepartment";
 import { EditDepartment } from "./components/departments/EditDepartment";
@@ -219,6 +220,14 @@ export function SuperAdminDashboard({
           estimatedRevenue={estimatedRevenue}
         />
       )}
+      {currentSection === "platformAdmins" && (
+        <PlatformAdmins
+          apiSession={apiSession}
+          busy={data.busy}
+          setBusy={data.setBusy}
+          setMessage={data.setMessage}
+        />
+      )}
       {currentSection === "tenants" && (
         <TenantManagement
           tenants={selectableTenants}
@@ -287,6 +296,7 @@ export function SuperAdminDashboard({
       {currentSection === "roleEdit" && (
         <EditRole
           role={data.roles.find((r: any) => r.id === selectedRoleId)}
+          permissionCatalog={data.permissionCatalog}
           busy={data.busy}
           updateRole={actions.updateRole}
           back={() => changeSection("roles")}
@@ -295,7 +305,9 @@ export function SuperAdminDashboard({
       {currentSection === "rolePermissions" && (
         <RolePermissions
           role={data.roles.find((r: any) => r.id === selectedRoleId)}
+          roles={data.roles}
           permissionCatalog={data.permissionCatalog}
+          onRoleChange={setSelectedRoleId}
           busy={data.busy}
           updateRole={actions.updateRole}
           back={() => changeSection("roles")}
@@ -318,7 +330,7 @@ export function SuperAdminDashboard({
           tenants={selectableTenants}
           selectedId={data.selectedId}
           setSelectedId={data.setSelectedId}
-          users={data.users}
+          users={data.users.filter((user: any) => !user.is_super_admin)}
           canCopyIds={canCopyIds}
           setSelectedUserId={setSelectedUserId}
           setSection={changeSection}
@@ -332,7 +344,7 @@ export function SuperAdminDashboard({
           selectedId={data.selectedId}
           setSelectedId={data.setSelectedId}
           branches={data.tenantBranches}
-          roles={data.roles}
+          roles={data.roles.filter((role: any) => role.key !== "super_admin")}
           busy={data.busy}
           createUser={actions.createUser}
           back={() => changeSection("users")}
@@ -344,7 +356,7 @@ export function SuperAdminDashboard({
           selected={selected}
           user={data.users.find((u: any) => u.id === selectedUserId)}
           branches={data.tenantBranches}
-          roles={data.roles}
+          roles={data.roles.filter((role: any) => role.key !== "super_admin")}
           busy={data.busy}
           updateUser={actions.updateUser}
           onResetPassword={setPasswordUser}

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlmodel import Session
@@ -269,7 +270,7 @@ def update_discount_offer(
     require_user_branch_access(actor, payload.branch_id or offer.branch_id)
     updates = payload.model_dump(exclude_unset=True)
     next_discount_type = updates.get("discount_type", offer.discount_type)
-    next_value = int(updates.get("value", offer.value) or 0)
+    next_value = Decimal(str(updates.get("value", offer.value) or 0))
     if next_discount_type.value == "percentage" and next_value > 100:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

@@ -175,6 +175,7 @@ class ErrorLogRepository:
         user_id: str | None,
         stack_trace: str | None,
         metadata_json: str,
+        message: str | None = None,
     ) -> ErrorLog:
         row.occurrence_count += 1
         row.last_seen_at = now
@@ -182,5 +183,6 @@ class ErrorLogRepository:
         row.user_id = user_id or row.user_id
         row.stack_trace = stack_trace or row.stack_trace
         row.metadata_json = metadata_json or row.metadata_json
+        row.message = message or row.message
         self.session.add(row)
         return row

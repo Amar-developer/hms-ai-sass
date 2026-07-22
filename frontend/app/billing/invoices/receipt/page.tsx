@@ -70,22 +70,14 @@ function toInvoiceProps(
       patientId: patient?.patient_number || ""
     },
     items: (detail.items || []).map((item: any, index: number) => {
-      const lineTotal = Number(item.total_amount || 0);
-      const lineDiscount =
-        item.discount_amount === null || item.discount_amount === undefined
-          ? Math.round(
-              (lineTotal * Number(invoice.discount_amount || 0)) /
-                Math.max(Number(invoice.subtotal_amount || 0), 1),
-            )
-          : Number(item.discount_amount || 0);
+      const pricing = invoiceItemPriceBreakdown(item, invoice);
       return {
         srNo: index + 1,
         name: item.description || item.item_type || "Item",
         qty: item.quantity || 1,
-        mrp: item.mrp_amount || item.selling_amount || item.unit_amount || 0,
-        discPercent:
-          lineTotal > 0 ? Math.round((lineDiscount * 100) / lineTotal) : 0,
-        rate: lineTotal,
+        mrp: pricing.mrpUnit,
+        discPercent: pricing.discountPercent,
+        rate: pricing.payableAmount,
       };
     }),
     bank: {
@@ -103,8 +95,8 @@ function toInvoiceProps(
     taxableAmount: Number(invoice.taxable_amount || 0),
     taxAmount: Number(invoice.tax_amount || 0),
     taxLabel: invoice.tax_label || "Tax",
+    taxPercentage: Number(invoice.tax_percentage || 0),
     total: Number(invoice.total_amount || 0),
-    tax_amount:Number(invoice.tax_amount || 0)
   };
 }
 
@@ -252,4 +244,39 @@ export default function ReceiptPage() {
       </div>
     </main>
   );
+}
+function invoiceItemPriceBreakdown(item: any, invoice: any) {
+  const toNumber = (value: unknown, fallback = 0) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  };
+
+  const quantity = Math.max(1, toNumber(item.quantity ?? item.qty ?? 1));
+  const mrpUnit = toNumber(
+    item.mrp_unit ?? item.mrp ?? item.price ?? item.unit_price ?? item.selling_price ?? item.rate ?? 0,
+  );
+  const totalAmount = toNumber(item.amount ?? item.total ?? 0);
+
+  let payableAmount = toNumber(item.rate ?? item.unit_rate ?? item.selling_price ?? item.price);
+  if (!payableAmount && totalAmount && quantity) {
+    payableAmount = totalAmount / quantity;
+  }
+  if (!payableAmount) {
+    payableAmount = mrpUnit;
+  }
+
+  const rawDiscountPercent = toNumber(
+    item.discount_percent ?? item.discount_percentage ?? item.disc_percent ?? item.discount ?? 0,
+  );
+  const discountPercent =
+    rawDiscountPercent ||
+    (mrpUnit > 0
+      ? Math.round(((mrpUnit - payableAmount) / mrpUnit) * 10000) / 100
+      : 0);
+
+  return {
+    mrpUnit,
+    discountPercent,
+    payableAmount,
+  };
 }

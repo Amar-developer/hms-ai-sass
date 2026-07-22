@@ -1,28 +1,33 @@
+from decimal import Decimal, ROUND_DOWN
+
 from sqlmodel import Session, select
 
 from app.modules.billing.models import Invoice, InvoiceItem
+from app.modules.billing.services.money import MONEY_QUANTUM, ZERO, money_value
 
 
-def allocate_amount(weights: list[int], amount: int) -> list[int]:
-    """Allocate integer rupees exactly using the largest-remainder method."""
-    safe_weights = [max(int(value or 0), 0) for value in weights]
+def allocate_amount(
+    weights: list[Decimal | int], amount: Decimal | int
+) -> list[Decimal]:
+    """Allocate money exactly to paise using the largest-remainder method."""
+    safe_weights = [max(money_value(value), ZERO) for value in weights]
     weight_total = sum(safe_weights)
-    target = min(max(int(amount or 0), 0), weight_total)
+    target = min(max(money_value(amount), ZERO), weight_total)
     if target <= 0 or weight_total <= 0:
-        return [0] * len(safe_weights)
-    numerators = [target * weight for weight in safe_weights]
-    allocated = [value // weight_total for value in numerators]
-    remainder = target - sum(allocated)
+        return [ZERO] * len(safe_weights)
+    exact = [target * weight / weight_total for weight in safe_weights]
+    allocated = [value.quantize(MONEY_QUANTUM, rounding=ROUND_DOWN) for value in exact]
+    remainder_cents = int((target - sum(allocated)) / MONEY_QUANTUM)
     order = sorted(
         range(len(safe_weights)),
         key=lambda index: (
-            -(numerators[index] % weight_total),
+            -(exact[index] - allocated[index]),
             -safe_weights[index],
             index,
         ),
     )
-    for index in order[:remainder]:
-        allocated[index] += 1
+    for index in order[:remainder_cents]:
+        allocated[index] += MONEY_QUANTUM
     return allocated
 
 
@@ -49,19 +54,21 @@ def sync_invoice_item_discounts(
     if not items:
         return
 
-    totals = [max(int(item.total_amount or 0), 0) for item in items]
+    totals = [max(money_value(item.total_amount), ZERO) for item in items]
     membership_target = min(
-        max(int(invoice.membership_discount_amount or 0), 0), sum(totals)
+        max(money_value(invoice.membership_discount_amount), ZERO), sum(totals)
     )
     free_ids = set(free_item_ids or [])
     discounted_ids = set(discounted_item_ids or [])
-    membership_allocations = [0] * len(items)
+    membership_allocations = [ZERO] * len(items)
 
     if membership_target > 0 and (free_ids or discounted_ids):
         for index, item in enumerate(items):
             if item.external_item_code and item.external_item_code in free_ids:
                 membership_allocations[index] = totals[index]
-        remaining_membership = max(membership_target - sum(membership_allocations), 0)
+        remaining_membership = max(
+            membership_target - sum(membership_allocations), ZERO
+        )
         eligible_indexes = [
             index
             for index, item in enumerate(items)
@@ -81,10 +88,10 @@ def sync_invoice_item_discounts(
     elif membership_target > 0:
         membership_allocations = allocate_amount(totals, membership_target)
 
-    total_target = min(max(int(invoice.discount_amount or 0), 0), sum(totals))
-    non_membership_target = max(total_target - sum(membership_allocations), 0)
+    total_target = min(max(money_value(invoice.discount_amount), ZERO), sum(totals))
+    non_membership_target = max(total_target - sum(membership_allocations), ZERO)
     remaining_weights = [
-        max(total - membership, 0)
+        max(total - membership, ZERO)
         for total, membership in zip(totals, membership_allocations, strict=True)
     ]
     other_allocations = allocate_amount(remaining_weights, non_membership_target)

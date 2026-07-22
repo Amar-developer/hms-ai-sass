@@ -11,6 +11,24 @@ export function membershipBenefitUsage(invoice: any) {
   return Math.max(amount(invoice?.membership_discount_amount), 0);
 }
 
+/** Invoice-level discount approved through the request/approval workflow. */
+export function approvedDiscountUsage(invoice: any) {
+  return Math.max(amount(invoice?.approved_discount_amount), 0);
+}
+
+/** Invoice-level promotional offer discount. MRP markdown is never included. */
+export function offerDiscountUsage(invoice: any) {
+  return Math.max(amount(invoice?.offer_discount_amount), 0);
+}
+
+export function billingDiscountUsage(invoice: any) {
+  return (
+    approvedDiscountUsage(invoice) +
+    offerDiscountUsage(invoice) +
+    membershipBenefitUsage(invoice)
+  );
+}
+
 export function recognizedInvoiceTax(invoice: any) {
   const total = Math.max(amount(invoice?.total_amount), 0);
   const paid = recognizedInvoiceRevenue(invoice);

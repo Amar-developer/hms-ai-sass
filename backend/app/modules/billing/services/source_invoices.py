@@ -22,6 +22,7 @@ from app.modules.billing.services.consultation_invoice import (
 from app.modules.billing.services.invoice_status import (
     update_invoice_payment_status,
 )
+from app.modules.billing.services.money import money_value
 from app.modules.consultations.models import ConsultationStatus
 from app.modules.consultations.repositories import (
     ConsultationBillingReferenceRepository,
@@ -381,7 +382,7 @@ def create_invoice_from_consultation_source(
         return read_invoice_detail(
             session, refresh_consultation_invoice(session, existing)
         )
-    approved_discount = int(payload.discount_amount or 0)
+    approved_discount = money_value(payload.discount_amount)
     approval = None
     if payload.discount_approval_id:
         approval = source_repo.get_discount_approval(payload.discount_approval_id)
@@ -397,9 +398,9 @@ def create_invoice_from_consultation_source(
                 detail="Approved discount approval is required for invoice discount",
             )
         if approved_discount <= 0:
-            approved_discount = int(approval.requested_amount or 0)
+            approved_discount = money_value(approval.requested_amount)
     if approved_discount > 0 and (
-        not approval or int(approval.requested_amount or 0) < approved_discount
+        not approval or money_value(approval.requested_amount) < approved_discount
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

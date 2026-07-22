@@ -10,7 +10,7 @@ import {
   PasswordField,
 } from "@/app/components/FormElements";
 
-export function ChangePassword({ apiSession, onClose }: any) {
+export function ChangePassword({ apiSession, onClose, required = false, onChanged }: any) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -32,7 +32,7 @@ export function ChangePassword({ apiSession, onClose }: any) {
     }
     setBusy(true);
     try {
-      await apiFetch("/auth/change-password", apiSession, {
+      const updated = await apiFetch("/auth/change-password", apiSession, {
         method: "POST",
         body: JSON.stringify({
           current_password: currentPassword,
@@ -43,7 +43,10 @@ export function ChangePassword({ apiSession, onClose }: any) {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      setTimeout(onClose, 700);
+      setTimeout(() => {
+        onChanged?.(updated);
+        onClose();
+      }, 700);
     } catch (err: any) {
       setError(err.message || "Could not change password.");
     } finally {
@@ -54,15 +57,19 @@ export function ChangePassword({ apiSession, onClose }: any) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
       <Card className="w-full max-w-md">
-       <div className="flex justify-end" onClick={()=>onClose()}>
-         <X className="cursor-pointer hover:bg-slate-100"/>
-       </div>
+       {!required && (
+         <div className="flex justify-end" onClick={() => onClose()}>
+           <X className="cursor-pointer hover:bg-slate-100" />
+         </div>
+       )}
         <div className="mb-5 flex items-center gap-3">
           <KeyRound />
           <div>
             <h3 className="text-lg font-bold">Change Password</h3>
             <p className="text-sm text-slate-500">
-              Password update is audited in the backend API.
+              {required
+                ? "You must replace the temporary password before continuing."
+                : "Password update is audited in the backend API."}
             </p>
           </div>
         </div>
@@ -89,13 +96,15 @@ export function ChangePassword({ apiSession, onClose }: any) {
           <FormErrorBanner error={error} />
           <FormSuccessBanner message={message} />
           <div className="flex gap-2  justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="close-button font-bold hover:bg-slate-100"
-            >
-              Cancel
-            </button>
+            {!required && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="close-button font-bold hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+            )}
             <Button disabled={busy} className='save-button'>
               {busy ? "Updating..." : "Update Password"}
             </Button>

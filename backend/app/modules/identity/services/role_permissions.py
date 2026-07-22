@@ -30,7 +30,7 @@ def ensure_role_permissions(
     session: Session, role: Role, permission_keys: list[str]
 ) -> None:
     role_permissions = IdentityRolePermissionRepository(session)
-    for permission_key in permission_keys:
+    for permission_key in dict.fromkeys(permission_keys):
         permission = ensure_permission(session, permission_key)
         role_permission = role_permissions.get(
             role_id=role.id, permission_id=permission.id
@@ -57,7 +57,7 @@ def replace_role_permissions(
     existing = role_permissions.list_for_role(role.id)
     for row in existing:
         role_permissions.delete(row)
-    for permission_key in permission_keys:
+    for permission_key in dict.fromkeys(permission_keys):
         permission = ensure_permission(session, permission_key)
         role_permissions.add(
             RolePermission(role_id=role.id, permission_id=permission.id)

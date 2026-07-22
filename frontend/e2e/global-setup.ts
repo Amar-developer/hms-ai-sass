@@ -60,7 +60,9 @@ async function createRoleUser(
   },
 ): Promise<SeedActor> {
   const roleKey = `${input.rolePrefix}_${input.runId}`;
-  const permissionKeys = input.permissionKeys.filter((key) => catalog.has(key));
+  const permissionKeys = Array.from(
+    new Set(input.permissionKeys.filter((key) => catalog.has(key))),
+  );
   await post(
     admin,
     "/identity/roles",
@@ -253,7 +255,7 @@ export default async function globalSetup() {
         "appointments.edit",
         "queue.manage",
         "queue.read",
-        "queue.edit",
+        "queue.manage",
         "practitioners.read",
         "scheduling.read",
         "departments.read",
@@ -289,7 +291,7 @@ export default async function globalSetup() {
         "appointments.read",
         "queue.manage",
         "queue.read",
-        "consultations.manage",
+        "consultations.edit",
         "consultations.read",
         "consultations.create",
         "consultations.edit",

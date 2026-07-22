@@ -5,7 +5,6 @@ import { userTypes } from "../../constants";
 import { BranchSelect } from "./BranchSelect";
 import { RoleCheckboxes } from "./RoleCheckboxes";
 import { TenantPicker } from "../shared/TenantPicker";
-import { useState } from "react";
 import { FormField } from "@/app/components/FormElements";
 
 export function CreateUser({
@@ -18,8 +17,6 @@ export function CreateUser({
   createUser,
   back,
 }: any) {
-  const [mobile, setMobile] = useState(null);
-
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -78,8 +75,7 @@ export function CreateUser({
           <Input
             name="mobile"
             mobileNumber
-            value={mobile}
-            onChange={(e: any) => setMobile(e.target.value)}
+            defaultValue=""
             placeholder="Enter patient mobile number"
           />
         </FormField>

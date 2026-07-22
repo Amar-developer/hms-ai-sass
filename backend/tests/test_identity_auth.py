@@ -93,6 +93,127 @@ def test_bootstrap_creates_primary_super_admin_role(unauthenticated_client):
     assert "platform.subscriptions.manage" not in tenant_admin_role["permission_keys"]
 
 
+def test_super_admin_can_create_and_manage_another_super_admin(
+    unauthenticated_client,
+):
+    client = unauthenticated_client
+    token = bootstrap_super_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    created = client.post(
+        "/api/v1/identity/super-admins",
+        headers=headers,
+        json={
+            "name": "Secondary Platform Admin",
+            "email": "secondary.admin@medizinhub.test",
+            "temporary_password": "TemporaryPass123",
+            "current_password": "SecretPass123",
+            "reason": "Operational continuity",
+        },
+    )
+    assert created.status_code == 201
+    secondary = created.json()
+    assert secondary["is_super_admin"] is True
+    assert secondary["user_type"] == "super_admin"
+    assert secondary["roles"] == ["super_admin"]
+    assert secondary["must_change_password"] is True
+
+    listed = client.get("/api/v1/identity/super-admins", headers=headers)
+    assert listed.status_code == 200
+    assert {row["email"] for row in listed.json()} == {
+        "admin@medizinhub.test",
+        "secondary.admin@medizinhub.test",
+    }
+
+    secondary_login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "secondary.admin@medizinhub.test",
+            "password": "TemporaryPass123",
+        },
+    )
+    assert secondary_login.status_code == 200
+
+    deactivated = client.post(
+        f"/api/v1/identity/super-admins/{secondary['id']}/status",
+        headers=headers,
+        json={
+            "is_active": False,
+            "current_password": "SecretPass123",
+            "reason": "Status protection test",
+        },
+    )
+    assert deactivated.status_code == 200
+    assert deactivated.json()["is_active"] is False
+    assert (
+        client.get(
+            "/api/v1/auth/me",
+            headers={
+                "Authorization": f"Bearer {secondary_login.cookies['access_token']}"
+            },
+        ).status_code
+        == 401
+    )
+
+
+def test_super_admin_management_requires_reauthentication_and_protects_self(
+    unauthenticated_client,
+):
+    client = unauthenticated_client
+    token = bootstrap_super_admin(client)
+    headers = {"Authorization": f"Bearer {token}"}
+    me = client.get("/api/v1/auth/me", headers=headers).json()
+
+    wrong_password = client.post(
+        "/api/v1/identity/super-admins",
+        headers=headers,
+        json={
+            "name": "Rejected Admin",
+            "email": "rejected.admin@medizinhub.test",
+            "temporary_password": "TemporaryPass123",
+            "current_password": "WrongPassword123",
+            "reason": "Reauthentication test",
+        },
+    )
+    assert wrong_password.status_code == 403
+    assert wrong_password.json()["detail"] == "Current password is incorrect"
+
+    self_disable = client.post(
+        f"/api/v1/identity/super-admins/{me['id']}/status",
+        headers=headers,
+        json={
+            "is_active": False,
+            "current_password": "SecretPass123",
+            "reason": "Self-deactivation test",
+        },
+    )
+    assert self_disable.status_code == 400
+    assert self_disable.json()["detail"] == (
+        "You cannot deactivate your own super admin account"
+    )
+
+    primary = next(
+        row
+        for row in client.get("/api/v1/tenants", headers=headers).json()
+        if row["is_primary"]
+    )
+    generic_create = client.post(
+        "/api/v1/identity/users",
+        headers={**headers, "X-Tenant-ID": primary["id"]},
+        json={
+            "name": "Unsafe Role Assignment",
+            "email": "unsafe.admin@medizinhub.test",
+            "password": "TemporaryPass123",
+            "user_type": "super_admin",
+            "role_keys": ["super_admin"],
+        },
+    )
+    assert generic_create.status_code == 403
+    assert generic_create.json()["detail"] == (
+        "Create super admins only from Platform Admins"
+    )
+
+
 def test_bootstrap_super_admin_can_manage_default_subscription_catalog(
     unauthenticated_client,
 ):
@@ -465,7 +586,7 @@ def test_role_crud_metadata_and_latest_first_ordering(unauthenticated_client):
         json={
             "name": "Front Office",
             "key": "front_office",
-            "permission_keys": ["appointments.manage"],
+            "permission_keys": ["appointments.manage", "appointments.manage"],
         },
     )
     assert first.status_code == 201

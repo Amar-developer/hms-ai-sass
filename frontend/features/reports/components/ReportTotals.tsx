@@ -14,12 +14,15 @@ export default function ReportTotals({ totals, money, section }: any) {
     [section === "invoice" || section === "metrix" ? "Total Costs" : costLabel, money(costValue)],
     ["Due", money(totals.due)],
     ["Gross Profit", money(totals.grossProfit)],
+    ["Billing Discounts", money(totals.billingDiscount)],
+    ["Approved Discount", money(totals.approvedDiscount)],
+    ["Offer Discount", money(totals.offerDiscount)],
     ["Membership Benefit", money(totals.membershipBenefit)],
   ];
 
   return (
     <Card>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {cards.map(([label, value]) => (
           <div key={label} className="rounded-xl bg-slate-50 px-4 py-4">
             <p className="text-xs font-bold uppercase text-slate-500">{label}</p>

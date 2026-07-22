@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from decimal import Decimal
 from sqlmodel import Session
 
 from app.core.auth import is_tenant_admin_user
@@ -12,6 +13,7 @@ from app.modules.billing.repositories.read_repository import BillingReadReposito
 from app.modules.billing.schemas import InvoiceDetailRead
 from app.modules.billing.services.adjustments import execute_billing_adjustment
 from app.modules.billing.services.read_models import read_invoice_detail
+from app.modules.billing.services.money import ZERO, money_value
 from app.modules.billing.services.service_invoices import (
     create_service_invoice as _create_service_invoice_command,
 )
@@ -34,11 +36,11 @@ def record_billing_ledger(
     *,
     entry_type: str,
     description: str,
-    debit_amount: int = 0,
-    credit_amount: int = 0,
-    invoice_total_delta: int = 0,
-    paid_amount_delta: int = 0,
-    balance_amount_delta: int = 0,
+    debit_amount: Decimal | int = 0,
+    credit_amount: Decimal | int = 0,
+    invoice_total_delta: Decimal | int = 0,
+    paid_amount_delta: Decimal | int = 0,
+    balance_amount_delta: Decimal | int = 0,
     reason: str | None = None,
     actor_user_id: str | None = None,
     related_payment_id: str | None = None,
@@ -52,11 +54,11 @@ def record_billing_ledger(
         invoice_number=invoice.invoice_number,
         entry_type=entry_type,
         description=description,
-        debit_amount=max(int(debit_amount or 0), 0),
-        credit_amount=max(int(credit_amount or 0), 0),
-        invoice_total_delta=int(invoice_total_delta or 0),
-        paid_amount_delta=int(paid_amount_delta or 0),
-        balance_amount_delta=int(balance_amount_delta or 0),
+        debit_amount=max(money_value(debit_amount), ZERO),
+        credit_amount=max(money_value(credit_amount), ZERO),
+        invoice_total_delta=money_value(invoice_total_delta),
+        paid_amount_delta=money_value(paid_amount_delta),
+        balance_amount_delta=money_value(balance_amount_delta),
         status_after=invoice.status,
         reason=reason,
         actor_user_id=actor_user_id,
@@ -84,9 +86,9 @@ def ensure_invoice_submit_ledger(session: Session, invoice: Invoice) -> None:
     # Amount/Balance by the discount amount even after the invoice is fully
     # paid. Add it back so "Invoice Submitted" represents the gross,
     # pre-membership-discount figure and the two entries telescope correctly.
-    membership_discount = int(invoice.membership_discount_amount or 0)
-    gross_total = int(invoice.total_amount or 0) + membership_discount
-    gross_balance = int(invoice.balance_amount or 0) + membership_discount
+    membership_discount = money_value(invoice.membership_discount_amount)
+    gross_total = money_value(invoice.total_amount) + membership_discount
+    gross_balance = money_value(invoice.balance_amount) + membership_discount
     record_billing_ledger(
         session,
         invoice,
@@ -105,7 +107,7 @@ def ensure_invoice_membership_benefit_ledger(
     *,
     actor_user_id: str | None = None,
 ) -> None:
-    membership_amount = int(invoice.membership_discount_amount or 0)
+    membership_amount = money_value(invoice.membership_discount_amount)
     if membership_amount <= 0:
         return
     if BillingReadRepository(session).has_ledger_entry(
@@ -113,9 +115,9 @@ def ensure_invoice_membership_benefit_ledger(
         entry_type="membership_benefit_applied",
     ):
         return
-    free_amount = int(invoice.membership_free_items_amount or 0)
-    discounted_amount = int(invoice.membership_item_discount_amount or 0)
-    regular_amount = int(invoice.membership_regular_items_amount or 0)
+    free_amount = money_value(invoice.membership_free_items_amount)
+    discounted_amount = money_value(invoice.membership_item_discount_amount)
+    regular_amount = money_value(invoice.membership_regular_items_amount)
     breakdown = (
         f"Free items ₹{free_amount}; membership discount ₹{discounted_amount}; "
         f"regular chargeable items ₹{regular_amount}"

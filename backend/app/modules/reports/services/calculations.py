@@ -49,8 +49,18 @@ def invoice_report_total(invoice: Invoice) -> int:
 
 
 def invoice_offer_discount(invoice: Invoice) -> int:
-    return max(
-        int(invoice.discount_amount or 0) - invoice_membership_benefit(invoice), 0
+    return max(int(getattr(invoice, "offer_discount_amount", 0) or 0), 0)
+
+
+def invoice_approved_discount(invoice: Invoice) -> int:
+    return max(int(getattr(invoice, "approved_discount_amount", 0) or 0), 0)
+
+
+def invoice_billing_discount(invoice: Invoice) -> int:
+    return (
+        invoice_approved_discount(invoice)
+        + invoice_offer_discount(invoice)
+        + invoice_membership_benefit(invoice)
     )
 
 

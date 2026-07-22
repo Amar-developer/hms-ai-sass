@@ -18,6 +18,8 @@ from app.modules.billing.schemas import (
     RevenueReport,
 )
 from app.modules.billing.services.membership import invoice_membership_service
+from app.modules.billing.services.money import ZERO, money_value
+from app.modules.billing.services.read_models import invoice_read
 from app.modules.identity.models import User
 from app.modules.subscriptions.service import enforce_module_enabled
 
@@ -46,10 +48,10 @@ def doctor_settlement_summary(
     total_doctor_share = sum(
         invoice.doctor_share_amount for invoice, _appointment in rows
     )
-    doctor_share_paid_basis = 0
+    doctor_share_paid_basis = ZERO
     for invoice, _appointment in rows:
         if invoice.total_amount:
-            doctor_share_paid_basis += round(
+            doctor_share_paid_basis += money_value(
                 invoice.doctor_share_amount * invoice.paid_amount / invoice.total_amount
             )
     settlements = report_repo.list_finalized_settlements(
@@ -58,8 +60,8 @@ def doctor_settlement_summary(
         practitioner_id=practitioner_id,
     )
     finalized_amount = sum(row.settlement_amount for row in settlements)
-    payable_amount = max(doctor_share_paid_basis - finalized_amount, 0)
-    recovery_amount = max(finalized_amount - doctor_share_paid_basis, 0)
+    payable_amount = max(doctor_share_paid_basis - finalized_amount, ZERO)
+    recovery_amount = max(finalized_amount - doctor_share_paid_basis, ZERO)
     latest_finalized_at = max((row.finalized_at for row in settlements), default=None)
     return DoctorSettlementSummary(
         tenant_id=tenant_id,
@@ -73,7 +75,7 @@ def doctor_settlement_summary(
         finalized_settlement_amount=finalized_amount,
         payable_settlement_amount=payable_amount,
         settlement_recovery_amount=recovery_amount,
-        pending_doctor_share=max(total_doctor_share - doctor_share_paid_basis, 0),
+        pending_doctor_share=max(total_doctor_share - doctor_share_paid_basis, ZERO),
         can_finalize=payable_amount > 0,
         latest_finalized_at=latest_finalized_at,
     )
@@ -228,9 +230,9 @@ def collection_report(
         from_date=from_date,
         to_date=to_date,
     )
-    collected_amount = sum(int(payment.amount or 0) for payment in payments)
+    collected_amount = sum((money_value(payment.amount) for payment in payments), ZERO)
     refunded_amount = sum(
-        abs(min(int(entry.paid_amount_delta or 0), 0)) for entry in refund_entries
+        abs(min(money_value(entry.paid_amount_delta), ZERO)) for entry in refund_entries
     )
     return CollectionReport(
         tenant_id=tenant_id,
@@ -285,6 +287,10 @@ def revenue_report(
                 "paid_amount": 0,
                 "tax_amount": 0,
                 "doctor_share": 0,
+                "discount_amount": 0,
+                "approved_discount_amount": 0,
+                "offer_discount_amount": 0,
+                "membership_discount_amount": 0,
             },
         )
         # balance_amount after a refund reflects the waived/refunded portion,
@@ -293,24 +299,33 @@ def revenue_report(
             InvoiceStatus.REFUNDED,
             InvoiceStatus.PARTIALLY_REFUNDED,
         ):
-            net_invoice_amount = int(invoice.paid_amount or 0)
+            net_invoice_amount = money_value(invoice.paid_amount)
         else:
-            net_invoice_amount = int(invoice.paid_amount or 0) + int(
-                invoice.balance_amount or 0
+            net_invoice_amount = money_value(invoice.paid_amount) + money_value(
+                invoice.balance_amount
             )
-        original_total = int(invoice.total_amount or 0)
+        original_total = money_value(invoice.total_amount)
         net_ratio = (
             net_invoice_amount / original_total
             if original_total and net_invoice_amount < original_total
             else 1
         )
         bucket["invoice_count"] += 1
-        bucket["billed_amount"] += int(invoice.total_amount or 0)
+        bucket["billed_amount"] += money_value(invoice.total_amount)
         bucket["invoice_amount"] += net_invoice_amount
         bucket["paid_amount"] += invoice.paid_amount
-        bucket["tax_amount"] += round(int(invoice.tax_amount or 0) * net_ratio)
-        bucket["doctor_share"] += round(
-            int(invoice.doctor_share_amount or 0) * net_ratio
+        bucket["tax_amount"] += money_value(invoice.tax_amount * net_ratio)
+        bucket["doctor_share"] += money_value(invoice.doctor_share_amount * net_ratio)
+        discount_read = invoice_read(session, invoice)
+        bucket["discount_amount"] += money_value(invoice.discount_amount)
+        bucket["approved_discount_amount"] += money_value(
+            discount_read.approved_discount_amount
+        )
+        bucket["offer_discount_amount"] += money_value(
+            discount_read.offer_discount_amount
+        )
+        bucket["membership_discount_amount"] += money_value(
+            invoice.membership_discount_amount
         )
     report_rows = list(grouped.values())
     return RevenueReport(
@@ -322,4 +337,14 @@ def revenue_report(
         total_paid_amount=sum(row["paid_amount"] for row in report_rows),
         total_tax_amount=sum(row["tax_amount"] for row in report_rows),
         total_doctor_share=sum(row["doctor_share"] for row in report_rows),
+        total_discount_amount=sum(row["discount_amount"] for row in report_rows),
+        total_approved_discount_amount=sum(
+            row["approved_discount_amount"] for row in report_rows
+        ),
+        total_offer_discount_amount=sum(
+            row["offer_discount_amount"] for row in report_rows
+        ),
+        total_membership_discount_amount=sum(
+            row["membership_discount_amount"] for row in report_rows
+        ),
     )

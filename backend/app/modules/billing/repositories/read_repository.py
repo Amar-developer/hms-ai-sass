@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from sqlalchemy import func
 from sqlmodel import Session, select
 
@@ -119,16 +121,16 @@ class BillingReadRepository:
             ).all()
         )
 
-    def payment_amount_total(self, invoice: Invoice) -> int:
+    def payment_amount_total(self, invoice: Invoice) -> Decimal:
         amount = self.session.exec(
             select(func.coalesce(func.sum(Payment.amount), 0)).where(
                 Payment.tenant_id == invoice.tenant_id,
                 Payment.invoice_id == invoice.id,
             )
         ).one()
-        return int(amount or 0)
+        return amount or 0
 
-    def refunded_amount_total(self, invoice: Invoice) -> int:
+    def refunded_amount_total(self, invoice: Invoice) -> Decimal:
         amount = self.session.exec(
             select(
                 func.coalesce(
@@ -140,9 +142,9 @@ class BillingReadRepository:
                 Payment.invoice_id == invoice.id,
             )
         ).one()
-        return int(amount or 0)
+        return amount or 0
 
-    def refundable_payment_total(self, invoice: Invoice) -> int:
+    def refundable_payment_total(self, invoice: Invoice) -> Decimal:
         amount = self.session.exec(
             select(
                 func.coalesce(func.sum(Payment.amount - Payment.refunded_amount), 0)
@@ -151,7 +153,7 @@ class BillingReadRepository:
                 Payment.invoice_id == invoice.id,
             )
         ).one()
-        return int(amount or 0)
+        return amount or 0
 
     def list_credit_notes(self, invoice: Invoice) -> list[CreditNote]:
         return list(
