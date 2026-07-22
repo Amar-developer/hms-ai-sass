@@ -13,6 +13,7 @@ export interface CustomerDetails {
   whatsapp?: string;
   gstin?: string;
   address?: string;
+  patientId?: string;
 }
 
 export interface BankDetails {

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import Invoice from "@/features/billing/components/Invoice";
+import { exportInvoicePdf } from "@/features/billing/exportInvoicePdf";
 import type { InvoiceProps } from "@/features/billing/types";
 import { apiFetch, type ApiSession, uploadAssetUrl } from "@/lib/api";
 import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
@@ -49,7 +50,7 @@ function toInvoiceProps(
       : {};
   const companyName =
     branding?.legal_name || branding?.name || "MedizinHub Healthcare";
-
+  console.log(patient,'patient')
   return {
     company: {
       name: companyName,
@@ -66,6 +67,7 @@ function toInvoiceProps(
       phone: patient?.mobile || "",
       whatsapp: patient?.alternate_mobile || "",
       address: patient?.address || "",
+      patientId: patient?.patient_number || ""
     },
     items: (detail.items || []).map((item: any, index: number) => {
       const lineTotal = Number(item.total_amount || 0);
@@ -109,6 +111,8 @@ function toInvoiceProps(
 export default function ReceiptPage() {
   const [invoiceProps, setInvoiceProps] = useState<InvoiceProps | null>(null);
   const [error, setError] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const printRootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const invoiceId = new URLSearchParams(window.location.search).get("id");
@@ -174,10 +178,7 @@ export default function ReceiptPage() {
           resolvedLogo.url,
           bankSetting?.value,
         );
-        document.title =
-          [safeFilename(props.customer.name), safeFilename(props.invoiceNo)]
-            .filter(Boolean)
-            .join("-") || "invoice";
+        console.log(bankSetting,'bankSetting')
         setInvoiceProps(props);
       } catch (caught: any) {
         if (!cancelled) {
@@ -192,23 +193,38 @@ export default function ReceiptPage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!invoiceProps) return;
-    let cancelled = false;
-    const printWhenReady = async () => {
+  async function downloadPdf() {
+    if (!invoiceProps || !printRootRef.current || isExporting) return;
+    setIsExporting(true);
+    try {
       await document.fonts?.ready;
       await Promise.all(
         Array.from(document.images).map((img) =>
           img.complete ? Promise.resolve() : img.decode().catch(() => undefined),
         ),
       );
-      if (!cancelled) window.print();
-    };
-    const timer = window.setTimeout(() => void printWhenReady(), 150);
+      const filename =
+        [safeFilename(invoiceProps.customer.name), safeFilename(invoiceProps.invoiceNo)]
+          .filter(Boolean)
+          .join("-") || "invoice";
+      await exportInvoicePdf(printRootRef.current, filename);
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!invoiceProps) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      if (!cancelled) void downloadPdf();
+      // if (!cancelled) window.print();
+    }, 150);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceProps]);
 
   if (error) {
@@ -223,13 +239,17 @@ export default function ReceiptPage() {
       <div className="mx-auto mb-4 flex max-w-[900px] justify-end print:hidden">
         <button
           type="button"
-          onClick={() => window.print()}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white"
+          onClick={() => void downloadPdf()}
+          // onClick={() => window.print()}
+          disabled={isExporting}
+          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
         >
-          Print / Save PDF
+          {isExporting ? "Generating PDF…" : "Download PDF"}
         </button>
       </div>
-      <Invoice {...invoiceProps} />
+      <div ref={printRootRef}>
+        <Invoice {...invoiceProps} />
+      </div>
     </main>
   );
 }

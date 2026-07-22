@@ -16,6 +16,7 @@ export const STATIC_CLINIC: PrescriptionClinic = {
   address: "No.112 A,Radha Nagar Main Road, Chromepet, Chennai - 600 044",
   phone: "90476 60909",
   email: "srimahaclinic@gmail.com",
+  logo_url: "",
 };
 
 export type PrescriptionDoctor = {
@@ -201,7 +202,10 @@ function PrescriptionPage({
       : "";
 
   return (
-    <section className="relative w-[794px] h-[1040px] bg-white overflow-hidden break-after-page last:break-after-auto">
+    <section
+      data-prescription-page
+      className="relative w-[794px] h-[1040px] bg-white overflow-hidden break-after-page last:break-after-auto"
+    >
       {isFirstPage && (
         <>
           {/* Everything above the signature/footer strip flows naturally
@@ -227,9 +231,8 @@ function PrescriptionPage({
                       </span>
                     )}
                   </h1>
-                  <div className="mt-[6px] w-[460px] max-w-full h-0 border-t-[1px] border-[#0175A7]/70" />
                   {subtitle && (
-                    <p className="mt-[6px] flex flex-wrap items-center gap-[8px]">
+                    <p className="mt-[15px] flex flex-wrap items-center gap-[8px]">
                       <span className="text-[9px] font-bold font-['Poppins'] tracking-[0.124px] text-[#00B36F] whitespace-nowrap">
                         A Unit of
                       </span>
@@ -244,7 +247,7 @@ function PrescriptionPage({
                     </p>
                   )}
                   {(clinic.phone || clinic.email) && (
-                    <p className="mt-[6px] flex flex-wrap items-center gap-[20px]">
+                    <div className="mt-[6px] flex flex-wrap items-center gap-[20px]">
                       {clinic.phone && (
                         <span className="inline-flex items-center gap-[4px] whitespace-nowrap">
                           <strong className="text-[#00B36F] text-[12px] font-bold font-['Poppins'] tracking-[0.5px]">
@@ -256,18 +259,20 @@ function PrescriptionPage({
                         </span>
                       )}
                       {clinic.email && (
-                        <span className="inline-flex items-center gap-[4px] whitespace-nowrap">
-                          <img
-                            src="/email.svg"
-                            alt=""
-                            className="w-[11px] h-auto"
-                          />
+                        <p className="flex items-center  gap-[4px] whitespace-nowrap">
+                          <span className="pt-3">
+                            <img
+                              src="/email.svg"
+                              alt=""
+                              className="w-[11px] h-auto"
+                            />
+                          </span>
                           <span className="text-[#0175A7] text-[10px] font-medium font-['Poppins'] tracking-[1px]">
                             {clinic.email}
                           </span>
-                        </span>
+                        </p>
                       )}
-                    </p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -371,14 +376,14 @@ function PrescriptionPage({
 
           {/* Footer */}
 
-          <div className="absolute left-0 right-0 -bottom-2 border-t-[1px] border-[#0175A7]/70 px-[20px] pt-2   grid grid-cols-[1fr_283px] gap-[30px] items-start bg-white">
-            <div className="flex items-start gap-[20px]">
+          <div className="absolute left-0 right-0 -bottom-1 border-t-[1px] border-[#0175A7]/70 px-[20px] pt-2  grid grid-cols-[1fr_320px] gap-[30px] items-start bg-white">
+            <div className="flex items-start gap-[20px] border-r-2 border-[#0175A7]">
               <img
                 className="block w-[76px] h-auto shrink-0"
                 src="/footer_logo.svg"
                 alt=""
               />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1  ">
                 <img
                   className="block w-[240px] h-auto"
                   src="/pharmacy_logo.svg"
@@ -412,27 +417,33 @@ function PrescriptionPage({
                   </p>
                 )}
                 <img
-                  className="block mt-1 w-[207px] h-auto"
+                  className="block mt-3 w-[247px] h-auto"
                   src="/home_delivery.svg"
                   alt="Free home delivery"
                 />
               </div>
             </div>
-            <div className="border-l-[3px] border-[#0175A7] pl-[11px]">
+            <div>
               <p className="m-0 text-[#0175A7] text-xs font-bold font-['Poppins']">
                 CLINICAL LABORATORY SERVICES
               </p>
               <div className="mt-[6px] flex flex-col gap-[7px]">
-                <p className="m-0 flex items-center gap-[6px] text-[#0175A7] text-[10px] font-['Poppins']">
-                  <span className="inline-block w-[8px] h-[8px] shrink-0 rounded-full bg-[#0175A7]" />
+                <p className="m-0 flex items-center gap-[6px] text-[#0175A7] text-[12px] font-['Poppins']">
+                  <span className="text-[#00B36F] pb-1 text-[14px] font-bold leading-none">
+                    +
+                  </span>
                   All types of test are done here at Reasonable Price
                 </p>
-                <p className="m-0 flex items-center gap-[6px] text-[#00B36F] text-[10px] font-['Poppins']">
-                  <span className="inline-block w-[8px] h-[8px] shrink-0 rounded-full bg-[#00B36F]" />
+                <p className="m-0 flex items-center gap-[6px] text-[#00B36F] text-[12px] font-['Poppins']">
+                  <span className="text-[#00B36F] pb-1 text-[14px]  font-bold leading-none">
+                    +
+                  </span>
                   Home sample collection available
                 </p>
-                <p className="m-0 flex items-center gap-[6px] text-[#0175A7] text-[10px] font-['Poppins']">
-                  <span className="inline-block w-[8px] h-[8px] shrink-0 rounded-full bg-[#0175A7]" />
+                <p className="m-0 flex items-center gap-[6px] text-[#0175A7] text-[12px] font-['Poppins']">
+                  <span className="text-[#00B36F] pb-1 text-[14px]  font-bold leading-none">
+                    +
+                  </span>
                   Online-Consultation on blood reports
                 </p>
               </div>

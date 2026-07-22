@@ -23,7 +23,7 @@ export default function Invoice({
   ],
   isPaid = false,
   signatoryLine,
-  footerNote = "Thanks for your order! We look forward to working with you again soon.",
+  footerNote = "Thanks for your order! We look forward to working with you agin soon.",
   currencySymbol = "₹",
   subTotal,
   discountAmount = 0,
@@ -55,16 +55,18 @@ export default function Invoice({
         return (
           <div
             key={pageIndex}
-            className="relative flex flex-col border-2 border-emerald-400 print:border-black print:min-h-[297mm] print:w-[210mm] print:mx-auto print:shadow-none"
+            data-invoice-page
+            className="relative flex flex-col border-2 border-[#25FF46] print:border-black print:min-h-[297mm] print:w-[210mm] print:mx-auto print:shadow-none"
           >
             <InvoiceHeader company={company} />
 
             {isFirstPage && company.tagline && (
-              <p className="px-6 py-1 text-center text-sm font-semibold text-emerald-600 border-b-2 border-emerald-400">
+              <p className="px-6 py-1 flex justify-center items-center text-sm font-semibold text-emerald-600 border-b-2 border-[#00AD00]">
                 {company.tagline}
               </p>
             )}
 
+            <div className="py-0 border-b-2 border-[#25FF46] text-[16px] font-bold text-center text-[#00AD00] pb-5">A Single Stop for All Your HealthCare Needs !</div>
             {isFirstPage && (
               <CustomerDetails
                 customer={customer}
@@ -75,35 +77,35 @@ export default function Invoice({
             )}
 
             {/* Items Table */}
-            <div className="flex-1 flex flex-col min-h-0">
-              <div className="border border-emerald-400 flex-1 flex flex-col overflow-hidden">
+            <div className="flex flex-col">
+              <div className="border border-[#25FF46] flex flex-col overflow-hidden">
                 {/* Header */}
-                <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] border-y-2 border-emerald-400 text-[12.5px] font-bold  shrink-0">
-                  <div className="border-r-2 border-emerald-400 p-2 text-center">Sr. No</div>
-                  <div className="border-r-2 border-emerald-400 p-2 text-center">Name of Product / Service</div>
-                  <div className="border-r-2 border-emerald-400 p-2 text-center">Qty</div>
-                  <div className="border-r-2 border-emerald-400 p-2 text-center">MRP</div>
-                  <div className="border-r-2 border-emerald-400 p-2 text-center">Disc. %</div>
-                  <div className="p-2 text-center">Rate</div>
+                <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] border-y-2 border-[#25FF46] text-[12.5px] font-bold  shrink-0">
+                  <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-2 pb-5">Sr. No</div>
+                  <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-2 pb-5">Name of Product / Service</div>
+                  <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-2 pb-5">Qty</div>
+                  <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-2 pb-5">MRP</div>
+                  <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-2 pb-5">Disc. %</div>
+                  <div className="flex justify-center items-center p-2 pb-5">Rate</div>
                 </div>
 
                 {/* Data Rows */}
-                <div className="flex-1 flex flex-col">
+                <div className="flex flex-col">
                   {pageItems.map((item, idx) => (
                     <div
                       key={idx}
-                      className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] "
+                      className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] min-h-[38px]"
                     >
-                      <div className="border-r-2 border-emerald-400 p-1.5 text-center">{item.srNo}</div>
-                      <div className="border-r-2 border-emerald-400 p-1.5 break-words">{item.name}</div>
-                      <div className="border-r-2 border-emerald-400 p-1.5 text-center">{item.qty}</div>
-                      <div className="border-r-2 border-emerald-400 p-1.5 text-right">
+                      <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">{item.srNo}</div>
+                      <div className="border-r-2 flex items-center border-[#25FF46] p-1.5 break-words">{item.name}</div>
+                      <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">{item.qty}</div>
+                      <div className="border-r-2 flex justify-end items-center border-[#25FF46] p-1.5">
                         {formatMoney(item.mrp, currencySymbol)}
                       </div>
-                      <div className="border-r-2 border-emerald-400 p-1.5 text-center">
+                      <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">
                         {item.discPercent ?? 0}%
                       </div>
-                      <div className="p-1.5 text-right border-r border-emerald-400">
+                      <div className="flex justify-end items-center p-1.5 border-r border-[#25FF46]">
                         {formatMoney(item.rate, currencySymbol)}
                       </div>
                     </div>
@@ -114,10 +116,10 @@ export default function Invoice({
                     Array.from({ length: Math.max(0, ROWS_PER_PAGE - pageItems.length) }).map((_, i) => (
                       <div
                         key={`pad-${i}`}
-                        className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr]  border-emerald-400 last:border-b-0 h-[38px] flex-1"
+                        className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] border-[#25FF46] last:border-b-0 h-[38px] shrink-0"
                       >
                         {Array.from({ length: 6 }).map((_, col) => (
-                          <div key={col} className="border-r-2 border-emerald-400 last:border-r-" />
+                          <div key={col} className=" border-[#25FF46] border-r-2 last:border-r-0" />
                         ))}
                       </div>
                     ))}
@@ -126,66 +128,66 @@ export default function Invoice({
 
               {/* Totals Section - Always on last page */}
               {isLastPage && (
-                <div className="border border-emerald-400 border-t-0 bg-white">
+                <div className="border border-[#25FF46] border-t-0 bg-white">
                   {/* Sub Total */}
-                  <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-emerald-400">
-                    <div className="col-span-5 p-2 text-right border-r-2 border-emerald-400">Sub Total</div>
-                    <div className="p-2 text-right">{formatMoney(subTotal, currencySymbol)}</div>
+                  <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
+                    <div className="col-span-5 flex justify-end items-center pb-5 p-2 border-r-2 border-[#25FF46]">Sub Total</div>
+                    <div className="flex justify-end items-center pb-5 p-2">{formatMoney(subTotal, currencySymbol)}</div>
                   </div>
 
                   {/* Tax (conditional) */}
                   {toNumber(tax_amount) > 0 && (
-                    <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-emerald-400">
-                      <div className="col-span-5 p-2 text-right border-r-2 border-emerald-400">Tax</div>
-                      <div className="p-2 text-right">{formatMoney(tax_amount, currencySymbol)}</div>
+                    <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
+                      <div className="col-span-5 flex justify-end items-center p-2 pb-5 border-r-2 border-[#25FF46]">Tax</div>
+                      <div className="flex justify-end items-center  p-2 pb-5">{formatMoney(tax_amount, currencySymbol)}</div>
                     </div>
                   )}
 
                   {/* Discount (conditional) */}
                   {toNumber(discountAmount) > 0 && (
-                    <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-emerald-400">
-                      <div className="col-span-5 p-2 text-right border-r-2 border-emerald-400">Discount</div>
-                      <div className="p-2 text-right text-red-600">
+                    <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
+                      <div className="col-span-5 flex justify-end items-center p-2 pb-5 border-r-2 border-[#25FF46]">Discount</div>
+                      <div className="flex justify-end items-center p-2 pb-5 text-red-600">
                         -{formatMoney(discountAmount, currencySymbol)}
                       </div>
                     </div>
                   )}
 
                   {/* Grand Total */}
-                  <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] border-t-2 border-emerald-400 font-bold ">
-                    <div className="col-span-3 p-3 border-r-2 border-emerald-400 flex items-center justify-between">
+                  <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] border-t-2 border-[#25FF46] font-bold ">
+                    <div className="col-span-3 p-3 pb-5 border-r-2 border-[#25FF46] flex items-center justify-between">
                       <span>{invoiceDate}</span>
                       <span className="text-lg">Total</span>
                     </div>
-                    <div className="border-r-2 border-emerald-400 p-3 text-right font-mono">
+                    <div className="border-r-2 flex justify-end items-center border-[#25FF46] p-3 pb-5 font-mono">
                       {toNumber(items.reduce((sum, item) => sum + toNumber(item.qty), 0))}
                     </div>
-                     <div className="border-r-2 border-emerald-400 p-3 text-right font-mono"/>
-                    <div className="p-3 text-right font-mono text-lg">
+                     <div className="border-r-2 border-[#25FF46] p-3 font-mono"/>
+                    <div className="flex justify-end items-center p-3 pb-5 font-mono text-lg">
                       {formatMoney(total, currencySymbol)}
                     </div>
                   </div>
 
                   {/* Total in Words */}
-                  <div className="border-y-2 border-emerald-400 p-2 text-sm font-semibold">
+                  <div className="border-y-2 border-[#25FF46] p-2 pb-5 text-sm font-semibold">
                     Total in words:{" "}
-                    <span className="font-normal">{grandTotalWords}</span>
+                    <span className="font-extrabold text-[#00AD00]">{grandTotalWords}</span>
                   </div>
                 </div>
               )}
 
               {!isLastPage && (
-                <div className="text-center text-sm py-3 border border-emerald-400 mt-2">
+                <div className="text-center text-sm py-3 border border-[#25FF46] mt-2">
                   Continue on next page...
                 </div>
               )}
             </div>
 
             {/* Bank Details & Signature */}
-            <div className="border-b-2 border-emerald-400 grid grid-cols-1 sm:grid-cols-[1.35fr_1fr] text-[13px] mt-auto">
+            <div className="border-b-2 border-[#25FF46] grid grid-cols-1 sm:grid-cols-[1.35fr_1fr] text-[13px] mt-auto">
               {/* Left side - Bank + Terms */}
-              <div className="border-b sm:border-b-0 sm:border-r border-emerald-400">
-                <h2 className="font-bold border-b-2 border-emerald-400 py-1.5 text-center">Bank Details</h2>
+              <div className="border-b sm:border-b-0 sm:border-r border-[#25FF46]">
+                <h2 className="font-bold border-b-2 border-[#25FF46] py-1.5 flex justify-center items-center pb-5">Bank Details</h2>
                 <div className="flex gap-4 px-2">
                   <div className="space-y-1 flex-1 py-1.5">
                     <FieldRow label="Name" value={bank?.name} />
@@ -195,34 +197,30 @@ export default function Invoice({
                     <FieldRow label="UPI ID" value={bank?.upiId} />
                   </div>
                   <div className="text-center pt-1">
-                    <div className="h-20 w-20 border border-emerald-400 rounded flex items-center justify-center mx-auto">
-                      {bank?.qrImageUrl ? (
-                        <img src={bank.qrImageUrl} alt="QR" className="h-full w-full object-contain" />
-                      ) : (
-                        <span className="text-xs">QR CODE</span>
-                      )}
+                    <div className="h-20 w-20 border border-[#25FF46] rounded flex items-center justify-center mx-auto">
+                        <img src='/qrcode.jpeg' alt="QR" className="h-full w-full object-contain" />
                     </div>
                     <p className="text-xs mt-1 font-medium">Pay using UPI</p>
                   </div>
                 </div>
 
                 <div className="mt-2">
-                  <h3 className="font-bold py-1 border-y-2 border-emerald-400 text-center">Terms and Conditions</h3>
-                  <ul className="text-xs space-y-0.5 pl-5 list-disc py-1">
+                  <h3 className="font-bold py-1 border-y-2 border-[#25FF46] flex justify-center items-center pb-5">Terms and Conditions</h3>
+                  <ul className="list-none text-xs space-y-0.5 pl-5 list-disc py-1">
                     {terms.map((t, i) => (
                       <li key={i}>{t}</li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="mt-3 border-t-2 py-1.5 border-emerald-400">
-                  <p className="font-semibold text-center">Customer Signature</p>
+                <div className="mt-3 border-t-2 py-1.5 border-[#25FF46]">
+                  <p className="font-semibold flex justify-center items-center">Customer Signature</p>
                 </div>
               </div>
 
               {/* Right side - Certification & Signature */}
               <div className="flex flex-col justify-between">
-                <div className="border-b-2 border-emerald-400 p-2">
+                <div className="border-b-2 border-[#25FF46] p-2 pb-5">
                   <p className="text-xs">
                     Certified that the particulars given above are true and correct.
                   </p>
@@ -232,19 +230,19 @@ export default function Invoice({
                 {isPaid && (
                   <div className="flex justify-center my-4">
                     <div className="-rotate-12 border-4 border-red-600 px-10 py-2 text-center">
-                      <span className="block text-4xl font-black text-red-600">PAID</span>
+                      <span className="block text-4xl font-black text-[fill: #37A94C]">PAID</span>
                     </div>
                   </div>
                 )}
 
-                <div className="text-center font-bold border-t-2 border-emerald-400 py-1.5">
+                <div className="font-bold border-t-2 border-[#25FF46] py-1.5 flex justify-center items-center">
                   Authorized Signature
                 </div>
               </div>
             </div>
 
             {isLastPage && footerNote && (
-              <div className="text-center text-xs text-slate-600 border-b-2 border-emerald-400 py-2">
+              <div className="flex justify-center items-center text-center text-xs text-slate-600 border-b-2 border-[#25FF46] py-2">
                 {footerNote}
               </div>
             )}
