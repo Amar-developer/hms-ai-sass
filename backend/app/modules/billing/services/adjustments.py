@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from datetime import datetime, timezone
+from decimal import Decimal
 import json
 
 from fastapi import HTTPException, status
@@ -24,25 +25,28 @@ from app.modules.billing.services.invoice_amounts import (
 )
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.numbering import next_credit_note_number
+from app.modules.billing.services.money import ZERO, money_value
 
 LedgerRecorder = Callable[..., object]
 SourceSyncer = Callable[[Session, Invoice], None]
 
 
 def validate_adjustment_amount(
-    invoice: Invoice, request_type: BillingAdjustmentType, amount: int | None
-) -> int:
-    refundable = int(invoice.paid_amount or 0)
+    invoice: Invoice,
+    request_type: BillingAdjustmentType,
+    amount: Decimal | int | None,
+) -> Decimal:
+    refundable = money_value(invoice.paid_amount)
     if request_type == BillingAdjustmentType.CANCEL:
-        return 0
+        return ZERO
     if request_type == BillingAdjustmentType.DISCOUNT:
-        requested = int(amount or 0)
+        requested = money_value(amount)
         if requested <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Discount amount is required",
             )
-        if requested > int(invoice.total_amount or 0):
+        if requested > money_value(invoice.total_amount):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Discount amount cannot exceed the invoice total",
@@ -55,7 +59,7 @@ def validate_adjustment_amount(
                 detail="Invoice has no refundable paid amount",
             )
         return refundable
-    requested = int(amount or 0)
+    requested = money_value(amount)
     if requested <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,7 +95,7 @@ def ensure_invoice_can_request_adjustment(
         )
     if (
         request_type == BillingAdjustmentType.CANCEL
-        and int(invoice.paid_amount or 0) > 0
+        and money_value(invoice.paid_amount) > 0
     ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -106,7 +110,7 @@ def ensure_invoice_can_request_adjustment(
 def apply_refund_to_payments(
     session: Session,
     invoice: Invoice,
-    amount: int,
+    amount: Decimal,
     reason: str,
     target_payment_id: str | None = None,
 ) -> list[Payment]:
@@ -124,11 +128,13 @@ def apply_refund_to_payments(
     if target_payment_id:
         payments.sort(key=lambda p: 0 if p.id == target_payment_id else 1)
     for payment in payments:
-        available = max(int(payment.amount or 0) - int(payment.refunded_amount or 0), 0)
+        available = max(
+            money_value(payment.amount) - money_value(payment.refunded_amount), ZERO
+        )
         if available <= 0:
             continue
         refund_part = min(available, remaining)
-        payment.refunded_amount = int(payment.refunded_amount or 0) + refund_part
+        payment.refunded_amount = money_value(payment.refunded_amount) + refund_part
         payment.refund_reason = reason
         if payment.refunded_amount >= payment.amount:
             payment.status = PaymentStatus.REFUNDED
@@ -152,7 +158,7 @@ def execute_billing_adjustment(
     *,
     invoice: Invoice,
     request_type: BillingAdjustmentType,
-    amount: int,
+    amount: Decimal | int,
     reason: str,
     actor_user_id: str | None,
     record_billing_ledger: LedgerRecorder,
@@ -161,9 +167,9 @@ def execute_billing_adjustment(
     payment_reference: str | None = None,
     target_payment_id: str | None = None,
 ) -> Invoice:
-    old_paid = int(invoice.paid_amount or 0)
-    old_balance = int(invoice.balance_amount or 0)
-    old_total = int(invoice.total_amount or 0)
+    old_paid = money_value(invoice.paid_amount)
+    old_balance = money_value(invoice.balance_amount)
+    old_total = money_value(invoice.total_amount)
     old_status = invoice.status
     if request_type == BillingAdjustmentType.CANCEL:
         if old_paid > 0:
@@ -213,7 +219,7 @@ def execute_billing_adjustment(
         # Tax is recomputed on the lower subtotal, so the invoice total can
         # drop by more than the raw discount amount — use the actual change
         # for the credit note and ledger rather than the requested amount.
-        actual_reduction = max(old_total - int(invoice.total_amount or 0), 0)
+        actual_reduction = max(old_total - money_value(invoice.total_amount), ZERO)
         credit = CreditNote(
             tenant_id=invoice.tenant_id,
             branch_id=invoice.branch_id,
@@ -303,7 +309,8 @@ def execute_billing_adjustment(
                 "reason": reason,
                 "payment_method": payment_method.value if payment_method else None,
                 "payment_reference": payment_reference,
-            }
+            },
+            default=str,
         ),
         changes=diff_changes(
             {

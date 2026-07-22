@@ -53,6 +53,11 @@ def assert_can_target_user_for_management(
     new_role_keys: list[str] | None = None,
 ) -> None:
     """Restrict tenant-admin account management to tenant admins or super admins."""
+    if target_user.is_super_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=("Super admin accounts can be managed only from Platform Admins"),
+        )
     if current_user.is_super_admin or has_tenant_admin_access(session, current_user):
         return
     if has_tenant_admin_access(session, target_user):

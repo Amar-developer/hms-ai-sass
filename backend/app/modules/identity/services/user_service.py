@@ -54,6 +54,13 @@ class UserService:
             permissions.IDENTITY_USERS_CREATE,
         )
         user_payload = normalize_user_access(payload.model_dump())
+        if user_payload.get(
+            "user_type"
+        ) == "super_admin" or "super_admin" in user_payload.get("role_keys", []):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Create super admins only from Platform Admins",
+            )
         if (
             not actor.is_super_admin
             and not has_tenant_admin_access(self.session, actor)
@@ -154,6 +161,13 @@ class UserService:
         )
         user = get_tenant_user_or_404(self.session, tenant_id, user_id)
         updates = normalize_user_access(payload.model_dump(exclude_unset=True))
+        if updates.get("user_type") == "super_admin" or "super_admin" in (
+            updates.get("role_keys") or []
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Manage super admins only from Platform Admins",
+            )
         assert_can_target_user_for_management(
             self.session, actor, user, updates.get("role_keys")
         )

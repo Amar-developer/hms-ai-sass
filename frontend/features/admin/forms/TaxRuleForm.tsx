@@ -90,6 +90,9 @@ export function TaxRuleForm({
           <Input
             {...register("taxPercentage",{valueAsNumber:true})}
             type="number"
+            min="0"
+            max="100"
+            step="0.01"
           />
           {errors.taxPercentage && (
             <FormError error={errors.taxPercentage?.message}/>

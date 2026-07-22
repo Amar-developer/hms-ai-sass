@@ -1,4 +1,5 @@
 from fastapi import HTTPException, status
+from decimal import Decimal
 from sqlmodel import Session
 
 from app.modules.audit.service import diff_changes, record_audit_event
@@ -11,6 +12,7 @@ from app.modules.billing.services.discount_policy import (
 )
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
+from app.modules.billing.services.money import ZERO, money_value, percentage_amount
 from app.modules.billing.services.rules import (
     calculate_offer_discount,
     calculate_fee_split,
@@ -43,7 +45,7 @@ def ensure_invoice_eligible_for_discount_request(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Cannot discount a {invoice.status.value} invoice",
         )
-    if int(invoice.paid_amount or 0) > 0:
+    if money_value(invoice.paid_amount) > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot request a discount after a payment is recorded — "
@@ -70,7 +72,7 @@ def apply_consultation_invoice_discount(
     *,
     tenant_id: str,
     invoice: Invoice,
-    discount_amount: int,
+    discount_amount: Decimal | int,
     actor_user_id: str | None,
 ) -> Invoice:
     """Apply an approved discount without hiding the original consultation fee.
@@ -93,13 +95,14 @@ def apply_consultation_invoice_discount(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Discounts can be requested only for consultation visits",
         )
-    subtotal = int(invoice.subtotal_amount or 0)
-    if int(discount_amount or 0) > max(subtotal - int(invoice.discount_amount or 0), 0):
+    subtotal = money_value(invoice.subtotal_amount)
+    discount_amount = money_value(discount_amount)
+    if discount_amount > max(subtotal - money_value(invoice.discount_amount), ZERO):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Discount amount cannot exceed the invoice subtotal",
         )
-    membership_discount = min(int(invoice.membership_discount_amount or 0), subtotal)
+    membership_discount = min(money_value(invoice.membership_discount_amount), subtotal)
     offer_discount, offer = calculate_offer_discount(
         session,
         tenant_id=tenant_id,
@@ -109,12 +112,12 @@ def apply_consultation_invoice_discount(
         discount_offer_id=invoice.discount_offer_id,
     )
     existing_non_membership_discount = max(
-        int(invoice.discount_amount or 0) - membership_discount, 0
+        money_value(invoice.discount_amount) - membership_discount, ZERO
     )
     existing_approved_discount = max(
         existing_non_membership_discount - offer_discount, 0
     )
-    approved_discount = existing_approved_discount + int(discount_amount or 0)
+    approved_discount = existing_approved_discount + discount_amount
     discount = min(membership_discount + offer_discount + approved_discount, subtotal)
     taxable = subtotal - discount
     tax_rule = find_tax_rule(
@@ -124,7 +127,7 @@ def apply_consultation_invoice_discount(
         service_scope="consultation",
         tax_rule_id=invoice.tax_rule_id,
     )
-    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    tax_amount = percentage_amount(taxable, tax_rule.tax_percentage if tax_rule else 0)
     total = taxable + tax_amount
     doctor_share = 0
     fee_rule = (
@@ -135,7 +138,7 @@ def apply_consultation_invoice_discount(
     if fee_rule and subtotal > 0:
         split = calculate_fee_split(fee_rule, subtotal)
         share_basis = total if fee_rule.share_tax_with_doctor else taxable
-        doctor_share = round(split.doctor_share_amount * share_basis / subtotal)
+        doctor_share = money_value(split.doctor_share_amount * share_basis / subtotal)
 
     before = {key: getattr(invoice, key) for key in INVOICE_AMOUNT_FIELDS}
     invoice.subtotal_amount = subtotal
@@ -176,7 +179,7 @@ def apply_generic_invoice_discount(
     session: Session,
     *,
     invoice: Invoice,
-    discount_amount: int,
+    discount_amount: Decimal | int,
     actor_user_id: str | None,
 ) -> Invoice:
     """Apply an approved discount to any non-consultation invoice — lab,
@@ -188,15 +191,16 @@ def apply_generic_invoice_discount(
     ensure_invoice_eligible_for_discount_request(
         tenant_id=invoice.tenant_id, invoice=invoice
     )
-    subtotal = int(invoice.subtotal_amount or 0)
-    existing_discount = min(int(invoice.discount_amount or 0), subtotal)
-    if int(discount_amount or 0) > max(subtotal - existing_discount, 0):
+    subtotal = money_value(invoice.subtotal_amount)
+    discount_amount = money_value(discount_amount)
+    existing_discount = min(money_value(invoice.discount_amount), subtotal)
+    if discount_amount > max(subtotal - existing_discount, ZERO):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Discount amount cannot exceed the remaining invoice subtotal",
         )
     before = {key: getattr(invoice, key) for key in INVOICE_AMOUNT_FIELDS}
-    total_discount = min(existing_discount + int(discount_amount or 0), subtotal)
+    total_discount = min(existing_discount + discount_amount, subtotal)
     taxable = max(subtotal - total_discount, 0)
     service_scope = (
         "lab"
@@ -218,17 +222,19 @@ def apply_generic_invoice_discount(
         service_scope=service_scope,
         tax_rule_id=invoice.tax_rule_id,
     )
-    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    tax_amount = percentage_amount(taxable, tax_rule.tax_percentage if tax_rule else 0)
     total = taxable + tax_amount
-    old_total = int(invoice.total_amount or 0)
-    old_doctor_share = int(invoice.doctor_share_amount or 0)
-    doctor_share = round(old_doctor_share * total / old_total) if old_total > 0 else 0
+    old_total = money_value(invoice.total_amount)
+    old_doctor_share = money_value(invoice.doctor_share_amount)
+    doctor_share = (
+        money_value(old_doctor_share * total / old_total) if old_total > 0 else ZERO
+    )
     invoice.discount_amount = total_discount
     invoice.taxable_amount = taxable
     invoice.tax_amount = tax_amount
     invoice.tax_rule_id = tax_rule.id if tax_rule else invoice.tax_rule_id
     invoice.total_amount = total
-    invoice.balance_amount = max(total - int(invoice.paid_amount or 0), 0)
+    invoice.balance_amount = max(total - money_value(invoice.paid_amount), ZERO)
     invoice.doctor_share_amount = min(doctor_share, total)
     invoice.clinic_share_amount = max(total - invoice.doctor_share_amount, 0)
     session.add(invoice)

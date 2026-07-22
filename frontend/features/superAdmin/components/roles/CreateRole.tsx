@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button, Card } from "@/app/components/common/ui";
 import { AutoRoleKeyFields } from "./AutoRoleKeyFields";
 import { PermissionCheckboxes } from "./PermissionCheckboxes";
@@ -14,6 +15,8 @@ export function CreateRole({
   createRole,
   back,
 }: any) {
+  const [roleName, setRoleName] = useState("");
+
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -37,9 +40,13 @@ export function CreateRole({
           selectedId={selectedId}
           setSelectedId={setSelectedId}
         />
-        <AutoRoleKeyFields />
+        <AutoRoleKeyFields onNameChange={setRoleName} />
         <div className="md:col-span-2">
-          <PermissionCheckboxes permissions={permissionCatalog} selected={[]} />
+          <PermissionCheckboxes
+            permissions={permissionCatalog}
+            selected={[]}
+            roleName={roleName}
+          />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
           <Button disabled={busy}>

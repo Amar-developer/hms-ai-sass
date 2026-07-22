@@ -16,6 +16,8 @@ import {
   invoiceAmount,
   invoiceBalance,
   invoiceMembershipBenefit,
+  invoiceApprovedDiscount,
+  invoiceBillingDiscount,
   invoiceOfferDiscount,
   isCompletedAppointment,
   monthKey,
@@ -133,12 +135,20 @@ export function Dashboard({
   const membershipPurchaseInvoices = monthlyInvoices.filter(
     isMembershipPlanInvoice,
   );
-  const membershipSavings = monthlyInvoices.reduce(
+  const membershipSavings = activeMonthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceMembershipBenefit(row),
     0,
   );
-  const offerSavings = monthlyInvoices.reduce(
+  const offerSavings = activeMonthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceOfferDiscount(row),
+    0,
+  );
+  const approvedSavings = activeMonthlyInvoices.reduce(
+    (sum: number, row: any) => sum + invoiceApprovedDiscount(row),
+    0,
+  );
+  const billingDiscounts = activeMonthlyInvoices.reduce(
+    (sum: number, row: any) => sum + invoiceBillingDiscount(row),
     0,
   );
   const departmentById = new Map(
@@ -213,6 +223,13 @@ export function Dashboard({
       detail: `Carried ${rupees(carriedDue)} · Total ${rupees(allDue)}`,
       icon: ReceiptIndianRupee,
       target: "billing",
+    },
+    {
+      title: "Billing Discounts",
+      value: rupees(billingDiscounts),
+      detail: `Approved ${rupees(approvedSavings)} · Offers ${rupees(offerSavings)} · Membership ${rupees(membershipSavings)}`,
+      icon: ReceiptIndianRupee,
+      target: "reports",
     },
     // {
     //   title: "Membership Usage",

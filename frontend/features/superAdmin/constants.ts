@@ -202,6 +202,7 @@ export const requiredRolePermissions = [
 
 export const superAdminSections = [
   ["overview", "Overview", Activity],
+  ["platformAdmins", "Platform Admins", ShieldCheck],
   ["tenants", "Tenants", Building2],
   ["roles", "Roles", ShieldCheck],
   ["users", "Users", Users],

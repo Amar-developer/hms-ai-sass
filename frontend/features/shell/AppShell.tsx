@@ -65,6 +65,9 @@ export function AppShell(props: any) {
   } = props;
 
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const passwordChangeRequired = Boolean(
+    apiSession?.user?.must_change_password,
+  );
   const visibleNav = nav.filter(
     ([id]: any) => enabled(id) && !(isSuperAdmin && id === "admin"),
   );
@@ -533,10 +536,19 @@ export function AppShell(props: any) {
             // setTabletCollapsed={setTabletCollapsed}
           />
 
-          {showPassword && (
+          {(showPassword || passwordChangeRequired) && (
             <ChangePassword
               apiSession={apiSession}
-              onClose={() => setShowPassword(false)}
+              required={passwordChangeRequired}
+              onChanged={(updated: any) => {
+                if (apiSession?.user && updated) {
+                  Object.assign(apiSession.user, updated);
+                }
+                setShowPassword(false);
+              }}
+              onClose={() => {
+                if (!passwordChangeRequired) setShowPassword(false);
+              }}
             />
           )}
 

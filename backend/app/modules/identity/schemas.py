@@ -58,6 +58,26 @@ class UserCreate(BaseModel):
         return str(_validate_email(value))
 
 
+class SuperAdminCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    email: str = Field(min_length=5, max_length=220)
+    temporary_password: str = Field(min_length=12, max_length=128)
+    current_password: str = Field(min_length=8, max_length=128)
+    mobile: str | None = Field(default=None, max_length=20)
+    reason: str = Field(min_length=3, max_length=500)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return str(_validate_email(value))
+
+
+class SuperAdminStatusUpdate(BaseModel):
+    is_active: bool
+    current_password: str = Field(min_length=8, max_length=128)
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
     email: str | None = Field(default=None, min_length=5, max_length=220)

@@ -22,6 +22,7 @@ SECRET_PATTERN = re.compile(
 )
 BEARER_PATTERN = re.compile(r"Bearer\s+[A-Za-z0-9._~+/-]+", re.IGNORECASE)
 EMAIL_PATTERN = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
+NUMERIC_PATTERN = re.compile(r"\d+(\.\d+)?")
 
 
 def sanitize_log_text(value: Any, max_length: int) -> str:
@@ -52,12 +53,18 @@ def error_fingerprint(
     route: str | None,
     status_code: int | None,
 ) -> str:
+    # Numbers are normalized out of the message before hashing: generated
+    # messages often embed volatile data (request durations, counts), which
+    # would otherwise give every occurrence of the same issue a distinct
+    # fingerprint and defeat deduplication (see request.slow, whose message
+    # embeds duration_ms and would never match a prior occurrence).
+    normalized_message = NUMERIC_PATTERN.sub("#", message)
     raw = "|".join(
         [
             source,
             category,
             event,
-            message,
+            normalized_message,
             route or "",
             str(status_code or ""),
         ]
@@ -124,6 +131,7 @@ def record_error_log(
             user_id=user_id,
             stack_trace=clean_stack,
             metadata_json=clean_metadata,
+            message=clean_message,
         )
     else:
         row = ErrorLog(

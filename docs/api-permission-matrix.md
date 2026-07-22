@@ -40,7 +40,9 @@ Current enforced guardrails:
 | `consultations.sign` | Sign/lock consultation |
 | `billing.manage` | Fee rules, invoice creation/listing/cancel |
 | `billing.discounts.approve` | Approve discount requests on invoices |
-| `billing.refunds.manage` | Full refund authority (approve/execute) |
+| `billing.refunds.approve` | Approve, reject, and execute refund requests |
+| `billing.refunds.manage` | Legacy full refund authority (approve/execute) |
+| `invoices.cancel_approve` | Approve or reject invoice cancellation requests |
 | `billing.refunds.request` | Raise a refund request for approval, without refund authority |
 | `invoices.create/read/edit/delete` | Granular invoice controls |
 | `invoices.cancel_request` | Request invoice cancellation for admin approval, without delete authority |
@@ -481,7 +483,7 @@ Five standard roles are seeded as global templates on the primary tenant (`app/a
 | **Pharmacist** | `pharmacy.manage/create/read/edit/dispense`, `consultations.read` (view prescriptions), `invoices.create/read`, `billing.read`, `reports.read` |
 
 Notes on scoping decisions:
-- Doctor and Receptionist do not get `appointments.delete`/`appointments.cancel` or `invoices.delete`/`billing.refunds.manage` — cancellation and refunds route through the `*.cancel_request`/`*.refunds.request` approval permissions, with the Tenant Admin (or a Billing Staff role granted `billing.refunds.manage`) approving.
+- Doctor and Receptionist do not get `appointments.delete`/`appointments.cancel` or `invoices.delete`/`billing.refunds.approve` — cancellation and refunds route through the `*.cancel_request`/`*.refunds.request` approval permissions, with the Tenant Admin (or a Billing Staff role granted `billing.refunds.approve`) approving.
 - Doctor is further scoped in code to their own linked practitioner profile for appointment, queue, and consultation actions regardless of the permission keys held (see "Current enforced guardrails" above).
 - Lab Technician and Pharmacist get `reports.read` for their own operational reports, not `reports.revenue.read` or `reports.manage`.
 - "Manage service and item master data" (Receptionist) maps to the new `service_items.*` permission group, since the existing catalog had no dedicated key for shared billing service/item master data.

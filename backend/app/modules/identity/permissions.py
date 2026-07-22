@@ -71,12 +71,14 @@ BILLING_READ = "billing.read"
 BILLING_CREATE = "billing.create"
 BILLING_DISCOUNTS_REQUEST = "billing.discounts.request"
 BILLING_DISCOUNTS_APPROVE = "billing.discounts.approve"
+BILLING_REFUNDS_APPROVE = "billing.refunds.approve"
 BILLING_REFUNDS_MANAGE = "billing.refunds.manage"
 INVOICES_CREATE = "invoices.create"
 INVOICES_READ = "invoices.read"
 INVOICES_EDIT = "invoices.edit"
 INVOICES_DELETE = "invoices.delete"
 INVOICES_CANCEL_REQUEST = "invoices.cancel_request"
+INVOICES_CANCEL_APPROVE = "invoices.cancel_approve"
 INVOICES_AMEND_REQUEST = "invoices.amend_request"
 BILLING_REFUNDS_REQUEST = "billing.refunds.request"
 PAYMENTS_MANAGE = "payments.manage"
@@ -227,12 +229,14 @@ PERMISSION_CATALOG = [
     BILLING_CREATE,
     BILLING_DISCOUNTS_REQUEST,
     BILLING_DISCOUNTS_APPROVE,
+    BILLING_REFUNDS_APPROVE,
     BILLING_REFUNDS_MANAGE,
     INVOICES_CREATE,
     INVOICES_READ,
     INVOICES_EDIT,
     INVOICES_DELETE,
     INVOICES_CANCEL_REQUEST,
+    INVOICES_CANCEL_APPROVE,
     INVOICES_AMEND_REQUEST,
     BILLING_REFUNDS_REQUEST,
     PAYMENTS_MANAGE,

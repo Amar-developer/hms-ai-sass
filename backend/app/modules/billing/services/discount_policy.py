@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 
 from app.modules.billing.models import Invoice
+from app.modules.billing.services.money import ZERO, money_value
 
 
 MEMBERSHIP_DISCOUNT_CONFLICT_DETAIL = (
@@ -13,37 +15,37 @@ MEMBERSHIP_DISCOUNT_CONFLICT_DETAIL = (
 
 @dataclass(frozen=True)
 class InvoiceDiscountComposition:
-    total: int
-    membership: int
-    approved: int
-    offer: int
+    total: Decimal
+    membership: Decimal
+    approved: Decimal
+    offer: Decimal
 
 
 def compose_invoice_discounts(
     *,
-    subtotal: int,
-    membership_discount: int = 0,
-    approved_discount: int = 0,
-    offer_discount: int = 0,
+    subtotal: Decimal | int,
+    membership_discount: Decimal | int = 0,
+    approved_discount: Decimal | int = 0,
+    offer_discount: Decimal | int = 0,
 ) -> InvoiceDiscountComposition:
     """Membership is exclusive; otherwise compose approved and offer savings."""
-    subtotal = max(int(subtotal or 0), 0)
-    membership = min(max(int(membership_discount or 0), 0), subtotal)
+    subtotal = max(money_value(subtotal), ZERO)
+    membership = min(max(money_value(membership_discount), ZERO), subtotal)
     if membership > 0:
         return InvoiceDiscountComposition(
             total=membership,
             membership=membership,
-            approved=0,
-            offer=0,
+            approved=ZERO,
+            offer=ZERO,
         )
-    approved = max(int(approved_discount or 0), 0)
-    offer = max(int(offer_discount or 0), 0)
+    approved = max(money_value(approved_discount), ZERO)
+    offer = max(money_value(offer_discount), ZERO)
     total = min(approved + offer, subtotal)
     approved = min(approved, total)
-    offer = max(total - approved, 0)
+    offer = max(total - approved, ZERO)
     return InvoiceDiscountComposition(
         total=total,
-        membership=0,
+        membership=ZERO,
         approved=approved,
         offer=offer,
     )
@@ -51,7 +53,7 @@ def compose_invoice_discounts(
 
 def invoice_has_applied_membership_benefit(invoice: Invoice) -> bool:
     return any(
-        int(value or 0) > 0
+        money_value(value) > 0
         for value in (
             invoice.membership_discount_amount,
             invoice.membership_free_items_amount,

@@ -47,6 +47,19 @@ class IdentityUserRepository:
             select(User).where(User.is_super_admin == True)  # noqa: E712
         ).first()
 
+    def list_super_admins(self, *, for_update: bool = False) -> list[User]:
+        statement = (
+            select(User)
+            .where(User.is_super_admin == True)  # noqa: E712
+            .order_by(User.is_active.desc(), User.created_at)
+        )
+        if for_update:
+            statement = statement.with_for_update()
+        return list(self.session.exec(statement).all())
+
+    def get_by_email(self, email: str) -> User | None:
+        return self.session.exec(select(User).where(User.email == email)).first()
+
     def list_login_candidates(self, email: str) -> list[User]:
         return list(
             self.session.exec(

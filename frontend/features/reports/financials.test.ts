@@ -1,14 +1,45 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  approvedDiscountUsage,
   allocateReportValues,
+  billingDiscountUsage,
   membershipBenefitUsage,
+  offerDiscountUsage,
   realizedGrossProfit,
   recognizedInvoiceTax,
   recognizedInvoiceRevenue,
   reportPaymentMode,
   reportedInvoiceTotal,
 } from "./financials";
+
+describe("invoice-level discount reporting", () => {
+  it("separates approved, offer, and membership discounts", () => {
+    const invoice = {
+      discount_amount: 175,
+      approved_discount_amount: 100,
+      offer_discount_amount: 25,
+      membership_discount_amount: 50,
+    };
+
+    expect(approvedDiscountUsage(invoice)).toBe(100);
+    expect(offerDiscountUsage(invoice)).toBe(25);
+    expect(membershipBenefitUsage(invoice)).toBe(50);
+    expect(billingDiscountUsage(invoice)).toBe(175);
+  });
+
+  it("does not infer MRP markdown from invoice totals", () => {
+    const invoice = {
+      subtotal_amount: 400,
+      total_amount: 400,
+      mrp_amount: 500,
+      selling_amount: 400,
+      discount_amount: 0,
+    };
+
+    expect(billingDiscountUsage(invoice)).toBe(0);
+  });
+});
 
 describe("membership report accounting", () => {
   it("allocates every rupee across multiple invoice lines", () => {

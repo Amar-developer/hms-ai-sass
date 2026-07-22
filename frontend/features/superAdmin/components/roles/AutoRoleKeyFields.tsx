@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Field, Input } from "@/app/components/common/ui";
 import { roleKeyFromName } from "@/utils/helper";
 
-export function AutoRoleKeyFields({ role }: any) {
+export function AutoRoleKeyFields({ role, onNameChange }: any) {
   const [name, setName] = useState(role?.name || "");
   const key = roleKeyFromName(name || role?.key || "");
   return (
@@ -13,7 +13,10 @@ export function AutoRoleKeyFields({ role }: any) {
         <Input
           name="name"
           value={name}
-          onChange={(e: any) => setName(e.target.value)}
+          onChange={(e: any) => {
+            setName(e.target.value);
+            onNameChange?.(e.target.value);
+          }}
           required
           placeholder="Reception Staff"
         />

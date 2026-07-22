@@ -31,6 +31,7 @@ from app.modules.billing.services.adjustments import (
     validate_adjustment_amount,
 )
 from app.modules.billing.services.invoice_status import refundable_paid_total
+from app.modules.billing.services.money import ZERO, money_value
 from app.modules.billing.services.ledger import (
     execute_adjustment,
     read_invoice_detail_full,
@@ -99,7 +100,8 @@ def create_billing_adjustment_request(
                 "request_type": str(payload.request_type),
                 "amount": amount,
                 "reason": payload.reason,
-            }
+            },
+            default=str,
         ),
     )
     notify_billing_request_created(
@@ -154,7 +156,8 @@ def approve_billing_adjustment_request(
                 "invoice_id": row.invoice_id,
                 "amount": row.amount,
                 "reason": payload.reason,
-            }
+            },
+            default=str,
         ),
         changes=diff_changes(
             before, {"status": row.status, "decision_reason": row.decision_reason}
@@ -328,8 +331,10 @@ def refund_payment(
             status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found"
         )
     require_user_branch_access(actor, invoice.branch_id)
-    available = max(int(payment.amount or 0) - int(payment.refunded_amount or 0), 0)
-    amount = int(payload.amount or available)
+    available = max(
+        money_value(payment.amount) - money_value(payment.refunded_amount), ZERO
+    )
+    amount = money_value(payload.amount if payload.amount is not None else available)
     if amount > available:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -373,7 +378,7 @@ def cancel_invoice(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Invoice already cancelled"
         )
-    if int(invoice.paid_amount or 0) > 0:
+    if money_value(invoice.paid_amount) > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Paid invoices cannot be cancelled; refund payments first",
@@ -429,7 +434,7 @@ def amend_invoice(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only cancelled invoices can be amended",
         )
-    restored_balance = int(invoice.total_amount or 0)
+    restored_balance = money_value(invoice.total_amount)
     amend_invoice_fields = ("status", "paid_amount", "balance_amount")
     before = {key: getattr(invoice, key) for key in amend_invoice_fields}
     invoice.status = (

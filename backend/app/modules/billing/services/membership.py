@@ -15,6 +15,7 @@ from app.modules.billing.services.discount_policy import (
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceMembershipBenefitRead
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
+from app.modules.billing.services.money import ZERO, money_value, percentage_amount
 from app.modules.billing.services.rules import find_tax_rule
 from app.modules.identity.models import User
 
@@ -102,7 +103,7 @@ def invoice_membership_benefit(
     service_type = invoice_membership_service(invoice)
     if not service_type:
         return None
-    applied_amount = int(invoice.membership_discount_amount or 0)
+    applied_amount = money_value(invoice.membership_discount_amount)
     if applied_amount > 0:
         return InvoiceMembershipBenefitRead(
             has_active_subscription=True,
@@ -111,10 +112,12 @@ def invoice_membership_benefit(
             service_type=service_type,
             plan_id=invoice.patient_subscription_plan_id,
             discount_amount=applied_amount,
-            free_items_amount=int(invoice.membership_free_items_amount or 0),
-            item_discount_amount=int(invoice.membership_item_discount_amount or 0),
-            regular_items_amount=int(invoice.membership_regular_items_amount or 0),
-            payable_amount=max(int(invoice.subtotal_amount or 0) - applied_amount, 0),
+            free_items_amount=money_value(invoice.membership_free_items_amount),
+            item_discount_amount=money_value(invoice.membership_item_discount_amount),
+            regular_items_amount=money_value(invoice.membership_regular_items_amount),
+            payable_amount=max(
+                money_value(invoice.subtotal_amount) - applied_amount, ZERO
+            ),
             reason="Membership benefit applied",
         )
     try:
@@ -138,7 +141,7 @@ def invoice_membership_benefit(
             can_apply=False,
             service_type=service_type,
             discount_amount=0,
-            payable_amount=int(invoice.subtotal_amount or 0),
+            payable_amount=money_value(invoice.subtotal_amount),
             reason="No active patient subscription",
         )
     enrollment, plan = membership
@@ -149,7 +152,7 @@ def invoice_membership_benefit(
         service_type=service_type,
         item_ids=_invoice_membership_item_ids(session, invoice, service_type),
         item_amounts=_invoice_membership_item_amounts(session, invoice, service_type),
-        subtotal_amount=int(invoice.subtotal_amount or 0),
+        subtotal_amount=money_value(invoice.subtotal_amount),
         department_id=consultation_department_id(
             session,
             appointment_id=invoice.appointment_id,
@@ -159,35 +162,35 @@ def invoice_membership_benefit(
         else None,
         session=session,
     )
-    discount_amount = int(preview["discount_amount"] or 0)
+    discount_amount = money_value(preview["discount_amount"])
     return InvoiceMembershipBenefitRead(
         has_active_subscription=True,
         is_applied=False,
-        can_apply=discount_amount > 0 and int(invoice.paid_amount or 0) <= 0,
+        can_apply=discount_amount > 0 and money_value(invoice.paid_amount) <= 0,
         service_type=service_type,
         plan_id=preview.get("plan_id"),
         plan_name=preview.get("plan_name"),
         discount_amount=discount_amount,
-        free_items_amount=int(preview["free_items_amount"] or 0),
-        item_discount_amount=int(preview["item_discount_amount"] or 0),
-        regular_items_amount=int(preview["regular_items_amount"] or 0),
-        payable_amount=int(preview.get("payable_amount") or 0),
+        free_items_amount=money_value(preview["free_items_amount"]),
+        item_discount_amount=money_value(preview["item_discount_amount"]),
+        regular_items_amount=money_value(preview["regular_items_amount"]),
+        payable_amount=money_value(preview.get("payable_amount")),
         reason=preview.get("reason"),
     )
 
 
 def apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invoice:
-    if int(invoice.membership_discount_amount or 0) > 0:
+    if money_value(invoice.membership_discount_amount) > 0:
         return update_invoice_payment_status(session, invoice)
-    if int(invoice.paid_amount or 0) > 0:
+    if money_value(invoice.paid_amount) > 0:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot apply membership benefit after payment is recorded",
         )
     existing_non_membership_discount = max(
-        int(invoice.discount_amount or 0)
-        - int(invoice.membership_discount_amount or 0),
-        0,
+        money_value(invoice.discount_amount)
+        - money_value(invoice.membership_discount_amount),
+        ZERO,
     )
     if (
         existing_non_membership_discount > 0
@@ -230,7 +233,7 @@ def apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invo
         service_type=service_type,
         item_ids=_invoice_membership_item_ids(session, invoice, service_type),
         item_amounts=_invoice_membership_item_amounts(session, invoice, service_type),
-        subtotal_amount=int(invoice.subtotal_amount or 0),
+        subtotal_amount=money_value(invoice.subtotal_amount),
         department_id=consultation_department_id(
             session,
             appointment_id=invoice.appointment_id,
@@ -240,14 +243,14 @@ def apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invo
         else None,
         session=session,
     )
-    membership_discount = int(preview["discount_amount"] or 0)
+    membership_discount = money_value(preview["discount_amount"])
     if membership_discount <= 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=preview.get("reason") or "No membership benefit available",
         )
-    discount = min(membership_discount, int(invoice.subtotal_amount or 0))
-    taxable = max(int(invoice.subtotal_amount or 0) - discount, 0)
+    discount = min(membership_discount, money_value(invoice.subtotal_amount))
+    taxable = max(money_value(invoice.subtotal_amount) - discount, ZERO)
     tax_rule = find_tax_rule(
         session,
         tenant_id=invoice.tenant_id,
@@ -255,18 +258,24 @@ def apply_invoice_membership_benefit(session: Session, invoice: Invoice) -> Invo
         service_scope=service_type,
         tax_rule_id=invoice.tax_rule_id,
     )
-    tax_amount = round(taxable * (tax_rule.tax_percentage if tax_rule else 0) / 100)
+    tax_amount = percentage_amount(taxable, tax_rule.tax_percentage if tax_rule else 0)
     total = taxable + tax_amount
     invoice.discount_amount = discount
     invoice.membership_discount_amount = membership_discount
-    invoice.membership_free_items_amount = int(preview["free_items_amount"] or 0)
-    invoice.membership_item_discount_amount = int(preview["item_discount_amount"] or 0)
-    invoice.membership_regular_items_amount = int(preview["regular_items_amount"] or 0)
+    invoice.membership_free_items_amount = money_value(preview["free_items_amount"])
+    invoice.membership_item_discount_amount = money_value(
+        preview["item_discount_amount"]
+    )
+    invoice.membership_regular_items_amount = money_value(
+        preview["regular_items_amount"]
+    )
     invoice.taxable_amount = taxable
     invoice.tax_amount = tax_amount
     invoice.total_amount = total
-    invoice.balance_amount = max(total - int(invoice.paid_amount or 0), 0)
-    invoice.clinic_share_amount = max(total - int(invoice.doctor_share_amount or 0), 0)
+    invoice.balance_amount = max(total - money_value(invoice.paid_amount), ZERO)
+    invoice.clinic_share_amount = max(
+        total - money_value(invoice.doctor_share_amount), ZERO
+    )
     invoice.patient_subscription_enrollment_id = enrollment.id
     invoice.patient_subscription_plan_id = plan.id
     if service_type == "consultation":

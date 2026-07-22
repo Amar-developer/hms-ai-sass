@@ -10,9 +10,11 @@ import { PermissionCheckboxes } from "./PermissionCheckboxes";
 export function RoleForm({
   title,
   role,
+  roles,
   permissions,
   busy,
   onSubmit,
+  onRoleChange,
   back,
 }: any) {
   const [roleName, setRoleName] = useState(role?.name || "");
@@ -73,6 +75,9 @@ export function RoleForm({
             selected={role?.permission_keys || []}
             disabled={false}
             roleName={roleName || role?.name}
+            roleId={role?.id}
+            roleOptions={role ? roles : []}
+            onRoleChange={onRoleChange}
           />
         </div>
         <Actions

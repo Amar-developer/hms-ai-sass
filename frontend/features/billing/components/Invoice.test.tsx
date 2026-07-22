@@ -42,4 +42,37 @@ describe("invoice receipt columns", () => {
     expect(screen.queryByText("Exp. Date")).toBeNull();
     expect(screen.queryByText("HSN / SAC")).toBeNull();
   });
+
+  it("shows prices and percentages as rounded whole values", () => {
+    render(
+      <Invoice
+        company={{ name: "MedizinHub", address: "Chennai", phone: "9876543210" }}
+        invoiceNo="MHB-INV-00055"
+        invoiceDate="22/07/2026"
+        customer={{ name: "Patient" }}
+        items={[
+          {
+            srNo: 1,
+            name: "Serum Creatinine",
+            qty: 1,
+            mrp: 180,
+            discPercent: 10.57,
+            rate: 161.46,
+          },
+        ]}
+        bank={{}}
+        subTotal={180}
+        discountAmount={18.54}
+        total={161.46}
+      />,
+    );
+
+    expect(screen.getAllByText("₹180").length).toBeGreaterThan(0);
+    expect(screen.getByText("11%")).toBeTruthy();
+    expect(screen.getAllByText("₹161").length).toBeGreaterThan(0);
+    expect(screen.getByText("-₹19")).toBeTruthy();
+    expect(
+      screen.getByText(/Rupees One Hundred Sixty One Only/),
+    ).toBeTruthy();
+  });
 });

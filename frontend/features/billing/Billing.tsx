@@ -998,7 +998,7 @@ export function Billing({
   return (
     <div className="space-y-6">
       {(canViewRevenueSummary || canViewSettlementSummary) && (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {canViewRevenueSummary && (
             <Card>
               <p className="text-xs lg:text-sm text-slate-500">
@@ -1020,6 +1020,21 @@ export function Billing({
               </p>
               <p className="text-[10px] lg:text-xs text-slate-500">
                 {dueReport?.invoice_count ?? 0} outstanding invoices
+              </p>
+            </Card>
+          )}
+          {canViewRevenueSummary && (
+            <Card>
+              <p className="text-xs lg:text-sm text-slate-500">
+                Billing Discounts
+              </p>
+              <p className="mt-1 text-xl lg:text-2xl font-bold">
+                {money(revenueReport?.total_discount_amount)}
+              </p>
+              <p className="text-[10px] lg:text-xs text-slate-500">
+                Approved {money(revenueReport?.total_approved_discount_amount)} ·
+                Offers {money(revenueReport?.total_offer_discount_amount)} ·
+                Membership {money(revenueReport?.total_membership_discount_amount)}
               </p>
             </Card>
           )}

@@ -516,11 +516,14 @@ export function TenantAdmin({
       )}
       {section === "roles" && view === "edit" && selectedRole && (
         <RoleForm
+          key={selectedRole.id}
           title="Edit Role"
           role={selectedRole}
+          roles={data.roles}
           permissions={data.permissions}
           busy={data.busy}
           onSubmit={(e: any) => actions.updateRole(e, selectedRole)}
+          onRoleChange={setSelectedId}
           back={() => open("roles")}
         />
       )}

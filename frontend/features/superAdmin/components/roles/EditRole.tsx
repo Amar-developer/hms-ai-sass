@@ -1,9 +1,16 @@
 "use client";
 
-import { Button, Card, Field, Input, Select } from "@/app/components/common/ui";
+import { Button, Card, Field, Select } from "@/app/components/common/ui";
 import { AutoRoleKeyFields } from "./AutoRoleKeyFields";
+import { PermissionCheckboxes } from "./PermissionCheckboxes";
 
-export function EditRole({ role, busy, updateRole, back }: any) {
+export function EditRole({
+  role,
+  permissionCatalog,
+  busy,
+  updateRole,
+  back,
+}: any) {
   if (!role)
     return (
       <Card>
@@ -46,14 +53,12 @@ export function EditRole({ role, busy, updateRole, back }: any) {
           </Select>
         </Field>
         <div className="md:col-span-2">
-          <Field label="Permission Keys">
-            <Input
-              name="permissionKeysText"
-              defaultValue={(role.permission_keys || []).join(", ")}
-              placeholder="appointments.manage,patients.read"
-              className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
-            />
-          </Field>
+          <input type="hidden" name="replacePermissions" value="true" />
+          <PermissionCheckboxes
+            permissions={permissionCatalog}
+            selected={role.permission_keys || []}
+            roleName={role.name}
+          />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
           <Button disabled={busy}>{busy ? "Saving..." : "Save Role"}</Button>

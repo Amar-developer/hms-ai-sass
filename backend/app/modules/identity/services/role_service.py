@@ -175,6 +175,12 @@ class RoleService:
             permissions.IDENTITY_USERS_EDIT,
         )
         roles = self.roles.list_for_tenant(tenant_id)
+        tenant = self.tenants.get(tenant_id)
+        roles = [
+            role
+            for role in roles
+            if role.key != "super_admin" or bool(tenant and tenant.is_primary)
+        ]
         canonical_by_name = {
             role.name: role
             for role in roles

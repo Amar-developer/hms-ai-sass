@@ -1,5 +1,5 @@
 import { displayDateTime, money } from "@/utils/helper";
-import { claimedDetail, invoiceDiscountParts, invoiceHasAppliedMembershipBenefit, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, isMembershipPlanInvoice, itemTypeLabel, numberValue, percentLabel } from "../helpers";
+import { claimedDetail, formatPercentage, invoiceDiscountParts, invoiceHasAppliedMembershipBenefit, invoiceItemPriceBreakdown, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, isMembershipPlanInvoice, itemTypeLabel, numberValue, percentLabel } from "../helpers";
 import { useEffect, useState } from "react";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Input, SearchableSelect } from "@/app/components/common/ui";
@@ -56,6 +56,14 @@ export function InvoiceDetailPage({
         userPermissions.includes("*") ||
         keys.some((key) => userPermissions.includes(key)),
     );
+  const currentUserRoles = Array.isArray(currentUser?.roles)
+    ? currentUser.roles
+    : [];
+  const isTenantBillingAdmin =
+    currentUser?.user_type === "tenant_admin" ||
+    currentUser?.user_type === "super_admin" ||
+    currentUserRoles.includes("tenant_admin") ||
+    currentUserRoles.includes("super_admin");
   const canCreateInvoices = hasPermission(
     "billing.manage",
     "billing.create",
@@ -63,17 +71,14 @@ export function InvoiceDetailPage({
   );
   const canEditInvoices = hasPermission("billing.manage", "invoices.edit");
   const canRequestDiscountPermission = hasPermission(
-    "billing.manage",
     "billing.discounts.request",
-  );
+  ) || isTenantBillingAdmin;
   const canRequestRefundPermission = hasPermission(
-    "billing.manage",
     "billing.refunds.request",
-  );
+  ) || isTenantBillingAdmin;
   const canRequestCancelPermission = hasPermission(
-    "billing.manage",
     "invoices.cancel_request",
-  );
+  ) || isTenantBillingAdmin;
   const canRecordPayments = hasPermission(
     "payments.manage",
     "payments.create",
@@ -246,37 +251,25 @@ export function InvoiceDetailPage({
   function itemRate(item: any) {
     return numberValue(item.selling_amount) || numberValue(item.unit_amount);
   }
-  function itemInvoiceDiscount(item: any) {
-    if (item.discount_amount !== undefined && item.discount_amount !== null) {
-      return numberValue(item.discount_amount);
-    }
-    const subtotal = numberValue(invoice.subtotal_amount);
-    if (subtotal <= 0) return 0;
-    return Math.round(
-      (numberValue(item.total_amount) * numberValue(invoice.discount_amount)) /
-        subtotal,
-    );
-  }
-  function itemMrpTotal(item: any) {
-    return numberValue(item.mrp_amount) * numberValue(item.quantity);
-  }
-  function itemMrpMarkdown(item: any) {
-    return Math.max(itemMrpTotal(item) - numberValue(item.total_amount), 0);
-  }
   const itemTableColSpan =
     7 + (showItemVendor ? 2 : 0) + (showItemPricing ? 1 : 0);
-  const currentUserRoles = Array.isArray(currentUser?.roles)
-    ? currentUser.roles
-    : [];
-  const isTenantBillingAdmin =
-    currentUser?.user_type === "tenant_admin" ||
-    currentUser?.user_type === "super_admin" ||
-    currentUserRoles.includes("tenant_admin") ||
-    currentUserRoles.includes("super_admin");
-  const canApproveAdjustments =
+  const canApproveDiscounts =
+    isTenantBillingAdmin || hasPermission("billing.discounts.approve");
+  const canManageRefunds =
     isTenantBillingAdmin ||
-    userPermissions.includes("*") ||
-    userPermissions.includes("billing.manage");
+    hasPermission("billing.refunds.approve", "billing.refunds.manage");
+  const canApproveCancellations =
+    isTenantBillingAdmin ||
+    hasPermission("invoices.cancel_approve", "billing.refunds.manage");
+  const canReviewAnyAdjustment =
+    canApproveDiscounts || canManageRefunds || canApproveCancellations;
+  const canIssueCreditNote =
+    isTenantBillingAdmin || hasPermission("payments.manage");
+  function canDecideAdjustment(row: any) {
+    if (row.request_type === "discount") return canApproveDiscounts;
+    if (row.request_type === "cancel") return canApproveCancellations;
+    return canManageRefunds;
+  }
   const hasOpenAdjustment = adjustmentRequests.some((row: any) =>
     ["pending", "approved"].includes(String(row.status)),
   );
@@ -523,12 +516,14 @@ export function InvoiceDetailPage({
                       </tr>
                     )}
                     {items.map((item: any, index: number) => {
-                      const allocatedDiscount = itemInvoiceDiscount(item);
-                      const mrpMarkdown = itemMrpMarkdown(item);
-                      const mrpTotal = itemMrpTotal(item);
-                      const displayDiscount = mrpMarkdown + allocatedDiscount;
+                      const pricing = invoiceItemPriceBreakdown(item, invoice);
+                      const allocatedDiscount =
+                        pricing.allocatedInvoiceDiscount;
+                      const displayDiscount = pricing.effectiveDiscount;
                       const discountBase =
-                        mrpTotal > 0 ? mrpTotal : numberValue(item.total_amount);
+                        pricing.mrpTotal > 0
+                          ? pricing.mrpTotal
+                          : pricing.lineAmount;
                       const itemSupplierOptions =
                         supplierOptions[item.id] || [];
                       const vendorName =
@@ -670,7 +665,7 @@ export function InvoiceDetailPage({
                       invoice.offer_discount_name
                         ? `Offer: ${invoice.offer_discount_name}${
                             invoice.offer_discount_type === "percentage"
-                              ? ` (${invoice.offer_discount_value}%)`
+                              ? ` (${formatPercentage(invoice.offer_discount_value)}%)`
                               : ""
                           }`
                         : "Offer & Discount"
@@ -728,7 +723,7 @@ export function InvoiceDetailPage({
                   <BillLine
                     label={`${invoice.tax_label || "Tax"}${
                       numberValue(invoice.tax_percentage) > 0
-                        ? ` (${invoice.tax_percentage}%)`
+                        ? ` (${formatPercentage(invoice.tax_percentage)}%)`
                         : ""
                     }`}
                     value={money(taxAmount)}
@@ -809,6 +804,7 @@ export function InvoiceDetailPage({
                                 className="text-right tabular-nums"
                                 type="number"
                                 min="0"
+                                step="0.01"
                                 placeholder="Amount"
                                 value={row.amount}
                                 onChange={(e: any) =>
@@ -916,7 +912,7 @@ export function InvoiceDetailPage({
                     <ActionButton onClick={() => openReceipt(invoice)}>
                       Print Invoice
                     </ActionButton>
-                    {canApproveAdjustments && (
+                    {canIssueCreditNote && (
                       <ActionButton onClick={() => issueCreditNote(invoice)}>
                         Credit Note
                       </ActionButton>
@@ -1111,7 +1107,7 @@ export function InvoiceDetailPage({
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
-                          {canApproveAdjustments && row.status === "pending" ? (
+                          {canDecideAdjustment(row) && row.status === "pending" ? (
                             <ActionGroup>
                               <ActionButton
                                 onClick={() => approveAdjustment?.(row)}
@@ -1125,7 +1121,7 @@ export function InvoiceDetailPage({
                                 Reject
                               </ActionButton>
                             </ActionGroup>
-                          ) : canApproveAdjustments &&
+                          ) : canDecideAdjustment(row) &&
                             row.status === "approved" &&
                             !adjustmentClosed ? (
                             <ActionButton
@@ -1145,7 +1141,7 @@ export function InvoiceDetailPage({
             </div>
           </div>
 
-          {canApproveAdjustments && (
+          {canReviewAnyAdjustment && (
             <div className="mt-5 rounded-lg border border-slate-200">
               <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
                 <h4 className="card-title font-bold">Billing Ledger</h4>

@@ -26,6 +26,7 @@ from app.modules.billing.schemas import (
 )
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.membership import invoice_membership_benefit
+from app.modules.billing.services.money import ZERO, money_value, percentage_amount
 from app.modules.billing.services.source_sync import sync_invoice_source_after_reversal
 
 
@@ -52,14 +53,14 @@ def invoice_read(session: Session, invoice: Invoice) -> InvoiceRead:
     if invoice.tax_rule_id:
         tax_rule = session.get(TaxRule, invoice.tax_rule_id)
         if tax_rule and tax_rule.tenant_id == invoice.tenant_id:
-            invoice_response.tax_percentage = int(tax_rule.tax_percentage or 0)
+            invoice_response.tax_percentage = tax_rule.tax_percentage
             invoice_response.tax_label = tax_rule.tax_label
-    total_discount = int(invoice.discount_amount or 0)
+    total_discount = money_value(invoice.discount_amount)
     membership_discount = min(
-        int(invoice.membership_discount_amount or 0), total_discount
+        money_value(invoice.membership_discount_amount), total_discount
     )
     approved_discount = sum(
-        int(row.amount or 0)
+        money_value(row.amount)
         for row in repo.list_adjustment_requests(invoice)
         if row.request_type == BillingAdjustmentType.DISCOUNT
         and row.status == BillingAdjustmentStatus.EXECUTED
@@ -67,27 +68,25 @@ def invoice_read(session: Session, invoice: Invoice) -> InvoiceRead:
     if invoice.discount_approval_id:
         legacy_approval = repo.get_discount_approval(invoice.discount_approval_id)
         if legacy_approval:
-            approved_discount += int(legacy_approval.requested_amount or 0)
+            approved_discount += money_value(legacy_approval.requested_amount)
     approved_discount = min(
-        approved_discount, max(total_discount - membership_discount, 0)
+        approved_discount, max(total_discount - membership_discount, ZERO)
     )
-    offer_discount = 0
+    offer_discount = ZERO
     if invoice.discount_offer_id:
         offer = repo.get_discount_offer(invoice.discount_offer_id)
         if offer and offer.tenant_id == invoice.tenant_id:
             invoice_response.offer_discount_name = offer.name
             invoice_response.offer_discount_type = offer.discount_type
-            invoice_response.offer_discount_value = int(offer.value or 0)
+            invoice_response.offer_discount_value = offer.value
             offer_discount = (
-                int(offer.value or 0)
+                money_value(offer.value)
                 if offer.discount_type == DiscountType.FIXED
-                else round(
-                    int(invoice.subtotal_amount or 0) * int(offer.value or 0) / 100
-                )
+                else percentage_amount(invoice.subtotal_amount, offer.value)
             )
             if offer.max_discount_amount is not None:
                 offer_discount = min(offer_discount, offer.max_discount_amount)
-    remaining = max(total_discount - membership_discount - approved_discount, 0)
+    remaining = max(total_discount - membership_discount - approved_discount, ZERO)
     invoice_response.offer_discount_amount = min(offer_discount, remaining)
     invoice_response.approved_discount_amount = approved_discount
     if invoice.appointment_id:
@@ -148,8 +147,8 @@ def normalize_invoice_status(session: Session, invoice: Invoice) -> Invoice:
         return invoice
     if (
         invoice.status in {InvoiceStatus.REFUNDED, InvoiceStatus.PARTIALLY_REFUNDED}
-        or int(invoice.total_amount or 0) <= 0
-        or int(invoice.balance_amount or 0) <= 0
+        or money_value(invoice.total_amount) <= 0
+        or money_value(invoice.balance_amount) <= 0
     ):
         previous_status = invoice.status
         invoice = update_invoice_payment_status(session, invoice)
@@ -197,7 +196,7 @@ def read_invoice_detail(
                 practitioner = read_repo.get_practitioner(appointment.practitioner_id)
                 if practitioner and practitioner.tenant_id == invoice.tenant_id:
                     consultation_vendor_name = practitioner.full_name
-    consultation_vendor_amount = int(invoice.doctor_share_amount or 0)
+    consultation_vendor_amount = money_value(invoice.doctor_share_amount)
     home_care_booking = (
         read_repo.get_home_care_booking(invoice.home_care_booking_id)
         if invoice.home_care_booking_id
@@ -228,7 +227,7 @@ def read_invoice_detail(
                 or item.supplier_id
                 or None
             )
-            read.vendor_amount = int(item.buying_amount or 0)
+            read.vendor_amount = money_value(item.buying_amount)
         return read
 
     def ledger_read(entry: BillingLedgerEntry) -> BillingLedgerEntryRead:

@@ -1,4 +1,5 @@
 import ast
+import re
 from pathlib import Path
 
 from app.modules.identity.services.helpers import permission_read as _permission_read
@@ -69,6 +70,19 @@ def test_every_permission_module_has_a_product_facing_label():
     )
 
 
+def test_billing_adjustment_request_and_approval_actions_are_discoverable():
+    catalog = set(permissions.PERMISSION_CATALOG)
+
+    assert {
+        "billing.discounts.request",
+        "billing.discounts.approve",
+        "billing.refunds.request",
+        "billing.refunds.approve",
+        "invoices.cancel_request",
+        "invoices.cancel_approve",
+    } <= catalog
+
+
 def test_every_backend_permission_reference_is_in_the_catalog():
     app_root = Path(__file__).resolve().parents[1] / "app"
     catalog = set(permissions.PERMISSION_CATALOG)
@@ -99,3 +113,23 @@ def test_every_manifest_permission_is_in_the_catalog():
 
     assert manifest_permissions
     assert manifest_permissions <= catalog
+
+
+def test_frontend_permission_checks_are_in_the_catalog():
+    frontend_root = Path(__file__).resolve().parents[2] / "frontend"
+    catalog = set(permissions.PERMISSION_CATALOG)
+    permission_actions = {key.rsplit(".", 1)[-1] for key in catalog}
+    referenced: set[str] = set()
+
+    for pattern in ("*.ts", "*.tsx"):
+        for path in frontend_root.rglob(pattern):
+            if "node_modules" in path.parts or ".next" in path.parts:
+                continue
+            source = path.read_text(encoding="utf-8")
+            for value in re.findall(
+                r'["\']([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)["\']', source
+            ):
+                if value.rsplit(".", 1)[-1] in permission_actions:
+                    referenced.add(value)
+
+    assert referenced <= catalog
