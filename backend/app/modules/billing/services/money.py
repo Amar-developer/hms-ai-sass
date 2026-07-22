@@ -27,3 +27,21 @@ def percentage_value(value: Any) -> Decimal:
 
 def percentage_amount(base: Any, percentage: Any) -> Decimal:
     return money_value(decimal_value(base) * decimal_value(percentage) / Decimal("100"))
+
+
+def decimal_json_number(value: Decimal) -> int | float:
+    """Serialize exact database decimals as JSON numbers for API compatibility."""
+    if value == value.to_integral_value():
+        return int(value)
+    return float(value)
+
+
+def decimal_values_to_json(value: Any) -> Any:
+    """Recursively convert decimals found in typed fields and report dictionaries."""
+    if isinstance(value, Decimal):
+        return decimal_json_number(value)
+    if isinstance(value, dict):
+        return {key: decimal_values_to_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [decimal_values_to_json(item) for item in value]
+    return value

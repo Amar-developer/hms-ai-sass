@@ -586,7 +586,7 @@ def test_role_crud_metadata_and_latest_first_ordering(unauthenticated_client):
         json={
             "name": "Front Office",
             "key": "front_office",
-            "permission_keys": ["appointments.manage"],
+            "permission_keys": ["appointments.manage", "appointments.manage"],
         },
     )
     assert first.status_code == 201

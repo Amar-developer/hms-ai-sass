@@ -1,7 +1,8 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import Field, field_serializer, model_validator
 
 from app.core.validation import (
     AppointmentId,
@@ -25,6 +26,15 @@ from app.modules.billing.models import (
     PaymentStatus,
 )
 from app.modules.billing.models import SettlementStatus
+from app.modules.billing.services.money import decimal_values_to_json
+
+
+class BaseModel(PydanticBaseModel):
+    """Billing schema base that keeps decimal API fields JSON-numeric."""
+
+    @field_serializer("*", when_used="json", check_fields=False)
+    def serialize_decimal_fields(self, value):
+        return decimal_values_to_json(value)
 
 
 class DoctorFeeRuleCreate(BaseModel):

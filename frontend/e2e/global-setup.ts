@@ -60,7 +60,9 @@ async function createRoleUser(
   },
 ): Promise<SeedActor> {
   const roleKey = `${input.rolePrefix}_${input.runId}`;
-  const permissionKeys = input.permissionKeys.filter((key) => catalog.has(key));
+  const permissionKeys = Array.from(
+    new Set(input.permissionKeys.filter((key) => catalog.has(key))),
+  );
   await post(
     admin,
     "/identity/roles",

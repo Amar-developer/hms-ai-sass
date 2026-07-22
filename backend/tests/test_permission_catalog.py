@@ -3,8 +3,27 @@ import re
 from pathlib import Path
 
 from app.modules.identity.services.helpers import permission_read as _permission_read
+from app.modules.identity.schemas import RoleCreate, RoleUpdate
 from app.modules import manifest
 from app.modules.identity import permissions
+
+
+def test_role_payloads_deduplicate_permission_keys_in_request_order():
+    create = RoleCreate(
+        name="Receptionist",
+        key="receptionist",
+        permission_keys=["queue.manage", "queue.read", "queue.manage"],
+    )
+    update = RoleUpdate(
+        permission_keys=[
+            "consultations.edit",
+            "consultations.read",
+            "consultations.edit",
+        ]
+    )
+
+    assert create.permission_keys == ["queue.manage", "queue.read"]
+    assert update.permission_keys == ["consultations.edit", "consultations.read"]
 
 
 def test_permission_catalog_has_unique_keys_and_all_application_modules():

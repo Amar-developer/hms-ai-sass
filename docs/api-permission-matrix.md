@@ -139,6 +139,9 @@ Error Logs is intentionally hidden from the sidebar. Users with `error_logs.read
 
 | Method | Endpoint | Permission |
 | --- | --- | --- |
+| `GET` | `/api/v1/identity/super-admins` | Active super admin only |
+| `POST` | `/api/v1/identity/super-admins` | Active super admin only; current-password reauthentication required |
+| `POST` | `/api/v1/identity/super-admins/{user_id}/status` | Active super admin only; current-password reauthentication required; cannot deactivate self or last active super admin |
 | `POST` | `/api/v1/identity/roles` | `identity.roles.manage` |
 | `GET` | `/api/v1/identity/roles` | `identity.roles.manage` |
 | `PATCH` | `/api/v1/identity/roles/{role_id}` | `identity.roles.manage` |
