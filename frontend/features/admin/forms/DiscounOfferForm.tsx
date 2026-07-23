@@ -116,7 +116,7 @@ export function DiscountOfferForm({
           />
         </FormField>
         <FormField label="Value" required>
-          <Input {...register("value")} type="number" min="0" step="0.01" />
+          <Input {...register("value",{valueAsNumber:true})} type="number" min="0" step="0.01" />
           {errors.value && <FormError error={errors.value?.message} />}
         </FormField>
         <FormField label="Minimum Bill Amount">

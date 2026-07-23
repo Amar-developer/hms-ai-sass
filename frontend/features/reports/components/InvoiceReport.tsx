@@ -56,12 +56,13 @@ const InvoiceReport = ({
     key: "type",
     header: "Type",
     width:'140px',
+    className:'',
     render: (row: any) => invoiceTypeLabel(invoiceType(row)),
   },
   {
     key: "patient",
     header: "Patient",
-    width:'80px',
+    width:'140px',
     render: (row: any) => {
       const patient = patientById.get(row.patient_id);
 
@@ -87,7 +88,7 @@ const InvoiceReport = ({
         doctorById.get(
           appointment?.doctorId || appointment?.practitioner_id,
         ) ||
-        "Unassigned"
+        "-"
       );
     },
   },
@@ -130,13 +131,13 @@ const InvoiceReport = ({
   },
   {
     key: "approved_discount_amount",
-    header: "Approved Discount",
-    width:'115px',
+    header: "Approved %",
+    width:'125px',
     render: (row: any) => money(approvedDiscountUsage(row)),
   },
   {
     key: "offer_discount_amount",
-    header: "Offer Discount",
+    header: "Offer %",
     width:'105px',
     render: (row: any) => money(offerDiscountUsage(row)),
   },
@@ -149,7 +150,7 @@ const InvoiceReport = ({
   },
   {
     key: "billing_discount_amount",
-    header: "Total Discount",
+    header: "Total %",
     width:'105px',
     render: (row: any) => money(billingDiscountUsage(row)),
   },
@@ -162,12 +163,12 @@ const InvoiceReport = ({
   {
     key: "doctor_fee",
     header: "Doctor Fee",
-    width:'100px',
+    width:'120px',
     render: (row: any) => money(invoiceDoctorFeeAmount(row)),
   },
   {
     key: "tax_amount",
-    header: "GST from Paid",
+    header: "GST",
     width: "110px",
     render: (row: any) => money(recognizedInvoiceTax(row)),
   },

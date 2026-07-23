@@ -19,6 +19,7 @@ import { displayDateTime } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
+import { RowActions } from "./RowActions";
 
 export function SettingsPanel(props: any) {
   const {
@@ -67,10 +68,7 @@ export function SettingsPanel(props: any) {
     downloadMonthlyReport,
   } = props;
   const [reportPage, setReportPage] = useState(1);
-  const reportTotalPages = Math.max(
-    1,
-    Math.ceil(reportJobs.length / pageSize),
-  );
+  const reportTotalPages = Math.max(1, Math.ceil(reportJobs.length / pageSize));
   const safeReportPage = Math.min(reportPage, reportTotalPages);
   const pagedReportJobs = reportJobs.slice(
     (safeReportPage - 1) * pageSize,
@@ -519,9 +517,7 @@ export function SettingsPanel(props: any) {
               {pagedReportJobs.map((job: any, index: number) => (
                 <tr key={job.id}>
                   <td className="px-4 py-4 text-sm">
-                    <b>
-                      Report {(safeReportPage - 1) * pageSize + index + 1}
-                    </b>
+                    <b>Report {(safeReportPage - 1) * pageSize + index + 1}</b>
                   </td>
                   <td>
                     <p className="text-xs text-slate-500">
@@ -558,25 +554,29 @@ export function SettingsPanel(props: any) {
                       {job.failure_reason || job.attachment_filename || "-"}
                     </div>
                   </td>
-                  <td className="">
-                    <ActionGroup>
-                      <ActionButton
-                        onClick={() => resendMonthlyReport(job)}
-                        disabled={reportBusy === `resend-${job.id}`}
-                      >
-                        {reportBusy === `resend-${job.id}`
-                          ? "Sending..."
-                          : "Resend"}
-                      </ActionButton>
-                      <ActionButton
-                        onClick={() => downloadMonthlyReport(job)}
-                        disabled={reportBusy === `download-${job.id}`}
-                      >
-                        {reportBusy === `download-${job.id}`
-                          ? "Downloading..."
-                          : "Download"}
-                      </ActionButton>
-                    </ActionGroup>
+                  <td>
+                    <RowActions
+                      actions={[
+                        {
+                          label:
+                            reportBusy === `resend-${job.id}`
+                              ? "Sending..."
+                              : "Resend",
+                          onClick: () => resendMonthlyReport(job),
+                          disabled: reportBusy === `resend-${job.id}`,
+                        },
+                        {
+                          label:
+                            reportBusy === `download-${job.id}`
+                              ? "Downloading..."
+                              : "Download",
+                          onClick: () => downloadMonthlyReport(job),
+                          disabled: reportBusy === `download-${job.id}`,
+                        },
+                      ]}
+                      className="right-24 -bottom-3"
+                      width="w-24"
+                    />
                   </td>
                 </tr>
               ))}

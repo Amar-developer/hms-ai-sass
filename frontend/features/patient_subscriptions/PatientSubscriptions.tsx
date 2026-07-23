@@ -772,7 +772,7 @@ export function PatientSubscriptions({
                   <div className="min-w-full overflow-x-auto lg:block">
                     <table className="min-w-full text-left text-sm">
                       <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
-                        <tr>
+                        <tr className="text-sm">
                           <th className="px-4 py-3">Plan</th>
                           <th className="px-4 py-3">Price</th>
                           <th className="px-4 py-3">Duration</th>

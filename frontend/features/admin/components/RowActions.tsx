@@ -36,7 +36,7 @@ export function RowActions({
 
       {open && (
         <div
-          className={`absolute ${className}  mb-2 ${width} rounded-lg border bg-white shadow-lg z-50`}
+          className={`absolute ${className}  border mb-2 ${width} rounded-lg border bg-white shadow-lg z-50`}
         >
           {actions
             .filter((a) => !a.hidden)
@@ -49,8 +49,12 @@ export function RowActions({
                   action.onClick();
                   setOpen(false);
                 }}
-                className={`block w-full px-4 py-1.5 text-left hover:bg-slate-100 ${
-                  action.danger ? "text-red-600 hover:bg-red-50" : ""
+                className={`block w-full px-4 py-1 text-left ${
+                  action.disabled
+                    ? "cursor-not-allowed text-slate-300"
+                    : `hover:bg-slate-100 ${
+                        action.danger ? "text-red-600 hover:bg-red-50" : ""
+                      }`
                 }`}
               >
                 {action.label}

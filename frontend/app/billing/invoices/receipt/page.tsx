@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from "react";
 
 import Invoice from "@/features/billing/components/Invoice";
 import { exportInvoicePdf } from "@/features/billing/exportInvoicePdf";
-import { invoiceItemPriceBreakdown } from "@/features/billing/helpers";
+import {
+  invoiceReceiptFilename,
+  loadInvoiceReceiptProps,
+} from "@/features/billing/invoiceReceiptData";
 import type { InvoiceProps } from "@/features/billing/types";
-import { apiFetch, type ApiSession, uploadAssetUrl } from "@/lib/api";
-import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
+import type { ApiSession } from "@/lib/api";
 
 function readSession(): ApiSession | null {
   const raw = window.localStorage.getItem("medizinhub.session");
@@ -17,89 +19,6 @@ function readSession(): ApiSession | null {
   } catch {
     return null;
   }
-}
-
-function safeFilename(value: unknown) {
-  return String(value || "")
-    .trim()
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-function invoiceDate(invoice: any) {
-  const value = invoice.invoice_date || invoice.created_at;
-  return value
-    ? new Intl.DateTimeFormat("en-IN", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(new Date(value))
-    : "";
-}
-
-function toInvoiceProps(
-  detail: any,
-  patient: any,
-  branding: any,
-  logoValue: unknown,
-  bankValue: unknown,
-): InvoiceProps {
-  const invoice = detail.invoice || {};
-  const bank =
-    bankValue && typeof bankValue === "object"
-      ? (bankValue as Record<string, unknown>)
-      : {};
-  const companyName =
-    branding?.legal_name || branding?.name || "MedizinHub Healthcare";
-  return {
-    company: {
-      name: companyName,
-      tagline: branding?.description || undefined,
-      address: branding?.address || "",
-      phone: branding?.phone || "",
-      gstin: String(bank.gstin || ""),
-      logoUrl: uploadAssetUrl(String(logoValue || branding?.logo_url || "")),
-    },
-    invoiceNo: invoice.invoice_number || invoice.id || "",
-    invoiceDate: invoiceDate(invoice),
-    customer: {
-      name: patient?.full_name || patient?.name || "Patient",
-      phone: patient?.mobile || "",
-      whatsapp: patient?.alternate_mobile || "",
-      address: patient?.address || "",
-      patientId: patient?.patient_number || ""
-    },
-    items: (detail.items || []).map((item: any, index: number) => {
-      const pricing = invoiceItemPriceBreakdown(item, invoice);
-      return {
-        srNo: index + 1,
-        name: item.description || item.item_type || "Item",
-        qty: item.quantity || 1,
-        mrp: pricing.hasMrp ? pricing.mrpUnit : "",
-        discPercent: pricing.discountPercent,
-        rate: pricing.payableAmount,
-      };
-    }),
-    bank: {
-      name: String(bank.account_name || ""),
-      branch: String(bank.branch_name || ""),
-      accountNumber: String(bank.account_number || ""),
-      ifsc: String(bank.ifsc || ""),
-      upiId: String(bank.upi_id || ""),
-      qrImageUrl: uploadAssetUrl(String(bank.qr_image_url || "")),
-    },
-    isPaid: String(invoice.status || "").toLowerCase() === "paid",
-    signatoryLine: `For ${companyName}`,
-    subTotal: Number(invoice.subtotal_amount || 0),
-    discountAmount: Number(invoice.discount_amount || 0),
-    taxableAmount: Number(invoice.taxable_amount || 0),
-    taxAmount: Number(invoice.tax_amount || 0),
-    taxLabel: invoice.tax_label || "Tax",
-    taxPercentage: Number(invoice.tax_percentage || 0),
-    total: Number(invoice.total_amount || 0),
-    paidAmount: Number(invoice.paid_amount || 0),
-    balanceAmount: Number(invoice.balance_amount || 0),
-  };
 }
 
 export default function ReceiptPage() {
@@ -125,53 +44,15 @@ export default function ReceiptPage() {
     let releaseLogo: () => void = () => undefined;
     void (async () => {
       try {
-        const detail = await apiFetch(
-          `/billing/invoices/${encodeURIComponent(invoiceId)}`,
-          session,
-        );
-        const patientId = detail.invoice?.patient_id;
-        const [patient, branding, logoSetting, bankSetting, logoFiles] =
-          await Promise.all([
-            patientId
-              ? apiFetch(
-                  `/patients/${encodeURIComponent(patientId)}`,
-                  session,
-                ).catch(() => null)
-              : Promise.resolve(null),
-            apiFetch("/tenants/current/branding", session).catch(() => null),
-            apiFetch(
-              "/settings/resolve?module=invoice&key=invoice.logo_url",
-              session,
-            ).catch(() => null),
-            apiFetch(
-              "/settings/resolve?module=accounts&key=accounts.bank_details",
-              session,
-            ).catch(() => null),
-            apiFetch(
-              "/files?category=logo&attached_to_doctype=Tenant&limit=20",
-              session,
-            ).catch(() => []),
-          ]);
-        if (cancelled) return;
-
-        const resolvedLogo = await resolveInvoiceLogoAsset(
-          logoSetting?.value || branding?.logo_url || "",
-          logoFiles || [],
+        const { props, release } = await loadInvoiceReceiptProps(
+          invoiceId,
           session,
         );
         if (cancelled) {
-          resolvedLogo.release();
+          release();
           return;
         }
-        releaseLogo = resolvedLogo.release;
-
-        const props = toInvoiceProps(
-          detail,
-          patient,
-          branding,
-          resolvedLogo.url,
-          bankSetting?.value,
-        );
+        releaseLogo = release;
         setInvoiceProps(props);
       } catch (caught: any) {
         if (!cancelled) {
@@ -196,11 +77,7 @@ export default function ReceiptPage() {
           img.complete ? Promise.resolve() : img.decode().catch(() => undefined),
         ),
       );
-      const filename =
-        [safeFilename(invoiceProps.customer.name), safeFilename(invoiceProps.invoiceNo)]
-          .filter(Boolean)
-          .join("-") || "invoice";
-      await exportInvoicePdf(printRootRef.current, filename);
+      await exportInvoicePdf(printRootRef.current, invoiceReceiptFilename(invoiceProps));
     } finally {
       setIsExporting(false);
     }
@@ -211,7 +88,6 @@ export default function ReceiptPage() {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       if (!cancelled) void downloadPdf();
-      // if (!cancelled) window.print();
     }, 150);
     return () => {
       cancelled = true;
@@ -233,7 +109,6 @@ export default function ReceiptPage() {
         <button
           type="button"
           onClick={() => void downloadPdf()}
-          // onClick={() => window.print()}
           disabled={isExporting}
           className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-60"
         >

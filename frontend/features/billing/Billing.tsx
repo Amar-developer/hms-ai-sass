@@ -25,6 +25,7 @@ import {
 } from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
+import { downloadInvoiceReceipt } from "./downloadInvoiceReceipt";
 import { Column } from "../reports/types";
 import { DataTable } from "../reports/components/DataTable";
 import { displayDateTime, money } from "@/utils/helper";
@@ -32,6 +33,7 @@ import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { status_options } from "./contants";
 
 export function Billing({
   apiSession,
@@ -575,13 +577,17 @@ export function Billing({
     }
   }
 
-  function openReceipt(invoice: any) {
-    if (!invoice?.id) return;
-    window.open(
-      `/billing/invoices/receipt?id=${encodeURIComponent(invoice.id)}`,
-      "_blank",
-      "noopener,noreferrer",
-    );
+  async function openReceipt(invoice: any) {
+    if (!invoice?.id || !apiSession) return;
+    setBusy(`receipt-${invoice.id}`);
+    setMessage("");
+    try {
+      await downloadInvoiceReceipt(invoice.id, apiSession);
+    } catch (err: any) {
+      setMessage(err.message || "Could not generate the invoice PDF.");
+    } finally {
+      setBusy("");
+    }
   }
 
   async function updateInvoiceItemSupplier(
@@ -1214,22 +1220,14 @@ export function Billing({
             <SearchableSelect
               value={filters.paidStatus}
               onChange={(v) => updateFilter("paidStatus", v)}
-              options={[
-                { value: "all", label: "All payments" },
-                { value: "paid", label: "Paid" },
-                { value: "due", label: "Due" },
-                { value: "partially_paid", label: "Partially paid" },
-                { value: "partially_refunded", label: "Partially refunded" },
-                { value: "refunded", label: "Refunded" },
-                { value: "unpaid", label: "Unpaid" },
-              ]}
+              options={status_options}
               searchable={false}
             />
           </FormField>
           <button
             type="button"
             onClick={clearFilters}
-            className="close-button font-bold text-slate-700 hover:bg-slate-50"
+            className="rounded-lg px-2 py-2.5 lg:px-4 lg:py-2.5 text-xs border font-bold text-slate-700 hover:bg-slate-50"
           >
             Clear
           </button>

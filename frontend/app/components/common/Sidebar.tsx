@@ -107,7 +107,7 @@ export function Sidebar(props: SidebarProps) {
   return (
     <aside
       className={`
-    h-screen shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-2
+    h-screen shrink-0 overflow-y-auto border-r border-slate-200 bg-white px-2 py-2
     hidden md:block
     transition-all duration-300 scrollbar-hidden
     ${props.tabletCollapsed ? "md:w-18" : "md:w-64"}

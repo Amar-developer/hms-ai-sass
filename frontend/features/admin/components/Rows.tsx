@@ -114,7 +114,7 @@ export function RoleRow({
       onClick={canEdit ? onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
           <b>{role.name}</b>
           <CopyIdButton
@@ -134,17 +134,17 @@ export function RoleRow({
         </div>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         {roleKeyLabel(role.key)}
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge tone="slate" className="rounded-full px-2 py-[2px]">
           {Array.isArray(role.permission_keys) ? role.permission_keys.length : 0}
         </Badge>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={role.is_active ? "green" : "red"}
           className="rounded-full px-2 py-[2px] text-[10px]"
@@ -153,11 +153,11 @@ export function RoleRow({
         </Badge>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         {formatDate(role.updated_at || role.created_at)}
       </td>
 
-      <td className="px-4 py-3 text-xs" onClick={(e) => e.stopPropagation()}>
+      <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
         <RowActions actions={actions} className="right-28 -bottom-5" />
       </td>
     </tr>
@@ -196,7 +196,7 @@ export function DepartmentRow({
       onClick={canEdit ? onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
           <span className="font-bold">{department.name}</span>
 
@@ -204,13 +204,13 @@ export function DepartmentRow({
         </div>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">{department.code}</td>
+      <td className="px-4 py-3 text-sm whitespace-nowrap">{department.code}</td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         {department.branch_names || "All branches"}
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={department.is_active ? "green" : "red"}
           className="rounded-full py-1"
@@ -219,7 +219,7 @@ export function DepartmentRow({
         </Badge>
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-28 -bottom-5" />
       </td>
     </tr>
@@ -258,7 +258,7 @@ export function BranchRow({
       onClick={canEdit ? onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
           <b>{branch.name}</b>
           <CopyIdButton
@@ -271,14 +271,14 @@ export function BranchRow({
         </div>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">{branch.code}</td>
+      <td className="px-4 py-3 text-sm whitespace-nowrap">{branch.code}</td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         {[branch.area, branch.city, branch.state].filter(Boolean).join(", ") ||
           "-"}
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={branch.is_active ? "green" : "red"}
           className="rounded-full py-1"
@@ -287,7 +287,7 @@ export function BranchRow({
         </Badge>
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-24 -bottom-5" />
       </td>
     </tr>
@@ -325,15 +325,15 @@ export function SupplierRow({
       onClick={canEdit ? onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <b>{supplier.name}</b>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         {supplier.gstin || "-"}
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <div>
           <b>{supplier.phone || "-"}</b>
           <p className="text-slate-500">
@@ -342,7 +342,7 @@ export function SupplierRow({
         </div>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={supplier.is_active ? "green" : "red"}
           className="rounded-full py-1"
@@ -351,7 +351,7 @@ export function SupplierRow({
         </Badge>
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-28 -bottom-5" />
       </td>
     </tr>
@@ -391,22 +391,22 @@ export function TaxRuleRow({
       onClick={canEdit ? onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <b>{rule.name}</b>
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         {scopeLabel(rule.service_scope)} · {branch?.name || "All branches"}
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <div>
           <b>{rule.tax_percentage}%</b>
           <p className="text-slate-500">{rule.tax_label || "GST"}</p>
         </div>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={rule.is_active ? "green" : "red"}
           className="rounded-full py-1"
@@ -415,7 +415,7 @@ export function TaxRuleRow({
         </Badge>
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-28 -bottom-5" />
       </td>
     </tr>
@@ -462,15 +462,15 @@ export function DiscountOfferRow({
       onClick={canEdit ? onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <b>{offer.name}</b>
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         {scopeLabel(offer.service_scope)} · {branch?.name || "All branches"}
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <div>
           <b>{value}</b>
 
@@ -488,7 +488,7 @@ export function DiscountOfferRow({
         </div>
       </td>
 
-      <td className="px-4 py-3 text-xs whitespace-nowrap">
+      <td className="px-4 py-3 text-sm whitespace-nowrap">
         <Badge
           tone={offer.is_active ? "green" : "red"}
           className="rounded-full py-1"
@@ -497,7 +497,7 @@ export function DiscountOfferRow({
         </Badge>
       </td>
 
-      <td className="px-4 py-3 text-xs">
+      <td className="px-4 py-3 text-sm">
         <RowActions actions={actions} className="right-24 -bottom-5" />
       </td>
     </tr>
