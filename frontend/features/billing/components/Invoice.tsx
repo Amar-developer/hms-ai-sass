@@ -270,7 +270,7 @@ export default function Invoice({
                   <div className="text-center pt-1">
                     <div className="h-20 w-20 border border-[#25FF46] rounded flex items-center justify-center mx-auto">
                       <img
-                        src="/qrcode.jpeg"
+                        src={bank?.qrImageUrl || "/qrcode.jpeg"}
                         alt="QR"
                         className="h-full w-full object-contain"
                       />
