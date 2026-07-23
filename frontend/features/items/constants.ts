@@ -3,11 +3,10 @@ export const itemTypes = [
   ["lab_test", "Lab Test"],
   ["lab_package", "Service"],
   ["physio_equipment", "Physiotherapy Equipment"],
-  ["home_care_service", "Home Care Service"],
   ["home_visit_service", "Home Visit Service"],
 ];
 
-export const homeServiceTypes = ["home_care_service", "home_visit_service"];
+export const homeServiceTypes = ["home_visit_service"];
 export const serviceItemTypes = ["lab_package", ...homeServiceTypes];
 
 export const modalities = [

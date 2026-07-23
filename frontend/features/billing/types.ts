@@ -53,5 +53,7 @@ export interface InvoiceProps {
   taxLabel?: string;
   taxPercentage?: number;
   total: number;
+  paidAmount?: number;
+  balanceAmount?: number;
   tax_amount?: number;
 }

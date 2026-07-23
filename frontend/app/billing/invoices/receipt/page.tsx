@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import Invoice from "@/features/billing/components/Invoice";
 import { exportInvoicePdf } from "@/features/billing/exportInvoicePdf";
+import { invoiceItemPriceBreakdown } from "@/features/billing/helpers";
 import type { InvoiceProps } from "@/features/billing/types";
 import { apiFetch, type ApiSession, uploadAssetUrl } from "@/lib/api";
 import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
@@ -50,7 +51,6 @@ function toInvoiceProps(
       : {};
   const companyName =
     branding?.legal_name || branding?.name || "MedizinHub Healthcare";
-  console.log(patient,'patient')
   return {
     company: {
       name: companyName,
@@ -75,7 +75,7 @@ function toInvoiceProps(
         srNo: index + 1,
         name: item.description || item.item_type || "Item",
         qty: item.quantity || 1,
-        mrp: pricing.mrpUnit,
+        mrp: pricing.hasMrp ? pricing.mrpUnit : "",
         discPercent: pricing.discountPercent,
         rate: pricing.payableAmount,
       };
@@ -97,6 +97,8 @@ function toInvoiceProps(
     taxLabel: invoice.tax_label || "Tax",
     taxPercentage: Number(invoice.tax_percentage || 0),
     total: Number(invoice.total_amount || 0),
+    paidAmount: Number(invoice.paid_amount || 0),
+    balanceAmount: Number(invoice.balance_amount || 0),
   };
 }
 
@@ -170,7 +172,6 @@ export default function ReceiptPage() {
           resolvedLogo.url,
           bankSetting?.value,
         );
-        console.log(bankSetting,'bankSetting')
         setInvoiceProps(props);
       } catch (caught: any) {
         if (!cancelled) {
@@ -244,39 +245,4 @@ export default function ReceiptPage() {
       </div>
     </main>
   );
-}
-function invoiceItemPriceBreakdown(item: any, invoice: any) {
-  const toNumber = (value: unknown, fallback = 0) => {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : fallback;
-  };
-
-  const quantity = Math.max(1, toNumber(item.quantity ?? item.qty ?? 1));
-  const mrpUnit = toNumber(
-    item.mrp_unit ?? item.mrp ?? item.price ?? item.unit_price ?? item.selling_price ?? item.rate ?? 0,
-  );
-  const totalAmount = toNumber(item.amount ?? item.total ?? 0);
-
-  let payableAmount = toNumber(item.rate ?? item.unit_rate ?? item.selling_price ?? item.price);
-  if (!payableAmount && totalAmount && quantity) {
-    payableAmount = totalAmount / quantity;
-  }
-  if (!payableAmount) {
-    payableAmount = mrpUnit;
-  }
-
-  const rawDiscountPercent = toNumber(
-    item.discount_percent ?? item.discount_percentage ?? item.disc_percent ?? item.discount ?? 0,
-  );
-  const discountPercent =
-    rawDiscountPercent ||
-    (mrpUnit > 0
-      ? Math.round(((mrpUnit - payableAmount) / mrpUnit) * 10000) / 100
-      : 0);
-
-  return {
-    mrpUnit,
-    discountPercent,
-    payableAmount,
-  };
 }

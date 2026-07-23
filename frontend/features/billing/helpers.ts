@@ -228,11 +228,13 @@ export function numberToWordsIndian(num: number): string {
 export function invoiceItemPriceBreakdown(item: any, invoice: any) {
   const quantity = Math.max(numberValue(item?.quantity), 1);
   const lineAmount = numberValue(item?.total_amount);
-  const mrpUnit =
-    numberValue(item?.mrp_amount) ||
+  const rateUnit =
     numberValue(item?.selling_amount) ||
-    numberValue(item?.unit_amount);
-  const mrpTotal = mrpUnit * quantity;
+    numberValue(item?.unit_amount) ||
+    (lineAmount > 0 ? lineAmount / quantity : 0);
+  const mrpUnit = numberValue(item?.mrp_amount);
+  const hasMrp = mrpUnit > 0;
+  const mrpTotal = hasMrp ? mrpUnit * quantity : 0;
 
   let allocatedInvoiceDiscount: number;
   if (item?.discount_amount !== undefined && item?.discount_amount !== null) {
@@ -253,13 +255,15 @@ export function invoiceItemPriceBreakdown(item: any, invoice: any) {
     lineAmount,
   );
 
-  const mrpMarkdown = Math.max(mrpTotal - lineAmount, 0);
+  const mrpMarkdown = hasMrp ? Math.max(mrpTotal - lineAmount, 0) : 0;
   const effectiveDiscount = mrpMarkdown + allocatedInvoiceDiscount;
   const discountBase = mrpTotal > 0 ? mrpTotal : lineAmount;
 
   return {
+    hasMrp,
     mrpUnit,
     mrpTotal,
+    rateUnit,
     lineAmount,
     allocatedInvoiceDiscount,
     mrpMarkdown,

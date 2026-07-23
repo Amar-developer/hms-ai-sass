@@ -68,6 +68,29 @@ describe("invoice item price breakdown", () => {
     });
   });
 
+  it("does not invent MRP markdown for service lines without MRP", () => {
+    expect(
+      invoiceItemPriceBreakdown(
+        {
+          quantity: 1,
+          unit_amount: 500,
+          selling_amount: 500,
+          total_amount: 500,
+          discount_amount: null,
+        },
+        { subtotal_amount: 500, discount_amount: 0 },
+      ),
+    ).toMatchObject({
+      hasMrp: false,
+      mrpUnit: 0,
+      rateUnit: 500,
+      mrpTotal: 0,
+      mrpMarkdown: 0,
+      discountPercent: 0,
+      payableAmount: 500,
+    });
+  });
+
   it("combines MRP markdown with an allocated invoice discount", () => {
     expect(
       invoiceItemPriceBreakdown(

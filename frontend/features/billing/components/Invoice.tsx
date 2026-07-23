@@ -38,9 +38,13 @@ export default function Invoice({
   tax_amount,
   taxLabel = "Tax",
   taxPercentage = 0,
+  paidAmount = 0,
+  balanceAmount = 0,
 }: InvoiceProps) {
   const grandTotal = toNumber(total);
   const resolvedTaxAmount = toNumber(taxAmount ?? tax_amount);
+  const resolvedPaidAmount = toNumber(paidAmount);
+  const resolvedBalanceAmount = toNumber(balanceAmount);
   const wholeAmount = Math.round(grandTotal);
   const grandTotalWords = `${currencySymbol === "₹" ? "Rupees " : ""}${numberToWordsIndian(
     wholeAmount,
@@ -106,7 +110,9 @@ export default function Invoice({
                       <div className="border-r-2 flex items-center border-[#25FF46] p-1.5 break-words">{item.name}</div>
                       <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">{item.qty}</div>
                       <div className="border-r-2 flex justify-end items-center border-[#25FF46] p-1.5">
-                        {formatMoney(item.mrp, currencySymbol)}
+                        {item.mrp === "" || item.mrp === undefined || item.mrp === null
+                          ? "-"
+                          : formatMoney(item.mrp, currencySymbol)}
                       </div>
                       <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">
                         {formatDiscountPercentage(item.discPercent)}%
@@ -141,16 +147,6 @@ export default function Invoice({
                     <div className="flex justify-end items-center pb-5 p-2">{formatMoney(subTotal, currencySymbol)}</div>
                   </div>
 
-                  {/* Tax (conditional) */}
-                  {resolvedTaxAmount > 0 && (
-                    <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
-                      <div className="col-span-5 flex justify-end items-center p-2 pb-5 border-r-2 border-[#25FF46]">
-                        {taxLabel}{taxPercentage > 0 ? ` (${formatPercentage(taxPercentage)}%)` : ""}
-                      </div>
-                      <div className="flex justify-end items-center  p-2 pb-5">{formatMoney(resolvedTaxAmount, currencySymbol)}</div>
-                    </div>
-                  )}
-
                   {/* Discount (conditional) */}
                   {toNumber(discountAmount) > 0 && (
                     <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
@@ -158,6 +154,16 @@ export default function Invoice({
                       <div className="flex justify-end items-center p-2 pb-5 text-red-600">
                         -{formatMoney(discountAmount, currencySymbol)}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Tax (conditional) */}
+                  {resolvedTaxAmount > 0 && (
+                    <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
+                      <div className="col-span-5 flex justify-end items-center p-2 pb-5 border-r-2 border-[#25FF46]">
+                        {taxLabel}{taxPercentage > 0 ? ` (${formatPercentage(taxPercentage)}%)` : ""}
+                      </div>
+                      <div className="flex justify-end items-center  p-2 pb-5">{formatMoney(resolvedTaxAmount, currencySymbol)}</div>
                     </div>
                   )}
 
@@ -175,6 +181,20 @@ export default function Invoice({
                       {formatMoney(total, currencySymbol)}
                     </div>
                   </div>
+
+                  {resolvedPaidAmount > 0 && (
+                    <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
+                      <div className="col-span-5 flex justify-end items-center p-2 pb-5 border-r-2 border-[#25FF46]">Paid Amount</div>
+                      <div className="flex justify-end items-center p-2 pb-5">{formatMoney(resolvedPaidAmount, currencySymbol)}</div>
+                    </div>
+                  )}
+
+                  {resolvedBalanceAmount > 0 && (
+                    <div className="grid grid-cols-[0.4fr_2.5fr_0.5fr_0.5fr_0.5fr_0.5fr] font-bold border-t-2 border-[#25FF46]">
+                      <div className="col-span-5 flex justify-end items-center p-2 pb-5 border-r-2 border-[#25FF46]">Balance Due</div>
+                      <div className="flex justify-end items-center p-2 pb-5 text-red-600">{formatMoney(resolvedBalanceAmount, currencySymbol)}</div>
+                    </div>
+                  )}
 
                   {/* Total in Words */}
                   <div className="border-y-2 border-[#25FF46] p-2 pb-5 text-sm font-semibold">

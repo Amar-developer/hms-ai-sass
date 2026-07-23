@@ -338,7 +338,7 @@ export function HomeCare({
             notes: data.notes || null,
             services: serviceRows
               .map((row) => ({
-                service_id: row.service_id || null,
+                service_id: isHomeVisit ? row.service_id || null : null,
                 service_category: isHomeVisit
                   ? "home_visit_service"
                   : "home_care_service",

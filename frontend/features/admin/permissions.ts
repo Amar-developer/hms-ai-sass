@@ -29,12 +29,6 @@ export function canUseTenantAdminSection(section: string, user: any) {
   return matching.some(isRead) && matching.some((permission: string) => !isRead(permission));
 }
 
-function isTenantAdminAccount(user: any) {
-  return Boolean(
-    user?.user_type === "tenant_admin" || user?.roles?.includes("tenant_admin"),
-  );
-}
-
 export function canResetTenantUserPassword(apiSession: any, user: any) {
   if (!apiSession?.user || !user) return false;
   if (apiSession.user.id === user.id) return false;
@@ -42,16 +36,9 @@ export function canResetTenantUserPassword(apiSession: any, user: any) {
   if (!Boolean(apiSession.tenantId && user.tenant_id === apiSession.tenantId))
     return false;
   const actor = apiSession.user;
-  const actorIsTenantAdmin =
-    actor.is_super_admin || isTenantAdminAccount(actor);
-  // Only a tenant admin may reset another tenant admin's password. Anyone
-  // else needs identity.users.manage/edit, which governs ordinary staff
-  // accounts only — mirrors the backend's _assert_can_target_user_for_management.
-  if (isTenantAdminAccount(user) && !actorIsTenantAdmin) return false;
-  if (actorIsTenantAdmin) return true;
-  const permissions = actor.permissions || [];
-  return (
-    permissions.includes("identity.users.manage") ||
-    permissions.includes("identity.users.edit")
+  return Boolean(
+    actor.is_super_admin ||
+      actor.user_type === "tenant_admin" ||
+      actor.roles?.includes("tenant_admin"),
   );
 }

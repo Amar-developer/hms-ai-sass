@@ -113,7 +113,12 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
             "location": "12 Home Street, Chennai",
             "complaints": "Post-discharge support",
             "services": [
-                {"service_id": service_body["id"], "quantity": 2},
+                {
+                    "service_category": "home_care_service",
+                    "description": "Nursing Visit",
+                    "quantity": 2,
+                    "unit_amount": 1500,
+                },
                 {
                     "service_category": "home_care_service",
                     "description": "Manual attender support",
@@ -129,9 +134,10 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     assert booking_body["status"] == "requested"
     assert booking_body["location"] == "12 Home Street, Chennai"
     assert booking_body["services"][0]["description"] == "Nursing Visit"
+    assert booking_body["services"][0]["service_id"] is None
     assert booking_body["services"][0]["service_category"] == "home_care_service"
     assert booking_body["services"][0]["unit_amount"] == 1500
-    assert booking_body["services"][0]["total_amount"] == 3000
+    assert booking_body["services"][0]["total_amount"] == 1500
     assert booking_body["services"][1]["service_id"] is None
     assert booking_body["services"][1]["service_category"] == "home_care_service"
     assert booking_body["services"][1]["description"] == "Manual attender support"
@@ -160,6 +166,23 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     assert (
         booking_update.json()["services"][0]["service_category"] == "home_care_service"
     )
+
+    catalog_linked_home_care = client.post(
+        "/api/v1/home-care/bookings",
+        headers=headers,
+        json={
+            "branch_id": branch_id,
+            "patient_id": patient_id,
+            "booking_type": "home_care",
+            "recurrence": "daily",
+            "start_date": date.today().isoformat(),
+            "end_date": date.today().isoformat(),
+            "status": "requested",
+            "location": "12 Home Street, Chennai",
+            "services": [{"service_id": service_body["id"], "quantity": 1}],
+        },
+    )
+    assert catalog_linked_home_care.status_code == 422
 
     missed_visit = client.post(
         f"/api/v1/home-care/bookings/{booking_body['id']}/visits",
@@ -229,6 +252,8 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     assert invoice_body["invoice"]["total_amount"] == 400
     assert invoice_body["items"][0]["item_type"] == "home_care"
     assert invoice_body["items"][0]["total_amount"] == 500
+    assert invoice_body["items"][0]["mrp_amount"] == 0
+    assert invoice_body["items"][0]["discount_amount"] == 100
     assert invoice_body["items"][0]["external_slug"] == "home_care_service"
     assert (
         invoice_body["items"][0]["external_item_code"] == completed_visit.json()["id"]

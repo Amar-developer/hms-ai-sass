@@ -207,21 +207,19 @@ export function Items({ apiSession, branchId }: any) {
         id: row.id,
         raw: row,
       })),
-      ...homeCareServices.map((row: any) => {
-        const isHomeVisit = String(row.code || "").startsWith("HV-");
-        const rowType = isHomeVisit
-          ? "home_visit_service"
-          : "home_care_service";
+      ...homeCareServices.filter((row: any) =>
+        String(row.code || "").startsWith("HV-"),
+      ).map((row: any) => {
         return {
-          type: rowType,
-          kind: isHomeVisit ? "Home Visit Service" : "Home Care Service",
+          type: "home_visit_service",
+          kind: "Home Visit Service",
           name: row.name,
           code: row.code,
           mrp_price: row.mrp_price || 0,
           price: row.default_price,
           purchase_price: null,
           supplier: "-",
-          meta: row.description || (isHomeVisit ? "Home visit" : "Home care"),
+          meta: row.description || "Home visit",
           created_at: row.created_at || row.updated_at || "",
           id: row.id,
           raw: row,

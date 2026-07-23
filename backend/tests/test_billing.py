@@ -1,12 +1,14 @@
 from datetime import date
 
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
+from app.modules.billing.models import InvoiceItem
 from app.modules.billing.services.consultation_invoice import (
     consultation_item_description,
 )
+from app.modules.billing.services.service_invoices import create_service_invoice
 from app.modules.tenants.models import Department
 
 
@@ -48,6 +50,42 @@ def test_consultation_item_description_uses_department_and_safe_fallback(test_en
             )
             == "General Consultation"
         )
+
+
+def test_service_invoice_line_prices_fallback_from_total_amount(test_engine):
+    with Session(test_engine) as session:
+        invoice = create_service_invoice(
+            session,
+            tenant_id="tenant_receipt_prices",
+            branch_id="branch_receipt_prices",
+            patient_id="patient_receipt_prices",
+            appointment_id=None,
+            consultation_id=None,
+            item_type="lab",
+            description="Beta HCG",
+            amount=700,
+            created_by_user_id="billing_user",
+            service_scope="lab",
+            record_billing_ledger=lambda *args, **kwargs: None,
+            ensure_invoice_membership_benefit_ledger=lambda *args, **kwargs: None,
+            line_items=[
+                {
+                    "item_type": "lab",
+                    "description": "Beta HCG",
+                    "quantity": 2,
+                    "total_amount": 700,
+                }
+            ],
+        )
+        item = session.exec(
+            select(InvoiceItem).where(InvoiceItem.invoice_id == invoice.id)
+        ).one()
+
+    assert item.quantity == 2
+    assert item.unit_amount == 350
+    assert item.selling_amount == 350
+    assert item.mrp_amount == 0
+    assert item.total_amount == 700
 
 
 def setup_signed_consultation(

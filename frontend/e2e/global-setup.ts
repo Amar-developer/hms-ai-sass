@@ -475,16 +475,6 @@ export default async function globalSetup() {
     },
     tenantId,
   );
-  const homeService = await post<any>(
-    adminContext,
-    "/home-care/services",
-    {
-      branch_id: branchId,
-      name: `Nursing Visit ${runId}`,
-      default_price: 1200,
-    },
-    tenantId,
-  );
   await post(
     adminContext,
     "/home-care/bookings",
@@ -498,7 +488,14 @@ export default async function globalSetup() {
       start_date: new Date().toISOString().slice(0, 10),
       end_date: new Date().toISOString().slice(0, 10),
       location: "Frontend E2E Home",
-      services: [{ service_id: homeService.id, quantity: 1 }],
+      services: [
+        {
+          service_category: "home_care_service",
+          description: `Nursing Visit ${runId}`,
+          quantity: 2,
+          unit_amount: 1200,
+        },
+      ],
     },
     tenantId,
   );

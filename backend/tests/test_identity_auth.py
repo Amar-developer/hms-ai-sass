@@ -560,6 +560,140 @@ def test_tenant_user_update_status_and_delete_are_supported(unauthenticated_clie
     assert login.status_code == 200
 
 
+def test_super_admin_can_reset_any_tenant_user_password(unauthenticated_client):
+    client = unauthenticated_client
+    super_token = bootstrap_super_admin(client)
+    tenant = create_tenant_with_paid_plan(client, super_token)
+    headers = {"Authorization": f"Bearer {super_token}", "X-Tenant-ID": tenant["id"]}
+
+    client.post(
+        "/api/v1/identity/roles",
+        headers=headers,
+        json={
+            "name": "Staff",
+            "key": "staff",
+            "permission_keys": ["appointments.manage"],
+        },
+    )
+    user = client.post(
+        "/api/v1/identity/users",
+        headers=headers,
+        json={
+            "name": "Reception Staff",
+            "email": "reception.reset@test.local",
+            "password": "OldStaffPass123",
+            "role_keys": ["staff"],
+        },
+    ).json()
+
+    reset = client.post(
+        f"/api/v1/identity/users/{user['id']}/password-reset",
+        headers=headers,
+        json={"new_password": "NewStaffPass123", "must_change_password": False},
+    )
+    old_login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": user["email"],
+            "password": "OldStaffPass123",
+            "tenant_id": tenant["id"],
+        },
+    )
+    new_login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": user["email"],
+            "password": "NewStaffPass123",
+            "tenant_id": tenant["id"],
+        },
+    )
+
+    assert reset.status_code == 200
+    assert reset.json()["must_change_password"] is False
+    assert old_login.status_code == 401
+    assert new_login.status_code == 200
+
+
+def test_tenant_admin_can_reset_same_tenant_user_password(unauthenticated_client):
+    client = unauthenticated_client
+    super_token = bootstrap_super_admin(client)
+    tenant = create_tenant_with_paid_plan(client, super_token)
+    super_headers = {
+        "Authorization": f"Bearer {super_token}",
+        "X-Tenant-ID": tenant["id"],
+    }
+
+    client.post(
+        "/api/v1/identity/roles",
+        headers=super_headers,
+        json={
+            "name": "Tenant Admin",
+            "key": "tenant_admin",
+            "permission_keys": ["identity.users.manage"],
+        },
+    )
+    admin = client.post(
+        "/api/v1/identity/users",
+        headers=super_headers,
+        json={
+            "name": "Clinic Admin",
+            "email": "reset.admin@test.local",
+            "password": "AdminPass123",
+            "user_type": "tenant_admin",
+            "role_keys": ["tenant_admin"],
+        },
+    ).json()
+    staff = client.post(
+        "/api/v1/identity/users",
+        headers=super_headers,
+        json={
+            "name": "Clinic Staff",
+            "email": "reset.staff@test.local",
+            "password": "StaffPass123",
+            "role_keys": [],
+        },
+    ).json()
+    login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": admin["email"],
+            "password": "AdminPass123",
+            "tenant_id": tenant["id"],
+        },
+    )
+    tenant_headers = {
+        "Authorization": f"Bearer {login.cookies['access_token']}",
+        "X-Tenant-ID": tenant["id"],
+    }
+
+    reset = client.post(
+        f"/api/v1/identity/users/{staff['id']}/password-reset",
+        headers=tenant_headers,
+        json={"new_password": "TempStaffPass123", "must_change_password": True},
+    )
+    old_login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": staff["email"],
+            "password": "StaffPass123",
+            "tenant_id": tenant["id"],
+        },
+    )
+    temp_login = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": staff["email"],
+            "password": "TempStaffPass123",
+            "tenant_id": tenant["id"],
+        },
+    )
+
+    assert reset.status_code == 200
+    assert reset.json()["must_change_password"] is True
+    assert old_login.status_code == 401
+    assert temp_login.status_code == 200
+
+
 def test_tenant_admin_user_type_enforces_tenant_admin_role():
     normalized = _normalize_user_access(
         {

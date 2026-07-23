@@ -197,19 +197,26 @@ def create_service_invoice(
         }
     ]
     for row in rows:
+        quantity = int(row.get("quantity") or 1)
+        total_amount = money_value(row.get("total_amount"))
+        unit_amount = money_value(row.get("unit_amount"))
+        if unit_amount <= 0 and total_amount > 0 and quantity > 0:
+            unit_amount = total_amount / quantity
+        selling_amount = money_value(row.get("selling_amount") or unit_amount)
+        if selling_amount <= 0 and total_amount > 0 and quantity > 0:
+            selling_amount = total_amount / quantity
+        mrp_amount = money_value(row.get("mrp_amount"))
         session.add(
             InvoiceItem(
                 tenant_id=tenant_id,
                 invoice_id=invoice.id,
                 item_type=str(row.get("item_type") or item_type),
                 description=str(row.get("description") or description),
-                quantity=int(row.get("quantity") or 1),
-                unit_amount=money_value(row.get("unit_amount")),
-                total_amount=money_value(row.get("total_amount")),
-                mrp_amount=money_value(row.get("mrp_amount")),
-                selling_amount=money_value(
-                    row.get("selling_amount") or row.get("unit_amount") or 0
-                ),
+                quantity=quantity,
+                unit_amount=unit_amount,
+                total_amount=total_amount,
+                mrp_amount=mrp_amount,
+                selling_amount=selling_amount,
                 buying_amount=money_value(row.get("buying_amount")),
                 supplier_id=str(row.get("supplier_id") or "") or None,
                 external_source=str(row.get("external_source") or "") or None,

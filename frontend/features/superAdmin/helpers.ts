@@ -336,11 +336,6 @@ export function readTenantOnboardingDraft(
   };
 }
 
-export function userHasTenantAdminAccess(user: any) {
-  const roles = Array.isArray(user?.roles) ? user.roles : [];
-  return user?.user_type === "tenant_admin" || roles.includes("tenant_admin");
-}
-
 export function canResetUserPassword(
   apiSession: any,
   user: any,
@@ -353,20 +348,8 @@ export function canResetUserPassword(
     return Boolean(
       selected?.id &&
         tenantId === selected.id &&
-        !selected?.is_primary &&
-        userHasTenantAdminAccess(user),
+        !user.is_super_admin,
     );
   }
-  const actorRoles = Array.isArray(apiSession.user.roles)
-    ? apiSession.user.roles
-    : [];
-  const actorIsTenantAdmin =
-    apiSession.user.user_type === "tenant_admin" ||
-    actorRoles.includes("tenant_admin");
-  return Boolean(
-    actorIsTenantAdmin &&
-      apiSession.tenantId &&
-      tenantId === apiSession.tenantId &&
-      !user.is_super_admin,
-  );
+  return false;
 }

@@ -72,6 +72,134 @@ describe("invoice payment summary", () => {
     expect(screen.queryByText("Total membership benefit")).toBeNull();
     expect(screen.queryByText("Regular chargeable items")).toBeNull();
   });
+
+  it("shows the actual payable amount as the last billing item column", () => {
+    render(
+      <InvoiceDetailPage
+        detail={{
+          invoice: {
+            id: "invoice-payable",
+            invoice_number: "MHB-INV-PAYABLE",
+            status: "issued",
+            lab_order_id: "lab-order-payable",
+            subtotal_amount: 200,
+            taxable_amount: 190,
+            tax_amount: 0,
+            total_amount: 190,
+            paid_amount: 0,
+            balance_amount: 190,
+            discount_amount: 10,
+            membership_discount_amount: 10,
+          },
+          items: [
+            {
+              id: "item-1",
+              item_type: "lab",
+              description: "12-Lead ECG",
+              quantity: 1,
+              mrp_amount: 350,
+              selling_amount: 200,
+              unit_amount: 200,
+              total_amount: 200,
+              discount_amount: 10,
+            },
+          ],
+          payments: [],
+          credit_notes: [],
+          ledger_entries: [],
+          adjustment_requests: [],
+        }}
+        patient={{}}
+        invoicePaymentOptions={[{ value: "cash", label: "Cash" }]}
+        defaultPaymentMethod="cash"
+        collectPayment={vi.fn()}
+        collectSplitPayment={vi.fn()}
+        refreshConsultationInvoice={vi.fn()}
+        applyMembershipBenefit={vi.fn()}
+        openReceipt={vi.fn()}
+        issueCreditNote={vi.fn()}
+        cancelInvoice={vi.fn()}
+        amendInvoice={vi.fn()}
+        requestAdjustment={vi.fn()}
+        approveAdjustment={vi.fn()}
+        rejectAdjustment={vi.fn()}
+        executeAdjustment={vi.fn()}
+        currentUser={{}}
+        userPermissions={["invoices.read"]}
+      />,
+    );
+
+    expect(screen.getByText("Payable (INR)")).toBeTruthy();
+    expect(screen.getByText("Rate (INR)")).toBeTruthy();
+    expect(screen.queryByText("Amount (INR)")).toBeNull();
+    expect(screen.getAllByRole("columnheader").at(-1)?.textContent).toBe(
+      "Payable (INR)",
+    );
+    expect(screen.getAllByText("₹200").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₹190").length).toBeGreaterThan(0);
+  });
+
+  it("uses quantity-adjusted line totals as payable amount when no bill discount applies", () => {
+    render(
+      <InvoiceDetailPage
+        detail={{
+          invoice: {
+            id: "invoice-quantity",
+            invoice_number: "MHB-INV-QTY",
+            status: "issued",
+            lab_order_id: "lab-order-quantity",
+            subtotal_amount: 700,
+            taxable_amount: 700,
+            tax_amount: 0,
+            total_amount: 700,
+            paid_amount: 0,
+            balance_amount: 700,
+            discount_amount: 0,
+          },
+          items: [
+            {
+              id: "item-qty",
+              item_type: "lab",
+              description: "Beta HCG",
+              quantity: 2,
+              mrp_amount: 770,
+              selling_amount: 350,
+              unit_amount: 350,
+              total_amount: 700,
+              discount_amount: 0,
+            },
+          ],
+          payments: [],
+          credit_notes: [],
+          ledger_entries: [],
+          adjustment_requests: [],
+        }}
+        patient={{}}
+        invoicePaymentOptions={[{ value: "cash", label: "Cash" }]}
+        defaultPaymentMethod="cash"
+        collectPayment={vi.fn()}
+        collectSplitPayment={vi.fn()}
+        refreshConsultationInvoice={vi.fn()}
+        applyMembershipBenefit={vi.fn()}
+        openReceipt={vi.fn()}
+        issueCreditNote={vi.fn()}
+        cancelInvoice={vi.fn()}
+        amendInvoice={vi.fn()}
+        requestAdjustment={vi.fn()}
+        approveAdjustment={vi.fn()}
+        rejectAdjustment={vi.fn()}
+        executeAdjustment={vi.fn()}
+        currentUser={{}}
+        userPermissions={["invoices.read"]}
+      />,
+    );
+
+    expect(screen.getByText("Payable (INR)")).toBeTruthy();
+    expect(screen.getByText("Rate (INR)")).toBeTruthy();
+    expect(screen.queryByText("Amount (INR)")).toBeNull();
+    expect(screen.getAllByText("₹350").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₹700").length).toBeGreaterThan(0);
+  });
 });
 
 function renderAdjustmentRequest(

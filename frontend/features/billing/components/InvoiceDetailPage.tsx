@@ -249,7 +249,8 @@ export function InvoiceDetailPage({
     return numberValue(item.mrp_amount);
   }
   function itemRate(item: any) {
-    return numberValue(item.selling_amount) || numberValue(item.unit_amount);
+    const pricing = invoiceItemPriceBreakdown(item, invoice);
+    return pricing.rateUnit;
   }
   const itemTableColSpan =
     7 + (showItemVendor ? 2 : 0) + (showItemPricing ? 1 : 0);
@@ -501,7 +502,7 @@ export function InvoiceDetailPage({
                       <th className="border-r border-slate-200 px-3 py-2 text-right">
                         Discount amount
                       </th>
-                      <th className="px-3 py-2 text-right">Amount (INR)</th>
+                      <th className="px-3 py-2 text-right">Payable (INR)</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -517,8 +518,6 @@ export function InvoiceDetailPage({
                     )}
                     {items.map((item: any, index: number) => {
                       const pricing = invoiceItemPriceBreakdown(item, invoice);
-                      const allocatedDiscount =
-                        pricing.allocatedInvoiceDiscount;
                       const displayDiscount = pricing.effectiveDiscount;
                       const discountBase =
                         pricing.mrpTotal > 0
@@ -615,13 +614,7 @@ export function InvoiceDetailPage({
                               : money(0)}
                           </td>
                           <td className="border-t border-slate-200 px-3 py-2.5 text-right font-black tabular-nums text-slate-900">
-                            {money(
-                              Math.max(
-                                numberValue(item.total_amount) -
-                                  allocatedDiscount,
-                                0,
-                              ),
-                            )}
+                            {money(pricing.payableAmount)}
                           </td>
                         </tr>
                       );
