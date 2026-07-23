@@ -80,7 +80,7 @@ export function ActiveEnrollmentsTable({
             {/* {canManage ? <col className="w-[150px]" />:''} */}
           </colgroup>
           <thead className="bg-slate-50 text-xs font-bold uppercase text-slate-500">
-            <tr>
+            <tr className="text-sm">
               <th className="px-4 py-3">#</th>
               <th>Patient</th>
               <th>Plan</th>

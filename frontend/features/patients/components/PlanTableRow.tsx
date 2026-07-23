@@ -46,7 +46,7 @@ export function PlanTableRow({
         </td>
         <td className="px-4 py-3">
           {activeEnrollmentCount > 0 && (
-            <span className="text-[11px] font-semibold text-slate-500">
+            <span className="text-sm font-semibold text-slate-500">
               {activeEnrollmentCount} enrolled
             </span>
           )}

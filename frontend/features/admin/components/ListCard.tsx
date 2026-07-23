@@ -74,7 +74,7 @@ export function ListCard({
 
       {/* SEARCH & FILTERS */}
       <FilterSection
-        title="Doctors"
+        title={title}
         query={query}
         setQuery={setQuery}
         filters={filters}

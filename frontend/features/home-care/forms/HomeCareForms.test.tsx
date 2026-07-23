@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BookingForm } from "./HomeCareForms";
 import { mapPatient } from "@/lib/liveData";
+import { bookingSchema } from "../homecare.schema";
 
 const patient = mapPatient({
   id: "patient-one",
@@ -127,5 +128,64 @@ describe("Home Care booking form draft persistence", () => {
         "Patient address or manual location",
       ) as HTMLTextAreaElement).value,
     ).toBe("");
+  });
+});
+
+describe("Home Care booking validation", () => {
+  it("requires manual service rows for home care and catalog rows for home visit", () => {
+    const base = {
+      patient_id: "patient-one",
+      recurrence: "daily",
+      start_date: "2026-07-23",
+      end_date: "2026-07-23",
+      status: "requested",
+      location: "Anna Street",
+      notes: "",
+    };
+
+    expect(
+      bookingSchema.safeParse({
+        ...base,
+        booking_type: "home_care",
+        lineItems: [
+          {
+            service_id: "catalog-service",
+            description: "Bathing",
+            quantity: "2",
+            unit_amount: "500",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+
+    expect(
+      bookingSchema.safeParse({
+        ...base,
+        booking_type: "home_care",
+        lineItems: [
+          {
+            service_id: "",
+            description: "Bathing",
+            quantity: "2",
+            unit_amount: "500",
+          },
+        ],
+      }).success,
+    ).toBe(true);
+
+    expect(
+      bookingSchema.safeParse({
+        ...base,
+        booking_type: "home_visit",
+        lineItems: [
+          {
+            service_id: "catalog-service",
+            description: "Bladder Wash - Home Visit",
+            quantity: "1",
+            unit_amount: "500",
+          },
+        ],
+      }).success,
+    ).toBe(true);
   });
 });

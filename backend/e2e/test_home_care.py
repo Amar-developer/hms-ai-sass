@@ -27,19 +27,6 @@ def test_home_care_booking_completed_visit_invoice_and_payment(
     )
     headers = tenant.admin.headers()
     patient = create_patient(api_client, tenant, name="E2E Home Care Patient")
-    service = assert_status(
-        api_client.post(
-            "/home-care/services",
-            headers=headers,
-            json={
-                "branch_id": tenant.branch_id,
-                "name": "Nursing Visit",
-                "description": "Vitals and medication support",
-                "default_price": 1200,
-            },
-        ),
-        201,
-    ).json()
     booking = assert_status(
         api_client.post(
             "/home-care/bookings",
@@ -54,7 +41,14 @@ def test_home_care_booking_completed_visit_invoice_and_payment(
                 "start_date": date.today().isoformat(),
                 "end_date": date.today().isoformat(),
                 "location": "E2E Patient Home, Chennai",
-                "services": [{"service_id": service["id"], "quantity": 1}],
+                "services": [
+                    {
+                        "service_category": "home_care_service",
+                        "description": "Nursing Visit",
+                        "quantity": 2,
+                        "unit_amount": 1200,
+                    }
+                ],
             },
         ),
         201,
@@ -76,8 +70,10 @@ def test_home_care_booking_completed_visit_invoice_and_payment(
                 "visit_date": date.today().isoformat(),
                 "assigned_staff_name": "Nurse E2E",
                 "staff_type": "nurse",
-                "service_id": service["id"],
-                "quantity": 1,
+                "service_category": "home_care_service",
+                "description": "Nursing Visit",
+                "quantity": 2,
+                "unit_amount": 1200,
                 "status": "completed",
             },
         ),
@@ -107,7 +103,6 @@ def test_home_care_booking_completed_visit_invoice_and_payment(
     ).json()
     assert final_invoice["invoice"]["balance_amount"] == 0
     assert {
-        "home_care_service.created",
         "home_care_booking.created",
         "home_care_visit.logged",
         "home_care_invoice.generated",

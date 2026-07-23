@@ -363,7 +363,7 @@ export function TenantAdmin({
     );
 
   return (
-    <div className="space-y-5">
+    <div className="">
       <StatusToast message={data.message} onClose={() => data.setMessage("")} />
       {section === "users" && view === "list" && (
         <ListCard

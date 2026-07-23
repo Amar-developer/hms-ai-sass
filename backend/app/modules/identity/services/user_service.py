@@ -24,7 +24,6 @@ from app.modules.identity.services.helpers import (
     assert_tenant_permission,
     get_tenant_user_or_404,
     has_tenant_admin_access,
-    is_primary_tenant,
     normalize_email,
     normalize_user_access,
     original_user_email,
@@ -236,6 +235,13 @@ class UserService:
             permissions.IDENTITY_USERS_MANAGE,
             permissions.IDENTITY_USERS_EDIT,
         )
+        if not actor.is_super_admin and not has_tenant_admin_access(
+            self.session, actor
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Tenant admin access required",
+            )
         user = get_tenant_user_or_404(self.session, tenant_id, user_id)
         if user.id == actor.id:
             raise HTTPException(
@@ -243,14 +249,6 @@ class UserService:
                 detail="Use change password for your own login",
             )
         assert_can_target_user_for_management(self.session, actor, user)
-        if actor.is_super_admin and (
-            is_primary_tenant(self.session, tenant_id)
-            or not has_tenant_admin_access(self.session, user)
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Super admin can reset only tenant admin passwords",
-            )
         if user.is_super_admin:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

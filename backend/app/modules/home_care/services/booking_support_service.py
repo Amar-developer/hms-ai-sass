@@ -96,12 +96,23 @@ class HomeCareBookingSupportService:
         booking: HomeCareBooking,
         services: list[HomeCareBookingItemCreate],
     ) -> None:
+        booking_type = str(booking.booking_type or "home_care").lower()
         existing = self.items.list_for_booking(
             tenant_id=tenant_id, booking_id=booking.id
         )
         for row in existing:
             self.items.delete(row)
         for row in services:
+            if booking_type == "home_care" and row.service_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Home care services must be entered manually",
+                )
+            if booking_type == "home_visit" and not row.service_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Home visit service is required",
+                )
             service = (
                 self.services.get_active_for_tenant(tenant_id, row.service_id)
                 if row.service_id
@@ -125,7 +136,11 @@ class HomeCareBookingSupportService:
                 if service and str(service.code or "").upper().startswith("HV")
                 else "home_care_service"
             )
-            total_amount = row.quantity * unit_amount
+            total_amount = (
+                row.quantity * unit_amount
+                if booking_type == "home_visit"
+                else unit_amount
+            )
             self.items.add(
                 HomeCareBookingItem(
                     tenant_id=tenant_id,

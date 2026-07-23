@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { canUseTenantAdminSection } from "./permissions";
+import {
+  canResetTenantUserPassword,
+  canUseTenantAdminSection,
+} from "./permissions";
 
 describe("tenant administration permission routing", () => {
   it("requires read plus another action for a custom-role section", () => {
@@ -43,5 +46,46 @@ describe("tenant administration permission routing", () => {
     expect(
       canUseTenantAdminSection("roles", { permissions: ["*"] }),
     ).toBe(true);
+  });
+
+  it("allows password reset for super admin and tenant admin actors", () => {
+    const tenantUser = {
+      id: "user-1",
+      tenant_id: "tenant-1",
+      user_type: "staff",
+      is_super_admin: false,
+    };
+
+    expect(
+      canResetTenantUserPassword(
+        {
+          tenantId: "tenant-1",
+          user: { id: "admin-1", is_super_admin: true },
+        },
+        tenantUser,
+      ),
+    ).toBe(true);
+    expect(
+      canResetTenantUserPassword(
+        {
+          tenantId: "tenant-1",
+          user: { id: "admin-2", user_type: "tenant_admin" },
+        },
+        tenantUser,
+      ),
+    ).toBe(true);
+    expect(
+      canResetTenantUserPassword(
+        {
+          tenantId: "tenant-1",
+          user: {
+            id: "admin-3",
+            permissions: ["identity.users.manage"],
+            user_type: "staff",
+          },
+        },
+        tenantUser,
+      ),
+    ).toBe(false);
   });
 });

@@ -16,7 +16,7 @@ import {
   displayToIsoDate,
   isoToDisplayDate,
 } from "@/utils/helper";
-import type { NoticeTone,SearchableSelectProps } from "@/features/admin/types";
+import type { NoticeTone, SearchableSelectProps } from "@/features/admin/types";
 
 export function Card({
   children,
@@ -574,7 +574,8 @@ export const Input = forwardRef<HTMLInputElement, any>(
     }
 
     const normalizedProps =
-      Object.prototype.hasOwnProperty.call(props, "value") && props.value == null
+      Object.prototype.hasOwnProperty.call(props, "value") &&
+      props.value == null
         ? { ...props, value: "" }
         : props;
 
@@ -583,7 +584,14 @@ export const Input = forwardRef<HTMLInputElement, any>(
         <input
           ref={ref}
           {...normalizedProps}
+          maxLength={mobileNumber ? 10 : normalizedProps.maxLength}
+          inputMode={mobileNumber ? "numeric" : normalizedProps.inputMode}
           onChange={(e) => {
+            if (mobileNumber) {
+              // Allow only digits and limit to 10
+              e.target.value = e.target.value.replace(/\D/g, "").slice(0, 10);
+            }
+
             props.onChange?.(e);
           }}
           className={`w-full rounded-lg border border-slate-200 outline-none focus:border-slate-500 ${className}`}
@@ -829,72 +837,74 @@ export function SearchableSelect<T = string>({
       {open &&
         typeof document !== "undefined" &&
         createPortal(
-        <div
-          ref={menuRef}
-          style={menuPosition}
-          className="fixed z-[1000] max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin"
-        >
-          {searchable && (
-            <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2 pr-4">
-              <input
-                autoFocus
-                value={query}
-                onChange={(event) =>
-                  setQuery(capitalizeFirst(event.target.value))
-                }
-                placeholder={searchPlaceholder}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
-              />
-            </div>
-          )}
+          <div
+            ref={menuRef}
+            style={menuPosition}
+            className="fixed z-[1000] max-h-56 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg scrollbar-thin"
+          >
+            {searchable && (
+              <div className="sticky top-0 z-10 border-b border-slate-100 bg-white p-2 pr-4">
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(event) =>
+                    setQuery(capitalizeFirst(event.target.value))
+                  }
+                  placeholder={searchPlaceholder}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
+                />
+              </div>
+            )}
 
-          {value && searchable && (
-            <button
-              type="button"
-              onClick={() => commit("")}
-              className="block w-full px-4 py-2 text-left text-xs font-bold uppercase tracking-wide text-slate-500 hover:bg-slate-50"
-            >
-              Clear selection
-            </button>
-          )}
+            {value && searchable && (
+              <button
+                type="button"
+                onClick={() => commit("")}
+                className="block w-full px-4 py-2 text-left text-xs font-bold uppercase tracking-wide text-slate-500 hover:bg-slate-50"
+              >
+                Clear selection
+              </button>
+            )}
 
-          {allowCustom && query.trim() && !matchesExisting && (
-            <button
-              type="button"
-              onClick={() => commit(query.trim())}
-              className="block w-full px-4 py-2 text-left text-sm font-bold text-blue-700 hover:bg-blue-50"
-            >
-              Use "{query.trim()}"
-            </button>
-          )}
+            {allowCustom && query.trim() && !matchesExisting && (
+              <button
+                type="button"
+                onClick={() => commit(query.trim())}
+                className="block w-full px-4 py-2 text-left text-sm font-bold text-blue-700 hover:bg-blue-50"
+              >
+                Use "{query.trim()}"
+              </button>
+            )}
 
-          {filtered.length === 0 && !allowCustom && (
-            <div className="px-4 py-3 text-sm text-slate-500">{emptyText}</div>
-          )}
+            {filtered.length === 0 && !allowCustom && (
+              <div className="px-4 py-3 text-sm text-slate-500">
+                {emptyText}
+              </div>
+            )}
 
-          {filtered.slice(0, maxOptions).map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => commit(option.value)}
-              className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
-                option.value === String(value) ? "bg-slate-50 font-bold" : ""
-              }`}
-            >
-              <span className="block truncate">
-                {capitalizeFirst(option.label)}
-              </span>
-
-              {option.sublabel && (
-                <span className="block truncate text-xs text-slate-500">
-                  {option.sublabel}
+            {filtered.slice(0, maxOptions).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => commit(option.value)}
+                className={`block w-full px-4 py-2 text-left text-sm hover:bg-slate-50 ${
+                  option.value === String(value) ? "bg-slate-50 font-bold" : ""
+                }`}
+              >
+                <span className="block truncate">
+                  {capitalizeFirst(option.label)}
                 </span>
-              )}
-            </button>
-          ))}
-        </div>,
-        document.body,
-      )}
+
+                {option.sublabel && (
+                  <span className="block truncate text-xs text-slate-500">
+                    {option.sublabel}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
 
       {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
     </div>

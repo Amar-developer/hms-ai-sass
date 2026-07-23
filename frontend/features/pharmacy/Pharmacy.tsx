@@ -24,11 +24,12 @@ import {
 } from "@/features/pharmacy/helpers";
 import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
 import { MedicineDetailModal } from "./components/MedicineDetailModal";
-import { isActivePatientRecord,patientPickerLabel, } from "../patients/helpers";
+import { isActivePatientRecord, patientPickerLabel } from "../patients/helpers";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { RowActions } from "../admin/components/RowActions";
 
 const pageSize = 10;
 
@@ -217,8 +218,8 @@ export function Pharmacy({
   const hasPermission = (...keys: string[]) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const canCreatePharmacyIssue = hasPermission(
     "pharmacy.manage",
@@ -654,124 +655,128 @@ export function Pharmacy({
       )}
       <StatusToast message={message} onClose={() => setMessage("")} />
       {canCreatePharmacyIssue && (
-      <Card>
-        <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
-        <form
-          onSubmit={createDirect}
-          className="mt-4 grid gap-3 md:grid-cols-4"
-        >
-          <FormField label="Patient" required>
-            <SearchableSelect
-              required
-              value={patientId}
-              onChange={setPatientId}
-              options={activePatients.map((p: any) => ({
-                value: p.id,
-                label: patientPickerLabel(p),
-                sublabel: p.mobile || p.patient_number || p.id,
-              }))}
-              placeholder="Select patient"
-              searchPlaceholder="Search patient by name, mobile, or number"
-            />
-          </FormField>
-
-          <FormField label="Source">
-            <SearchableSelect
-              name="source"
-              value={source}
-              onChange={setSource}
-              options={[
-                { value: "op_direct", label: "OP Direct" },
-                {
-                  value: "external_prescription",
-                  label: "External Prescription",
-                },
-              ]}
-              placeholder="Select source"
-              searchable={false}
-            />
-          </FormField>
-          {source === "external_prescription" && (
-            <FormField label="External Prescriber" required>
-              <Input
-                value={externalPrescriber}
-                onChange={(event: any) => setExternalPrescriber(event.target.value)}
+        <Card>
+          <h3 className="card-title font-bold">Create Pharmacy Issue</h3>
+          <form
+            onSubmit={createDirect}
+            className="mt-4 grid gap-3 md:grid-cols-4"
+          >
+            <FormField label="Patient" required>
+              <SearchableSelect
                 required
-                placeholder="Enter prescriber name"
+                value={patientId}
+                onChange={setPatientId}
+                options={activePatients.map((p: any) => ({
+                  value: p.id,
+                  label: patientPickerLabel(p),
+                  sublabel: p.mobile || p.patient_number || p.id,
+                }))}
+                placeholder="Select patient"
+                searchPlaceholder="Search patient by name, mobile, or number"
               />
             </FormField>
-          )}
-          <FormField label="Medicine" required>
-            <SearchPicker
-              value={selectedMedicineId}
-              inputValue={medicineSearch}
-              onInputValueChange={(text: string) => {
-                setMedicineSearch(text);
-                if (!text) setSelectedMedicineId("");
-              }}
-              onChange={(id: string, medicine: any) => {
-                setSelectedMedicineId(id);
-                setMedicineSearch(medicine?.item_name || medicine?.name || "");
-              }}
-              options={medicineOptions}
-              placeholder="Type medicine name"
-              onUseTyped={(text: string) => {
-                setSelectedMedicineId("");
-                setMedicineSearch(text);
-              }}
-              getSearchText={(medicine: any) =>
-                [
-                  medicine?.name,
-                  medicine?.item_name,
-                  medicine?.strength,
-                  medicine?.generic_name,
-                  medicine?.brand_name,
-                  medicine?.slug,
-                ]
-                  .filter(Boolean)
-                  .join(" ")
-              }
-              loading={medicineLoading}
+
+            <FormField label="Source">
+              <SearchableSelect
+                name="source"
+                value={source}
+                onChange={setSource}
+                options={[
+                  { value: "op_direct", label: "OP Direct" },
+                  {
+                    value: "external_prescription",
+                    label: "External Prescription",
+                  },
+                ]}
+                placeholder="Select source"
+                searchable={false}
+              />
+            </FormField>
+            {source === "external_prescription" && (
+              <FormField label="External Prescriber" required>
+                <Input
+                  value={externalPrescriber}
+                  onChange={(event: any) =>
+                    setExternalPrescriber(event.target.value)
+                  }
+                  required
+                  placeholder="Enter prescriber name"
+                />
+              </FormField>
+            )}
+            <FormField label="Medicine" required>
+              <SearchPicker
+                value={selectedMedicineId}
+                inputValue={medicineSearch}
+                onInputValueChange={(text: string) => {
+                  setMedicineSearch(text);
+                  if (!text) setSelectedMedicineId("");
+                }}
+                onChange={(id: string, medicine: any) => {
+                  setSelectedMedicineId(id);
+                  setMedicineSearch(
+                    medicine?.item_name || medicine?.name || "",
+                  );
+                }}
+                options={medicineOptions}
+                placeholder="Type medicine name"
+                onUseTyped={(text: string) => {
+                  setSelectedMedicineId("");
+                  setMedicineSearch(text);
+                }}
+                getSearchText={(medicine: any) =>
+                  [
+                    medicine?.name,
+                    medicine?.item_name,
+                    medicine?.strength,
+                    medicine?.generic_name,
+                    medicine?.brand_name,
+                    medicine?.slug,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                }
+                loading={medicineLoading}
+              />
+            </FormField>
+            <NumberField
+              label="Qty"
+              value={quantity}
+              onChange={setQuantity}
+              min={1}
             />
-          </FormField>
-          <NumberField
-            label="Qty"
-            value={quantity}
-            onChange={setQuantity}
-            min={1}
-          />
-          <div className="flex items-end gap-2 w-full lg:w-[80%]">
-            <button
-              type="button"
-              onClick={addIssueItem}
-              className="close-button font-bold"
-            >
-              Add
-            </button>
-            <Button
-              disabled={busy === "create"}
-              className="w-[130px] px-1 lg:px-2 py-2.5"
-            >
-              {busy === "create" ? "Saving..." : "Create Order"}
-            </Button>
-          </div>
-          {issueItems.length > 0 && (
-            <div className="md:col-span-4 flex flex-wrap gap-2">
-              {issueItems.map((item: any, index: number) => (
-                <button
-                  key={`${item.medicine_id}-${index}`}
-                  type="button"
-                  onClick={() => removeIssueItem(index)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
-                >
-                  {item.medicine_name} x {item.quantity} · ₹
-                  {item.quantity * item.unit_price} ×
-                </button>
-              ))}
+            <div className="flex items-end gap-2 w-full lg:w-[80%]">
+              <button
+                type="button"
+                onClick={addIssueItem}
+                className="close-button font-bold"
+              >
+                Add
+              </button>
+              <Button
+                disabled={busy === "create"}
+                className="w-[130px] px-1 lg:px-2 py-2.5"
+              >
+                {busy === "create" ? "Saving..." : "Create Order"}
+              </Button>
             </div>
-          )}
-        </form>
-      </Card>
+            {issueItems.length > 0 && (
+              <div className="md:col-span-4 flex flex-wrap gap-2">
+                {issueItems.map((item: any, index: number) => (
+                  <button
+                    key={`${item.medicine_id}-${index}`}
+                    type="button"
+                    onClick={() => removeIssueItem(index)}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700"
+                  >
+                    {item.medicine_name} x {item.quantity} · ₹
+                    {item.quantity * item.unit_price} ×
+                  </button>
+                ))}
+              </div>
+            )}
+          </form>
+        </Card>
       )}
       <Card>
         <h3 className="card-title font-bold">Doctor Prescriptions</h3>
@@ -801,7 +806,9 @@ export function Pharmacy({
                   ) : (
                     visible.slice(0, 6).map((a: any) => (
                       <tr key={a.id}>
-                        <td className="px-4 py-3 font-bold">{a.token || "-"}</td>
+                        <td className="px-4 py-3 font-bold">
+                          {a.token || "-"}
+                        </td>
                         <td className="px-4 py-3 font-semibold">{a.patient}</td>
                         <td className="px-4 py-3 text-slate-600">
                           {a.doctor && a.doctor !== "Unassigned"
@@ -870,8 +877,8 @@ export function Pharmacy({
                 <th className="w-[150px]">Patient</th>
                 <th className="w-[140px]">Source</th>
                 <th className="w-[150px]">Status</th>
-                <th className="w-[180px]">Amount</th>
-                <th className="w-[210px] pr-4 text-right">Action</th>
+                <th className="w-[100px]">Amount</th>
+                <th className="w-[80px] pr-4 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -1008,50 +1015,56 @@ export function Pharmacy({
                       className="pr-4"
                       onClick={(event) => event.stopPropagation()}
                     >
-                      <div className="ml-auto w-[190px]">
-                        <select
-                          value=""
-                          disabled={
-                            rowBusy || invoiceBusy || cancelled || invoiced
-                          }
-                          onChange={(event: any) =>
-                            handleIssueAction(issue, event.target.value)
-                          }
-                          className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400"
-                        >
-                          <option value="">
-                            {rowBusy || invoiceBusy
-                              ? "Updating..."
-                              : "Select action"}
-                          </option>
-                          {canDispensePharmacyIssue && (
-                            <option
-                              value="partial"
-                              disabled={dispensed || cancelled || invoiced}
-                            >
-                              Partial dispense
-                            </option>
-                          )}
-                          {canDispensePharmacyIssue && (
-                            <option
-                              value="dispense"
-                              disabled={dispensed || cancelled || invoiced}
-                            >
-                              Dispense
-                            </option>
-                          )}
-                          {!invoiced && canBillPharmacyIssue && (
-                            <option value="invoice">Generate invoice</option>
-                          )}
-                          {canDispensePharmacyIssue && (
-                            <option
-                              value="cancel"
-                              disabled={dispensed || cancelled || invoiced}
-                            >
-                              Cancel order
-                            </option>
-                          )}
-                        </select>
+                      <div className="ml-auto flex justify-center">
+                        <RowActions
+                          className="right-8 top-0"
+                          width="w-52"
+                          actions={[
+                            {
+                              label: "Partial dispense",
+                              hidden: !canDispensePharmacyIssue,
+                              disabled:
+                                dispensed ||
+                                cancelled ||
+                                invoiced ||
+                                rowBusy ||
+                                invoiceBusy,
+                              onClick: () =>
+                                handleIssueAction(issue, "partial"),
+                            },
+                            {
+                              label: "Dispense",
+                              hidden: !canDispensePharmacyIssue,
+                              disabled:
+                                dispensed ||
+                                cancelled ||
+                                invoiced ||
+                                rowBusy ||
+                                invoiceBusy,
+                              onClick: () =>
+                                handleIssueAction(issue, "dispense"),
+                            },
+                            {
+                              label: "Generate invoice",
+                              hidden: invoiced || !canBillPharmacyIssue,
+                              disabled: rowBusy || invoiceBusy,
+                              onClick: () =>
+                                handleIssueAction(issue, "invoice"),
+                            },
+                            {
+                              label: "Cancel order",
+                              hidden: !canDispensePharmacyIssue,
+                              disabled:
+                                dispensed ||
+                                cancelled ||
+                                invoiced ||
+                                rowBusy ||
+                                invoiceBusy,
+                              danger: true,
+                              onClick: () => handleIssueAction(issue, "cancel"),
+                            },
+                          ]}
+                        />
                       </div>
                     </td>
                   </tr>

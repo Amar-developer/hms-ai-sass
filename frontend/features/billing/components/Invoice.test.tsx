@@ -75,4 +75,70 @@ describe("invoice receipt columns", () => {
       screen.getByText(/Rupees One Hundred Sixty One Only/),
     ).toBeTruthy();
   });
+
+  it("shows a dash when an item has no MRP", () => {
+    render(
+      <Invoice
+        company={{ name: "MedizinHub", address: "Chennai", phone: "9876543210" }}
+        invoiceNo="MHB-INV-00056"
+        invoiceDate="22/07/2026"
+        customer={{ name: "Patient" }}
+        items={[
+          {
+            srNo: 1,
+            name: "Consultation Fee",
+            qty: 1,
+            mrp: "",
+            discPercent: 0,
+            rate: 500,
+          },
+        ]}
+        bank={{}}
+        subTotal={500}
+        total={500}
+      />,
+    );
+
+    expect(screen.getByText("-")).toBeTruthy();
+    expect(screen.getAllByText("₹500").length).toBeGreaterThan(0);
+  });
+
+  it("shows receipt totals from backend invoice amounts", () => {
+    render(
+      <Invoice
+        company={{ name: "MedizinHub", address: "Chennai", phone: "9876543210" }}
+        invoiceNo="MHB-INV-00057"
+        invoiceDate="22/07/2026"
+        customer={{ name: "Patient" }}
+        items={[
+          {
+            srNo: 1,
+            name: "Lab Services",
+            qty: 1,
+            mrp: "",
+            discPercent: 10,
+            rate: 900,
+          },
+        ]}
+        bank={{}}
+        subTotal={1000}
+        discountAmount={100}
+        taxAmount={45}
+        taxLabel="GST"
+        taxPercentage={5}
+        total={945}
+        paidAmount={500}
+        balanceAmount={445}
+      />,
+    );
+
+    expect(screen.getByText("Sub Total")).toBeTruthy();
+    expect(screen.getByText("Discount")).toBeTruthy();
+    expect(screen.getByText("GST (5%)")).toBeTruthy();
+    expect(screen.getByText("Paid Amount")).toBeTruthy();
+    expect(screen.getByText("Balance Due")).toBeTruthy();
+    expect(screen.getByText("-₹100")).toBeTruthy();
+    expect(screen.getByText("₹945")).toBeTruthy();
+    expect(screen.getByText("₹445")).toBeTruthy();
+  });
 });

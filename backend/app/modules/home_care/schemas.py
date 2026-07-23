@@ -136,6 +136,8 @@ class HomeCareBookingCreate(BaseModel):
                 raise ValueError("Service price is required")
             if booking_type == "home_visit" and not service.service_id:
                 raise ValueError("Home visit service is required")
+            if booking_type == "home_care" and service.service_id:
+                raise ValueError("Home care services must be entered manually")
             if booking_type == "home_care" and not service.service_id:
                 if not service.description or not service.description.strip():
                     raise ValueError("Home care service description is required")

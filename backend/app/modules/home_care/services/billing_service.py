@@ -9,6 +9,7 @@ from app.modules.billing.schemas import (
     InvoiceRead,
     PaymentRead,
 )
+from app.modules.billing.services.line_discounts import sync_invoice_item_discounts
 from app.modules.billing.services.numbering import next_invoice_number
 from app.modules.billing.services.rules import calculate_offer_discount, find_tax_rule
 from app.modules.home_care.models import (
@@ -223,7 +224,11 @@ class HomeCareBillingService:
                 if row.service_category == "home_care_service"
                 else row.unit_amount or (service.default_price if service else 0)
             )
-            mrp_amount = int(service.mrp_price if service else 0)
+            mrp_amount = int(
+                service.mrp_price
+                if service and row.service_category != "home_care_service"
+                else 0
+            )
             description = row.description
             if isinstance(row, HomeCareVisitLog):
                 description = f"{row.description} ({row.visit_date.isoformat()})"
@@ -245,6 +250,7 @@ class HomeCareBillingService:
                     else row.service_id,
                 )
             )
+        sync_invoice_item_discounts(self.session, invoice)
         self.session.commit()
         self.session.refresh(invoice)
         self._sync_booking_status_from_invoice(booking, invoice)

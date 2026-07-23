@@ -23,6 +23,13 @@ export const bookingSchema = z
   .superRefine((data, ctx) => {
     data.lineItems.forEach((line, index) => {
       if (data.booking_type === "home_care") {
+        if (line.service_id?.trim()) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["lineItems", index, "service_id"],
+            message: "Home care service must be entered manually",
+          });
+        }
         if (!line.description?.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,

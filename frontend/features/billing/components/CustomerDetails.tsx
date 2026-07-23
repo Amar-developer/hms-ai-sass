@@ -2,7 +2,6 @@ import React from "react";
 import { FieldRow } from "./FieldRow";
 
 const CustomerDetails = ({customer,company,invoiceDate,invoiceNo}) => {
-  console.log(customer,'customer')
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 ">
       <div className="border-b-2 border-[#25FF46] sm:border-b-0 sm:border-r-2 pb-2">
