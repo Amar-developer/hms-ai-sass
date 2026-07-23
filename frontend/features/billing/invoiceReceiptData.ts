@@ -1,5 +1,6 @@
 import { apiFetch, type ApiSession, uploadAssetUrl } from "@/lib/api";
 import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
+import { invoiceItemPriceBreakdown } from "./helpers";
 import type { InvoiceProps } from "./types";
 
 export function safeFilename(value: unknown) {
@@ -28,39 +29,15 @@ function invoiceDate(invoice: any) {
     : "";
 }
 
-function invoiceItemPriceBreakdown(item: any, invoice: any) {
-  const toNumber = (value: unknown, fallback = 0) => {
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : fallback;
-  };
-
-  const quantity = Math.max(1, toNumber(item.quantity ?? item.qty ?? 1));
-  const mrpUnit = toNumber(
-    item.mrp_unit ?? item.mrp ?? item.price ?? item.unit_price ?? item.selling_price ?? item.rate ?? 0,
-  );
-  const totalAmount = toNumber(item.amount ?? item.total ?? 0);
-
-  let payableAmount = toNumber(item.rate ?? item.unit_rate ?? item.selling_price ?? item.price);
-  if (!payableAmount && totalAmount && quantity) {
-    payableAmount = totalAmount / quantity;
-  }
-  if (!payableAmount) {
-    payableAmount = mrpUnit;
-  }
-
-  const rawDiscountPercent = toNumber(
-    item.discount_percent ?? item.discount_percentage ?? item.disc_percent ?? item.discount ?? 0,
-  );
-  const discountPercent =
-    rawDiscountPercent ||
-    (mrpUnit > 0
-      ? Math.round(((mrpUnit - payableAmount) / mrpUnit) * 10000) / 100
-      : 0);
-
+export function invoiceReceiptLineItem(item: any, invoice: any, index: number) {
+  const pricing = invoiceItemPriceBreakdown(item, invoice);
   return {
-    mrpUnit,
-    discountPercent,
-    payableAmount,
+    srNo: index + 1,
+    name: item.description || item.item_type || "Item",
+    qty: item.quantity || 1,
+    mrp: pricing.mrpUnit,
+    discPercent: pricing.discountPercent,
+    rate: pricing.payableAmount,
   };
 }
 
@@ -96,17 +73,9 @@ function toInvoiceProps(
       address: patient?.address || "",
       patientId: patient?.patient_number || "",
     },
-    items: (detail.items || []).map((item: any, index: number) => {
-      const pricing = invoiceItemPriceBreakdown(item, invoice);
-      return {
-        srNo: index + 1,
-        name: item.description || item.item_type || "Item",
-        qty: item.quantity || 1,
-        mrp: pricing.mrpUnit,
-        discPercent: pricing.discountPercent,
-        rate: pricing.payableAmount,
-      };
-    }),
+    items: (detail.items || []).map((item: any, index: number) =>
+      invoiceReceiptLineItem(item, invoice, index),
+    ),
     bank: {
       name: String(bank.account_name || ""),
       branch: String(bank.branch_name || ""),
