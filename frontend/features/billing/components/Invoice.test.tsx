@@ -120,7 +120,7 @@ describe("invoice receipt columns", () => {
             rate: 900,
           },
         ]}
-        bank={{}}
+        bank={{ qrImageUrl: "/uploads/tenant-upi-qr.png" }}
         subTotal={1000}
         discountAmount={100}
         taxAmount={45}
@@ -140,5 +140,8 @@ describe("invoice receipt columns", () => {
     expect(screen.getByText("-₹100")).toBeTruthy();
     expect(screen.getByText("₹945")).toBeTruthy();
     expect(screen.getByText("₹445")).toBeTruthy();
+    expect(screen.getByAltText("QR").getAttribute("src")).toBe(
+      "/uploads/tenant-upi-qr.png",
+    );
   });
 });

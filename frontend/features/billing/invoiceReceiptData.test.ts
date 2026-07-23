@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { invoiceReceiptLineItem } from "./invoiceReceiptData";
+import {
+  invoiceReceiptLineItem,
+  toInvoiceProps,
+} from "./invoiceReceiptData";
 
 describe("invoice receipt line pricing", () => {
   it("uses the same API price fields and MRP markdown as the billing view", () => {
@@ -47,6 +50,34 @@ describe("invoice receipt line pricing", () => {
       mrp: 250,
       discPercent: 20,
       rate: 400,
+    });
+  });
+
+  it("preserves partial and split-payment totals in receipt props", () => {
+    const props = toInvoiceProps(
+      {
+        invoice: {
+          invoice_number: "MHB-INV-00057",
+          status: "partially_paid",
+          subtotal_amount: 1200,
+          total_amount: 1200,
+          paid_amount: 700,
+          balance_amount: 500,
+        },
+        items: [],
+      },
+      { full_name: "Patient" },
+      { name: "MedizinHub", address: "Chennai" },
+      "",
+      { qr_image_url: "/uploads/tenant-upi-qr.png" },
+    );
+
+    expect(props).toMatchObject({
+      isPaid: false,
+      total: 1200,
+      paidAmount: 700,
+      balanceAmount: 500,
+      bank: { qrImageUrl: expect.stringContaining("/uploads/tenant-upi-qr.png") },
     });
   });
 });

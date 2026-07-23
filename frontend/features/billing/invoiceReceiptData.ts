@@ -41,7 +41,7 @@ export function invoiceReceiptLineItem(item: any, invoice: any, index: number) {
   };
 }
 
-function toInvoiceProps(
+export function toInvoiceProps(
   detail: any,
   patient: any,
   branding: any,
@@ -93,6 +93,8 @@ function toInvoiceProps(
     taxLabel: invoice.tax_label || "Tax",
     taxPercentage: Number(invoice.tax_percentage || 0),
     total: Number(invoice.total_amount || 0),
+    paidAmount: Number(invoice.paid_amount || 0),
+    balanceAmount: Number(invoice.balance_amount || 0),
   };
 }
 
