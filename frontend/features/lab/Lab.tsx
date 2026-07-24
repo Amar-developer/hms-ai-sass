@@ -892,6 +892,7 @@ export function Lab({
     {
       key: "report",
       header: "Report",
+      className:'text-center',
       width: "170px",
       disableRowClick: true,
       render: (o) => {
@@ -959,6 +960,7 @@ export function Lab({
     {
       key: "action",
       header: "Action",
+      className:'text-center',
       width: "140px",
       disableRowClick: true,
       render: (o) => {
@@ -973,7 +975,7 @@ export function Lab({
         const canAddMore = docs.length < MAX_REPORT_DOCUMENTS;
 
         return (
-          <div className="flex justify-end">
+          <div className="flex justify-center">
             <RowActions
               actions={[
                 {

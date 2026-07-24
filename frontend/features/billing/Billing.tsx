@@ -108,6 +108,7 @@ export function Billing({
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
+
   useEffect(() => {
     let alive = true;
     apiFetch(
@@ -210,13 +211,7 @@ export function Billing({
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
-  // Lab/pharmacy/IP/physiotherapy invoices legitimately carry the same
-  // consultation_id/appointment_id as the originating consultation (so their
-  // billing can be traced back to it), so only a *pure* consultation invoice
-  // — not just any invoice referencing that consultation — can mean the
-  // consultation-fee invoice was actually generated. Membership benefits do
-  // not change this source classification: a covered visit remains a
-  // consultation invoice.
+
   const consultationInvoices = invoices.filter((i: any) => {
     const key = invoiceSourceKey(i);
     return key === "consultation";
@@ -424,7 +419,6 @@ export function Billing({
       setDetailLoading("");
     }
   }
-
   async function loadInvoiceSupplierOptions(row: any) {
     if (!apiSession || !row?.invoice?.lab_order_id) {
       setSupplierOptions({});
@@ -835,7 +829,6 @@ export function Billing({
       setBusy("");
     }
   }
-
   const invoiceColumns: Column<any>[] = [
     {
       key: "index",
@@ -884,6 +877,7 @@ export function Billing({
     {
       key: "patient",
       header: "Patient",
+      width:'120px',
       render: (invoice) => {
         const p: any = patientMap.get(invoice.patient_id);
 
@@ -895,6 +889,7 @@ export function Billing({
       key: "status",
       header: "Status",
       className: "text-center",
+      width:'120px',
       render: (invoice) => (
         <Badge
           tone={
@@ -934,8 +929,15 @@ export function Billing({
       cellClassName: "tabular-nums",
     },
     {
+      key: "due",
+      header: "Due",
+      width: '100px',
+      render: (invoice) => money(invoice.balance_amount)
+    },
+    {
       key: "actions",
       header: "Actions",
+      width:'120px',
       disableRowClick: true,
       render: (invoice) => (
         <ActionButton

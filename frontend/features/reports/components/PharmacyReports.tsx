@@ -16,13 +16,13 @@ const PharmacyReports = ({
     {
       key: "supplier",
       header: "Supplier",
-      width:'90px',
+      width:'160px',
       render: (row: any) => <b>{row.supplier}</b>,
     },
     {
       key: "item",
       header: "Medicine",
-      width:'90px',
+      width:'180px',
     },
     {
       key: "issueCount",
@@ -59,14 +59,14 @@ const PharmacyReports = ({
     },
     {
       key: "approvedDiscount",
-      header: "Approved Discount",
+      header: "Approved %",
       width: '130px',
       render: (row: any) => money(row.approvedDiscount),
     },
     {
       key: "offerDiscount",
-      header: "Offer Discount",
-      width: '120px',
+      header: "Offer %",
+      width: '100px',
       render: (row: any) => money(row.offerDiscount),
     },
     {
@@ -77,14 +77,14 @@ const PharmacyReports = ({
     },
     {
       key: "billingDiscount",
-      header: "Total Discount",
-      width: '120px',
+      header: "Total %",
+      width: '100px',
       render: (row: any) => money(row.billingDiscount),
     },
     {
       key: "paymentMode",
       header: "M.O.P",
-      width: "90px",
+      width: "120px",
     },
     {
       key: "purchaseCost",
@@ -95,6 +95,7 @@ const PharmacyReports = ({
     {
       key: "profit",
       header: "Profit",
+      width:'90px',
       render: (row: any) => (
         <span className="font-bold">{money(row.profit)}</span>
       ),
@@ -115,43 +116,6 @@ const PharmacyReports = ({
         }
       >
         <div className="mt-4 overflow-auto rounded-2xl border">
-          {/* <table className="w-full min-w-[1220px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3">Supplier</th>
-                <th>Medicine</th>
-                <th>Issues</th>
-                <th>Invoices</th>
-                <th>Qty</th>
-                <th>Revenue</th>
-                <th>Purchase Cost</th>
-                <th>Pharmacy Profit</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {pharmacySettlementRows.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-4 text-slate-500">
-                    No paid pharmacy invoices match this filter.
-                  </td>
-                </tr>
-              )}
-              {pharmacySettlementRows.map((row: any) => (
-                <tr key={row.id}>
-                  <td className="px-4 py-4">
-                    <b>{row.supplier}</b>
-                  </td>
-                  <td>{row.item}</td>
-                  <td>{row.issueCount}</td>
-                  <td>{row.invoiceCount}</td>
-                  <td>{row.quantity}</td>
-                  <td>{money(row.revenue)}</td>
-                  <td>{money(row.purchaseCost)}</td>
-                  <td className="font-bold">{money(row.profit)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table> */}
           <DataTable
             columns={columns}
             data={pharmacySettlementRows}

@@ -1263,7 +1263,7 @@ export function DoctorConsultation({
                 Select any waiting patient for consultation.
               </p>
             </div>
-            <div className="flex items-center gap-3 w-[30%] lg:w-[25%]">
+            <div className="flex items-center gap-3">
               <FormField label="Doctor">
                 <SearchableSelect
                   value={doctorId}
@@ -1332,6 +1332,7 @@ export function DoctorConsultation({
                           tone={
                             a.consultationStatus === "signed" ? "green" : "blue"
                           }
+                          className="normal-badge"
                         >
                           {humanizeOptionLabel(a.consultationStatus)}
                         </Badge>

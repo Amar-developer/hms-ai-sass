@@ -312,7 +312,7 @@ export default function Invoice({
                 {isPaid && (
                   <div className="flex justify-center my-4">
                     <div className="relative -rotate-12 border-4 border-[#37A94C] px-6 py-1 text-center">
-                      <span className="block text-4xl font-black leading-none text-[#37A94C]">
+                      <span className="block text-4xl font-black leading-none text-[#37A94C] pb-2">
                         PAID
                       </span>
                       <span className="block text-lg font-black leading-tight tracking-wide text-[#37A94C] pb-6">

@@ -54,14 +54,14 @@ const LabReports = ({
     },
     {
       key: "approvedDiscount",
-      header: "Approved Discount",
+      header: "Approved %",
       width: '130px',
       render: (row: any) => money(row.approvedDiscount),
     },
     {
       key: "offerDiscount",
-      header: "Offer Discount",
-      width: '120px',
+      header: "Offer %",
+      width: '100px',
       render: (row: any) => money(row.offerDiscount),
     },
     {
@@ -72,8 +72,8 @@ const LabReports = ({
     },
     {
       key: "billingDiscount",
-      header: "Total Discount",
-      width: '120px',
+      header: "Total %",
+      width: '100px',
       render: (row: any) => money(row.billingDiscount),
     },
     {
@@ -83,8 +83,8 @@ const LabReports = ({
     },
     {
       key: "purchaseCost",
-      header: "Purchase Cost",
-      width: '150px',
+      header: "Purchase",
+      width: '120px',
       render: (row: any) => money(row.purchaseCost),
     },
     {
@@ -93,6 +93,7 @@ const LabReports = ({
       render: (row: any) => (
         <span className="font-bold">{money(row.profit)}</span>
       ),
+      width:'90px'
     },
   ];
   return (

@@ -22,6 +22,7 @@ export function ConfirmModal({
     action.department ||
     action.role ||
     action.user ||
+    action.file ||
     action.row;
 
   const label =
@@ -33,9 +34,13 @@ export function ConfirmModal({
           ? "Role"
           : action.entity === "user"
             ? "User"
-            : "Item";
+            : action.entity === "file"
+              ? "File"
+              : "Item";
 
-  const name = item?.name || item?.email || "this item";
+  const name = item?.name || item?.email || item?.file_name || "this item";
+
+  const isHardDelete = action.entity === "file";
 
   const title = action.entity
     ? isDelete
@@ -43,13 +48,15 @@ export function ConfirmModal({
       : `Change ${label} Status`
     : `Confirm ${action.kind}`;
 
-  const message = action.entity
-    ? isDelete
-      ? `Delete ${name}? This will deactivate the record and keep history for audit/reference.`
-      : `${item?.is_active ? "Deactivate" : "Activate"} ${name}?`
-    : `This will ${
-        isDelete ? "deactivate/delete" : "change status for"
-      } ${name}. Continue?`;
+  const message = isHardDelete
+    ? `Delete "${name}"? This action cannot be undone.`
+    : action.entity
+      ? isDelete
+        ? `Delete ${name}? This will deactivate the record and keep history for audit/reference.`
+        : `${item?.is_active ? "Deactivate" : "Activate"} ${name}?`
+      : `This will ${
+          isDelete ? "deactivate/delete" : "change status for"
+        } ${name}. Continue?`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 ">

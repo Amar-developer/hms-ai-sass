@@ -125,11 +125,11 @@ export function DiscountOfferForm({
         <FormField label="Max Discount">
           <Input {...register("maxDiscountAmount")} type="number" min="0" step="0.01" />
         </FormField>
-        <FormField label="Valid From">
+        <FormField label="Valid From" required>
           <Input {...register("validFrom")} type="date" />
           {errors.validFrom && <FormError error={errors.validFrom?.message} />}
         </FormField>
-        <FormField label="Valid Until">
+        <FormField label="Valid Until" required>
           <Input {...register("validUntil")} type="date" />
           {errors.validUntil && (
             <FormError error={errors.validUntil?.message} />

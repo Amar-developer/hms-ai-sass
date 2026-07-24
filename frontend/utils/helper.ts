@@ -1,3 +1,5 @@
+import { colorList, COLORS } from "./constants";
+
 export function userInitials(user: any, email: string) {
   const source = String(user?.name || email || "User").trim();
   const parts = source.split(/[\s.@_-]+/).filter(Boolean);
@@ -141,4 +143,35 @@ export function roleKeyFromName(value: string) {
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
     .replace(/_+/g, "_");
+}
+
+
+export function userIcon(fullName = "") {
+  const name = fullName.trim();
+
+  // Split by one or more spaces
+  const parts = name.split(/\s+/).filter(Boolean);
+
+  let initials = "?";
+
+  if (parts.length >= 2) {
+    // First letter of first and second words
+    initials = `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  } else if (parts.length === 1) {
+    // First letter of the single word
+    initials = parts[0][0].toUpperCase();
+  }
+
+  // Generate a consistent hash from the full name
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const color = colorList[Math.abs(hash) % COLORS.length];
+
+  return {
+    initials,
+    color,
+  };
 }

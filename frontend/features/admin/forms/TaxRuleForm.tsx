@@ -86,7 +86,7 @@ export function TaxRuleForm({
           <Input {...register("taxLabel")} />
         </FormField>
 
-        <FormField label="Tax Percentage" >
+        <FormField label="Tax Percentage" required>
           <Input
             {...register("taxPercentage",{valueAsNumber:true})}
             type="number"

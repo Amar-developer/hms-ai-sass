@@ -22,6 +22,7 @@ import { StatusToast } from "@/app/components/common/ui";
 import { BookingDetail } from "./components/BookingDetail";
 import { pageSize } from "@/utils/constants";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
 
@@ -47,22 +48,26 @@ export function HomeCare({
   const [filters, setFilters] = useState({ query: "", status: "all" });
   const [page, setPage] = useState(1);
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
+  const [confirmAction, setConfirmAction] = useState<any>(null);
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
       apiSession?.user?.is_super_admin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   // Editing and cancelling bookings is restricted to tenant admins (and super
   // admins), or any role explicitly granted home_care.edit/manage.
   const canManageBooking = Boolean(
     apiSession?.user?.is_super_admin ||
-      apiSession?.user?.user_type === "tenant_admin" ||
-      apiSession?.user?.roles?.includes("tenant_admin") ||
-      hasPermission("home_care.edit", "home_care.manage"),
+    apiSession?.user?.user_type === "tenant_admin" ||
+    apiSession?.user?.roles?.includes("tenant_admin") ||
+    hasPermission("home_care.edit", "home_care.manage"),
   );
-  const canCreateBooking = hasPermission("home_care.create", "home_care.manage");
+  const canCreateBooking = hasPermission(
+    "home_care.create",
+    "home_care.manage",
+  );
   const [visitForm, setVisitForm] = useState<any>(() => ({
     visit_date: today(),
     assigned_staff_user_id: "",
@@ -120,7 +125,9 @@ export function HomeCare({
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
-        const query = String(filters.query || "").trim().toLowerCase();
+        const query = String(filters.query || "")
+          .trim()
+          .toLowerCase();
         if (query && !haystack.includes(query)) return false;
         if (filters.status !== "all" && booking.status !== filters.status)
           return false;
@@ -293,13 +300,17 @@ export function HomeCare({
 
   async function handleSaveBooking(data: BookingFormValues) {
     if (!apiSession) return false;
-    const serviceRows = lineItems.filter((row) => row.service_id || row.description);
+    const serviceRows = lineItems.filter(
+      (row) => row.service_id || row.description,
+    );
     if (serviceRows.length === 0) {
       setError("At least one service is required.");
       return false;
     }
     if (data.status !== "requested") {
-      setError("Create bookings as Requested, then assign staff before changing status.");
+      setError(
+        "Create bookings as Requested, then assign staff before changing status.",
+      );
       return false;
     }
     if (
@@ -311,7 +322,9 @@ export function HomeCare({
     }
     if (
       data.booking_type === "home_care" &&
-      serviceRows.some((row) => !row.service_id && !String(row.description || "").trim())
+      serviceRows.some(
+        (row) => !row.service_id && !String(row.description || "").trim(),
+      )
     ) {
       setError("Enter a service name for every manual home care line.");
       return false;
@@ -336,16 +349,15 @@ export function HomeCare({
             end_date: data.end_date || null,
             status: data.status,
             notes: data.notes || null,
-            services: serviceRows
-              .map((row) => ({
-                service_id: isHomeVisit ? row.service_id || null : null,
-                service_category: isHomeVisit
-                  ? "home_visit_service"
-                  : "home_care_service",
-                description: row.description || null,
-                quantity: Number(row.quantity || 1),
-                unit_amount: Number(row.unit_amount || 0),
-              })),
+            services: serviceRows.map((row) => ({
+              service_id: isHomeVisit ? row.service_id || null : null,
+              service_category: isHomeVisit
+                ? "home_visit_service"
+                : "home_care_service",
+              description: row.description || null,
+              quantity: Number(row.quantity || 1),
+              unit_amount: Number(row.unit_amount || 0),
+            })),
           }),
         },
       );
@@ -433,7 +445,11 @@ export function HomeCare({
       setError("Hours is required.");
       return;
     }
-    if (visitForm.unit_amount === "" || visitForm.unit_amount === null || visitForm.unit_amount === undefined) {
+    if (
+      visitForm.unit_amount === "" ||
+      visitForm.unit_amount === null ||
+      visitForm.unit_amount === undefined
+    ) {
       setError("Price is required.");
       return;
     }
@@ -472,8 +488,7 @@ export function HomeCare({
   }
 
   async function deleteVisitLog(visitId: string) {
-    if (!apiSession || !selected || !confirm("Delete this service log?"))
-      return;
+    if (!apiSession || !selected) return;
     setBusy(`delete-visit-${visitId}`);
     setMessage("");
     setError("");
@@ -613,13 +628,7 @@ export function HomeCare({
   const isFormView = view === "create" || view === "edit";
 
   return (
-    <div className="space-y-6">
-      {/* <Header
-        view={view}
-        count={bookings.length}
-        onList={backToList}
-        onCreate={openCreate}
-      /> */}
+    <div className="">
       <StatusToast
         message={message}
         tone="success"
@@ -678,6 +687,7 @@ export function HomeCare({
           setVisitField={setVisitField}
           saveVisitLog={saveVisitLog}
           deleteVisitLog={deleteVisitLog}
+          setConfirmAction={setConfirmAction}
           busy={busy}
           invoiceDetail={invoiceDetail}
           onBack={backToList}
@@ -712,6 +722,17 @@ export function HomeCare({
         />
       )}
 
+      {confirmAction && (
+        <ConfirmModal
+          action={confirmAction}
+          busy={busy === `delete-visit-${confirmAction.row.id}`}
+          onCancel={() => setConfirmAction(null)}
+          onConfirm={async () => {
+            await deleteVisitLog(confirmAction.row.id);
+            setConfirmAction(null);
+          }}
+        />
+      )}
     </div>
   );
 }

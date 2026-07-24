@@ -158,7 +158,7 @@ export function RoleRow({
       </td>
 
       <td className="px-4 py-3 text-sm" onClick={(e) => e.stopPropagation()}>
-        <RowActions actions={actions} className="right-28 -bottom-5" />
+        <RowActions actions={actions} className="right-20 -bottom-5" />
       </td>
     </tr>
   );

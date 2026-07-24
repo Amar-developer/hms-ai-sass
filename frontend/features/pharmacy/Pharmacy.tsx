@@ -1018,7 +1018,7 @@ export function Pharmacy({
                       <div className="ml-auto flex justify-center">
                         <RowActions
                           className="right-8 top-0"
-                          width="w-52"
+                          width="w-48"
                           actions={[
                             {
                               label: "Partial dispense",
