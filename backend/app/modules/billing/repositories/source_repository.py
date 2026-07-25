@@ -1,7 +1,12 @@
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
-from app.modules.billing.models import DiscountApproval, Invoice, InvoiceItem
+from app.modules.billing.models import (
+    DiscountApproval,
+    Invoice,
+    InvoiceItem,
+    InvoiceStatus,
+)
 from app.modules.consultations.models import Consultation
 from app.modules.lab.models import LabOrder, LabOrderItem, LabTestCatalog
 from app.modules.patients.models import Patient
@@ -92,10 +97,15 @@ class BillingSourceRepository:
         self, *, tenant_id: str, lab_order_id: str
     ) -> Invoice | None:
         return self.session.exec(
-            select(Invoice).where(
+            select(Invoice)
+            .where(
                 Invoice.tenant_id == tenant_id,
                 Invoice.lab_order_id == lab_order_id,
+                Invoice.status.notin_(
+                    [InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]
+                ),
             )
+            .order_by(Invoice.created_at.desc())
         ).first()
 
     def get_pharmacy_issue(self, pharmacy_issue_id: str) -> PharmacyIssue | None:

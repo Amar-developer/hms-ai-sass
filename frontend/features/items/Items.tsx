@@ -587,69 +587,11 @@ export function Items({ apiSession, branchId }: any) {
     const raw = row.raw;
     setEditing(row);
     setType(row.type);
-    if (row.type === "medicine")
-      setForm({
-        ...form,
-        code: raw.code,
-        name: raw.name,
-        generic_name: raw.generic_name || "",
-        mrp_price: String(raw.mrp_price || 0),
-        price: String(raw.default_sale_price || 0),
-        purchase_price: String(raw.purchase_price || 0),
-        supplier_id: raw.supplier_id || "",
-        reorder_level: String(raw.reorder_level || 0),
-        branch_scope: raw.branch_id ? "branch" : "tenant",
-      });
-    else if (row.type === "lab_test")
-      setForm({
-        ...form,
-        code: raw.code,
-        name: raw.name,
-        mrp_price: String(raw.mrp_price || 0),
-        price: String(raw.default_price || 0),
-        purchase_price: String(raw.purchase_price || 0),
-        supplier_id: raw.supplier_id || "",
-        sample_type: raw.sample_type || "",
-        branch_scope: raw.branch_id ? "branch" : "tenant",
-      });
-    else if (row.type === "lab_package") {
-      setForm({
-        ...form,
-        code: raw.code,
-        name: raw.name,
-        mrp_price: String(raw.mrp_price || 0),
-        price: String(raw.package_price || 0),
-        purchase_price: "",
-        supplier_id: "",
-        description: raw.description || "",
-        branch_scope: raw.branch_id ? "branch" : "tenant",
-      });
+    if (row.type === "lab_package") {
       setPackageTestIds(raw.test_ids || []);
-    } else if (homeServiceTypes.includes(row.type))
-      setForm({
-        ...form,
-        code: raw.code,
-        name: raw.name,
-        mrp_price: String(raw.mrp_price || 0),
-        price: String(raw.default_price || 0),
-        description: raw.description || "",
-        branch_scope: raw.branch_id ? "branch" : "tenant",
-      });
-    else
-      setForm({
-        ...form,
-        code: raw.serial_number || "",
-        name: raw.name,
-        modality_type: raw.modality_type,
-        mrp_price: String(raw.mrp_price || 0),
-        purchase_price: String(raw.purchase_price || 0),
-        supplier_id: raw.supplier_id || "",
-        manufacturer: raw.manufacturer || "",
-        model_number: raw.model_number || "",
-        serial_number: raw.serial_number || "",
-        is_portable: String(Boolean(raw.is_portable)),
-        branch_scope: raw.branch_id ? "branch" : "tenant",
-      });
+    } else {
+      setPackageTestIds([]);
+    }
   }
 
   function cancelEdit() {
@@ -725,7 +667,7 @@ export function Items({ apiSession, branchId }: any) {
         <StatusToast message={message} onClose={() => setMessage("")} />
         <ItemForm
           type={type}
-          initialData={editing}
+          initialData={editing?.raw}
           stockSuppliers={stockSuppliers}
           busy={busy === "save"}
           onSubmit={handleItemSubmit}

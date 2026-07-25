@@ -17,6 +17,7 @@ import {
 } from "@/features/items/constants";
 import { FormError } from "@/app/components/common/FormError";
 import { useEffect } from "react";
+import { itemFormValuesFromCatalogItem } from "../helpers";
 
 type ItemFormProps = {
   type: string;
@@ -68,27 +69,7 @@ export function ItemForm({
   // Reset when editing item changes
   useEffect(() => {
     if (initialData) {
-      reset({
-        name: initialData.name || "",
-        generic_name: initialData.generic_name || "",
-        mrp_price: String(initialData.mrp_price || ""),
-        price: String(
-          initialData.default_sale_price ||
-            initialData.default_price ||
-            initialData.package_price ||
-            "",
-        ),
-        purchase_price: String(initialData.purchase_price || ""),
-        supplier_id: initialData.supplier_id || "",
-        reorder_level: String(initialData.reorder_level || ""),
-        sample_type: initialData.sample_type || "",
-        description: initialData.description || "",
-        modality_type: initialData.modality_type || "ift",
-        manufacturer: initialData.manufacturer || "",
-        model_number: initialData.model_number || "",
-        serial_number: initialData.serial_number || "",
-        is_portable: initialData.is_portable === true ? "true" : "false",
-      });
+      reset(itemFormValuesFromCatalogItem(initialData));
     }
   }, [initialData, reset]);
 

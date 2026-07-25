@@ -14,6 +14,7 @@ import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate, displayDateTime, formatPrice } from "@/utils/helper";
 import { pageSize } from "./constants";
 import {
+  activeLabInvoiceOrderIds,
   downloadBlob,
   isCancelled,
   isReleased,
@@ -175,13 +176,23 @@ export function Lab({
   const invoicedOrderIds = useMemo(
     () =>
       new Set([
-        ...(liveInvoices || [])
-          .map((invoice: any) => invoice.lab_order_id)
-          .filter(Boolean),
+        ...activeLabInvoiceOrderIds(liveInvoices),
         ...localInvoicedOrderIds,
       ]),
     [liveInvoices, localInvoicedOrderIds],
   );
+
+  useEffect(() => {
+    const serverOrderIds = new Set(
+      (liveInvoices || [])
+        .map((invoice: any) => invoice.lab_order_id)
+        .filter(Boolean),
+    );
+    if (!serverOrderIds.size) return;
+    setLocalInvoicedOrderIds((ids) =>
+      ids.filter((orderId) => !serverOrderIds.has(orderId)),
+    );
+  }, [liveInvoices]);
 
   // Load data
   useEffect(() => {
