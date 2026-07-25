@@ -42,22 +42,28 @@ const InvoiceReport = ({
   {
     key: "invoice_number",
     header: "Invoice",
-    width:'130px',
+    width:'160px',
+    className:'text-center',
     render: (row: any) => (
       <>
         <b>{row.invoice_number}</b>
-        <p className="text-xs text-slate-500">
-          {rowDate(row)}
-        </p>
       </>
     ),
   },
   {
+    key:"invoice_date",
+    header:'Date',
+    width:'100px',
+    render: (row:any)=> rowDate(row),
+    className:'text-center',
+  },
+  {
     key: "type",
     header: "Type",
-    width:'140px',
-    className:'',
+    width:'120px',
+    className:'text-center',
     render: (row: any) => invoiceTypeLabel(invoiceType(row)),
+
   },
   {
     key: "patient",
@@ -79,7 +85,7 @@ const InvoiceReport = ({
   {
     key: "doctor",
     header: "Doctor",
-    width:'100px',
+    width:'140px',
     render: (row: any) => {
       const appointment = appointmentById.get(row.appointment_id);
 
@@ -157,7 +163,7 @@ const InvoiceReport = ({
   {
     key: "payment_mode",
     header: "M.O.P",
-    width: "90px",
+    width: "120px",
     render: (row: any) => invoicePaymentMode(row),
   },
   {
@@ -199,6 +205,7 @@ const InvoiceReport = ({
     render: (row: any) => invoiceGrossProfitPercent(row),
   },
 ];
+console.log(invoicePageRows,'invoicePageRows')
   return (
     <Card>
       <div className="flex flex-col justify-between gap-2 md:flex-row md:items-center">

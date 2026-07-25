@@ -14,7 +14,7 @@ const AppointmentReports = ({
     {
       key: "doctor",
       header: "Doctor",
-      width: "80px",
+      width: "140px",
       render: (row: any) => <b>{row.doctor}</b>,
     },
     {
@@ -41,20 +41,20 @@ const AppointmentReports = ({
     },
     {
       key: "approvedDiscount",
-      header: "Approved Discount",
+      header: "Approved %",
       width: "130px",
       render: (row: any) => money(row.approvedDiscount),
     },
     {
       key: "offerDiscount",
-      header: "Offer Discount",
-      width: "120px",
+      header: "Offer %",
+      width: "100px",
       render: (row: any) => money(row.offerDiscount),
     },
     {
       key: "billingDiscount",
-      header: "Total Discount",
-      width: "120px",
+      header: "Total %",
+      width: "100px",
       render: (row: any) => money(row.billingDiscount),
     },
     {

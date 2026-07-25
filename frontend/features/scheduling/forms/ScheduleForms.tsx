@@ -33,7 +33,6 @@ export function ScheduleForm({
   onSubmit,
   back,
 }: any) {
-  const [mode, setMode] = useState<WeekdayMode>("");
   const defaultRanges = React.useMemo(() => {
     const schedules = schedule?.schedules ?? [];
     if (!schedules.length) {
@@ -72,6 +71,18 @@ export function ScheduleForm({
         .map((row: any) => String(row?.weekday ?? 0)),
     ),
   );
+
+  const [mode, setMode] = useState<WeekdayMode>(() => {
+    if (!defaultWeekdays.length) return "";
+    if (defaultWeekdays.length === 7) return "daily";
+    if (
+      defaultWeekdays.length === 6 &&
+      !defaultWeekdays.includes(String(6))
+    ) {
+      return "mon-saturday";
+    }
+    return "custom";
+  });
 
   // Then in defaultValues:
   const {

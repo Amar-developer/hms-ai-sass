@@ -565,7 +565,7 @@ export function Patient({
   );
 
   return (
-    <Card className="space-y-5">
+    <Card className="">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
         <div className="min-w-0">
           <h3 className="card-title font-bold">EMR / Patient Management</h3>

@@ -2,6 +2,7 @@ import React from "react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
 import { DataTable } from "./DataTable";
 import { HomeCareReportsProps } from "../types";
+import { rowDate } from "../helpers";
 
 
 
@@ -15,14 +16,19 @@ const HomeCareReports = ({
   const columns = [
     {
       key: "invoice",
-      header: "Invoice",
+      header: "Invoice No",
       render: (row: any) => (
         <>
           <b>{row.invoice}</b>
-          <p className="text-xs text-slate-500">{row.date}</p>
         </>
       ),
       width:'120px'
+    },
+    {
+      key:'invoice_date',
+      header:'Date',
+      render: (row:any)=> row.date,
+      width:'100px'
     },
     {
       key: "type",
@@ -38,7 +44,7 @@ const HomeCareReports = ({
     {
       key: "staff",
       header: "Staff",
-      width:'90px'
+      width:'140px'
     },
     {
       key: "totalAmount",
@@ -60,13 +66,13 @@ const HomeCareReports = ({
     },
     {
       key: "approvedDiscount",
-      header: "Approved Discount",
+      header: "Approved %",
       render: (row: any) => money(row.approvedDiscount),
       width:'130px'
     },
     {
       key: "offerDiscount",
-      header: "Offer Discount",
+      header: "Offer %",
       render: (row: any) => money(row.offerDiscount),
       width:'120px'
     },
@@ -78,7 +84,7 @@ const HomeCareReports = ({
     },
     {
       key: "billingDiscount",
-      header: "Total Discount",
+      header: "Total %",
       render: (row: any) => money(row.billingDiscount),
       width:'120px'
     },
@@ -99,12 +105,12 @@ const HomeCareReports = ({
       render: (row: any) => (
         <span className="font-bold">{money(row.grossProfit)}</span>
       ),
-      width:'90px'
+      width:'140px'
     },
     {
       key: "grossProfitPercent",
       header: "Gross Profit %",
-      width:'120px'
+      width:'150px'
     },
   ];
 

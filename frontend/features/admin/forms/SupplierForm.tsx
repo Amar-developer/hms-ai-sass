@@ -64,7 +64,7 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
             <p className="text-xs text-red-500">{errors.gstin.message}</p>
           )}
         </FormField>
-        <FormField label="Phone">
+        <FormField label="Phone" required>
           <Input
             mobileNumber
             type='number'
@@ -75,7 +75,7 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
             <p className="text-xs text-red-500">{errors.phone.message}</p>
           )}
         </FormField>
-        <FormField label="Email">
+        <FormField label="Email" required>
           <Input {...register("email")} placeholder="Enter supplier email" />
           {errors.email && (
             <p className="text-xs text-red-500">{errors.email.message}</p>
@@ -96,7 +96,7 @@ export function SupplierForm({ title, supplier, busy, onSubmit, back }: any) {
           </FormField>
         )}
         <div className="md:col-span-2">
-          <FormField label="Address">
+          <FormField label="Address" required>
             <Input
               {...register("address")}
               placeholder="Enter supplier address"

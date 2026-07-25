@@ -167,9 +167,7 @@ export function RolePermissionMatrix({
                     <p className="text-sm font-medium text-slate-900">
                       {row.label}
                     </p>
-                    <p className="mt-1 break-all text-[10px] font-medium text-slate-400">
-                      {row.module}
-                    </p>
+
                   </div>
                   <p className="text-sm text-slate-800">
                     {roleName || "New Role"}

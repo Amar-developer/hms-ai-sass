@@ -489,7 +489,7 @@ export function AppShell(props: any) {
               />
             </div>
           )}
-          <div className="mt-8 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
+          <div className="mt-4 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
               {isSuperAdmin ? "Primary Tenant" : clinic.type}
             </b>
@@ -650,7 +650,7 @@ export function AppShell(props: any) {
                       label: department.name,
                     }))}
                     disabled={!canChangeDepartment}
-                    // className="h-9 min-w-[190px] rounded-lg  border-slate-200 px-3 text-xs font-bold text-slate-900 outline-none transition bg-white disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
+                    className=" min-w-[170px] "
                     placeholder="Select department"
                     searchable={false}
                   />

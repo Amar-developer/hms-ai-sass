@@ -35,7 +35,6 @@ import {
 import { homeCareHourOptions } from "../forms/HomeCareForms";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 
-
 export function BookingDetail({
   booking,
   patientMap,
@@ -46,6 +45,7 @@ export function BookingDetail({
   setVisitField,
   saveVisitLog,
   deleteVisitLog,
+  setConfirmAction,
   busy,
   invoiceDetail,
   onBack,
@@ -279,22 +279,21 @@ export function BookingDetail({
                 </div>
               </div>
               {fixedServiceCategory === "home_visit_service" ? (
-                <SearchableSelectField
-                  label="Visit Service"
-                  value={visitForm.service_id}
-                  onChange={(value: string) =>
-                    setVisitField("service_id", value)
-                  }
-                  options={[
-                    { value: "", label: "Select visit service" },
-                    ...visitServices.map((service: any) => ({
-                      value: service.id,
-                      label: service.name,
-                      sublabel: money(service.default_price),
-                    })),
-                  ]}
-                  required
-                />
+                <FormField label="Visit Service">
+                  <SearchableSelect
+                    value={visitForm.service_id}
+                    onChange={(value) => setVisitField("service_id", value)}
+                    options={[
+                      { value: "", label: "Select visit service" },
+                      ...visitServices.map((service) => ({
+                        value: service.id,
+                        label: service.name,
+                        sublabel: money(service.default_price),
+                      })),
+                    ]}
+                    searchable={false}
+                  />
+                </FormField>
               ) : (
                 <FormField label="Service Name" required>
                   <Input
@@ -420,7 +419,16 @@ export function BookingDetail({
                       <td className="pr-3 text-right">
                         <ActionButton
                           tone="danger"
-                          onClick={() => deleteVisitLog(row.id)}
+                          onClick={() =>
+                            setConfirmAction({
+                              kind: "delete",
+                              entity: "serviceLog",
+                              row: {
+                                id: row.id,
+                                name: row.service_name || 'Log',
+                              },
+                            })
+                          }
                           disabled={busy === `delete-visit-${row.id}`}
                         >
                           Delete

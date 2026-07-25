@@ -1,7 +1,7 @@
 import React from "react";
 import { LogOut, KeyRound } from "lucide-react";
 import ProfileRow from "../ProfileRow";
-import { userInitials } from "@/utils/helper";
+import { userIcon, userInitials } from "@/utils/helper";
 import { GlobalSearch } from "./GlobalSearch";
 import { SearchableSelect } from "./ui";
 import { FormField } from "../FormElements";
@@ -65,6 +65,9 @@ const AppHeader = ({
   navigatePage,
 }: AppHeaderProps) => {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+  const { initials, color } = userIcon(
+  apiSession?.user?.name
+);
 
   return (
     <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
@@ -120,10 +123,10 @@ const AppHeader = ({
             <button
               type="button"
               onClick={() => setProfileOpen(!profileOpen)}
-              className="grid h-10 w-10 place-items-center rounded-full bg-slate-900 text-sm font-black text-white"
+              className={`grid h-10 w-10 place-items-center rounded-full bg-slate-900 text-sm font-black text-white ${color}`}
               title="Profile"
             >
-              {userInitials(apiSession?.user, apiSession?.email)}
+              {initials}
             </button>
             {profileOpen && (
               <div className="absolute right-0 top-12 z-40 w-80 rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-xl">

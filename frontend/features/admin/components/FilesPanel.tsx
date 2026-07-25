@@ -15,6 +15,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 
 export function FilesPanel({
   apiSession,
@@ -56,6 +57,7 @@ export function FilesPanel({
   const [recordOptions, setRecordOptions] = useState<any[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<any>(null);
   const rule = fileCategoryRules[category] || fileCategoryRules.general;
 
   useEffect(() => {
@@ -250,11 +252,6 @@ export function FilesPanel({
 
   async function deleteFile(file: any) {
     if (!apiSession) return;
-    if (
-      typeof window !== "undefined" &&
-      !window.confirm(`Delete "${file.file_name}" from the registry?`)
-    )
-      return;
     setBusy(true);
     setMessage("");
     try {
@@ -267,6 +264,7 @@ export function FilesPanel({
       setMessage(err.message || "Could not delete file.");
     } finally {
       setBusy(false);
+      setConfirmDelete(null);
     }
   }
 
@@ -305,7 +303,7 @@ export function FilesPanel({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="">
       <Card>
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
           <div>
@@ -569,7 +567,9 @@ export function FilesPanel({
                   <td className="pr-4 ">
                     <button
                       type="button"
-                      onClick={() => deleteFile(file)}
+                      onClick={() =>
+                        setConfirmDelete({ kind: "delete", entity: "file", file })
+                      }
                       disabled={busy}
                       className="font-semibold text-xs  mt-2 text-red-600 underline disabled:text-slate-300"
                     >
@@ -588,6 +588,14 @@ export function FilesPanel({
           onPage={setPage}
         />
       </Card>
+      {confirmDelete && (
+        <ConfirmModal
+          busy={busy}
+          action={confirmDelete}
+          onCancel={() => setConfirmDelete(null)}
+          onConfirm={() => deleteFile(confirmDelete.file)}
+        />
+      )}
     </div>
   );
 }

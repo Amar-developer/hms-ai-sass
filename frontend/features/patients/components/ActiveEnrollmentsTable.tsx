@@ -83,6 +83,7 @@ export function ActiveEnrollmentsTable({
             <tr className="text-sm">
               <th className="px-4 py-3">#</th>
               <th>Patient</th>
+              <th>ID</th>
               <th>Plan</th>
               <th>Validity</th>
               <th className="text-left">Paid</th>
@@ -114,6 +115,8 @@ export function ActiveEnrollmentsTable({
                         patientMap.get(row.patient_id)?.full_name ||
                         "Patient"}
                     </b>
+                  </td>
+                  <td>
                     <p className="text-xs text-slate-500 text-xs lg:text-sm">
                       {patientMap.get(row.patient_id)?.patient_number || ""}
                     </p>
