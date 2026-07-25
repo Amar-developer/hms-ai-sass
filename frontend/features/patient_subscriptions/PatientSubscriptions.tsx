@@ -25,6 +25,7 @@ import { PlanForm } from "../patients/components/PlanForm";
 import { money } from "@/utils/helper";
 import { PlanTableRow } from "../patients/components/PlanTableRow";
 import { QueuedEnrollmentsTable } from "../patients/components/QueuedEnrollmentsTable";
+import { PatientSearchSelect } from "../patients/components/PatientSearchSelect";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
@@ -698,16 +699,14 @@ export function PatientSubscriptions({
                 className="mt-4 grid gap-3 md:grid-cols-3"
               >
                 <FormField label="Patient" required>
-                  <SearchableSelect
+                  <PatientSearchSelect
+                    apiSession={apiSession}
+                    initialPatients={patients}
                     required
                     value={selectedPatient}
                     onChange={(value: string) => setSelectedPatient(value)}
                     placeholder="Select patient"
-                    searchPlaceholder="Search patient by name"
-                    options={(patients || []).map((p: any) => ({
-                      value: p.id,
-                      label: p.name || p.full_name || p.id,
-                    }))}
+                    searchPlaceholder="Search patient by name, mobile, or number"
                   />
                 </FormField>
                 <FormField label="Plan" required>

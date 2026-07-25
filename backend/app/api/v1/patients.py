@@ -91,6 +91,34 @@ def search_patients(
 
 
 @router.get(
+    "/references",
+    response_model=list[PatientSearchResult],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def patient_references(
+    ids: list[str] = Query(default=[], max_length=100),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+) -> list[PatientSearchResult]:
+    unique_ids = list(dict.fromkeys(ids))[:100]
+    return PatientService(session).patient_references(
+        tenant_id=tenant_id, patient_ids=unique_ids
+    )
+
+
+@router.get(
+    "/count",
+    response_model=dict[str, int],
+    dependencies=[Depends(require_permission(permissions.PATIENTS_READ))],
+)
+def patient_count(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+) -> dict[str, int]:
+    return {"total": PatientService(session).patient_count(tenant_id=tenant_id)}
+
+
+@router.get(
     "/{patient_id}",
     response_model=PatientRead,
 )

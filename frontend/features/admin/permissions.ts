@@ -9,6 +9,7 @@ const SECTION_PERMISSION_PREFIXES: Record<string, string[]> = {
   membership: ["patient_subscriptions"],
   files: ["files"],
   settings: ["settings"],
+  whatsapp: ["communications.whatsapp"],
 };
 
 export function canUseTenantAdminSection(section: string, user: any) {
@@ -20,6 +21,13 @@ export function canUseTenantAdminSection(section: string, user: any) {
     user?.user_type === "tenant_admin"
   ) {
     return true;
+  }
+  if (section === "whatsapp") {
+    return (
+      permissions.includes("communications.read") &&
+      (permissions.includes("communications.manage") ||
+        permissions.includes("communications.whatsapp.manage"))
+    );
   }
   const prefixes = SECTION_PERMISSION_PREFIXES[section] || [];
   const matching = permissions.filter((permission: string) =>

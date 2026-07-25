@@ -33,4 +33,15 @@ def ensure_default_plans(session: Session) -> None:
                 )
                 exists.updated_at = now
                 session.add(exists)
+        if (
+            exists
+            and exists.monthly_whatsapp_message_limit == 0
+            and payload.get("monthly_whatsapp_message_limit", 0) > 0
+            and "whatsapp" in modules_from_json(payload["enabled_modules_json"])
+        ):
+            exists.monthly_whatsapp_message_limit = payload[
+                "monthly_whatsapp_message_limit"
+            ]
+            exists.updated_at = now
+            session.add(exists)
     session.commit()

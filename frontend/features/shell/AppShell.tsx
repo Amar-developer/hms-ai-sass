@@ -135,7 +135,9 @@ export function AppShell(props: any) {
   const [tenantAdminSection, setTenantAdminSection] = useState("users");
   const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
   const visibleTenantAdminSections = tenantAdminSections.filter(
-    ([sectionId]: any) => canUseTenantAdminSection(sectionId, apiSession?.user),
+    ([sectionId]: any) =>
+      canUseTenantAdminSection(sectionId, apiSession?.user) &&
+      (sectionId !== "whatsapp" || clinic.modules?.includes("whatsapp")),
   );
   const activeTenantAdminSection = visibleTenantAdminSections.some(
     ([sectionId]: any) => sectionId === tenantAdminSection,

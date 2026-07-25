@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { fileCategoryOptions,doctypeFetchPaths,fileCategoryRules } from "../constants";
 import { apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
 import { FormField } from "@/app/components/FormElements";
@@ -6,7 +6,7 @@ import { Card,Button,Input, SearchableSelect, Badge, ActionButton } from "@/app/
 import { asOptionList,patientLabel } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
 import { capitalizeFirst, displayDateTime } from "@/utils/helper";
-import { isActivePatientRecord,patientPickerLabel } from "@/features/patients/helpers";
+import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
 import { useForm } from "react-hook-form";
 import {
   DocumentUploadFormValues,
@@ -75,28 +75,13 @@ export function FilesPanel({
     setValue("folder", nextFolder);
   }, [category, rule, setValue]);
 
-  const patientOptions = useMemo(
-    () =>
-      patients
-        .filter(isActivePatientRecord)
-        .slice(0, 500)
-        .map((patient: any) => {
-          return {
-            value: patient.id,
-            label: patientPickerLabel(patient),
-            sublabel: patient.patient_number || patient.mobile || patient.id,
-          };
-        }),
-    [patients],
-  );
-
   useEffect(() => {
     if (!apiSession || !doctype) {
       setRecordOptions([]);
       return;
     }
     if (doctype === "Patient") {
-      setRecordOptions(patientOptions);
+      setRecordOptions([]);
       return;
     }
     if (doctype === "Tenant") {
@@ -141,7 +126,7 @@ export function FilesPanel({
     return () => {
       cancelled = true;
     };
-  }, [apiSession?.tenantId, doctype, patientOptions]);
+  }, [apiSession?.tenantId, doctype]);
 
   const visible = files.filter((file: any) =>
     [
@@ -368,14 +353,15 @@ export function FilesPanel({
             />
           </FormField>
           <FormField label="Patient">
-            <SearchableSelect
+            <PatientSearchSelect
+              apiSession={apiSession}
+              initialPatients={patients}
               value={watch('patient_id')}
               onChange={(value) => {
                 setValue("patient_id", value);
               }}
               placeholder="No patient link"
-              options={patientOptions}
-              searchPlaceholder="Search patients..."
+              searchPlaceholder="Search patient by name, mobile, or number"
             />
           </FormField>
           <FormField label="Source Module">
@@ -403,23 +389,33 @@ export function FilesPanel({
             />
           </FormField>
           <FormField label="Linked Record ID">
-            <SearchableSelect
-              value={watch('attached_to_name')}
-              onChange={(value) => {
-                setValue("attached_to_name", value);
-              }}
-              options={recordOptions}
-              placeholder={
-                recordsLoading
-                  ? "Loading records..."
-                  : recordOptions.length
-                    ? "Select a record"
-                    : "Type a record id"
-              }
-              searchPlaceholder="Search records..."
-              allowCustom
-              emptyText={recordsLoading ? "Loading..." : "No matching records."}
-            />
+            {doctype === "Patient" ? (
+              <PatientSearchSelect
+                apiSession={apiSession}
+                initialPatients={patients}
+                value={watch("attached_to_name")}
+                onChange={(value) => setValue("attached_to_name", value)}
+                placeholder="Select patient record"
+              />
+            ) : (
+              <SearchableSelect
+                value={watch('attached_to_name')}
+                onChange={(value) => {
+                  setValue("attached_to_name", value);
+                }}
+                options={recordOptions}
+                placeholder={
+                  recordsLoading
+                    ? "Loading records..."
+                    : recordOptions.length
+                      ? "Select a record"
+                      : "Type a record id"
+                }
+                searchPlaceholder="Search records..."
+                allowCustom
+                emptyText={recordsLoading ? "Loading..." : "No matching records."}
+              />
+            )}
           </FormField>
           <FormField label="Linked Field">
             <SearchableSelect

@@ -27,6 +27,7 @@ import { DepartmentForm } from "./forms/DepartmentForm";
 import { SupplierForm } from "./forms/SupplierForm";
 import { FilesPanel } from "./components/FilesPanel";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { WhatsAppIntegrationSettings } from "./components/WhatsAppIntegrationSettings";
 import {
   BRANCH_COLUMNS,
   DEPARTMENT_COLUMNS,
@@ -98,6 +99,9 @@ export function TenantAdmin({
   });
 
   const data = useTenantAdminData(apiSession, clinic);
+  const whatsappModuleEnabled = Boolean(
+    clinic?.modules?.includes("whatsapp"),
+  );
   const permissionKeys: string[] = apiSession?.user?.permissions || [];
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const hasAdminAction = (prefix: string, action: string) =>
@@ -972,6 +976,17 @@ export function TenantAdmin({
           resendMonthlyReport={actions.resendMonthlyReport}
           downloadMonthlyReport={actions.downloadMonthlyReport}
         />
+      )}
+      {section === "whatsapp" && whatsappModuleEnabled && (
+        <WhatsAppIntegrationSettings apiSession={apiSession} />
+      )}
+      {section === "whatsapp" && !whatsappModuleEnabled && (
+        <Card>
+          <h3 className="card-title font-bold">WhatsApp Settings</h3>
+          <p className="mt-2 text-sm text-slate-500">
+            This module is not enabled by the tenant&apos;s active subscription.
+          </p>
+        </Card>
       )}
       {confirm && (
         <ConfirmModal

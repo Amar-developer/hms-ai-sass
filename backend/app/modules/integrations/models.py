@@ -18,6 +18,8 @@ class TenantIntegrationPlugin(SQLModel, table=True):
     plugin_key: str = Field(index=True, min_length=2, max_length=120)
     enabled: bool = Field(default=False, index=True)
     config_json: str = Field(default="{}")
+    secret_ciphertext: str | None = Field(default=None, max_length=4096)
+    secret_last_four: str | None = Field(default=None, max_length=4)
     created_by_user_id: str | None = Field(default=None, index=True)
     updated_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)

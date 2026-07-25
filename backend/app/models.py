@@ -49,6 +49,7 @@ from app.modules.ip.models import (
     IPRoom,
     IPTreatment,
 )
+from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.lab.models import (
     LabOrder,
     LabOrderItem,
@@ -146,6 +147,7 @@ __all__ = [
     "IPMedicationOrder",
     "IPRoom",
     "IPTreatment",
+    "TenantIntegrationPlugin",
     "LabOrder",
     "LabOrderItem",
     "LabResult",

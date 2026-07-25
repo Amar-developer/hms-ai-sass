@@ -41,6 +41,10 @@ class Settings(BaseSettings):
 
     database_url: str = Field(default="sqlite:///./medizinhub_hms.db")
     redis_url: str = Field(default="redis://localhost:6379/0")
+    credential_encryption_key: str = Field(
+        default="local-development-credential-key-change-before-production",
+        min_length=32,
+    )
     report_queue_name: str = Field(default="medizinhub:reports:monthly")
     report_scheduler_lock_key: str = Field(
         default="medizinhub:reports:monthly:scheduler"

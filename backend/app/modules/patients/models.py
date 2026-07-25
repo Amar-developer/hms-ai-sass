@@ -19,6 +19,12 @@ class PatientStatus(str, Enum):
     DECEASED = "deceased"
 
 
+class WhatsAppConsentStatus(str, Enum):
+    NOT_RECORDED = "not_recorded"
+    OPTED_IN = "opted_in"
+    OPTED_OUT = "opted_out"
+
+
 class AlertType(str, Enum):
     ALLERGY = "allergy"
     CHRONIC_CONDITION = "chronic_condition"
@@ -53,6 +59,12 @@ class Patient(SQLModel, table=True):
     photo_url: str | None = Field(default=None, max_length=500)
     photo_file_name: str | None = Field(default=None, max_length=220)
     status: PatientStatus = Field(default=PatientStatus.ACTIVE)
+    whatsapp_consent_status: WhatsAppConsentStatus = Field(
+        default=WhatsAppConsentStatus.NOT_RECORDED, index=True
+    )
+    whatsapp_consent_source: str | None = Field(default=None, max_length=80)
+    whatsapp_consent_updated_at: datetime | None = Field(default=None, index=True)
+    whatsapp_preferred_language: str = Field(default="en", max_length=20)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
 

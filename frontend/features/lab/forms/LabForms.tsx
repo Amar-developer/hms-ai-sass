@@ -3,17 +3,18 @@
 import { Controller, useForm } from "react-hook-form";
 import { LabOrderFormValues, labOrderSchema } from "../lab.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useEffect } from "react";
 import { Input, SearchableSelect, Button, ActionButton } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { FormError } from "@/app/components/common/FormError";
 import { SearchPicker } from "@/app/components/clinicalRows";
+import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
+import type { ApiSession } from "@/lib/api";
 
 
 
 type LabOrderFormProps = {
-  patientOptions: { value: string; label: string; sublabel?: string }[];
-  defaultPatientId?: string;
+  apiSession: ApiSession;
+  patients?: any[];
   busy: boolean;
   testOptions: any[];
   testSearch: string;
@@ -36,8 +37,8 @@ type LabOrderFormProps = {
 };
 
 export function LabOrderForm({
-  patientOptions,
-  defaultPatientId,
+  apiSession,
+  patients = [],
   busy,
   testOptions,
   testSearch,
@@ -62,27 +63,15 @@ export function LabOrderForm({
     register,
     reset,
     watch,
-    setValue,
-    getValues,
     formState: { errors },
   } = useForm<LabOrderFormValues>({
     resolver: zodResolver(labOrderSchema),
     defaultValues: {
-      patient_id: defaultPatientId || "",
+      patient_id: "",
       source: "op_direct",
       external_referrer: "",
     },
   });
-
-  // Keep the patient field pointed at a valid default while the patient list
-  // loads / changes, without overriding a value the user already picked.
-  useEffect(() => {
-    if (!defaultPatientId) return;
-    const current = getValues("patient_id");
-    if (!current || !patientOptions.some((p) => p.value === current)) {
-      setValue("patient_id", defaultPatientId);
-    }
-  }, [defaultPatientId, patientOptions, getValues, setValue]);
 
   const source = watch("source");
 
@@ -107,15 +96,15 @@ export function LabOrderForm({
           name="patient_id"
           control={control}
           render={({ field }) => (
-          <SearchableSelect
-            required
+            <PatientSearchSelect
+              apiSession={apiSession}
+              initialPatients={patients}
+              required
               value={field.value}
               onChange={field.onChange}
-              searchable={true}
               placeholder="Select patient"
               searchPlaceholder="Search patient by name, mobile, or number"
               className="text-xs md:col-span-2"
-              options={patientOptions}
             />
           )}
         />

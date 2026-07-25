@@ -3,6 +3,8 @@ const A4_HEIGHT_MM = 297;
 const PAGE_MARGIN_MM = 6;
 const CONTENT_WIDTH_MM = A4_WIDTH_MM - PAGE_MARGIN_MM * 2;
 const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - PAGE_MARGIN_MM * 2;
+const CAPTURE_SCALE = 1.5;
+const JPEG_QUALITY = 0.88;
 
 /**
  * Renders each `[data-invoice-page]` element inside `container` to a canvas and
@@ -16,10 +18,7 @@ const CONTENT_HEIGHT_MM = A4_HEIGHT_MM - PAGE_MARGIN_MM * 2;
  * element is only as tall as its content and the PDF ends up with dead space
  * below a short invoice.
  */
-export async function exportInvoicePdf(
-  container: HTMLElement,
-  filename: string,
-): Promise<void> {
+async function buildInvoicePdf(container: HTMLElement) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
     import("html2canvas"),
     import("jspdf"),
@@ -28,13 +27,18 @@ export async function exportInvoicePdf(
   const pageEls = Array.from(
     container.querySelectorAll<HTMLElement>("[data-invoice-page]"),
   );
-  if (pageEls.length === 0) return;
+  if (pageEls.length === 0) return null;
 
-  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  const pdf = new jsPDF({
+    unit: "mm",
+    format: "a4",
+    orientation: "portrait",
+    compress: true,
+  });
 
   for (let i = 0; i < pageEls.length; i += 1) {
     const canvas = await html2canvas(pageEls[i], {
-      scale: 2,
+      scale: CAPTURE_SCALE,
       backgroundColor: "#ffffff",
       useCORS: true,
       onclone: (clonedDoc: Document) => {
@@ -58,14 +62,33 @@ export async function exportInvoicePdf(
     );
     if (i > 0) pdf.addPage();
     pdf.addImage(
-      canvas.toDataURL("image/png"),
-      "PNG",
+      canvas.toDataURL("image/jpeg", JPEG_QUALITY),
+      "JPEG",
       PAGE_MARGIN_MM,
       PAGE_MARGIN_MM,
       CONTENT_WIDTH_MM,
       imageHeightMm,
+      undefined,
+      "MEDIUM",
     );
   }
 
+  return pdf;
+}
+
+export async function renderInvoicePdfBlob(
+  container: HTMLElement,
+): Promise<Blob> {
+  const pdf = await buildInvoicePdf(container);
+  if (!pdf) throw new Error("Invoice PDF content could not be rendered.");
+  return pdf.output("blob");
+}
+
+export async function exportInvoicePdf(
+  container: HTMLElement,
+  filename: string,
+): Promise<void> {
+  const pdf = await buildInvoicePdf(container);
+  if (!pdf) return;
   pdf.save(filename.endsWith(".pdf") ? filename : `${filename}.pdf`);
 }

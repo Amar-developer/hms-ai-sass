@@ -627,6 +627,7 @@ export function IPAdmission({
               </div>
             )}
             <AdmissionFields
+              apiSession={apiSession}
               patients={patients}
               departmentId={departmentId}
               rooms={ipRooms}
@@ -680,6 +681,7 @@ export function IPAdmission({
             className="mt-5 grid gap-4"
           >
             <AdmissionFields
+              apiSession={apiSession}
               patients={patients}
               departmentId={departmentId}
               rooms={ipRooms}

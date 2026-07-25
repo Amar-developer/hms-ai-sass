@@ -3,7 +3,12 @@ from sqlmodel import Session
 from app.modules.appointments.models import AppointmentStatus
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
-from app.modules.notifications.service import queue_notification_if_allowed
+from app.modules.notifications.service import (
+    queue_notification_if_allowed,
+    queue_whatsapp_template_if_allowed,
+)
+from app.modules.patients.models import Patient
+from app.modules.practitioners.models import Practitioner
 from app.modules.notifications.services.in_app import notify_appointment_status
 from app.modules.queue.models import QueueEntry
 from app.modules.queue.services.display import token_call_message, token_language
@@ -145,6 +150,34 @@ def cancel(
         status_value="cancelled",
         actor_user_id=actor.id,
         reason=reason,
+    )
+    patient = session.get(Patient, appointment.patient_id)
+    queue_whatsapp_template_if_allowed(
+        session,
+        tenant_id=tenant_id,
+        branch_id=updated.branch_id,
+        flow_key="appointment_cancelled_patient",
+        recipient=patient.mobile if patient else None,
+        resource_type="appointment",
+        resource_id=appointment.id,
+        dedupe_key=f"whatsapp:appointment:{appointment.id}:cancelled:patient",
+        queued_by_user_id=actor_user_id,
+    )
+    practitioner = (
+        session.get(Practitioner, appointment.practitioner_id)
+        if appointment.practitioner_id
+        else None
+    )
+    queue_whatsapp_template_if_allowed(
+        session,
+        tenant_id=tenant_id,
+        branch_id=updated.branch_id,
+        flow_key="appointment_cancelled_doctor",
+        recipient=practitioner.mobile if practitioner else None,
+        resource_type="appointment",
+        resource_id=appointment.id,
+        dedupe_key=f"whatsapp:appointment:{appointment.id}:cancelled:doctor",
+        queued_by_user_id=actor_user_id,
     )
     return updated
 

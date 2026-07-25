@@ -24,7 +24,7 @@ import {
 } from "@/features/pharmacy/helpers";
 import { ConsultPrescriptionModal } from "./components/ConsultPrescriptionModal";
 import { MedicineDetailModal } from "./components/MedicineDetailModal";
-import { isActivePatientRecord, patientPickerLabel } from "../patients/helpers";
+import { PatientSearchSelect } from "../patients/components/PatientSearchSelect";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
@@ -50,9 +50,7 @@ export function Pharmacy({
   const [lowStock, setLowStock] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [patientId, setPatientId] = useState(
-    patients.find(isActivePatientRecord)?.id || "",
-  );
+  const [patientId, setPatientId] = useState("");
   const [source, setSource] = useState("op_direct");
   const [externalPrescriber, setExternalPrescriber] = useState("");
   const [medicineText, setMedicineText] = useState("Paracetamol 500mg");
@@ -148,19 +146,6 @@ export function Pharmacy({
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
-  const activePatients = useMemo(
-    () => patients.filter(isActivePatientRecord),
-    [patients],
-  );
-
-  useEffect(() => {
-    if (
-      (!patientId ||
-        !activePatients.some((patient: any) => patient.id === patientId)) &&
-      activePatients[0]?.id
-    )
-      setPatientId(activePatients[0].id);
-  }, [activePatients, patientId]);
   useEffect(() => {
     load();
   }, [apiSession?.tenantId]);
@@ -662,15 +647,12 @@ export function Pharmacy({
             className="mt-4 grid gap-3 md:grid-cols-4"
           >
             <FormField label="Patient" required>
-              <SearchableSelect
+              <PatientSearchSelect
+                apiSession={apiSession}
+                initialPatients={patients}
                 required
                 value={patientId}
                 onChange={setPatientId}
-                options={activePatients.map((p: any) => ({
-                  value: p.id,
-                  label: patientPickerLabel(p),
-                  sublabel: p.mobile || p.patient_number || p.id,
-                }))}
                 placeholder="Select patient"
                 searchPlaceholder="Search patient by name, mobile, or number"
               />

@@ -1,4 +1,4 @@
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
@@ -22,6 +22,29 @@ class PatientRepository:
         if not patient or patient.tenant_id != tenant_id:
             return None
         return patient
+
+    def list_references(
+        self, *, tenant_id: str, patient_ids: list[str]
+    ) -> list[Patient]:
+        if not patient_ids:
+            return []
+        return list(
+            self.session.exec(
+                select(Patient).where(
+                    Patient.tenant_id == tenant_id,
+                    Patient.id.in_(patient_ids),
+                )
+            ).all()
+        )
+
+    def count(self, *, tenant_id: str) -> int:
+        return int(
+            self.session.exec(
+                select(func.count())
+                .select_from(Patient)
+                .where(Patient.tenant_id == tenant_id)
+            ).one()
+        )
 
     def patients_with_primary_mobile(self, *, tenant_id: str) -> list[Patient]:
         return list(
@@ -77,22 +100,39 @@ class PatientRepository:
         if branch_id:
             statement = statement.where(Patient.branch_id == branch_id)
         if q:
-            pattern = f"%{q.strip().lower()}%"
+            term = q.strip().lower()
+            search_columns = (
+                Patient.patient_number,
+                Patient.full_name,
+                Patient.mobile,
+                Patient.alternate_mobile,
+                Patient.guardian_name,
+                Patient.guardian_mobile,
+                Patient.area,
+                Patient.address,
+            )
             statement = statement.where(
                 or_(
-                    func.lower(Patient.patient_number).like(pattern),
-                    func.lower(Patient.full_name).like(pattern),
-                    func.lower(Patient.mobile).like(pattern),
-                    func.lower(Patient.alternate_mobile).like(pattern),
-                    func.lower(Patient.guardian_name).like(pattern),
-                    func.lower(Patient.guardian_mobile).like(pattern),
-                    func.lower(Patient.area).like(pattern),
-                    func.lower(Patient.address).like(pattern),
+                    *(
+                        func.lower(column).contains(term, autoescape=True)
+                        for column in search_columns
+                    )
                 )
+            ).order_by(
+                case(
+                    (func.lower(Patient.patient_number) == term, 0),
+                    (func.lower(Patient.mobile) == term, 0),
+                    (func.lower(Patient.full_name) == term, 1),
+                    (func.lower(Patient.patient_number).startswith(term), 2),
+                    (func.lower(Patient.mobile).startswith(term), 2),
+                    (func.lower(Patient.full_name).startswith(term), 3),
+                    else_=4,
+                ),
+                Patient.updated_at.desc(),
             )
-        return list(
-            self.session.exec(statement.order_by(Patient.created_at).limit(limit)).all()
-        )
+        else:
+            statement = statement.order_by(Patient.updated_at.desc())
+        return list(self.session.exec(statement.limit(limit)).all())
 
     def doctor_has_patient_appointment(
         self,

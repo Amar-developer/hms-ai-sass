@@ -53,6 +53,26 @@ export const patientSchema = z
     address: z.string().trim().min(1, "Address is required"),
 
     status: z.string().optional(),
+    whatsappConsentStatus: z.enum([
+      "not_recorded",
+      "opted_in",
+      "opted_out",
+    ]),
+    whatsappConsentSource: z.string().optional(),
+    whatsappPreferredLanguage: z.enum([
+      "tenant_default",
+      "en",
+      "hi",
+      "mr",
+      "gu",
+      "ta",
+      "te",
+      "kn",
+      "ml",
+      "bn",
+      "pa",
+      "ur",
+    ]),
   })
   .superRefine((values, context) => {
     if (

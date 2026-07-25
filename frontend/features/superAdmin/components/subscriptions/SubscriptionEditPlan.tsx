@@ -57,6 +57,15 @@ export function SubscriptionEditPlan({
             defaultValue={plan.included_branches}
           />
         </FormField>
+        <FormField label="Monthly WhatsApp Notifications">
+          <Input
+            name="monthlyWhatsAppMessageLimit"
+            type="number"
+            required
+            min="0"
+            defaultValue={plan.monthly_whatsapp_message_limit || 0}
+          />
+        </FormField>
         <FormField label="Included Doctors">
           <Input
             name="includedDoctors"

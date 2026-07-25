@@ -17,12 +17,16 @@ export function PlanModulePreview({ plan, modules }: any) {
   });
   return (
     <div className="grid gap-4">
-      <div className="grid gap-3 md:grid-cols-5">
+      <div className="grid gap-3 md:grid-cols-6">
         <Info label="Plan" value={plan.name} />
         <Info label="Price" value={`₹${plan.price_inr_monthly}`} />
         <Info label="Patients" value={limitLabel(plan.monthly_patient_limit)} />
         <Info label="Invoices" value={invoiceLimitLabel(plan)} />
         <Info label="Branches" value={limitLabel(plan.included_branches)} />
+        <Info
+          label="WhatsApp"
+          value={limitLabel(plan.monthly_whatsapp_message_limit)}
+        />
       </div>
       <Card>
         <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">

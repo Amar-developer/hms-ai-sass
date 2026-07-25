@@ -27,6 +27,8 @@ import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { PasswordResetModal } from "./components/shared/PasswordResetModal";
 import { SubscriptionManagement } from "./components/subscriptions/SubscriptionManagement";
 import { TenantBranchSettings } from "./components/subscriptions/TenantBranchSettings";
+import { TenantPicker } from "./components/shared/TenantPicker";
+import { WhatsAppIntegrationSettings } from "@/features/admin/components/WhatsAppIntegrationSettings";
 import { useSuperAdminData, useSuperAdminActions } from "./api";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 
@@ -57,7 +59,11 @@ export function SuperAdminDashboard({
     selectableTenants.find((t) => t.id === data.selectedId) ||
     selectableTenants.find((t) => t.is_primary) ||
     selectableTenants[0];
-  const settingsTenant = currentSection === "settings" ? selected : null;
+  const settingsTenant = ["settings", "whatsappSettings"].includes(
+    currentSection,
+  )
+    ? selected
+    : null;
   const customerTenants = tenantSelectOptions(
     data.tenants.filter((t) => !t.is_primary),
   );
@@ -71,6 +77,29 @@ export function SuperAdminDashboard({
     (plan: any) =>
       catalogPlanIds.has(plan.id) || currentTenantPlanIds.has(plan.id),
   );
+  const activeTenantSubscription =
+    data.tenantSubscriptions.find(
+      (subscription: any) =>
+        subscription.status === "active" || subscription.is_active,
+    ) || data.tenantSubscriptions[0];
+  const activeTenantPlan = activeTenantSubscription
+    ? data.plans.find(
+        (plan: any) => plan.id === activeTenantSubscription.plan_id,
+      )
+    : null;
+  const tenantWhatsAppEnabled = Boolean(
+    activeTenantPlan?.enabled_modules?.includes("whatsapp"),
+  );
+
+  useEffect(() => {
+    if (
+      currentSection === "whatsappSettings" &&
+      customerTenants.length > 0 &&
+      !customerTenants.some((tenant: any) => tenant.id === data.selectedId)
+    ) {
+      data.setSelectedId(customerTenants[0].id);
+    }
+  }, [currentSection, customerTenants, data.selectedId]);
   const activeTenants = customerTenants.filter(
     (t) => t.status === "active",
   ).length;
@@ -481,6 +510,38 @@ export function SuperAdminDashboard({
           modules={data.moduleRegistry}
           reloadPlans={data.reload}
         />
+      )}
+      {currentSection === "whatsappSettings" && (
+        <div className="space-y-5">
+          <Card>
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+              <TenantPicker
+                tenants={customerTenants}
+                selectedId={data.selectedId}
+                setSelectedId={data.setSelectedId}
+              />
+              <Badge tone={tenantWhatsAppEnabled ? "green" : "slate"}>
+                {tenantWhatsAppEnabled
+                  ? "Included in active subscription"
+                  : "Not included in active subscription"}
+              </Badge>
+            </div>
+          </Card>
+          {tenantWhatsAppEnabled ? (
+            <WhatsAppIntegrationSettings
+              apiSession={apiSession}
+              tenantId={data.selectedId}
+            />
+          ) : (
+            <Card>
+              <h3 className="card-title font-bold">WhatsApp Settings</h3>
+              <p className="mt-2 text-sm text-slate-500">
+                Enable the WhatsApp module in the tenant&apos;s subscription
+                before configuring its connection and notification templates.
+              </p>
+            </Card>
+          )}
+        </div>
       )}
       {confirmAction && (
         <ConfirmModal

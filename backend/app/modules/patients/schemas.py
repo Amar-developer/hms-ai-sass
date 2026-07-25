@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -7,7 +8,24 @@ from app.modules.patients.models import (
     AlertType,
     Gender,
     PatientStatus,
+    WhatsAppConsentStatus,
 )
+
+
+WhatsAppPatientLanguage = Literal[
+    "tenant_default",
+    "en",
+    "hi",
+    "mr",
+    "gu",
+    "ta",
+    "te",
+    "kn",
+    "ml",
+    "bn",
+    "pa",
+    "ur",
+]
 
 
 class PatientCreate(BaseModel):
@@ -25,6 +43,9 @@ class PatientCreate(BaseModel):
     area: str | None = Field(default=None, max_length=160)
     address: str | None = Field(default=None, max_length=500)
     blood_group: str | None = Field(default=None, max_length=8)
+    whatsapp_consent_status: WhatsAppConsentStatus = WhatsAppConsentStatus.NOT_RECORDED
+    whatsapp_consent_source: str | None = Field(default=None, max_length=80)
+    whatsapp_preferred_language: WhatsAppPatientLanguage = "en"
 
     @field_validator("date_of_birth")
     @classmethod
@@ -49,6 +70,9 @@ class PatientUpdate(BaseModel):
     address: str | None = Field(default=None, max_length=500)
     blood_group: str | None = Field(default=None, max_length=8)
     status: PatientStatus | None = None
+    whatsapp_consent_status: WhatsAppConsentStatus | None = None
+    whatsapp_consent_source: str | None = Field(default=None, max_length=80)
+    whatsapp_preferred_language: WhatsAppPatientLanguage | None = None
 
     @field_validator("date_of_birth")
     @classmethod
@@ -78,6 +102,10 @@ class PatientRead(BaseModel):
     photo_url: str | None = None
     photo_file_name: str | None = None
     status: PatientStatus
+    whatsapp_consent_status: WhatsAppConsentStatus
+    whatsapp_consent_source: str | None
+    whatsapp_consent_updated_at: datetime | None
+    whatsapp_preferred_language: WhatsAppPatientLanguage
     created_at: datetime
     updated_at: datetime
 

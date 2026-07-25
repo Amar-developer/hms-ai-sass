@@ -344,6 +344,7 @@ export function Physiotherapy({
 
       {view === "op" && (
         <CaseForm
+          apiSession={apiSession}
           title="OP Physiotherapy Case"
           subtitle="Assessment, pain mapping, electrotherapy plan, and rehab exercise plan for outpatients."
           patients={patients}

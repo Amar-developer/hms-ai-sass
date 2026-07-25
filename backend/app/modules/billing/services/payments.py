@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from datetime import timedelta
 
 from fastapi import HTTPException, status
 from sqlmodel import Session
@@ -11,7 +12,11 @@ from app.modules.billing.schemas import InvoiceDetailRead, PaymentCreate
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
-from app.modules.notifications.service import queue_notification_if_allowed
+from app.modules.notifications.service import (
+    queue_notification_if_allowed,
+    queue_whatsapp_template_if_allowed,
+)
+from app.modules.tenants.models import now_utc
 
 LedgerRecorder = Callable[..., object]
 InvoiceSyncer = Callable[[Session, Invoice], None]
@@ -84,21 +89,54 @@ def record_invoice_payment(
     sync_home_care_booking_status(session, invoice)
     sync_patient_membership_payment(session, invoice)
     patient = payment_repo.get_patient(invoice.patient_id)
-    if invoice.balance_amount > 0 and patient:
-        for provider in (NotificationProvider.WHATSAPP, NotificationProvider.SMS):
-            queue_notification_if_allowed(
-                session,
-                tenant_id=tenant_id,
-                branch_id=invoice.branch_id,
-                provider=provider,
-                event_type=NotificationEventType.PAYMENT_REMINDER,
-                recipient=patient.mobile,
-                subject="Payment pending",
-                message=f"Payment pending for invoice {invoice.invoice_number}: Rs. {invoice.balance_amount}.",
-                resource_type="invoice",
-                resource_id=invoice.id,
-                queued_by_user_id=payload.collected_by_user_id,
-            )
+    if (
+        patient
+        and invoice.status == InvoiceStatus.PAID
+        and before["status"] != InvoiceStatus.PAID
+    ):
+        paid_event = queue_whatsapp_template_if_allowed(
+            session,
+            tenant_id=tenant_id,
+            branch_id=invoice.branch_id,
+            flow_key="invoice_paid_patient",
+            recipient=patient.mobile,
+            resource_type="invoice",
+            resource_id=invoice.id,
+            dedupe_key=f"whatsapp:invoice:{invoice.id}:paid",
+            queued_by_user_id=payload.collected_by_user_id,
+        )
+        if paid_event and paid_event.attempt_count == 0:
+            # The SPA uploads the exact branded Print Invoice PDF immediately
+            # after this response. Delay processing so the worker never races
+            # ahead and falls back to a different document design.
+            paid_event.next_attempt_at = now_utc() + timedelta(minutes=2)
+            session.add(paid_event)
+            session.commit()
+    elif invoice.balance_amount > 0 and patient:
+        queue_notification_if_allowed(
+            session,
+            tenant_id=tenant_id,
+            branch_id=invoice.branch_id,
+            provider=NotificationProvider.SMS,
+            event_type=NotificationEventType.PAYMENT_REMINDER,
+            recipient=patient.mobile,
+            subject="Payment pending",
+            message=f"Payment pending for invoice {invoice.invoice_number}: Rs. {invoice.balance_amount}.",
+            resource_type="invoice",
+            resource_id=invoice.id,
+            queued_by_user_id=payload.collected_by_user_id,
+        )
+        queue_whatsapp_template_if_allowed(
+            session,
+            tenant_id=tenant_id,
+            branch_id=invoice.branch_id,
+            flow_key="payment_pending_patient",
+            recipient=patient.mobile,
+            resource_type="invoice",
+            resource_id=invoice.id,
+            dedupe_key=f"whatsapp:invoice:{invoice.id}:pending:{payment.id}",
+            queued_by_user_id=payload.collected_by_user_id,
+        )
     record_audit_event(
         session,
         tenant_id=tenant_id,

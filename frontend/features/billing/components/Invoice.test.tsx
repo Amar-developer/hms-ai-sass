@@ -39,6 +39,7 @@ describe("invoice receipt columns", () => {
     expect(screen.getByText("Qty")).toBeTruthy();
     expect(screen.getByText("MRP")).toBeTruthy();
     expect(screen.getByText("Rate")).toBeTruthy();
+    expect(screen.queryByText("0%")).toBeNull();
     expect(screen.queryByText("Exp. Date")).toBeNull();
     expect(screen.queryByText("HSN / SAC")).toBeNull();
   });
@@ -76,7 +77,7 @@ describe("invoice receipt columns", () => {
     ).toBeTruthy();
   });
 
-  it("shows a dash when an item has no MRP", () => {
+  it("shows dashes when an item has no MRP or discount", () => {
     render(
       <Invoice
         company={{ name: "MedizinHub", address: "Chennai", phone: "9876543210" }}
@@ -99,7 +100,9 @@ describe("invoice receipt columns", () => {
       />,
     );
 
-    expect(screen.getByText("-")).toBeTruthy();
+    expect(screen.getAllByText("-").length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("₹0")).toBeNull();
+    expect(screen.queryByText("0%")).toBeNull();
     expect(screen.getAllByText("₹500").length).toBeGreaterThan(0);
   });
 

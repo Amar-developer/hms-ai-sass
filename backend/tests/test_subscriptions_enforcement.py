@@ -195,6 +195,7 @@ def test_subscription_plan_can_be_edited_and_deactivated(client):
             "key": "editable_growth",
             "name": "Editable Growth",
             "monthly_patient_limit": 500,
+            "monthly_whatsapp_message_limit": 2000,
             "included_branches": 2,
             "included_doctors": 5,
             "price_inr_monthly": 2499,
@@ -206,6 +207,7 @@ def test_subscription_plan_can_be_edited_and_deactivated(client):
         f"/api/v1/subscription-plans/{plan['id']}",
         json={
             "monthly_patient_limit": 750,
+            "monthly_whatsapp_message_limit": 3000,
             "price_inr_monthly": 2999,
             "enabled_modules": ["patients", "appointments", "lab"],
         },
@@ -216,6 +218,7 @@ def test_subscription_plan_can_be_edited_and_deactivated(client):
 
     assert updated.status_code == 200
     assert updated.json()["monthly_patient_limit"] == 750
+    assert updated.json()["monthly_whatsapp_message_limit"] == 3000
     assert "lab" in updated.json()["enabled_modules"]
     assert inactive.status_code == 200
     assert inactive.json()["is_active"] is False

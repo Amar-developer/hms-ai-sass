@@ -3,6 +3,7 @@ import {
   Building2,
   ClipboardList,
   CreditCard,
+  MessageCircleMore,
   Settings,
   ShieldCheck,
   Users,
@@ -210,6 +211,7 @@ export const superAdminSections = [
   ["branches", "Branches", Building2],
   ["subscriptions", "Subscription Management", CreditCard],
   ["settings", "Tenant & Branch Settings", Settings],
+  ["whatsappSettings", "WhatsApp Settings", MessageCircleMore],
 ] as const;
 
 export const status_options = [
