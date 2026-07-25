@@ -6,7 +6,8 @@ import { Search, X } from "lucide-react";
 import { Button, Input } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { PatientFormFields } from "@/features/patients/PatientFormFields";
-import { searchPatients } from "@/lib/hmsLogic";
+import { apiFetch, type ApiSession } from "@/lib/api";
+import { usePatientSearch } from "./PatientSearchSelect";
 import {
   isActivePatientRecord,
   patientDisplayMobile,
@@ -89,6 +90,7 @@ function NewPatientForm({
 export function PatientLookupField({
   label = "Patient",
   patients,
+  apiSession,
   searchValue,
   onSearchChange,
   selectedPatient,
@@ -105,15 +107,33 @@ export function PatientLookupField({
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const query = String(searchValue || "").trim();
-  const matches = useMemo(() => {
-    if (!query || selectedPatient) return [];
-    return searchPatients(patients || [], query)
-      .filter(isActivePatientRecord)
-      .slice(0, 8);
-  }, [patients, query, selectedPatient]);
+  const {
+    patients: searchRows,
+    loading,
+    failed,
+  } = usePatientSearch({
+    apiSession: apiSession as ApiSession | null,
+    query,
+    selectedPatientId: selectedPatient?.id || "",
+    initialPatients: patients || [],
+  });
+  const matches = useMemo(
+    () =>
+      selectedPatient
+        ? []
+        : searchRows.filter(isActivePatientRecord).slice(0, 8),
+    [searchRows, selectedPatient],
+  );
 
-  function selectPatient(patient: any) {
-    onSelect(patient);
+  async function selectPatient(patient: any) {
+    let selected = patient;
+    if (apiSession && patient?.id) {
+      selected = await apiFetch(
+        `/patients/${encodeURIComponent(patient.id)}`,
+        apiSession,
+      ).catch(() => patient);
+    }
+    onSelect(selected);
     setCreating(false);
     setOpen(false);
   }
@@ -121,7 +141,7 @@ export function PatientLookupField({
   async function savePatient(data: any) {
     const saved = await onCreatePatient(data);
     if (saved) {
-      selectPatient(saved);
+      await selectPatient(saved);
       onSearchChange("");
     }
   }
@@ -200,6 +220,13 @@ export function PatientLookupField({
                   </p>
                 )}
                 {query.length >= 2 &&
+                  loading && (
+                    <p className="px-3 py-3 text-xs text-slate-500">
+                      Searching...
+                    </p>
+                  )}
+                {query.length >= 2 &&
+                  !loading &&
                   matches.map((patient: any) => (
                     <button
                       key={patient.id}
@@ -224,9 +251,11 @@ export function PatientLookupField({
                       </span>
                     </button>
                   ))}
-                {query.length >= 2 && matches.length === 0 && (
+                {query.length >= 2 && !loading && matches.length === 0 && (
                   <p className="px-3 py-2 table-data text-slate-500">
-                    No active patient found.
+                    {failed
+                      ? "Patient search failed. Try again."
+                      : "No active patient found."}
                   </p>
                 )}
                 {query.length >= 2 && (

@@ -7,3 +7,4 @@ alembic==1.14.1
 psycopg[binary]==3.2.13
 python-multipart==0.0.20
 redis==5.2.1
+cryptography==49.0.0

@@ -37,6 +37,19 @@ describe("tenant administration permission routing", () => {
         permissions: ["discounts.read"],
       }),
     ).toBe(false);
+    expect(
+      canUseTenantAdminSection("whatsapp", {
+        permissions: [
+          "communications.read",
+          "communications.whatsapp.manage",
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      canUseTenantAdminSection("whatsapp", {
+        permissions: ["communications.whatsapp.manage"],
+      }),
+    ).toBe(false);
   });
 
   it("keeps tenant admins and wildcard users fully authorized", () => {

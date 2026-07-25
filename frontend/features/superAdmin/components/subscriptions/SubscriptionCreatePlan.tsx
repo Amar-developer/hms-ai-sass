@@ -56,6 +56,15 @@ export function SubscriptionCreatePlan({
             defaultValue="2999"
           />
         </FormField>
+        <FormField label="Monthly WhatsApp Notifications">
+          <Input
+            name="monthlyWhatsAppMessageLimit"
+            type="number"
+            required
+            min="0"
+            defaultValue="1000"
+          />
+        </FormField>
         <FormField label="Included Branches">
           <Input
             name="includedBranches"

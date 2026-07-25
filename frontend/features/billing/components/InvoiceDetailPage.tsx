@@ -27,7 +27,7 @@ export function InvoiceDetailPage({
   busy,
   collectPayment,
   collectSplitPayment,
-  refreshConsultationInvoice,
+  sendInvoice,
   applyMembershipBenefit,
   openReceipt,
   issueCreditNote,
@@ -64,11 +64,6 @@ export function InvoiceDetailPage({
     currentUser?.user_type === "super_admin" ||
     currentUserRoles.includes("tenant_admin") ||
     currentUserRoles.includes("super_admin");
-  const canCreateInvoices = hasPermission(
-    "billing.manage",
-    "billing.create",
-    "invoices.create",
-  );
   const canEditInvoices = hasPermission("billing.manage", "invoices.edit");
   const canRequestDiscountPermission = hasPermission(
     "billing.discounts.request",
@@ -161,14 +156,26 @@ export function InvoiceDetailPage({
         : membershipBenefit?.reason || "No membership benefit applied";
   const taxableAmount = numberValue(invoice.taxable_amount);
   const taxAmount = numberValue(invoice.tax_amount);
-  const canRefresh =
-    canCreateInvoices &&
-    invoice.consultation_id &&
-    !invoice.lab_order_id &&
-    !invoice.pharmacy_issue_id &&
-    !invoice.ip_admission_id &&
-    !invoice.physiotherapy_case_id;
   const balanceDue = numberValue(invoice.balance_amount);
+  const invoiceDelivery = detail.invoice_delivery || {};
+  const invoiceDeliveryStatus = String(
+    invoiceDelivery.status || "not_sent",
+  ).toLowerCase();
+  const invoiceDeliveryPending = ["queued", "processing"].includes(
+    invoiceDeliveryStatus,
+  );
+  const invoiceDeliveryLabel = {
+    not_sent: "Not sent",
+    queued: "Queued",
+    processing: "Sending",
+    sent: "Sent",
+    failed: "Failed",
+    cancelled: "Cancelled",
+  }[invoiceDeliveryStatus] || humanizeOptionLabel(invoiceDeliveryStatus);
+  const canSendInvoice =
+    canEditInvoices &&
+    String(invoice.status || "").toLowerCase() === "paid" &&
+    balanceDue <= 0;
   const [payRows, setPayRows] = useState<any[]>([
     { method: defaultPaymentMethod, amount: "", reference: "" },
   ]);
@@ -599,19 +606,21 @@ export function InvoiceDetailPage({
                           )}
                           {showItemPricing && (
                             <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                              {money(itemMrp(item))}
+                              {itemMrp(item) > 0 ? money(itemMrp(item)) : "-"}
                             </td>
                           )}
                           <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-slate-800">
                             {money(itemRate(item))}
                           </td>
                           <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right tabular-nums text-slate-700">
-                            {percentLabel(displayDiscount, discountBase)}
+                            {displayDiscount > 0
+                              ? percentLabel(displayDiscount, discountBase)
+                              : "-"}
                           </td>
                           <td className="border-r border-t border-slate-200 px-3 py-2.5 text-right font-bold tabular-nums text-emerald-700">
                             {displayDiscount > 0
                               ? `-${money(displayDiscount)}`
-                              : money(0)}
+                              : "-"}
                           </td>
                           <td className="border-t border-slate-200 px-3 py-2.5 text-right font-black tabular-nums text-slate-900">
                             {money(pricing.payableAmount)}
@@ -663,7 +672,11 @@ export function InvoiceDetailPage({
                           }`
                         : "Offer & Discount"
                     }
-                    value={`-${money(discountParts.offerDiscount)}`}
+                    value={
+                      discountParts.offerDiscount > 0
+                        ? `-${money(discountParts.offerDiscount)}`
+                        : "-"
+                    }
                     muted={discountParts.offerDiscount <= 0}
                     savings={discountParts.offerDiscount > 0}
                     note={
@@ -677,7 +690,11 @@ export function InvoiceDetailPage({
                   />
                   <BillLine
                     label="Admin Approved Discount"
-                    value={`-${money(discountParts.approvedDiscount)}`}
+                    value={
+                      discountParts.approvedDiscount > 0
+                        ? `-${money(discountParts.approvedDiscount)}`
+                        : "-"
+                    }
                     muted={discountParts.approvedDiscount <= 0}
                     savings={discountParts.approvedDiscount > 0}
                     note={
@@ -692,7 +709,11 @@ export function InvoiceDetailPage({
                   />
                   <BillLine
                     label="Membership benefit"
-                    value={`-${money(discountParts.membershipDiscount)}`}
+                    value={
+                      discountParts.membershipDiscount > 0
+                        ? `-${money(discountParts.membershipDiscount)}`
+                        : "-"
+                    }
                     muted={discountParts.membershipDiscount <= 0}
                     savings={discountParts.membershipDiscount > 0}
                     note={membershipBenefitNote}
@@ -891,15 +912,64 @@ export function InvoiceDetailPage({
                       <span>{money(invoice.paid_amount)}</span>
                     </div>
                   )}
+                  {String(invoice.status || "").toLowerCase() === "paid" && (
+                    <div
+                      className={`rounded-lg border p-3 text-xs ${
+                        invoiceDeliveryStatus === "sent"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-900"
+                          : ["failed", "cancelled"].includes(invoiceDeliveryStatus)
+                            ? "border-red-200 bg-red-50 text-red-900"
+                            : "border-amber-200 bg-amber-50 text-amber-900"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-bold">Patient invoice delivery</span>
+                        <Badge
+                          tone={
+                            invoiceDeliveryStatus === "sent"
+                              ? "green"
+                              : ["failed", "cancelled"].includes(
+                                    invoiceDeliveryStatus,
+                                  )
+                                ? "red"
+                                : "amber"
+                          }
+                        >
+                          {invoiceDeliveryLabel}
+                        </Badge>
+                      </div>
+                      {invoiceDelivery.failure_reason && (
+                        <p className="mt-2 whitespace-pre-wrap break-words font-semibold">
+                          {invoiceDelivery.failure_reason}
+                        </p>
+                      )}
+                      {Number(invoiceDelivery.attempt_count || 0) > 0 && (
+                        <p className="mt-1 opacity-80">
+                          Attempt {invoiceDelivery.attempt_count} of {invoiceDelivery.max_attempts}
+                        </p>
+                      )}
+                    </div>
+                  )}
                   <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
-                    {canRefresh && (
+                    {canSendInvoice && (
                       <ActionButton
-                        onClick={() => refreshConsultationInvoice(invoice)}
-                        disabled={busy === `refresh-${invoice.id}`}
+                        onClick={() => sendInvoice(invoice)}
+                        disabled={
+                          busy === `send-invoice-${invoice.id}` ||
+                          invoiceDeliveryPending
+                        }
                       >
-                        {busy === `refresh-${invoice.id}`
-                          ? "Refreshing..."
-                          : "Refresh"}
+                        {busy === `send-invoice-${invoice.id}`
+                          ? "Sending Invoice..."
+                          : invoiceDeliveryPending
+                            ? "Invoice Queued"
+                            : invoiceDeliveryStatus === "sent"
+                              ? "Resend Invoice"
+                              : ["failed", "cancelled"].includes(
+                                    invoiceDeliveryStatus,
+                                  )
+                                ? "Retry Send Invoice"
+                                : "Send Invoice"}
                       </ActionButton>
                     )}
                     <ActionButton

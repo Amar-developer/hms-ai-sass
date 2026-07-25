@@ -44,6 +44,10 @@ export function PlanDetailModal({ plan, onClose, onEdit }: any) {
             label="Doctors"
             value={limitLabel(plan.included_doctors)}
           />
+          <Info
+            label="Monthly WhatsApp Notifications"
+            value={limitLabel(plan.monthly_whatsapp_message_limit)}
+          />
         </div>
         <div className="mt-4 rounded-2xl bg-slate-50 p-4">
           <div className="flex items-center justify-between gap-3">

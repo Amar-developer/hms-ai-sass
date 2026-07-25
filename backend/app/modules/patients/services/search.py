@@ -57,3 +57,11 @@ class PatientSearchService:
             )
             for patient in patients
         ]
+
+    def references(
+        self, *, tenant_id: str, patient_ids: list[str]
+    ) -> list[PatientSearchResult]:
+        patients = self.patients.list_references(
+            tenant_id=tenant_id, patient_ids=patient_ids
+        )
+        return [patient_search_result(patient) for patient in patients]

@@ -16,6 +16,7 @@ from app.api.v1.ip import router as ip_router
 from app.api.v1.lab import router as lab_router
 from app.api.v1.modules import router as modules_router
 from app.api.v1.notifications import router as notifications_router
+from app.api.v1.communications import router as communications_router
 from app.api.v1.patients import router as patients_router
 from app.api.v1.patient_subscriptions import router as patient_subscriptions_router
 from app.api.v1.pharmacy import router as pharmacy_router
@@ -53,3 +54,4 @@ api_router.include_router(physiotherapy_router, tags=["physiotherapy"])
 api_router.include_router(home_care_router, tags=["home-care"])
 api_router.include_router(settings_router, tags=["Settings"])
 api_router.include_router(notifications_router, tags=["Notifications"])
+api_router.include_router(communications_router, tags=["Communications"])

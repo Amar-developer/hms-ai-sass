@@ -387,6 +387,38 @@ export function PatientDetail({
           <Info title="Address" value={patient.address || "-"} />
           <Info title="Guardian" value={patient.guardian_name || "-"} />
           <Info title="Alternate Mobile" value={patient.alternate_mobile || "-"} />
+          <Info
+            title="WhatsApp Preference"
+            value={String(patient.whatsapp_consent_status || "not_recorded")
+              .replaceAll("_", " ")
+              .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+          />
+          <Info
+            title="Preference Source"
+            value={String(patient.whatsapp_consent_source || "-")
+              .replaceAll("_", " ")
+              .replace(/\b\w/g, (letter) => letter.toUpperCase())}
+          />
+          <Info
+            title="Message Language"
+            value={
+              {
+                tenant_default: "English",
+                en: "English",
+                hi: "Hindi",
+                mr: "Marathi",
+                gu: "Gujarati",
+                ta: "Tamil",
+                te: "Telugu",
+                kn: "Kannada",
+                ml: "Malayalam",
+                bn: "Bengali",
+                pa: "Punjabi",
+                ur: "Urdu",
+              }[String(patient.whatsapp_preferred_language || "en")] ||
+              String(patient.whatsapp_preferred_language)
+            }
+          />
         </div>
         {canReadMembership && (
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50/40 p-3">

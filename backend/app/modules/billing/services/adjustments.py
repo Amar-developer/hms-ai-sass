@@ -26,6 +26,8 @@ from app.modules.billing.services.invoice_amounts import (
 from app.modules.billing.services.invoice_status import update_invoice_payment_status
 from app.modules.billing.services.numbering import next_credit_note_number
 from app.modules.billing.services.money import ZERO, money_value
+from app.modules.notifications.service import queue_whatsapp_template_if_allowed
+from app.modules.patients.models import Patient
 
 LedgerRecorder = Callable[..., object]
 SourceSyncer = Callable[[Session, Invoice], None]
@@ -300,8 +302,8 @@ def execute_billing_adjustment(
         action="payment.refunded"
         if request_type == BillingAdjustmentType.FULL_REFUND
         else "payment.partially_refunded",
-        resource_type="invoice",
-        resource_id=invoice.id,
+        resource_type="credit_note",
+        resource_id=credit.id,
         purpose="refund",
         metadata_json=json.dumps(
             {
@@ -324,5 +326,17 @@ def execute_billing_adjustment(
                 "balance_amount": invoice.balance_amount,
             },
         ),
+    )
+    patient = session.get(Patient, invoice.patient_id)
+    queue_whatsapp_template_if_allowed(
+        session,
+        tenant_id=invoice.tenant_id,
+        branch_id=invoice.branch_id,
+        flow_key="invoice_refunded_patient",
+        recipient=patient.mobile if patient else None,
+        resource_type="invoice",
+        resource_id=invoice.id,
+        dedupe_key=f"whatsapp:invoice:{invoice.id}:refund:{credit.id}",
+        queued_by_user_id=actor_user_id,
     )
     return invoice

@@ -130,12 +130,14 @@ export default function Invoice({
                         {item.qty}
                       </div>
                       <div className="border-r-2 flex justify-end items-center border-[#25FF46] p-1.5">
-                        {item.mrp === "" || item.mrp === undefined || item.mrp === null
-                          ? "-"
-                          : formatMoney(item.mrp, currencySymbol)}
+                        {toNumber(item.mrp) > 0
+                          ? formatMoney(item.mrp, currencySymbol)
+                          : "-"}
                       </div>
                       <div className="border-r-2 flex justify-center items-center border-[#25FF46] p-1.5">
-                        {formatDiscountPercentage(item.discPercent)}%
+                        {toNumber(item.discPercent) > 0
+                          ? `${formatDiscountPercentage(item.discPercent)}%`
+                          : "-"}
                       </div>
                       <div className="flex justify-end items-center p-1.5 border-r border-[#25FF46]">
                         {formatMoney(item.rate, currencySymbol)}

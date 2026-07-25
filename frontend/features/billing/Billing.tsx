@@ -12,7 +12,7 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiUpload } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { paymentMethodOptions } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
@@ -25,7 +25,10 @@ import {
 } from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
-import { downloadInvoiceReceipt } from "./downloadInvoiceReceipt";
+import {
+  createInvoiceReceiptPdf,
+  downloadInvoiceReceipt,
+} from "./downloadInvoiceReceipt";
 import { Column } from "../reports/types";
 import { DataTable } from "../reports/components/DataTable";
 import { displayDateTime, money } from "@/utils/helper";
@@ -43,6 +46,7 @@ export function Billing({
   liveInvoices,
   branchId,
 }: any) {
+  const maxInvoicePdfUploadBytes = 10 * 1024 * 1024;
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -285,6 +289,31 @@ export function Billing({
     window.sessionStorage.removeItem("medizinhub.billingInvoiceId");
     openInvoiceDetail({ id: invoiceId });
   }, [apiSession?.tenantId]);
+  useEffect(() => {
+    const invoiceId = detail?.invoice?.id;
+    if (!apiSession || !invoiceId) return;
+    let active = true;
+    const refreshDelivery = () =>
+      apiFetch(
+        `/billing/invoices/${encodeURIComponent(invoiceId)}/delivery`,
+        apiSession,
+      )
+        .then((delivery: any) => {
+          if (!active) return;
+          setDetail((current: any) =>
+            current?.invoice?.id === invoiceId
+              ? { ...current, invoice_delivery: delivery }
+              : current,
+          );
+        })
+        .catch(() => {});
+    void refreshDelivery();
+    const timer = window.setInterval(refreshDelivery, 5000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [apiSession?.tenantId, detail?.invoice?.id]);
 
   function updateFilter(key: string, value: string) {
     setFilters((current) => ({ ...current, [key]: value }));
@@ -383,25 +412,47 @@ export function Billing({
     }
   }
 
-  async function refreshConsultationInvoice(invoice: any) {
-    if (!apiSession || !invoice.consultation_id) return;
-    setBusy(`refresh-${invoice.id}`);
-    setMessage("");
+  async function sendInvoice(invoice: any, automatic = false) {
+    if (!apiSession || !invoice?.id) return;
+    if (!automatic) {
+      setBusy(`send-invoice-${invoice.id}`);
+      setMessage("");
+    }
     try {
-      await apiFetch("/billing/invoices/from-consultation", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          consultation_id: invoice.consultation_id,
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await loadLiveData(apiSession);
-      await loadReports();
-      setMessage(`Invoice refreshed for ${invoice.invoice_number}.`);
+      const { blob, filename } = await createInvoiceReceiptPdf(
+        invoice.id,
+        apiSession,
+      );
+      if (blob.size > maxInvoicePdfUploadBytes) {
+        throw new Error(
+          `The generated invoice PDF is ${(blob.size / (1024 * 1024)).toFixed(1)} MB. The maximum allowed size is 10 MB.`,
+        );
+      }
+      const form = new FormData();
+      form.append("file", blob, filename);
+      const result = await apiUpload(
+        `/billing/invoices/${encodeURIComponent(invoice.id)}/send`,
+        apiSession,
+        form,
+      );
+      setDetail((current: any) =>
+        current?.invoice?.id === invoice.id
+          ? { ...current, invoice_delivery: result }
+          : current,
+      );
+      if (!automatic) {
+        setMessage(
+          result?.message ||
+            `Invoice ${invoice.invoice_number} queued for delivery.`,
+        );
+      }
+      return result;
     } catch (err: any) {
-      setMessage(err.message || "Could not refresh invoice items.");
+      if (automatic) throw err;
+      setMessage(err.message || "Could not send the invoice.");
+      return null;
     } finally {
-      setBusy("");
+      if (!automatic) setBusy("");
     }
   }
 
@@ -411,7 +462,11 @@ export function Billing({
     setMessage("");
     try {
       const row = await apiFetch(`/billing/invoices/${invoice.id}`, apiSession);
-      setDetail(row);
+      const delivery = await apiFetch(
+        `/billing/invoices/${encodeURIComponent(invoice.id)}/delivery`,
+        apiSession,
+      ).catch(() => ({ status: "not_sent" }));
+      setDetail({ ...row, invoice_delivery: delivery });
       await loadInvoiceSupplierOptions(row);
     } catch (err: any) {
       setMessage(err.message || "Could not load invoice details.");
@@ -450,7 +505,7 @@ export function Billing({
     setBusy(invoice.id);
     setMessage("");
     try {
-      await apiFetch(`/billing/invoices/${invoice.id}/payments`, apiSession, {
+      const paymentResult = await apiFetch(`/billing/invoices/${invoice.id}/payments`, apiSession, {
         method: "POST",
         body: JSON.stringify({
           method: methods[invoice.id] || defaultPaymentMethod,
@@ -463,7 +518,25 @@ export function Billing({
       await loadReports();
       setAmounts({ ...amounts, [invoice.id]: "" });
       setReferences({ ...references, [invoice.id]: "" });
-      setMessage(`Payment recorded for ${invoice.invoice_number}.`);
+      if (
+        String(paymentResult?.invoice?.status || "").toLowerCase() === "paid" &&
+        Number(paymentResult?.invoice?.balance_amount || 0) <= 0
+      ) {
+        try {
+          await sendInvoice(paymentResult.invoice, true);
+          setMessage(
+            `Payment recorded and invoice ${invoice.invoice_number} queued for delivery.`,
+          );
+        } catch (deliveryError: any) {
+          setMessage(
+            `Payment recorded, but automatic invoice delivery failed: ${
+              deliveryError?.message || "Could not prepare the invoice PDF."
+            }`,
+          );
+        }
+      } else {
+        setMessage(`Payment recorded for ${invoice.invoice_number}.`);
+      }
     } catch (err: any) {
       setMessage(err.message || "Could not record payment.");
     } finally {
@@ -495,8 +568,9 @@ export function Billing({
     setBusy(invoice.id);
     setMessage("");
     try {
+      let paymentResult: any = null;
       for (const row of valid) {
-        await apiFetch(`/billing/invoices/${invoice.id}/payments`, apiSession, {
+        paymentResult = await apiFetch(`/billing/invoices/${invoice.id}/payments`, apiSession, {
           method: "POST",
           body: JSON.stringify({
             ...row,
@@ -509,9 +583,27 @@ export function Billing({
       await openInvoiceDetail(invoice);
       const modes =
         valid.length > 1 ? `${valid.length} payment modes` : valid[0].method;
-      setMessage(
-        `Recorded ${money(total)} (${modes}) for ${invoice.invoice_number}.`,
-      );
+      if (
+        String(paymentResult?.invoice?.status || "").toLowerCase() === "paid" &&
+        Number(paymentResult?.invoice?.balance_amount || 0) <= 0
+      ) {
+        try {
+          await sendInvoice(paymentResult.invoice, true);
+          setMessage(
+            `Recorded ${money(total)} (${modes}); invoice queued for delivery.`,
+          );
+        } catch (deliveryError: any) {
+          setMessage(
+            `Payment recorded, but automatic invoice delivery failed: ${
+              deliveryError?.message || "Could not prepare the invoice PDF."
+            }`,
+          );
+        }
+      } else {
+        setMessage(
+          `Recorded ${money(total)} (${modes}) for ${invoice.invoice_number}.`,
+        );
+      }
     } catch (err: any) {
       setMessage(err.message || "Could not record payment.");
     } finally {
@@ -981,10 +1073,7 @@ export function Billing({
           await openInvoiceDetail(invoice);
         }}
         collectSplitPayment={collectSplitPayment}
-        refreshConsultationInvoice={async (invoice: any) => {
-          await refreshConsultationInvoice(invoice);
-          await openInvoiceDetail(invoice);
-        }}
+        sendInvoice={sendInvoice}
         applyMembershipBenefit={applyMembershipBenefit}
         openReceipt={openReceipt}
         issueCreditNote={issueCreditNote}

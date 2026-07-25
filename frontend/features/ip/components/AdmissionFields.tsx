@@ -1,11 +1,12 @@
-import { isActivePatientRecord,patientPickerLabel } from "@/features/patients/helpers";
 import { useEffect, useState } from "react";
-import { Select,SearchableSelect,Input } from "@/app/components/common/ui";
+import { Select,Input } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { inr } from "@/utils/helper";
+import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
 
 export function AdmissionFields({
   patients,
+  apiSession,
   departmentId,
   rooms = [],
   admissionDate,
@@ -64,18 +65,15 @@ export function AdmissionFields({
     <>
       {!hidePatient && (
         <FormField label="Patient" required>
-          <SearchableSelect
+          <PatientSearchSelect
+            apiSession={apiSession}
+            initialPatients={patients}
             required
             name="patient_id"
             value={patientId}
             onChange={setPatientId}
             placeholder="Select patient"
             searchPlaceholder="Search patient by name, mobile, or number"
-            options={patients.filter(isActivePatientRecord).map((p: any) => ({
-              value: p.id,
-              label: patientPickerLabel(p),
-              sublabel: p.mobile || p.patient_number || p.patientNumber || p.id,
-            }))}
           />
         </FormField>
       )}

@@ -300,6 +300,11 @@ export function Patient({
           area: data.area || null,
           address: data.address || null,
           blood_group: data.bloodGroup || null,
+          whatsapp_consent_status:
+            data.whatsappConsentStatus || "not_recorded",
+          whatsapp_consent_source: data.whatsappConsentSource || null,
+          whatsapp_preferred_language:
+            data.whatsappPreferredLanguage || "en",
         }),
       });
       setRows((previous: any[]) => [
@@ -340,6 +345,11 @@ export function Patient({
           address: data.address || null,
           blood_group: data.bloodGroup || null,
           status: data.status || "active",
+          whatsapp_consent_status:
+            data.whatsappConsentStatus || "not_recorded",
+          whatsapp_consent_source: data.whatsappConsentSource || null,
+          whatsapp_preferred_language:
+            data.whatsappPreferredLanguage || "en",
         }),
       });
       setRows((previous: any[]) => [

@@ -46,7 +46,7 @@ describe("invoice payment summary", () => {
         defaultPaymentMethod="cash"
         collectPayment={vi.fn()}
         collectSplitPayment={vi.fn()}
-        refreshConsultationInvoice={vi.fn()}
+        sendInvoice={vi.fn()}
         applyMembershipBenefit={vi.fn()}
         openReceipt={vi.fn()}
         issueCreditNote={vi.fn()}
@@ -114,7 +114,7 @@ describe("invoice payment summary", () => {
         defaultPaymentMethod="cash"
         collectPayment={vi.fn()}
         collectSplitPayment={vi.fn()}
-        refreshConsultationInvoice={vi.fn()}
+        sendInvoice={vi.fn()}
         applyMembershipBenefit={vi.fn()}
         openReceipt={vi.fn()}
         issueCreditNote={vi.fn()}
@@ -179,7 +179,7 @@ describe("invoice payment summary", () => {
         defaultPaymentMethod="cash"
         collectPayment={vi.fn()}
         collectSplitPayment={vi.fn()}
-        refreshConsultationInvoice={vi.fn()}
+        sendInvoice={vi.fn()}
         applyMembershipBenefit={vi.fn()}
         openReceipt={vi.fn()}
         issueCreditNote={vi.fn()}
@@ -200,12 +200,72 @@ describe("invoice payment summary", () => {
     expect(screen.getAllByText("₹350").length).toBeGreaterThan(0);
     expect(screen.getAllByText("₹700").length).toBeGreaterThan(0);
   });
+
+  it("shows dashes for zero optional MRP and discount values", () => {
+    render(
+      <InvoiceDetailPage
+        detail={{
+          invoice: {
+            id: "invoice-no-discount",
+            invoice_number: "MHB-INV-NO-DISCOUNT",
+            status: "paid",
+            subtotal_amount: 650,
+            taxable_amount: 650,
+            tax_amount: 0,
+            total_amount: 650,
+            paid_amount: 650,
+            balance_amount: 0,
+            discount_amount: 0,
+          },
+          items: [
+            {
+              id: "item-no-discount",
+              item_type: "consultation",
+              description: "General Medicine Consultation",
+              quantity: 1,
+              mrp_amount: 0,
+              selling_amount: 650,
+              unit_amount: 650,
+              total_amount: 650,
+              discount_amount: 0,
+            },
+          ],
+          payments: [],
+          credit_notes: [],
+          ledger_entries: [],
+          adjustment_requests: [],
+        }}
+        patient={{}}
+        invoicePaymentOptions={[{ value: "cash", label: "Cash" }]}
+        defaultPaymentMethod="cash"
+        collectPayment={vi.fn()}
+        collectSplitPayment={vi.fn()}
+        sendInvoice={vi.fn()}
+        applyMembershipBenefit={vi.fn()}
+        openReceipt={vi.fn()}
+        issueCreditNote={vi.fn()}
+        cancelInvoice={vi.fn()}
+        amendInvoice={vi.fn()}
+        requestAdjustment={vi.fn()}
+        approveAdjustment={vi.fn()}
+        rejectAdjustment={vi.fn()}
+        executeAdjustment={vi.fn()}
+        currentUser={{}}
+        userPermissions={["invoices.read"]}
+      />,
+    );
+
+    expect(screen.queryByText("0%")).toBeNull();
+    expect(screen.queryByText("-₹0")).toBeNull();
+    expect(screen.getAllByText("-").length).toBeGreaterThanOrEqual(5);
+  });
 });
 
 function renderAdjustmentRequest(
   userPermissions: string[],
   currentUser: any,
   requestType = "full_refund",
+  invoiceDelivery: any = undefined,
 ) {
   render(
     <InvoiceDetailPage
@@ -237,13 +297,14 @@ function renderAdjustmentRequest(
             created_at: "2026-07-22T10:00:00Z",
           },
         ],
+        invoice_delivery: invoiceDelivery,
       }}
       patient={{}}
       invoicePaymentOptions={[{ value: "cash", label: "Cash" }]}
       defaultPaymentMethod="cash"
       collectPayment={vi.fn()}
       collectSplitPayment={vi.fn()}
-      refreshConsultationInvoice={vi.fn()}
+      sendInvoice={vi.fn()}
       applyMembershipBenefit={vi.fn()}
       openReceipt={vi.fn()}
       issueCreditNote={vi.fn()}
@@ -269,6 +330,8 @@ describe("adjustment approval permissions", () => {
     );
 
     expect(screen.getByText("Request Full Refund")).toBeTruthy();
+    expect(screen.getByText("Send Invoice")).toBeTruthy();
+    expect(screen.queryByText("Refresh")).toBeNull();
     expect(screen.queryByText("Approve")).toBeNull();
     expect(screen.queryByText("Reject")).toBeNull();
   });
@@ -291,5 +354,29 @@ describe("adjustment approval permissions", () => {
 
     expect(screen.queryByText("Approve")).toBeNull();
     expect(screen.queryByText("Reject")).toBeNull();
+  });
+
+  it("shows the complete failed invoice delivery reason and retry action", () => {
+    renderAdjustmentRequest(
+      ["billing.manage"],
+      { user_type: "billing", roles: ["billing"] },
+      "full_refund",
+      {
+        status: "failed",
+        failure_reason:
+          "The printed invoice PDF could not be fetched by the messaging service.",
+        attempt_count: 3,
+        max_attempts: 5,
+      },
+    );
+
+    expect(screen.getByText("Failed")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "The printed invoice PDF could not be fetched by the messaging service.",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("Attempt 3 of 5")).toBeTruthy();
+    expect(screen.getByText("Retry Send Invoice")).toBeTruthy();
   });
 });

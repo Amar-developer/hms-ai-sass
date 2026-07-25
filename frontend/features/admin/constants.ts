@@ -3,6 +3,7 @@ import {
   ClipboardList,
   FileText,
   KeyRound,
+  MessageCircleMore,
   Percent,
   Plus,
   Settings,
@@ -31,6 +32,7 @@ export const sections = [
   ["membership", "Patient Membership", ShieldCheck],
   ["files", "Files", FileText],
   ["settings", "Tenant & Branch Settings", Settings],
+  ["whatsapp", "WhatsApp Settings", MessageCircleMore],
 ] as const;
 
 export const tenantAdminSections = sections;

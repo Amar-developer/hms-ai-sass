@@ -14,6 +14,7 @@ import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate, displayDateTime, formatPrice } from "@/utils/helper";
 import { pageSize } from "./constants";
 import {
+  activeLabInvoiceOrderIds,
   downloadBlob,
   isCancelled,
   isReleased,
@@ -22,7 +23,6 @@ import {
 import { ConsultReferralModal } from "./components/ConsultReferralModal";
 import { WorklistDetailModal } from "./components/WorklistDetailModal";
 import { Pagination } from "@/app/components/common/Pagination";
-import { isActivePatientRecord, patientPickerLabel } from "../patients/helpers";
 import { LabOrderForm } from "@/features/lab/forms/LabForms";
 import { LabOrderFormValues } from "@/features/lab/lab.schema";
 import { DataTable } from "../reports/components/DataTable";
@@ -172,31 +172,27 @@ export function Lab({
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
   );
-  const activePatients = useMemo(
-    () => patients.filter(isActivePatientRecord),
-    [patients],
-  );
-  const defaultPatientId = activePatients[0]?.id || "";
-  const patientOptions = useMemo(
-    () =>
-      activePatients.map((p: any) => ({
-        value: p.id,
-        label: patientPickerLabel(p),
-        sublabel: p.mobile || p.patient_number || p.id,
-      })),
-    [activePatients],
-  );
 
   const invoicedOrderIds = useMemo(
     () =>
       new Set([
-        ...(liveInvoices || [])
-          .map((invoice: any) => invoice.lab_order_id)
-          .filter(Boolean),
+        ...activeLabInvoiceOrderIds(liveInvoices),
         ...localInvoicedOrderIds,
       ]),
     [liveInvoices, localInvoicedOrderIds],
   );
+
+  useEffect(() => {
+    const serverOrderIds = new Set(
+      (liveInvoices || [])
+        .map((invoice: any) => invoice.lab_order_id)
+        .filter(Boolean),
+    );
+    if (!serverOrderIds.size) return;
+    setLocalInvoicedOrderIds((ids) =>
+      ids.filter((orderId) => !serverOrderIds.has(orderId)),
+    );
+  }, [liveInvoices]);
 
   // Load data
   useEffect(() => {
@@ -1059,8 +1055,8 @@ export function Lab({
         <Card>
           <h3 className="card-title font-bold">Create Lab & Service Order</h3>
           <LabOrderForm
-            patientOptions={patientOptions}
-            defaultPatientId={defaultPatientId}
+            apiSession={apiSession}
+            patients={patients}
             busy={busy === "create"}
             testOptions={testOptions}
             testSearch={testSearch}

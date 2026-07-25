@@ -17,6 +17,9 @@ const validPatient = {
   bloodGroup: "",
   address: "Chennai",
   status: "active",
+  whatsappConsentStatus: "not_recorded" as const,
+  whatsappConsentSource: "",
+  whatsappPreferredLanguage: "en" as const,
 };
 
 describe("patientSchema mobile validation", () => {
@@ -44,5 +47,26 @@ describe("patientSchema mobile validation", () => {
           "Alternate phone number must be different from the primary mobile number",
       }),
     );
+  });
+});
+
+describe("patientSchema WhatsApp preference", () => {
+  it("keeps the preference source optional for an explicit opt-out", () => {
+    const result = patientSchema.safeParse({
+      ...validPatient,
+      whatsappConsentStatus: "opted_out",
+      whatsappConsentSource: "",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a supported preferred message language", () => {
+    const result = patientSchema.safeParse({
+      ...validPatient,
+      whatsappPreferredLanguage: "ta",
+    });
+
+    expect(result.success).toBe(true);
   });
 });

@@ -134,8 +134,21 @@ class PatientService:
             update={
                 "tenant_id": tenant_id,
                 "patient_number": patient_number,
+                "whatsapp_consent_updated_at": (
+                    now_utc()
+                    if payload.whatsapp_consent_status.value != "not_recorded"
+                    else None
+                ),
             },
         )
+        if (
+            patient.whatsapp_consent_status.value != "not_recorded"
+            and not patient.whatsapp_consent_source
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Consent source is required when WhatsApp consent is recorded",
+            )
         self.patients.add(patient)
         self.session.commit()
         self.session.refresh(patient)
@@ -187,23 +200,25 @@ class PatientService:
         # an optional filter, not a scope restriction.
         if branch_id:
             require_branch_in_tenant(self.session, tenant_id, branch_id)
-        results = PatientSearchService(self.session).search(
+        return PatientSearchService(self.session).search(
             tenant_id=tenant_id,
             q=q,
             branch_id=branch_id,
             active_only=active_only,
             limit=limit,
         )
-        record_audit_event(
-            self.session,
-            tenant_id=tenant_id,
-            action="patient.search.performed",
-            resource_type="patient",
-            resource_id="search",
-            purpose="treatment_or_registration",
-            metadata_json=f'{{"query_present": {str(bool(q)).lower()}, "result_count": {len(results)}}}',
+
+    def patient_references(
+        self, *, tenant_id: str, patient_ids: list[str]
+    ) -> list[PatientSearchResult]:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        return PatientSearchService(self.session).references(
+            tenant_id=tenant_id, patient_ids=patient_ids
         )
-        return results
+
+    def patient_count(self, *, tenant_id: str) -> int:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        return self.patients.count(tenant_id=tenant_id)
 
     def get_patient(self, *, tenant_id: str, patient_id: str, actor: User) -> Patient:
         enforce_entitlement(self.session, tenant_id, "patients")
@@ -250,6 +265,23 @@ class PatientService:
         enforce_entitlement(self.session, tenant_id, "patients")
         patient = self._get_or_404(tenant_id, patient_id)
         updates = payload.model_dump(exclude_unset=True)
+        if "whatsapp_consent_status" in updates:
+            consent_status = updates["whatsapp_consent_status"]
+            if consent_status.value == "not_recorded":
+                updates["whatsapp_consent_source"] = None
+                updates["whatsapp_consent_updated_at"] = None
+            else:
+                if not updates.get("whatsapp_consent_source"):
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=(
+                            "Consent source is required when WhatsApp consent "
+                            "is recorded"
+                        ),
+                    )
+                updates["whatsapp_consent_updated_at"] = now_utc()
+        elif "whatsapp_consent_source" in updates:
+            updates["whatsapp_consent_updated_at"] = now_utc()
         if "branch_id" in updates:
             require_branch_in_tenant(self.session, tenant_id, updates["branch_id"])
         self._validate_mobile_numbers(

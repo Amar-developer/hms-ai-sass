@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Index, UniqueConstraint
+from sqlalchemy import Index, UniqueConstraint, text
 from sqlmodel import Field, SQLModel
 
 from app.modules.tenants.models import new_id, now_utc
@@ -52,6 +52,23 @@ class InAppNotificationPriority(str, Enum):
 
 
 class NotificationEvent(SQLModel, table=True):
+    __table_args__ = (
+        Index(
+            "uq_notificationevent_dedupe_key",
+            "tenant_id",
+            "dedupe_key",
+            unique=True,
+            postgresql_where=text("dedupe_key IS NOT NULL"),
+            sqlite_where=text("dedupe_key IS NOT NULL"),
+        ),
+        Index(
+            "ix_notificationevent_due",
+            "provider",
+            "status",
+            "next_attempt_at",
+        ),
+    )
+
     id: str = Field(default_factory=lambda: new_id("notification"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
@@ -61,11 +78,17 @@ class NotificationEvent(SQLModel, table=True):
     recipient: str = Field(min_length=2, max_length=160)
     subject: str | None = Field(default=None, max_length=200)
     message: str = Field(min_length=1, max_length=2000)
+    template_key: str | None = Field(default=None, index=True, max_length=120)
+    dedupe_key: str | None = Field(default=None, max_length=240)
     resource_type: str | None = Field(default=None, index=True, max_length=80)
     resource_id: str | None = Field(default=None, index=True, max_length=120)
     queued_by_user_id: str | None = Field(default=None, index=True)
     provider_message_id: str | None = Field(default=None, max_length=160)
     failure_reason: str | None = Field(default=None, max_length=500)
+    attempt_count: int = Field(default=0, ge=0)
+    max_attempts: int = Field(default=5, ge=1, le=10)
+    next_attempt_at: datetime = Field(default_factory=now_utc, index=True)
+    processing_started_at: datetime | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
     sent_at: datetime | None = Field(default=None, index=True)
