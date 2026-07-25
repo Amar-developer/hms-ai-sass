@@ -37,7 +37,11 @@ from app.modules.consultations.services.detail_builder import (
 )
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
-from app.modules.notifications.service import queue_notification_if_allowed
+from app.modules.notifications.service import (
+    queue_notification_if_allowed,
+    queue_whatsapp_template_if_allowed,
+    whatsapp_template_integration_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -348,12 +352,38 @@ class ConsultationRecordService:
             tenant_id, consultation.patient_id
         )
         if consultation.follow_up_advice and patient:
-            for provider in (NotificationProvider.WHATSAPP, NotificationProvider.SMS):
+            queue_notification_if_allowed(
+                self.session,
+                tenant_id=tenant_id,
+                branch_id=consultation.branch_id,
+                provider=NotificationProvider.SMS,
+                event_type=NotificationEventType.FOLLOW_UP_REMINDER,
+                recipient=patient.mobile,
+                subject="Follow-up reminder",
+                message=consultation.follow_up_advice,
+                resource_type="consultation",
+                resource_id=consultation.id,
+                queued_by_user_id=actor.id,
+            )
+            template_event = queue_whatsapp_template_if_allowed(
+                self.session,
+                tenant_id=tenant_id,
+                branch_id=consultation.branch_id,
+                flow_key="follow_up_advice_patient",
+                recipient=patient.mobile,
+                resource_type="consultation",
+                resource_id=consultation.id,
+                dedupe_key=f"whatsapp:consultation:{consultation.id}:follow-up-advice",
+                queued_by_user_id=actor.id,
+            )
+            if not template_event and not whatsapp_template_integration_enabled(
+                self.session, tenant_id
+            ):
                 queue_notification_if_allowed(
                     self.session,
                     tenant_id=tenant_id,
                     branch_id=consultation.branch_id,
-                    provider=provider,
+                    provider=NotificationProvider.WHATSAPP,
                     event_type=NotificationEventType.FOLLOW_UP_REMINDER,
                     recipient=patient.mobile,
                     subject="Follow-up reminder",
@@ -362,6 +392,18 @@ class ConsultationRecordService:
                     resource_id=consultation.id,
                     queued_by_user_id=actor.id,
                 )
+        if consultation.prescription_text and patient:
+            queue_whatsapp_template_if_allowed(
+                self.session,
+                tenant_id=tenant_id,
+                branch_id=consultation.branch_id,
+                flow_key="prescription_ready_patient",
+                recipient=patient.mobile,
+                resource_type="consultation",
+                resource_id=consultation.id,
+                dedupe_key=f"whatsapp:consultation:{consultation.id}:prescription-ready",
+                queued_by_user_id=actor.id,
+            )
         return consultation
 
     def create_addendum(

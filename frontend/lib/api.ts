@@ -105,7 +105,8 @@ function notifyLiveDataChanged(
       LIVE_DATA_CHANGED_STORAGE_KEY,
       JSON.stringify({ tenantId: detail.tenantId, revision: detail.revision }),
     );
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
     // Same-tab refresh still works when storage is blocked or unavailable.
   }
 }
@@ -235,7 +236,8 @@ export async function apiFetch(
         ...(options.headers || {}),
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
     reportClientError(
       new Error(`Backend connection failed for ${path}`),
       {
@@ -288,7 +290,8 @@ export async function apiBlob(
         ...(options.headers || {}),
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
     reportClientError(
       new Error(`Backend blob request failed for ${path}`),
       {

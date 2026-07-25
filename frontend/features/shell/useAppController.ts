@@ -12,6 +12,7 @@ import {
 import { demoUsers, loginPresets } from "@/lib/authPresets";
 import { type LiveSummary, mapAppointment, mapPatient } from "@/lib/liveData";
 import { canOpenModule } from "@/lib/moduleAccess";
+import { fetchPatientReferences } from "@/features/patients/components/PatientSearchSelect";
 import {
   formatClientLogArguments,
   reportClientError,
@@ -255,7 +256,7 @@ export function useAppController() {
           null,
         );
     const [
-      patientRows,
+      patientCountResult,
       appointmentRows,
       queueRows,
       consultationRows,
@@ -266,12 +267,12 @@ export function useAppController() {
       entitlements,
     ] = await Promise.all([
       isPlatformPrimaryTenant
-        ? Promise.resolve<any[]>([])
-        : apiFetchIfAllowed<any[]>(
-            "/patients",
+        ? Promise.resolve<{ total: number }>({ total: 0 })
+        : apiFetchIfAllowed<{ total: number }>(
+            "/patients/count",
             session,
             ["patients.read", "patients.create", "patients.write"],
-            [],
+            { total: 0 },
           ),
       isPlatformPrimaryTenant
         ? Promise.resolve<any[]>([])
@@ -327,6 +328,16 @@ export function useAppController() {
       ),
       entitlementsPromise,
     ]);
+    const referencedPatientIds = [
+      ...appointmentRows.map((row: any) => row.patient_id),
+      ...invoiceRows.map((row: any) => row.patient_id),
+      ...ipRows.map((row: any) => row.patient_id || row.patientId),
+    ];
+    const patientRows = isPlatformPrimaryTenant
+      ? []
+      : await fetchPatientReferences(session, referencedPatientIds).catch(
+          () => [],
+        );
     // Focus, navigation, and mutation events can request overlapping refreshes.
     // Only the newest response may update shared state, otherwise a slower old
     // request can overwrite a just-saved record with stale data.
@@ -430,7 +441,7 @@ export function useAppController() {
         : defaultEntitlementModuleIds,
     );
     setLiveSummary({
-      patients: patientRows.length,
+      patients: Number(patientCountResult?.total || 0),
       appointments: appointmentRows.length,
       queue: queueRows.length,
       invoices: invoiceRows.length,

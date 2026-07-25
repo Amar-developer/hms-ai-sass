@@ -38,7 +38,11 @@ from app.modules.appointments.services.conflict_rules import (
 from app.modules.audit.service import record_audit_event
 from app.modules.identity.models import User
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
-from app.modules.notifications.service import queue_notification_if_allowed
+from app.modules.notifications.service import (
+    queue_notification_if_allowed,
+    queue_whatsapp_template_if_allowed,
+    whatsapp_template_integration_enabled,
+)
 from app.modules.notifications.services.in_app import notify_appointment_booked
 from app.modules.practitioners.service import (
     check_practitioner_availability,
@@ -202,6 +206,7 @@ class AppointmentBookingService:
                     detail="Invalid source appointment",
                 )
         practitioner_requires_schedule = False
+        practitioner = None
         if payload.practitioner_id:
             practitioner = self.references.get_practitioner(payload.practitioner_id)
             if practitioner:
@@ -314,18 +319,56 @@ class AppointmentBookingService:
             commit=False,
         )
         queue_entry = create_queue_entry_for_appointment(self.session, appointment)
-        for provider in (NotificationProvider.WHATSAPP, NotificationProvider.SMS):
+        queue_notification_if_allowed(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=appointment.branch_id,
+            provider=NotificationProvider.SMS,
+            event_type=NotificationEventType.APPOINTMENT_REMINDER,
+            recipient=patient.mobile,
+            subject="Appointment booked",
+            message=f"Your appointment token is {queue_entry.token_number}.",
+            resource_type="appointment",
+            resource_id=appointment.id,
+            queued_by_user_id=payload.created_by_user_id,
+        )
+        patient_template_event = queue_whatsapp_template_if_allowed(
+            self.session,
+            tenant_id=tenant_id,
+            branch_id=appointment.branch_id,
+            flow_key="appointment_booked_patient",
+            recipient=patient.mobile,
+            resource_type="appointment",
+            resource_id=appointment.id,
+            dedupe_key=f"whatsapp:appointment:{appointment.id}:patient",
+            queued_by_user_id=payload.created_by_user_id,
+        )
+        if not patient_template_event and not whatsapp_template_integration_enabled(
+            self.session, tenant_id
+        ):
             queue_notification_if_allowed(
                 self.session,
                 tenant_id=tenant_id,
                 branch_id=appointment.branch_id,
-                provider=provider,
+                provider=NotificationProvider.WHATSAPP,
                 event_type=NotificationEventType.APPOINTMENT_REMINDER,
                 recipient=patient.mobile,
                 subject="Appointment booked",
                 message=f"Your appointment token is {queue_entry.token_number}.",
                 resource_type="appointment",
                 resource_id=appointment.id,
+                queued_by_user_id=payload.created_by_user_id,
+            )
+        if practitioner:
+            queue_whatsapp_template_if_allowed(
+                self.session,
+                tenant_id=tenant_id,
+                branch_id=appointment.branch_id,
+                flow_key="appointment_booked_doctor",
+                recipient=practitioner.mobile,
+                resource_type="appointment",
+                resource_id=appointment.id,
+                dedupe_key=f"whatsapp:appointment:{appointment.id}:doctor",
                 queued_by_user_id=payload.created_by_user_id,
             )
         notify_appointment_booked(

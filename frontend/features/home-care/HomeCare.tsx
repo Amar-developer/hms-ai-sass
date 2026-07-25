@@ -660,6 +660,7 @@ export function HomeCare({
 
       {isFormView && (
         <BookingForm
+          apiSession={apiSession}
           patients={patients}
           services={services}
           visitServices={visitServices}

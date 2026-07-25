@@ -67,6 +67,30 @@ export function PatientForm({
       bloodGroup: patientField(patient, "blood_group", "bloodGroup") || "",
       address: patientField(patient, "address") || "",
       status: patient?.status || "active",
+      whatsappConsentStatus:
+        patientField(
+          patient,
+          "whatsapp_consent_status",
+          "whatsappConsentStatus",
+        ) || "not_recorded",
+      whatsappConsentSource:
+        patientField(
+          patient,
+          "whatsapp_consent_source",
+          "whatsappConsentSource",
+        ) || "",
+      whatsappPreferredLanguage:
+        (patientField(
+          patient,
+          "whatsapp_preferred_language",
+          "whatsappPreferredLanguage",
+        ) || "en") === "tenant_default"
+          ? "en"
+          : patientField(
+              patient,
+              "whatsapp_preferred_language",
+              "whatsappPreferredLanguage",
+            ) || "en",
     },
   });
   const today = todayInputValue();
@@ -121,10 +145,35 @@ export function PatientForm({
       bloodGroup: patientField(patient, "blood_group", "bloodGroup") || "",
       address: patientField(patient, "address") || "",
       status: patient?.status || "active",
+      whatsappConsentStatus:
+        patientField(
+          patient,
+          "whatsapp_consent_status",
+          "whatsappConsentStatus",
+        ) || "not_recorded",
+      whatsappConsentSource:
+        patientField(
+          patient,
+          "whatsapp_consent_source",
+          "whatsappConsentSource",
+        ) || "",
+      whatsappPreferredLanguage:
+        (patientField(
+          patient,
+          "whatsapp_preferred_language",
+          "whatsappPreferredLanguage",
+        ) || "en") === "tenant_default"
+          ? "en"
+          : patientField(
+              patient,
+              "whatsapp_preferred_language",
+              "whatsappPreferredLanguage",
+            ) || "en",
     });
   }, [patient, defaultBranchId, reset]);
 
   const dateOfBirth = watch("dateOfBirth");
+  const whatsappConsentStatus = watch("whatsappConsentStatus");
   const dateOfBirthRegistration = register("dateOfBirth");
 
   // Skip the initial mount: defaultValues/reset already computed the
@@ -283,6 +332,73 @@ export function PatientForm({
         <FormField label="Email">
           <Input {...register("email")} placeholder="Enter patient email" />
           <FormError error={errors.email?.message} />
+        </FormField>
+        <FormField label="WhatsApp preference">
+          <SearchableSelect
+            value={whatsappConsentStatus}
+            searchable={false}
+            options={[
+              { value: "not_recorded", label: "Not recorded" },
+              { value: "opted_in", label: "Patient opted in" },
+              { value: "opted_out", label: "Patient opted out" },
+            ]}
+            onChange={(value) => {
+              setValue("whatsappConsentStatus", value as any, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              if (value === "not_recorded") {
+                setValue("whatsappConsentSource", "", {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                });
+              }
+            }}
+          />
+          <p className="mt-1 text-[11px] text-slate-500">
+            An explicit opt-out blocks every patient WhatsApp notification.
+          </p>
+        </FormField>
+        {whatsappConsentStatus !== "not_recorded" && (
+          <FormField label="Preference source (optional)">
+            <SearchableSelect
+              value={watch("whatsappConsentSource") || ""}
+              searchable={false}
+              options={[
+                { value: "", label: "Select source" },
+                { value: "patient_verbal", label: "Patient verbal" },
+                { value: "patient_written", label: "Patient written" },
+                { value: "digital", label: "Digital consent" },
+                { value: "imported", label: "Imported record" },
+              ]}
+              onChange={(value) =>
+                setValue("whatsappConsentSource", value, {
+                  shouldDirty: true,
+                  shouldValidate: true,
+                })
+              }
+            />
+            <FormError error={errors.whatsappConsentSource?.message} />
+          </FormField>
+        )}
+        <FormField label="Message language">
+          <SearchableSelect
+            value={watch("whatsappPreferredLanguage")}
+            searchable={false}
+            options={[
+              { value: "en", label: "English (default)" },
+              { value: "ta", label: "Tamil" },
+            ]}
+            onChange={(value) =>
+              setValue("whatsappPreferredLanguage", value as any, {
+                shouldDirty: true,
+                shouldValidate: true,
+              })
+            }
+          />
+          <p className="mt-1 text-[11px] text-slate-500">
+            English is used unless Tamil is selected for this patient.
+          </p>
         </FormField>
         <FormField label="Blood Group">
           <SearchableSelect

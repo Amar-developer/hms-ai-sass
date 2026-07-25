@@ -30,7 +30,11 @@ from app.modules.consultations.repositories import (
 from app.modules.identity.models import User
 from app.modules.lab.models import LabOrderStatus
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
-from app.modules.notifications.service import queue_notification_if_allowed
+from app.modules.notifications.service import (
+    queue_notification_if_allowed,
+    queue_whatsapp_template_if_allowed,
+    whatsapp_template_integration_enabled,
+)
 from app.modules.pharmacy.models import PharmacyIssueStatus
 
 ServiceInvoiceCreator = Callable[..., Invoice]
@@ -456,12 +460,38 @@ def create_invoice_from_consultation_source(
     )
     patient = source_repo.get_patient(invoice.patient_id)
     if invoice.balance_amount > 0 and patient:
-        for provider in (NotificationProvider.WHATSAPP, NotificationProvider.SMS):
+        queue_notification_if_allowed(
+            session,
+            tenant_id=tenant_id,
+            branch_id=invoice.branch_id,
+            provider=NotificationProvider.SMS,
+            event_type=NotificationEventType.PAYMENT_REMINDER,
+            recipient=patient.mobile,
+            subject="Payment pending",
+            message=f"Payment pending for invoice {invoice.invoice_number}: Rs. {invoice.balance_amount}.",
+            resource_type="invoice",
+            resource_id=invoice.id,
+            queued_by_user_id=payload.created_by_user_id,
+        )
+        pending_template_event = queue_whatsapp_template_if_allowed(
+            session,
+            tenant_id=tenant_id,
+            branch_id=invoice.branch_id,
+            flow_key="payment_pending_patient",
+            recipient=patient.mobile,
+            resource_type="invoice",
+            resource_id=invoice.id,
+            dedupe_key=f"whatsapp:invoice:{invoice.id}:initial-pending",
+            queued_by_user_id=payload.created_by_user_id,
+        )
+        if not pending_template_event and not whatsapp_template_integration_enabled(
+            session, tenant_id
+        ):
             queue_notification_if_allowed(
                 session,
                 tenant_id=tenant_id,
                 branch_id=invoice.branch_id,
-                provider=provider,
+                provider=NotificationProvider.WHATSAPP,
                 event_type=NotificationEventType.PAYMENT_REMINDER,
                 recipient=patient.mobile,
                 subject="Payment pending",

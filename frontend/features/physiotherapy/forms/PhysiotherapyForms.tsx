@@ -5,12 +5,13 @@ import { CaseFields } from "../components/CaseFields";
 import { SearchSelect } from "../components/SearchSelect";
 import { Button,Card } from "../../../app/components/common/ui";
 import { FormField } from "../../../app/components/FormElements";
-import { isActivePatientRecord,patientPickerLabel } from "@/features/patients/helpers";
+import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
 
 export function CaseForm({
   title,
   subtitle,
   patients,
+  apiSession,
   appointments,
   physiotherapists,
   onSubmit,
@@ -20,11 +21,6 @@ export function CaseForm({
   const [patientId, setPatientId] = useState("");
   const [appointmentId, setAppointmentId] = useState("");
   const [physiotherapistId, setPhysiotherapistId] = useState("");
-  const patientOptions = patients.filter(isActivePatientRecord).map((p: any) => ({
-    value: p.id,
-    label: patientPickerLabel(p),
-    item: p,
-  }));
   const appointmentOptions = [
     { value: "", label: "No linked appointment", item: null },
     ...appointments.map((a: any) => ({
@@ -47,24 +43,14 @@ export function CaseForm({
       </div>
       <form onSubmit={onSubmit} className="mt-5 grid gap-4">
         <FormField label="Patient" required>
-          <SearchSelect
+          <PatientSearchSelect
+            apiSession={apiSession}
+            initialPatients={patients}
             name="patient_id"
             value={patientId}
             onChange={setPatientId}
-            options={patientOptions}
             placeholder="Type patient name, mobile, or number"
             required
-            getSearchText={(p: any) =>
-              [
-                patientName(p),
-                p?.mobile,
-                p?.patientNumber,
-                p?.patient_number,
-                p?.id,
-              ]
-                .filter(Boolean)
-                .join(" ")
-            }
           />
         </FormField>
         <FormField label="Linked OP Appointment">

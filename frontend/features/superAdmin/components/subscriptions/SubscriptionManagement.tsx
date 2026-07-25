@@ -167,6 +167,9 @@ export function SubscriptionManagement({
             .replace(/\s+/g, "_"),
           name: fd.get("name"),
           monthly_patient_limit: Number(fd.get("monthlyPatientLimit") || 0),
+          monthly_whatsapp_message_limit: Number(
+            fd.get("monthlyWhatsAppMessageLimit") || 0,
+          ),
           included_branches: Number(fd.get("includedBranches") || 1),
           included_doctors: Number(fd.get("includedDoctors") || 1),
           price_inr_monthly: Number(fd.get("priceInrMonthly") || 0),
@@ -201,6 +204,9 @@ export function SubscriptionManagement({
         body: JSON.stringify({
           name: fd.get("name"),
           monthly_patient_limit: Number(fd.get("monthlyPatientLimit") || 0),
+          monthly_whatsapp_message_limit: Number(
+            fd.get("monthlyWhatsAppMessageLimit") || 0,
+          ),
           included_branches: Number(fd.get("includedBranches") || 0),
           included_doctors: Number(fd.get("includedDoctors") || 0),
           price_inr_monthly: Number(fd.get("priceInrMonthly") || 0),
@@ -691,7 +697,8 @@ export function SubscriptionManagement({
                   <b>₹{plan.price_inr_monthly}</b>
                   <span className="text-slate-600 text-xs lg:text-sm">
                     {limitLabel(plan.monthly_patient_limit)} patients ·{" "}
-                    {limitLabel(plan.included_branches)} branches
+                    {limitLabel(plan.included_branches)} branches ·{" "}
+                    {limitLabel(plan.monthly_whatsapp_message_limit)} messages
                   </span>
                   <Badge tone="slate" className="rounded-full text-xs lg:text-sm py-1 px-1">
                     {(plan.enabled_modules || []).length}

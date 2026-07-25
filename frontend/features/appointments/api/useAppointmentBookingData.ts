@@ -16,7 +16,6 @@ interface UseAppointmentBookingDataArgs {
   platformTenantId: string;
   setPlatformTenantId: (value: string) => void;
   listRefreshKey: number;
-  patientSearch: string;
   setMessage: (message: string) => void;
 }
 
@@ -32,10 +31,8 @@ export function useAppointmentBookingData({
   platformTenantId,
   setPlatformTenantId,
   listRefreshKey,
-  patientSearch,
   setMessage,
 }: UseAppointmentBookingDataArgs) {
-  const [liveMatches, setLiveMatches] = useState<any[]>([]);
   const [liveDoctors, setLiveDoctors] = useState<any[]>([]);
   const [doctorFeeRules, setDoctorFeeRules] = useState<any[]>([]);
   const [doctorId, setDoctorId] = useState("");
@@ -95,33 +92,6 @@ export function useAppointmentBookingData({
     platformTenantId,
     listRefreshKey,
   ]);
-
-  useEffect(() => {
-    let alive = true;
-    async function runSearch() {
-      if (!apiSession || patientSearch.trim().length < 2) {
-        setLiveMatches([]);
-        return;
-      }
-      try {
-        const params = new URLSearchParams({
-          q: patientSearch.trim(),
-          limit: "10",
-        });
-        const rows = await apiFetch(
-          `/patients?${params.toString()}`,
-          apiSession,
-        );
-        if (alive) setLiveMatches(rows);
-      } catch (err: any) {
-        if (alive) setMessage(err.message || "Could not search patients.");
-      }
-    }
-    runSearch();
-    return () => {
-      alive = false;
-    };
-  }, [apiSession?.email, apiSession?.tenantId, patientSearch]);
 
   useEffect(() => {
     let alive = true;
@@ -243,8 +213,6 @@ export function useAppointmentBookingData({
   ]);
 
   return {
-    liveMatches,
-    setLiveMatches,
     liveDoctors,
     doctorFeeRules,
     doctorId,

@@ -31,6 +31,7 @@ class SubscriptionPlan(SQLModel, table=True):
     key: str = Field(index=True, unique=True, min_length=2, max_length=80)
     name: str = Field(min_length=2, max_length=160)
     monthly_patient_limit: int = Field(default=300, ge=0)
+    monthly_whatsapp_message_limit: int = Field(default=0, ge=0)
     included_branches: int = Field(default=1, ge=0)
     included_doctors: int = Field(default=1, ge=0)
     price_inr_monthly: int = Field(default=0, ge=0)

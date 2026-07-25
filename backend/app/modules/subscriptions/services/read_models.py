@@ -25,6 +25,7 @@ def read_plan(plan: SubscriptionPlan) -> SubscriptionPlanRead:
         key=plan.key,
         name=plan.name,
         monthly_patient_limit=plan.monthly_patient_limit,
+        monthly_whatsapp_message_limit=plan.monthly_whatsapp_message_limit,
         included_branches=plan.included_branches,
         included_doctors=plan.included_doctors,
         price_inr_monthly=plan.price_inr_monthly,

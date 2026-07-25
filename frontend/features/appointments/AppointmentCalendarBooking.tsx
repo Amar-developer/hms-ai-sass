@@ -23,6 +23,7 @@ import {
   TextField,
 } from "@/app/components/FormElements";
 import { searchPatients } from "@/lib/hmsLogic";
+import { usePatientSearch } from "@/features/patients/components/PatientSearchSelect";
 import {
   humanizeOptionLabel,
   publicDisplayValue,
@@ -171,6 +172,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const [page, setPage] = useState(1);
   const [patientSearch, setPatientSearch] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
   const [patientLookupOpen, setPatientLookupOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState<BookingStep>("appointment");
   const [appointmentDate, setAppointmentDate] = useState(
@@ -257,8 +259,6 @@ export function AppointmentCalendarBooking(props: Props) {
       ?.name || "selected department";
 
   const {
-    liveMatches,
-    setLiveMatches,
     liveDoctors,
     doctorFeeRules,
     doctorId,
@@ -277,8 +277,16 @@ export function AppointmentCalendarBooking(props: Props) {
     platformTenantId,
     setPlatformTenantId,
     listRefreshKey,
-    patientSearch,
     setMessage,
+  });
+  const {
+    patients: liveMatches,
+    loading: patientSearchLoading,
+    failed: patientSearchFailed,
+  } = usePatientSearch({
+    apiSession,
+    query: patientSearch,
+    initialPatients: patients,
   });
 
   const platformDepartmentOptions = Array.from(
@@ -416,7 +424,10 @@ export function AppointmentCalendarBooking(props: Props) {
     appointmentType === "fitness_certificate";
   const patientMatches = (
     apiSession
-      ? liveMatches
+      ? [...duplicateMatches, ...liveMatches].filter(
+          (patient, index, rows) =>
+            rows.findIndex((row) => row.id === patient.id) === index,
+        )
       : searchPatients(patients, patientSearch).map((patient: any) => ({
           id: patient.id,
           full_name: patient.name,
@@ -484,7 +495,7 @@ export function AppointmentCalendarBooking(props: Props) {
     setBookingStep("appointment");
     setSelectedPatient(null);
     setPatientSearch("");
-    setLiveMatches([]);
+    setDuplicateMatches([]);
     setPatientLookupOpen(false);
     setBooked(null);
     setMessage("");
@@ -633,7 +644,7 @@ export function AppointmentCalendarBooking(props: Props) {
       setBookingStep,
       setPatientSearch,
       setPatientLookupOpen,
-      setLiveMatches,
+      setLiveMatches: setDuplicateMatches,
       bookingInFlightRef,
     });
 
@@ -642,7 +653,7 @@ export function AppointmentCalendarBooking(props: Props) {
     setBookingStep("appointment");
     setSelectedPatient(null);
     setPatientSearch("");
-    setLiveMatches([]);
+    setDuplicateMatches([]);
     setPatientLookupOpen(false);
     setBooked(null);
     setMessage("");
@@ -767,7 +778,6 @@ export function AppointmentCalendarBooking(props: Props) {
                         type="button"
                         onClick={() => {
                           setPatientSearch("");
-                          setLiveMatches([]);
                         }}
                         className="absolute right-3 top-1/2 z-10 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                         aria-label="Clear patient search"
@@ -783,6 +793,13 @@ export function AppointmentCalendarBooking(props: Props) {
                           </p>
                         )}
                         {patientSearch.trim().length >= 2 &&
+                          patientSearchLoading && (
+                            <p className="px-3 py-3 text-xs text-slate-500">
+                              Searching...
+                            </p>
+                          )}
+                        {patientSearch.trim().length >= 2 &&
+                          !patientSearchLoading &&
                           patientMatches.map((patient: any) => (
                             <button
                               key={patient.id}
@@ -814,9 +831,12 @@ export function AppointmentCalendarBooking(props: Props) {
                             </button>
                           ))}
                         {patientSearch.trim().length >= 2 &&
+                          !patientSearchLoading &&
                           patientMatches.length === 0 && (
                             <p className="px-3 py-2 table-data text-slate-500">
-                              No active patient found.
+                              {patientSearchFailed
+                                ? "Patient search failed. Try again."
+                                : "No active patient found."}
                             </p>
                           )}
                         {patientSearch.trim().length >= 2 && (

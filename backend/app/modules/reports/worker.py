@@ -21,6 +21,12 @@ from app.modules.reports.service import (
 )
 from app.modules.reports.snapshots import archive_due_months
 from app.modules.tenants.models import Tenant, TenantStatus, now_utc
+from app.modules.notifications.whatsapp_processor import (
+    process_due_whatsapp_notifications,
+)
+from app.modules.integrations.whatsapp_reminders import (
+    queue_due_whatsapp_appointment_reminders,
+)
 
 
 def enqueue_due_monthly_reports(session: Session) -> None:
@@ -75,6 +81,9 @@ def run_once() -> None:
             archive_due_months(session)
             # Delete error logs past retention (idempotent no-op most cycles).
             purge_expired_error_logs(session)
+            queue_due_whatsapp_appointment_reminders(session)
+    with Session(engine) as session:
+        process_due_whatsapp_notifications(session)
     job_id = dequeue_monthly_report_job(timeout=5)
     if not job_id:
         return

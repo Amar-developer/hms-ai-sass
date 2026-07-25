@@ -1,6 +1,8 @@
 import { BookingFormValues } from "./homecare.schema";
+import type { ApiSession } from "@/lib/api";
 
 export type BookingFormProps = {
+  apiSession?: ApiSession | null;
   patients: any[];
   services: any[];
   visitServices: any[];

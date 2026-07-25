@@ -720,6 +720,8 @@ export function SearchableSelect<T = string>({
   searchable = true,
   required = false,
   error,
+  loading = false,
+  onSearchChange,
 }: SearchableSelectProps<T>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -742,6 +744,7 @@ export function SearchableSelect<T = string>({
       ) {
         setOpen(false);
         setQuery("");
+        onSearchChange?.("");
       }
     }
 
@@ -750,7 +753,7 @@ export function SearchableSelect<T = string>({
     return () => {
       document.removeEventListener("mousedown", handleClick);
     };
-  }, [open]);
+  }, [onSearchChange, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -813,6 +816,7 @@ export function SearchableSelect<T = string>({
 
     setOpen(false);
     setQuery("");
+    onSearchChange?.("");
   }
 
   return (
@@ -822,7 +826,15 @@ export function SearchableSelect<T = string>({
         disabled={disabled}
         aria-required={required || undefined}
         aria-invalid={Boolean(error) || undefined}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() =>
+          setOpen((current) => {
+            if (current) {
+              setQuery("");
+              onSearchChange?.("");
+            }
+            return !current;
+          })
+        }
         className="flex w-full items-center justify-between rounded-lg border border-slate-200 bg-white px-2 py-2 text-left text-xs outline-none focus:border-slate-500 disabled:bg-slate-50 disabled:text-slate-400 lg:py-2 lg:text-sm"
       >
         <span className={displayLabel ? "truncate" : "truncate text-slate-400"}>
@@ -847,9 +859,11 @@ export function SearchableSelect<T = string>({
                 <input
                   autoFocus
                   value={query}
-                  onChange={(event) =>
-                    setQuery(capitalizeFirst(event.target.value))
-                  }
+                  onChange={(event) => {
+                    const nextQuery = event.target.value;
+                    setQuery(capitalizeFirst(nextQuery));
+                    onSearchChange?.(nextQuery);
+                  }}
                   placeholder={searchPlaceholder}
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-500"
                 />
@@ -876,13 +890,19 @@ export function SearchableSelect<T = string>({
               </button>
             )}
 
-            {filtered.length === 0 && !allowCustom && (
+            {loading && (
+              <div className="px-4 py-3 text-sm text-slate-500">
+                Searching...
+              </div>
+            )}
+
+            {!loading && filtered.length === 0 && !allowCustom && (
               <div className="px-4 py-3 text-sm text-slate-500">
                 {emptyText}
               </div>
             )}
 
-            {filtered.slice(0, maxOptions).map((option) => (
+            {!loading && filtered.slice(0, maxOptions).map((option) => (
               <button
                 key={option.value}
                 type="button"

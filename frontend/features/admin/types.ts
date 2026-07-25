@@ -27,6 +27,8 @@ export type SearchableSelectProps<T = string> = {
   searchable?: boolean;
   required?: boolean;
   error?: string;
+  loading?: boolean;
+  onSearchChange?: (query: string) => void;
 };
 
 

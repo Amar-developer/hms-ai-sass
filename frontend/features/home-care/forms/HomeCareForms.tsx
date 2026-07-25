@@ -45,6 +45,7 @@ export const homeCareHourOptions = Object.entries(homeCareHourPrices).map(
 );
 
 export function BookingForm({
+  apiSession,
   patients,
   services,
   visitServices,
@@ -271,6 +272,7 @@ export function BookingForm({
       </div>
       <div className="mt-5">
         <PatientLookupField
+          apiSession={apiSession}
           label="Patient Search"
           patients={patients}
           searchValue={patientSearch}
