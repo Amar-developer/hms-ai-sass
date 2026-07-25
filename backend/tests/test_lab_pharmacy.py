@@ -14,6 +14,57 @@ from app.modules.lab.models import (
 from app.modules.identity.models import User
 
 
+def test_cancelled_lab_invoice_does_not_lock_order_for_billing(test_engine):
+    from app.modules.billing.models import Invoice, InvoiceStatus
+    from app.modules.billing.repositories.source_repository import (
+        BillingSourceRepository,
+    )
+
+    with Session(test_engine) as session:
+        order = LabOrder(
+            tenant_id="tenant_lab_rebill",
+            branch_id="branch_lab_rebill",
+            patient_id="patient_lab_rebill",
+            source=LabOrderSource.OP_DIRECT,
+            tests="Beta HCG",
+            amount=350,
+        )
+        session.add(order)
+        session.commit()
+        session.refresh(order)
+
+        invoice = Invoice(
+            tenant_id=order.tenant_id,
+            branch_id=order.branch_id,
+            patient_id=order.patient_id,
+            lab_order_id=order.id,
+            invoice_number="LAB-VOID-001",
+            status=InvoiceStatus.CANCELLED,
+        )
+        session.add(invoice)
+        session.commit()
+
+        repository = BillingSourceRepository(session)
+        assert (
+            repository.get_lab_order_invoice(
+                tenant_id=order.tenant_id,
+                lab_order_id=order.id,
+            )
+            is None
+        )
+
+        invoice.status = InvoiceStatus.ISSUED
+        session.add(invoice)
+        session.commit()
+
+        active_invoice = repository.get_lab_order_invoice(
+            tenant_id=order.tenant_id,
+            lab_order_id=order.id,
+        )
+        assert active_invoice is not None
+        assert active_invoice.id == invoice.id
+
+
 def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):
     from app.modules.lab.services.helpers import _package_read
     from app.modules.lab.models import LabTestPackage

@@ -15,6 +15,20 @@ export function isCancelled(order: any) {
   return String(order?.status || "") === "cancelled";
 }
 
+export function activeLabInvoiceOrderIds(invoices: any[]) {
+  return new Set(
+    (invoices || [])
+      .filter(
+        (invoice) =>
+          !["cancelled", "refunded"].includes(
+            String(invoice?.status || "").toLowerCase(),
+          ),
+      )
+      .map((invoice) => invoice.lab_order_id)
+      .filter(Boolean),
+  );
+}
+
 export function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
