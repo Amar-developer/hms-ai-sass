@@ -651,7 +651,7 @@ export function WhatsAppIntegrationSettings({
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Badge tone={draft.enabled ? "green" : "slate"}>
+          <Badge tone={draft.enabled ? "green" : "slate"} className="normal-badge">
             {draft.enabled ? "Enabled" : "Disabled"}
           </Badge>
           <Switch
@@ -681,6 +681,7 @@ export function WhatsAppIntegrationSettings({
                     ? "amber"
                     : "red"
               }
+              className="normal-badge"
             >
               {readiness.status === "ready"
                 ? "Ready"
@@ -732,15 +733,15 @@ export function WhatsAppIntegrationSettings({
         <div className="mt-4 rounded-xl border border-slate-200 p-4">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h4 className="text-sm font-bold text-slate-800">
+              <h4 className="card-title font-bold text-slate-800">
                 Monthly notification usage
               </h4>
-              <p className="mt-1 text-xs text-slate-500">
+              <p className="mt-1 card-desc text-slate-500">
                 {usage.plan_name} plan · resets at the start of each calendar
                 month.
               </p>
             </div>
-            <Badge tone={usage.limit_reached ? "red" : "blue"}>
+            <Badge tone={usage.limit_reached ? "red" : "blue"} className="normal-badge">
               {usage.used} / {usage.monthly_limit}
             </Badge>
           </div>
@@ -764,10 +765,10 @@ export function WhatsAppIntegrationSettings({
         <div className="mt-4 rounded-xl border border-slate-200 p-4">
           <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
             <div>
-              <h4 className="text-sm font-bold text-slate-800">
+              <h1 className="card-title font-bold text-slate-800">
                 Delivery health
-              </h4>
-              <p className="mt-1 text-xs text-slate-500">
+              </h1>
+              <p className="mt-1 card-desc text-slate-500">
                 Application queue and delivery activity during the last 24 hours.
               </p>
             </div>
@@ -779,6 +780,7 @@ export function WhatsAppIntegrationSettings({
                     ? "amber"
                     : "green"
               }
+              className="normal-badge"
             >
               {String(health.status).replace(/^./, (value) => value.toUpperCase())}
             </Badge>
@@ -811,7 +813,7 @@ export function WhatsAppIntegrationSettings({
       <div className="mt-5 rounded-xl border border-slate-200 p-4">
         <div className="mb-4 flex items-center gap-2">
           <Link2 className="h-4 w-4 text-slate-500" />
-          <h4 className="text-sm font-bold text-slate-800">API connection</h4>
+          <h4 className="card-title font-bold text-slate-800">API connection</h4>
         </div>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <div className="md:col-span-2 xl:col-span-3">
@@ -931,10 +933,10 @@ export function WhatsAppIntegrationSettings({
       </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 p-4">
-        <h4 className="text-sm font-bold text-slate-800">
+        <h4 className="card-title font-bold text-slate-800">
           Recipient controls
         </h4>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 card-desc text-slate-500">
           A recipient switch disables every notification for that audience.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -974,10 +976,10 @@ export function WhatsAppIntegrationSettings({
       </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 p-4">
-        <h4 className="text-sm font-bold text-slate-800">
+        <h4 className="card-title font-bold text-slate-800">
           Notification templates
         </h4>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 card-desc text-slate-500">
           Configure separate approved identifiers for English and Tamil. Patient
           messages use the language selected in the patient record; a missing
           Tamil identifier falls back to the tenant default.

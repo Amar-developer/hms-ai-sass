@@ -20,6 +20,7 @@ import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
+import { dateFieldOptions, status_options } from "../../constants";
 
 export function RolesManagement({
   tenants,
@@ -146,18 +147,13 @@ export function RolesManagement({
             value={filters.query}
             onChange={(e: any) => updateFilter("query", e.target.value)}
             placeholder="Role name"
-            // className="rounded-lg px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm"
           />
         </FormField>
         <FormField label="Status">
           <SearchableSelect
             value={filters.status}
             onChange={(value) => updateFilter("status", value)}
-            options={[
-              { value: "all", label: "All status" },
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-            ]}
+            options={status_options}
             placeholder="Select status"
             searchable={false}
           />
@@ -168,10 +164,7 @@ export function RolesManagement({
             searchable={false}
             value={filters.dateField}
             onChange={(value) => updateFilter("dateField", value)}
-            options={[
-              { value: "updated_at", label: "Modified date" },
-              { value: "created_at", label: "Created date" },
-            ]}
+            options={dateFieldOptions}
             placeholder="Select date field"
           />
         </FormField>
@@ -282,6 +275,7 @@ export function RolesManagement({
                     {formatDate(role.updated_at)}
                   </span>
                   <RowActions
+                    className="right-24 -bottom-5"
                     actions={[
                       {
                         label: "Edit",

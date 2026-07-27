@@ -147,8 +147,8 @@ export function WhatsAppDeliveryQueue({
         aria-expanded={expanded}
       >
         <div>
-          <h3 className="font-bold text-slate-900">Delivery queue</h3>
-          <p className="mt-1 text-xs text-slate-500">
+          <h3 className="card-title font-bold text-slate-900">Delivery queue</h3>
+          <p className="card-desc mt-1 text-xs text-slate-500">
             Monitor queued, sent, failed and cancelled template notifications.
           </p>
         </div>

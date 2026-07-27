@@ -1,4 +1,5 @@
 import { useForm } from "react-hook-form";
+import { KeyRound } from "lucide-react";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
 import { CheckboxList } from "../components/CheckboxList";
@@ -7,10 +8,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMemo } from "react";
 import { tenantRoleOptions } from "../helpers";
 import { canResetTenantUserPassword } from "../permissions";
-import { Card,Field,Input, SearchableSelect } from "@/app/components/common/ui";
+import { Card,Input, SearchableSelect } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { booleanOptions, userTypeOptions } from "../options";
 import { FormError } from "@/app/components/common/FormError";
+import { TenantPicker } from "@/features/superAdmin/components/shared/TenantPicker";
 
 export function UserForm({
   title,
@@ -23,6 +25,11 @@ export function UserForm({
   apiSession,
   onResetPassword,
   back,
+  tenants,
+  selectedId,
+  setSelectedId,
+  defaultUserType,
+  canResetPassword: canResetPasswordProp,
 }: any) {
   const {
     register,
@@ -36,7 +43,7 @@ export function UserForm({
     defaultValues: {
       name: user?.name || "",
       email: user?.email || "",
-      userType: user?.user_type || "staff",
+      userType: user?.user_type || defaultUserType || "staff",
       mobile: user?.mobile || "",
       branchId: user?.branch_id || "",
       password: user ? undefined : "TempPass123",
@@ -44,7 +51,7 @@ export function UserForm({
       isActive: String(user?.is_active ?? true),
       roleKeys: user?.roles?.length
         ? user.roles
-        : user?.user_type === "tenant_admin"
+        : (user?.user_type || defaultUserType) === "tenant_admin"
           ? ["tenant_admin"]
           : [],
     },
@@ -138,7 +145,10 @@ export function UserForm({
     [roles, branches, selectedBranch, selectedRoleKeys],
   );
 
-  const canResetPassword = canResetTenantUserPassword(apiSession, user);
+  const canResetPassword =
+    typeof canResetPasswordProp === "boolean"
+      ? canResetPasswordProp
+      : canResetTenantUserPassword(apiSession, user);
 
   return (
     <Card>
@@ -152,6 +162,14 @@ export function UserForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-6 md:grid-cols-2"
       >
+        {tenants && !user && (
+          <TenantPicker
+            tenants={tenants}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+          />
+        )}
+
         <FormField label="Name" required>
           <Input
             {...register("name")}
@@ -287,8 +305,21 @@ export function UserForm({
         </div>
 
         {canResetPassword && (
-          <div className="md:col-span-2">
-            {/* existing reset password block */}
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 md:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-bold">Password reset</p>
+              <p className="mt-1 text-xs text-slate-500">
+                Set a temporary password for this user.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => onResetPassword?.(user)}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border bg-white px-4 py-3 text-sm font-bold shadow-sm transition hover:bg-slate-100"
+            >
+              <KeyRound size={16} />
+              <span>Reset Password</span>
+            </button>
           </div>
         )}
 

@@ -14,6 +14,7 @@ import { BranchFormValues, branchSchema } from "../settings.schema";
 import { useEffect } from "react";
 import { FormError } from "@/app/components/common/FormError";
 import { branch_status_options } from "../constants";
+import { TenantPicker } from "@/features/superAdmin/components/shared/TenantPicker";
 
 export function BranchForm({
   title,
@@ -23,6 +24,9 @@ export function BranchForm({
   busy,
   onSubmit,
   back,
+  tenants,
+  selectedId,
+  setSelectedId,
 }: any) {
   const {
     register,
@@ -81,6 +85,14 @@ export function BranchForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
+        {tenants && !branch && (
+          <TenantPicker
+            tenants={tenants}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+          />
+        )}
+
         <FormField label="Branch Name" required>
           <Input
             {...register("name")}

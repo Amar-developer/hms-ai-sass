@@ -2,6 +2,11 @@
 
 import { useRef } from "react";
 import { apiFetch, apiUpload } from "@/lib/api";
+import {
+  UserFormValues,
+  BranchFormValues,
+  DepartmentFormValues,
+} from "@/features/admin/settings.schema";
 
 type Setter<T = any> = React.Dispatch<React.SetStateAction<T[]>>;
 type EntitySection = "roles" | "users" | "departments" | "branches";
@@ -701,55 +706,41 @@ export function useSuperAdminActions({
     await assignTemplate("roles", selectedRoleId, e);
   }
 
-  async function createUser(e: any) {
-    e.preventDefault();
+  async function createUser(data: UserFormValues) {
     if (!apiSession || !selectedId) return;
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const roleKeys = fd
-      .getAll("roleKeys")
-      .map((x) => String(x).trim())
-      .filter(Boolean);
     const created = await createEntity(
       "users",
       {
-        name: fd.get("name"),
-        email: fd.get("email"),
-        password: fd.get("password"),
-        mobile: fd.get("mobile") || null,
-        user_type: fd.get("userType") || "staff",
-        branch_id: fd.get("branchId") || null,
-        role_keys: roleKeys,
-        must_change_password: fd.get("mustChangePassword") === "true",
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        mobile: data.mobile || null,
+        user_type: data.userType || "staff",
+        branch_id: data.branchId || null,
+        role_keys: data.roleKeys || [],
+        must_change_password: data.mustChangePassword === "true",
       },
       (row) => `User created: ${row.name}`,
       "Could not create user.",
     );
-    if (created) form.reset();
+    return created;
   }
 
-  async function updateUser(e: any) {
-    e.preventDefault();
-    if (!apiSession || !selectedId || !selectedUserId) return;
-    const fd = new FormData(e.currentTarget);
-    const roleKeys = fd
-      .getAll("roleKeys")
-      .map((x) => String(x).trim())
-      .filter(Boolean);
-    const payload: any = {
-      name: fd.get("name"),
-      email: fd.get("email"),
-      user_type: fd.get("userType") || "staff",
-      mobile: fd.get("mobile") || null,
-      branch_id: fd.get("branchId") || null,
-      is_active: fd.get("isActive") === "true",
-      must_change_password: fd.get("mustChangePassword") === "true",
-      role_keys: roleKeys,
-    };
+  async function updateUser(data: UserFormValues, selectedUser: any) {
+    if (!apiSession || !selectedId || !selectedUser) return;
     await updateEntity(
       "users",
-      selectedUserId,
-      payload,
+      selectedUser.id,
+      {
+        name: data.name,
+        email: data.email,
+        user_type: data.userType || "staff",
+        mobile: data.mobile || null,
+        branch_id: data.branchId || null,
+        is_active: data.isActive === "true",
+        must_change_password: data.mustChangePassword === "true",
+        role_keys: data.roleKeys || [],
+      },
       "User updated.",
       "Could not update user.",
     );
@@ -794,45 +785,35 @@ export function useSuperAdminActions({
     }
   }
 
-  async function createDepartment(e: any) {
-    e.preventDefault();
+  async function createDepartment(data: DepartmentFormValues) {
     if (!apiSession || !selectedId) return;
-    const form = e.currentTarget;
-    const fd = new FormData(form);
-    const name = String(fd.get("name") || "").trim();
-    if (name.length < 2) {
-      setMessage("Medical department name must contain at least 2 characters.");
-      return;
-    }
     const created = await createEntity(
       "departments",
       {
-        name,
-        description: fd.get("description") || null,
+        name: data.name.trim(),
+        description: data.description || null,
+        branch_id: data.branchId || null,
         created_by_user_id: apiSession.user?.id || null,
       },
       (row) => `Medical Department created: ${row.name}`,
       "Could not create medical department.",
     );
-    if (created) form.reset();
+    return created;
   }
 
-  async function updateDepartment(e: any) {
-    e.preventDefault();
-    if (!apiSession || !selectedId || !selectedDepartmentId) return;
-    const fd = new FormData(e.currentTarget);
-    const name = String(fd.get("name") || "").trim();
-    if (name.length < 2) {
-      setMessage("Medical department name must contain at least 2 characters.");
-      return;
-    }
+  async function updateDepartment(
+    data: DepartmentFormValues,
+    selectedDepartment: any,
+  ) {
+    if (!apiSession || !selectedId || !selectedDepartment) return;
     await updateEntity(
       "departments",
-      selectedDepartmentId,
+      selectedDepartment.id,
       {
-        name,
-        description: fd.get("description") || null,
-        is_active: fd.get("isActive") === "true",
+        name: data.name.trim(),
+        description: data.description || null,
+        branch_id: data.branchId || null,
+        is_active: data.isActive === "true",
       },
       "Medical Department updated.",
       "Could not update medical department.",
@@ -843,42 +824,37 @@ export function useSuperAdminActions({
     await assignTemplate("departments", selectedDepartmentId, e);
   }
 
-  async function createBranch(e: any) {
-    e.preventDefault();
+  async function createBranch(data: BranchFormValues) {
     if (!apiSession || !selectedId) return;
-    const form = e.currentTarget;
-    const fd = new FormData(form);
     const created = await createEntity(
       "branches",
       {
-        name: fd.get("name"),
-        code: fd.get("code"),
-        area: fd.get("area") || null,
-        address: fd.get("address") || null,
-        city: fd.get("city") || null,
-        state: fd.get("state") || null,
+        name: data.name,
+        code: data.code,
+        area: data.area || null,
+        address: data.address || null,
+        city: data.city || null,
+        state: data.state || null,
       },
       (row) => `Branch created: ${row.name}`,
       "Could not create branch.",
     );
-    if (created) form.reset();
+    return created;
   }
 
-  async function updateBranch(e: any) {
-    e.preventDefault();
-    if (!apiSession || !selectedId || !selectedBranchId) return;
-    const fd = new FormData(e.currentTarget);
+  async function updateBranch(data: BranchFormValues, selectedBranch: any) {
+    if (!apiSession || !selectedId || !selectedBranch) return;
     await updateEntity(
       "branches",
-      selectedBranchId,
+      selectedBranch.id,
       {
-        name: fd.get("name"),
-        code: fd.get("code"),
-        area: fd.get("area") || null,
-        address: fd.get("address") || null,
-        city: fd.get("city") || null,
-        state: fd.get("state") || null,
-        is_active: fd.get("isActive") === "true",
+        name: data.name,
+        code: data.code,
+        area: data.area || null,
+        address: data.address || null,
+        city: data.city || null,
+        state: data.state || null,
+        is_active: data.isActive === "true",
       },
       "Branch updated.",
       "Could not update branch.",

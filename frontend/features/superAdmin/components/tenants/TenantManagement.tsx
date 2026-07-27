@@ -4,12 +4,16 @@ import { useEffect, useState } from "react";
 import {
   Badge,
   Card,
-  Field,
   Input,
   RefreshButton,
-  Select,
+  SearchableSelect,
 } from "@/app/components/common/ui";
-import { tenantTypes } from "../../constants";
+import { FormField } from "@/app/components/FormElements";
+import {
+  dateFieldOptions,
+  tenant_status_options,
+  tenantTypes,
+} from "../../constants";
 import { addressText, formatDate, formatTenantType } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
@@ -127,73 +131,70 @@ export function TenantManagement({
         </div>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-7">
-        <Field label="Tenant">
+        <FormField label="Tenant">
           <Input
             value={filters.tenant}
             onChange={(e: any) => updateFilter("tenant", e.target.value)}
             placeholder="Tenant name or ID"
             className="search-filter"
           />
-        </Field>
-        <Field label="Type">
-          <Select
+        </FormField>
+        <FormField label="Type">
+          <SearchableSelect
+            searchable={false}
             value={filters.type}
-            onChange={(e: any) => updateFilter("type", e.target.value)}
-            className="select-filter"
-          >
-            <option value="all">All types</option>
-            {tenantTypes.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Status">
-          <Select
+            onChange={(value) => updateFilter("type", value)}
+            placeholder="All types"
+            options={[
+              { value: "all", label: "All types" },
+              ...tenantTypes.map(([value, label]) => ({
+                value,
+                label,
+              })),
+            ]}
+          />
+        </FormField>
+        <FormField label="Status">
+          <SearchableSelect
+            searchable={false}
             value={filters.status}
-            onChange={(e: any) => updateFilter("status", e.target.value)}
-            className="select-filter"
-          >
-            <option value="all">All status</option>
-            <option value="trial">Trial</option>
-            <option value="active">Active</option>
-          </Select>
-        </Field>
-        <Field label="Contact">
+            onChange={(value) => updateFilter("status", value)}
+            placeholder="All status"
+            options={tenant_status_options}
+          />
+        </FormField>
+        <FormField label="Contact">
           <Input
             value={filters.contact}
             onChange={(e: any) => updateFilter("contact", e.target.value)}
             placeholder="Email, phone, address"
             className="search-filter"
           />
-        </Field>
-        <Field label="Date field">
-          <Select
+        </FormField>
+        <FormField label="Date field">
+          <SearchableSelect
             value={filters.dateField}
-            onChange={(e: any) => updateFilter("dateField", e.target.value)}
-            className="select-filter"
-          >
-            <option value="updated_at">Modified date</option>
-            <option value="created_at">Created date</option>
-          </Select>
-        </Field>
-        <Field label="From">
+            onChange={(value) => updateFilter("dateField", value)}
+            searchable={false}
+            options={dateFieldOptions}
+          />
+        </FormField>
+        <FormField label="From">
           <Input
             type="date"
             value={filters.fromDate}
             onChange={(e: any) => updateFilter("fromDate", e.target.value)}
             className="date-filter"
           />
-        </Field>
-        <Field label="To">
+        </FormField>
+        <FormField label="To">
           <Input
             type="date"
             value={filters.toDate}
             onChange={(e: any) => updateFilter("toDate", e.target.value)}
             className="date-filter"
           />
-        </Field>
+        </FormField>
       </div>
       <div className="mt-4 overflow-hidden rounded-2xl border border-slate-200">
         <div className="hidden md:grid grid-cols-[1.45fr_.9fr_.7fr_1.1fr_.7fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
@@ -214,6 +215,7 @@ export function TenantManagement({
             field="status"
             sort={sort}
             onSort={changeSort}
+            className="text-center"
           />
           <SortButton
             label="Contact"
@@ -233,7 +235,7 @@ export function TenantManagement({
             sort={sort}
             onSort={changeSort}
           />
-          <span>Actions</span>
+          <span className="text-center">Actions</span>
         </div>
         <div className="divide-y divide-slate-200">
           {rows.length === 0 && <Empty text="No tenants match your search." />}
@@ -320,7 +322,7 @@ export function TenantManagement({
                 >
                   <RowActions
                     actions={actions}
-                    className="right-28 -bottom-5"
+                    className="right-10 -bottom-5"
                   />
                 </div>
               </div>

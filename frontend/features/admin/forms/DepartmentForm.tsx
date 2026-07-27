@@ -7,6 +7,7 @@ import { FormField } from "@/app/components/FormElements";
 import { DepartmentFormValues, departmentSchema } from "../settings.schema";
 import { basicMedicalDepartmentSuggestions } from "@/lib/options";
 import { isLocked } from "../helpers";
+import { TenantPicker } from "@/features/superAdmin/components/shared/TenantPicker";
 
 
 
@@ -18,6 +19,9 @@ export function DepartmentForm({
   busy,
   onSubmit,
   back,
+  tenants,
+  selectedId,
+  setSelectedId,
 }: any) {
   const {
     register,
@@ -97,6 +101,14 @@ export function DepartmentForm({
         autoComplete="off"
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
+        {tenants && !department && (
+          <TenantPicker
+            tenants={tenants}
+            selectedId={selectedId}
+            setSelectedId={setSelectedId}
+          />
+        )}
+
         <Field label="Name" required>
           <SuggestionInput
             value={watch("name")}

@@ -198,7 +198,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
                   <td className="px-4 py-3 font-bold">{admin.name}</td>
                   <td className="px-4 py-3">{admin.email}</td>
                   <td className="px-4 py-3">
-                    <Badge tone={admin.is_active ? "green" : "red"} className="inline-flex px-2 py-1 text-xs">
+                    <Badge tone={admin.is_active ? "green" : "red"} className="normal-badge">
                       {admin.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </td>

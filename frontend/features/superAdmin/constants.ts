@@ -219,3 +219,14 @@ export const status_options = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
+
+export const tenant_status_options = [
+  { value: "all", label: "All status" },
+  { value: "trial", label: "Trial" },
+  { value: "active", label: "Active" },
+];
+
+export const dateFieldOptions  = [
+  { value: "updated_at", label: "Modified date" },
+  { value: "created_at", label: "Created date" },
+];

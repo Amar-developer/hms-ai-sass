@@ -22,7 +22,12 @@ export const userSchema = z.object({
   ]),
   mobile: mobileSchema,
   branchId: z.string().optional(),
-  password: z.string().optional(),
+  password: z
+    .string()
+    .optional()
+    .refine((value) => !value || value.trim().length >= 8, {
+      message: "Password must be at least 8 characters",
+    }),
   mustChangePassword: z.string(),
   isActive: z.string().optional(),
   roleKeys: z.array(z.string()).min(1, "Select at least one role"),

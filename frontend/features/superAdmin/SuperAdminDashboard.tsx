@@ -13,15 +13,9 @@ import { CreateRole } from "./components/roles/CreateRole";
 import { EditRole } from "./components/roles/EditRole";
 import { RolePermissions } from "./components/roles/RolePermissions";
 import { TenantUsers } from "./components/users/TenantUsers";
-import { CreateUser } from "./components/users/CreateUser";
-import { EditUser } from "./components/users/EditUser";
 import { PlatformAdmins } from "./components/users/PlatformAdmins";
 import { DepartmentsManagement } from "./components/departments/DepartmentsManagement";
-import { CreateDepartment } from "./components/departments/CreateDepartment";
-import { EditDepartment } from "./components/departments/EditDepartment";
 import { BranchesManagement } from "./components/branches/BranchesManagement";
-import { CreateBranch } from "./components/branches/CreateBranch";
-import { EditBranch } from "./components/branches/EditBranch";
 import { AssignTemplate } from "./components/shared/AssignTemplate";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { PasswordResetModal } from "./components/shared/PasswordResetModal";
@@ -29,8 +23,12 @@ import { SubscriptionManagement } from "./components/subscriptions/SubscriptionM
 import { TenantBranchSettings } from "./components/subscriptions/TenantBranchSettings";
 import { TenantPicker } from "./components/shared/TenantPicker";
 import { WhatsAppIntegrationSettings } from "@/features/admin/components/WhatsAppIntegrationSettings";
+import { UserForm } from "@/features/admin/forms/UserForm";
+import { BranchForm } from "@/features/admin/forms/BranchForm";
+import { DepartmentForm } from "@/features/admin/forms/DepartmentForm";
 import { useSuperAdminData, useSuperAdminActions } from "./api";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import { canResetUserPassword } from "./helpers";
 
 export { superAdminSections } from "./constants";
 
@@ -209,6 +207,14 @@ export function SuperAdminDashboard({
     data.tenantBranches,
   ]);
 
+  const editingUser = data.users.find((u: any) => u.id === selectedUserId);
+  const editingBranch = data.tenantBranches.find(
+    (b: any) => b.id === selectedBranchId,
+  );
+  const editingDepartment = data.departments.find(
+    (d: any) => d.id === selectedDepartmentId,
+  );
+
   if (!apiSession?.user?.is_super_admin)
     return (
       <Card>
@@ -368,26 +374,30 @@ export function SuperAdminDashboard({
         />
       )}
       {currentSection === "userCreate" && (
-        <CreateUser
+        <UserForm
+          title="Create User"
+          roles={data.roles.filter((role: any) => role.key !== "super_admin")}
+          branches={data.tenantBranches}
+          busy={data.busy}
           tenants={selectableTenants}
           selectedId={data.selectedId}
           setSelectedId={data.setSelectedId}
-          branches={data.tenantBranches}
-          roles={data.roles.filter((role: any) => role.key !== "super_admin")}
-          busy={data.busy}
-          createUser={actions.createUser}
+          defaultUserType="tenant_admin"
+          apiSession={apiSession}
+          onSubmit={actions.createUser}
           back={() => changeSection("users")}
         />
       )}
       {currentSection === "userEdit" && (
-        <EditUser
-          apiSession={apiSession}
-          selected={selected}
-          user={data.users.find((u: any) => u.id === selectedUserId)}
-          branches={data.tenantBranches}
+        <UserForm
+          title="Edit User"
+          user={editingUser}
           roles={data.roles.filter((role: any) => role.key !== "super_admin")}
+          branches={data.tenantBranches}
           busy={data.busy}
-          updateUser={actions.updateUser}
+          apiSession={apiSession}
+          canResetPassword={canResetUserPassword(apiSession, editingUser, selected)}
+          onSubmit={(formData: any) => actions.updateUser(formData, editingUser)}
           onResetPassword={setPasswordUser}
           back={() => changeSection("users")}
         />
@@ -407,22 +417,28 @@ export function SuperAdminDashboard({
         />
       )}
       {currentSection === "departmentCreate" && (
-        <CreateDepartment
+        <DepartmentForm
+          title="Create Medical Department"
+          departments={data.departments}
+          branches={data.tenantBranches}
+          busy={data.busy}
           tenants={selectableTenants}
           selectedId={data.selectedId}
           setSelectedId={data.setSelectedId}
-          busy={data.busy}
-          createDepartment={actions.createDepartment}
+          onSubmit={actions.createDepartment}
           back={() => changeSection("departments")}
         />
       )}
       {currentSection === "departmentEdit" && (
-        <EditDepartment
-          department={data.departments.find(
-            (d: any) => d.id === selectedDepartmentId,
-          )}
+        <DepartmentForm
+          title="Edit Medical Department"
+          department={editingDepartment}
+          departments={data.departments}
+          branches={data.tenantBranches}
           busy={data.busy}
-          updateDepartment={actions.updateDepartment}
+          onSubmit={(formData: any) =>
+            actions.updateDepartment(formData, editingDepartment)
+          }
           back={() => changeSection("departments")}
         />
       )}
@@ -455,22 +471,22 @@ export function SuperAdminDashboard({
         />
       )}
       {currentSection === "branchCreate" && (
-        <CreateBranch
+        <BranchForm
+          title="Create Branch"
+          busy={data.busy}
           tenants={selectableTenants}
           selectedId={data.selectedId}
           setSelectedId={data.setSelectedId}
-          busy={data.busy}
-          createBranch={actions.createBranch}
+          onSubmit={actions.createBranch}
           back={() => changeSection("branches")}
         />
       )}
       {currentSection === "branchEdit" && (
-        <EditBranch
-          branch={data.tenantBranches.find(
-            (b: any) => b.id === selectedBranchId,
-          )}
+        <BranchForm
+          title="Edit Branch"
+          branch={editingBranch}
           busy={data.busy}
-          updateBranch={actions.updateBranch}
+          onSubmit={(formData: any) => actions.updateBranch(formData, editingBranch)}
           back={() => changeSection("branches")}
         />
       )}
@@ -520,7 +536,7 @@ export function SuperAdminDashboard({
                 selectedId={data.selectedId}
                 setSelectedId={data.setSelectedId}
               />
-              <Badge tone={tenantWhatsAppEnabled ? "green" : "slate"}>
+              <Badge tone={tenantWhatsAppEnabled ? "green" : "slate"} className="normal-badge">
                 {tenantWhatsAppEnabled
                   ? "Included in active subscription"
                   : "Not included in active subscription"}
