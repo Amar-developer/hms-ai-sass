@@ -101,7 +101,7 @@ def list_cases(
     tenant_id: str = Depends(require_tenant_id),
     session: Session = Depends(get_session),
     current_user: User = Depends(require_permission(permissions.PHYSIOTHERAPY_READ)),
-) -> list[PhysiotherapyCase]:
+) -> list[PhysiotherapyCaseRead]:
     return PhysiotherapyCaseService(session).list_cases(
         tenant_id=tenant_id,
         branch_id=branch_id,

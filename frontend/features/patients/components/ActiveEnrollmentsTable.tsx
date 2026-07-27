@@ -111,14 +111,17 @@ export function ActiveEnrollmentsTable({
                   </td>
                   <td>
                     <b className="text-xs lg:text-sm">
-                      {patientMap.get(row.patient_id)?.name ||
+                      {row.patient_name ||
+                        patientMap.get(row.patient_id)?.name ||
                         patientMap.get(row.patient_id)?.full_name ||
                         "Patient"}
                     </b>
                   </td>
                   <td>
                     <p className="text-xs text-slate-500 text-xs lg:text-sm">
-                      {patientMap.get(row.patient_id)?.patient_number || ""}
+                      {row.patient_number ||
+                        patientMap.get(row.patient_id)?.patient_number ||
+                        ""}
                     </p>
                   </td>
                   <td>

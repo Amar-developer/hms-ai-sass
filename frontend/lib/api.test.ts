@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   LIVE_DATA_CHANGED_EVENT,
   LIVE_DATA_CHANGED_STORAGE_KEY,
+  RequestTimeoutError,
   apiFetch,
   apiUpload,
+  fetchWithTimeout,
   uploadAssetUrl,
   type ApiSession,
 } from "./api";
@@ -25,8 +27,27 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   localStorage.clear();
+});
+
+describe("request timeouts", () => {
+  it("aborts a request that exceeds its deadline", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockImplementation((_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(new DOMException("Aborted", "AbortError"));
+        });
+      }),
+    );
+
+    const request = fetchWithTimeout("/slow", {}, 50);
+    const assertion = expect(request).rejects.toBeInstanceOf(RequestTimeoutError);
+    await vi.advanceTimersByTimeAsync(50);
+    await assertion;
+  });
 });
 
 describe("uploaded asset URL resolution", () => {

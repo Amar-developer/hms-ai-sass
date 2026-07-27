@@ -233,6 +233,10 @@ def list_suppliers(
             permissions.SUPPLIERS_READ,
             permissions.PHARMACY_MANAGE,
             permissions.BILLING_MANAGE,
+            permissions.LAB_MANAGE,
+            permissions.LAB_READ,
+            permissions.SERVICE_ITEMS_MANAGE,
+            permissions.SERVICE_ITEMS_READ,
             permissions.SETTINGS_MANAGE,
         )
     ),
@@ -383,7 +387,7 @@ def list_pharmacy_issues(
     current_user: User = Depends(
         require_any_permission(permissions.PHARMACY_MANAGE, permissions.PHARMACY_READ)
     ),
-) -> list[PharmacyIssue]:
+) -> list[PharmacyIssueRead]:
     return list_pharmacy_issues_service(
         session,
         tenant_id=tenant_id,

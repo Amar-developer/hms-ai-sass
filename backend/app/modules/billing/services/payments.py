@@ -15,6 +15,7 @@ from app.modules.notifications.models import NotificationEventType, Notification
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
     queue_whatsapp_template_if_allowed,
+    whatsapp_template_integration_enabled,
 )
 from app.modules.tenants.models import now_utc
 
@@ -126,7 +127,7 @@ def record_invoice_payment(
             resource_id=invoice.id,
             queued_by_user_id=payload.collected_by_user_id,
         )
-        queue_whatsapp_template_if_allowed(
+        pending_template_event = queue_whatsapp_template_if_allowed(
             session,
             tenant_id=tenant_id,
             branch_id=invoice.branch_id,
@@ -137,6 +138,25 @@ def record_invoice_payment(
             dedupe_key=f"whatsapp:invoice:{invoice.id}:pending:{payment.id}",
             queued_by_user_id=payload.collected_by_user_id,
         )
+        if not pending_template_event and not whatsapp_template_integration_enabled(
+            session, tenant_id
+        ):
+            queue_notification_if_allowed(
+                session,
+                tenant_id=tenant_id,
+                branch_id=invoice.branch_id,
+                provider=NotificationProvider.WHATSAPP,
+                event_type=NotificationEventType.PAYMENT_REMINDER,
+                recipient=patient.mobile,
+                subject="Payment pending",
+                message=(
+                    f"Payment pending for invoice {invoice.invoice_number}: "
+                    f"Rs. {invoice.balance_amount}."
+                ),
+                resource_type="invoice",
+                resource_id=invoice.id,
+                queued_by_user_id=payload.collected_by_user_id,
+            )
     record_audit_event(
         session,
         tenant_id=tenant_id,

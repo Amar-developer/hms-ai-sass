@@ -88,6 +88,51 @@ def test_service_invoice_line_prices_fallback_from_total_amount(test_engine):
     assert item.total_amount == 700
 
 
+def test_service_invoice_posts_full_multiline_total_to_ledger(test_engine):
+    ledger_entries: list[dict] = []
+
+    def capture_ledger(*_args, **kwargs):
+        ledger_entries.append(kwargs)
+
+    with Session(test_engine) as session:
+        invoice = create_service_invoice(
+            session,
+            tenant_id="tenant_multiline_ledger",
+            branch_id="branch_multiline_ledger",
+            patient_id="patient_multiline_ledger",
+            appointment_id=None,
+            consultation_id=None,
+            item_type="lab",
+            description="Lab order",
+            amount=700,
+            created_by_user_id="billing_user",
+            service_scope="lab",
+            record_billing_ledger=capture_ledger,
+            ensure_invoice_membership_benefit_ledger=lambda *_args, **_kwargs: None,
+            line_items=[
+                {
+                    "item_type": "lab",
+                    "description": "CBC",
+                    "quantity": 1,
+                    "total_amount": 300,
+                },
+                {
+                    "item_type": "lab",
+                    "description": "Thyroid panel",
+                    "quantity": 1,
+                    "total_amount": 400,
+                },
+            ],
+        )
+
+    assert invoice.total_amount == 700
+    assert len(ledger_entries) == 1
+    assert ledger_entries[0]["debit_amount"] == 700
+    assert ledger_entries[0]["invoice_total_delta"] == 700
+    assert ledger_entries[0]["balance_amount_delta"] == 700
+    assert ledger_entries[0]["commit"] is False
+
+
 def setup_signed_consultation(
     client: TestClient,
     appointment_type: str = "op",

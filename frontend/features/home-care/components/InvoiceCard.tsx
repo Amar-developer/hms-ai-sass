@@ -52,7 +52,8 @@ export function InvoiceCard({
           />
         </div>
         <p className="mt-1 text-slate-500">
-          {patientName(patientMap.get(booking.patient_id))} ·{" "}
+          {booking.patient_name ||
+            patientName(patientMap.get(booking.patient_id))} ·{" "}
           {displayDate(booking.start_date)} to {displayDate(booking.end_date)}
         </p>
         <p className="text-xs text-slate-500">

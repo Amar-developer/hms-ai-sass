@@ -120,6 +120,8 @@ class InvoiceRead(BaseModel):
     tenant_id: str
     branch_id: str
     patient_id: str
+    patient_name: str | None = None
+    patient_number: str | None = None
     appointment_id: str | None
     appointment_type: AppointmentType | None = None
     consultation_id: str | None

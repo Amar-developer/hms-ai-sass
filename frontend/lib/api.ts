@@ -17,13 +17,60 @@ export function uploadAssetUrl(value: string | null | undefined): string {
 export type ApiSession = {
   tenantId: string;
   email: string;
-  user: any;
+  user: {
+    id?: string;
+    tenant_id?: string | null;
+    tenant_name?: string | null;
+    branch_id?: string | null;
+    email?: string;
+    is_super_admin?: boolean;
+    user_type?: string;
+    roles?: string[];
+    permissions?: string[];
+  };
 };
 
 export const AUTH_SESSION_EXPIRED_EVENT = "medizinhub.auth.sessionExpired";
 export const LIVE_DATA_CHANGED_EVENT = "medizinhub.liveData.changed";
 export const LIVE_DATA_CHANGED_STORAGE_KEY =
   "medizinhub.liveData.changed.revision";
+
+export const DEFAULT_API_TIMEOUT_MS = 20_000;
+export const UPLOAD_API_TIMEOUT_MS = 60_000;
+
+export class RequestTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`The server did not respond within ${Math.round(timeoutMs / 1000)} seconds.`);
+    this.name = "RequestTimeoutError";
+  }
+}
+
+export async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init: RequestInit = {},
+  timeoutMs = DEFAULT_API_TIMEOUT_MS,
+) {
+  const controller = new AbortController();
+  const upstreamSignal = init.signal;
+  let timedOut = false;
+  const abortFromUpstream = () => controller.abort(upstreamSignal?.reason);
+  if (upstreamSignal?.aborted) abortFromUpstream();
+  else upstreamSignal?.addEventListener("abort", abortFromUpstream, { once: true });
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timedOut) throw new RequestTimeoutError(timeoutMs);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    upstreamSignal?.removeEventListener("abort", abortFromUpstream);
+  }
+}
 
 const IDEMPOTENT_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const IDEMPOTENCY_KEY_TTL_MS = 2 * 60 * 1000;
@@ -214,17 +261,17 @@ async function readErrorDetail(res: Response) {
   return detail;
 }
 
-export async function apiFetch(
+export async function apiFetch<T = any>(
   path: string,
   session: ApiSession,
   options: RequestInit = {},
-) {
+): Promise<T> {
   let res: Response;
   const method = String(options.method || "GET").toUpperCase();
   const idempotencyKey = idempotencyKeyFor(path, session, options);
   const correlationId = requestId();
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetchWithTimeout(`${API_BASE}${path}`, {
       ...options,
       cache: options.cache ?? "no-store",
       credentials: "include",
@@ -237,7 +284,11 @@ export async function apiFetch(
       },
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    if (
+      error instanceof RequestTimeoutError ||
+      (error instanceof DOMException && error.name === "AbortError")
+    )
+      throw error;
     reportClientError(
       new Error(`Backend connection failed for ${path}`),
       {
@@ -268,8 +319,8 @@ export async function apiFetch(
     notifyLiveDataChanged(path, session, method);
   }
   if (res.status === 204 || res.headers.get("content-length") === "0")
-    return null;
-  return res.json();
+    return null as T;
+  return res.json() as Promise<T>;
 }
 
 export async function apiBlob(
@@ -280,7 +331,7 @@ export async function apiBlob(
   let res: Response;
   const correlationId = requestId();
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetchWithTimeout(`${API_BASE}${path}`, {
       ...options,
       cache: options.cache ?? "no-store",
       credentials: "include",
@@ -291,7 +342,11 @@ export async function apiBlob(
       },
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    if (
+      error instanceof RequestTimeoutError ||
+      (error instanceof DOMException && error.name === "AbortError")
+    )
+      throw error;
     reportClientError(
       new Error(`Backend blob request failed for ${path}`),
       {
@@ -332,17 +387,22 @@ export async function apiUpload(
   let res: Response;
   const correlationId = requestId();
   try {
-    res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      cache: "no-store",
-      credentials: "include",
-      headers: {
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
+    res = await fetchWithTimeout(
+      `${API_BASE}${path}`,
+      {
+        method: "POST",
+        cache: "no-store",
+        credentials: "include",
+        headers: {
+          "X-Tenant-ID": session.tenantId,
+          "X-Request-ID": correlationId,
+        },
+        body: formData,
       },
-      body: formData,
-    });
-  } catch {
+      UPLOAD_API_TIMEOUT_MS,
+    );
+  } catch (error) {
+    if (error instanceof RequestTimeoutError) throw error;
     reportClientError(
       new Error(`Backend upload failed for ${path}`),
       {

@@ -18,7 +18,7 @@ import { readNotificationTarget } from "@/lib/notificationTarget";
 import {
   FormField,
 } from "@/app/components/FormElements";
-import { patientSearchText,toRow } from "./helpers";
+import { patientSearchText, toRow, todayInputValue } from "./helpers";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { PatientDetail } from "./components/PatientDetail";
 import { activeTenantOptions } from "@/utils/helper";
@@ -464,7 +464,7 @@ export function Patient({
           branch_id: data.branchId || selected?.branch_id || branchId,
           patient_id: selectedId,
           plan_id: data.planId,
-          starts_on: data.startsOn || new Date().toISOString().slice(0, 10),
+          starts_on: data.startsOn || todayInputValue(),
           paid_amount:
             data.paidAmount !== "" ? Number(data.paidAmount) : undefined,
           payment_method: data.paymentMethod || "cash",

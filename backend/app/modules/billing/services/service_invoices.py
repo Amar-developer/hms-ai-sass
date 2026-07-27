@@ -75,6 +75,7 @@ def create_service_invoice(
             session,
             tenant_id=tenant_id,
             patient_id=patient_id,
+            commit=False,
         )
         if membership:
             enrollment, plan = membership
@@ -127,11 +128,6 @@ def create_service_invoice(
             discount_amount = discount_composition.total
             if membership_discount > 0:
                 offer = None
-            taxable_amount = amount - discount_amount
-            tax_amount = percentage_amount(
-                taxable_amount, tax_rule.tax_percentage if tax_rule else 0
-            )
-            total_amount = taxable_amount + tax_amount
     except HTTPException:
         # Subscription entitlement failures may legitimately mean that this
         # invoice has no membership benefit. Programming/data errors must not
@@ -153,7 +149,7 @@ def create_service_invoice(
     tax_amount = percentage_amount(
         taxable_amount, tax_rule.tax_percentage if tax_rule else 0
     )
-    total_amount = taxable_amount + tax_amount
+    invoice_total_amount = taxable_amount + tax_amount
     invoice = Invoice(
         tenant_id=tenant_id,
         branch_id=branch_id,
@@ -172,11 +168,13 @@ def create_service_invoice(
         taxable_amount=taxable_amount,
         tax_amount=tax_amount,
         tax_rule_id=tax_rule.id if tax_rule else None,
-        total_amount=total_amount,
-        status=InvoiceStatus.PAID if total_amount <= 0 else InvoiceStatus.ISSUED,
-        balance_amount=total_amount,
+        total_amount=invoice_total_amount,
+        status=InvoiceStatus.PAID
+        if invoice_total_amount <= 0
+        else InvoiceStatus.ISSUED,
+        balance_amount=invoice_total_amount,
         doctor_share_amount=0,
-        clinic_share_amount=total_amount,
+        clinic_share_amount=invoice_total_amount,
         discount_offer_id=offer.id
         if offer and discount_composition.offer > 0
         else None,
@@ -185,8 +183,7 @@ def create_service_invoice(
         created_by_user_id=created_by_user_id,
     )
     session.add(invoice)
-    session.commit()
-    session.refresh(invoice)
+    session.flush()
     rows = line_items or [
         {
             "item_type": item_type,
@@ -198,13 +195,13 @@ def create_service_invoice(
     ]
     for row in rows:
         quantity = int(row.get("quantity") or 1)
-        total_amount = money_value(row.get("total_amount"))
+        line_total_amount = money_value(row.get("total_amount"))
         unit_amount = money_value(row.get("unit_amount"))
-        if unit_amount <= 0 and total_amount > 0 and quantity > 0:
-            unit_amount = total_amount / quantity
+        if unit_amount <= 0 and line_total_amount > 0 and quantity > 0:
+            unit_amount = line_total_amount / quantity
         selling_amount = money_value(row.get("selling_amount") or unit_amount)
-        if selling_amount <= 0 and total_amount > 0 and quantity > 0:
-            selling_amount = total_amount / quantity
+        if selling_amount <= 0 and line_total_amount > 0 and quantity > 0:
+            selling_amount = line_total_amount / quantity
         mrp_amount = money_value(row.get("mrp_amount"))
         session.add(
             InvoiceItem(
@@ -214,7 +211,7 @@ def create_service_invoice(
                 description=str(row.get("description") or description),
                 quantity=quantity,
                 unit_amount=unit_amount,
-                total_amount=total_amount,
+                total_amount=line_total_amount,
                 mrp_amount=mrp_amount,
                 selling_amount=selling_amount,
                 buying_amount=money_value(row.get("buying_amount")),
@@ -231,21 +228,24 @@ def create_service_invoice(
         free_item_ids=(membership_preview or {}).get("free_item_ids"),
         discounted_item_ids=(membership_preview or {}).get("discounted_item_ids"),
     )
-    session.commit()
-    session.refresh(invoice)
+    gross_invoice_amount = invoice_total_amount + membership_discount
     record_billing_ledger(
         session,
         invoice,
         entry_type="invoice_submitted",
         description="Invoice submitted",
-        debit_amount=total_amount,
-        invoice_total_delta=total_amount,
-        balance_amount_delta=total_amount,
+        debit_amount=gross_invoice_amount,
+        invoice_total_delta=gross_invoice_amount,
+        balance_amount_delta=gross_invoice_amount,
         actor_user_id=created_by_user_id,
+        commit=False,
     )
     ensure_invoice_membership_benefit_ledger(
         session,
         invoice,
         actor_user_id=created_by_user_id,
+        commit=False,
     )
+    session.commit()
+    session.refresh(invoice)
     return invoice

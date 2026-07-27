@@ -107,6 +107,8 @@ export function HomeCare({
         const assigned: any = staffMap.get(booking.assigned_staff_user_id);
         const haystack = [
           booking.booking_number,
+          booking.patient_name,
+          booking.patient_number,
           patientName(patient),
           patientCode(patient),
           patient?.mobile,

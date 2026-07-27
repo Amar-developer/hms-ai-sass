@@ -24,12 +24,15 @@ export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
       render: (row: any) => (
         <>
           <b>
-            {patientMap.get(row.patient_id)?.name ||
+            {row.patient_name ||
+              patientMap.get(row.patient_id)?.name ||
               patientMap.get(row.patient_id)?.full_name ||
               "Patient"}
           </b>
           <p className="text-xs text-slate-500">
-            {patientMap.get(row.patient_id)?.patient_number || ""}
+            {row.patient_number ||
+              patientMap.get(row.patient_id)?.patient_number ||
+              ""}
           </p>
         </>
       ),

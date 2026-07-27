@@ -1,6 +1,7 @@
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.validation import (
     BranchId,
@@ -9,6 +10,9 @@ from app.core.validation import (
     PractitionerId,
     UserId,
 )
+
+PhysiotherapyCareContext = Literal["op", "ip"]
+PhysiotherapyCaseStatus = Literal["active", "completed", "paid", "cancelled"]
 
 
 class PhysiotherapyEquipmentCreate(BaseModel):
@@ -55,7 +59,7 @@ class PhysiotherapyCaseCreate(BaseModel):
     ip_admission_id: str | None = None
     physiotherapist_id: PractitionerId | None = None
     department_id: DepartmentId | None = None
-    care_context: str = Field(default="op", max_length=20)
+    care_context: PhysiotherapyCareContext = "op"
     assessment_date: date
     body_region: str = Field(min_length=2, max_length=120)
     condition: str = Field(min_length=2, max_length=500)
@@ -65,6 +69,11 @@ class PhysiotherapyCaseCreate(BaseModel):
     treatment_goal: str = Field(min_length=2, max_length=1000)
     planned_sessions: int = Field(default=1, ge=1)
     frequency: str | None = Field(default=None, max_length=120)
+
+    @field_validator("care_context", mode="before")
+    @classmethod
+    def normalize_care_context(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class PhysiotherapyCaseUpdate(BaseModel):
@@ -77,13 +86,20 @@ class PhysiotherapyCaseUpdate(BaseModel):
     treatment_goal: str | None = Field(default=None, max_length=1000)
     planned_sessions: int | None = Field(default=None, ge=1)
     frequency: str | None = Field(default=None, max_length=120)
-    status: str | None = Field(default=None, max_length=40)
+    status: PhysiotherapyCaseStatus | None = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class PhysiotherapyCaseRead(PhysiotherapyCaseCreate):
     id: str
     tenant_id: str
     case_number: str
+    patient_name: str | None = None
+    patient_number: str | None = None
     assessment_date: date
     status: str
     consent_form_url: str | None = None

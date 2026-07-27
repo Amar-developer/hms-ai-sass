@@ -169,7 +169,7 @@ def list_admissions(
     current_user: User = Depends(
         require_any_permission(permissions.IP_MANAGE, permissions.IP_READ)
     ),
-) -> list[IPAdmission]:
+) -> list[IPAdmissionRead]:
     return list_ip_admissions(
         session,
         tenant_id=tenant_id,

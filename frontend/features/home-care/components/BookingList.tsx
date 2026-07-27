@@ -128,7 +128,9 @@ export function BookingsList({
                     </p>
                   </td>
                   <td className="card-desc">
-                    {capitalizeFirst(patientName(patient))}
+                    {capitalizeFirst(
+                      booking.patient_name || patientName(patient),
+                    )}
                   </td>
                   <td className="card-desc">
 

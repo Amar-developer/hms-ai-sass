@@ -13,7 +13,7 @@ def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
         op.execute(
-            "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS " "'ACCOUNTS_BANK_DETAILS'"
+            "ALTER TYPE settingkey ADD VALUE IF NOT EXISTS 'ACCOUNTS_BANK_DETAILS'"
         )
 
 

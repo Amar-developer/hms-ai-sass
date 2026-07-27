@@ -111,8 +111,11 @@ export function BookingDetail({
               />
             </div>
             <p className="text-xs text-slate-500">
-              {patientName(patient)} ·{" "}
-              {patientCode(patient) || patient?.mobile || ""}
+              {booking.patient_name || patientName(patient)} ·{" "}
+              {booking.patient_number ||
+                patientCode(patient) ||
+                patient?.mobile ||
+                ""}
             </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
@@ -139,7 +142,10 @@ export function BookingDetail({
           </div>
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-3 md:max-w-2xl lg:max-w-4xl">
-          <Info title="Patient" value={patientName(patient)} />
+          <Info
+            title="Patient"
+            value={booking.patient_name || patientName(patient)}
+          />
           <Info
             title="Recurrence"
             value={humanizeOptionLabel(booking.recurrence || "daily")}

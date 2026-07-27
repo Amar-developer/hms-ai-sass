@@ -1,8 +1,23 @@
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.validation import BranchId, PatientId, UserId
+
+HomeCareBookingType = Literal["home_care", "home_visit"]
+HomeCareRecurrence = Literal["daily", "one_week", "monthly", "custom"]
+HomeCareBookingStatus = Literal[
+    "requested",
+    "scheduled",
+    "assigned",
+    "in_progress",
+    "completed",
+    "invoiced",
+    "paid",
+    "cancelled",
+]
+HomeCareVisitStatus = Literal["completed", "missed", "cancelled"]
 
 
 class HomeCareServiceCreate(BaseModel):
@@ -64,8 +79,13 @@ class HomeCareVisitLogCreate(BaseModel):
     description: str | None = Field(default=None, max_length=260)
     quantity: int = Field(default=1, ge=1)
     unit_amount: int | None = Field(default=None, ge=0)
-    status: str = Field(default="completed", max_length=40)
+    status: HomeCareVisitStatus = "completed"
     notes: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class HomeCareVisitLogUpdate(BaseModel):
@@ -78,8 +98,13 @@ class HomeCareVisitLogUpdate(BaseModel):
     description: str | None = Field(default=None, max_length=260)
     quantity: int | None = Field(default=None, ge=1)
     unit_amount: int | None = Field(default=None, ge=0)
-    status: str | None = Field(default=None, max_length=40)
+    status: HomeCareVisitStatus | None = None
     notes: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class HomeCareVisitLogRead(HomeCareVisitLogCreate):
@@ -104,15 +129,20 @@ class HomeCareBookingCreate(BaseModel):
     assigned_staff_user_id: UserId | None = None
     assigned_staff_name: str | None = Field(default=None, max_length=160)
     staff_type: str | None = Field(default=None, max_length=80)
-    booking_type: str = Field(max_length=40)
-    recurrence: str = Field(max_length=40)
+    booking_type: HomeCareBookingType
+    recurrence: HomeCareRecurrence
     start_date: date
     end_date: date
-    status: str = Field(default="requested", max_length=40)
+    status: HomeCareBookingStatus = "requested"
     location: str = Field(min_length=2, max_length=500)
     complaints: str | None = Field(default=None, max_length=2000)
     notes: str | None = Field(default=None, max_length=2000)
     services: list[HomeCareBookingItemCreate] = Field(min_length=1)
+
+    @field_validator("booking_type", "recurrence", "status", mode="before")
+    @classmethod
+    def normalize_workflow_values(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def validate_booking_requirements(self) -> "HomeCareBookingCreate":
@@ -148,15 +178,20 @@ class HomeCareBookingUpdate(BaseModel):
     assigned_staff_user_id: UserId | None = None
     assigned_staff_name: str | None = Field(default=None, max_length=160)
     staff_type: str | None = Field(default=None, max_length=80)
-    booking_type: str | None = Field(default=None, max_length=40)
-    recurrence: str | None = Field(default=None, max_length=40)
+    booking_type: HomeCareBookingType | None = None
+    recurrence: HomeCareRecurrence | None = None
     start_date: date | None = None
     end_date: date | None = None
-    status: str | None = Field(default=None, max_length=40)
+    status: HomeCareBookingStatus | None = None
     location: str | None = Field(default=None, max_length=500)
     complaints: str | None = Field(default=None, max_length=2000)
     notes: str | None = Field(default=None, max_length=2000)
     services: list[HomeCareBookingItemCreate] | None = None
+
+    @field_validator("booking_type", "recurrence", "status", mode="before")
+    @classmethod
+    def normalize_workflow_values(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class HomeCareBookingRead(BaseModel):
@@ -164,6 +199,8 @@ class HomeCareBookingRead(BaseModel):
     tenant_id: str
     branch_id: str
     patient_id: str
+    patient_name: str | None = None
+    patient_number: str | None = None
     assigned_staff_user_id: str | None
     assigned_staff_name: str | None = None
     staff_type: str | None = None

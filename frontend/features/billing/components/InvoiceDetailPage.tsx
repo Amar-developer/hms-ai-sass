@@ -434,7 +434,11 @@ export function InvoiceDetailPage({
                   />
                 </div>
                 <span className="text-slate-500">
-                  {patient?.name || patient?.full_name || "Patient"}
+                  {invoice.patient_name ||
+                    patient?.name ||
+                    patient?.full_name ||
+                    invoice.patient_number ||
+                    "Patient"}
                 </span>
               </div>
             </div>
@@ -455,7 +459,13 @@ export function InvoiceDetailPage({
               <InvoiceMeta label="Source" value={linkedRecord} />
               <InvoiceMeta
                 label="Patient"
-                value={patient?.name || patient?.full_name || "Patient"}
+                value={
+                  invoice.patient_name ||
+                  patient?.name ||
+                  patient?.full_name ||
+                  invoice.patient_number ||
+                  "Patient"
+                }
               />
               <InvoiceMeta
                 label="Status"

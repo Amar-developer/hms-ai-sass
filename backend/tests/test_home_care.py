@@ -224,6 +224,8 @@ def test_home_care_service_booking_invoice_payment_and_audit(client, test_engine
     )
     assert bookings.status_code == 200
     assert [row["id"] for row in bookings.json()] == [booking_body["id"]]
+    assert bookings.json()[0]["patient_name"] == "Home Care Patient"
+    assert bookings.json()[0]["patient_number"] == "HC-PT-001"
     assert len(bookings.json()[0]["visit_logs"]) == 2
 
     offer = client.post(

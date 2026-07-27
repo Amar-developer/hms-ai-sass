@@ -1,6 +1,7 @@
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.core.validation import (
     AppointmentId,
@@ -9,6 +10,14 @@ from app.core.validation import (
     PatientId,
     PractitionerId,
 )
+
+IPAdmissionStatus = Literal[
+    "admitted",
+    "under_treatment",
+    "discharge_initiated",
+    "discharged",
+    "cancelled",
+]
 
 
 class IPRoomCreate(BaseModel):
@@ -71,13 +80,20 @@ class IPAdmissionUpdate(BaseModel):
     admitting_practitioner_id: PractitionerId | None = None
     reason: str | None = Field(default=None, max_length=1000)
     provisional_diagnosis: str | None = Field(default=None, max_length=1000)
-    status: str | None = Field(default=None, max_length=40)
+    status: IPAdmissionStatus | None = None
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, value: object) -> object:
+        return value.strip().lower() if isinstance(value, str) else value
 
 
 class IPAdmissionRead(IPAdmissionCreate):
     id: str
     tenant_id: str
     admission_number: str
+    patient_name: str | None = None
+    patient_number: str | None = None
     admission_date: date
     status: str
     admission_document_url: str | None = None

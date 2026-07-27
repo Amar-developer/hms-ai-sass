@@ -15,7 +15,7 @@ import { apiFetch } from "@/lib/api";
 import { FormField, NumberField } from "@/app/components/FormElements";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
-import { displayDate, displayDateTime } from "@/utils/helper";
+import { displayDate, displayDateTime, today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import {
   isBilledIssue,
@@ -30,6 +30,7 @@ import {
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "../admin/components/RowActions";
+import type { PharmacyIssueSummary } from "@/lib/contracts";
 
 const pageSize = 10;
 
@@ -42,7 +43,7 @@ export function Pharmacy({
   liveInvoices = [],
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [issues, setIssues] = useState<any[]>([]);
+  const [issues, setIssues] = useState<PharmacyIssueSummary[]>([]);
   const [issuesLoaded, setIssuesLoaded] = useState(false);
   const [medicines, setMedicines] = useState<any[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
@@ -86,7 +87,7 @@ export function Pharmacy({
   const [purchaseQty, setPurchaseQty] = useState("50");
   const [purchaseOrderId, setPurchaseOrderId] = useState("PO-001");
   const [purchaseDate, setPurchaseDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+    today(),
   );
   const [purchaseDiscount, setPurchaseDiscount] = useState("0");
   const [lineDiscount, setLineDiscount] = useState("0");
@@ -96,7 +97,8 @@ export function Pharmacy({
   const [localInvoicedIssueIds, setLocalInvoicedIssueIds] = useState<string[]>(
     [],
   );
-  const [selectedIssue, setSelectedIssue] = useState<any>(null);
+  const [selectedIssue, setSelectedIssue] =
+    useState<PharmacyIssueSummary | null>(null);
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [consultDetail, setConsultDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -619,6 +621,7 @@ export function Pharmacy({
           issue={selectedIssue}
           apiSession={apiSession}
           patient={
+            selectedIssue.patient_name ||
             (patientMap.get(selectedIssue.patient_id) as any)?.name ||
             publicDisplayValue(selectedIssue.patient_id, "Patient")
           }
@@ -915,7 +918,8 @@ export function Pharmacy({
                     <td className="text-xs">
                       <div className="flex items-center gap-2">
                         <span>
-                          {p?.name ||
+                          {issue.patient_name ||
+                            p?.name ||
                             publicDisplayValue(issue.patient_id, "Patient")}
                         </span>
                         <CopyIdButton

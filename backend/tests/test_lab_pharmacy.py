@@ -297,7 +297,7 @@ def test_trial_plan_blocks_lab_and_pharmacy_modules(client):
 
 
 def test_create_lab_order_from_consultation_and_release_result(client):
-    tenant, _branch, _patient, consultation = setup_signed_consultation(client)
+    tenant, _branch, patient, consultation = setup_signed_consultation(client)
 
     order = client.post(
         f"/api/v1/lab/orders/from-consultation/{consultation['id']}",
@@ -324,6 +324,8 @@ def test_create_lab_order_from_consultation_and_release_result(client):
     assert result.json()["order"]["status"] == "result_ready"
     assert result.json()["results"][0]["abnormal_flag"] is True
     assert len(listed) == 1
+    assert listed[0]["patient_name"] == patient["full_name"]
+    assert listed[0]["patient_number"] == patient["patient_number"]
 
 
 def test_zero_amount_lab_order_reprices_from_local_catalog(test_engine):
@@ -486,7 +488,10 @@ def test_available_lab_search_returns_local_lab_tests_and_services(
                 code="CBC",
                 name="Complete Blood Count",
                 sample_type="Blood (EDTA)",
+                mrp_price=450,
                 default_price=300,
+                purchase_price=100,
+                supplier_id="supplier-neuberg",
             )
         )
         session.add(
@@ -497,6 +502,8 @@ def test_available_lab_search_returns_local_lab_tests_and_services(
                 name="Cardiac Screening",
                 description="ECG + Chest X-Ray",
                 package_price=500,
+                purchase_price=225,
+                supplier_id="supplier-metropolis",
             )
         )
         session.commit()
@@ -516,16 +523,22 @@ def test_available_lab_search_returns_local_lab_tests_and_services(
             current_user=current_user,
         )
 
-    assert any(
-        row["item_name"] == "Complete Blood Count" and row["item_type"] == "lab_test"
-        for row in lab_rows
+    lab_row = next(
+        row for row in lab_rows if row["item_name"] == "Complete Blood Count"
     )
-    assert any(
-        row["item_name"] == "Cardiac Screening"
-        and row["item_type"] == "lab_package"
-        and row["kind"] == "Service"
-        for row in service_rows
+    assert lab_row["item_type"] == "lab_test"
+    assert lab_row["supplier_id"] == "supplier-neuberg"
+    assert lab_row["buying_price"] == 100
+    assert lab_row["mrp_price"] == 450
+    assert lab_row["selling_price"] == 300
+
+    service_row = next(
+        row for row in service_rows if row["item_name"] == "Cardiac Screening"
     )
+    assert service_row["item_type"] == "lab_package"
+    assert service_row["kind"] == "Service"
+    assert service_row["supplier_id"] == "supplier-metropolis"
+    assert service_row["buying_price"] == 225
 
 
 def test_create_direct_op_and_outside_referral_lab_orders(client):
@@ -687,7 +700,7 @@ def test_lab_catalog_package_order_items_sample_template_report_and_consultation
 
 
 def test_create_pharmacy_issue_from_consultation_and_dispense(client):
-    tenant, _branch, _patient, consultation = setup_signed_consultation(client)
+    tenant, _branch, patient, consultation = setup_signed_consultation(client)
 
     issue = client.post(
         f"/api/v1/pharmacy/issues/from-consultation/{consultation['id']}",
@@ -699,12 +712,17 @@ def test_create_pharmacy_issue_from_consultation_and_dispense(client):
         headers={"X-Tenant-ID": tenant["id"]},
         json={"status": "dispensed", "actor_user_id": "pharmacy_user"},
     )
+    listed = client.get(
+        "/api/v1/pharmacy/issues", headers={"X-Tenant-ID": tenant["id"]}
+    ).json()
 
     assert issue.status_code == 201
     assert issue.json()["medicine_text"] == "Paracetamol 500mg twice daily for 3 days"
     assert dispensed.status_code == 200
     assert dispensed.json()["status"] == "dispensed"
     assert dispensed.json()["dispensed_at"] is not None
+    assert listed[0]["patient_name"] == patient["full_name"]
+    assert listed[0]["patient_number"] == patient["patient_number"]
 
 
 def test_consultation_invoice_excludes_lab_and_pharmacy_charges(client):

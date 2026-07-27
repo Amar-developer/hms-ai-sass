@@ -25,6 +25,7 @@ import { WorklistDetailModal } from "./components/WorklistDetailModal";
 import { Pagination } from "@/app/components/common/Pagination";
 import { LabOrderForm } from "@/features/lab/forms/LabForms";
 import { LabOrderFormValues } from "@/features/lab/lab.schema";
+import type { LabOrderSummary } from "@/lib/contracts";
 import { DataTable } from "../reports/components/DataTable";
 import { Column } from "../reports/types";
 import {
@@ -55,7 +56,7 @@ export function Lab({
   liveInvoices = [],
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [orders, setOrders] = useState<any[]>([]);
+  const [orders, setOrders] = useState<LabOrderSummary[]>([]);
   const [ordersLoaded, setOrdersLoaded] = useState(false);
   const [consultationReferrals, setConsultationReferrals] = useState<any[]>([]);
   const [tests, setTests] = useState<any[]>([]);
@@ -97,7 +98,8 @@ export function Lab({
   const [localInvoicedOrderIds, setLocalInvoicedOrderIds] = useState<string[]>(
     [],
   );
-  const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [selectedOrder, setSelectedOrder] =
+    useState<LabOrderSummary | null>(null);
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [consultDetail, setConsultDetail] = useState<any>(null);
 
@@ -336,7 +338,7 @@ export function Lab({
         apiFetch("/lab/catalog/tests", apiSession),
         apiFetch("/lab/catalog/packages", apiSession),
         apiFetch("/lab/result-templates", apiSession),
-        apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
+        apiFetch("/pharmacy/suppliers", apiSession),
         apiFetch("/files?category=lab_report&limit=500", apiSession).catch(
           () => [],
         ),
@@ -828,7 +830,9 @@ export function Lab({
         return (
           <div className="flex items-center gap-2">
             <span>
-              {p?.name || publicDisplayValue(o.patient_id, "Patient")}
+              {o.patient_name ||
+                p?.name ||
+                publicDisplayValue(o.patient_id, "Patient")}
             </span>
             <CopyIdButton
               value={o.id}
@@ -1028,6 +1032,7 @@ export function Lab({
           title="Lab Test List"
           id={selectedOrder.id}
           patient={
+            selectedOrder.patient_name ||
             (patientMap.get(selectedOrder.patient_id) as any)?.name ||
             publicDisplayValue(selectedOrder.patient_id, "Patient")
           }

@@ -16,10 +16,16 @@ from app.modules.patient_subscriptions.services.serialization import (
 from app.modules.patient_subscriptions.services.usage_sync import (
     sync_free_item_usage_from_invoices,
 )
+from app.modules.patients.services.references import (
+    PatientReference,
+    patient_reference_map,
+)
 
 
 def read_enrollment(
-    session: Session, enrollment: PatientSubscriptionEnrollment
+    session: Session,
+    enrollment: PatientSubscriptionEnrollment,
+    patient_reference: PatientReference | None = None,
 ) -> PatientSubscriptionEnrollmentRead:
     # Promote a queued enrollment if the patient's active plan has expired
     # since it was last read — the session identity map means this mutates
@@ -37,8 +43,16 @@ def read_enrollment(
     free_medicine = free_items_from_json(plan.free_medicine_ids_json) if plan else {}
     used_medicine = usage_from_json(enrollment.used_free_medicine_json)
     free_consultations = int(plan.free_consultations or 0) if plan else 0
+    if patient_reference is None:
+        patient_reference = patient_reference_map(
+            session,
+            tenant_id=enrollment.tenant_id,
+            patient_ids={enrollment.patient_id},
+        ).get(enrollment.patient_id)
     return PatientSubscriptionEnrollmentRead(
         **enrollment.model_dump(),
+        patient_name=patient_reference.name if patient_reference else None,
+        patient_number=patient_reference.number if patient_reference else None,
         allocated_free_consultations=free_consultations,
         remaining_free_consultations=max(
             free_consultations - int(enrollment.used_consultations or 0), 0

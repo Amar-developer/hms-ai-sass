@@ -973,7 +973,7 @@ export function Billing({
       render: (invoice) => {
         const p: any = patientMap.get(invoice.patient_id);
 
-        return p?.name || p?.full_name || "Patient";
+        return invoice.patient_name || p?.name || p?.full_name || "Patient";
       },
       cellClassName: "font-medium",
     },

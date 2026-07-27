@@ -81,6 +81,7 @@ def normalize_local_lab_test(row: LabTestCatalog) -> dict[str, object]:
         "selling_price": row.default_price,
         "price": row.default_price,
         "buying_price": row.purchase_price,
+        "supplier_id": row.supplier_id,
     }
 
 
@@ -100,6 +101,7 @@ def normalize_local_lab_package(row: LabTestPackage) -> dict[str, object]:
         "selling_price": row.package_price,
         "price": row.package_price,
         "buying_price": row.purchase_price,
+        "supplier_id": row.supplier_id,
         "package_id": row.id,
     }
 

@@ -65,8 +65,19 @@ def enrollment_end_date(starts_on: date, plan: PatientSubscriptionPlan) -> date:
     return starts_on + timedelta(days=max(plan.duration_days, 1) - 1)
 
 
+def _persist_enrollment_changes(session: Session, *, commit: bool) -> None:
+    if commit:
+        session.commit()
+    else:
+        session.flush()
+
+
 def resolve_current_enrollment(
-    session: Session, *, tenant_id: str, patient_id: str
+    session: Session,
+    *,
+    tenant_id: str,
+    patient_id: str,
+    commit: bool = True,
 ) -> PatientSubscriptionEnrollment | None:
     """Return the patient's current occupying enrollment, promoting a queued
     one first if the prior active plan has expired.
@@ -120,7 +131,7 @@ def resolve_current_enrollment(
                 session.add(queued)
                 dirty = True
         if dirty:
-            session.commit()
+            _persist_enrollment_changes(session, commit=commit)
         return current
 
     queued_rows = repo.status_rows_for_patient(
@@ -130,7 +141,7 @@ def resolve_current_enrollment(
     )
     if not queued_rows:
         if dirty:
-            session.commit()
+            _persist_enrollment_changes(session, commit=commit)
         return None
     next_enrollment = queued_rows[0]
     plan = PatientSubscriptionPlanRepository(session).get_for_tenant(
@@ -138,14 +149,14 @@ def resolve_current_enrollment(
     )
     if not plan:
         if dirty:
-            session.commit()
+            _persist_enrollment_changes(session, commit=commit)
         return None
     next_enrollment.starts_on = today
     next_enrollment.activated_on = today
     next_enrollment.ends_on = enrollment_end_date(today, plan)
     next_enrollment.status = PatientSubscriptionEnrollmentStatus.ACTIVE
     session.add(next_enrollment)
-    session.commit()
+    _persist_enrollment_changes(session, commit=commit)
     session.refresh(next_enrollment)
     return next_enrollment
 
@@ -155,6 +166,7 @@ def active_patient_enrollment(
     *,
     tenant_id: str,
     patient_id: str,
+    commit: bool = True,
 ) -> tuple[PatientSubscriptionEnrollment, PatientSubscriptionPlan] | None:
     """Return the patient's active tenant-wide membership, if benefit-eligible.
 
@@ -164,7 +176,10 @@ def active_patient_enrollment(
     simultaneous active plans across branches either.
     """
     enrollment = resolve_current_enrollment(
-        session, tenant_id=tenant_id, patient_id=patient_id
+        session,
+        tenant_id=tenant_id,
+        patient_id=patient_id,
+        commit=commit,
     )
     if not enrollment:
         return None

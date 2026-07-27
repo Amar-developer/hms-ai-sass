@@ -244,6 +244,8 @@ class LabOrderRead(BaseModel):
     tenant_id: str
     branch_id: str
     patient_id: str
+    patient_name: str | None = None
+    patient_number: str | None = None
     consultation_id: str | None
     lab_order_number: str | None = None
     source: LabOrderSource
@@ -263,6 +265,6 @@ class LabOrderRead(BaseModel):
 
 class LabOrderDetailRead(BaseModel):
     order: LabOrderRead
-    items: list[LabOrderItemRead] = []
-    samples: list[LabSampleRead] = []
-    results: list[LabResultRead] = []
+    items: list[LabOrderItemRead] = Field(default_factory=list)
+    samples: list[LabSampleRead] = Field(default_factory=list)
+    results: list[LabResultRead] = Field(default_factory=list)

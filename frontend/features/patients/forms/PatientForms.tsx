@@ -460,7 +460,7 @@ export function MembershipEnrollForm({
   const [planId, setPlanId] = useState("");
   const [branchId, setBranchId] = useState(patient?.branch_id || "");
   const [startsOn, setStartsOn] = useState(
-    new Date().toISOString().slice(0, 10),
+    todayInputValue(),
   );
   const [paidAmount, setPaidAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -487,7 +487,7 @@ export function MembershipEnrollForm({
   function resetForm() {
     setPlanId("");
     setBranchId(patient?.branch_id || "");
-    setStartsOn(new Date().toISOString().slice(0, 10));
+    setStartsOn(todayInputValue());
     setPaidAmount("");
     setPaymentMethod("cash");
   }

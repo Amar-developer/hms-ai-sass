@@ -29,7 +29,7 @@ import {
   publicDisplayValue,
   uniqueDepartmentRows,
 } from "@/lib/options";
-import { displayDate } from "@/utils/helper";
+import { displayDate, today } from "@/utils/helper";
 import { STATUS_FILTER_OPTIONS } from "@/utils/constants";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { Info } from "@/app/components/common/Info";
@@ -176,7 +176,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const [patientLookupOpen, setPatientLookupOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState<BookingStep>("appointment");
   const [appointmentDate, setAppointmentDate] = useState(
-    new Date().toISOString().slice(0, 10),
+    today(),
   );
   const [appointmentType, setAppointmentType] = useState<
     "op" | "follow_up" | "doctor_review" | "fitness_certificate" | "emergency"

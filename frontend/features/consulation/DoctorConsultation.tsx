@@ -21,7 +21,12 @@ import { apiFetch } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { calculateConsultationCharge, sortQueue } from "@/lib/hmsLogic";
 import { humanizeOptionLabel } from "@/lib/options";
-import { displayDate, displayDate as formatDisplayDate } from "@/utils/helper";
+import {
+  displayDate,
+  displayDate as formatDisplayDate,
+  localDateKey,
+  today,
+} from "@/utils/helper";
 import { ConsultationWorkspace } from "./components/ConsultationWorkspace";
 import { ScheduleList } from "./components/ScheduleList";
 import { DoctorMetric } from "./components/DoctorMetric";
@@ -207,7 +212,7 @@ export function DoctorConsultation({
   const [consultationValidationAttempted, setConsultationValidationAttempted] =
     useState(false);
   const [selectedDate, setSelectedDate] = useState(() =>
-    new Date().toISOString().slice(0, 10),
+    today(),
   );
 
   useEffect(() => {
@@ -602,7 +607,7 @@ export function DoctorConsultation({
   const appointmentDays = Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setDate(date.getDate() + index);
-    const iso = date.toISOString().slice(0, 10);
+    const iso = localDateKey(date);
     const count = doctorQueue.filter(
       (a: any) =>
         String(a.appointmentDate || a.appointment_date || "").slice(0, 10) ===

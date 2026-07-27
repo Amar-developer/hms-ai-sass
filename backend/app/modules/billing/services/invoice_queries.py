@@ -10,8 +10,7 @@ from app.modules.billing.repositories.read_repository import BillingReadReposito
 from app.modules.billing.schemas import InvoiceDetailRead, InvoiceRead
 from app.modules.billing.services.ledger import read_invoice_detail_full
 from app.modules.billing.services.read_models import (
-    invoice_read,
-    normalize_invoice_status,
+    invoice_reads,
 )
 from app.modules.identity.models import User
 
@@ -31,10 +30,10 @@ def list_billing_invoices(
         branch_id=scoped_branch,
         patient_id=patient_id,
     )
-    return [
-        invoice_read(session, normalize_invoice_status(session, invoice))
-        for invoice in invoices
-    ]
+    # Status is maintained by payment/refund/cancellation commands. List reads
+    # must stay read-only and batch related display data instead of repairing
+    # every invoice with per-row queries and commits.
+    return invoice_reads(session, invoices)
 
 
 def get_billing_invoice_detail(

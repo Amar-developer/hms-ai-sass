@@ -770,7 +770,10 @@ export function IPAdmission({
                   className={`min-h-32 rounded-2xl p-4 text-left transition ${selectedAdmission?.id === row.id ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-900 hover:bg-slate-100"}`}
                 >
                   <div className="line-clamp-2 font-bold">
-                    {patientName(p) || row.patient || row.patient_id}
+                    {row.patient_name ||
+                      patientName(p) ||
+                      row.patient ||
+                      row.patient_id}
                   </div>
                   <div
                     className={`mt-1 line-clamp-2 text-sm ${selectedAdmission?.id === row.id ? "text-slate-300" : "text-slate-500"}`}
@@ -820,10 +823,13 @@ export function IPAdmission({
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <Info
                 title="Patient"
-                value={patientName(
-                  patientMap.get(selectedAdmission.patient_id) ||
-                    patientMap.get(selectedAdmission.patientId),
-                )}
+                value={
+                  selectedAdmission.patient_name ||
+                  patientName(
+                    patientMap.get(selectedAdmission.patient_id) ||
+                      patientMap.get(selectedAdmission.patientId),
+                  )
+                }
               />
               <Info
                 title="Status"

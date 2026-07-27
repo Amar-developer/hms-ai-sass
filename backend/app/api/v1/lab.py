@@ -383,7 +383,7 @@ def list_lab_orders(
     current_user: User = Depends(
         require_any_permission(permissions.LAB_MANAGE, permissions.LAB_READ)
     ),
-) -> list[LabOrder]:
+) -> list[LabOrderRead]:
     branch_id = scoped_branch_id(current_user, branch_id)
     return list_lab_orders_records(
         session,

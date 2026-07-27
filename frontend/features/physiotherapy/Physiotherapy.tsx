@@ -416,7 +416,7 @@ export function Physiotherapy({
                     }}
                     className={`rounded-lg p-4 text-left ${active ? "bg-slate-900 text-white" : "bg-slate-50"}`}
                   >
-                    <b>{patientName(patient)}</b>
+                    <b>{row.patient_name || patientName(patient)}</b>
                     <p
                       className={`text-sm ${active ? "text-slate-300" : "text-slate-500"}`}
                     >
@@ -438,7 +438,10 @@ export function Physiotherapy({
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <Info
                     title="Patient"
-                    value={patientName(patientMap.get(selected.patient_id))}
+                    value={
+                      selected.patient_name ||
+                      patientName(patientMap.get(selected.patient_id))
+                    }
                   />
                   <Info title="Pain Score" value={selected.pain_score ?? "-"} />
                   <Info

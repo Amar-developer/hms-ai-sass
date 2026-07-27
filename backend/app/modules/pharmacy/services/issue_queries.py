@@ -11,6 +11,7 @@ from app.modules.pharmacy.schemas import (
 )
 from app.modules.pharmacy.services.validation import get_issue_or_404
 from app.modules.subscriptions.service import enforce_module_enabled
+from app.modules.patients.services.references import patient_reference_map
 
 
 def issue_detail(session: Session, issue: PharmacyIssue) -> PharmacyIssueDetailRead:
@@ -18,8 +19,17 @@ def issue_detail(session: Session, issue: PharmacyIssue) -> PharmacyIssueDetailR
         tenant_id=issue.tenant_id,
         issue_id=issue.id,
     )
+    issue_read = PharmacyIssueRead.model_validate(issue, from_attributes=True)
+    patient = patient_reference_map(
+        session,
+        tenant_id=issue.tenant_id,
+        patient_ids={issue.patient_id},
+    ).get(issue.patient_id)
+    if patient:
+        issue_read.patient_name = patient.name
+        issue_read.patient_number = patient.number
     return PharmacyIssueDetailRead(
-        issue=PharmacyIssueRead.model_validate(issue, from_attributes=True),
+        issue=issue_read,
         items=[
             PharmacyIssueItemRead.model_validate(item, from_attributes=True)
             for item in items
@@ -35,15 +45,29 @@ def list_pharmacy_issues_service(
     status_filter: PharmacyIssueStatus | None,
     branch_id: str | None,
     actor: User,
-) -> list[PharmacyIssue]:
+) -> list[PharmacyIssueRead]:
     enforce_module_enabled(session, tenant_id, "pharmacy")
     branch_id = scoped_branch_id(actor, branch_id)
-    return PharmacyIssueRepository(session).list_issues(
+    rows = PharmacyIssueRepository(session).list_issues(
         tenant_id=tenant_id,
         branch_id=branch_id,
         patient_id=patient_id,
         status_filter=status_filter,
     )
+    patients = patient_reference_map(
+        session,
+        tenant_id=tenant_id,
+        patient_ids={issue.patient_id for issue in rows},
+    )
+    result: list[PharmacyIssueRead] = []
+    for issue in rows:
+        read = PharmacyIssueRead.model_validate(issue, from_attributes=True)
+        patient = patients.get(issue.patient_id)
+        if patient:
+            read.patient_name = patient.name
+            read.patient_number = patient.number
+        result.append(read)
+    return result
 
 
 def get_pharmacy_issue_service(

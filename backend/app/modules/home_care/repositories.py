@@ -132,6 +132,25 @@ class HomeCareBookingItemRepository:
             ).all()
         )
 
+    def list_for_bookings(
+        self, *, tenant_id: str, booking_ids: set[str]
+    ) -> list[HomeCareBookingItem]:
+        if not booking_ids:
+            return []
+        return list(
+            self.session.exec(
+                select(HomeCareBookingItem)
+                .where(
+                    HomeCareBookingItem.tenant_id == tenant_id,
+                    HomeCareBookingItem.booking_id.in_(booking_ids),
+                )
+                .order_by(
+                    HomeCareBookingItem.booking_id,
+                    HomeCareBookingItem.created_at,
+                )
+            ).all()
+        )
+
     def list_billable_for_booking(
         self, *, tenant_id: str, booking_id: str
     ) -> list[HomeCareBookingItem]:
@@ -176,6 +195,26 @@ class HomeCareVisitLogRepository:
                     HomeCareVisitLog.booking_id == booking_id,
                 )
                 .order_by(HomeCareVisitLog.visit_date, HomeCareVisitLog.created_at)
+            ).all()
+        )
+
+    def list_for_bookings(
+        self, *, tenant_id: str, booking_ids: set[str]
+    ) -> list[HomeCareVisitLog]:
+        if not booking_ids:
+            return []
+        return list(
+            self.session.exec(
+                select(HomeCareVisitLog)
+                .where(
+                    HomeCareVisitLog.tenant_id == tenant_id,
+                    HomeCareVisitLog.booking_id.in_(booking_ids),
+                )
+                .order_by(
+                    HomeCareVisitLog.booking_id,
+                    HomeCareVisitLog.visit_date,
+                    HomeCareVisitLog.created_at,
+                )
             ).all()
         )
 

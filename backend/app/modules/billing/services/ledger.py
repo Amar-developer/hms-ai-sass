@@ -106,6 +106,7 @@ def ensure_invoice_membership_benefit_ledger(
     invoice: Invoice,
     *,
     actor_user_id: str | None = None,
+    commit: bool = True,
 ) -> None:
     membership_amount = money_value(invoice.membership_discount_amount)
     if membership_amount <= 0:
@@ -132,6 +133,7 @@ def ensure_invoice_membership_benefit_ledger(
         balance_amount_delta=-membership_amount,
         reason=f"Membership benefit settled by patient plan. {breakdown}",
         actor_user_id=actor_user_id or invoice.created_by_user_id,
+        commit=commit,
     )
 
 

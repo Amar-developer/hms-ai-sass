@@ -22,7 +22,7 @@ import {
 import { ActiveEnrollmentsTable } from "../patients/components/ActiveEnrollmentsTable";
 import { PlanDetailPage } from "../patients/components/PlanDetailPage";
 import { PlanForm } from "../patients/components/PlanForm";
-import { money } from "@/utils/helper";
+import { money, today } from "@/utils/helper";
 import { PlanTableRow } from "../patients/components/PlanTableRow";
 import { QueuedEnrollmentsTable } from "../patients/components/QueuedEnrollmentsTable";
 import { PatientSearchSelect } from "../patients/components/PatientSearchSelect";
@@ -320,7 +320,7 @@ export function PatientSubscriptions({
             branch_id: branchId,
             patient_id: selectedPatient,
             plan_id: selectedPlan,
-            starts_on: new Date().toISOString().slice(0, 10),
+            starts_on: today(),
             created_by_user_id: apiSession.user?.id,
           }),
         },
@@ -503,6 +503,7 @@ export function PatientSubscriptions({
   }
   function cancelEnrollment(row: any) {
     const patientName =
+      row.patient_name ||
       patientMap.get(row.patient_id)?.name ||
       patientMap.get(row.patient_id)?.full_name ||
       "this patient";
@@ -512,7 +513,7 @@ export function PatientSubscriptions({
     // }
     updateEnrollment(row, {
       status: "cancelled",
-      ends_on: new Date().toISOString().slice(0, 10),
+      ends_on: today(),
     });
     setConfirm(false)
   }

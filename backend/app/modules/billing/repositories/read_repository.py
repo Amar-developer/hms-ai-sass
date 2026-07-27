@@ -15,6 +15,7 @@ from app.modules.billing.models import (
     InvoiceItem,
     Payment,
     PaymentStatus,
+    TaxRule,
 )
 from app.modules.identity.models import User
 from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
@@ -105,6 +106,24 @@ class BillingReadRepository:
                     Payment.status == PaymentStatus.RECORDED,
                     Payment.amount > 0,
                 )
+            ).all()
+        )
+
+    def list_recorded_positive_payments_for_invoices(
+        self, *, tenant_id: str, invoice_ids: set[str]
+    ) -> list[Payment]:
+        if not invoice_ids:
+            return []
+        return list(
+            self.session.exec(
+                select(Payment)
+                .where(
+                    Payment.tenant_id == tenant_id,
+                    Payment.invoice_id.in_(invoice_ids),
+                    Payment.status == PaymentStatus.RECORDED,
+                    Payment.amount > 0,
+                )
+                .order_by(Payment.collected_at)
             ).all()
         )
 
@@ -204,6 +223,54 @@ class BillingReadRepository:
                 .order_by(BillingAdjustmentRequest.created_at.desc())
             ).all()
         )
+
+    def list_adjustment_requests_for_invoices(
+        self, *, tenant_id: str, invoice_ids: set[str]
+    ) -> list[BillingAdjustmentRequest]:
+        if not invoice_ids:
+            return []
+        return list(
+            self.session.exec(
+                select(BillingAdjustmentRequest).where(
+                    BillingAdjustmentRequest.tenant_id == tenant_id,
+                    BillingAdjustmentRequest.invoice_id.in_(invoice_ids),
+                )
+            ).all()
+        )
+
+    def tax_rules(self, ids: set[str | None]) -> dict[str, TaxRule]:
+        rule_ids = {row_id for row_id in ids if row_id}
+        if not rule_ids:
+            return {}
+        rows = self.session.exec(select(TaxRule).where(TaxRule.id.in_(rule_ids))).all()
+        return {row.id: row for row in rows}
+
+    def discount_approvals(self, ids: set[str | None]) -> dict[str, DiscountApproval]:
+        approval_ids = {row_id for row_id in ids if row_id}
+        if not approval_ids:
+            return {}
+        rows = self.session.exec(
+            select(DiscountApproval).where(DiscountApproval.id.in_(approval_ids))
+        ).all()
+        return {row.id: row for row in rows}
+
+    def discount_offers(self, ids: set[str | None]) -> dict[str, DiscountOffer]:
+        offer_ids = {row_id for row_id in ids if row_id}
+        if not offer_ids:
+            return {}
+        rows = self.session.exec(
+            select(DiscountOffer).where(DiscountOffer.id.in_(offer_ids))
+        ).all()
+        return {row.id: row for row in rows}
+
+    def appointments(self, ids: set[str | None]) -> dict[str, Appointment]:
+        appointment_ids = {row_id for row_id in ids if row_id}
+        if not appointment_ids:
+            return {}
+        rows = self.session.exec(
+            select(Appointment).where(Appointment.id.in_(appointment_ids))
+        ).all()
+        return {row.id: row for row in rows}
 
     def has_open_adjustment_request(self, invoice: Invoice) -> bool:
         return (

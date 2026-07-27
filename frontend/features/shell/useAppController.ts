@@ -4,9 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   API_BASE,
   AUTH_SESSION_EXPIRED_EVENT,
-  LIVE_DATA_CHANGED_EVENT,
   LIVE_DATA_CHANGED_STORAGE_KEY,
+  RequestTimeoutError,
   apiFetch,
+  type ApiErrorLike,
+  fetchWithTimeout,
   type ApiSession,
 } from "@/lib/api";
 import { demoUsers, loginPresets } from "@/lib/authPresets";
@@ -138,8 +140,10 @@ export function useAppController() {
     if (!sessionHasAnyPermission(session, permissions)) return fallback;
     try {
       return await apiFetch(path, session);
-    } catch {
-      return fallback;
+    } catch (error) {
+      const apiError = error as ApiErrorLike;
+      if (apiError.permissionDenied || apiError.status === 404) return fallback;
+      throw error;
     }
   }
 
@@ -174,7 +178,7 @@ export function useAppController() {
       mutationRefreshTimerRef.current = null;
     }
     const requestRevision = ++liveDataRequestRef.current;
-    setLiveStatus("Loading seeded backend data...");
+    setLiveStatus("Refreshing application data...");
     const referenceReadPermissions = [
       "settings.manage",
       "settings.read",
@@ -595,11 +599,6 @@ export function useAppController() {
         refreshLiveData();
       }, 50);
     };
-    const handleLiveDataChanged = (event: Event) => {
-      const detail = (event as CustomEvent<{ tenantId?: string }>).detail;
-      if (detail?.tenantId && detail.tenantId !== apiSession.tenantId) return;
-      scheduleMutationRefresh();
-    };
     const handleStorage = (event: StorageEvent) => {
       if (event.key === "medizinhub.entitlements.refresh") {
         scheduleMutationRefresh();
@@ -618,7 +617,6 @@ export function useAppController() {
     window.addEventListener("focus", refreshLiveData);
     window.addEventListener("storage", handleStorage);
     window.addEventListener("medizinhub.entitlements.refresh", refreshLiveData);
-    window.addEventListener(LIVE_DATA_CHANGED_EVENT, handleLiveDataChanged);
     document.addEventListener("visibilitychange", refreshLiveData);
     return () => {
       if (mutationRefreshTimerRef.current) {
@@ -631,7 +629,6 @@ export function useAppController() {
         "medizinhub.entitlements.refresh",
         refreshLiveData,
       );
-      window.removeEventListener(LIVE_DATA_CHANGED_EVENT, handleLiveDataChanged);
       document.removeEventListener("visibilitychange", refreshLiveData);
     };
     // }, [apiSession?.tenantId]);
@@ -641,13 +638,16 @@ export function useAppController() {
     setLiveStatus("Signing in...");
     let res: Response;
     try {
-      res = await fetch(`${API_BASE}/auth/login`, {
+      res = await fetchWithTimeout(`${API_BASE}/auth/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: input.email, password: input.password }),
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof RequestTimeoutError) {
+        throw new Error("Sign-in timed out. Please try again.");
+      }
       throw new Error(
         `Backend is not reachable at ${API_BASE}. Start the FastAPI backend, then open ${API_BASE}/health.`,
       );
@@ -666,10 +666,13 @@ export function useAppController() {
     if (body.user?.is_super_admin) {
       let tenantsRes: Response;
       try {
-        tenantsRes = await fetch(`${API_BASE}/tenants`, {
+        tenantsRes = await fetchWithTimeout(`${API_BASE}/tenants`, {
           credentials: "include",
         });
-      } catch {
+      } catch (error) {
+        if (error instanceof RequestTimeoutError) {
+          throw new Error("Sign-in succeeded, but loading tenants timed out.");
+        }
         throw new Error(
           `Login succeeded, but tenants could not be loaded from ${API_BASE}/tenants.`,
         );
@@ -709,11 +712,20 @@ export function useAppController() {
     setLiveBranchId(liveBranchIdRef.current);
     setDepartmentId(departmentIdRef.current);
     setAuthenticated(true);
-    await loadLiveData(session).catch((err: any) => {
+    void loadLiveData(session).catch((err: any) => {
       setLiveStatus(
         err.message || "Connected, but live data could not be loaded.",
       );
     });
+  }
+
+  function refreshLiveDataInBackground(session: ApiSession): Promise<void> {
+    void loadLiveData(session).catch((err: any) => {
+      setLiveStatus(
+        err.message || "Saved, but application data could not be refreshed.",
+      );
+    });
+    return Promise.resolve();
   }
 
   async function handleLogout() {
@@ -842,7 +854,7 @@ export function useAppController() {
     setIpAdmissions,
     scopedAppointments,
     apiSession,
-    loadLiveData,
+    loadLiveData: refreshLiveDataInBackground,
     liveInvoices,
   };
   const permissionKeys = apiSession?.user?.permissions || [];
