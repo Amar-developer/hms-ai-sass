@@ -293,25 +293,36 @@ export function Billing({
     const invoiceId = detail?.invoice?.id;
     if (!apiSession || !invoiceId) return;
     let active = true;
-    const refreshDelivery = () =>
-      apiFetch(
+    let timer: number | null = null;
+    const shouldPollDelivery = (delivery: any) =>
+      ["queued", "processing"].includes(
+        String(delivery?.status || "").toLowerCase(),
+      );
+    const refreshDelivery = async () => {
+      const delivery = await apiFetch(
         `/billing/invoices/${encodeURIComponent(invoiceId)}/delivery`,
         apiSession,
       )
-        .then((delivery: any) => {
-          if (!active) return;
-          setDetail((current: any) =>
-            current?.invoice?.id === invoiceId
-              ? { ...current, invoice_delivery: delivery }
-              : current,
-          );
-        })
-        .catch(() => {});
-    void refreshDelivery();
-    const timer = window.setInterval(refreshDelivery, 5000);
+        .catch(() => null);
+      if (!active || !delivery) return false;
+      setDetail((current: any) =>
+        current?.invoice?.id === invoiceId
+          ? { ...current, invoice_delivery: delivery }
+          : current,
+      );
+      return shouldPollDelivery(delivery);
+    };
+    const pollDelivery = () => {
+      void refreshDelivery().then((keepPolling) => {
+        if (active && keepPolling) {
+          timer = window.setTimeout(pollDelivery, 5000);
+        }
+      });
+    };
+    pollDelivery();
     return () => {
       active = false;
-      window.clearInterval(timer);
+      if (timer !== null) window.clearTimeout(timer);
     };
   }, [apiSession?.tenantId, detail?.invoice?.id]);
 

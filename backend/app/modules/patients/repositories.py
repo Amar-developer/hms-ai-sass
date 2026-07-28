@@ -1,3 +1,5 @@
+from datetime import date, datetime, time, timedelta
+
 from sqlalchemy import case, func, or_
 from sqlmodel import Session, select
 
@@ -37,14 +39,28 @@ class PatientRepository:
             ).all()
         )
 
-    def count(self, *, tenant_id: str) -> int:
-        return int(
-            self.session.exec(
-                select(func.count())
-                .select_from(Patient)
-                .where(Patient.tenant_id == tenant_id)
-            ).one()
+    def count(
+        self,
+        *,
+        tenant_id: str,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> int:
+        statement = (
+            select(func.count())
+            .select_from(Patient)
+            .where(Patient.tenant_id == tenant_id)
         )
+        if from_date:
+            statement = statement.where(
+                Patient.created_at >= datetime.combine(from_date, time.min)
+            )
+        if to_date:
+            statement = statement.where(
+                Patient.created_at
+                < datetime.combine(to_date + timedelta(days=1), time.min)
+            )
+        return int(self.session.exec(statement).one())
 
     def patients_with_primary_mobile(self, *, tenant_id: str) -> list[Patient]:
         return list(

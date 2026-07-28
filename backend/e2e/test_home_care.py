@@ -37,7 +37,7 @@ def test_home_care_booking_completed_visit_invoice_and_payment(
                 "assigned_staff_name": "Nurse E2E",
                 "staff_type": "nurse",
                 "booking_type": "home_care",
-                "recurrence": "once",
+                "recurrence": "daily",
                 "start_date": date.today().isoformat(),
                 "end_date": date.today().isoformat(),
                 "location": "E2E Patient Home, Chennai",

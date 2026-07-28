@@ -31,6 +31,7 @@ from app.modules.identity.services.helpers import (
     resolve_role_for_user_assignment,
     user_read,
 )
+from app.modules.identity.services.privileged_policy import PRIVILEGED_USER_TYPES
 from app.modules.settings.numbering import next_document_number
 from app.modules.tenants.models import now_utc
 
@@ -59,6 +60,11 @@ class UserService:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Create super admins only from Platform Admins",
+            )
+        if user_payload.get("user_type") in PRIVILEGED_USER_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Create privileged accounts only from Privileged Access",
             )
         if (
             not actor.is_super_admin
@@ -166,6 +172,11 @@ class UserService:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Manage super admins only from Platform Admins",
+            )
+        if updates.get("user_type") in PRIVILEGED_USER_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Manage privileged accounts only from Privileged Access",
             )
         assert_can_target_user_for_management(
             self.session, actor, user, updates.get("role_keys")

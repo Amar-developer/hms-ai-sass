@@ -30,6 +30,7 @@ def auth_user_read(session: Session, user: User) -> AuthUserRead:
         tenant = IdentityTenantRepository(session).get(user.tenant_id)
         data["tenant_name"] = tenant.name if tenant else None
     data.pop("roles", None)
+    data.pop("permissions", None)
     return AuthUserRead(
         **data,
         roles=user_role_keys(session, user),
@@ -53,6 +54,7 @@ def user_read(session: Session, user: User) -> UserRead:
         tenant = IdentityTenantRepository(session).get(user.tenant_id)
         data["tenant_name"] = tenant.name if tenant else None
     data["roles"] = user_role_keys(session, user)
+    data["permissions"] = user_permission_keys(session, user)
     return UserRead(**data)
 
 

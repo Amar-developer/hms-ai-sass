@@ -5,6 +5,8 @@ All notable MedizinHub HMS product changes are recorded here. Versions follow
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-28
+
 ### Added
 
 - Enterprise release-version management based on the root `VERSION` file.

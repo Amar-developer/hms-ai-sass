@@ -18,17 +18,26 @@ from app.modules.identity.schemas import (
     LoginRequest,
     LoginResponse,
     PermissionRead,
+    PrivilegedAccessOptionsRead,
+    PrivilegedAccountCreate,
+    PrivilegedAccountUpdate,
     ResetUserPasswordRequest,
     RoleCreate,
     RoleRead,
     RoleUpdate,
     SuperAdminCreate,
     SuperAdminStatusUpdate,
+    SupportAccessGrantCreate,
+    SupportAccessGrantRead,
+    SupportAccessGrantRevoke,
     UserCreate,
     UserRead,
     UserUpdate,
 )
 from app.modules.identity.services.auth_service import AuthService, secure_cookie
+from app.modules.identity.services.privileged_access_service import (
+    PrivilegedAccessService,
+)
 from app.modules.identity.services.role_service import RoleService
 from app.modules.identity.services.super_admin_service import SuperAdminService
 from app.modules.identity.services.user_service import UserService
@@ -68,6 +77,98 @@ def change_super_admin_status(
 ) -> UserRead:
     return SuperAdminService(session).change_status(
         user_id=user_id, payload=payload, actor=current_user
+    )
+
+
+@router.get(
+    "/identity/privileged-access/options",
+    response_model=PrivilegedAccessOptionsRead,
+)
+def privileged_access_options(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> PrivilegedAccessOptionsRead:
+    return PrivilegedAccessService(session).options(actor=current_user)
+
+
+@router.get("/identity/privileged-accounts", response_model=list[UserRead])
+def list_privileged_accounts(
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> list[UserRead]:
+    return PrivilegedAccessService(session).list_accounts(actor=current_user)
+
+
+@router.post(
+    "/identity/privileged-accounts",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_privileged_account(
+    payload: PrivilegedAccountCreate,
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> UserRead:
+    return PrivilegedAccessService(session).create_account(
+        payload=payload, actor=current_user
+    )
+
+
+@router.patch("/identity/privileged-accounts/{user_id}", response_model=UserRead)
+def update_privileged_account(
+    user_id: str,
+    payload: PrivilegedAccountUpdate,
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> UserRead:
+    return PrivilegedAccessService(session).update_account(
+        user_id=user_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/identity/support-access-grants",
+    response_model=list[SupportAccessGrantRead],
+)
+def list_support_access_grants(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[SupportAccessGrantRead]:
+    return PrivilegedAccessService(session).list_grants(actor=current_user)
+
+
+@router.post(
+    "/identity/support-access-grants",
+    response_model=SupportAccessGrantRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_support_access_grant(
+    payload: SupportAccessGrantCreate,
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> SupportAccessGrantRead:
+    return PrivilegedAccessService(session).create_grant(
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.post(
+    "/identity/support-access-grants/{grant_id}/revoke",
+    response_model=SupportAccessGrantRead,
+)
+def revoke_support_access_grant(
+    grant_id: str,
+    payload: SupportAccessGrantRevoke,
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_session),
+) -> SupportAccessGrantRead:
+    return PrivilegedAccessService(session).revoke_grant(
+        grant_id=grant_id,
+        payload=payload,
+        actor=current_user,
     )
 
 

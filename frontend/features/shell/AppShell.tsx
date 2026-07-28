@@ -20,7 +20,7 @@ import { Pharmacy } from "@/features/pharmacy/Pharmacy";
 import { Physiotherapy } from "@/features/physiotherapy/Physiotherapy";
 import {
   SuperAdminDashboard,
-  superAdminSections,
+  platformSectionsForUser,
 } from "@/features/superAdmin/SuperAdminDashboard";
 import { Doctors } from "@/features/doctors/Doctors";
 import { TokenQueue } from "@/features/queue/TokenQueue";
@@ -65,6 +65,16 @@ export function AppShell(props: any) {
   } = props;
 
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
+  const canAccessPlatformWorkspace = Boolean(
+    isSuperAdmin ||
+      apiSession?.user?.user_type === "platform_admin" ||
+      apiSession?.user?.user_type === "support_admin",
+  );
+  const canManagePlatformTenants = Boolean(
+    isSuperAdmin ||
+      apiSession?.user?.permissions?.includes("platform.tenants.manage"),
+  );
+  const visiblePlatformSections = platformSectionsForUser(apiSession?.user);
   const passwordChangeRequired = Boolean(
     apiSession?.user?.must_change_password,
   );
@@ -77,7 +87,7 @@ export function AppShell(props: any) {
       ? active
       : visibleNav.some(([id]: any) => id === active)
         ? active
-        : isSuperAdmin
+        : canAccessPlatformWorkspace
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
   const primaryRole = apiSession?.user?.roles?.[0] || role;
@@ -117,7 +127,7 @@ export function AppShell(props: any) {
     .filter(Boolean);
   const displayClinicName = clinic.name || "Hospital / Clinic";
   const visibleTenantOptions = activeTenantOptions(tenants);
-  const tenantOptions = isSuperAdmin
+  const tenantOptions = canManagePlatformTenants
     ? visibleTenantOptions.length
       ? visibleTenantOptions.map((tenant: any) => ({
           value: tenant.id,
@@ -130,7 +140,30 @@ export function AppShell(props: any) {
           },
         ]
     : clinics;
+  const superAdminSectionParents: Record<string, string> = {
+    tenantEdit: "tenants",
+    createTenant: "tenants",
+    roleCreate: "roles",
+    roleEdit: "roles",
+    rolePermissions: "roles",
+    roleAssign: "roles",
+    userCreate: "users",
+    userEdit: "users",
+    departmentCreate: "departments",
+    departmentEdit: "departments",
+    departmentAssign: "departments",
+    branchCreate: "branches",
+    branchEdit: "branches",
+    branchAssign: "branches",
+  };
+  const isVisibleSuperAdminSection = (sectionId: string) => {
+    const parentSection = superAdminSectionParents[sectionId] || sectionId;
+    return visiblePlatformSections.some(([id]: any) => id === parentSection);
+  };
   const [superAdminSection, setSuperAdminSection] = useState("overview");
+  const activeSuperAdminSection = isVisibleSuperAdminSection(superAdminSection)
+    ? superAdminSection
+    : visiblePlatformSections[0]?.[0] || superAdminSection;
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
   const [tenantAdminSection, setTenantAdminSection] = useState("users");
   const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
@@ -162,8 +195,11 @@ export function AppShell(props: any) {
   const activeSectionLabel =
     activePage === "superadmin"
       ? String(
-          superAdminSections.find(
-            ([id]: any) => id === superAdminSection,
+          visiblePlatformSections.find(
+            ([id]: any) =>
+              id ===
+              (superAdminSectionParents[activeSuperAdminSection] ||
+                activeSuperAdminSection),
           )?.[1] ?? "",
         )
       : activePage === "admin"
@@ -221,12 +257,12 @@ export function AppShell(props: any) {
           action: () => navigatePage({ id: "reports", section: id }),
         }))
       : []),
-    ...(isSuperAdmin
-      ? superAdminSections.map(([id, label]: any) => ({
+    ...(canAccessPlatformWorkspace
+      ? visiblePlatformSections.map(([id, label]: any) => ({
           id: `superadmin-${id}`,
           label: `${label}`,
-          description: "Super Admin",
-          keywords: `platform super admin ${label}`,
+          description: "Platform Access",
+          keywords: `platform privileged support root ${label}`,
           action: () => navigatePage({ id: "superadmin", section: id }),
         }))
       : []),
@@ -253,7 +289,9 @@ export function AppShell(props: any) {
     }
     if (id === "superadmin" && section) {
       setSuperAdminSettingsOpen(true);
-      setSuperAdminSection(section);
+      if (isVisibleSuperAdminSection(section)) {
+        setSuperAdminSection(section);
+      }
     }
     if (id === activePage) return;
     setActive(id);
@@ -326,7 +364,7 @@ export function AppShell(props: any) {
           <SuperAdminDashboard
             apiSession={apiSession}
             switchTenant={switchTenant}
-            section={superAdminSection}
+            section={activeSuperAdminSection}
             setSection={setSuperAdminSection}
           />
         );
@@ -361,7 +399,7 @@ export function AppShell(props: any) {
           />
         );
       case "lab":
-        return <Lab {...ctx} />;
+        return <Lab {...ctx} setActive={navigatePage} />;
       case "pharmacy":
         return <Pharmacy {...ctx} />;
       case "physiotherapy":
@@ -424,6 +462,7 @@ export function AppShell(props: any) {
               activePage={activePage}
               navigatePage={navigatePage}
               isSuperAdmin={isSuperAdmin}
+              canAccessPlatformWorkspace={canAccessPlatformWorkspace}
               reportsOpen={reportsOpen}
               setReportsOpen={setReportsOpen}
               reportsSection={reportsSection}
@@ -434,7 +473,7 @@ export function AppShell(props: any) {
               setTenantAdminSection={setTenantAdminSection}
               superAdminSettingsOpen={superAdminSettingsOpen}
               setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
-              superAdminSection={superAdminSection}
+              superAdminSection={activeSuperAdminSection}
               setSuperAdminSection={setSuperAdminSection}
               visibleTenantAdminSections={visibleTenantAdminSections}
               enabled={enabled}
@@ -443,7 +482,7 @@ export function AppShell(props: any) {
               sideBarOpen={sideBarOpen}
               reportSections={reportSections}
               reportSection={reportsSection}
-              superAdminSections={superAdminSections}
+              superAdminSections={visiblePlatformSections}
               tabletCollapsed={tabletCollapsed}
               setTabletCollapsed={setTabletCollapsed}
             />
@@ -466,6 +505,7 @@ export function AppShell(props: any) {
                 activePage={activePage}
                 navigatePage={navigatePage}
                 isSuperAdmin={isSuperAdmin}
+                canAccessPlatformWorkspace={canAccessPlatformWorkspace}
                 reportsOpen={reportsOpen}
                 setReportsOpen={setReportsOpen}
                 reportsSection={reportsSection}
@@ -476,7 +516,7 @@ export function AppShell(props: any) {
                 setTenantAdminSection={setTenantAdminSection}
                 superAdminSettingsOpen={superAdminSettingsOpen}
                 setSuperAdminSettingsOpen={setSuperAdminSettingsOpen}
-                superAdminSection={superAdminSection}
+                superAdminSection={activeSuperAdminSection}
                 setSuperAdminSection={setSuperAdminSection}
                 visibleTenantAdminSections={visibleTenantAdminSections}
                 enabled={enabled}
@@ -485,7 +525,7 @@ export function AppShell(props: any) {
                 sideBarOpen={sideBarOpen}
                 reportSections={reportSections}
                 reportSection={reportsSection}
-                superAdminSections={superAdminSections}
+                superAdminSections={visiblePlatformSections}
                 tabletCollapsed={tabletCollapsed}
                 setTabletCollapsed={setTabletCollapsed}
               />
@@ -493,11 +533,13 @@ export function AppShell(props: any) {
           )}
           <div className="mt-4 rounded-lg bg-slate-50 p-4 text-xs leading-5 text-slate-500">
             <b className="text-slate-900">
-              {isSuperAdmin ? "Primary Tenant" : clinic.type}
+              {canAccessPlatformWorkspace ? "Platform Access" : clinic.type}
             </b>
             <br />
-            {isSuperAdmin
-              ? "Global platform access"
+            {canAccessPlatformWorkspace
+              ? isSuperAdmin
+                ? "Root platform access"
+                : "Permission-scoped access"
               : clinic.multiBranch
                 ? "Multi-branch enabled"
                 : "Single branch mode"}
@@ -514,7 +556,7 @@ export function AppShell(props: any) {
   `}
         >
           <AppHeader
-            isSuperAdmin={isSuperAdmin}
+            isSuperAdmin={canManagePlatformTenants}
             apiSession={apiSession}
             tenantOptions={tenantOptions}
             switchTenant={switchTenant}

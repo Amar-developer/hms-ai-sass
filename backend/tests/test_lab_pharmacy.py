@@ -8,6 +8,7 @@ from app.modules.lab.models import (
     LabOrder,
     LabOrderItem,
     LabOrderSource,
+    LabOrderStatus,
     LabTestCatalog,
     LabTestPackage,
 )
@@ -541,6 +542,41 @@ def test_available_lab_search_returns_local_lab_tests_and_services(
     assert service_row["buying_price"] == 225
 
 
+def test_lab_service_package_creates_one_package_price_invoice_line(test_engine):
+    from app.modules.billing.services.source_invoices import _lab_invoice_line_items
+
+    with Session(test_engine) as session:
+        package = LabTestPackage(
+            tenant_id="tenant-service-lines",
+            code="CARDIAC",
+            name="Cardiac Screening",
+            package_price=500,
+        )
+        session.add(package)
+        session.commit()
+        session.refresh(package)
+        items = [
+            LabOrderItem(
+                tenant_id=package.tenant_id,
+                branch_id="branch-1",
+                lab_order_id="order-1",
+                test_id=f"test-{index}",
+                package_id=package.id,
+                test_name=name,
+                price=0,
+            )
+            for index, name in enumerate(
+                ["12-Lead ECG", "Chest X-Ray PA View"], start=1
+            )
+        ]
+
+        lines = _lab_invoice_line_items(session, package.tenant_id, items)
+
+    assert len(lines) == 1
+    assert lines[0]["description"] == "Cardiac Screening"
+    assert lines[0]["total_amount"] == 500
+
+
 def test_create_direct_op_and_outside_referral_lab_orders(client):
     tenant, branch, patient = setup_lab_pharmacy_tenant(client)
 
@@ -577,6 +613,103 @@ def test_create_direct_op_and_outside_referral_lab_orders(client):
     assert external.status_code == 201
     assert external.json()["external_referrer"] == "Outside Clinic"
     assert status_update.json()["status"] == "sample_collected"
+
+
+def test_lab_order_multiple_file_upload_list_download_and_validation(
+    client, tmp_path, monkeypatch
+):
+    from app.core import uploads as uploads_module
+    from app.modules.lab.services import file_service as lab_file_service
+
+    monkeypatch.setattr(uploads_module, "PRIVATE_UPLOADS_DIR", tmp_path)
+    monkeypatch.setattr(lab_file_service, "PRIVATE_UPLOADS_DIR", tmp_path)
+    tenant, branch, patient = setup_lab_pharmacy_tenant(client)
+    order = client.post(
+        "/api/v1/lab/orders",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "source": "op_direct",
+            "tests": "CBC",
+            "amount": 450,
+        },
+    ).json()
+
+    upload = client.post(
+        f"/api/v1/lab/orders/{order['id']}/files",
+        headers={"X-Tenant-ID": tenant["id"]},
+        files=[
+            ("files", ("report.pdf", b"%PDF-1.4\n%lab\n", "application/pdf")),
+            (
+                "files",
+                (
+                    "scan.png",
+                    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR",
+                    "image/png",
+                ),
+            ),
+        ],
+    )
+    listed = client.get(
+        f"/api/v1/lab/orders/{order['id']}/files",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    first_file = upload.json()[0]
+    download = client.get(
+        f"/api/v1/lab/orders/{order['id']}/files/{first_file['id']}/download",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    invalid_upload = client.post(
+        f"/api/v1/lab/orders/{order['id']}/files",
+        headers={"X-Tenant-ID": tenant["id"]},
+        files=[("files", ("unsafe.txt", b"plain text", "text/plain"))],
+    )
+
+    assert upload.status_code == 201
+    assert len(upload.json()) == 2
+    assert {row["attached_to_name"] for row in upload.json()} == {order["id"]}
+    assert {row["category"] for row in upload.json()} == {"lab_report"}
+    assert listed.status_code == 200
+    assert len(listed.json()) == 2
+    assert download.status_code == 200
+    assert download.content.startswith(b"%PDF")
+    assert invalid_upload.status_code == 400
+    assert "Unsupported" in invalid_upload.json()["detail"]
+
+
+def test_cancelled_lab_order_rejects_file_upload(client, tmp_path, monkeypatch):
+    from app.core import uploads as uploads_module
+    from app.modules.lab.services import file_service as lab_file_service
+
+    monkeypatch.setattr(uploads_module, "PRIVATE_UPLOADS_DIR", tmp_path)
+    monkeypatch.setattr(lab_file_service, "PRIVATE_UPLOADS_DIR", tmp_path)
+    tenant, branch, patient = setup_lab_pharmacy_tenant(client)
+    order = client.post(
+        "/api/v1/lab/orders",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={
+            "branch_id": branch["id"],
+            "patient_id": patient["id"],
+            "source": "op_direct",
+            "tests": "CBC",
+            "amount": 450,
+        },
+    ).json()
+    client.patch(
+        f"/api/v1/lab/orders/{order['id']}/status",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"status": LabOrderStatus.CANCELLED.value, "reason": "Duplicate"},
+    )
+
+    upload = client.post(
+        f"/api/v1/lab/orders/{order['id']}/files",
+        headers={"X-Tenant-ID": tenant["id"]},
+        files=[("files", ("report.pdf", b"%PDF-1.4\n%lab\n", "application/pdf"))],
+    )
+
+    assert upload.status_code == 409
+    assert upload.json()["detail"] == "Cannot upload reports for a cancelled lab order"
 
 
 def test_lab_catalog_package_order_items_sample_template_report_and_consultation_visibility(

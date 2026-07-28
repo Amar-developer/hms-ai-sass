@@ -13,12 +13,8 @@ import { isMembershipPlanInvoice } from "@/features/billing/helpers";
 import {
   topRows,
   dateKey,
-  invoiceAmount,
   invoiceBalance,
   invoiceMembershipBenefit,
-  invoiceApprovedDiscount,
-  invoiceBillingDiscount,
-  invoiceOfferDiscount,
   isCompletedAppointment,
   monthKey,
   normalized,
@@ -42,8 +38,12 @@ export function Dashboard({
   branchId,
 }: any) {
   const [monthlyCollections, setMonthlyCollections] = useState<any>(null);
-  const [allDueReport, setAllDueReport] = useState<any>(null);
+  const [todayCollections, setTodayCollections] = useState<any>(null);
   const [monthlyDueReport, setMonthlyDueReport] = useState<any>(null);
+  const [todayDueReport, setTodayDueReport] = useState<any>(null);
+  const [todayPatientCount, setTodayPatientCount] = useState<number | null>(
+    null,
+  );
   const now = new Date();
   const today = [
     now.getFullYear(),
@@ -63,9 +63,11 @@ export function Dashboard({
     to_date: monthEnd,
   });
   if (branchId) monthlyParams.set("branch_id", branchId);
-  const branchQuery = branchId
-    ? `?branch_id=${encodeURIComponent(branchId)}`
-    : "";
+  const todayParams = new URLSearchParams({
+    from_date: today,
+    to_date: today,
+  });
+  if (branchId) todayParams.set("branch_id", branchId);
   useEffect(() => {
     if (!apiSession) return;
     let active = true;
@@ -73,22 +75,33 @@ export function Dashboard({
       apiFetch(`/billing/reports/collections?${monthlyParams}`, apiSession).catch(
         () => null,
       ),
-      apiFetch(`/billing/reports/due-collection${branchQuery}`, apiSession).catch(
+      apiFetch(`/billing/reports/collections?${todayParams}`, apiSession).catch(
         () => null,
       ),
       apiFetch(`/billing/reports/due-collection?${monthlyParams}`, apiSession).catch(
         () => null,
       ),
-    ]).then(([collections, allDue, monthlyDue]) => {
+      apiFetch(`/billing/reports/due-collection?${todayParams}`, apiSession).catch(
+        () => null,
+      ),
+      apiFetch(
+        `/patients/count?from_date=${today}&to_date=${today}`,
+        apiSession,
+      ).catch(() => null),
+    ]).then(([collections, todayPaid, monthlyDue, todayDue, patientCount]) => {
       if (!active) return;
       setMonthlyCollections(collections);
-      setAllDueReport(allDue);
+      setTodayCollections(todayPaid);
       setMonthlyDueReport(monthlyDue);
+      setTodayDueReport(todayDue);
+      setTodayPatientCount(
+        patientCount?.total === undefined ? null : Number(patientCount.total),
+      );
     });
     return () => {
       active = false;
     };
-  }, [apiSession?.tenantId, branchId, monthStart, monthEnd]);
+  }, [apiSession?.tenantId, branchId, monthStart, monthEnd, today]);
   const todayAppointments = scopedAppointments.filter(
     (row: any) =>
       dateKey(row.appointmentDate || row.appointment_date) === today,
@@ -104,51 +117,63 @@ export function Dashboard({
   });
   const activeMonthlyInvoices = monthlyInvoices.filter(
     (row: any) =>
-      normalized(row.status) !== "cancelled",
+      !["cancelled", "refunded"].includes(normalized(row.status)),
   );
-  const monthlyRevenue = activeMonthlyInvoices.reduce(
-    (sum: number, row: any) => sum + Number(row.total_amount || 0),
-    0,
+  const todayInvoices = liveInvoices.filter((row: any) => {
+    const sourceDate =
+      row.created_at || row.invoice_date || row.updated_at || row.paid_at;
+    return dateKey(sourceDate) === today;
+  });
+  const activeTodayInvoices = todayInvoices.filter(
+    (row: any) =>
+      !["cancelled", "refunded"].includes(normalized(row.status)),
   );
   const fallbackMonthlyDue = activeMonthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceBalance(row),
     0,
   );
-  const fallbackAllDue = liveInvoices
-    .filter(
-      (row: any) =>
-        !["cancelled", "refunded"].includes(normalized(row.status)),
-    )
-    .reduce((sum: number, row: any) => sum + invoiceBalance(row), 0);
   const monthlyDue = Number(
     monthlyDueReport?.total_due_amount ?? fallbackMonthlyDue,
   );
-  const allDue = Number(allDueReport?.total_due_amount ?? fallbackAllDue);
-  const carriedDue = Math.max(allDue - monthlyDue, 0);
-  const monthlyPaid = Number(
-    monthlyCollections?.net_collected_amount ??
-      activeMonthlyInvoices.reduce(
-        (sum: number, row: any) => sum + invoiceAmount(row),
+  const todayDue = Number(
+    todayDueReport?.total_due_amount ??
+      activeTodayInvoices.reduce(
+        (sum: number, row: any) => sum + invoiceBalance(row),
         0,
       ),
   );
+  const monthlyDueInvoiceCount = Number(
+    monthlyDueReport?.invoice_count ??
+      activeMonthlyInvoices.filter((row: any) => invoiceBalance(row) > 0)
+        .length,
+  );
+  const todayDueInvoiceCount = Number(
+    todayDueReport?.invoice_count ??
+      activeTodayInvoices.filter((row: any) => invoiceBalance(row) > 0).length,
+  );
+  const monthlyPaid = Number(
+    monthlyCollections?.net_collected_amount ??
+      activeMonthlyInvoices.reduce(
+        (sum: number, row: any) => sum + Number(row.paid_amount || 0),
+        0,
+      ),
+  );
+  const todayPaid = Number(
+    todayCollections?.net_collected_amount ??
+      activeTodayInvoices.reduce(
+        (sum: number, row: any) => sum + Number(row.paid_amount || 0),
+        0,
+      ),
+  );
+  const fallbackTodayPatientCount = patients.filter(
+    (patient: any) =>
+      dateKey(patient.created_at || patient.createdAt) === today,
+  ).length;
   const membershipPurchaseInvoices = monthlyInvoices.filter(
     isMembershipPlanInvoice,
   );
   const membershipSavings = activeMonthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceMembershipBenefit(row),
-    0,
-  );
-  const offerSavings = activeMonthlyInvoices.reduce(
-    (sum: number, row: any) => sum + invoiceOfferDiscount(row),
-    0,
-  );
-  const approvedSavings = activeMonthlyInvoices.reduce(
-    (sum: number, row: any) => sum + invoiceApprovedDiscount(row),
-    0,
-  );
-  const billingDiscounts = activeMonthlyInvoices.reduce(
-    (sum: number, row: any) => sum + invoiceBillingDiscount(row),
     0,
   );
   const departmentById = new Map(
@@ -190,14 +215,21 @@ export function Dashboard({
   });
   const cards = [
     {
-      title: "Today Appointments",
+      title: "Booked Today",
       value: todayAppointments.length,
       detail: `${completedToday.length} completed today`,
       icon: CalendarDays,
       target: "appointments",
     },
     {
-      title: "Patients Count",
+      title: "Patients Created Today",
+      value: todayPatientCount ?? fallbackTodayPatientCount,
+      detail: "New patient registrations today",
+      icon: Users,
+      target: "patients",
+    },
+    {
+      title: "Total Patients",
       value: liveSummary?.patients ?? patients.length,
       detail: `${patients.length} loaded records`,
       icon: Users,
@@ -212,24 +244,31 @@ export function Dashboard({
     // },
     {
       title: "Monthly Revenue",
-      value: rupees(monthlyRevenue),
-      detail: `Net collections ${rupees(monthlyPaid)}`,
+      value: rupees(monthlyPaid),
+      detail: "Paid collections only",
+      icon: IndianRupee,
+      target: "billing",
+    },
+    {
+      title: "Today Revenue",
+      value: rupees(todayPaid),
+      detail: "Paid collections today",
       icon: IndianRupee,
       target: "billing",
     },
     {
       title: "Monthly Due",
       value: rupees(monthlyDue),
-      detail: `Carried ${rupees(carriedDue)} · Total ${rupees(allDue)}`,
+      detail: `${monthlyDueInvoiceCount} invoices with balance`,
       icon: ReceiptIndianRupee,
       target: "billing",
     },
     {
-      title: "Billing Discounts",
-      value: rupees(billingDiscounts),
-      detail: `Approved ${rupees(approvedSavings)} · Offers ${rupees(offerSavings)} · Membership ${rupees(membershipSavings)}`,
+      title: "Today Due",
+      value: rupees(todayDue),
+      detail: `${todayDueInvoiceCount} invoices with balance today`,
       icon: ReceiptIndianRupee,
-      target: "reports",
+      target: "billing",
     },
     // {
     //   title: "Membership Usage",
@@ -280,7 +319,10 @@ export function Dashboard({
           <Insight label="Booked Today" value={todayAppointments.length} />
           <Insight label="Completed Today" value={completedToday.length} />
           <Insight label="Waiting Queue" value={activeQueue.length} />
-          <Insight label="Invoices This Month" value={monthlyInvoices.length} />
+          <Insight
+            label="Invoices This Month"
+            value={activeMonthlyInvoices.length}
+          />
           <Insight
             label="Membership Savings"
             value={rupees(membershipSavings)}

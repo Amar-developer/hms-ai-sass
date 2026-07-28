@@ -54,6 +54,7 @@ export function Lab({
   appointments,
   loadLiveData,
   liveInvoices = [],
+  setActive,
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [orders, setOrders] = useState<LabOrderSummary[]>([]);
@@ -98,6 +99,9 @@ export function Lab({
   const [localInvoicedOrderIds, setLocalInvoicedOrderIds] = useState<string[]>(
     [],
   );
+  const [localInvoiceIdsByOrder, setLocalInvoiceIdsByOrder] = useState<
+    Record<string, string>
+  >({});
   const [selectedOrder, setSelectedOrder] =
     useState<LabOrderSummary | null>(null);
   const [viewConsult, setViewConsult] = useState<any>(null);
@@ -183,6 +187,21 @@ export function Lab({
       ]),
     [liveInvoices, localInvoicedOrderIds],
   );
+  const invoiceIdsByOrder = useMemo(() => {
+    const rows: Record<string, string> = { ...localInvoiceIdsByOrder };
+    (liveInvoices || []).forEach((invoice: any) => {
+      if (
+        invoice?.id &&
+        invoice?.lab_order_id &&
+        !["cancelled", "refunded"].includes(
+          String(invoice.status || "").toLowerCase(),
+        )
+      ) {
+        rows[invoice.lab_order_id] = invoice.id;
+      }
+    });
+    return rows;
+  }, [liveInvoices, localInvoiceIdsByOrder]);
 
   useEffect(() => {
     const serverOrderIds = new Set(
@@ -465,13 +484,22 @@ export function Lab({
         body: JSON.stringify({
           branch_id: branchId,
           patient_id: data.patient_id,
-          source: data.source,
+          order_date: data.order_date,
+          source:
+            data.acquisition_source === "referral"
+              ? "external_referral"
+              : "op_direct",
+          acquisition_source: data.acquisition_source,
+          referrer_patient_id: data.referrer_patient_id || null,
+          referrer_name: data.referrer_name || null,
           tests: testsText,
           test_ids: localTestIds,
           package_ids: packageIds,
           external_items: [],
           external_referrer:
-            data.source === "external_referral" ? data.external_referrer : null,
+            data.acquisition_source === "referral"
+              ? data.referrer_name
+              : null,
           amount: 0,
           ordered_by_user_id: apiSession.user?.id,
         }),
@@ -754,6 +782,12 @@ export function Lab({
       setLocalInvoicedOrderIds((ids) =>
         ids.includes(order.id) ? ids : [...ids, order.id],
       );
+      if (detail.invoice?.id) {
+        setLocalInvoiceIdsByOrder((current) => ({
+          ...current,
+          [order.id]: detail.invoice.id,
+        }));
+      }
       await load();
       await loadLiveData?.(apiSession);
       setMessage(
@@ -766,11 +800,20 @@ export function Lab({
     }
   }
 
+  function viewInvoice(order: any) {
+    const invoiceId = invoiceIdsByOrder[order.id];
+    if (!invoiceId || typeof window === "undefined") return;
+    window.sessionStorage.setItem("medizinhub.billingInvoiceId", invoiceId);
+    setSelectedOrder(null);
+    setActive?.("billing");
+  }
+
   async function handleOrderAction(order: any, action: string) {
     if (!action) return;
     if (action === "sample") return collectSample(order);
     if (action === "release") return releaseResult(order);
     if (action === "invoice") return generateInvoice(order);
+    if (action === "view-invoice") return viewInvoice(order);
     if (action === "pdf") return openReport(order);
     if (action === "cancel") return updateStatus(order, "cancelled");
   }
@@ -850,7 +893,7 @@ export function Lab({
       width: "150px",
       render: (o) => (
         <Badge className="normal-badge w-[70%]">
-          {humanizeOptionLabel(o.source)}
+          {humanizeOptionLabel(o.acquisition_source || o.source)}
         </Badge>
       ),
     },
@@ -979,10 +1022,15 @@ export function Lab({
             <RowActions
               actions={[
                 {
-                  label: invoiceBusy ? "Generating..." : "Generate invoice",
-                  onClick: () => handleOrderAction(o, "invoice"),
+                  label: invoiced
+                    ? "View Invoice"
+                    : invoiceBusy
+                      ? "Generating..."
+                      : "Generate invoice",
+                  onClick: () =>
+                    handleOrderAction(o, invoiced ? "view-invoice" : "invoice"),
                   hidden: !canBillLabOrder,
-                  disabled: actionsBusy || cancelled || invoiced,
+                  disabled: actionsBusy || (!invoiced && cancelled),
                 },
                 {
                   label: "Download Report",
@@ -1040,6 +1088,15 @@ export function Lab({
           items={splitList(selectedOrder.tests)}
           onClose={() => setSelectedOrder(null)}
           apiSession={apiSession}
+          canGenerateInvoice={canBillLabOrder}
+          invoiceDisabled={isCancelled(selectedOrder)}
+          invoiceBusy={busy === `invoice-${selectedOrder.id}`}
+          invoiceGenerated={invoicedOrderIds.has(selectedOrder.id)}
+          packages={packages}
+          onGenerateInvoice={() => handleOrderAction(selectedOrder, "invoice")}
+          onViewInvoice={() =>
+            handleOrderAction(selectedOrder, "view-invoice")
+          }
         />
       )}
       {viewConsult && (

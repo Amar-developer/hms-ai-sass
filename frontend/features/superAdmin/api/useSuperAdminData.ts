@@ -4,6 +4,19 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { tenantSelectOptions } from "../helpers";
 
+function hasPermission(apiSession: any, permission: string) {
+  const keys = apiSession?.user?.permissions || [];
+  return Boolean(
+    apiSession?.user?.is_super_admin ||
+      keys.includes("*") ||
+      keys.includes(permission),
+  );
+}
+
+function hasAnyPermission(apiSession: any, permissions: string[]) {
+  return permissions.some((permission) => hasPermission(apiSession, permission));
+}
+
 export function useSuperAdminData(apiSession: any) {
   const [tenants, setTenants] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
@@ -27,6 +40,7 @@ export function useSuperAdminData(apiSession: any) {
 
   async function loadPrimaryTemplates(primaryTenantId: string) {
     if (!apiSession || !primaryTenantId) return;
+    if (!hasPermission(apiSession, "platform.templates.manage")) return;
     try {
       const scoped = { ...apiSession, tenantId: primaryTenantId };
       const [roleRows, departmentRows, branchRows] = await Promise.all([
@@ -49,10 +63,23 @@ export function useSuperAdminData(apiSession: any) {
     setBusy(true);
     setMessage("");
     try {
+      const canLoadTenants = hasAnyPermission(apiSession, [
+        "platform.tenants.manage",
+        "platform.subscriptions.manage",
+        "platform.templates.manage",
+      ]);
+      const canLoadPlans = hasPermission(
+        apiSession,
+        "platform.subscriptions.manage",
+      );
       const [tenantRows, planRows, moduleRows] = await Promise.all([
-        apiFetch("/tenants", apiSession),
-        apiFetch("/subscription-plans", apiSession),
-        apiFetch("/modules", apiSession),
+        canLoadTenants ? apiFetch("/tenants", apiSession) : Promise.resolve([]),
+        canLoadPlans
+          ? apiFetch("/subscription-plans", apiSession)
+          : Promise.resolve([]),
+        canLoadPlans || hasPermission(apiSession, "platform.templates.manage")
+          ? apiFetch("/modules", apiSession)
+          : Promise.resolve([]),
       ]);
       const selectableRows = tenantSelectOptions(tenantRows);
       setTenants(tenantRows);
@@ -80,6 +107,21 @@ export function useSuperAdminData(apiSession: any) {
 
   async function loadTenantAccess(tenantId: string) {
     if (!apiSession || !tenantId) return;
+    if (
+      !hasAnyPermission(apiSession, [
+        "platform.tenants.manage",
+        "platform.templates.manage",
+        "platform.subscriptions.manage",
+      ])
+    ) {
+      setRoles([]);
+      setUsers([]);
+      setDepartments([]);
+      setTenantBranches([]);
+      setTenantSubscriptions([]);
+      setPermissionCatalog([]);
+      return;
+    }
     const requestSequence = ++tenantAccessLoadSequence.current;
     // Never display one tenant's grantable catalog while another tenant is
     // loading. Primary-tenant catalogs can contain platform-only permissions.

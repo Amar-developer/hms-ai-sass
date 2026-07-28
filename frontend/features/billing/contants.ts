@@ -33,11 +33,12 @@ export const b = [
   "Ninety",
 ];
 export const status_options = [
-  { value: "all", label: "All payments" },
+  { value: "all", label: "All statuses" },
   { value: "paid", label: "Paid" },
   { value: "due", label: "Due" },
   { value: "partially_paid", label: "Partially paid" },
   { value: "partially_refunded", label: "Partially refunded" },
   { value: "refunded", label: "Refunded" },
   { value: "unpaid", label: "Unpaid" },
+  { value: "cancelled", label: "Cancelled" },
 ];

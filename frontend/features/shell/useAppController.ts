@@ -119,15 +119,36 @@ export function useAppController() {
 
   function hasPermission(session: ApiSession, permission: string) {
     const keys = session.user?.permissions || [];
+    const isTenantAdmin = Boolean(
+      session.user?.user_type === "tenant_admin" ||
+        session.user?.roles?.includes("tenant_admin"),
+    );
     return (
       session.user?.is_super_admin ||
       keys.includes("*") ||
-      keys.includes(permission)
+      keys.includes(permission) ||
+      (isTenantAdmin && !permission.startsWith("platform."))
     );
   }
 
   function sessionHasAnyPermission(session: ApiSession, permissions: string[]) {
     return permissions.some((permission) => hasPermission(session, permission));
+  }
+
+  function isPlatformWorkspaceUser(session: ApiSession) {
+    return Boolean(
+      session.user?.is_super_admin ||
+        session.user?.user_type === "platform_admin" ||
+        session.user?.user_type === "support_admin",
+    );
+  }
+
+  function primaryWorkspaceSection(session: ApiSession) {
+    return isPlatformWorkspaceUser(session) ? "superadmin" : "dashboard";
+  }
+
+  function basePermissionKeys(session: ApiSession) {
+    return session.basePermissions || session.user?.permissions || [];
   }
 
   async function apiFetchIfAllowed<T>(
@@ -139,10 +160,17 @@ export function useAppController() {
     const permissions = Array.isArray(permission) ? permission : [permission];
     if (!sessionHasAnyPermission(session, permissions)) return fallback;
     try {
-      return await apiFetch(path, session);
+      return await apiFetch(path, session, {
+        suppressErrorReportStatuses: [402, 403, 404],
+      });
     } catch (error) {
       const apiError = error as ApiErrorLike;
-      if (apiError.permissionDenied || apiError.status === 404) return fallback;
+      if (
+        apiError.permissionDenied ||
+        apiError.status === 404 ||
+        apiError.status === 402
+      )
+        return fallback;
       throw error;
     }
   }
@@ -194,7 +222,11 @@ export function useAppController() {
       "practitioners.manage",
       "practitioners.read",
     ];
-    const tenantRowsPromise = session.user?.is_super_admin
+    const tenantRowsPromise = sessionHasAnyPermission(session, [
+      "platform.tenants.manage",
+      "platform.subscriptions.manage",
+      "platform.templates.manage",
+    ])
       ? apiFetchIfAllowed<any[]>(
           "/tenants",
           session,
@@ -222,7 +254,7 @@ export function useAppController() {
       (tenant: any) => tenant.id === session.tenantId,
     );
     const isPlatformPrimaryTenant = Boolean(
-      session.user?.is_super_admin &&
+      isPlatformWorkspaceUser(session) &&
       (activeTenant?.is_primary ||
         session.user?.tenant_id === session.tenantId),
     );
@@ -236,29 +268,55 @@ export function useAppController() {
       preferredDepartmentId,
     );
 
-    const entitlementsPromise = isPlatformPrimaryTenant
-      ? Promise.resolve<any>(null)
-      : apiFetchIfAllowed<any>(
+    let entitlements: any = null;
+    let subscriptionUnavailable = false;
+    const entitlementReadPermissions = [
+      "reports.read",
+      "settings.manage",
+      "identity.users.manage",
+      "identity.users.read",
+      "identity.roles.manage",
+      "branches.manage",
+      "branches.read",
+      "departments.manage",
+      "departments.read",
+      "patient_subscriptions.manage",
+      "patient_subscriptions.read",
+      "patient_subscriptions.create",
+      "home_care.manage",
+      "home_care.read",
+      "home_care.create",
+      "platform.subscriptions.manage",
+    ];
+    if (
+      !isPlatformPrimaryTenant &&
+      sessionHasAnyPermission(session, entitlementReadPermissions)
+    ) {
+      try {
+        entitlements = await apiFetch<any>(
           "/subscription-plans/entitlements",
           session,
-          [
-            "reports.read",
-            "settings.manage",
-            "identity.users.manage",
-            "identity.users.read",
-            "identity.roles.manage",
-            "branches.manage",
-            "departments.manage",
-            "patient_subscriptions.manage",
-            "patient_subscriptions.read",
-            "patient_subscriptions.create",
-            "home_care.manage",
-            "home_care.read",
-            "home_care.create",
-            "platform.subscriptions.manage",
-          ],
-          null,
+          { suppressErrorReportStatuses: [402, 403, 404] },
         );
+      } catch (error) {
+        const apiError = error as ApiErrorLike;
+        if (apiError.status === 402) {
+          subscriptionUnavailable = true;
+          entitlements = null;
+        } else if (apiError.permissionDenied || apiError.status === 404) {
+          entitlements = null;
+        } else {
+          throw error;
+        }
+      }
+    }
+    const enabledModuleKeys = new Set<string>(entitlements?.enabled_modules || []);
+    const moduleAvailable = (...moduleKeys: string[]) => {
+      if (isPlatformPrimaryTenant) return false;
+      if (subscriptionUnavailable) return false;
+      if (!entitlements?.enabled_modules?.length) return true;
+      return moduleKeys.some((moduleKey) => enabledModuleKeys.has(moduleKey));
+    };
     const [
       patientCountResult,
       appointmentRows,
@@ -268,9 +326,8 @@ export function useAppController() {
       ipRows,
       practitionerRows,
       scheduleRows,
-      entitlements,
     ] = await Promise.all([
-      isPlatformPrimaryTenant
+      !moduleAvailable("patients")
         ? Promise.resolve<{ total: number }>({ total: 0 })
         : apiFetchIfAllowed<{ total: number }>(
             "/patients/count",
@@ -278,7 +335,7 @@ export function useAppController() {
             ["patients.read", "patients.create", "patients.write"],
             { total: 0 },
           ),
-      isPlatformPrimaryTenant
+      !moduleAvailable("appointments")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
             "/appointments",
@@ -286,7 +343,7 @@ export function useAppController() {
             ["appointments.manage", "appointments.read", "appointments.create"],
             [],
           ),
-      isPlatformPrimaryTenant
+      !moduleAvailable("queue")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
             "/queue?include_completed=true",
@@ -294,7 +351,7 @@ export function useAppController() {
             ["queue.manage", "queue.read"],
             [],
           ),
-      isPlatformPrimaryTenant
+      !moduleAvailable("consultations")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
             "/consultations",
@@ -302,15 +359,15 @@ export function useAppController() {
             "consultations.read",
             [],
           ),
-      isPlatformPrimaryTenant
+      !moduleAvailable("billing_basic", "billing_advanced", "billing")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
-            "/billing/invoices",
+            "/billing/invoices?limit=200",
             session,
             ["billing.manage", "billing.read", "invoices.read"],
             [],
           ),
-      isPlatformPrimaryTenant
+      !moduleAvailable("ip")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
             "/ip/admissions",
@@ -318,19 +375,22 @@ export function useAppController() {
             ["ip.manage", "ip.read"],
             [],
           ),
-      apiFetchIfAllowed<any[]>(
+      !moduleAvailable("practitioners")
+        ? Promise.resolve<any[]>([])
+        : apiFetchIfAllowed<any[]>(
         "/practitioners",
         session,
         [...referenceReadPermissions, "practitioners.create"],
         [],
       ),
-      apiFetchIfAllowed<any[]>(
+      !moduleAvailable("scheduling")
+        ? Promise.resolve<any[]>([])
+        : apiFetchIfAllowed<any[]>(
         "/practitioners/schedules?is_active=true",
         session,
         ["scheduling.manage", "scheduling.read", "practitioners.manage"],
         [],
       ),
-      entitlementsPromise,
     ]);
     const referencedPatientIds = [
       ...appointmentRows.map((row: any) => row.patient_id),
@@ -440,7 +500,9 @@ export function useAppController() {
     setIpAdmissions(ipRows);
     setLiveInvoices(invoiceRows);
     setEnabledModules(
-      entitlements?.enabled_modules?.length
+      subscriptionUnavailable
+        ? []
+        : entitlements?.enabled_modules?.length
         ? entitlements.enabled_modules
         : defaultEntitlementModuleIds,
     );
@@ -524,10 +586,13 @@ export function useAppController() {
     if (raw) {
       try {
         const saved = JSON.parse(raw);
+        if (!saved.basePermissions) {
+          saved.basePermissions = saved.user?.permissions || [];
+        }
         const workspace = readWorkspace(saved);
         const restoredActive =
           workspace.active ||
-          (saved.user?.is_super_admin ? "superadmin" : "dashboard");
+          primaryWorkspaceSection(saved);
         const restoredBranchId = workspace.branchId || "";
         const restoredDepartmentId =
           workspace.departmentId || defaultDepartment.id;
@@ -663,7 +728,14 @@ export function useAppController() {
 
     const body = await res.json();
     let tenantId = body.user?.tenant_id || "";
-    if (body.user?.is_super_admin) {
+    const loginSessionUser = body.user || {};
+    const canLoadPlatformTenants = Boolean(
+      loginSessionUser.is_super_admin ||
+        loginSessionUser.permissions?.includes("platform.tenants.manage") ||
+        loginSessionUser.permissions?.includes("platform.subscriptions.manage") ||
+        loginSessionUser.permissions?.includes("platform.templates.manage"),
+    );
+    if (canLoadPlatformTenants) {
       let tenantsRes: Response;
       try {
         tenantsRes = await fetchWithTimeout(`${API_BASE}/tenants`, {
@@ -691,9 +763,10 @@ export function useAppController() {
     }
     if (!tenantId) throw new Error("No tenant is available for this user.");
 
-    const session = {
+    const session: ApiSession = {
       tenantId,
       email: input.email,
+      basePermissions: body.user?.permissions || [],
       user: body.user,
     };
     localStorage.setItem("medizinhub.session", JSON.stringify(session));
@@ -702,7 +775,7 @@ export function useAppController() {
     const nextRole =
       body.user.roles?.[0] ||
       (body.user.is_super_admin ? "super_admin" : "tenant_admin");
-    const nextActive = nextRole === "super_admin" ? "superadmin" : "dashboard";
+    const nextActive = primaryWorkspaceSection(session);
     activeRef.current = nextActive;
     liveBranchIdRef.current = workspace.branchId || "";
     departmentIdRef.current = workspace.departmentId || defaultDepartment.id;
@@ -738,15 +811,25 @@ export function useAppController() {
     }
   }
 
-  async function switchTenant(tenantId: string) {
+  async function switchTenant(tenantId: string, grantedPermissions?: string[]) {
     if (!apiSession || !tenantId) return;
-    const next = { ...apiSession, tenantId };
+    const basePermissions = basePermissionKeys(apiSession);
+    const nextPermissions = grantedPermissions || basePermissions;
+    const next = {
+      ...apiSession,
+      basePermissions,
+      tenantId,
+      user: {
+        ...apiSession.user,
+        permissions: nextPermissions,
+      },
+    };
     const workspace = readWorkspace(next);
     localStorage.setItem("medizinhub.session", JSON.stringify(next));
     setApiSession(next);
     const nextActive =
       workspace.active ||
-      (next.user?.is_super_admin ? "superadmin" : "dashboard");
+      primaryWorkspaceSection(next);
     activeRef.current = nextActive;
     liveBranchIdRef.current = workspace.branchId || "";
     departmentIdRef.current = workspace.departmentId || defaultDepartment.id;
@@ -795,7 +878,12 @@ export function useAppController() {
       : [defaultDepartment];
   const effectiveClinicId =
     apiSession && !isSuperAdmin ? apiSession.tenantId : clinicId;
-  const effectiveBranchId = liveBranchId || branchId;
+  const preferredBranchId = liveBranchId || branchId;
+  const effectiveBranchId = apiSession
+    ? branchOptions.some((branch: any) => branch.id === preferredBranchId)
+      ? preferredBranchId
+      : ""
+    : preferredBranchId || defaultBranch.id;
   const selectedTenant = liveTenants.find(
     (tenant: any) => tenant.id === apiSession?.tenantId,
   );

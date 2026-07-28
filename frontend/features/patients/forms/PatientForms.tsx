@@ -31,6 +31,7 @@ export function PatientForm({
 }: any) {
   const {
     register,
+    getValues,
     setValue,
     watch,
     handleSubmit,
@@ -171,6 +172,28 @@ export function PatientForm({
             ) || "en",
     });
   }, [patient, defaultBranchId, reset]);
+
+  useEffect(() => {
+    const currentBranchId = getValues("branchId");
+    const currentBranchIsValid = branches.some(
+      (branch: any) => branch.id === currentBranchId,
+    );
+    if (currentBranchIsValid) return;
+
+    const nextBranchId = branches.some(
+      (branch: any) => branch.id === defaultBranchId,
+    )
+      ? defaultBranchId
+      : branches[0]?.id;
+    if (!nextBranchId) return;
+
+    // Branches load after the form can already be edited. Repair only the
+    // branch field so late API data never clears patient details already typed.
+    setValue("branchId", nextBranchId, {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [branches, defaultBranchId, getValues, setValue]);
 
   const dateOfBirth = watch("dateOfBirth");
   const whatsappConsentStatus = watch("whatsappConsentStatus");
@@ -536,6 +559,8 @@ export function MembershipEnrollForm({
         value={paidAmount}
         onChange={setPaidAmount}
         min={0}
+        disabled
+        hint="Fixed from the selected membership plan"
         placeholder="Auto-filled from plan"
       />
       <FormField label="Payment Method">

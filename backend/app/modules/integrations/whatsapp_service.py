@@ -46,6 +46,7 @@ DEFAULT_CONFIG = {
     "templates": WhatsAppTemplateSettings().model_dump(),
     "localized_templates": {},
     "flows": WhatsAppFlowSettings().model_dump(),
+    "custom_templates": [],
 }
 
 TEST_RATE_LIMIT_PER_MINUTE = 5
@@ -91,6 +92,7 @@ def _read(row: TenantIntegrationPlugin | None) -> WhatsAppIntegrationRead:
         ),
         localized_templates=config.get("localized_templates") or {},
         flows=WhatsAppFlowSettings.model_validate(config.get("flows") or {}),
+        custom_templates=config.get("custom_templates") or [],
         updated_at=row.updated_at.isoformat() if row else None,
     )
 

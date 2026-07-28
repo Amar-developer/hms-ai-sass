@@ -17,6 +17,7 @@ export function uploadAssetUrl(value: string | null | undefined): string {
 export type ApiSession = {
   tenantId: string;
   email: string;
+  basePermissions?: string[];
   user: {
     id?: string;
     tenant_id?: string | null;
@@ -88,6 +89,10 @@ export type ApiErrorLike = Error & {
   detail?: string;
   requestId?: string | null;
   permissionDenied?: boolean;
+};
+
+type ApiFetchOptions = RequestInit & {
+  suppressErrorReportStatuses?: number[];
 };
 
 const GENERIC_FORBIDDEN =
@@ -264,23 +269,24 @@ async function readErrorDetail(res: Response) {
 export async function apiFetch<T = any>(
   path: string,
   session: ApiSession,
-  options: RequestInit = {},
+  options: ApiFetchOptions = {},
 ): Promise<T> {
+  const { suppressErrorReportStatuses = [], ...fetchOptions } = options;
   let res: Response;
-  const method = String(options.method || "GET").toUpperCase();
-  const idempotencyKey = idempotencyKeyFor(path, session, options);
+  const method = String(fetchOptions.method || "GET").toUpperCase();
+  const idempotencyKey = idempotencyKeyFor(path, session, fetchOptions);
   const correlationId = requestId();
   try {
     res = await fetchWithTimeout(`${API_BASE}${path}`, {
-      ...options,
-      cache: options.cache ?? "no-store",
+      ...fetchOptions,
+      cache: fetchOptions.cache ?? "no-store",
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
         "X-Tenant-ID": session.tenantId,
         "X-Request-ID": correlationId,
         ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
-        ...(options.headers || {}),
+        ...(fetchOptions.headers || {}),
       },
     });
   } catch (error) {
@@ -305,14 +311,16 @@ export async function apiFetch<T = any>(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    reportApiFailure(
-      path,
-      res.status,
-      detail,
-      res.headers.get("x-request-id"),
-      method,
-      session,
-    );
+    if (!suppressErrorReportStatuses.includes(res.status)) {
+      reportApiFailure(
+        path,
+        res.status,
+        detail,
+        res.headers.get("x-request-id"),
+        method,
+        session,
+      );
+    }
     throw apiError(path, detail, res);
   }
   if (IDEMPOTENT_METHODS.has(method)) {

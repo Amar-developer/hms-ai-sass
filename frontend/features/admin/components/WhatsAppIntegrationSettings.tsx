@@ -7,7 +7,9 @@ import {
   EyeOff,
   Link2,
   MessageCircleMore,
+  Plus,
   ShieldCheck,
+  Trash2,
 } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
@@ -40,6 +42,15 @@ type WhatsAppLanguage =
   | "en"
   | "ta";
 
+type WhatsAppCustomTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  audience: "patient" | "doctor" | "user";
+  enabled: boolean;
+  identifiers: Partial<Record<WhatsAppLanguage, string>>;
+};
+
 const languageOptions: Array<{ value: WhatsAppLanguage; label: string }> = [
   { value: "en", label: "English" },
   { value: "ta", label: "Tamil" },
@@ -64,6 +75,7 @@ type WhatsAppSettingsDraft = {
     Record<WhatsAppLanguage, Record<WhatsAppFlowKey, string>>
   >;
   flows: Record<WhatsAppFlowKey, boolean>;
+  customTemplates: WhatsAppCustomTemplate[];
 };
 
 type WhatsAppTestDraft = {
@@ -191,6 +203,7 @@ const initialDraft: WhatsAppSettingsDraft = {
     follow_up_advice_patient: false,
     appointment_reminder_patient: false,
   },
+  customTemplates: [],
 };
 
 const testSamples: Record<WhatsAppFlowKey, string[]> = {
@@ -334,6 +347,9 @@ function readDraft(value: any): WhatsAppSettingsDraft {
       ...initialDraft.flows,
       ...(value?.flows || {}),
     },
+    customTemplates: Array.isArray(value?.custom_templates)
+      ? value.custom_templates
+      : [],
   };
 }
 
@@ -347,6 +363,14 @@ export function WhatsAppIntegrationSettings({
   const [draft, setDraft] = useState<WhatsAppSettingsDraft>(initialDraft);
   const [showApiKey, setShowApiKey] = useState(false);
   const [showAllTemplates, setShowAllTemplates] = useState(false);
+  const [addTemplateOpen, setAddTemplateOpen] = useState(false);
+  const [newTemplate, setNewTemplate] = useState({
+    name: "",
+    description: "",
+    audience: "patient" as "patient" | "doctor" | "user",
+    englishIdentifier: "",
+    tamilIdentifier: "",
+  });
   const [activeTemplateLanguage, setActiveTemplateLanguage] =
     useState<WhatsAppLanguage>("en");
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -495,6 +519,7 @@ export function WhatsAppIntegrationSettings({
             templates: draft.templates,
             localized_templates: draft.localizedTemplates,
             flows: draft.flows,
+            custom_templates: draft.customTemplates,
           }),
         },
       );
@@ -518,8 +543,76 @@ export function WhatsAppIntegrationSettings({
       flow.audience === "doctor"
         ? draft.doctorNotificationsEnabled
         : draft.patientNotificationsEnabled;
-    return audienceEnabled && draft.flows[flow.key] && draft.templates[flow.key].trim();
+    return (
+      audienceEnabled &&
+      draft.flows[flow.key] &&
+      draft.templates[flow.key].trim()
+    );
   });
+  function openAddTemplate() {
+    setNewTemplate({
+      name: "",
+      description: "",
+      audience: "patient",
+      englishIdentifier: "",
+      tamilIdentifier: "",
+    });
+    setAddTemplateOpen(true);
+  }
+
+  function addNotificationTemplate(event: React.FormEvent) {
+    event.preventDefault();
+    const name = newTemplate.name.trim();
+    const englishIdentifier = newTemplate.englishIdentifier.trim();
+    if (!name || !englishIdentifier) return;
+    const slug = name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 60) || "template";
+    const id = `custom_${slug}_${Date.now().toString(36)}`;
+    setDraft((current) => ({
+      ...current,
+      customTemplates: [
+        ...current.customTemplates,
+        {
+          id,
+          name,
+          description: newTemplate.description.trim(),
+          audience: newTemplate.audience,
+          enabled: true,
+          identifiers: {
+            en: englishIdentifier,
+            ...(newTemplate.tamilIdentifier.trim()
+              ? { ta: newTemplate.tamilIdentifier.trim() }
+              : {}),
+          },
+        },
+      ],
+    }));
+    setAddTemplateOpen(false);
+  }
+
+  function updateCustomTemplate(
+    templateId: string,
+    updates: Partial<WhatsAppCustomTemplate>,
+  ) {
+    setDraft((current) => ({
+      ...current,
+      customTemplates: current.customTemplates.map((template) =>
+        template.id === templateId ? { ...template, ...updates } : template,
+      ),
+    }));
+  }
+
+  function removeCustomTemplate(templateId: string) {
+    setDraft((current) => ({
+      ...current,
+      customTemplates: current.customTemplates.filter(
+        (template) => template.id !== templateId,
+      ),
+    }));
+  }
   const activeTemplates =
     activeTemplateLanguage === draft.defaultLanguage
       ? draft.templates
@@ -976,14 +1069,27 @@ export function WhatsAppIntegrationSettings({
       </div>
 
       <div className="mt-4 rounded-xl border border-slate-200 p-4">
-        <h4 className="card-title font-bold text-slate-800">
-          Notification templates
-        </h4>
-        <p className="mt-1 card-desc text-slate-500">
-          Configure separate approved identifiers for English and Tamil. Patient
-          messages use the language selected in the patient record; a missing
-          Tamil identifier falls back to the tenant default.
-        </p>
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start">
+          <div>
+            <h4 className="card-title font-bold text-slate-800">
+              Notification templates
+            </h4>
+            <p className="mt-1 card-desc text-slate-500">
+              Configure separate approved identifiers for English and Tamil.
+              Patient messages use the language selected in the patient record;
+              a missing Tamil identifier falls back to the tenant default.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={openAddTemplate}
+            disabled={!draft.enabled}
+            className="close-button inline-flex shrink-0 items-center gap-2 font-bold disabled:cursor-not-allowed disabled:text-slate-400"
+          >
+            <Plus size={15} />
+            Add Notification Template
+          </button>
+        </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2">
           <FormField label="Tenant default language">
             <Select
@@ -1118,9 +1224,83 @@ export function WhatsAppIntegrationSettings({
               onClick={() => setShowAllTemplates((current) => !current)}
             >
               {showAllTemplates
-                ? "Show fewer templates"
-                : `Show ${flowOptions.length - 4} more templates`}
+                ? "Show fewer automatic templates"
+                : `Show ${flowOptions.length - 4} more automatic templates`}
             </button>
+          </div>
+        )}
+        {draft.customTemplates.length > 0 && (
+          <div className="mt-5 border-t border-slate-200 pt-5">
+            <h5 className="text-sm font-bold text-slate-800">
+              Custom notification templates
+            </h5>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {draft.customTemplates.map((template) => {
+                const audienceEnabled =
+                  template.audience === "doctor"
+                    ? draft.doctorNotificationsEnabled
+                    : template.audience === "patient"
+                      ? draft.patientNotificationsEnabled
+                      : true;
+                const disabled = !draft.enabled || !audienceEnabled;
+                return (
+                  <div
+                    key={template.id}
+                    className="rounded-lg border border-slate-200 bg-white p-4"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">
+                          {template.name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {template.description || `Custom ${template.audience} template`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => removeCustomTemplate(template.id)}
+                          aria-label={`Remove ${template.name}`}
+                          className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                        <Switch
+                          label={template.name}
+                          checked={template.enabled}
+                          onChange={(enabled) =>
+                            updateCustomTemplate(template.id, { enabled })
+                          }
+                          disabled={disabled}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <FormField label="Template / Campaign Identifier">
+                        <Input
+                          value={template.identifiers[activeTemplateLanguage] || ""}
+                          onChange={(event: any) =>
+                            updateCustomTemplate(template.id, {
+                              identifiers: {
+                                ...template.identifiers,
+                                [activeTemplateLanguage]: event.target.value,
+                              },
+                            })
+                          }
+                          placeholder={
+                            activeTemplateLanguage === draft.defaultLanguage
+                              ? "Enter approved identifier"
+                              : "Optional — falls back to tenant default"
+                          }
+                          disabled={disabled || !template.enabled}
+                        />
+                      </FormField>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -1157,6 +1337,101 @@ export function WhatsAppIntegrationSettings({
         onMessage={setMessage}
       />
     )}
+    <Modal
+      open={addTemplateOpen}
+      onClose={() => setAddTemplateOpen(false)}
+      title="Add Notification Template"
+      description="Create a custom WhatsApp template manually. Enter the approved provider identifiers used for each language."
+      maxWidth="lg"
+    >
+      <form onSubmit={addNotificationTemplate} className="space-y-4">
+        <FormField label="Template name" required>
+          <Input
+            value={newTemplate.name}
+            onChange={(event: any) =>
+              setNewTemplate((current) => ({
+                ...current,
+                name: event.target.value,
+              }))
+            }
+            placeholder="Enter notification template name"
+            required
+          />
+        </FormField>
+        <FormField label="Description">
+          <Input
+            value={newTemplate.description}
+            onChange={(event: any) =>
+              setNewTemplate((current) => ({
+                ...current,
+                description: event.target.value,
+              }))
+            }
+            placeholder="When or why this template is used"
+          />
+        </FormField>
+        <FormField label="Recipient audience">
+          <Select
+            value={newTemplate.audience}
+            onChange={(event: any) =>
+              setNewTemplate((current) => ({
+                ...current,
+                audience: event.target.value as "patient" | "doctor" | "user",
+              }))
+            }
+          >
+            <option value="patient">Patient</option>
+            <option value="doctor">Doctor</option>
+            <option value="user">User</option>
+          </Select>
+        </FormField>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FormField label="English identifier" required>
+            <Input
+              value={newTemplate.englishIdentifier}
+              onChange={(event: any) =>
+                setNewTemplate((current) => ({
+                  ...current,
+                  englishIdentifier: event.target.value,
+                }))
+              }
+              placeholder="Enter approved English identifier"
+              required
+            />
+          </FormField>
+          <FormField label="Tamil identifier">
+            <Input
+              value={newTemplate.tamilIdentifier}
+              onChange={(event: any) =>
+                setNewTemplate((current) => ({
+                  ...current,
+                  tamilIdentifier: event.target.value,
+                }))
+              }
+              placeholder="Optional Tamil identifier"
+            />
+          </FormField>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setAddTemplateOpen(false)}
+            className="close-button font-bold"
+          >
+            Cancel
+          </button>
+          <Button
+            type="submit"
+            disabled={
+              !newTemplate.name.trim() ||
+              !newTemplate.englishIdentifier.trim()
+            }
+          >
+            Add Template
+          </Button>
+        </div>
+      </form>
+    </Modal>
     <Modal
       open={testOpen}
       onClose={() => !testBusy && setTestOpen(false)}

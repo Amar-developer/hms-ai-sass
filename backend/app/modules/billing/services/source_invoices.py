@@ -28,7 +28,7 @@ from app.modules.consultations.repositories import (
     ConsultationBillingReferenceRepository,
 )
 from app.modules.identity.models import User
-from app.modules.lab.models import LabOrderStatus
+from app.modules.lab.models import LabOrderStatus, LabTestPackage
 from app.modules.notifications.models import NotificationEventType, NotificationProvider
 from app.modules.notifications.service import (
     queue_notification_if_allowed,
@@ -41,6 +41,59 @@ ServiceInvoiceCreator = Callable[..., Invoice]
 InvoiceDetailReader = Callable[[Session, Invoice], InvoiceDetailRead]
 InvoiceRefresher = Callable[[Session, Invoice], Invoice]
 LedgerEnsurer = Callable[[Session, Invoice], None]
+
+
+def _lab_order_item_invoice_line(item) -> dict[str, int | str | None]:
+    return {
+        "item_type": "lab",
+        "description": item.test_name,
+        "quantity": 1,
+        "unit_amount": item.price,
+        "total_amount": item.price,
+        "mrp_amount": item.mrp_price,
+        "selling_amount": item.selling_price or item.price,
+        "buying_amount": item.buying_price,
+        "supplier_id": item.supplier_id,
+        "external_source": item.external_source,
+        "external_slug": item.external_slug,
+        "external_item_code": (
+            item.test_id or item.package_id or item.external_item_code
+        ),
+    }
+
+
+def _lab_invoice_line_items(
+    session: Session, tenant_id: str, items: list
+) -> list[dict[str, int | str | None]]:
+    lines: list[dict[str, int | str | None]] = []
+    added_package_ids: set[str] = set()
+    for item in items:
+        if not item.package_id:
+            lines.append(_lab_order_item_invoice_line(item))
+            continue
+        if item.package_id in added_package_ids:
+            continue
+        package = session.get(LabTestPackage, item.package_id)
+        if not package or package.tenant_id != tenant_id:
+            continue
+        added_package_ids.add(package.id)
+        lines.append(
+            {
+                "item_type": "lab_service",
+                "description": package.name,
+                "quantity": 1,
+                "unit_amount": package.package_price,
+                "total_amount": package.package_price,
+                "mrp_amount": package.mrp_price,
+                "selling_amount": package.package_price,
+                "buying_amount": package.purchase_price,
+                "supplier_id": package.supplier_id,
+                "external_source": "local",
+                "external_slug": package.code,
+                "external_item_code": package.id,
+            }
+        )
+    return lines
 
 
 def _sync_lab_order_item_catalog_prices(
@@ -58,6 +111,11 @@ def _sync_lab_order_item_catalog_prices(
 
     changed = False
     for item in items:
+        # Package/service components are operational tests included in the
+        # package price. Keep their zero selling price instead of repricing
+        # them as separately billable Lab Test catalog items.
+        if item.package_id:
+            continue
         old_price = int(item.price or 0)
         old_selling = int(item.selling_price or 0)
         old_mrp = int(item.mrp_price or 0)
@@ -169,24 +227,6 @@ def create_invoice_from_lab_order_source(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Lab order amount is zero"
         )
 
-    def lab_line_item(item) -> dict[str, int | str | None]:
-        return {
-            "item_type": "lab",
-            "description": item.test_name,
-            "quantity": 1,
-            "unit_amount": item.price,
-            "total_amount": item.price,
-            "mrp_amount": item.mrp_price,
-            "selling_amount": item.selling_price or item.price,
-            "buying_amount": item.buying_price,
-            "supplier_id": item.supplier_id,
-            "external_source": item.external_source,
-            "external_slug": item.external_slug,
-            "external_item_code": (
-                item.test_id or item.package_id or item.external_item_code
-            ),
-        }
-
     lab_benefit_amounts: dict[str, int] = {}
     for item in items:
         if item.test_id:
@@ -209,7 +249,7 @@ def create_invoice_from_lab_order_source(
         discount_offer_id=payload.discount_offer_id,
         benefit_item_ids=[item.test_id for item in items if item.test_id],
         benefit_item_amounts=lab_benefit_amounts,
-        line_items=[lab_line_item(item) for item in items] or None,
+        line_items=_lab_invoice_line_items(session, tenant_id, items) or None,
         created_by_user_id=payload.created_by_user_id,
     )
     record_audit_event(

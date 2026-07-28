@@ -65,6 +65,29 @@ class WhatsAppFlowSettings(BaseModel):
     appointment_reminder_patient: bool = False
 
 
+class WhatsAppCustomTemplateSettings(BaseModel):
+    id: str = Field(pattern=r"^custom_[a-z0-9_]{1,80}$")
+    name: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=300)
+    audience: Literal["patient", "doctor", "user"] = "patient"
+    enabled: bool = False
+    identifiers: dict[WhatsAppLanguage, str] = Field(default_factory=dict)
+
+    @field_validator("id", "name", "description", mode="before")
+    @classmethod
+    def normalize_text(cls, value):
+        return str(value or "").strip()
+
+    @field_validator("identifiers", mode="before")
+    @classmethod
+    def normalize_identifiers(cls, value):
+        return {
+            str(language): str(identifier or "").strip()
+            for language, identifier in (value or {}).items()
+            if str(identifier or "").strip()
+        }
+
+
 class WhatsAppIntegrationUpdate(BaseModel):
     enabled: bool = False
     api_url: HttpUrl | None = None
@@ -86,6 +109,16 @@ class WhatsAppIntegrationUpdate(BaseModel):
         default_factory=dict
     )
     flows: WhatsAppFlowSettings = Field(default_factory=WhatsAppFlowSettings)
+    custom_templates: list[WhatsAppCustomTemplateSettings] = Field(
+        default_factory=list, max_length=50
+    )
+
+    @field_validator("custom_templates")
+    @classmethod
+    def unique_custom_templates(cls, value: list[WhatsAppCustomTemplateSettings]):
+        if len({template.id for template in value}) != len(value):
+            raise ValueError("Custom template identifiers must be unique")
+        return value
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -210,6 +243,7 @@ class WhatsAppIntegrationRead(BaseModel):
     templates: WhatsAppTemplateSettings
     localized_templates: dict[WhatsAppLanguage, WhatsAppTemplateSettings]
     flows: WhatsAppFlowSettings
+    custom_templates: list[WhatsAppCustomTemplateSettings] = Field(default_factory=list)
     usage: WhatsAppUsageRead | None = None
     health: WhatsAppHealthRead | None = None
     readiness: WhatsAppReadinessRead | None = None

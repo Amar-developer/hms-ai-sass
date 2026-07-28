@@ -3,12 +3,14 @@
 import { Controller, useForm } from "react-hook-form";
 import { LabOrderFormValues, labOrderSchema } from "../lab.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Input, SearchableSelect, Button, ActionButton } from "@/app/components/common/ui";
-import { FormField } from "@/app/components/FormElements";
+import { Input, Button, ActionButton } from "@/app/components/common/ui";
+import { DateField, FormField } from "@/app/components/FormElements";
 import { FormError } from "@/app/components/common/FormError";
 import { SearchPicker } from "@/app/components/clinicalRows";
 import { PatientSearchSelect } from "@/features/patients/components/PatientSearchSelect";
 import type { ApiSession } from "@/lib/api";
+import { today } from "@/utils/helper";
+import { SourceReferralFields } from "@/app/components/common/SourceReferralFields";
 
 
 
@@ -60,28 +62,34 @@ export function LabOrderForm({
   const {
     handleSubmit,
     control,
-    register,
     reset,
+    setValue,
     watch,
     formState: { errors },
   } = useForm<LabOrderFormValues>({
     resolver: zodResolver(labOrderSchema),
     defaultValues: {
       patient_id: "",
-      source: "op_direct",
-      external_referrer: "",
+      order_date: today(),
+      acquisition_source: "direct",
+      referrer_patient_id: "",
+      referrer_name: "",
     },
   });
 
-  const source = watch("source");
+  const acquisitionSource = watch("acquisition_source");
+  const referrerPatientId = watch("referrer_patient_id") || "";
+  const referrerName = watch("referrer_name") || "";
 
   const submitOrder = handleSubmit(async (data) => {
     const result = await onSubmit(data);
     if (result !== false) {
       reset({
         patient_id: data.patient_id,
-        source: "op_direct",
-        external_referrer: "",
+        order_date: today(),
+        acquisition_source: "direct",
+        referrer_patient_id: "",
+        referrer_name: "",
       });
     }
   });
@@ -111,34 +119,36 @@ export function LabOrderForm({
         <FormError error={errors.patient_id?.message} />
       </FormField>
 
-      <FormField label="Source">
-        <Controller
-          name="source"
-          control={control}
-          render={({ field }) => (
-            <SearchableSelect
-              value={field.value}
-              onChange={field.onChange}
-              searchable={false}
-              options={[
-                { value: "op_direct", label: "OP Direct" },
-                { value: "external_referral", label: "External Referral" },
-              ]}
-            />
-          )}
-        />
-      </FormField>
-
-      {source === "external_referral" && (
-        <FormField label="External Referrer" required>
-          <Input
+      <Controller
+        name="order_date"
+        control={control}
+        render={({ field }) => (
+          <DateField
+            label="Date"
             required
-            {...register("external_referrer")}
-            placeholder="Referring doctor / lab name"
+            value={field.value}
+            onChange={field.onChange}
+            error={errors.order_date?.message}
           />
-          <FormError error={errors.external_referrer?.message} />
-        </FormField>
-      )}
+        )}
+      />
+
+      <SourceReferralFields
+        apiSession={apiSession}
+        patients={patients}
+        source={acquisitionSource}
+        onSourceChange={(value) =>
+          setValue("acquisition_source", value as LabOrderFormValues["acquisition_source"])
+        }
+        referrerName={referrerName}
+        referrerPatientId={referrerPatientId}
+        onReferrerChange={(name, patientId) => {
+          setValue("referrer_name", name, { shouldValidate: true });
+          setValue("referrer_patient_id", patientId);
+        }}
+        sourceError={errors.acquisition_source?.message}
+        referrerError={errors.referrer_name?.message}
+      />
 
       <FormField label="Lab Test / Service" required className="md:col-span-2">
         <SearchPicker

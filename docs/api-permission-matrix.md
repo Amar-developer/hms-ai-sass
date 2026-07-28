@@ -142,6 +142,13 @@ Error Logs is intentionally hidden from the sidebar. Users with `error_logs.read
 | `GET` | `/api/v1/identity/super-admins` | Active super admin only |
 | `POST` | `/api/v1/identity/super-admins` | Active super admin only; current-password reauthentication required |
 | `POST` | `/api/v1/identity/super-admins/{user_id}/status` | Active super admin only; current-password reauthentication required; cannot deactivate self or last active super admin |
+| `GET` | `/api/v1/identity/privileged-access/options` | Authenticated privileged platform user |
+| `GET` | `/api/v1/identity/privileged-accounts` | Active root super admin only |
+| `POST` | `/api/v1/identity/privileged-accounts` | Active root super admin only; current-password reauthentication required |
+| `PATCH` | `/api/v1/identity/privileged-accounts/{user_id}` | Active root super admin only; current-password reauthentication required |
+| `GET` | `/api/v1/identity/support-access-grants` | Root super admin lists all grants; support admin lists own grants |
+| `POST` | `/api/v1/identity/support-access-grants` | Active root super admin only; current-password reauthentication required; max 8 hours |
+| `POST` | `/api/v1/identity/support-access-grants/{grant_id}/revoke` | Active root super admin only; current-password reauthentication required |
 | `POST` | `/api/v1/identity/roles` | `identity.roles.manage` |
 | `GET` | `/api/v1/identity/roles` | `identity.roles.manage` |
 | `PATCH` | `/api/v1/identity/roles/{role_id}` | `identity.roles.manage` |
@@ -234,6 +241,7 @@ For `user_type=doctor`, `GET /api/v1/practitioners` is restricted to the practit
 | `GET` | `/api/v1/appointments` | `appointments.manage` | List appointments |
 | `GET` | `/api/v1/appointments/{appointment_id}` | `appointments.manage` | Appointment detail |
 | `POST` | `/api/v1/appointments/{appointment_id}/follow-up` | `appointments.manage` | Books follow-up using source appointment context |
+| `PATCH` | `/api/v1/appointments/{appointment_id}/reschedule` | `appointments.manage` or `appointments.edit` | Reschedules an eligible, unfinished appointment to a different available date/slot |
 | `GET` | `/api/v1/appointments/platform/all` | `platform.tenants.manage` | Cross-tenant platform appointment search |
 | `GET` | `/api/v1/queue` | `queue.manage` | Queue list |
 | `GET` | `/api/v1/queue/display` | `queue.manage` | Queue display rows for reception/called-token screens with language-aware call text |
@@ -378,6 +386,9 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `POST` | `/api/v1/lab/orders/from-consultation/{consultation_id}` | `lab.manage` |
 | `GET` | `/api/v1/lab/orders` | `lab.manage` |
 | `GET` | `/api/v1/lab/orders/{order_id}` | `lab.manage` |
+| `GET` | `/api/v1/lab/orders/{order_id}/files` | Any of `lab.manage`, `lab.read` |
+| `POST` | `/api/v1/lab/orders/{order_id}/files` | Any of `lab.manage`, `lab.edit`, `lab.results.manage` |
+| `GET` | `/api/v1/lab/orders/{order_id}/files/{file_id}/download` | Any of `lab.manage`, `lab.read`, `lab.results.manage` |
 | `PATCH` | `/api/v1/lab/orders/{order_id}/status` | `lab.manage` |
 | `POST` | `/api/v1/lab/orders/{order_id}/samples` | `lab.manage` |
 | `POST` | `/api/v1/lab/orders/{order_id}/results` | `lab.manage` |

@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from sqlmodel import Session
 
@@ -113,9 +115,17 @@ def patient_references(
 )
 def patient_count(
     tenant_id: str = Depends(require_tenant_id),
+    from_date: date | None = None,
+    to_date: date | None = None,
     session: Session = Depends(get_session),
 ) -> dict[str, int]:
-    return {"total": PatientService(session).patient_count(tenant_id=tenant_id)}
+    return {
+        "total": PatientService(session).patient_count(
+            tenant_id=tenant_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
+    }
 
 
 @router.get(

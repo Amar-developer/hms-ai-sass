@@ -13,7 +13,7 @@ import { CreateRole } from "./components/roles/CreateRole";
 import { EditRole } from "./components/roles/EditRole";
 import { RolePermissions } from "./components/roles/RolePermissions";
 import { TenantUsers } from "./components/users/TenantUsers";
-import { PlatformAdmins } from "./components/users/PlatformAdmins";
+import { PrivilegedAccess } from "./components/users/PrivilegedAccess";
 import { DepartmentsManagement } from "./components/departments/DepartmentsManagement";
 import { BranchesManagement } from "./components/branches/BranchesManagement";
 import { AssignTemplate } from "./components/shared/AssignTemplate";
@@ -31,6 +31,7 @@ import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { canResetUserPassword } from "./helpers";
 
 export { superAdminSections } from "./constants";
+export { platformSectionsForUser } from "./constants";
 
 export function SuperAdminDashboard({
   apiSession,
@@ -50,6 +51,12 @@ export function SuperAdminDashboard({
   const [passwordUser, setPasswordUser] = useState<any>(null);
 
   const data = useSuperAdminData(apiSession);
+  const isRoot = Boolean(apiSession?.user?.is_super_admin);
+  const isPrivilegedWorkspace = Boolean(
+    isRoot ||
+      apiSession?.user?.user_type === "platform_admin" ||
+      apiSession?.user?.user_type === "support_admin",
+  );
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
 
   const selectableTenants = tenantSelectOptions(data.tenants);
@@ -207,21 +214,22 @@ export function SuperAdminDashboard({
     data.tenantBranches,
   ]);
 
-  const editingUser = data.users.find((u: any) => u.id === selectedUserId);
-  const editingBranch = data.tenantBranches.find(
-    (b: any) => b.id === selectedBranchId,
+  const editingUser = data.users.find(
+    (user: any) => user.id === selectedUserId,
   );
   const editingDepartment = data.departments.find(
-    (d: any) => d.id === selectedDepartmentId,
+    (department: any) => department.id === selectedDepartmentId,
+  );
+  const editingBranch = data.tenantBranches.find(
+    (branch: any) => branch.id === selectedBranchId,
   );
 
-  if (!apiSession?.user?.is_super_admin)
+  if (!isPrivilegedWorkspace)
     return (
       <Card>
         <h3 className="text-lg font-bold">Super Admin</h3>
         <p className="mt-2 text-sm text-slate-500">
-          This workspace is available only for MedizinHub HMS primary tenant
-          super admin users.
+          This workspace is available only for authorized platform accounts.
         </p>
       </Card>
     );
@@ -241,7 +249,11 @@ export function SuperAdminDashboard({
             </p>
           </div>
           <Badge tone="blue" className="px-2 py-2 lg:px-4 lg:py-3 text-xs rounded-lg">
-            Global Platform Access
+            {isRoot
+              ? "Root Platform Access"
+              : apiSession?.user?.user_type === "support_admin"
+                ? "Temporary Support Access"
+                : "Scoped Platform Access"}
           </Badge>
         </div>
       </Card>
@@ -255,9 +267,11 @@ export function SuperAdminDashboard({
           estimatedRevenue={estimatedRevenue}
         />
       )}
-      {currentSection === "platformAdmins" && (
-        <PlatformAdmins
+      {currentSection === "privilegedAccess" && (
+        <PrivilegedAccess
           apiSession={apiSession}
+          tenants={selectableTenants}
+          switchTenant={switchTenant}
           busy={data.busy}
           setBusy={data.setBusy}
           setMessage={data.setMessage}

@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.core.acquisition import AcquisitionSource
 from app.core.validation import BranchId, ConsultationId, PatientId, UserId
 from app.modules.lab.models import LabOrderPriority, LabOrderSource, LabOrderStatus
 
@@ -120,6 +121,10 @@ class LabOrderExternalItem(BaseModel):
 class LabOrderCreate(BaseModel):
     branch_id: BranchId
     patient_id: PatientId
+    order_date: date = Field(default_factory=date.today)
+    acquisition_source: AcquisitionSource = AcquisitionSource.DIRECT
+    referrer_patient_id: PatientId | None = None
+    referrer_name: str | None = Field(default=None, max_length=180)
     consultation_id: ConsultationId | None = None
     source: LabOrderSource = LabOrderSource.OP_DIRECT
     priority: LabOrderPriority = LabOrderPriority.ROUTINE
@@ -134,6 +139,9 @@ class LabOrderCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_source_requirements(self) -> "LabOrderCreate":
+        if self.acquisition_source == AcquisitionSource.REFERRAL:
+            if not self.referrer_name or not self.referrer_name.strip():
+                raise ValueError("Referrer name is required")
         if self.source == LabOrderSource.EXTERNAL_REFERRAL:
             if not self.external_referrer or not self.external_referrer.strip():
                 raise ValueError("External referrer is required")
@@ -246,6 +254,10 @@ class LabOrderRead(BaseModel):
     patient_id: str
     patient_name: str | None = None
     patient_number: str | None = None
+    order_date: date
+    acquisition_source: str
+    referrer_patient_id: str | None
+    referrer_name: str | None
     consultation_id: str | None
     lab_order_number: str | None = None
     source: LabOrderSource

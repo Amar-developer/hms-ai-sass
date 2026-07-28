@@ -1,5 +1,10 @@
-import { Card,ActionButton } from "@/app/components/common/ui";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
+import { Card, ActionButton, Button } from "@/app/components/common/ui";
 import { displayDateTime } from "@/utils/helper";
+import { apiFetch } from "@/lib/api";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
@@ -13,11 +18,85 @@ export function WorklistDetailModal({
   items,
   onClose,
   apiSession,
+  onGenerateInvoice,
+  onViewInvoice,
+  invoiceBusy = false,
+  invoiceGenerated = false,
+  canGenerateInvoice = false,
+  invoiceDisabled = false,
+  packages = [],
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+  const [detail, setDetail] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true);
+    setLoadError("");
+    apiFetch(`/lab/orders/${id}`, apiSession, { signal: controller.signal })
+      .then(setDetail)
+      .catch((error: any) => {
+        if (error?.name !== "AbortError") {
+          setLoadError(error?.message || "Could not load order prices.");
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+  }, [apiSession, id]);
+
+  const pricedItems = useMemo(() => {
+    if (Array.isArray(detail?.items) && detail.items.length > 0) {
+      const packageById = new Map(
+        packages.map((item: any) => [item.id, item]),
+      );
+      const rows: any[] = [];
+      const packageRows = new Map<string, any>();
+      detail.items.forEach((item: any) => {
+        if (!item.package_id) {
+          rows.push({
+            id: item.id,
+            name: item.test_name,
+            price: Number(item.price || 0),
+            includedItems: [],
+          });
+          return;
+        }
+        const existing = packageRows.get(item.package_id);
+        if (existing) {
+          existing.includedItems.push(item.test_name);
+          return;
+        }
+        const service: any = packageById.get(item.package_id);
+        const row = {
+          id: item.package_id,
+          name: service?.name || "Service package",
+          price: Number(service?.package_price || 0),
+          includedItems: [item.test_name],
+        };
+        packageRows.set(item.package_id, row);
+        rows.push(row);
+      });
+      return rows;
+    }
+    return items.map((item: string, index: number) => ({
+      id: `${item}-${index}`,
+      name: item,
+      price: null,
+    }));
+  }, [detail?.items, items, packages]);
+  const itemTotal = pricedItems.reduce(
+    (sum: number, item: any) => sum + Number(item.price || 0),
+    0,
+  );
+  const total = Number(detail?.order?.amount ?? itemTotal);
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-2xl">
+      <Card className="w-full max-w-3xl">
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -36,7 +115,9 @@ export function WorklistDetailModal({
           <ActionButton onClick={onClose}>Close</ActionButton>
         </div>
         <div className="mt-5 overflow-auto rounded-lg border border-slate-200">
-          {items.length === 0 ? (
+          {loading ? (
+            <p className="p-4 text-sm text-slate-500">Loading prices...</p>
+          ) : pricedItems.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">
               No items found.
             </p>
@@ -46,19 +127,65 @@ export function WorklistDetailModal({
                 <tr>
                   <th className="w-16 px-4 py-3">#</th>
                   <th className="px-4 py-3">Lab Test / Service</th>
+                  <th className="w-36 px-4 py-3 text-right">Price</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200">
-                {items.map((item: string, index: number) => (
-                  <tr key={`${item}-${index}`}>
+                {pricedItems.map((item: any, index: number) => (
+                  <tr key={item.id}>
                     <td className="px-4 py-3 text-slate-500">{index + 1}</td>
-                    <td className="px-4 py-3 font-semibold">{item}</td>
+                    <td className="px-4 py-3 font-semibold">
+                      <div>{item.name}</div>
+                      {item.includedItems?.length > 0 && (
+                        <div className="mt-1 text-xs font-medium text-slate-500">
+                          Includes: {item.includedItems.join(", ")}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold">
+                      {item.price === null
+                        ? "-"
+                        : `₹${item.price.toLocaleString("en-IN")}`}
+                    </td>
                   </tr>
                 ))}
               </tbody>
+              <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+                <tr>
+                  <td colSpan={2} className="px-4 py-3 text-right font-bold">
+                    Total
+                  </td>
+                  <td className="px-4 py-3 text-right text-base font-black">
+                    ₹{total.toLocaleString("en-IN")}
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           )}
         </div>
+        {loadError && (
+          <p className="mt-2 text-xs font-semibold text-red-600">{loadError}</p>
+        )}
+        {canGenerateInvoice && (
+          <div className="mt-4 flex justify-end">
+            <Button
+              type="button"
+              disabled={
+                invoiceBusy ||
+                loading ||
+                (invoiceGenerated ? !onViewInvoice : invoiceDisabled)
+              }
+              onClick={invoiceGenerated ? onViewInvoice : onGenerateInvoice}
+              className="save-button"
+            >
+              {invoiceBusy
+                ? "Generating..."
+                : invoiceGenerated
+                  ? "View Invoice"
+                  : "Generate Invoice"}
+            </Button>
+          </div>
+        )}
       </Card>
     </div>
   );

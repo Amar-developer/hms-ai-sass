@@ -32,6 +32,7 @@ from app.modules.home_care.models import (
 from app.modules.identity.models import (
     AuthSession,
     Permission,
+    PrivilegedAccessGrant,  # noqa: F401
     Role,
     RolePermission,
     User,

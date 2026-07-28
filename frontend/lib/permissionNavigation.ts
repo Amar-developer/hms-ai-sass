@@ -57,7 +57,9 @@ export function navigationModulesForPermissions(
     }
   }
 
-  if (isSuperAdmin) modules.add("superadmin");
+  if (isSuperAdmin || keys.some((key) => key.startsWith("platform."))) {
+    modules.add("superadmin");
+  }
 
   return Array.from(modules);
 }

@@ -11,6 +11,7 @@ from app.modules.appointments.schemas import (
     AppointmentCreate,
     AppointmentGridRead,
     AppointmentRead,
+    AppointmentReschedule,
     FollowUpAppointmentCreate,
 )
 from app.modules.appointments.models import Appointment
@@ -83,6 +84,30 @@ def book_follow_up_appointment(
     session: Session = Depends(get_session),
 ) -> AppointmentBookingRead:
     return AppointmentBookingService(session).book_follow_up_appointment(
+        tenant_id=tenant_id,
+        appointment_id=appointment_id,
+        payload=payload,
+        actor=current_user,
+    )
+
+
+@router.patch(
+    "/{appointment_id}/reschedule",
+    response_model=AppointmentBookingRead,
+)
+def reschedule_appointment(
+    appointment_id: str,
+    payload: AppointmentReschedule,
+    tenant_id: str = Depends(require_tenant_id),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.APPOINTMENTS_MANAGE,
+            permissions.APPOINTMENTS_EDIT,
+        )
+    ),
+    session: Session = Depends(get_session),
+) -> AppointmentBookingRead:
+    return AppointmentBookingService(session).reschedule_appointment(
         tenant_id=tenant_id,
         appointment_id=appointment_id,
         payload=payload,

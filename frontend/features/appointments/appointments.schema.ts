@@ -17,6 +17,23 @@ export const appointmentSchema = z.object({
 
   appointmentDate: z.string().min(1, "Appointment date is required"),
 
+  acquisitionSource: z.enum([
+    "direct",
+    "referral",
+    "google",
+    "facebook",
+    "instagram",
+    "website",
+    "whatsapp",
+    "ads",
+    "campaign",
+    "other",
+  ]),
+
+  referrerPatientId: z.string().optional(),
+
+  referrerName: z.string().optional(),
+
   emergencyReason: z.string().optional(),
 
   isBillable: z.boolean(),

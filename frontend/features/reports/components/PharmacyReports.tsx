@@ -12,6 +12,8 @@ const PharmacyReports = ({
   money,
   onOpenInvoices,
 }: PharmacyReportsProps) => {
+  const moneyOrDash = (value: any) =>
+    Number(value || 0) === 0 ? "-" : money(value);
   const columns = [
     {
       key: "supplier",
@@ -42,63 +44,74 @@ const PharmacyReports = ({
     {
       key: "total",
       header: "Total",
-      render: (row: any) => money(row.total),
+      render: (row: any) => moneyOrDash(row.total),
        width:'90px',
     },
     {
       key: "revenue",
-      header: "Revenue",
-      render: (row: any) => money(row.revenue),
+      header: "Paid",
+      render: (row: any) => moneyOrDash(row.revenue),
        width:'90px',
     },
     {
       key: "balance",
-      header: "Balance",
-      render: (row: any) => money(row.balance),
+      header: "Amount Due",
+      render: (row: any) => moneyOrDash(row.balance),
        width:'90px',
     },
     {
       key: "approvedDiscount",
-      header: "Approved %",
+      header: "Admin Discount",
       width: '130px',
-      render: (row: any) => money(row.approvedDiscount),
+      render: (row: any) => moneyOrDash(row.approvedDiscount),
     },
     {
       key: "offerDiscount",
-      header: "Offer %",
+      header: "Offer Discount",
       width: '100px',
-      render: (row: any) => money(row.offerDiscount),
+      render: (row: any) => moneyOrDash(row.offerDiscount),
     },
     {
       key: "membershipBenefit",
-      header: "Membership",
+      header: "Membership Benefit",
       width: '130px',
-      render: (row: any) => money(row.membershipBenefit),
-    },
-    {
-      key: "billingDiscount",
-      header: "Total %",
-      width: '100px',
-      render: (row: any) => money(row.billingDiscount),
+      render: (row: any) => moneyOrDash(row.membershipBenefit),
     },
     {
       key: "paymentMode",
-      header: "M.O.P",
-      width: "120px",
+      header: "Payment Method",
+      width: "130px",
+    },
+    {
+      key: "tax",
+      header: "Paid GST",
+      width: "100px",
+      render: (row: any) => moneyOrDash(row.tax),
     },
     {
       key: "purchaseCost",
       header: "Purchase Cost",
-      render: (row: any) => money(row.purchaseCost),
+      render: (row: any) => moneyOrDash(row.purchaseCost),
        width:'160px',
     },
     {
       key: "profit",
-      header: "Profit",
+      header: "Realized Profit",
       width:'90px',
       render: (row: any) => (
-        <span className="font-bold">{money(row.profit)}</span>
+        <span className="font-bold">{moneyOrDash(row.profit)}</span>
       ),
+    },
+    {
+      key: "profitMargin",
+      header: "Profit Margin",
+      width: "120px",
+      render: (row: any) => {
+        const basis = Number(row.revenue || 0) - Number(row.tax || 0);
+        return basis && Number(row.profit || 0) !== 0
+          ? `${Math.round((Number(row.profit) / basis) * 100)}%`
+          : "-";
+      },
     },
   ];
   return (

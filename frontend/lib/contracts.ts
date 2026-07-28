@@ -31,6 +31,10 @@ export type LabOrderSummary = PatientDisplayFields & {
   id: string;
   tenant_id: string;
   branch_id: string;
+  order_date: string;
+  acquisition_source: string;
+  referrer_patient_id?: string | null;
+  referrer_name?: string | null;
   lab_order_number?: string | null;
   consultation_id?: string | null;
   source: string;

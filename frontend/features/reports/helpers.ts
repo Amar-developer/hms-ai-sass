@@ -61,6 +61,23 @@ export function currentRange(period: string) {
     end.setDate(start.getDate() + 6);
     return [toInputDate(start), toInputDate(end)];
   }
+  if (period === "quarterly") {
+    const quarterStartMonth = Math.floor(start.getMonth() / 3) * 3;
+    start.setMonth(quarterStartMonth, 1);
+    end.setMonth(quarterStartMonth + 3, 0);
+    return [toInputDate(start), toInputDate(end)];
+  }
+  if (period === "half_yearly") {
+    const halfStartMonth = start.getMonth() < 6 ? 0 : 6;
+    start.setMonth(halfStartMonth, 1);
+    end.setMonth(halfStartMonth + 6, 0);
+    return [toInputDate(start), toInputDate(end)];
+  }
+  if (period === "yearly") {
+    start.setMonth(0, 1);
+    end.setMonth(12, 0);
+    return [toInputDate(start), toInputDate(end)];
+  }
   start.setDate(1);
   end.setMonth(end.getMonth() + 1, 0);
   return [toInputDate(start), toInputDate(end)];

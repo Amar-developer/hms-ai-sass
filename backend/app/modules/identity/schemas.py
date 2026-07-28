@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -84,6 +85,83 @@ class SuperAdminStatusUpdate(BaseModel):
     reason: str = Field(min_length=3, max_length=500)
 
 
+class PrivilegedAccountCreate(BaseModel):
+    account_type: Literal["platform_admin", "support_admin"]
+    name: str = Field(min_length=2, max_length=160)
+    email: str = Field(min_length=5, max_length=220)
+    temporary_password: str = Field(min_length=12, max_length=128)
+    current_password: str = Field(min_length=8, max_length=128)
+    mobile: str | None = Field(default=None, max_length=20)
+    permission_keys: list[str] = Field(default_factory=list)
+    reason: str = Field(min_length=3, max_length=500)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return str(_validate_email(value))
+
+    @field_validator("permission_keys")
+    @classmethod
+    def unique_permission_keys(cls, value: list[str]) -> list[str]:
+        return _unique_strings(value) or []
+
+
+class PrivilegedAccountUpdate(BaseModel):
+    permission_keys: list[str] | None = None
+    is_active: bool | None = None
+    current_password: str = Field(min_length=8, max_length=128)
+    reason: str = Field(min_length=3, max_length=500)
+
+    @field_validator("permission_keys")
+    @classmethod
+    def unique_permission_keys(cls, value: list[str] | None) -> list[str] | None:
+        return _unique_strings(value)
+
+
+class SupportAccessGrantCreate(BaseModel):
+    user_id: str
+    tenant_id: str
+    permission_keys: list[str] = Field(default_factory=list)
+    duration_minutes: int = Field(default=60, ge=15, le=480)
+    current_password: str = Field(min_length=8, max_length=128)
+    reason: str = Field(min_length=3, max_length=500)
+
+    @field_validator("permission_keys")
+    @classmethod
+    def unique_permission_keys(cls, value: list[str]) -> list[str]:
+        return _unique_strings(value) or []
+
+
+class SupportAccessGrantRevoke(BaseModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class SupportAccessGrantRead(BaseModel):
+    id: str
+    tenant_id: str
+    tenant_name: str | None = None
+    user_id: str
+    user_name: str | None = None
+    user_email: str | None = None
+    permission_keys: list[str] = Field(default_factory=list)
+    reason: str
+    starts_at: datetime
+    expires_at: datetime
+    revoked_at: datetime | None = None
+    granted_by_user_id: str
+    revoked_by_user_id: str | None = None
+    revoke_reason: str | None = None
+    status: Literal["scheduled", "active", "expired", "revoked"]
+    created_at: datetime
+
+
+class PrivilegedAccessOptionsRead(BaseModel):
+    platform_permission_keys: list[str]
+    support_permission_keys: list[str]
+    maximum_support_duration_minutes: int = 480
+
+
 class UserUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=160)
     email: str | None = Field(default=None, min_length=5, max_length=220)
@@ -114,6 +192,7 @@ class UserRead(BaseModel):
     is_active: bool
     must_change_password: bool
     roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
     last_login_at: datetime | None
     created_by_user_id: str | None = None
     updated_by_user_id: str | None = None

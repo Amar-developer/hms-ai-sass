@@ -3,6 +3,7 @@ from datetime import date, datetime
 from sqlmodel import Session, select
 
 from app.modules.billing.models import Invoice, InvoiceItem, InvoiceStatus
+from app.modules.lab.models import LabTestPackage
 from app.modules.reports.models import MonthlyRevenueSnapshot
 from app.modules.reports.snapshots import (
     archive_due_months,
@@ -100,6 +101,72 @@ def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
     assert totals["doctorFee"] == 200 + 160
     assert totals["settlement"] == 0
     assert metrics["finalProfit"] == 1800 - (200 + 160)
+
+
+def test_service_revenue_uses_paid_share_of_lab_package_items(test_engine):
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Service Revenue Clinic")
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        package = LabTestPackage(
+            tenant_id=tenant.id,
+            code="HEALTH-PACK",
+            name="Health Package",
+            package_price=600,
+        )
+        session.add(package)
+        session.commit()
+        session.refresh(package)
+
+        invoice = _invoice(
+            tenant.id,
+            invoice_number="INV-SERVICE",
+            lab_order_id="lab-order-service",
+            subtotal_amount=1000,
+            total_amount=800,
+            paid_amount=800,
+            doctor_share_amount=0,
+            clinic_share_amount=800,
+        )
+        session.add(invoice)
+        session.flush()
+        session.add_all(
+            [
+                InvoiceItem(
+                    tenant_id=tenant.id,
+                    invoice_id=invoice.id,
+                    item_type="lab",
+                    description="Health Package",
+                    quantity=1,
+                    unit_amount=600,
+                    total_amount=600,
+                    external_item_code=package.id,
+                ),
+                InvoiceItem(
+                    tenant_id=tenant.id,
+                    invoice_id=invoice.id,
+                    item_type="lab",
+                    description="Blood Test",
+                    quantity=1,
+                    unit_amount=400,
+                    total_amount=400,
+                    external_item_code="lab-test-1",
+                ),
+            ]
+        )
+        session.commit()
+
+        metrics = compute_dashboard_metrics(
+            session,
+            tenant_id=tenant.id,
+            branch_id=None,
+            start=date(2026, 5, 1),
+            end=date(2026, 5, 31),
+        )
+
+    assert metrics["totals"]["serviceRevenue"] == 480
 
 
 def test_membership_claim_is_usage_not_revenue_or_profit(test_engine):

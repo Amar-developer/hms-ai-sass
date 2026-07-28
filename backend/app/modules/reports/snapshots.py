@@ -19,8 +19,10 @@ from app.core.config import get_settings
 from app.modules.billing.models import Invoice, InvoiceItem
 from app.modules.billing.services.read_models import invoice_read
 from app.modules.home_care.models import HomeCareBooking
+from app.modules.lab.models import LabTestPackage
 from app.modules.reports.models import MonthlyRevenueSnapshot
 from app.modules.reports.services.calculations import (
+    allocate_values,
     invoice_report_total,
     is_paid_invoice,
     report_doctor_fee,
@@ -154,6 +156,13 @@ def compute_dashboard_metrics(
         ).all():
             invoice_items_by_invoice.setdefault(item.invoice_id, []).append(item)
 
+    package_ids = {
+        package.id
+        for package in session.exec(
+            select(LabTestPackage).where(LabTestPackage.tenant_id == tenant_id)
+        ).all()
+    }
+
     # Home visit vs home care split. A home_care invoice counts as a home visit
     # when its booking is typed as one, or its line items carry home-visit
     # markers (mirrors the dashboard's booking + item slug heuristics).
@@ -196,6 +205,7 @@ def compute_dashboard_metrics(
         "membershipDiscount": 0,
         "approvedDiscount": 0,
         "offerDiscount": 0,
+        "serviceRevenue": 0,
         "billingDiscount": 0,
         "membershipPurchases": 0,
         "membershipEnrollCount": 0,
@@ -240,6 +250,19 @@ def compute_dashboard_metrics(
         totals["billingDiscount"] += (
             membership_discount + approved_discount + offer_discount
         )
+
+        if kind == "lab":
+            invoice_items = invoice_items_by_invoice.get(invoice.id, [])
+            allocated_revenue = allocate_values(
+                [int(item.total_amount or 0) for item in invoice_items],
+                int(invoice.subtotal_amount or 0),
+                amount_paid,
+            )
+            totals["serviceRevenue"] += sum(
+                allocated_revenue[index]
+                for index, item in enumerate(invoice_items)
+                if item.external_item_code in package_ids
+            )
 
         is_plan_purchase = _is_membership_plan_invoice(invoice)
         if is_plan_purchase:

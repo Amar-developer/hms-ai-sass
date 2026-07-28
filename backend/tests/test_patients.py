@@ -49,6 +49,27 @@ def test_create_patient_generates_patient_number_and_audit(client: TestClient):
     assert any(event["action"] == "patient.created" for event in audit)
 
 
+def test_patient_count_supports_created_date_range(client: TestClient):
+    tenant = create_tenant(client)
+    create_patient(client, tenant["id"])
+    today = date.today().isoformat()
+    tomorrow = (date.today() + timedelta(days=1)).isoformat()
+
+    today_count = client.get(
+        f"/api/v1/patients/count?from_date={today}&to_date={today}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    future_count = client.get(
+        f"/api/v1/patients/count?from_date={tomorrow}&to_date={tomorrow}",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert today_count.status_code == 200
+    assert today_count.json() == {"total": 1}
+    assert future_count.status_code == 200
+    assert future_count.json() == {"total": 0}
+
+
 def test_create_patient_rejects_future_date_of_birth(client: TestClient):
     tenant = create_tenant(client)
 

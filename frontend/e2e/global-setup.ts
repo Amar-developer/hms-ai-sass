@@ -484,7 +484,7 @@ export default async function globalSetup() {
       assigned_staff_name: "Frontend E2E Nurse",
       staff_type: "nurse",
       booking_type: "home_care",
-      recurrence: "once",
+      recurrence: "daily",
       start_date: new Date().toISOString().slice(0, 10),
       end_date: new Date().toISOString().slice(0, 10),
       location: "Frontend E2E Home",

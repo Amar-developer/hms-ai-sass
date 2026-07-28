@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import HTTPException, UploadFile, status
 from sqlmodel import Session
 
@@ -216,9 +218,19 @@ class PatientService:
             tenant_id=tenant_id, patient_ids=patient_ids
         )
 
-    def patient_count(self, *, tenant_id: str) -> int:
+    def patient_count(
+        self,
+        *,
+        tenant_id: str,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> int:
         enforce_entitlement(self.session, tenant_id, "patients")
-        return self.patients.count(tenant_id=tenant_id)
+        return self.patients.count(
+            tenant_id=tenant_id,
+            from_date=from_date,
+            to_date=to_date,
+        )
 
     def get_patient(self, *, tenant_id: str, patient_id: str, actor: User) -> Patient:
         enforce_entitlement(self.session, tenant_id, "patients")

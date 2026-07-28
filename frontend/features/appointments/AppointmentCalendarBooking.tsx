@@ -41,6 +41,7 @@ import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { SourceReferralFields } from "@/app/components/common/SourceReferralFields";
 
 type Props = {
   clinic: any;
@@ -178,6 +179,9 @@ export function AppointmentCalendarBooking(props: Props) {
   const [appointmentDate, setAppointmentDate] = useState(
     today(),
   );
+  const [acquisitionSource, setAcquisitionSource] = useState("direct");
+  const [referrerPatientId, setReferrerPatientId] = useState("");
+  const [referrerName, setReferrerName] = useState("");
   const [appointmentType, setAppointmentType] = useState<
     "op" | "follow_up" | "doctor_review" | "fitness_certificate" | "emergency"
   >("op");
@@ -205,8 +209,18 @@ export function AppointmentCalendarBooking(props: Props) {
   const [listRefreshKey, setListRefreshKey] = useState(0);
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [rescheduleAppointment, setRescheduleAppointment] = useState<any>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleBusy, setRescheduleBusy] = useState(false);
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
+  const appointmentPermissions = apiSession?.user?.permissions || [];
+  const canRescheduleAppointments = Boolean(
+    apiSession?.user?.is_super_admin ||
+      appointmentPermissions.includes("*") ||
+      appointmentPermissions.includes("appointments.manage") ||
+      appointmentPermissions.includes("appointments.edit"),
+  );
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -333,6 +347,8 @@ export function AppointmentCalendarBooking(props: Props) {
       appointment.doctor,
       appointment.practitioner_name,
       appointment.status,
+      appointment.acquisitionSource,
+      appointment.referrerName,
       appointment.consultationStatus,
       appointment.consultation_status,
     ]
@@ -500,6 +516,9 @@ export function AppointmentCalendarBooking(props: Props) {
     setBooked(null);
     setMessage("");
     setAppointmentType("op");
+    setAcquisitionSource("direct");
+    setReferrerPatientId("");
+    setReferrerName("");
     setCustomFee("");
     setEmergencyReason("");
     setIntakeComplaints("");
@@ -622,6 +641,9 @@ export function AppointmentCalendarBooking(props: Props) {
       setSelectedPatient,
       appointmentType,
       appointmentDate,
+      acquisitionSource,
+      referrerPatientId,
+      referrerName,
       isBillable,
       customFee,
       billingNote,
@@ -658,6 +680,42 @@ export function AppointmentCalendarBooking(props: Props) {
     setBooked(null);
     setMessage("");
     await refreshAppointmentList();
+  }
+
+  function openReschedule(appointment: any) {
+    setRescheduleAppointment(appointment);
+    setRescheduleDate(
+      String(
+        appointment.appointmentDate || appointment.appointment_date || "",
+      ).slice(0, 10),
+    );
+    setMessage("");
+  }
+
+  async function saveReschedule() {
+    if (!apiSession || !rescheduleAppointment?.id || !rescheduleDate) return;
+    setRescheduleBusy(true);
+    setMessage("");
+    try {
+      await apiFetch(
+        `/appointments/${encodeURIComponent(rescheduleAppointment.id)}/reschedule`,
+        apiSession,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            appointment_date: rescheduleDate,
+            appointment_time: null,
+          }),
+        },
+      );
+      setRescheduleAppointment(null);
+      await refreshAppointmentList();
+      setMessage(`Appointment rescheduled to ${displayDate(rescheduleDate)}.`);
+    } catch (error: any) {
+      setMessage(error?.message || "Could not reschedule appointment.");
+    } finally {
+      setRescheduleBusy(false);
+    }
   }
 
   const normalizedDepartmentOptions = departmentOptions.map((d: any) => ({
@@ -944,6 +1002,18 @@ export function AppointmentCalendarBooking(props: Props) {
                       onChange={(e: any) => setAppointmentDate(e.target.value)}
                     />
                   </Field>
+                  <SourceReferralFields
+                    apiSession={apiSession}
+                    patients={patients}
+                    source={acquisitionSource}
+                    onSourceChange={setAcquisitionSource}
+                    referrerName={referrerName}
+                    referrerPatientId={referrerPatientId}
+                    onReferrerChange={(name, patientId) => {
+                      setReferrerName(name);
+                      setReferrerPatientId(patientId);
+                    }}
+                  />
                   <div className="rounded-lg bg-slate-50 p-4">
                     <p className="text-xs font-bold uppercase text-slate-500">
                       Doctor Fee
@@ -1238,6 +1308,64 @@ export function AppointmentCalendarBooking(props: Props) {
 
   return (
     <Card>
+      {rescheduleAppointment && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
+          <Card className="w-full max-w-md">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold">Reschedule Appointment</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {rescheduleAppointment.patient || "Patient"}
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={rescheduleBusy}
+                onClick={() => setRescheduleAppointment(null)}
+                className="close-button font-bold"
+              >
+                Close
+              </button>
+            </div>
+            <div className="mt-5">
+              <Field label="New Appointment Date" required>
+                <Input
+                  required
+                  type="date"
+                  min={today()}
+                  value={rescheduleDate}
+                  onChange={(event: any) =>
+                    setRescheduleDate(event.target.value)
+                  }
+                />
+              </Field>
+              <p className="mt-2 text-xs text-slate-500">
+                Consultation time and token will be reassigned from the
+                doctor&apos;s available schedule.
+              </p>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button
+                type="button"
+                disabled={
+                  rescheduleBusy ||
+                  !rescheduleDate ||
+                  rescheduleDate ===
+                    String(
+                      rescheduleAppointment.appointmentDate ||
+                        rescheduleAppointment.appointment_date ||
+                        "",
+                    ).slice(0, 10)
+                }
+                onClick={saveReschedule}
+              >
+                {rescheduleBusy ? "Rescheduling..." : "Reschedule"}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+      <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
         <div>
           <h3 className="card-title font-bold">Appointments</h3>
@@ -1457,6 +1585,22 @@ export function AppointmentCalendarBooking(props: Props) {
                   <div className="flex items-center justify-center">
                     <RowActions
                       actions={[
+                        {
+                          label: "Reschedule",
+                          onClick: () => openReschedule(appointment),
+                          hidden:
+                            !canRescheduleAppointments ||
+                            appointmentStatusInfo(appointment).key !== "active" ||
+                            [
+                              appointment.status,
+                              appointment.queueStatus,
+                              appointment.consultationStatus,
+                            ]
+                              .map((value) =>
+                                String(value || "").trim().toLowerCase(),
+                              )
+                              .includes("in_consultation"),
+                        },
                         {
                           label: "Patient Details",
                           onClick: () => openPatient(appointment),

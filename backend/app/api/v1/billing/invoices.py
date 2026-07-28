@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import Query
 from sqlmodel import Session, select
 
 from app.core.auth import require_any_permission
@@ -161,6 +162,7 @@ def list_invoices(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     patient_id: str | None = None,
+    limit: int | None = Query(default=None, ge=1, le=500),
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(
@@ -178,6 +180,7 @@ def list_invoices(
         tenant_id=tenant_id,
         branch_id=branch_id,
         patient_id=patient_id,
+        limit=limit,
         current_user=current_user,
     )
 

@@ -21,6 +21,7 @@ def list_billing_invoices(
     tenant_id: str,
     branch_id: str | None,
     patient_id: str | None,
+    limit: int | None,
     current_user: User,
 ) -> list[InvoiceRead]:
     enforce_entitlement(session, tenant_id, "billing_basic")
@@ -29,6 +30,7 @@ def list_billing_invoices(
         tenant_id=tenant_id,
         branch_id=scoped_branch,
         patient_id=patient_id,
+        limit=limit,
     )
     # Status is maintained by payment/refund/cancellation commands. List reads
     # must stay read-only and batch related display data instead of repairing

@@ -9,6 +9,7 @@ export function DataTable<T>({
   emptyMessage = "No data found",
   className,
   onRowClick,
+  footer,
   paginate = false,
   pageSize = defaultPageSize,
 }: DataTableProps<T>) {
@@ -80,6 +81,11 @@ export function DataTable<T>({
             </tr>
           ))}
         </tbody>
+        {footer && (
+          <tfoot className="border-t-2 border-slate-200 bg-slate-50">
+            {footer}
+          </tfoot>
+        )}
         </table>
       </div>
       {paginate && (

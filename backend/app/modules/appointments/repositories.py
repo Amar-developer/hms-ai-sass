@@ -94,6 +94,26 @@ class AppointmentReferenceRepository:
     def get_practitioner(self, practitioner_id: str) -> Practitioner | None:
         return self.session.get(Practitioner, practitioner_id)
 
+    def get_queue_entry_for_appointment(
+        self, *, tenant_id: str, appointment_id: str
+    ) -> QueueEntry | None:
+        return self.session.exec(
+            select(QueueEntry).where(
+                QueueEntry.tenant_id == tenant_id,
+                QueueEntry.appointment_id == appointment_id,
+            )
+        ).first()
+
+    def get_consultation_for_appointment(
+        self, *, tenant_id: str, appointment_id: str
+    ) -> Consultation | None:
+        return self.session.exec(
+            select(Consultation).where(
+                Consultation.tenant_id == tenant_id,
+                Consultation.appointment_id == appointment_id,
+            )
+        ).first()
+
     def lock_practitioner(self, practitioner_id: str) -> Practitioner | None:
         return self.session.exec(
             select(Practitioner)

@@ -23,6 +23,7 @@ export type DataTableProps<T> = {
   emptyMessage?: string;
   className?: string;
   onRowClick?: (row: T) => void;
+  footer?: React.ReactNode;
   paginate?: boolean;
   pageSize?: number;
 };

@@ -1,10 +1,12 @@
 import uuid
+from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import get_settings
 
 UPLOADS_DIR = get_settings().uploads_dir.expanduser().resolve()
+PRIVATE_UPLOADS_DIR = (UPLOADS_DIR.parent / "private_uploads").resolve()
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 _CHUNK = 1024 * 1024  # 1 MB streamed read
 
@@ -26,8 +28,8 @@ _MAGIC_SIGNATURES: tuple[tuple[bytes, str, str], ...] = (
 )
 
 
-def _ensure_dir() -> None:
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+def _ensure_dir(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
 
 
 def _sniff(data: bytes) -> tuple[str, str]:
@@ -62,7 +64,9 @@ async def _read_bounded(file: UploadFile) -> bytes:
     return bytes(buffer)
 
 
-async def save_upload(file: UploadFile, prefix: str) -> tuple[str, str, str]:
+async def _save_upload_to(
+    file: UploadFile, prefix: str, directory: Path, url_prefix: str
+) -> tuple[str, str, str]:
     """Validate and persist an UploadFile.
 
     Returns (filename, url_path, content_type) where content_type is the
@@ -77,6 +81,14 @@ async def save_upload(file: UploadFile, prefix: str) -> tuple[str, str, str]:
     # Filename is fully server-generated: opaque id + validated extension. The
     # client's original filename/extension is never used on disk.
     filename = f"{prefix}_{uuid.uuid4().hex}{ext}"
-    _ensure_dir()
-    (UPLOADS_DIR / filename).write_bytes(data)
-    return filename, f"/uploads/{filename}", content_type
+    _ensure_dir(directory)
+    (directory / filename).write_bytes(data)
+    return filename, f"{url_prefix}/{filename}", content_type
+
+
+async def save_upload(file: UploadFile, prefix: str) -> tuple[str, str, str]:
+    return await _save_upload_to(file, prefix, UPLOADS_DIR, "/uploads")
+
+
+async def save_private_upload(file: UploadFile, prefix: str) -> tuple[str, str, str]:
+    return await _save_upload_to(file, prefix, PRIVATE_UPLOADS_DIR, "private:/")

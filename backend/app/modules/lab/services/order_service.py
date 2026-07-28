@@ -44,6 +44,15 @@ def create_lab_order_record(
     enforce_module_enabled(session, tenant_id, "lab")
     _validate_patient_branch(session, tenant_id, payload.patient_id, payload.branch_id)
     require_user_branch_access(current_user, payload.branch_id)
+    if payload.referrer_patient_id:
+        referrer = LabReferenceRepository(session).get_patient(
+            payload.referrer_patient_id
+        )
+        if not referrer or referrer.tenant_id != tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid referrer patient",
+            )
     if payload.consultation_id:
         consultation = LabReferenceRepository(session).get_consultation_for_tenant(
             tenant_id=tenant_id,

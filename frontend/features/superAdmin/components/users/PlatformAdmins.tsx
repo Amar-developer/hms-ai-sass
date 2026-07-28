@@ -102,9 +102,9 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
   return (
     <div className="space-y-5">
       <Card>
-        <h3 className="card-title font-bold">Add Super Admin</h3>
+        <h3 className="card-title font-bold">Add Root Super Admin</h3>
         <p className="card-desc mt-1 text-slate-500">
-          Creates a named platform administrator under the primary tenant. The
+          Creates a root-level platform owner under the primary tenant. The
           temporary password must be changed on first login.
         </p>
         <form
@@ -146,7 +146,7 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
               className="rounded-lg bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50"
               disabled={busy}
             >
-              {busy ? "Creating..." : "Create Super Admin"}
+              {busy ? "Creating..." : "Create Root Super Admin"}
             </button>
           </div>
         </form>
@@ -155,9 +155,9 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
       <Card>
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-start">
           <div>
-            <h3 className="card-title font-bold">Platform Administrators</h3>
+            <h3 className="card-title font-bold">Root Super Administrators</h3>
             <p className="card-desc text-slate-500">
-              Super admin access is global. Use tenant roles for routine work.
+              Root access is global. Use Platform Admin or tenant roles for routine work.
             </p>
           </div>
           <button className="rounded-lg border px-3 py-2 font-bold" onClick={() => void load()} disabled={busy}>

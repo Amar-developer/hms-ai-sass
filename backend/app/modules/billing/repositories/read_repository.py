@@ -63,15 +63,17 @@ class BillingReadRepository:
         tenant_id: str,
         branch_id: str | None,
         patient_id: str | None,
+        limit: int | None = None,
     ) -> list[Invoice]:
         statement = select(Invoice).where(Invoice.tenant_id == tenant_id)
         if branch_id:
             statement = statement.where(Invoice.branch_id == branch_id)
         if patient_id:
             statement = statement.where(Invoice.patient_id == patient_id)
-        return list(
-            self.session.exec(statement.order_by(Invoice.created_at.desc())).all()
-        )
+        statement = statement.order_by(Invoice.created_at.desc())
+        if limit:
+            statement = statement.limit(limit)
+        return list(self.session.exec(statement).all())
 
     def list_invoice_items(self, invoice: Invoice) -> list[InvoiceItem]:
         return list(

@@ -1,10 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { aggregateInvoiceMetrics, toInputDate } from "./helpers";
+import { aggregateInvoiceMetrics, currentRange, toInputDate } from "./helpers";
 
 describe("report cost accounting", () => {
   it("formats report boundaries from the local calendar date", () => {
     expect(toInputDate(new Date(2026, 6, 1, 0, 15))).toBe("2026-07-01");
+  });
+
+  it("builds calendar quarter, half-year, and year ranges", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 6, 27, 12));
+
+    expect(currentRange("quarterly")).toEqual(["2026-07-01", "2026-09-30"]);
+    expect(currentRange("half_yearly")).toEqual(["2026-07-01", "2026-12-31"]);
+    expect(currentRange("yearly")).toEqual(["2026-01-01", "2026-12-31"]);
+
+    vi.useRealTimers();
   });
 
   it("keeps consultation doctor fee separate from other settlements", () => {
