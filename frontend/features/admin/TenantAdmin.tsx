@@ -378,6 +378,7 @@ export function TenantAdmin({
           canCreate={hasAdminAction("identity.users", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={USER_COLUMNS}
           filters={[
             {
@@ -479,6 +480,7 @@ export function TenantAdmin({
           canCreate={hasAdminAction("identity.roles", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={ROLE_COLUMNS}
           filters={[status_filters]}
           filterValues={roleFilter}
@@ -541,6 +543,7 @@ export function TenantAdmin({
           canCreate={hasAdminAction("departments", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={DEPARTMENT_COLUMNS}
           filters={[
             status_filters,
@@ -625,6 +628,7 @@ export function TenantAdmin({
           canCreate={hasAdminAction("branches", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={BRANCH_COLUMNS}
           filters={[
             {
@@ -699,6 +703,7 @@ export function TenantAdmin({
           canCreate={hasAdminAction("suppliers", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={SUPPLIER_COLUMNS}
           filters={[
             {
@@ -775,6 +780,7 @@ export function TenantAdmin({
           canCreate={hasAdminAction("tax", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={TAX_RULE_COLUMNS}
           filters={[
             {
@@ -846,6 +852,7 @@ export function TenantAdmin({
           canCreate={hasAdminAction("discounts", "create")}
           onCreate={() => setView("create")}
           onRefresh={data.reload}
+          loading={data.busy}
           columns={DISCOUNT_OFFER_COLUMNS}
           filters={[
             {

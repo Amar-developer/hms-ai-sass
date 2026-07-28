@@ -41,6 +41,8 @@ import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { SourceReferralFields } from "@/app/components/common/SourceReferralFields";
 
 type Props = {
@@ -56,6 +58,7 @@ type Props = {
   apiSession: ApiSession | null;
   loadLiveData: (session: ApiSession) => Promise<void>;
   setActive?: (page: string) => void;
+  isInitialLoading?: boolean;
 };
 
 type BookingStep = "appointment" | "newPatient" | "success";
@@ -166,6 +169,7 @@ export function AppointmentCalendarBooking(props: Props) {
     apiSession,
     loadLiveData,
     setActive,
+    isInitialLoading,
   } = props;
   const [mode, setMode] = useState<"list" | "book">("list");
   const [query, setQuery] = useState("");
@@ -279,6 +283,7 @@ export function AppointmentCalendarBooking(props: Props) {
     setDoctorId,
     platformTenants,
     platformRows,
+    platformLoading,
   } = useAppointmentBookingData({
     apiSession,
     isSuperAdmin,
@@ -379,6 +384,9 @@ export function AppointmentCalendarBooking(props: Props) {
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
+  const rowsLoading = isSuperAdmin
+    ? platformLoading
+    : Boolean(isInitialLoading);
 
   function openConsultation(appointment: any) {
     if (!appointment?.id || isSuperAdmin) return;
@@ -1213,7 +1221,9 @@ export function AppointmentCalendarBooking(props: Props) {
                     disabled={busy || !hasAvailableDoctor}
                     className="save-button"
                   >
-                    {busy ? "Booking..." : "Save & Generate Token"}
+                    <ButtonLoader loading={busy}>
+                      {busy ? "Booking..." : "Save & Generate Token"}
+                    </ButtonLoader>
                   </Button>
                   <button
                     type="button"
@@ -1468,12 +1478,13 @@ export function AppointmentCalendarBooking(props: Props) {
             )}
           </div>
           <div className="divide-y divide-slate-200">
-            {rows.length === 0 && (
+            {rowsLoading && <TableSkeleton rows={pageSize} />}
+            {!rowsLoading && rows.length === 0 && (
               <div className="p-4 text-xs  text-slate-500">
                 No appointments found.
               </div>
             )}
-            {rows.map((appointment: any) => {
+            {!rowsLoading && rows.map((appointment: any) => {
               if (isSuperAdmin) {
                 return (
                   <div

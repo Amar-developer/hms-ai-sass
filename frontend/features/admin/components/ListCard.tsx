@@ -3,6 +3,7 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { Card, RefreshButton } from "@/app/components/common/ui";
 import { Plus } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 export function ListCard({
   title,
@@ -17,6 +18,7 @@ export function ListCard({
   onRefresh,
   columns,
   render,
+  loading = false,
 }: any) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -100,20 +102,30 @@ export function ListCard({
 
           {/* ROWS */}
           <tbody className="divide-y divide-slate-200">
-            {pageRows.length === 0 && (
+            {loading ? (
               <tr>
-                <td
-                  colSpan={columns.length}
-                  className="px-4 py-4 text-xs text-slate-500 lg:text-sm"
-                >
-                  <div className="rounded-lg bg-slate-50 p-4">
-                    No records match your search.
-                  </div>
+                <td colSpan={columns.length} className="p-0">
+                  <TableSkeleton rows={5} />
                 </td>
               </tr>
-            )}
+            ) : (
+              <>
+                {pageRows.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={columns.length}
+                      className="px-4 py-4 text-xs text-slate-500 lg:text-sm"
+                    >
+                      <div className="rounded-lg bg-slate-50 p-4">
+                        No records match your search.
+                      </div>
+                    </td>
+                  </tr>
+                )}
 
-            {pageRows.map((row: any, index: number) => render(row, index))}
+                {pageRows.map((row: any, index: number) => render(row, index))}
+              </>
+            )}
           </tbody>
         </table>
       </div>

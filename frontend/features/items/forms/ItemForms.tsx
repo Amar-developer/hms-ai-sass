@@ -18,6 +18,7 @@ import {
 import { FormError } from "@/app/components/common/FormError";
 import { useEffect } from "react";
 import { itemFormValuesFromCatalogItem } from "../helpers";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 type ItemFormProps = {
   type: string;
@@ -231,7 +232,9 @@ export function ItemForm({
 
       <div className="flex items-end gap-2 md:col-span-4">
         <Button disabled={busy} type="submit" className="save-button">
-          {busy ? "Saving..." : editing ? "Update Item" : "Save Item"}
+          <ButtonLoader loading={busy}>
+            {busy ? "Saving..." : editing ? "Update Item" : "Save Item"}
+          </ButtonLoader>
         </Button>
         {editing && (
           <ActionButton type="button" onClick={onCancel}>

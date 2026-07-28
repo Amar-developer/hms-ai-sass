@@ -26,6 +26,7 @@ export type DataTableProps<T> = {
   footer?: React.ReactNode;
   paginate?: boolean;
   pageSize?: number;
+  loading?: boolean;
 };
 
 export type HomeCareReportsProps = {
@@ -34,6 +35,7 @@ export type HomeCareReportsProps = {
   setOpenSections: any;
   money: any;
   onOpenInvoices: any;
+  loading?: boolean;
 };
 
 export type InvoiceProps = {
@@ -61,6 +63,7 @@ export type InvoiceProps = {
   totalInvoicePages:any
   setInvoicePage:any
   onOpenInvoices:any
+  loading?: boolean;
 };
 
 export type LabReportsProps = {
@@ -69,6 +72,7 @@ export type LabReportsProps = {
   setOpenSections: any;
   money: any;
   onOpenInvoices: any;
+  loading?: boolean;
 };
 
 export type MetrixProps = {
@@ -104,4 +108,5 @@ export type PharmacyReportsProps = {
   setOpenSections: any;
   money: any;
   onOpenInvoices: any;
+  loading?: boolean;
 };

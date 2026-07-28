@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import { Badge, Button, Card, Input, Select } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 type QueueItem = {
   id: string;
@@ -216,7 +217,14 @@ export function WhatsAppDeliveryQueue({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {data.items.map((item) => (
+                {busy && data.items.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="p-0">
+                      <TableSkeleton rows={6} />
+                    </td>
+                  </tr>
+                )}
+                {(!busy || data.items.length > 0) && data.items.map((item) => (
                   <tr key={item.id} className="align-top">
                     <td className="px-3 py-3"><p className="font-bold text-slate-800">{item.recipient_name}</p><p className="text-slate-500">{item.recipient_masked}</p></td>
                     <td className="px-3 py-3">{flowLabels[item.flow_key] || item.flow_key}</td>

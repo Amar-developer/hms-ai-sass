@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { apiFetch } from "@/lib/api";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import {
   Card,
   Select,
@@ -1291,7 +1292,13 @@ export function ConsultationWorkspace(props: any) {
                 onClick={apiSession ? saveBackendDraft : markDone}
                 disabled={busy || selected?.consultationStatus === "signed"}
               >
-                {apiSession ? "Save Draft" : "Mark Consultation Done"}
+                <ButtonLoader loading={busy}>
+                  {apiSession
+                    ? busy
+                      ? "Saving..."
+                      : "Save Draft"
+                    : "Mark Consultation Done"}
+                </ButtonLoader>
               </Button>
               {apiSession && (
                 <Button
@@ -1300,7 +1307,9 @@ export function ConsultationWorkspace(props: any) {
                   disabled={busy || selected?.consultationStatus === "signed"}
                   className="bg-emerald-700 text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
                 >
-                  Complete
+                  <ButtonLoader loading={busy}>
+                    {busy ? "Signing..." : "Complete"}
+                  </ButtonLoader>
                 </Button>
               )}
               <Button

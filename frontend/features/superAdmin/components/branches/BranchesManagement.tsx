@@ -5,6 +5,7 @@ import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { formatDate } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { Pagination } from "@/app/components/common/Pagination";
 import { FormField } from "@/app/components/FormElements";
@@ -24,6 +25,7 @@ export function BranchesManagement({
   setSection,
   setConfirmAction,
   onRefresh,
+  busy,
 }: any) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -202,15 +204,19 @@ export function BranchesManagement({
         />
       </div>
         <div className="mt-4 rounded-2xl border border-slate-200">
-          <DataTable
-            columns={branchColumns}
-            data={rows}
-            emptyMessage="No branches match your search."
-            onRowClick={(branch) => {
-              setSelectedBranchId(branch.id);
-              setSection("branchEdit");
-            }}
-          />
+          {busy && rows.length === 0 ? (
+            <TableSkeleton />
+          ) : (
+            <DataTable
+              columns={branchColumns}
+              data={rows}
+              emptyMessage="No branches match your search."
+              onRowClick={(branch) => {
+                setSelectedBranchId(branch.id);
+                setSection("branchEdit");
+              }}
+            />
+          )}
         </div>
       <Pagination
         page={safePage}

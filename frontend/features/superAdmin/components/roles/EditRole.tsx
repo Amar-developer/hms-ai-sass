@@ -3,6 +3,7 @@
 import { Button, Card, Field, Select } from "@/app/components/common/ui";
 import { AutoRoleKeyFields } from "./AutoRoleKeyFields";
 import { PermissionCheckboxes } from "./PermissionCheckboxes";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function EditRole({
   role,
@@ -61,7 +62,11 @@ export function EditRole({
           />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
-          <Button disabled={busy}>{busy ? "Saving..." : "Save Role"}</Button>
+          <Button disabled={busy}>
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : "Save Role"}
+            </ButtonLoader>
+          </Button>
           <button
             type="button"
             onClick={back}

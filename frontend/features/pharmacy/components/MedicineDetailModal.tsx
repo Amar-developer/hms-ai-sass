@@ -7,6 +7,7 @@ import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
 
 export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -48,7 +49,8 @@ export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any
     : parsedMedicines;
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl">
+      <Card className="relative w-full max-w-3xl">
+        {loading && <OverlayLoader />}
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">

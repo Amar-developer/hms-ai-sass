@@ -20,6 +20,7 @@ import { Info } from "@/app/components/common/Info";
 import { AdmissionFields } from "./components/AdmissionFields";
 import { displayDate, inr, patientName, today } from "@/utils/helper";
 import { IPHeader } from "./components/IPHeader";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 
 
@@ -39,6 +40,7 @@ export function IPAdmission({
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [admissionWorkLoading, setAdmissionWorkLoading] = useState(false);
   const [treatments, setTreatments] = useState<any[]>([]);
   const [charges, setCharges] = useState<any[]>([]);
   const [billingItems, setBillingItems] = useState<any[]>([]);
@@ -207,6 +209,7 @@ export function IPAdmission({
   async function loadAdmissionWork(admissionId: string) {
     if (!apiSession) return;
     setError("");
+    setAdmissionWorkLoading(true);
     try {
       const [
         treatmentRows,
@@ -241,6 +244,8 @@ export function IPAdmission({
       setIpInvoice(invoiceResult);
     } catch (err: any) {
       setError(err.message || "Unable to load IP admission details.");
+    } finally {
+      setAdmissionWorkLoading(false);
     }
   }
 
@@ -646,7 +651,9 @@ export function IPAdmission({
                 Cancel
               </button>
               <Button disabled={busy === "admission"}>
-                Create IP Admission
+                <ButtonLoader loading={busy === "admission"}>
+                  {busy === "admission" ? "Creating..." : "Create IP Admission"}
+                </ButtonLoader>
               </Button>
             </div>
           </form>
@@ -698,7 +705,11 @@ export function IPAdmission({
               >
                 Cancel
               </button>
-              <Button disabled={busy === "admission"}>Admit Patient</Button>
+              <Button disabled={busy === "admission"}>
+                <ButtonLoader loading={busy === "admission"}>
+                  {busy === "admission" ? "Admitting..." : "Admit Patient"}
+                </ButtonLoader>
+              </Button>
             </div>
           </form>
         </Card>
@@ -899,6 +910,7 @@ export function IPAdmission({
           autoRoomTotal={autoRoomTotal}
           runningBillTotal={runningBillTotal}
           ipInvoice={ipInvoice}
+          loading={admissionWorkLoading}
           apiSession={apiSession}
           busy={busy}
           setBusy={setBusy}

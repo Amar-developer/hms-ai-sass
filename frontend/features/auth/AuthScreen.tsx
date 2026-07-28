@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { authSchema, AuthFormValues } from "@/features/auth/auth.schema";
 import { Eye, EyeOff, HeartPulse, Lock, ShieldCheck } from "lucide-react";
 import { Button, Card, Field, Input } from "@/app/components/common/ui";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 type DemoUser = readonly [string, string, string];
 
@@ -166,11 +167,10 @@ export function AuthScreen({
                   {error}
                 </div>
               )}
-              <Button
-                disabled={loading}
-                className="w-full rounded-lg text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4 "
-              >
-                {loading ? "Signing in..." : "Sign In"}
+              <Button disabled={loading}>
+                <ButtonLoader loading={loading}>
+                  {loading ? "Signing in..." : "Sign In"}
+                </ButtonLoader>
               </Button>
             </form>
 

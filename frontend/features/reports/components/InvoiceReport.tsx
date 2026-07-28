@@ -34,6 +34,7 @@ const InvoiceReport = ({
   totalInvoicePages,
   setInvoicePage,
   onOpenInvoices,
+  loading,
 
 }: InvoiceProps) => {
   const moneyOrDash = (value: any) => {
@@ -249,6 +250,7 @@ const InvoiceReport = ({
           data={invoicePageRows}
           onRowClick={(row: any) => onOpenInvoices(row.id)}
           emptyMessage="No paid invoices match this filter."
+          loading={loading}
           footer={
             <tr className="font-bold text-slate-900">
               <td colSpan={6} className="px-4 py-4 text-right">

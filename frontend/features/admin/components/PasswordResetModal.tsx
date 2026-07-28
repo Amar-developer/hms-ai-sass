@@ -1,5 +1,6 @@
 import { Card,Input,Button,Field, SearchableSelect } from "@/app/components/common/ui";
 import { MUST_CHANGE_OPTIONS } from "../constants";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 export function PasswordResetModal({ user, busy, onSubmit, onCancel }: any) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
@@ -35,7 +36,9 @@ export function PasswordResetModal({ user, busy, onSubmit, onCancel }: any) {
 
           <div className="flex flex-wrap gap-2">
             <Button disabled={busy}>
-              {busy ? "Saving..." : "Reset Password"}
+              <ButtonLoader loading={busy}>
+                {busy ? "Saving..." : "Reset Password"}
+              </ButtonLoader>
             </Button>
 
             <button

@@ -20,6 +20,7 @@ import {
 import { uniqueDepartmentRows } from "@/lib/options";
 import { doctorTypes } from "./constants";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { DoctorRow } from "./components/DoctorRow";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { activeTenantOptions } from "@/utils/helper";
@@ -556,34 +557,36 @@ export function Doctors({ apiSession, clinic, setLivePractitioners }: any) {
             <span className="text-sm text-center">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
-            {pageRows.length === 0 && (
-              <Empty
-                text={
-                  busy ? "Loading doctors..." : "No doctors match your search."
-                }
-              />
+            {busy ? (
+              <TableSkeleton rows={pageSize} />
+            ) : (
+              <>
+                {pageRows.length === 0 && (
+                  <Empty text="No doctors match your search." />
+                )}
+                {pageRows.map((row: any) => (
+                  <DoctorRow
+                    key={row.id}
+                    row={row}
+                    canCopyIds={canCopyIds}
+                    branches={branches}
+                    departments={departments}
+                    feeRules={feeRules}
+                    onEdit={() => open("edit", row.id)}
+                    onStatus={
+                      canEditDoctor
+                        ? () => setConfirm({ kind: "status", row })
+                        : undefined
+                    }
+                    onDelete={
+                      canDeleteDoctor
+                        ? () => setConfirm({ kind: "delete", row })
+                        : undefined
+                    }
+                  />
+                ))}
+              </>
             )}
-            {pageRows.map((row: any) => (
-              <DoctorRow
-                key={row.id}
-                row={row}
-                canCopyIds={canCopyIds}
-                branches={branches}
-                departments={departments}
-                feeRules={feeRules}
-                onEdit={() => open("edit", row.id)}
-                onStatus={
-                  canEditDoctor
-                    ? () => setConfirm({ kind: "status", row })
-                    : undefined
-                }
-                onDelete={
-                  canDeleteDoctor
-                    ? () => setConfirm({ kind: "delete", row })
-                    : undefined
-                }
-              />
-            ))}
           </div>
         </div>
       </div>

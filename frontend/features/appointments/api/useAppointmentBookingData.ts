@@ -38,11 +38,13 @@ export function useAppointmentBookingData({
   const [doctorId, setDoctorId] = useState("");
   const [platformTenants, setPlatformTenants] = useState<any[]>([]);
   const [platformRows, setPlatformRows] = useState<any[]>([]);
+  const [platformLoading, setPlatformLoading] = useState(false);
 
   useEffect(() => {
     let alive = true;
     async function loadPlatformGrid() {
       if (!apiSession || !isSuperAdmin) return;
+      setPlatformLoading(true);
       try {
         const params = new URLSearchParams({ limit: "500" });
         if (query) params.set("q", query);
@@ -77,6 +79,8 @@ export function useAppointmentBookingData({
       } catch (err: any) {
         if (alive)
           setMessage(err.message || "Could not load all-tenant appointments.");
+      } finally {
+        if (alive) setPlatformLoading(false);
       }
     }
     loadPlatformGrid();
@@ -219,5 +223,6 @@ export function useAppointmentBookingData({
     setDoctorId,
     platformTenants,
     platformRows,
+    platformLoading,
   };
 }

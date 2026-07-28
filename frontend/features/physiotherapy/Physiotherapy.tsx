@@ -19,6 +19,7 @@ import { CaseForm,IPCaseForm } from "@/features/physiotherapy/forms/Physiotherap
 import { Info } from "@/app/components/common/Info";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { readNotificationTarget } from "@/lib/notificationTarget";
+import { Skeleton } from "@/app/components/common/loader/Skeleton";
 
 type View = "list" | "op" | "ip" | "detail";
 
@@ -43,6 +44,7 @@ export function Physiotherapy({
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const patientMap = useMemo(
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],
@@ -103,6 +105,7 @@ export function Physiotherapy({
   async function loadPhysio() {
     if (!apiSession) return;
     setError("");
+    setLoading(true);
     try {
       const [caseRows, equipmentRows, practitionerRows, feeRuleRows] =
         await Promise.all([
@@ -117,6 +120,8 @@ export function Physiotherapy({
       setFeeRules(feeRuleRows);
     } catch (err: any) {
       setError(err.message || "Unable to load physiotherapy module.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -398,12 +403,19 @@ export function Physiotherapy({
               </button>
             </div>
             <div className="mt-4 grid gap-3">
-              {departmentCases.length === 0 && (
+              {loading && (
+                <>
+                  <Skeleton className="h-[74px] w-full rounded-lg" />
+                  <Skeleton className="h-[74px] w-full rounded-lg" />
+                  <Skeleton className="h-[74px] w-full rounded-lg" />
+                </>
+              )}
+              {!loading && departmentCases.length === 0 && (
                 <p className="rounded-lg bg-slate-50 p-4 table-data text-slate-500">
                   No physiotherapy cases yet.
                 </p>
               )}
-              {departmentCases.map((row: any) => {
+              {!loading && departmentCases.map((row: any) => {
                 const patient = patientMap.get(row.patient_id);
                 const active = selected?.id === row.id;
                 return (

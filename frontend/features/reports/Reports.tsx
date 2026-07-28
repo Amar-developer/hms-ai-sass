@@ -153,6 +153,14 @@ export function Reports({
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [invoiceDetails, setInvoiceDetails] = useState<any[]>([]);
+  const [invoiceDetailsLoading, setInvoiceDetailsLoading] = useState(false);
+  const [labSettlementLoading, setLabSettlementLoading] = useState(false);
+  const [pharmacySettlementLoading, setPharmacySettlementLoading] =
+    useState(false);
+  const [homeCareBookingsLoading, setHomeCareBookingsLoading] =
+    useState(false);
+  const [homeCareInvoiceDetailsLoading, setHomeCareInvoiceDetailsLoading] =
+    useState(false);
   const [homeCareBookings, setHomeCareBookings] = useState<any[]>([]);
   const [homeCareInvoiceDetails, setHomeCareInvoiceDetails] = useState<any[]>(
     [],
@@ -477,18 +485,24 @@ export function Reports({
   useEffect(() => {
     if (!apiSession?.tenantId || filteredInvoiceIds.length === 0) {
       setInvoiceDetails([]);
+      setInvoiceDetailsLoading(false);
       return;
     }
     let cancelled = false;
     async function loadInvoiceDetails() {
-      const details = await Promise.all(
-        filteredInvoiceIds.map((invoiceId: string) =>
-          apiFetch(`/billing/invoices/${invoiceId}`, apiSession).catch(
-            () => null,
+      setInvoiceDetailsLoading(true);
+      try {
+        const details = await Promise.all(
+          filteredInvoiceIds.map((invoiceId: string) =>
+            apiFetch(`/billing/invoices/${invoiceId}`, apiSession).catch(
+              () => null,
+            ),
           ),
-        ),
-      );
-      if (!cancelled) setInvoiceDetails(details.filter(Boolean));
+        );
+        if (!cancelled) setInvoiceDetails(details.filter(Boolean));
+      } finally {
+        if (!cancelled) setInvoiceDetailsLoading(false);
+      }
     }
     loadInvoiceDetails();
     return () => {
@@ -500,33 +514,38 @@ export function Reports({
     if (!apiSession?.tenantId) return;
     let cancelled = false;
     async function loadLabSettlementData() {
-      const [testRows, packageRows, supplierRows, orderRows] =
-        await Promise.all([
-          apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
-          apiFetch("/lab/catalog/packages", apiSession).catch(() => []),
-          apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
-          apiFetch("/lab/orders", apiSession).catch(() => []),
-        ]);
-      if (cancelled) return;
-      setLabTests(testRows || []);
-      setLabPackages(packageRows || []);
-      setSuppliers(supplierRows || []);
-      const relevantOrderIds = Array.from(
-        new Set(
-          liveInvoices
-            .filter((invoice: any) => invoice.lab_order_id)
-            .map((invoice: any) => invoice.lab_order_id),
-        ),
-      );
-      const sourceOrderIds = relevantOrderIds.length
-        ? relevantOrderIds
-        : (orderRows || []).slice(0, 200).map((order: any) => order.id);
-      const details = await Promise.all(
-        sourceOrderIds.map((orderId: any) =>
-          apiFetch(`/lab/orders/${orderId}`, apiSession).catch(() => null),
-        ),
-      );
-      if (!cancelled) setLabOrderDetails(details.filter(Boolean));
+      setLabSettlementLoading(true);
+      try {
+        const [testRows, packageRows, supplierRows, orderRows] =
+          await Promise.all([
+            apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
+            apiFetch("/lab/catalog/packages", apiSession).catch(() => []),
+            apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
+            apiFetch("/lab/orders", apiSession).catch(() => []),
+          ]);
+        if (cancelled) return;
+        setLabTests(testRows || []);
+        setLabPackages(packageRows || []);
+        setSuppliers(supplierRows || []);
+        const relevantOrderIds = Array.from(
+          new Set(
+            liveInvoices
+              .filter((invoice: any) => invoice.lab_order_id)
+              .map((invoice: any) => invoice.lab_order_id),
+          ),
+        );
+        const sourceOrderIds = relevantOrderIds.length
+          ? relevantOrderIds
+          : (orderRows || []).slice(0, 200).map((order: any) => order.id);
+        const details = await Promise.all(
+          sourceOrderIds.map((orderId: any) =>
+            apiFetch(`/lab/orders/${orderId}`, apiSession).catch(() => null),
+          ),
+        );
+        if (!cancelled) setLabOrderDetails(details.filter(Boolean));
+      } finally {
+        if (!cancelled) setLabSettlementLoading(false);
+      }
     }
     loadLabSettlementData();
     return () => {
@@ -583,11 +602,16 @@ export function Reports({
     if (!apiSession?.tenantId) return;
     let cancelled = false;
     async function loadHomeCareBookings() {
-      const rows = await apiFetch(
-        `/home-care/bookings${branchId ? `?branch_id=${branchId}` : ""}`,
-        apiSession,
-      ).catch(() => []);
-      if (!cancelled) setHomeCareBookings(Array.isArray(rows) ? rows : []);
+      setHomeCareBookingsLoading(true);
+      try {
+        const rows = await apiFetch(
+          `/home-care/bookings${branchId ? `?branch_id=${branchId}` : ""}`,
+          apiSession,
+        ).catch(() => []);
+        if (!cancelled) setHomeCareBookings(Array.isArray(rows) ? rows : []);
+      } finally {
+        if (!cancelled) setHomeCareBookingsLoading(false);
+      }
     }
     loadHomeCareBookings();
     return () => {
@@ -598,18 +622,24 @@ export function Reports({
   useEffect(() => {
     if (!apiSession?.tenantId || homeCareInvoiceIds.length === 0) {
       setHomeCareInvoiceDetails([]);
+      setHomeCareInvoiceDetailsLoading(false);
       return;
     }
     let cancelled = false;
     async function loadHomeCareInvoiceDetails() {
-      const details = await Promise.all(
-        homeCareInvoiceIds.map((invoiceId: string) =>
-          apiFetch(`/billing/invoices/${invoiceId}`, apiSession).catch(
-            () => null,
+      setHomeCareInvoiceDetailsLoading(true);
+      try {
+        const details = await Promise.all(
+          homeCareInvoiceIds.map((invoiceId: string) =>
+            apiFetch(`/billing/invoices/${invoiceId}`, apiSession).catch(
+              () => null,
+            ),
           ),
-        ),
-      );
-      if (!cancelled) setHomeCareInvoiceDetails(details.filter(Boolean));
+        );
+        if (!cancelled) setHomeCareInvoiceDetails(details.filter(Boolean));
+      } finally {
+        if (!cancelled) setHomeCareInvoiceDetailsLoading(false);
+      }
     }
     loadHomeCareInvoiceDetails();
     return () => {
@@ -621,28 +651,35 @@ export function Reports({
     if (!apiSession?.tenantId) return;
     let cancelled = false;
     async function loadPharmacySettlementData() {
-      const [medicines, issueRows] = await Promise.all([
-        apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
-        apiFetch("/pharmacy/issues", apiSession).catch(() => []),
-      ]);
-      if (cancelled) return;
-      setMedicineRows(medicines || []);
-      const relevantIssueIds = Array.from(
-        new Set(
-          liveInvoices
-            .filter((invoice: any) => invoice.pharmacy_issue_id)
-            .map((invoice: any) => invoice.pharmacy_issue_id),
-        ),
-      );
-      const sourceIssueIds = relevantIssueIds.length
-        ? relevantIssueIds
-        : (issueRows || []).slice(0, 200).map((issue: any) => issue.id);
-      const details = await Promise.all(
-        sourceIssueIds.map((issueId: any) =>
-          apiFetch(`/pharmacy/issues/${issueId}`, apiSession).catch(() => null),
-        ),
-      );
-      if (!cancelled) setPharmacyIssueDetails(details.filter(Boolean));
+      setPharmacySettlementLoading(true);
+      try {
+        const [medicines, issueRows] = await Promise.all([
+          apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
+          apiFetch("/pharmacy/issues", apiSession).catch(() => []),
+        ]);
+        if (cancelled) return;
+        setMedicineRows(medicines || []);
+        const relevantIssueIds = Array.from(
+          new Set(
+            liveInvoices
+              .filter((invoice: any) => invoice.pharmacy_issue_id)
+              .map((invoice: any) => invoice.pharmacy_issue_id),
+          ),
+        );
+        const sourceIssueIds = relevantIssueIds.length
+          ? relevantIssueIds
+          : (issueRows || []).slice(0, 200).map((issue: any) => issue.id);
+        const details = await Promise.all(
+          sourceIssueIds.map((issueId: any) =>
+            apiFetch(`/pharmacy/issues/${issueId}`, apiSession).catch(
+              () => null,
+            ),
+          ),
+        );
+        if (!cancelled) setPharmacyIssueDetails(details.filter(Boolean));
+      } finally {
+        if (!cancelled) setPharmacySettlementLoading(false);
+      }
     }
     loadPharmacySettlementData();
     return () => {
@@ -1911,6 +1948,7 @@ export function Reports({
             setInvoicePage={setInvoicePage}
             pageSize={pageSize}
             onOpenInvoices={openLinkedInvoices}
+            loading={invoiceDetailsLoading}
           />
         );
 
@@ -1922,6 +1960,7 @@ export function Reports({
             setOpenSections={setOpenSections}
             money={money}
             onOpenInvoices={openLinkedInvoices}
+            loading={labSettlementLoading}
           />
         );
 
@@ -1933,6 +1972,7 @@ export function Reports({
             setOpenSections={setOpenSections}
             money={money}
             onOpenInvoices={openLinkedInvoices}
+            loading={pharmacySettlementLoading}
           />
         );
 
@@ -1944,6 +1984,7 @@ export function Reports({
             setOpenSections={setOpenSections}
             money={money}
             onOpenInvoices={openLinkedInvoices}
+            loading={homeCareBookingsLoading || homeCareInvoiceDetailsLoading}
           />
         );
 

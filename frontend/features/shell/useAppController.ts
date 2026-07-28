@@ -82,6 +82,7 @@ export function useAppController() {
     defaultEntitlementModuleIds,
   );
   const [liveStatus, setLiveStatus] = useState("Not connected");
+  const [isInitialLoading, setIsInitialLoading] = useState(false);
   const [role, setRole] = useState("tenant_admin");
   const [showPassword, setShowPassword] = useState(false);
   const [active, setActive] = useState("dashboard");
@@ -200,12 +201,27 @@ export function useAppController() {
     setLiveStatus(status);
   }
 
-  async function loadLiveData(session: ApiSession) {
+  async function loadLiveData(
+    session: ApiSession,
+    options: { initial?: boolean } = {},
+  ) {
     if (mutationRefreshTimerRef.current) {
       clearTimeout(mutationRefreshTimerRef.current);
       mutationRefreshTimerRef.current = null;
     }
     const requestRevision = ++liveDataRequestRef.current;
+    if (options.initial) setIsInitialLoading(true);
+    try {
+      await loadLiveDataInner(session, requestRevision);
+    } finally {
+      if (options.initial) setIsInitialLoading(false);
+    }
+  }
+
+  async function loadLiveDataInner(
+    session: ApiSession,
+    requestRevision: number,
+  ) {
     setLiveStatus("Refreshing application data...");
     const referenceReadPermissions = [
       "settings.manage",
@@ -608,7 +624,7 @@ export function useAppController() {
           (saved.user?.is_super_admin ? "super_admin" : "tenant_admin");
         setRole(savedRole);
         setAuthenticated(true);
-        loadLiveData(saved).catch((err: any) => {
+        loadLiveData(saved, { initial: true }).catch((err: any) => {
           setLiveStatus(
             err.message || "Connected, but live data could not be loaded.",
           );
@@ -785,7 +801,7 @@ export function useAppController() {
     setLiveBranchId(liveBranchIdRef.current);
     setDepartmentId(departmentIdRef.current);
     setAuthenticated(true);
-    void loadLiveData(session).catch((err: any) => {
+    void loadLiveData(session, { initial: true }).catch((err: any) => {
       setLiveStatus(
         err.message || "Connected, but live data could not be loaded.",
       );
@@ -839,7 +855,7 @@ export function useAppController() {
     setLiveBranches([]);
     setLiveDepartments([]);
     setLiveStatus(`Switching to ${tenantId}...`);
-    await loadLiveData(next).catch((err: any) => {
+    await loadLiveData(next, { initial: true }).catch((err: any) => {
       setLiveStatus(
         err.message || "Tenant switched, but live data could not be loaded.",
       );
@@ -944,6 +960,7 @@ export function useAppController() {
     apiSession,
     loadLiveData: refreshLiveDataInBackground,
     liveInvoices,
+    isInitialLoading,
   };
   const permissionKeys = apiSession?.user?.permissions || [];
   const roleAllowedModules = navigationModulesForPermissions(permissionKeys, {
@@ -989,6 +1006,7 @@ export function useAppController() {
       switchTenant,
       ctx,
       liveSummary,
+      isInitialLoading,
     },
   };
 }

@@ -24,6 +24,8 @@ import {
 import { Modal } from "@/app/components/common/Modal";
 import { apiFetch } from "@/lib/api";
 import { WhatsAppDeliveryQueue } from "./WhatsAppDeliveryQueue";
+import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 type WhatsAppFlowKey =
   | "appointment_booked_patient"
@@ -379,6 +381,7 @@ export function WhatsAppIntegrationSettings({
   const [health, setHealth] = useState<any>(null);
   const [readiness, setReadiness] = useState<any>(null);
   const [busy, setBusy] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [testBusy, setTestBusy] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
   const [testMessage, setTestMessage] = useState("");
@@ -397,6 +400,7 @@ export function WhatsAppIntegrationSettings({
       setUsage(null);
       setHealth(null);
       setReadiness(null);
+      setInitialLoading(false);
       return () => {
         active = false;
       };
@@ -421,7 +425,10 @@ export function WhatsAppIntegrationSettings({
           setMessage(error.message || "Could not load WhatsApp settings.");
       })
       .finally(() => {
-        if (active) setBusy(false);
+        if (active) {
+          setBusy(false);
+          setInitialLoading(false);
+        }
       });
     return () => {
       active = false;
@@ -728,7 +735,8 @@ export function WhatsAppIntegrationSettings({
 
   return (
     <>
-    <Card>
+    <Card className="relative px-2 py-2 lg:px-4 lg:py-3 text-xs lg:text-sm">
+      {initialLoading && <OverlayLoader />}
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-start">
         <div className="flex gap-3">
@@ -1325,7 +1333,9 @@ export function WhatsAppIntegrationSettings({
             onClick={saveSettings}
             disabled={busy || !apiSession || !effectiveTenantId}
           >
-            {busy ? "Saving..." : "Save WhatsApp Settings"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : "Save WhatsApp Settings"}
+            </ButtonLoader>
           </Button>
         </div>
       </div>
@@ -1578,7 +1588,9 @@ export function WhatsAppIntegrationSettings({
             Cancel
           </button>
           <Button type="submit" disabled={testBusy}>
-            {testBusy ? "Sending..." : "Send Test Message"}
+            <ButtonLoader loading={testBusy}>
+              {testBusy ? "Sending..." : "Send Test Message"}
+            </ButtonLoader>
           </Button>
         </div>
       </form>

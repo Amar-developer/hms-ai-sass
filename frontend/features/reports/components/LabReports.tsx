@@ -11,6 +11,7 @@ const LabReports = ({
   setOpenSections,
   money,
   onOpenInvoices,
+  loading,
 }: LabReportsProps) => {
   const moneyOrDash = (value: any) =>
     Number(value || 0) === 0 ? "-" : money(value);
@@ -128,6 +129,7 @@ const LabReports = ({
             paginate
             emptyMessage="No paid lab invoices match this filter"
             className='w-full min-w-[920px] text-left text-sm'
+            loading={loading}
           />
         </div>
       </CollapsibleReportSection>

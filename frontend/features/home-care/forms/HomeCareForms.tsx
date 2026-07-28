@@ -19,6 +19,7 @@ import {
   SearchableSelect,
 } from "@/app/components/common/ui";
 import { FormError } from "@/app/components/common/FormError";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { PatientLookupField } from "@/features/patients/components/PatientLookupCreate";
 import { displayDate, today } from "@/utils/helper";
 import {
@@ -576,7 +577,9 @@ export function BookingForm({
         </div>
         <div className="flex items-end gap-2 md:col-span-4">
           <Button disabled={busy} className="save-button">
-            {busy ? "Saving..." : editing ? "Update Booking" : "Create Booking"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : editing ? "Update Booking" : "Create Booking"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"

@@ -33,6 +33,7 @@ import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
 import { activeTenantOptions } from "@/utils/helper";
 import { ErrorLogs } from "@/features/error-logs/ErrorLogs";
+import { PageLoader } from "@/app/components/common/loader/PageLoader";
 
 export function AppShell(props: any) {
   const {
@@ -62,6 +63,7 @@ export function AppShell(props: any) {
     switchTenant,
     ctx,
     liveSummary,
+    isInitialLoading,
   } = props;
 
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
@@ -442,6 +444,7 @@ export function AppShell(props: any) {
 
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
+      {isInitialLoading && <PageLoader label={'Loading'}/>}
       {/* Sidebar */}
       {!isDesktop && (
         <div
@@ -703,7 +706,7 @@ export function AppShell(props: any) {
             </div>
           </div>
 
-          <section className="space-y-4 py-4 px-6">{renderPage()}</section>
+          <section className=" py-4 px-6">{renderPage()}</section>
         </main>
       </div>
     </div>

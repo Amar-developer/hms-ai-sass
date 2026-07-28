@@ -22,6 +22,7 @@ import {
 import { tenantTypes } from "../../constants";
 import { formatTenantType,invoiceLimitLabel,limitLabel } from "../../helpers";
 import { Info } from "@/app/components/common/Info";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 const sections = [
   { label: "Tenant Details", short: "Tenant", icon: Building2 },
@@ -845,7 +846,9 @@ export function EditTenant({
                 disabled={busy}
                 className="rounded-lg px-5 py-2.5 text-xs lg:text-sm"
               >
-                {busy ? "Saving..." : "Save All Changes"}
+                <ButtonLoader loading={busy}>
+                  {busy ? "Saving..." : "Save All Changes"}
+                </ButtonLoader>
               </Button>
             </div>
           </div>

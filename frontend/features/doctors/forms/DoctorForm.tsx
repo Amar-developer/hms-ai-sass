@@ -1,4 +1,5 @@
 import { FormError } from "@/app/components/common/FormError";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import {
   Button,
   Card,
@@ -421,7 +422,9 @@ export function DoctorForm({
 
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
           <Button disabled={busy} className="save-button" type="submit">
-            {busy ? "Saving..." : doctor ? "Save Doctor" : "Create Doctor"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : doctor ? "Save Doctor" : "Create Doctor"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"

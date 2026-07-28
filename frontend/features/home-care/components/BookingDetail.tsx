@@ -1,4 +1,5 @@
 import { displayDate, money, patientName } from "@/utils/helper";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import {
   bookingTotal,
   isBookingLocked,
@@ -358,7 +359,9 @@ export function BookingDetail({
               />
               <div className="flex items-end">
                 <Button disabled={busy === "visit-log"} className="save-button">
-                  {busy === "visit-log" ? "Saving..." : "Add Log"}
+                  <ButtonLoader loading={busy === "visit-log"}>
+                    {busy === "visit-log" ? "Saving..." : "Add Log"}
+                  </ButtonLoader>
                 </Button>
               </div>
             </form>
@@ -464,7 +467,9 @@ export function BookingDetail({
               disabled={locked || busy === "cancel-booking"}
               title={locked ? "Locked after billing/completion" : undefined}
             >
-              {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
+              <ButtonLoader loading={busy === "cancel-booking"}>
+                {busy === "cancel-booking" ? "Cancelling..." : "Cancel Booking"}
+              </ButtonLoader>
             </ActionButton>
           )}
           {(invoiceDetail?.invoice ||

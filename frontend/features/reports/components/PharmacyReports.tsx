@@ -11,6 +11,7 @@ const PharmacyReports = ({
   setOpenSections,
   money,
   onOpenInvoices,
+  loading,
 }: PharmacyReportsProps) => {
   const moneyOrDash = (value: any) =>
     Number(value || 0) === 0 ? "-" : money(value);
@@ -136,6 +137,7 @@ const PharmacyReports = ({
             paginate
             emptyMessage="No paid pharmacy invoices match this filter."
             className="w-full min-w-[1220px] text-left text-sm"
+            loading={loading}
           />
         </div>
       </CollapsibleReportSection>

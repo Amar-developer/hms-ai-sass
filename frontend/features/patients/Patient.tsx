@@ -25,6 +25,7 @@ import { activeTenantOptions } from "@/utils/helper";
 import { PatientRow } from "./components/PatientRow";
 import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -705,16 +706,11 @@ export function Patient({
             <span className="text-sm text-center">Actions</span>
           </div>
           <div className="divide-y divide-slate-200 z-0">
-            {pageRows.length === 0 && (
-              <Empty
-                text={
-                  busy
-                    ? "Loading patients..."
-                    : "No patients match your search."
-                }
-              />
+            {busy && <TableSkeleton />}
+            {!busy && pageRows.length === 0 && (
+              <Empty text="No patients match your search." />
             )}{" "}
-            {pageRows.map((row: any) => (
+            {!busy && pageRows.map((row: any) => (
               <PatientRow
                 key={row.id}
                 row={row}

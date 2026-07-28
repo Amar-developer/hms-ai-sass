@@ -17,6 +17,7 @@ import {
 import { addressText, formatDate, formatTenantType } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { SortButton } from "../shared/SortButton";
 import { Pagination } from "@/app/components/common/Pagination";
 import { RowActions } from "@/features/admin/components/RowActions";
@@ -238,7 +239,10 @@ export function TenantManagement({
           <span className="text-center">Actions</span>
         </div>
         <div className="divide-y divide-slate-200">
-          {rows.length === 0 && <Empty text="No tenants match your search." />}
+          {busy && rows.length === 0 && <TableSkeleton />}
+          {!busy && rows.length === 0 && (
+            <Empty text="No tenants match your search." />
+          )}
           {rows.map((tenant: any) => {
             const actions = [
               {

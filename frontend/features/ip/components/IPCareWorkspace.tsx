@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { medicineFrequencyOptions,rowTagLabel, SearchPicker, TagEntryBox } from "@/app/components/clinicalRows";
 import { FormField } from "@/app/components/FormElements";
 import { Card,Button,Input,Select,Badge } from "@/app/components/common/ui";
+import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 import { CollapsibleIPSection } from "./CollapsibleIPSection";
 
@@ -22,6 +24,7 @@ export function IPCareWorkspace({
   autoRoomTotal,
   runningBillTotal,
   ipInvoice,
+  loading = false,
   apiSession,
   busy,
   setBusy,
@@ -369,7 +372,8 @@ export function IPCareWorkspace({
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="relative grid gap-6">
+      {loading && <OverlayLoader />}
       <div className="grid gap-6">
         <Card>
           <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
@@ -690,11 +694,13 @@ export function IPCareWorkspace({
             </div>
 
             <Button disabled={closed || busy === "ip care"}>
-              {busy === "ip care"
-                ? "Saving..."
-                : closed
-                  ? "Admission Locked"
-                  : "Save IP Care Entry"}
+              <ButtonLoader loading={busy === "ip care"}>
+                {busy === "ip care"
+                  ? "Saving..."
+                  : closed
+                    ? "Admission Locked"
+                    : "Save IP Care Entry"}
+              </ButtonLoader>
             </Button>
           </form>
         </Card>
@@ -774,7 +780,9 @@ export function IPCareWorkspace({
               )}
               <div className="flex flex-wrap gap-2">
                 <Button disabled={closed || busy === "consent"}>
-                  Save Consent
+                  <ButtonLoader loading={busy === "consent"}>
+                    {busy === "consent" ? "Saving..." : "Save Consent"}
+                  </ButtonLoader>
                 </Button>
                 <Button
                   type="button"
@@ -788,7 +796,9 @@ export function IPCareWorkspace({
                   }
                   className="bg-emerald-700"
                 >
-                  Mark Signed
+                  <ButtonLoader loading={busy === "consent sign"}>
+                    {busy === "consent sign" ? "Signing..." : "Mark Signed"}
+                  </ButtonLoader>
                 </Button>
               </div>
             </form>
@@ -837,7 +847,9 @@ export function IPCareWorkspace({
               )}
               <div className="flex flex-wrap gap-2">
                 <Button disabled={closed || busy === "discharge"}>
-                  Save Summary
+                  <ButtonLoader loading={busy === "discharge"}>
+                    {busy === "discharge" ? "Saving..." : "Save Summary"}
+                  </ButtonLoader>
                 </Button>
                 <Button
                   type="button"
@@ -853,7 +865,13 @@ export function IPCareWorkspace({
                   }
                   className="bg-emerald-700"
                 >
-                  {closed ? "Discharged" : "Finalize"}
+                  <ButtonLoader loading={busy === "discharge finalize"}>
+                    {closed
+                      ? "Discharged"
+                      : busy === "discharge finalize"
+                        ? "Finalizing..."
+                        : "Finalize"}
+                  </ButtonLoader>
                 </Button>
               </div>
             </form>
@@ -905,13 +923,15 @@ export function IPCareWorkspace({
             onClick={generateInvoice}
             className="mt-4 w-full"
           >
-            {busy === "invoice"
-              ? "Generating..."
-              : closed
-                ? "Final Bill Locked"
-                : ipInvoice
-                  ? "Regenerate IP Invoice"
-                  : "Generate IP Invoice"}
+            <ButtonLoader loading={busy === "invoice"}>
+              {busy === "invoice"
+                ? "Generating..."
+                : closed
+                  ? "Final Bill Locked"
+                  : ipInvoice
+                    ? "Regenerate IP Invoice"
+                    : "Generate IP Invoice"}
+            </ButtonLoader>
           </Button>
         </CollapsibleIPSection>
 

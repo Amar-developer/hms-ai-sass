@@ -2,6 +2,7 @@ import { FormField } from "@/app/components/FormElements";
 import { Input, Select,Card, Button } from "@/app/components/common/ui";
 import { today } from "@/utils/helper";
 import { modalities } from "../constants";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function EquipmentPage({ equipment, onSubmit, busy }: any) {
   return (
@@ -46,7 +47,11 @@ export function EquipmentPage({ equipment, onSubmit, busy }: any) {
               <option value="tenant">All Branches</option>
             </Select>
           </FormField>
-          <Button disabled={busy}>Save Equipment</Button>
+          <Button disabled={busy}>
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : "Save Equipment"}
+            </ButtonLoader>
+          </Button>
         </form>
       </Card>
       <Card>

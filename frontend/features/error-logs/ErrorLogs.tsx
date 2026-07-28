@@ -21,6 +21,8 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch } from "@/lib/api";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { pageSize } from "@/utils/constants";
 import { displayDateTime } from "@/utils/helper";
 import { category_options, error_level_options, source_options, status_options } from "./constants";
@@ -268,14 +270,23 @@ export function ErrorLogs({ apiSession }: any) {
                   disabled={busy === "resolve"}
                   onClick={() => updateResolved(!selected.is_resolved)}
                 >
-                  {selected.is_resolved ? "Reopen" : "Mark Resolved"}
+                  <ButtonLoader loading={busy === "resolve"}>
+                    {busy === "resolve"
+                      ? "Resolving..."
+                      : selected.is_resolved
+                        ? "Reopen"
+                        : "Mark Resolved"}
+                  </ButtonLoader>
                 </Button>
                 <ActionButton
                   tone="danger"
                   disabled={busy === "delete"}
                   onClick={deleteSelected}
                 >
-                  <Trash2 size={14} /> Delete
+                  <ButtonLoader loading={busy === "delete"}>
+                    <Trash2 size={14} />{" "}
+                    {busy === "delete" ? "Deleting..." : "Delete"}
+                  </ButtonLoader>
                 </ActionButton>
               </div>
             </div>
@@ -391,12 +402,17 @@ export function ErrorLogs({ apiSession }: any) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
-              {rows.length === 0 && (
+              {busy === "load" && rows.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-0">
+                    <TableSkeleton />
+                  </td>
+                </tr>
+              )}
+              {busy !== "load" && rows.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-6 text-slate-500">
-                    {busy === "load"
-                      ? "Loading error logs..."
-                      : "No error logs match these filters."}
+                    No error logs match these filters.
                   </td>
                 </tr>
               )}

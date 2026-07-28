@@ -37,6 +37,8 @@ import {
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { status_options } from "./contants";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 
 export function Billing({
   apiSession,
@@ -66,6 +68,19 @@ export function Billing({
     {},
   );
   const [detailLoading, setDetailLoading] = useState("");
+  const [creditNotePrompt, setCreditNotePrompt] = useState<any>(null);
+  const [adjustmentPrompt, setAdjustmentPrompt] = useState<{
+    invoice: any;
+    type: string;
+  } | null>(null);
+  const [invoiceActionPrompt, setInvoiceActionPrompt] = useState<{
+    kind: "cancel" | "amend";
+    invoice: any;
+  } | null>(null);
+  const [requestActionPrompt, setRequestActionPrompt] = useState<{
+    kind: "approve" | "reject" | "execute";
+    row: any;
+  } | null>(null);
   const [filters, setFilters] = useState({
     query: "",
     source: "all",
@@ -645,10 +660,12 @@ export function Billing({
 
   async function issueCreditNote(invoice: any) {
     if (!apiSession) return;
-    const reason = window.prompt(
-      `Credit note reason for ${invoice.invoice_number}`,
-    );
-    if (!reason) return;
+    setCreditNotePrompt(invoice);
+  }
+
+  async function submitCreditNote(reason: string) {
+    const invoice = creditNotePrompt;
+    if (!apiSession || !invoice || !reason) return;
     setBusy(invoice.id);
     try {
       await apiFetch(
@@ -667,6 +684,7 @@ export function Billing({
       await loadReports();
       await openInvoiceDetail(invoice);
       setMessage(`Credit note issued for ${invoice.invoice_number}.`);
+      setCreditNotePrompt(null);
     } catch (err: any) {
       setMessage(err.message || "Could not issue credit note.");
     } finally {
@@ -716,19 +734,22 @@ export function Billing({
 
   async function cancelInvoice(invoice: any) {
     if (!apiSession) return;
-    if (
-      !window.confirm(
-        `Cancel invoice ${invoice.invoice_number}? This reverses the ledger and, for home care/visit bills, reopens the booking for editing.`,
-      )
-    )
-      return;
-    const reason = window.prompt(`Cancel reason for ${invoice.invoice_number}`);
-    if (!reason) return;
-    setBusy(`cancel-${invoice.id}`);
+    setInvoiceActionPrompt({ kind: "cancel", invoice });
+  }
+
+  async function amendInvoice(invoice: any) {
+    if (!apiSession) return;
+    setInvoiceActionPrompt({ kind: "amend", invoice });
+  }
+
+  async function submitInvoiceAction(reason: string) {
+    if (!apiSession || !invoiceActionPrompt || !reason) return;
+    const { kind, invoice } = invoiceActionPrompt;
+    setBusy(`${kind}-${invoice.id}`);
     setMessage("");
     try {
       const row = await apiFetch(
-        `/billing/invoices/${invoice.id}/cancel`,
+        `/billing/invoices/${invoice.id}/${kind}`,
         apiSession,
         {
           method: "POST",
@@ -739,10 +760,13 @@ export function Billing({
       await loadLiveData(apiSession);
       await loadReports();
       setMessage(
-        `Invoice ${invoice.invoice_number} cancelled and ledger reversed.`,
+        kind === "cancel"
+          ? `Invoice ${invoice.invoice_number} cancelled and ledger reversed.`
+          : `Invoice ${invoice.invoice_number} amended and reopened.`,
       );
+      setInvoiceActionPrompt(null);
     } catch (err: any) {
-      setMessage(err.message || "Could not cancel invoice.");
+      setMessage(err.message || `Could not ${kind} invoice.`);
     } finally {
       setBusy("");
     }
@@ -750,29 +774,12 @@ export function Billing({
 
   async function requestAdjustment(invoice: any, type: string) {
     if (!apiSession) return;
-    const label = String(type).replaceAll("_", " ");
-    const reason = window.prompt(
-      `Reason for ${label} request on ${invoice.invoice_number}`,
-    );
-    if (!reason) return;
-    let amount: any = null;
-    if (type === "partial_refund" || type === "discount") {
-      const raw = window.prompt(
-        type === "discount"
-          ? `Discount amount for ${invoice.invoice_number}`
-          : `Partial refund amount for ${invoice.invoice_number}`,
-      );
-      if (!raw) return;
-      amount = Number(raw);
-      if (!amount || amount <= 0) {
-        setMessage(
-          type === "discount"
-            ? "Enter a valid discount amount."
-            : "Enter a valid refund amount.",
-        );
-        return;
-      }
-    }
+    setAdjustmentPrompt({ invoice, type });
+  }
+
+  async function submitAdjustmentRequest(reason: string, amount: number | null) {
+    if (!apiSession || !adjustmentPrompt || !reason) return;
+    const { invoice, type } = adjustmentPrompt;
     setBusy(`request-${invoice.id}`);
     setMessage("");
     try {
@@ -793,6 +800,7 @@ export function Billing({
       setMessage(
         `${String(row.request_type).replaceAll("_", " ")} request raised.`,
       );
+      setAdjustmentPrompt(null);
     } catch (err: any) {
       setMessage(err.message || "Could not raise request.");
     } finally {
@@ -802,105 +810,57 @@ export function Billing({
 
   async function approveAdjustment(row: any) {
     if (!apiSession) return;
-    const reason = window.prompt("Approval note (optional)") || "";
-    setBusy(`approve-${row.id}`);
-    setMessage("");
-    try {
-      await apiFetch(
-        `/billing/adjustment-requests/${row.id}/approve`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            reason: reason || null,
-            actor_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      if (detail?.invoice) await openInvoiceDetail(detail.invoice);
-      setMessage("Request approved.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not approve request.");
-    } finally {
-      setBusy("");
-    }
+    setRequestActionPrompt({ kind: "approve", row });
   }
 
   async function rejectAdjustment(row: any) {
     if (!apiSession) return;
-    const reason = window.prompt("Reject reason");
-    if (!reason) return;
-    setBusy(`reject-${row.id}`);
-    setMessage("");
-    try {
-      await apiFetch(
-        `/billing/adjustment-requests/${row.id}/reject`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({ reason, actor_user_id: apiSession.user?.id }),
-        },
-      );
-      if (detail?.invoice) await openInvoiceDetail(detail.invoice);
-      setMessage("Request rejected.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not reject request.");
-    } finally {
-      setBusy("");
-    }
+    setRequestActionPrompt({ kind: "reject", row });
   }
 
   async function executeAdjustment(row: any) {
     if (!apiSession) return;
-    if (
-      !window.confirm(
-        `Execute ${String(row.request_type).replaceAll("_", " ")} request?`,
-      )
-    )
-      return;
-    setBusy(`execute-${row.id}`);
-    setMessage("");
-    try {
-      const next = await apiFetch(
-        `/billing/adjustment-requests/${row.id}/execute`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({ actor_user_id: apiSession.user?.id }),
-        },
-      );
-      setDetail(next);
-      await loadLiveData(apiSession);
-      await loadReports();
-      setMessage("Request executed and ledger updated.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not execute request.");
-    } finally {
-      setBusy("");
-    }
+    setRequestActionPrompt({ kind: "execute", row });
   }
 
-  async function amendInvoice(invoice: any) {
-    if (!apiSession) return;
-    const reason = window.prompt(`Amend reason for ${invoice.invoice_number}`);
-    if (!reason) return;
-    setBusy(`amend-${invoice.id}`);
+  async function submitRequestAction(reason: string) {
+    if (!apiSession || !requestActionPrompt) return;
+    const { kind, row } = requestActionPrompt;
+    if (kind === "reject" && !reason) return;
+    setBusy(`${kind}-${row.id}`);
     setMessage("");
     try {
-      const row = await apiFetch(
-        `/billing/invoices/${invoice.id}/amend`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({ reason, actor_user_id: apiSession.user?.id }),
-        },
-      );
-      setDetail(row);
-      await loadLiveData(apiSession);
-      await loadReports();
-      setMessage(`Invoice ${invoice.invoice_number} amended and reopened.`);
+      if (kind === "execute") {
+        const next = await apiFetch(
+          `/billing/adjustment-requests/${row.id}/execute`,
+          apiSession,
+          {
+            method: "POST",
+            body: JSON.stringify({ actor_user_id: apiSession.user?.id }),
+          },
+        );
+        setDetail(next);
+        await loadLiveData(apiSession);
+        await loadReports();
+        setMessage("Request executed and ledger updated.");
+      } else {
+        await apiFetch(
+          `/billing/adjustment-requests/${row.id}/${kind}`,
+          apiSession,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              reason: reason || null,
+              actor_user_id: apiSession.user?.id,
+            }),
+          },
+        );
+        if (detail?.invoice) await openInvoiceDetail(detail.invoice);
+        setMessage(kind === "approve" ? "Request approved." : "Request rejected.");
+      }
+      setRequestActionPrompt(null);
     } catch (err: any) {
-      setMessage(err.message || "Could not amend invoice.");
+      setMessage(err.message || `Could not ${kind} request.`);
     } finally {
       setBusy("");
     }
@@ -1047,7 +1007,9 @@ export function Billing({
           onClick={() => openInvoiceDetail(invoice)}
           disabled={detailLoading === invoice.id}
         >
-          {detailLoading === invoice.id ? "Loading..." : "View"}
+          <ButtonLoader loading={detailLoading === invoice.id}>
+            {detailLoading === invoice.id ? "Loading..." : "View"}
+          </ButtonLoader>
         </ActionButton>
       ),
     },
@@ -1066,45 +1028,156 @@ export function Billing({
 
   if (detail) {
     return (
-      <InvoiceDetailPage
-        detail={detail}
-        patient={patientMap.get(detail.invoice?.patient_id)}
-        onClose={() => setDetail(null)}
-        methods={methods}
-        setMethods={setMethods}
-        amounts={amounts}
-        setAmounts={setAmounts}
-        references={references}
-        setReferences={setReferences}
-        invoicePaymentOptions={invoicePaymentOptions}
-        defaultPaymentMethod={defaultPaymentMethod}
-        busy={busy}
-        collectPayment={async (invoice: any) => {
-          await collectPayment(invoice);
-          await openInvoiceDetail(invoice);
-        }}
-        collectSplitPayment={collectSplitPayment}
-        sendInvoice={sendInvoice}
-        applyMembershipBenefit={applyMembershipBenefit}
-        openReceipt={openReceipt}
-        issueCreditNote={issueCreditNote}
-        cancelInvoice={cancelInvoice}
-        amendInvoice={amendInvoice}
-        requestAdjustment={requestAdjustment}
-        approveAdjustment={approveAdjustment}
-        rejectAdjustment={rejectAdjustment}
-        executeAdjustment={executeAdjustment}
-        userPermissions={apiSession.user?.permissions || []}
-        currentUser={apiSession.user}
-        supplierOptions={supplierOptions}
-        updateInvoiceItemSupplier={updateInvoiceItemSupplier}
-        apiSession={apiSession}
-      />
+      <>
+        <InvoiceDetailPage
+          detail={detail}
+          patient={patientMap.get(detail.invoice?.patient_id)}
+          onClose={() => setDetail(null)}
+          methods={methods}
+          setMethods={setMethods}
+          amounts={amounts}
+          setAmounts={setAmounts}
+          references={references}
+          setReferences={setReferences}
+          invoicePaymentOptions={invoicePaymentOptions}
+          defaultPaymentMethod={defaultPaymentMethod}
+          busy={busy}
+          collectPayment={async (invoice: any) => {
+            await collectPayment(invoice);
+            await openInvoiceDetail(invoice);
+          }}
+          collectSplitPayment={collectSplitPayment}
+          sendInvoice={sendInvoice}
+          applyMembershipBenefit={applyMembershipBenefit}
+          openReceipt={openReceipt}
+          issueCreditNote={issueCreditNote}
+          cancelInvoice={cancelInvoice}
+          amendInvoice={amendInvoice}
+          requestAdjustment={requestAdjustment}
+          approveAdjustment={approveAdjustment}
+          rejectAdjustment={rejectAdjustment}
+          executeAdjustment={executeAdjustment}
+          userPermissions={apiSession.user?.permissions || []}
+          currentUser={apiSession.user}
+          supplierOptions={supplierOptions}
+          updateInvoiceItemSupplier={updateInvoiceItemSupplier}
+          apiSession={apiSession}
+        />
+        {creditNotePrompt && (
+          <ConfirmModal
+            title={`Credit Note - ${creditNotePrompt.invoice_number}`}
+            message="This will issue a credit note against this invoice for the outstanding balance."
+            confirmLabel="Issue Credit Note"
+            requireReason
+            reasonLabel="Credit note reason"
+            busy={busy === creditNotePrompt.id}
+            onCancel={() => setCreditNotePrompt(null)}
+            onConfirm={({ reason }) => submitCreditNote(reason)}
+          />
+        )}
+        {adjustmentPrompt && (
+          <ConfirmModal
+            title={`Request ${adjustmentPrompt.type.replaceAll("_", " ")} - ${adjustmentPrompt.invoice.invoice_number}`}
+            message={`Provide a reason for this ${adjustmentPrompt.type.replaceAll("_", " ")} request${
+              adjustmentPrompt.type === "partial_refund" ||
+              adjustmentPrompt.type === "discount"
+                ? " and an amount"
+                : ""
+            }.`}
+            confirmLabel="Submit Request"
+            requireReason
+            reasonLabel="Reason"
+            requireAmount={
+              adjustmentPrompt.type === "partial_refund" ||
+              adjustmentPrompt.type === "discount"
+            }
+            amountLabel={
+              adjustmentPrompt.type === "discount"
+                ? "Discount amount"
+                : "Refund amount"
+            }
+            busy={busy === `request-${adjustmentPrompt.invoice.id}`}
+            onCancel={() => setAdjustmentPrompt(null)}
+            onConfirm={({ reason, amount }) =>
+              submitAdjustmentRequest(reason, amount)
+            }
+          />
+        )}
+        {invoiceActionPrompt && (
+          <ConfirmModal
+            title={
+              invoiceActionPrompt.kind === "cancel"
+                ? `Cancel Invoice - ${invoiceActionPrompt.invoice.invoice_number}`
+                : `Amend Invoice - ${invoiceActionPrompt.invoice.invoice_number}`
+            }
+            message={
+              invoiceActionPrompt.kind === "cancel"
+                ? "This reverses the ledger and, for home care/visit bills, reopens the booking for editing."
+                : "This reopens the invoice for editing."
+            }
+            confirmLabel={
+              invoiceActionPrompt.kind === "cancel"
+                ? "Cancel Invoice"
+                : "Amend Invoice"
+            }
+            requireReason
+            reasonLabel={
+              invoiceActionPrompt.kind === "cancel"
+                ? "Cancel reason"
+                : "Amend reason"
+            }
+            busy={
+              busy ===
+              `${invoiceActionPrompt.kind}-${invoiceActionPrompt.invoice.id}`
+            }
+            onCancel={() => setInvoiceActionPrompt(null)}
+            onConfirm={({ reason }) => submitInvoiceAction(reason)}
+          />
+        )}
+        {requestActionPrompt && (
+          <ConfirmModal
+            title={
+              requestActionPrompt.kind === "approve"
+                ? "Approve Request"
+                : requestActionPrompt.kind === "reject"
+                  ? "Reject Request"
+                  : "Execute Request"
+            }
+            message={
+              requestActionPrompt.kind === "execute"
+                ? `Execute ${String(requestActionPrompt.row.request_type).replaceAll("_", " ")} request?`
+                : requestActionPrompt.kind === "approve"
+                  ? "Approve this adjustment request? You may add an optional note."
+                  : "Reject this adjustment request. A reason is required."
+            }
+            confirmLabel={
+              requestActionPrompt.kind === "approve"
+                ? "Approve"
+                : requestActionPrompt.kind === "reject"
+                  ? "Reject"
+                  : "Execute"
+            }
+            requireReason={requestActionPrompt.kind === "reject"}
+            showReason={requestActionPrompt.kind !== "execute"}
+            reasonLabel={
+              requestActionPrompt.kind === "approve"
+                ? "Approval note (optional)"
+                : "Reason"
+            }
+            busy={
+              busy ===
+              `${requestActionPrompt.kind}-${requestActionPrompt.row.id}`
+            }
+            onCancel={() => setRequestActionPrompt(null)}
+            onConfirm={({ reason }) => submitRequestAction(reason)}
+          />
+        )}
+      </>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="">
       {(canViewRevenueSummary || canViewSettlementSummary) && (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           {canViewRevenueSummary && (
@@ -1192,7 +1265,9 @@ export function Billing({
                   className="mt-2 rounded-lg border px-3 py-2 text-xs font-bold"
                   disabled={busy === "settlement"}
                 >
-                  {busy === "settlement" ? "Finalizing..." : "Finalize"}
+                  <ButtonLoader loading={busy === "settlement"}>
+                    {busy === "settlement" ? "Finalizing..." : "Finalize"}
+                  </ButtonLoader>
                 </button>
               ) : (
                 <Badge
@@ -1266,7 +1341,9 @@ export function Billing({
                           disabled={busy === a.id}
                           onClick={() => generateInvoice(a)}
                         >
-                          {busy === a.id ? "Generating..." : "Generate Invoice"}
+                          <ButtonLoader loading={busy === a.id}>
+                            {busy === a.id ? "Generating..." : "Generate Invoice"}
+                          </ButtonLoader>
                         </Button>
                       </td>
                     </tr>

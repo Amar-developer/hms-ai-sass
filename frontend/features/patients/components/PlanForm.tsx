@@ -10,6 +10,7 @@ import { FormField } from "@/app/components/FormElements";
 import { PharmacySlabEditor } from "./PharmacySlabEditor";
 import { BenefitPicker } from "./BenefitPicker";
 import { FormError } from "@/app/components/common/FormError";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function PlanForm({
   title,
@@ -311,7 +312,11 @@ export function PlanForm({
           />
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-4">
-          <Button disabled={busy}>{busy ? "Saving..." : submitLabel}</Button>
+          <Button disabled={busy}>
+            <ButtonLoader loading={busy}>
+              {busy ? "Saving..." : submitLabel}
+            </ButtonLoader>
+          </Button>
           <button
             type="button"
             onClick={back}

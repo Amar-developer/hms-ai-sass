@@ -16,6 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function FilesPanel({
   apiSession,
@@ -307,7 +308,9 @@ export function FilesPanel({
               onClick={syncUploadsFolder}
               disabled={syncing || !apiSession}
             >
-              {syncing ? "Syncing..." : "Sync Uploads Folder"}
+              <ButtonLoader loading={syncing}>
+                {syncing ? "Syncing..." : "Sync Uploads Folder"}
+              </ButtonLoader>
             </ActionButton>
           </div>
         </div>
@@ -464,7 +467,9 @@ export function FilesPanel({
           </div>
           <div className="flex items-end">
             <Button disabled={busy} className="save-button">
-              {busy ? "Uploading..." : "Upload File"}
+              <ButtonLoader loading={busy}>
+                {busy ? "Uploading..." : "Upload File"}
+              </ButtonLoader>
             </Button>
           </div>
         </form>

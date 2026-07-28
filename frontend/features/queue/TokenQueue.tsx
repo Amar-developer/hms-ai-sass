@@ -20,6 +20,8 @@ import { QueueAction, TokenQueueProps } from "./types";
 import { dateKey, isActiveQueueAppointment, sortByQueuePosition, todayKey } from "./helpers";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { Skeleton } from "@/app/components/common/loader/Skeleton";
 
 
 
@@ -44,6 +46,7 @@ export function TokenQueue({
     "english" | "tamil" | "both"
   >("english");
   const [displayRows, setDisplayRows] = useState<any[]>([]);
+  const [displayLoading, setDisplayLoading] = useState(false);
   const today = todayKey();
   const [selectedDate, setSelectedDate] = useState(today);
   const [page, setPage] = useState(1);
@@ -106,7 +109,10 @@ export function TokenQueue({
     let alive = true;
     async function loadDisplay() {
       if (!apiSession) return;
-      if (alive) setDisplayRows([]);
+      if (alive) {
+        setDisplayRows([]);
+        setDisplayLoading(true);
+      }
       try {
         const rows = await apiFetch(
           `/queue/display?display_mode=${displayMode}`,
@@ -115,6 +121,8 @@ export function TokenQueue({
         if (alive) setDisplayRows(rows);
       } catch {
         if (alive) setDisplayRows([]);
+      } finally {
+        if (alive) setDisplayLoading(false);
       }
     }
     loadDisplay();
@@ -348,14 +356,21 @@ export function TokenQueue({
               disabled={busyId === "end-of-day" || queue.length === 0}
               className="cancel-button border-red-100 bg-white table-xs font-bold text-red-600 hover:bg-red-50 disabled:text-slate-300"
             >
-              {busyId === "end-of-day" ? "Closing..." : "Cancel Remaining"}
+              <ButtonLoader loading={busyId === "end-of-day"}>
+                {busyId === "end-of-day" ? "Closing..." : "Cancel Remaining"}
+              </ButtonLoader>
             </button>
           </FormField>
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="mt-4 grid gap-3 sm:grid-cols-4 lg:grid-cols-5">
-        {(visibleDisplayRows.length ? visibleDisplayRows : visibleQueue).map(
+        {displayLoading &&
+          Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-[72px] w-full rounded-lg" />
+          ))}
+        {!displayLoading &&
+        (visibleDisplayRows.length ? visibleDisplayRows : visibleQueue).map(
           (item: any) => {
             const appointment = item.appointment || item;
             return (
@@ -471,27 +486,35 @@ export function TokenQueue({
                         transition(appointment, "call");
                       }}
                     >
-                      Call
+                      <ButtonLoader loading={busyId === appointment.id}>
+                        Call
+                      </ButtonLoader>
                     </ActionButton>
                     <ActionButton
                       disabled={busyId === appointment.id}
                       onClick={() => transition(appointment, "skip")}
                     >
-                      Skip
+                      <ButtonLoader loading={busyId === appointment.id}>
+                        Skip
+                      </ButtonLoader>
                     </ActionButton>
                     <ActionButton
                       tone="primary"
                       disabled={busyId === appointment.id}
                       onClick={() => transition(appointment, "requeue")}
                     >
-                      Requeue
+                      <ButtonLoader loading={busyId === appointment.id}>
+                        Requeue
+                      </ButtonLoader>
                     </ActionButton>
                     <ActionButton
                       tone="danger"
                       disabled={busyId === appointment.id}
                       onClick={() => transition(appointment, "cancel")}
                     >
-                      Cancel
+                      <ButtonLoader loading={busyId === appointment.id}>
+                        Cancel
+                      </ButtonLoader>
                     </ActionButton>
                   </ActionGroup>
                 </td>

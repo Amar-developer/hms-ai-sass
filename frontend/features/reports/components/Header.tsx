@@ -13,6 +13,7 @@ import {
   Mail,
   RefreshCw,
 } from "lucide-react";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 type HeaderProps = {
   section: string;
@@ -397,7 +398,9 @@ const Header = ({
               className="inline-flex items-center gap-2 py-2 px-2 lg:px-4 lg:py-3 rounded-lg bg-slate-900 font-bold text-white disabled:bg-slate-300"
             >
               <Mail size={15} />
-              {sendBusy ? "Sending..." : "Send Excel"}
+              <ButtonLoader loading={sendBusy}>
+                {sendBusy ? "Sending..." : "Send Excel"}
+              </ButtonLoader>
             </button>
             <button
               type="button"

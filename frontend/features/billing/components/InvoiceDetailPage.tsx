@@ -11,6 +11,7 @@ import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function InvoiceDetailPage({
   detail,
@@ -394,7 +395,7 @@ export function InvoiceDetailPage({
       new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime(),
   );
   return (
-    <div className="space-y-5">
+    <div className="">
       <Card>
         <div className="-mx-6 -mt-6 border-b border-slate-200 bg-white px-6 py-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -474,7 +475,7 @@ export function InvoiceDetailPage({
             </div>
           </div>
 
-          <div className="mt-5 space-y-5">
+          <div className="mt-5 ">
             <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex flex-col gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -662,7 +663,7 @@ export function InvoiceDetailPage({
             <aside className="rounded-lg border border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-4 py-4">
                 <h4 className="card-title font-bold">Payment Summary</h4>
-                <p className="table-data text-slate-500">
+                <p className="card-desc text-slate-500">
                   Staff collection view
                 </p>
               </div>
@@ -736,9 +737,13 @@ export function InvoiceDetailPage({
                           onClick={() => applyMembershipBenefit(invoice)}
                           disabled={busy === `membership-${invoice.id}`}
                         >
-                          {busy === `membership-${invoice.id}`
-                            ? "Applying..."
-                            : `Apply ${money(membershipBenefit.discount_amount)}`}
+                          <ButtonLoader
+                            loading={busy === `membership-${invoice.id}`}
+                          >
+                            {busy === `membership-${invoice.id}`
+                              ? "Applying..."
+                              : `Apply ${money(membershipBenefit.discount_amount)}`}
+                          </ButtonLoader>
                         </ActionButton>
                       ) : null
                     }
@@ -775,7 +780,7 @@ export function InvoiceDetailPage({
                     danger={numberValue(invoice.balance_amount) > 0}
                   />
                 </div>
-                <div className="space-y-3">
+                <div className="">
                   <div className="rounded-2xl bg-slate-50 p-4">
                     <div className="grid grid-cols-2 gap-3 text-xs">
                       <InvoiceMeta
@@ -809,7 +814,7 @@ export function InvoiceDetailPage({
                           + Add mode
                         </button>
                       </div>
-                      <div className="mt-3 space-y-3">
+                      <div className="mt-3 ">
                         {payRows.map((row, index) => (
                           <div
                             key={index}
@@ -894,21 +899,23 @@ export function InvoiceDetailPage({
                         onClick={() => collectSplitPayment(invoice, payRows)}
                         className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-slate-900 to-slate-700 px-4 py-3.5 text-sm lg:text-base   font-black tracking-wide text-white shadow-lg shadow-slate-900/20 transition hover:from-slate-800 hover:to-slate-600 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                       >
-                        {busy === invoice.id ? (
-                          "Saving Payment..."
-                        ) : (
-                          <>
-                            <span>
-                              {payRows.filter((r) => Number(r.amount) > 0)
-                                .length > 1
-                                ? "Pay (Split)"
-                                : "Pay"}
-                            </span>
-                            <span className="tabular-nums">
-                              {money(enteredTotal)}
-                            </span>
-                          </>
-                        )}
+                        <ButtonLoader loading={busy === invoice.id}>
+                          {busy === invoice.id ? (
+                            "Saving Payment..."
+                          ) : (
+                            <>
+                              <span>
+                                {payRows.filter((r) => Number(r.amount) > 0)
+                                  .length > 1
+                                  ? "Pay (Split)"
+                                  : "Pay"}
+                              </span>
+                              <span className="tabular-nums">
+                                {money(enteredTotal)}
+                              </span>
+                            </>
+                          )}
+                        </ButtonLoader>
                       </button>
                     </div>
                   ) : isPaymentClosed ? (
@@ -969,26 +976,32 @@ export function InvoiceDetailPage({
                           invoiceDeliveryPending
                         }
                       >
-                        {busy === `send-invoice-${invoice.id}`
-                          ? "Sending Invoice..."
-                          : invoiceDeliveryPending
-                            ? "Invoice Queued"
-                            : invoiceDeliveryStatus === "sent"
-                              ? "Resend Invoice"
-                              : ["failed", "cancelled"].includes(
-                                    invoiceDeliveryStatus,
-                                  )
-                                ? "Retry Send Invoice"
-                                : "Send Invoice"}
+                        <ButtonLoader
+                          loading={busy === `send-invoice-${invoice.id}`}
+                        >
+                          {busy === `send-invoice-${invoice.id}`
+                            ? "Sending Invoice..."
+                            : invoiceDeliveryPending
+                              ? "Invoice Queued"
+                              : invoiceDeliveryStatus === "sent"
+                                ? "Resend Invoice"
+                                : ["failed", "cancelled"].includes(
+                                      invoiceDeliveryStatus,
+                                    )
+                                  ? "Retry Send Invoice"
+                                  : "Send Invoice"}
+                        </ButtonLoader>
                       </ActionButton>
                     )}
                     <ActionButton
                       onClick={() => openReceipt(invoice)}
                       disabled={busy === `receipt-${invoice.id}`}
                     >
-                      {busy === `receipt-${invoice.id}`
-                        ? "Generating PDF..."
-                        : "Print Invoice"}
+                      <ButtonLoader loading={busy === `receipt-${invoice.id}`}>
+                        {busy === `receipt-${invoice.id}`
+                          ? "Generating PDF..."
+                          : "Print Invoice"}
+                      </ButtonLoader>
                     </ActionButton>
                     {canIssueCreditNote && (
                       <ActionButton onClick={() => issueCreditNote(invoice)}>
@@ -1004,18 +1017,22 @@ export function InvoiceDetailPage({
                             numberValue(invoice.paid_amount) > 0
                           }
                         >
-                          {busy === `cancel-${invoice.id}`
-                            ? "Cancelling..."
-                            : "Cancel"}
+                          <ButtonLoader loading={busy === `cancel-${invoice.id}`}>
+                            {busy === `cancel-${invoice.id}`
+                              ? "Cancelling..."
+                              : "Cancel"}
+                          </ButtonLoader>
                         </ActionButton>
                       ) : (
                         <ActionButton
                           onClick={() => amendInvoice?.(invoice)}
                           disabled={busy === `amend-${invoice.id}`}
                         >
-                          {busy === `amend-${invoice.id}`
-                            ? "Amending..."
-                            : "Amend"}
+                          <ButtonLoader loading={busy === `amend-${invoice.id}`}>
+                            {busy === `amend-${invoice.id}`
+                              ? "Amending..."
+                              : "Amend"}
+                          </ButtonLoader>
                         </ActionButton>
                       ))}
                   </div>
@@ -1089,7 +1106,7 @@ export function InvoiceDetailPage({
                 <h4 className="card-title font-bold">
                   Discount, Refund & Cancellation Requests
                 </h4>
-                <p className="table-data text-slate-500">
+                <p className="card-desc text-slate-500">
                   Request, approve, and execute invoice adjustments.
                 </p>
               </div>
@@ -1223,7 +1240,7 @@ export function InvoiceDetailPage({
             <div className="mt-5 rounded-lg border border-slate-200">
               <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
                 <h4 className="card-title font-bold">Billing Ledger</h4>
-                <p className="table-data text-slate-500">
+                <p className="card-desc text-slate-500">
                   Invoice lifecycle is tracked for audit. Credit and debit show
                   only payment, refund, or membership benefit movement.
                 </p>

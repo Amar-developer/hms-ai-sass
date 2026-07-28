@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge, Card, Input, RefreshButton } from "@/app/components/common/ui";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { TenantPicker } from "../shared/TenantPicker";
 import { displayDate } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
@@ -22,6 +23,7 @@ export function DepartmentsManagement({
   setSection,
   setConfirmAction,
   onRefresh,
+  busy,
 }: any) {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -199,15 +201,19 @@ export function DepartmentsManagement({
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[980px]">
-          <DataTable
-            columns={departmentColumns}
-            data={rows}
-            emptyMessage="No medical departments match your search."
-            onRowClick={(department) => {
-              setSelectedDepartmentId(department.id);
-              setSection("departmentEdit");
-            }}
-          />
+          {busy && rows.length === 0 ? (
+            <TableSkeleton />
+          ) : (
+            <DataTable
+              columns={departmentColumns}
+              data={rows}
+              emptyMessage="No medical departments match your search."
+              onRowClick={(department) => {
+                setSelectedDepartmentId(department.id);
+                setSection("departmentEdit");
+              }}
+            />
+          )}
         </div>
       </div>
       <Pagination

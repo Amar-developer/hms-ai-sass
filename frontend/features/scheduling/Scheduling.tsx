@@ -21,6 +21,7 @@ import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
 import { pageSize,weekdays } from "./constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { ScheduleRow } from "./components/ScheduleRow";
 import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
@@ -545,14 +546,9 @@ export function Scheduling({ apiSession, branchId }: any) {
             <span className="text-center">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
-            {pageRows.length === 0 && (
-              <Empty
-                text={
-                  busy
-                    ? "Loading schedules..."
-                    : "No schedules match your search."
-                }
-              />
+            {busy && pageRows.length === 0 && <TableSkeleton />}
+            {!busy && pageRows.length === 0 && (
+              <Empty text="No schedules match your search." />
             )}{" "}
             {pageRows.map((row: any) => (
               <ScheduleRow

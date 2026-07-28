@@ -33,6 +33,7 @@ import {
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "../admin/components/RowActions";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 const MAX_REPORT_DOCUMENTS = 5;
 
@@ -1253,19 +1254,27 @@ export function Lab({
           <RefreshButton onRefresh={load} />
         </div>
         <div className="mt-4">
-          <DataTable
-            columns={worklistColumns}
-            data={labPageRows}
-            emptyMessage="No lab orders yet."
-            onRowClick={setSelectedOrder}
-          />
+          {!ordersLoaded ? (
+            <div className="overflow-auto rounded-lg border">
+              <TableSkeleton rows={8} />
+            </div>
+          ) : (
+            <DataTable
+              columns={worklistColumns}
+              data={labPageRows}
+              emptyMessage="No lab orders yet."
+              onRowClick={setSelectedOrder}
+            />
+          )}
         </div>
-        <Pagination
-          page={safePage}
-          totalPages={totalPages}
-          total={orders.length}
-          onPage={setPage}
-        />
+        {ordersLoaded && (
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={orders.length}
+            onPage={setPage}
+          />
+        )}
       </Card>
       {replaceDocPicker && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">

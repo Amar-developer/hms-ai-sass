@@ -29,6 +29,8 @@ import { PatientSearchSelect } from "../patients/components/PatientSearchSelect"
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 export function PatientSubscriptions({
   apiSession,
@@ -50,6 +52,7 @@ export function PatientSubscriptions({
   } | null>(null);
   const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState("");
+  const [loading, setLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
   const [freeConsultDeptIds, setFreeConsultDeptIds] = useState<string[]>([]);
@@ -98,6 +101,7 @@ export function PatientSubscriptions({
   async function load() {
     if (!apiSession) return;
     setLoadError("");
+    setLoading(true);
     try {
       const [planRows, enrollmentRows, testRows, medicineRows, departmentRows] =
         await Promise.all([
@@ -143,6 +147,8 @@ export function PatientSubscriptions({
     } catch (err: any) {
       const msg = err.message || "Could not load patient subscriptions.";
       setLoadError(msg);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -727,7 +733,9 @@ export function PatientSubscriptions({
                 </FormField>
                 <div className="flex items-end">
                   <Button disabled={busy === "enroll"}>
-                    {busy === "enroll" ? "Enrolling..." : "Enroll"}
+                    <ButtonLoader loading={busy === "enroll"}>
+                      {busy === "enroll" ? "Enrolling..." : "Enroll"}
+                    </ButtonLoader>
                   </Button>
                 </div>
               </form>
@@ -762,12 +770,13 @@ export function PatientSubscriptions({
               </div>
             </div>
             <div className="mt-4 overflow-hidden rounded-lg border border-slate-200">
-              {plans.length === 0 && (
+              {loading && <TableSkeleton />}
+              {!loading && plans.length === 0 && (
                 <p className="p-4 text-sm text-slate-500">
                   No patient plans yet.
                 </p>
               )}
-              {plans.length > 0 && (
+              {!loading && plans.length > 0 && (
                 <div>
                   <div className="min-w-full overflow-x-auto lg:block">
                     <table className="min-w-full text-left text-sm">

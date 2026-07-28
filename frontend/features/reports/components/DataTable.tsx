@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { DataTableProps } from "../types";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize as defaultPageSize } from "@/utils/constants";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 export function DataTable<T>({
   columns,
@@ -12,6 +13,7 @@ export function DataTable<T>({
   footer,
   paginate = false,
   pageSize = defaultPageSize,
+  loading = false,
 }: DataTableProps<T>) {
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(data.length / pageSize));
@@ -46,7 +48,15 @@ export function DataTable<T>({
         </thead>
 
         <tbody className="divide-y">
-          {data.length === 0 && (
+          {loading && (
+            <tr>
+              <td colSpan={columns.length} className="p-0">
+                <TableSkeleton />
+              </td>
+            </tr>
+          )}
+
+          {!loading && data.length === 0 && (
             <tr>
               <td
                 colSpan={columns.length}
@@ -57,7 +67,7 @@ export function DataTable<T>({
             </tr>
           )}
 
-          {visibleData.map((row, index) => (
+          {!loading && visibleData.map((row, index) => (
             <tr
               key={index}
               onClick={() => onRowClick?.(row)}

@@ -12,6 +12,7 @@ const HomeCareReports = ({
   setOpenSections,
   money,
   onOpenInvoices,
+  loading,
 }: HomeCareReportsProps) => {
   const moneyOrDash = (value: any) =>
     Number(value || 0) === 0 ? "-" : money(value);
@@ -139,6 +140,7 @@ const HomeCareReports = ({
           paginate
           emptyMessage="No paid home care or home visit invoices match this filter."
           className="w-full min-w-[1280px] text-left text-sm"
+          loading={loading}
         />
       </div>
     </CollapsibleReportSection>

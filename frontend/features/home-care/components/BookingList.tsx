@@ -21,6 +21,7 @@ import { humanizeOptionLabel } from "@/lib/options";
 import { Pagination } from "@/app/components/common/Pagination";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "@/features/admin/components/RowActions";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 
 export function BookingsList({
@@ -33,6 +34,7 @@ export function BookingsList({
   setFilters,
   patientMap,
   staffMap,
+  loading = false,
   onRefresh,
   onCreate,
   onView,
@@ -103,14 +105,21 @@ export function BookingsList({
             </tr>
           </thead>
           <tbody className="divide-y">
-            {bookings.length === 0 && (
+            {loading && (
+              <tr>
+                <td colSpan={7} className="p-0">
+                  <TableSkeleton />
+                </td>
+              </tr>
+            )}
+            {!loading && bookings.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-4 text-slate-500">
                   No home care / visit bookings match your filter.
                 </td>
               </tr>
             )}
-            {bookings.map((booking: any) => {
+            {!loading && bookings.map((booking: any) => {
               const patient: any = patientMap.get(booking.patient_id);
               return (
                 <tr key={booking.id}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { Button, Card, Field, Input, Select } from "@/app/components/common/ui";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function PasswordResetModal({ user, busy, onSubmit, onCancel }: any) {
   return (
@@ -39,7 +40,9 @@ export function PasswordResetModal({ user, busy, onSubmit, onCancel }: any) {
             </Field>
             <div className="flex flex-wrap gap-2">
               <Button disabled={busy}>
-                {busy ? "Saving..." : "Reset Password"}
+                <ButtonLoader loading={busy}>
+                  {busy ? "Saving..." : "Reset Password"}
+                </ButtonLoader>
               </Button>
               <button
                 type="button"

@@ -22,6 +22,7 @@ import { OnboardingReview } from "@/features/admin/components/OnboardingReview";
 import { PlanModulePreview } from "@/features/admin/components/PlanModulePreview";
 import { TemplateChecklist } from "@/features/admin/components/TemplateChecklist";
 import { FormField } from "@/app/components/FormElements";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 
 
@@ -609,7 +610,9 @@ export function CreateTenantForm({
             disabled={!canComplete}
             className="rounded-lg px-5 py-2.5 text-xs lg:text-sm"
           >
-            {busy ? "Onboarding..." : "Complete Onboarding"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Onboarding..." : "Complete Onboarding"}
+            </ButtonLoader>
           </Button>
         </div>
       </form>

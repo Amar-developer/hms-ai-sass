@@ -45,6 +45,7 @@ export function HomeCare({
   const [error, setError] = useState("");
   const [serviceLoadError, setServiceLoadError] = useState("");
   const [busy, setBusy] = useState("");
+  const [loading, setLoading] = useState(false);
   const [filters, setFilters] = useState({ query: "", status: "all" });
   const [page, setPage] = useState(1);
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
@@ -264,6 +265,7 @@ export function HomeCare({
     if (!apiSession) return;
     setError("");
     setServiceLoadError("");
+    setLoading(true);
     try {
       const serviceRows = mergeServices(
         await apiFetch("/home-care/services", apiSession)
@@ -287,6 +289,8 @@ export function HomeCare({
       setStaff(staffRows.filter((user: any) => user.is_active !== false));
     } catch (err: any) {
       setError(err.message || "Unable to load home care bookings.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -649,6 +653,7 @@ export function HomeCare({
           setFilters={setFilters}
           patientMap={patientMap}
           staffMap={staffMap}
+          loading={loading}
           onRefresh={load}
           onCreate={openCreate}
           onView={openView}

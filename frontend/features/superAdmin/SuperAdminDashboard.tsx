@@ -265,6 +265,7 @@ export function SuperAdminDashboard({
           trialTenants={trialTenants}
           plans={data.plans}
           estimatedRevenue={estimatedRevenue}
+          loading={data.busy}
         />
       )}
       {currentSection === "privilegedAccess" && (
@@ -329,6 +330,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
+          busy={data.busy}
         />
       )}
       {currentSection === "roleCreate" && (
@@ -385,6 +387,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
+          busy={data.busy}
         />
       )}
       {currentSection === "userCreate" && (
@@ -428,6 +431,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
+          busy={data.busy}
         />
       )}
       {currentSection === "departmentCreate" && (
@@ -482,6 +486,7 @@ export function SuperAdminDashboard({
           setSection={changeSection}
           setConfirmAction={setConfirmAction}
           onRefresh={data.reload}
+          busy={data.busy}
         />
       )}
       {currentSection === "branchCreate" && (

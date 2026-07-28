@@ -6,21 +6,24 @@ import { Badge, Card, Input } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
 import { displayDateTime } from "@/utils/helper";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
   const [admins, setAdmins] = useState<any[]>([]);
   const [statusPassword, setStatusPassword] = useState("");
   const [statusReason, setStatusReason] = useState("");
+  const [loading, setLoading] = useState(false);
 
   async function load() {
     if (!apiSession) return;
-    setBusy(true);
+    setLoading(true);
     try {
       setAdmins(await apiFetch("/identity/super-admins", apiSession));
     } catch (error: any) {
       setMessage(error.message || "Could not load platform administrators.");
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }
 
@@ -146,7 +149,9 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
               className="rounded-lg bg-slate-950 px-4 py-3 font-bold text-white disabled:opacity-50"
               disabled={busy}
             >
-              {busy ? "Creating..." : "Create Root Super Admin"}
+              <ButtonLoader loading={busy}>
+                {busy ? "Creating..." : "Create root Super Admin"}
+              </ButtonLoader>
             </button>
           </div>
         </form>
@@ -160,7 +165,11 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
               Root access is global. Use Platform Admin or tenant roles for routine work.
             </p>
           </div>
-          <button className="rounded-lg border px-3 py-2 font-bold" onClick={() => void load()} disabled={busy}>
+          <button
+            className="rounded-lg border px-3 py-2 font-bold"
+            onClick={() => void load()}
+            disabled={loading}
+          >
             Refresh
           </button>
         </div>
@@ -193,6 +202,20 @@ export function PlatformAdmins({ apiSession, busy, setBusy, setMessage }: any) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {loading && admins.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-0">
+                    <TableSkeleton />
+                  </td>
+                </tr>
+              )}
+              {!loading && admins.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-slate-500">
+                    No platform administrators found.
+                  </td>
+                </tr>
+              )}
               {admins.map((admin) => (
                 <tr key={admin.id}>
                   <td className="px-4 py-3 font-bold">{admin.name}</td>

@@ -15,6 +15,7 @@ import {
 import { formatDate } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { Pagination } from "@/app/components/common/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
@@ -36,6 +37,7 @@ export function TenantUsers({
   setSection,
   setConfirmAction,
   onRefresh,
+  busy,
 }: any) {
   const [filters, setFilters] = useState({
     query: "",
@@ -302,15 +304,19 @@ export function TenantUsers({
       </div>
       <div className="mt-4 overflow-x-auto scrollbar-hidden rounded-2xl border border-slate-200 ">
         <div className="min-w-[1000px]">
-          <DataTable
-            columns={userColumns}
-            data={rows}
-            emptyMessage="No users match your search."
-            onRowClick={(user) => {
-              setSelectedUserId(user.id);
-              setSection("userEdit");
-            }}
-          />
+          {busy && rows.length === 0 ? (
+            <TableSkeleton />
+          ) : (
+            <DataTable
+              columns={userColumns}
+              data={rows}
+              emptyMessage="No users match your search."
+              onRowClick={(user) => {
+                setSelectedUserId(user.id);
+                setSection("userEdit");
+              }}
+            />
+          )}
         </div>
       </div>
       <Pagination

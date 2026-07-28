@@ -21,6 +21,7 @@ import {
   canCopyDatabaseIds,
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
+import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
 
 export function PatientDetail({
   apiSession,
@@ -312,7 +313,8 @@ export function PatientDetail({
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="relative space-y-5">
+      {loading && <OverlayLoader />}
       <Card>
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div className="flex items-start gap-4">

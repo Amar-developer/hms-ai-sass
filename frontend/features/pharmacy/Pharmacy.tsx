@@ -17,6 +17,7 @@ import { SearchPicker } from "@/app/components/clinicalRows";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate, displayDateTime, today } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import {
   isBilledIssue,
   isCancelledIssue,
@@ -867,7 +868,14 @@ export function Pharmacy({
               </tr>
             </thead>
             <tbody className="divide-y">
-              {issues.length === 0 && (
+              {!issuesLoaded && (
+                <tr>
+                  <td colSpan={7} className="p-0">
+                    <TableSkeleton />
+                  </td>
+                </tr>
+              )}
+              {issuesLoaded && issues.length === 0 && (
                 <tr>
                   <td
                     colSpan={7}
@@ -877,7 +885,7 @@ export function Pharmacy({
                   </td>
                 </tr>
               )}
-              {pharmacyPageRows.map((issue: any, index: number) => {
+              {issuesLoaded && pharmacyPageRows.map((issue: any, index: number) => {
                 const p: any = patientMap.get(issue.patient_id);
                 const selected = selectedIssue?.id === issue.id;
                 const dispensed = isDispensed(issue);

@@ -22,6 +22,7 @@ import {
   WeekdayMode,
   WeekdaySelector,
 } from "@/app/components/common/WeekdaySelector";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function ScheduleForm({
   title,
@@ -412,11 +413,13 @@ export function ScheduleForm({
 
         <div className="flex flex-wrap gap-2 md:col-span-2 xl:col-span-3">
           <Button disabled={busy} type="submit" className="save-button">
-            {busy
-              ? "Saving..."
-              : schedule
-                ? "Save Schedule"
-                : "Create Schedule"}
+            <ButtonLoader loading={busy}>
+              {busy
+                ? "Saving..."
+                : schedule
+                  ? "Save Schedule"
+                  : "Create Schedule"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"

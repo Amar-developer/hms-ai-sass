@@ -34,6 +34,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { RowActions } from "../admin/components/RowActions";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { findDuplicateItem, itemEndpoint } from "./helpers";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 
 function generatedItemCode(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -117,6 +118,7 @@ export function Items({ apiSession, branchId }: any) {
   const [type, setType] = useState("medicine");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
+  const [loading, setLoading] = useState(false);
   const [medicines, setMedicines] = useState<any[]>([]);
   const [tests, setTests] = useState<any[]>([]);
   const [packages, setPackages] = useState<any[]>([]);
@@ -309,6 +311,7 @@ export function Items({ apiSession, branchId }: any) {
 
   async function load() {
     if (!apiSession) return;
+    setLoading(true);
     try {
       const [
         medicineRows,
@@ -333,6 +336,8 @@ export function Items({ apiSession, branchId }: any) {
       setStockSuppliers(supplierRows);
     } catch (err: any) {
       setMessage(err.message || "Could not load items.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -745,14 +750,21 @@ export function Items({ apiSession, branchId }: any) {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {sortedRows.length === 0 && (
+              {loading && (
+                <tr>
+                  <td colSpan={9} className="p-0">
+                    <TableSkeleton />
+                  </td>
+                </tr>
+              )}
+              {!loading && sortedRows.length === 0 && (
                 <tr>
                   <td colSpan={9} className="px-4 py-4 text-slate-500">
                     No items match your filter.
                   </td>
                 </tr>
               )}
-              {pagedRows.map((row: any) => (
+              {!loading && pagedRows.map((row: any) => (
                 <tr key={`${row.kind}-${row.id}`}>
                   <td className="px-4 py-3">
                     <p className="text-xs font-bold">

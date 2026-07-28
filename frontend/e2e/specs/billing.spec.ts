@@ -16,19 +16,23 @@ test.describe("billing workflow", () => {
   }) => {
     await page.goto("/");
     await openModule(page, "Invoices");
-    await page.getByPlaceholder("Invoice, patient, source").fill(seed.invoiceNumber);
+    await page
+      .getByPlaceholder("Invoice, patient, source")
+      .fill(seed.invoiceNumber);
     await page.getByText(seed.invoiceNumber, { exact: true }).click();
     await expect(page.getByText("Payment Summary")).toBeVisible();
     await expect(page.getByLabel("Copy Invoice ID")).toBeVisible();
 
     const amount = page.getByPlaceholder("Amount").first();
     await amount.fill("400");
-    await page.getByRole("button", { name: /Pay ₹400/ }).click();
+    await page.getByRole("button", { name: /Pay/ }).click();
+
     await expect(page.getByText(/Payment recorded/i)).toBeVisible();
     await expect(page.getByText(/Partially Paid/i).first()).toBeVisible();
 
     await page.getByPlaceholder("Amount").first().fill("600");
-    await page.getByRole("button", { name: /Pay ₹600/ }).click();
+    await page.getByRole("button", { name: /Pay/ }).click();
+
     await expect(page.getByText(/Payment recorded/i)).toBeVisible();
     await expect(page.getByText("Payment settled")).toBeVisible();
 

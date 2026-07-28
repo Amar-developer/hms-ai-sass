@@ -24,6 +24,7 @@ import { Insight } from "./components/Insight";
 import { QuickAccess } from "./components/QuickAccess";
 import { NotificationWidget } from "./components/NotificationWidget";
 import { apiFetch } from "@/lib/api";
+import { Skeleton } from "@/app/components/common/loader/Skeleton";
 
 export function Dashboard({
   scopedAppointments,
@@ -40,6 +41,7 @@ export function Dashboard({
   const [monthlyCollections, setMonthlyCollections] = useState<any>(null);
   const [todayCollections, setTodayCollections] = useState<any>(null);
   const [monthlyDueReport, setMonthlyDueReport] = useState<any>(null);
+  const [loading, setLoading] = useState(false)
   const [todayDueReport, setTodayDueReport] = useState<any>(null);
   const [todayPatientCount, setTodayPatientCount] = useState<number | null>(
     null,
@@ -71,6 +73,7 @@ export function Dashboard({
   useEffect(() => {
     if (!apiSession) return;
     let active = true;
+    setLoading(true);
     Promise.all([
       apiFetch(`/billing/reports/collections?${monthlyParams}`, apiSession).catch(
         () => null,
@@ -97,6 +100,7 @@ export function Dashboard({
       setTodayPatientCount(
         patientCount?.total === undefined ? null : Number(patientCount.total),
       );
+      setLoading(false);
     });
     return () => {
       active = false;
@@ -235,13 +239,6 @@ export function Dashboard({
       icon: Users,
       target: "patients",
     },
-    // {
-    //   title: "Active Queue",
-    //   value: activeQueue.length,
-    //   detail: `${liveSummary?.queue ?? activeQueue.length} total queue entries`,
-    //   icon: Clock,
-    //   target: "queue",
-    // },
     {
       title: "Monthly Revenue",
       value: rupees(monthlyPaid),
@@ -255,6 +252,15 @@ export function Dashboard({
       detail: "Paid collections today",
       icon: IndianRupee,
       target: "billing",
+      loading,
+    },
+    {
+      title: "Today Revenue",
+      value: rupees(todayPaid),
+      detail: "Paid collections today",
+      icon: IndianRupee,
+      target: "billing",
+      loading,
     },
     {
       title: "Monthly Due",
@@ -262,6 +268,7 @@ export function Dashboard({
       detail: `${monthlyDueInvoiceCount} invoices with balance`,
       icon: ReceiptIndianRupee,
       target: "billing",
+      loading,
     },
     {
       title: "Today Due",
@@ -269,20 +276,14 @@ export function Dashboard({
       detail: `${todayDueInvoiceCount} invoices with balance today`,
       icon: ReceiptIndianRupee,
       target: "billing",
+      loading,
     },
-    // {
-    //   title: "Membership Usage",
-    //   value: rupees(membershipSavings),
-    //   detail: `${membershipPurchaseInvoices.length} plan purchases · offers ${rupees(offerSavings)}`,
-    //   icon: ReceiptIndianRupee,
-    //   target: "patients",
-    // },
   ];
 
   return (
     <div className="space-y-6">
       <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-4">
-        {cards.map(({ title, value, detail, icon: Icon, target }: any) => (
+        {cards.map(({ title, value, detail, icon: Icon, target, loading: cardLoading }: any) => (
           <button
             key={title}
             type="button"
@@ -295,10 +296,18 @@ export function Dashboard({
                 {title}
               </p>
             </div>
-            <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
-            <p className="mt-2 text-[10px] font-semibold text-slate-500 h-5">
-              {detail}
-            </p>
+            {cardLoading ? (
+              <Skeleton className="mt-1 h-7 w-24" />
+            ) : (
+              <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
+            )}
+            {cardLoading ? (
+              <Skeleton className="mt-2 h-4 w-32" />
+            ) : (
+              <p className="mt-2 text-[10px] font-semibold text-slate-500 h-5">
+                {detail}
+              </p>
+            )}
           </button>
         ))}
       </div>

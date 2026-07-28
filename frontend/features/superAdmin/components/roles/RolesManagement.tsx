@@ -15,6 +15,7 @@ import { FormField } from "@/app/components/FormElements";
 import { formatDate, groupRolesByName } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
 import { Empty } from "@/app/components/common/Empty";
+import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { Pagination } from "@/app/components/common/Pagination";
 import { SortButton } from "../shared/SortButton";
 import { TenantPicker } from "../shared/TenantPicker";
@@ -33,6 +34,7 @@ export function RolesManagement({
   setSection,
   setConfirmAction,
   onRefresh,
+  busy,
 }: any) {
   const [filters, setFilters] = useState({
     query: "",
@@ -214,7 +216,10 @@ export function RolesManagement({
             <span className="text-start">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
-            {rows.length === 0 && <Empty text="No roles match your search." />}
+            {busy && rows.length === 0 && <TableSkeleton />}
+            {!busy && rows.length === 0 && (
+              <Empty text="No roles match your search." />
+            )}
             {rows.map((role: any) => {
               const locked = role.locked;
               const stop = (handler: () => void) => (event: any) => {

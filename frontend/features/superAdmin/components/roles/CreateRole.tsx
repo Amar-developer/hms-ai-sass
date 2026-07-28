@@ -5,6 +5,7 @@ import { Button, Card } from "@/app/components/common/ui";
 import { AutoRoleKeyFields } from "./AutoRoleKeyFields";
 import { PermissionCheckboxes } from "./PermissionCheckboxes";
 import { TenantPicker } from "../shared/TenantPicker";
+import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 
 export function CreateRole({
   tenants,
@@ -50,7 +51,9 @@ export function CreateRole({
         </div>
         <div className="flex flex-wrap gap-2 md:col-span-2">
           <Button disabled={busy}>
-            {busy ? "Creating..." : "Create Role"}
+            <ButtonLoader loading={busy}>
+              {busy ? "Creating..." : "Create Role"}
+            </ButtonLoader>
           </Button>
           <button
             type="button"
