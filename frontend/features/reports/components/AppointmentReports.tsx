@@ -104,14 +104,18 @@ const AppointmentReports = ({
       render: (row: any) =>
         Number(row.finalProfit || 0) === 0
           ? "-"
-          : percent(row.finalProfit, row.paidRevenue - row.paidTax),
+          : percent(
+              row.finalProfit,
+              row.paidRevenue - row.paidTax,
+              row.grossRevenue,
+            ),
     },
   ];
   return (
     <div>
       <CollapsibleReportSection
         title="Doctor Fee & Profitability"
-        subtitle="Doctor fee and profit use only fully paid consultation invoices, so the doctor cost is deducted exactly once."
+        subtitle="Doctor fee is deducted once for settled consultations, including fully covered membership visits."
         badge={`${doctorRows.length} doctors`}
         isOpen={openSections.doctor}
         onToggle={() =>

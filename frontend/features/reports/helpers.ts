@@ -91,16 +91,19 @@ export function toInputDate(date: Date) {
   ].join("-");
 }
 
-export function percent(value: number, total: number) {
-  if (!total) return "0%";
-  return `${Math.round((value / total) * 100)}%`;
+export function percent(value: number, total: number, fallbackTotal = 0) {
+  const basis = total || fallbackTotal;
+  if (!basis) return "0%";
+  return `${Math.round((value / basis) * 100)}%`;
 }
 
 export function settlementPaidBasis(invoice: any) {
   const total = numberValue(invoice.total_amount);
   const paid = numberValue(invoice.paid_amount);
   const doctorShare = numberValue(invoice.doctor_share_amount);
-  if (!total || !paid || !doctorShare) return 0;
+  if (!doctorShare) return 0;
+  if (total <= 0 && membershipBenefitUsage(invoice) > 0) return doctorShare;
+  if (!total || !paid) return 0;
   return Math.min(Math.round((doctorShare * paid) / total), paid);
 }
 

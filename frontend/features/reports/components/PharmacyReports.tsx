@@ -108,7 +108,9 @@ const PharmacyReports = ({
       header: "Profit Margin",
       width: "120px",
       render: (row: any) => {
-        const basis = Number(row.revenue || 0) - Number(row.tax || 0);
+        const basis =
+          Number(row.revenue || 0) - Number(row.tax || 0) ||
+          Number(row.total || 0);
         return basis && Number(row.profit || 0) !== 0
           ? `${Math.round((Number(row.profit) / basis) * 100)}%`
           : "-";

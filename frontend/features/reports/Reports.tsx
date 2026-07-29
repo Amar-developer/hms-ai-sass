@@ -938,7 +938,11 @@ export function Reports({
           Array.from(row.paymentModes)
             .filter((value: any) => value && value !== "-")
             .join(" + ") || "-",
-        doctorFeePercent: percent(row.doctorFee, row.paidRevenue),
+        doctorFeePercent: percent(
+          row.doctorFee,
+          row.paidRevenue,
+          row.grossRevenue,
+        ),
       };
     })
     .sort((a: any, b: any) => b.finalProfit - a.finalProfit);
@@ -968,7 +972,11 @@ export function Reports({
     row.doctorFee,
     row.doctorFeePercent,
     row.clinicFee,
-    percent(row.finalProfit, row.paidRevenue - row.paidTax),
+    percent(
+      row.finalProfit,
+      row.paidRevenue - row.paidTax,
+      row.grossRevenue,
+    ),
     row.finalProfit,
   ]);
   const settlementExportRows = settlementRows.length
@@ -1213,7 +1221,11 @@ export function Reports({
         Array.from(row.paymentModes)
           .filter((value: any) => value && value !== "-")
           .join(" + ") || "-",
-      settlementPercent: percent(row.purchaseCost, row.revenue - row.tax),
+      settlementPercent: percent(
+        row.purchaseCost,
+        row.revenue - row.tax,
+        row.total,
+      ),
     }))
     .filter(
       (row: any) =>
@@ -1349,7 +1361,11 @@ export function Reports({
         Array.from(row.paymentModes)
           .filter((value: any) => value && value !== "-")
           .join(" + ") || "-",
-      settlementPercent: percent(row.purchaseCost, row.revenue - row.tax),
+      settlementPercent: percent(
+        row.purchaseCost,
+        row.revenue - row.tax,
+        row.total,
+      ),
     }))
     .filter(
       (row: any) =>
@@ -1527,6 +1543,7 @@ export function Reports({
     return percent(
       invoiceGrossProfit(invoice),
       numberValue(invoice.paid_amount) - recognizedInvoiceTax(invoice),
+      reportedInvoiceTotal(invoice),
     );
   }
 
@@ -1677,6 +1694,7 @@ export function Reports({
         settlementPercent: percent(
           invoiceSettlementAmount(invoice),
           numberValue(invoice.paid_amount),
+          reportedInvoiceTotal(invoice),
         ),
         grossProfit: invoiceGrossProfit(invoice),
         grossProfitPercent: invoiceGrossProfitPercent(invoice),

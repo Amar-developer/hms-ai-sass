@@ -5,7 +5,13 @@ def settlement_paid_basis(invoice: Invoice) -> int:
     total = int(invoice.total_amount or 0)
     paid = int(invoice.paid_amount or 0)
     doctor_share = int(invoice.doctor_share_amount or 0)
-    if not total or not paid or not doctor_share:
+    if not doctor_share:
+        return 0
+    if total <= 0 and int(invoice.membership_discount_amount or 0) > 0:
+        # Membership pays the patient's bill down to zero, but the contractual
+        # doctor cost is still incurred and must remain visible/payable.
+        return doctor_share
+    if not total or not paid:
         return 0
     return min(round((doctor_share * paid) / total), paid)
 

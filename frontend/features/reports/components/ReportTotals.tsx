@@ -5,8 +5,9 @@ export default function ReportTotals({ totals, money, section }: any) {
     Number(value || 0) === 0 ? "-" : money(value);
   const paidProfitBasis =
     Number(totals.paidRevenue || 0) - Number(totals.paidTax || 0);
-  const profitMargin = paidProfitBasis
-    ? `${Math.round((Number(totals.grossProfit || 0) / paidProfitBasis) * 100)}%`
+  const profitBasis = paidProfitBasis || Number(totals.grandTotal || 0);
+  const profitMargin = profitBasis
+    ? `${Math.round((Number(totals.grossProfit || 0) / profitBasis) * 100)}%`
     : "-";
   const commonCards = [
     {
@@ -59,7 +60,7 @@ export default function ReportTotals({ totals, money, section }: any) {
     {
       label: "Profit Margin",
       value: profitMargin,
-      hint: "Profit ÷ paid excluding GST",
+      hint: "Profit ÷ paid or delivered service value",
     },
   ];
   const cards =
@@ -100,10 +101,10 @@ export default function ReportTotals({ totals, money, section }: any) {
             value: moneyOrDash(totals.membershipBenefit),
             hint: "Membership value used on paid invoices",
           },
-          {
-            label: "Doctor Cost",
-            value: moneyOrDash(totals.doctorFee),
-            hint: "Paid-basis doctor share",
+            {
+              label: "Doctor Cost",
+              value: moneyOrDash(totals.doctorFee),
+              hint: "Includes covered membership visits",
           },
           {
             label: "Paid GST",
@@ -123,7 +124,7 @@ export default function ReportTotals({ totals, money, section }: any) {
           {
             label: "Profit Margin",
             value: profitMargin,
-            hint: "Realized profit ÷ paid excluding GST",
+            hint: "Profit ÷ paid or delivered service value",
           },
         ]
       : section === "appointments"
@@ -132,7 +133,7 @@ export default function ReportTotals({ totals, money, section }: any) {
             {
               label: "Doctor Fee",
               value: moneyOrDash(totals.doctorFee),
-              hint: "Paid-basis doctor share",
+              hint: "Includes covered membership visits",
             },
             ...profitCards.slice(0, 1),
             {

@@ -255,14 +255,6 @@ export function Dashboard({
       loading,
     },
     {
-      title: "Today Revenue",
-      value: rupees(todayPaid),
-      detail: "Paid collections today",
-      icon: IndianRupee,
-      target: "billing",
-      loading,
-    },
-    {
       title: "Monthly Due",
       value: rupees(monthlyDue),
       detail: `${monthlyDueInvoiceCount} invoices with balance`,

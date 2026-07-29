@@ -88,7 +88,7 @@ export type MetrixProps = {
   snapshotMessage?: string;
   onRecalculateSnapshot?: (snapshot: any) => void;
   money: (value: number) => string;
-  percent: (value: number, total: number) => string;
+  percent: (value: number, total: number, fallbackTotal?: number) => string;
 };
 
 export type DashboardView = {

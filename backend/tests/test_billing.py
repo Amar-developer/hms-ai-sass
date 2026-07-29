@@ -3,13 +3,36 @@ from datetime import date
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from app.modules.appointments.models import Appointment
-from app.modules.billing.models import InvoiceItem
+from app.modules.appointments.models import Appointment, AppointmentType
+from app.modules.billing.models import DoctorFeeRule, InvoiceItem
 from app.modules.billing.services.consultation_invoice import (
     consultation_item_description,
+    doctor_share_after_patient_benefits,
 )
+from app.modules.billing.services.rules import calculate_fee_split
 from app.modules.billing.services.service_invoices import create_service_invoice
 from app.modules.tenants.models import Department
+
+
+def test_full_membership_benefit_preserves_contractual_doctor_share():
+    calculation = calculate_fee_split(
+        DoctorFeeRule(
+            tenant_id="tenant_doctor_cost",
+            appointment_type=AppointmentType.OP,
+            fee_amount=1000,
+            doctor_share_percentage=60,
+        )
+    )
+
+    doctor_share = doctor_share_after_patient_benefits(
+        calculation,
+        subtotal=calculation.consultation_amount,
+        taxable=0,
+        total=0,
+        membership_discount=1000,
+    )
+
+    assert doctor_share == 600
 
 
 def test_consultation_item_description_uses_department_and_safe_fallback(test_engine):

@@ -277,8 +277,9 @@ def build_profit_report_email_attachments(
     for bucket in doctor_buckets.values():
         bucket["consultations"] = len(bucket["consultation_ids"])
 
-    def percent(value: int, total: int) -> str:
-        return "0%" if not total else f"{round((value / total) * 100)}%"
+    def percent(value: int, total: int, fallback_total: int = 0) -> str:
+        basis = total or fallback_total
+        return "0%" if not basis else f"{round((value / basis) * 100)}%"
 
     settlement_headers = [
         "Doctor",
@@ -314,9 +315,9 @@ def build_profit_report_email_attachments(
             combined_payment_modes(row["payment_modes"]),
             row["tax"],
             row["doctor_fee"],
-            percent(row["doctor_fee"], row["paid"] - row["tax"]),
+            percent(row["doctor_fee"], row["paid"] - row["tax"], row["gross"]),
             row["clinic_fee"],
-            percent(row["final_profit"], row["paid"] - row["tax"]),
+            percent(row["final_profit"], row["paid"] - row["tax"], row["gross"]),
             row["final_profit"],
         ]
         for row in sorted(
@@ -351,6 +352,7 @@ def build_profit_report_email_attachments(
                         int(row["paid"] or 0) - int(row["tax"] or 0)
                         for row in doctor_buckets.values()
                     ),
+                    total_gross,
                 ),
                 sum(int(row["clinic_fee"] or 0) for row in doctor_buckets.values()),
                 percent(
@@ -361,6 +363,7 @@ def build_profit_report_email_attachments(
                         int(row["paid"] or 0) - int(row["tax"] or 0)
                         for row in doctor_buckets.values()
                     ),
+                    total_gross,
                 ),
                 sum(int(row["final_profit"] or 0) for row in doctor_buckets.values()),
             ]
@@ -423,7 +426,7 @@ def build_profit_report_email_attachments(
                 paid_tax,
                 doctor_fee,
                 settlement,
-                percent(settlement, paid),
+                percent(settlement, paid, invoice_report_total(invoice)),
                 paid - paid_tax - doctor_fee - settlement,
             ]
         )
@@ -451,6 +454,7 @@ def build_profit_report_email_attachments(
                 percent(
                     sum(invoice_settlement(invoice) for invoice in paid_invoices),
                     sum(int(invoice.paid_amount or 0) for invoice in paid_invoices),
+                    sum(invoice_report_total(invoice) for invoice in paid_invoices),
                 ),
                 sum(
                     int(invoice.paid_amount or 0)
@@ -637,7 +641,7 @@ def build_profit_report_email_attachments(
             combined_payment_modes(row["payment_modes"]),
             row["tax"],
             row["purchase"],
-            percent(row["purchase"], row["revenue"] - row["tax"]),
+            percent(row["purchase"], row["revenue"] - row["tax"], row["item_total"]),
             row["revenue"] - row["tax"] - row["purchase"],
         ]
         for row in sorted(
@@ -669,6 +673,7 @@ def build_profit_report_email_attachments(
                         int(row["revenue"] or 0) - int(row["tax"] or 0)
                         for row in lab_buckets.values()
                     ),
+                    sum(int(row["item_total"] or 0) for row in lab_buckets.values()),
                 ),
                 sum(
                     int(row["revenue"] or 0)
@@ -851,7 +856,7 @@ def build_profit_report_email_attachments(
             combined_payment_modes(row["payment_modes"]),
             row["tax"],
             row["purchase"],
-            percent(row["purchase"], row["revenue"] - row["tax"]),
+            percent(row["purchase"], row["revenue"] - row["tax"], row["item_total"]),
             row["revenue"] - row["tax"] - row["purchase"],
         ]
         for row in sorted(
