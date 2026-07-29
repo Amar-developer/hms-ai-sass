@@ -24,6 +24,7 @@ from app.modules.tenants.models import Tenant, TenantStatus, now_utc
 from app.modules.notifications.whatsapp_processor import (
     process_due_whatsapp_notifications,
 )
+from app.modules.notifications.email_processor import process_due_email_deliveries
 from app.modules.integrations.whatsapp_reminders import (
     queue_due_whatsapp_appointment_reminders,
 )
@@ -84,6 +85,7 @@ def run_once() -> None:
             queue_due_whatsapp_appointment_reminders(session)
     with Session(engine) as session:
         process_due_whatsapp_notifications(session)
+        process_due_email_deliveries(session)
     job_id = dequeue_monthly_report_job(timeout=5)
     if not job_id:
         return
@@ -102,6 +104,8 @@ def run_once() -> None:
         job.updated_at = now_utc()
         session.add(job)
         session.commit()
+    with Session(engine) as session:
+        process_due_email_deliveries(session)
 
 
 def main() -> None:

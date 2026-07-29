@@ -33,6 +33,8 @@ def read_job(job: ReportJob) -> ReportJobRead:
         cc=json.loads(job.cc_json),
         filters=json.loads(job.filters_json),
         attachment_filename=job.attachment_filename,
+        artifact_file_id=job.artifact_file_id,
+        artifact_file_ids=json.loads(job.artifact_file_ids_json or "[]"),
         provider_message_id=job.provider_message_id,
         failure_reason=job.failure_reason,
         queued_by_user_id=job.queued_by_user_id,

@@ -2,7 +2,7 @@ import re
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     uploads_dir: Path = Field(
         default_factory=lambda: Path(__file__).resolve().parents[2] / "uploads"
     )
+    file_storage_backend: str = Field(default="local", pattern="^(local|s3)$")
+    aws_s3_bucket: str | None = Field(default=None)
+    aws_s3_region: str = Field(default="ap-south-1", min_length=1)
+    aws_s3_prefix: str = Field(default="", max_length=120)
+    aws_s3_endpoint_url: str | None = Field(default=None)
+    aws_s3_kms_key_id: str | None = Field(default=None)
+    aws_s3_presigned_url_ttl_seconds: int = Field(default=900, ge=60, le=86400)
+    permanent_invoice_delivery_enabled: bool = Field(default=True)
 
     enable_docs: bool = Field(default=True)
 
@@ -106,6 +114,44 @@ class Settings(BaseSettings):
                 "app_version must use Semantic Versioning, for example 1.2.44"
             )
         return normalized
+
+    @model_validator(mode="after")
+    def _validate_storage_configuration(self):
+        environment = self.environment.strip().lower()
+        prefix = self.aws_s3_prefix.strip()
+        if prefix.startswith("/") or ".." in prefix.split("/"):
+            raise ValueError(
+                "aws_s3_prefix must be a relative server-controlled prefix"
+            )
+        if (
+            self.file_storage_backend == "s3"
+            and not str(self.aws_s3_bucket or "").strip()
+        ):
+            raise ValueError(
+                "aws_s3_bucket is required when file_storage_backend is s3"
+            )
+        if environment in {"production", "prod"}:
+            if self.file_storage_backend != "s3":
+                raise ValueError("production must use the s3 file storage backend")
+            if self.aws_s3_endpoint_url:
+                raise ValueError("production cannot use a custom S3 endpoint URL")
+            bucket = str(self.aws_s3_bucket or "").strip().lower()
+            unsafe_markers = ("local", "dev", "staging", "stage", "test")
+            if any(marker in bucket for marker in unsafe_markers):
+                raise ValueError(
+                    "production cannot use a local, development, staging, or test bucket"
+                )
+            if self.aws_s3_presigned_url_ttl_seconds > 3600:
+                raise ValueError(
+                    "production S3 presigned URL TTL cannot exceed 3600 seconds"
+                )
+        elif self.file_storage_backend == "s3":
+            bucket = str(self.aws_s3_bucket or "").strip().lower()
+            if "prod" in bucket or "production" in bucket:
+                raise ValueError(
+                    "non-production environments cannot use a production bucket"
+                )
+        return self
 
     model_config = SettingsConfigDict(
         env_prefix="MEDIZINHUB_",

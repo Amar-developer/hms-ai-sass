@@ -551,23 +551,25 @@ def test_paid_invoice_job_serves_signed_stored_printed_receipt(
         printed_pdf = b"%PDF-1.4\nprinted invoice layout\n%%EOF"
         (tmp_path / "printed-invoice.pdf").write_bytes(printed_pdf)
         monkeypatch.setattr(invoice_receipts, "UPLOADS_DIR", tmp_path)
-        session.add(
-            FileDocument(
-                tenant_id=tenant.id,
-                branch_id=branch.id,
-                patient_id=patient.id,
-                file_name="Queue-Patient-INV-QUEUE-1.pdf",
-                file_url="/uploads/printed-invoice.pdf",
-                content_type="application/pdf",
-                is_private=True,
-                category="invoice",
-                source_module="billing",
-                attached_to_doctype="Invoice",
-                attached_to_name=invoice.id,
-                attached_to_field="invoice_pdf",
-            )
+        artifact = FileDocument(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            file_name="Queue-Patient-INV-QUEUE-1.pdf",
+            file_url="/uploads/printed-invoice.pdf",
+            content_type="application/pdf",
+            artifact_type="final",
+            document_version=1,
+            is_private=True,
+            category="invoice",
+            source_module="billing",
+            attached_to_doctype="Invoice",
+            attached_to_name=invoice.id,
+            attached_to_field="invoice_pdf",
         )
+        session.add(artifact)
         session.commit()
+        session.refresh(artifact)
         event = events.queue_whatsapp_template_if_allowed(
             session,
             tenant_id=tenant.id,
@@ -577,6 +579,8 @@ def test_paid_invoice_job_serves_signed_stored_printed_receipt(
             resource_type="invoice",
             resource_id=invoice.id,
             dedupe_key=f"whatsapp:invoice:{invoice.id}:paid",
+            artifact_file_id=artifact.id,
+            artifact_version=artifact.document_version,
         )
         assert event
 
@@ -589,14 +593,19 @@ def test_paid_invoice_job_serves_signed_stored_printed_receipt(
         query = parse_qs(parsed.query)
         assert parsed.netloc == "api.example.com"
         assert parsed.path.endswith(f"/{invoice.id}.pdf")
+        assert query["file_id"] == [artifact.id]
         verify_invoice_receipt_signature(
             tenant_id=tenant.id,
             invoice_id=invoice.id,
+            file_id=artifact.id,
             expires=int(query["expires"][0]),
             signature=query["signature"][0],
         )
         rendered, filename = invoice_receipts.render_invoice_receipt_pdf(
-            session, tenant_id=tenant.id, invoice_id=invoice.id
+            session,
+            tenant_id=tenant.id,
+            invoice_id=invoice.id,
+            file_id=artifact.id,
         )
         assert rendered == printed_pdf
         assert filename == "Queue-Patient-INV-QUEUE-1.pdf"

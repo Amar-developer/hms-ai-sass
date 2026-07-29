@@ -25,6 +25,9 @@ from app.modules.integrations.invoice_receipts import (
     render_invoice_receipt_pdf,
     verify_invoice_receipt_signature,
 )
+from app.modules.integrations.document_links import verify_document_signature
+from app.modules.files.models import FileDocument
+from app.modules.files.services.artifact_service import ArtifactService
 from app.modules.integrations.whatsapp_queue_service import (
     cancel_whatsapp_notification,
     list_whatsapp_queue,
@@ -33,6 +36,37 @@ from app.modules.integrations.whatsapp_queue_service import (
 
 
 router = APIRouter(prefix="/communications")
+
+
+@router.get(
+    "/public/document-artifacts/{file_id}",
+    response_class=Response,
+    summary="Download an exact artifact through a short-lived signed link",
+)
+def public_document_artifact(
+    file_id: str,
+    tenant_id: str = Query(min_length=3, max_length=80),
+    expires: int = Query(gt=0),
+    signature: str = Query(min_length=40, max_length=100),
+    session: Session = Depends(get_session),
+) -> Response:
+    verify_document_signature(
+        tenant_id=tenant_id, file_id=file_id, expires=expires, signature=signature
+    )
+    row = session.get(FileDocument, file_id)
+    if not row or row.tenant_id != tenant_id or row.document_status != "ready":
+        return Response(status_code=404)
+    content = ArtifactService.read_bytes(row)
+    safe_name = row.file_name.replace('"', "").replace("\r", "").replace("\n", "")
+    return Response(
+        content=content,
+        media_type=row.content_type or "application/octet-stream",
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_name}"',
+            "Cache-Control": "private, no-store, max-age=0",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 WHATSAPP_SETTINGS_PERMISSIONS = (
@@ -50,6 +84,7 @@ WHATSAPP_SETTINGS_PERMISSIONS = (
 def public_invoice_receipt(
     invoice_id: str,
     tenant_id: str = Query(min_length=3, max_length=80),
+    file_id: str | None = Query(default=None, min_length=3, max_length=120),
     expires: int = Query(gt=0),
     signature: str = Query(min_length=40, max_length=100),
     session: Session = Depends(get_session),
@@ -57,11 +92,12 @@ def public_invoice_receipt(
     verify_invoice_receipt_signature(
         tenant_id=tenant_id,
         invoice_id=invoice_id,
+        file_id=file_id,
         expires=expires,
         signature=signature,
     )
     pdf, filename = render_invoice_receipt_pdf(
-        session, tenant_id=tenant_id, invoice_id=invoice_id
+        session, tenant_id=tenant_id, invoice_id=invoice_id, file_id=file_id
     )
     return Response(
         content=pdf,

@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 from json import dumps
 
@@ -6,16 +7,28 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access
-from app.core.uploads import PRIVATE_UPLOADS_DIR, save_private_upload
+from app.core.config import get_settings
+from app.core.uploads import (
+    PRIVATE_UPLOADS_DIR,
+    read_validated_upload,
+    save_private_upload,
+)
 from app.modules.audit.service import record_audit_event
 from app.modules.files.models import FileDocument
 from app.modules.files.repositories import FileDocumentRepository
 from app.modules.files.service import record_file_document
 from app.modules.files.services.file_service import FileService
+from app.modules.files.services.optimization_service import FileOptimizationService
+from app.modules.files.storage.factory import (
+    get_storage_backend,
+    get_storage_backend_for_document,
+)
+from app.modules.files.storage.keys import build_storage_key
 from app.modules.identity.models import User
 from app.modules.lab.models import LabOrderStatus
 from app.modules.lab.services.validation import get_order_or_404
 from app.modules.subscriptions.service import enforce_module_enabled
+from app.modules.tenants.models import new_id
 
 LAB_REPORT_CATEGORY = "lab_report"
 LAB_ORDER_DOCTYPE = "LabOrder"
@@ -70,6 +83,14 @@ def _remove_saved_files(saved_paths: list[Path]) -> None:
         saved_path.unlink(missing_ok=True)
 
 
+def _remove_stored_objects(stored_objects: list[tuple[object, object]]) -> None:
+    for backend, stored in stored_objects:
+        try:
+            backend.delete(key=stored.key, version_id=stored.version_id)
+        except Exception:
+            pass
+
+
 def list_lab_order_files(
     session: Session,
     *,
@@ -121,17 +142,71 @@ async def upload_lab_order_files(
         )
 
     saved_paths: list[Path] = []
+    stored_objects: list[tuple[object, object]] = []
     rows: list[FileDocument] = []
+    settings = get_settings()
+    configured_backend = get_storage_backend(settings)
     try:
         for file in files:
-            saved_filename, url_path, verified_content_type = await save_private_upload(
-                file, f"lab_report_{order.id[:12]}"
-            )
-            saved_path = PRIVATE_UPLOADS_DIR / saved_filename
-            saved_paths.append(saved_path)
-            file_size = saved_path.stat().st_size if saved_path.exists() else None
+            storage_values = {}
+            document_id = new_id("file")
+            if configured_backend.name == "s3":
+                data, verified_content_type, extension = await read_validated_upload(
+                    file
+                )
+                checksum = hashlib.sha256(data).hexdigest()
+                storage_key = build_storage_key(
+                    environment=settings.environment,
+                    tenant_id=tenant_id,
+                    module="lab",
+                    document_type="lab-report-original",
+                    entity_id=order.id,
+                    extension=extension,
+                    prefix=settings.aws_s3_prefix,
+                )
+                stored = configured_backend.put(
+                    key=storage_key,
+                    data=data,
+                    content_type=verified_content_type,
+                    checksum_sha256=checksum,
+                    metadata={
+                        "sha256": checksum,
+                        "tenant-id": tenant_id,
+                        "document-id": document_id,
+                        "artifact-type": "original",
+                    },
+                    tags={
+                        "artifact": "original",
+                        "retention": "permanent",
+                        "environment": settings.environment,
+                    },
+                )
+                stored_objects.append((configured_backend, stored))
+                url_path = f"/api/v1/files/{document_id}/download"
+                file_size = stored.size
+                storage_values = {
+                    "storage_backend": configured_backend.name,
+                    "storage_key": stored.key,
+                    "storage_bucket": stored.bucket,
+                    "storage_region": stored.region,
+                    "storage_version_id": stored.version_id,
+                    "checksum_sha256": checksum,
+                    "original_size_bytes": len(data),
+                    "stored_size_bytes": stored.size,
+                    "storage_class": stored.storage_class,
+                }
+            else:
+                (
+                    saved_filename,
+                    url_path,
+                    verified_content_type,
+                ) = await save_private_upload(file, f"lab_report_{order.id[:12]}")
+                saved_path = PRIVATE_UPLOADS_DIR / saved_filename
+                saved_paths.append(saved_path)
+                file_size = saved_path.stat().st_size if saved_path.exists() else None
             row = record_file_document(
                 session,
+                document_id=document_id,
                 tenant_id=tenant_id,
                 branch_id=order.branch_id,
                 patient_id=order.patient_id,
@@ -148,6 +223,9 @@ async def upload_lab_order_files(
                 folder="Lab Reports",
                 uploaded_by_user_id=current_user.id,
                 is_private=True,
+                artifact_type="original",
+                optimization_status="not_required",
+                **storage_values,
             )
             rows.append(row)
         session.commit()
@@ -164,14 +242,27 @@ async def upload_lab_order_files(
                 purpose="lab_report_management",
                 metadata_json=dumps({"file_id": row.id}),
             )
+            try:
+                FileOptimizationService(session).optimize_file(
+                    tenant_id=tenant_id,
+                    file_id=row.id,
+                    actor=current_user,
+                )
+            except HTTPException:
+                # The immutable clinical original is already safely stored. A
+                # delivery-rendition failure is recorded on that file and can
+                # be retried through the file optimization endpoint.
+                pass
         return rows
     except HTTPException:
         session.rollback()
         _remove_saved_files(saved_paths)
+        _remove_stored_objects(stored_objects)
         raise
     except OSError:
         session.rollback()
         _remove_saved_files(saved_paths)
+        _remove_stored_objects(stored_objects)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not store lab report file",
@@ -179,10 +270,19 @@ async def upload_lab_order_files(
     except SQLAlchemyError:
         session.rollback()
         _remove_saved_files(saved_paths)
+        _remove_stored_objects(stored_objects)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not save lab report metadata",
         )
+    except Exception as exc:
+        session.rollback()
+        _remove_saved_files(saved_paths)
+        _remove_stored_objects(stored_objects)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not store lab report file",
+        ) from exc
 
 
 def prepare_lab_order_file_download(
@@ -192,7 +292,7 @@ def prepare_lab_order_file_download(
     order_id: str,
     file_id: str,
     current_user: User,
-) -> tuple[FileDocument, Path]:
+) -> tuple[FileDocument, Path | bytes]:
     enforce_module_enabled(session, tenant_id, "lab", current_user=current_user)
     order = get_order_or_404(session, tenant_id, order_id)
     require_user_branch_access(current_user, order.branch_id)
@@ -202,7 +302,17 @@ def prepare_lab_order_file_download(
             status_code=status.HTTP_404_NOT_FOUND, detail="Lab file not found"
         )
     _validate_lab_file_owner(file_document=file_document, order_id=order.id)
-    resolved = _resolve_private_lab_file(file_document)
+    if file_document.storage_backend == "s3" and file_document.storage_key:
+        try:
+            resolved = get_storage_backend_for_document(file_document).get_bytes(
+                key=file_document.storage_key
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Lab file not found"
+            ) from exc
+    else:
+        resolved = _resolve_private_lab_file(file_document)
     record_audit_event(
         session,
         tenant_id=tenant_id,

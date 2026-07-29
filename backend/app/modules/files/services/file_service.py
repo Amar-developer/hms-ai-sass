@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 from fastapi import HTTPException, UploadFile, status
@@ -5,13 +6,25 @@ from sqlmodel import Session, select
 
 from app.core.access_control import require_user_branch_access, scoped_branch_id
 from app.core.model_update import apply_update_fields
-from app.core.uploads import UPLOADS_DIR, save_upload
+from app.core.config import get_settings
+from app.core.uploads import UPLOADS_DIR, read_validated_upload
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import Invoice
 from app.modules.files.models import FileDocument
+from app.modules.files.optimization import (
+    OptimizationError,
+    optimize_document,
+    select_optimization_profile,
+)
 from app.modules.files.repositories import FileDocumentRepository
 from app.modules.files.schemas import FileDocumentUpdate
 from app.modules.files.service import record_file_document
+from app.modules.files.storage.factory import (
+    get_storage_backend,
+    get_storage_backend_for_document,
+)
+from app.modules.files.storage.keys import build_storage_key
+from app.modules.files.storage.local import LocalStorageBackend
 from app.modules.identity.models import User
 from app.modules.ip.models import IPAdmission
 from app.modules.lab.models import LabOrder
@@ -20,7 +33,7 @@ from app.modules.physiotherapy.models import PhysiotherapyCase
 from app.modules.practitioners.models import Practitioner
 from app.modules.settings.models import SettingKey, SettingScope
 from app.modules.settings.service import resolve_setting, upsert_setting
-from app.modules.tenants.models import Tenant, now_utc
+from app.modules.tenants.models import Tenant, new_id, now_utc
 
 # Maps an upload filename prefix (without the 12-char id suffix) to the entity
 # that owns the file. Order matters: longest prefix first to avoid greedy match.
@@ -137,6 +150,34 @@ class FileService:
             )
         return row
 
+    @staticmethod
+    def _storage_key(row: FileDocument) -> str:
+        if row.storage_key:
+            return row.storage_key
+        if row.file_url.startswith("/uploads/"):
+            return row.file_url.removeprefix("/uploads/")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+        )
+
+    @classmethod
+    def _stored_content(cls, row: FileDocument) -> Path | bytes:
+        backend = get_storage_backend_for_document(row)
+        key = cls._storage_key(row)
+        if isinstance(backend, LocalStorageBackend):
+            resolved = backend.resolve_path(key)
+            if not resolved.is_file():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+                )
+            return resolved
+        try:
+            return backend.get_bytes(key=key)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
+            ) from exc
+
     def _match_upload_to_entity(self, tenant_id: str, filename: str):
         for rule in _UPLOAD_PREFIX_RULES:
             prefix = rule["prefix"]
@@ -241,27 +282,11 @@ class FileService:
 
     def prepare_download(
         self, *, tenant_id: str, file_id: str, actor: User
-    ) -> tuple[FileDocument, Path]:
-        """Serve a stored file only after re-checking tenant + branch + permission —
-        the same authorization stack as every JSON route. Content-Type is forced
-        from the DB (server-verified at upload). Rejects any path traversal
-        attempt and confirms the resolved path stays inside the uploads directory
-        before touching the filesystem.
-        """
+    ) -> tuple[FileDocument, Path | bytes]:
+        """Resolve local or S3 content after tenant and branch authorization."""
         row = self._get_or_404(tenant_id, file_id)
         require_user_branch_access(actor, row.branch_id)
-        disk_path = UPLOADS_DIR / Path(row.file_url).name
-        try:
-            resolved = disk_path.resolve()
-            resolved.relative_to(UPLOADS_DIR.resolve())
-        except (ValueError, OSError):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
-            )
-        if not resolved.is_file():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="File not found"
-            )
+        content = self._stored_content(row)
         record_audit_event(
             self.session,
             tenant_id=tenant_id,
@@ -272,11 +297,11 @@ class FileService:
             resource_id=row.id,
             purpose="file_access",
         )
-        return row, resolved
+        return row, content
 
     def prepare_invoice_logo(
         self, *, tenant_id: str, branch_id: str | None, actor: User
-    ) -> tuple[FileDocument, Path]:
+    ) -> tuple[FileDocument, Path | bytes]:
         configured, _scope, _scope_id = resolve_setting(
             self.session,
             tenant_id=tenant_id,
@@ -337,9 +362,34 @@ class FileService:
         actor: User,
     ) -> FileDocument:
         require_user_branch_access(actor, branch_id)
-        saved_filename, url_path, verified_content_type = await save_upload(
-            file, f"file_{tenant_id[:12]}"
+        data, verified_content_type, extension = await read_validated_upload(file)
+        original_size_bytes = len(data)
+        optimization_profile = select_optimization_profile(
+            category=category,
+            source_module=source_module,
+            attached_to_field=attached_to_field,
+            content_type=verified_content_type,
         )
+        optimization_status = "not_required"
+        if optimization_profile and optimization_profile.name == "invoice_pdf":
+            try:
+                optimized = optimize_document(
+                    data=data,
+                    content_type=verified_content_type,
+                    profile=optimization_profile,
+                )
+            except OptimizationError as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=str(exc),
+                ) from exc
+            data = optimized.data
+            verified_content_type = optimized.content_type
+            extension = optimized.extension
+            optimization_status = "ready" if optimized.changed else "not_required"
+        checksum_sha256 = hashlib.sha256(data).hexdigest()
+        settings = get_settings()
+        backend = get_storage_backend(settings)
         previous = FileDocumentRepository(self.session).find_attachment(
             tenant_id=tenant_id,
             file_url="",
@@ -347,33 +397,118 @@ class FileService:
             attached_to_name=attached_to_name,
             attached_to_field=attached_to_field,
         )
-        previous_url = previous.file_url if previous else None
-        row = record_file_document(
-            self.session,
+        document_id = new_id("file")
+        document_version = int(previous.document_version or 1) + 1 if previous else 1
+        storage_key = build_storage_key(
+            environment=settings.environment,
             tenant_id=tenant_id,
-            branch_id=branch_id,
-            patient_id=patient_id,
-            file_name=file.filename or saved_filename,
-            file_url=url_path,
-            # Store the server-verified content type, never the client's header.
-            content_type=verified_content_type,
-            category=(category or "general").strip().lower()[:80],
-            source_module=source_module,
-            attached_to_doctype=attached_to_doctype,
-            attached_to_name=attached_to_name,
-            attached_to_field=attached_to_field,
-            attached_to_label=attached_to_label,
-            folder=folder,
-            notes=notes,
-            uploaded_by_user_id=actor.id,
-            is_private=is_private,
+            module=source_module,
+            document_type=category,
+            entity_id=attached_to_name,
+            extension=extension,
+            prefix=settings.aws_s3_prefix,
         )
-        self._sync_tenant_logo_attachment(row, actor_user_id=actor.id)
-        self._sync_practitioner_signature_attachment(row, actor_user_id=actor.id)
-        self.session.commit()
-        self.session.refresh(row)
-        if previous_url and previous_url != url_path:
-            (UPLOADS_DIR / Path(previous_url).name).unlink(missing_ok=True)
+        try:
+            stored_object = backend.put(
+                key=storage_key,
+                data=data,
+                content_type=verified_content_type,
+                checksum_sha256=checksum_sha256,
+                metadata={
+                    "sha256": checksum_sha256,
+                    "tenant-id": tenant_id,
+                    "document-id": document_id,
+                },
+                tags={
+                    "artifact": (
+                        "final"
+                        if (category or "").strip().lower() == "invoice"
+                        else "original"
+                    ),
+                    "retention": "permanent",
+                    "environment": settings.environment,
+                },
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not store uploaded file",
+            ) from exc
+        url_path = (
+            f"/uploads/{storage_key}"
+            if backend.name == "local"
+            else f"/api/v1/files/{document_id}/download"
+        )
+        try:
+            row = record_file_document(
+                self.session,
+                document_id=document_id,
+                tenant_id=tenant_id,
+                branch_id=branch_id,
+                patient_id=patient_id,
+                file_name=file.filename or f"upload{extension}",
+                file_url=url_path,
+                file_size=stored_object.size,
+                # Store the server-verified content type, never the client's header.
+                content_type=verified_content_type,
+                category=(category or "general").strip().lower()[:80],
+                source_module=source_module,
+                attached_to_doctype=attached_to_doctype,
+                attached_to_name=attached_to_name,
+                attached_to_field=attached_to_field,
+                attached_to_label=attached_to_label,
+                folder=folder,
+                notes=notes,
+                uploaded_by_user_id=actor.id,
+                is_private=is_private,
+                storage_backend=backend.name,
+                storage_key=stored_object.key,
+                storage_bucket=stored_object.bucket,
+                storage_region=stored_object.region,
+                storage_version_id=stored_object.version_id,
+                checksum_sha256=checksum_sha256,
+                original_size_bytes=original_size_bytes,
+                stored_size_bytes=stored_object.size,
+                storage_class=stored_object.storage_class,
+                document_status="ready",
+                document_version=document_version,
+                artifact_type=(
+                    "final"
+                    if (category or "").strip().lower() == "invoice"
+                    else "original"
+                ),
+                finalized_at=(
+                    now_utc() if (category or "").strip().lower() == "invoice" else None
+                ),
+                optimization_profile=(
+                    optimization_profile.name if optimization_profile else None
+                ),
+                optimization_status=optimization_status,
+                force_create=previous is not None,
+            )
+            if previous:
+                previous.is_active = False
+                previous.updated_at = now_utc()
+                self.session.add(previous)
+                for rendition in self.files.list_renditions(
+                    tenant_id=tenant_id, original_file_id=previous.id
+                ):
+                    rendition.is_active = False
+                    rendition.updated_at = now_utc()
+                    self.session.add(rendition)
+            self._sync_tenant_logo_attachment(row, actor_user_id=actor.id)
+            self._sync_practitioner_signature_attachment(row, actor_user_id=actor.id)
+            self.session.commit()
+            self.session.refresh(row)
+        except Exception:
+            self.session.rollback()
+            try:
+                backend.delete(
+                    key=stored_object.key, version_id=stored_object.version_id
+                )
+            except Exception:
+                pass
+            raise
         record_audit_event(
             self.session,
             tenant_id=tenant_id,
@@ -491,6 +626,18 @@ class FileService:
     def delete_file(self, *, tenant_id: str, file_id: str, actor: User) -> FileDocument:
         row = self._get_or_404(tenant_id, file_id)
         require_user_branch_access(actor, row.branch_id)
+        if row.legal_hold:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="File is protected by legal hold",
+            )
+        if not row.original_file_id and self.files.has_active_renditions(
+            tenant_id=tenant_id, original_file_id=row.id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Deactivate optimized renditions before deleting the original file",
+            )
         row.is_active = False
         row.updated_at = now_utc()
         self.session.add(row)
@@ -499,15 +646,19 @@ class FileService:
         # Remove the physical file too, but only when no other active record still
         # points at it, so deleting one duplicate row never breaks another that
         # references the same upload.
-        if row.file_url and row.file_url.startswith("/uploads/"):
+        if row.retention_class == "temporary" and (
+            row.storage_key or (row.file_url and row.file_url.startswith("/uploads/"))
+        ):
             still_referenced = self.files.has_active_reference(
                 tenant_id=tenant_id, file_url=row.file_url
             )
             if not still_referenced:
-                disk_path = UPLOADS_DIR / Path(row.file_url).name
                 try:
-                    disk_path.unlink(missing_ok=True)
-                except OSError:
+                    backend = get_storage_backend_for_document(row)
+                    backend.delete(
+                        key=self._storage_key(row), version_id=row.storage_version_id
+                    )
+                except Exception:
                     pass
         record_audit_event(
             self.session,

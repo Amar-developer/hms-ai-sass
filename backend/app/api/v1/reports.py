@@ -16,6 +16,7 @@ from app.modules.reports.schemas import (
     ProfitReportEmailRead,
     ProfitReportEmailRequest,
     ReportJobRead,
+    ReportResendRequest,
 )
 
 router = APIRouter(prefix="/reports")
@@ -148,6 +149,33 @@ def download_monthly_report_job(
         content=content,
         media_type="application/vnd.ms-excel",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post(
+    "/monthly-email/jobs/{job_id}/resend",
+    response_model=ReportJobRead,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def resend_monthly_report_job(
+    job_id: str,
+    payload: ReportResendRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.REPORTS_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.BILLING_MANAGE,
+        )
+    ),
+) -> ReportJobRead:
+    return reports_service.resend_monthly_report_job(
+        session,
+        tenant_id=tenant_id,
+        job_id=job_id,
+        payload=payload,
+        actor=current_user,
     )
 
 

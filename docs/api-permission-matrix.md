@@ -325,8 +325,13 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/from-pharmacy-issue` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
-| `POST` | `/api/v1/billing/invoices/{invoice_id}/send` | `billing.manage` or `invoices.edit` |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/document` | `billing.manage`, `billing.read`, or `invoices.read` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/document/finalize` | `billing.manage` or `invoices.edit` |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/document/regenerate` | `billing.manage` or `invoices.edit`; reason and expected version supported |
+| `POST` | `/api/v1/billing/invoices/{invoice_id}/send` | `billing.manage` or `invoices.edit`; reuses the finalized artifact |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/deliveries` | Any of `billing.manage`, `billing.read`, `invoices.read` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/delivery` | `billing.manage`, `billing.read`, or `invoices.read` |
+| `GET` | `/api/v1/billing/invoices/{invoice_id}/deliveries` | `billing.manage`, `billing.read`, or `invoices.read` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/membership-benefit/apply` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/credit-notes` | `payments.manage` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/payments` | `payments.manage` |
@@ -358,6 +363,7 @@ Billing APIs enforce `billing_basic` for fee rules, tax rules, invoice reads, pa
 | `POST` | `/api/v1/reports/monthly-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-email/jobs` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-email/jobs/{job_id}/download` | Any of `reports.read`, `settings.manage`, `billing.manage` |
+| `POST` | `/api/v1/reports/monthly-email/jobs/{job_id}/resend` | Any of `reports.read`, `settings.manage`, `billing.manage`; reuses permanent artifacts |
 | `POST` | `/api/v1/reports/profit-email/send` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-snapshots` | Any of `reports.read`, `settings.manage`, `billing.manage` |
 | `GET` | `/api/v1/reports/monthly-snapshots/{snapshot_id}` | Any of `reports.read`, `settings.manage`, `billing.manage` |
@@ -393,6 +399,7 @@ Monthly email report APIs require `X-Tenant-ID`. The send endpoint creates a `Re
 | `POST` | `/api/v1/lab/orders/{order_id}/samples` | `lab.manage` |
 | `POST` | `/api/v1/lab/orders/{order_id}/results` | `lab.manage` |
 | `GET` | `/api/v1/lab/orders/{order_id}/report.pdf` | `lab.manage` |
+| `POST` | `/api/v1/lab/orders/{order_id}/send-report` | Any of `lab.manage`, `lab.results.manage`; sends an exact stored artifact |
 | `POST` | `/api/v1/pharmacy/medicines` | `pharmacy.manage` |
 | `GET` | `/api/v1/pharmacy/medicines` | `pharmacy.manage` |
 | `PATCH` | `/api/v1/pharmacy/medicines/{medicine_id}` | `pharmacy.manage` |
@@ -462,7 +469,11 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | --- | --- | --- |
 | `POST` | `/api/v1/files` | Authenticated tenant user |
 | `GET` | `/api/v1/files` | Authenticated tenant user |
+| `GET` | `/api/v1/files/storage-metrics` | `files.manage` or `billing.manage` |
 | `GET` | `/api/v1/files/{file_id}/download` | Authenticated tenant user |
+| `GET` | `/api/v1/files/{file_id}/renditions` | `files.manage`, `files.read`, `lab.read`, or `invoices.read` |
+| `GET` | `/api/v1/files/{file_id}/optimization-status` | `files.manage`, `files.read`, `lab.read`, or `invoices.read` |
+| `POST` | `/api/v1/files/{file_id}/optimize` | `files.manage`, `files.edit`, `lab.manage`, or `lab.results.manage` |
 | `PATCH` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `DELETE` | `/api/v1/files/{file_id}` | Authenticated tenant user |
 | `POST` | `/api/v1/files/sync-uploads` | Authenticated tenant user |

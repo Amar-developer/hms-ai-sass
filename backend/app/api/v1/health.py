@@ -58,6 +58,13 @@ def readiness() -> ReadinessResponse:
         dependencies={
             "database": "not_configured",
             "redis": "not_configured",
-            "object_storage": "not_configured",
+            "object_storage": (
+                "s3_configured"
+                if settings.file_storage_backend == "s3"
+                else "local_configured"
+            ),
+            "permanent_invoice_delivery": (
+                "enabled" if settings.permanent_invoice_delivery_enabled else "disabled"
+            ),
         },
     )

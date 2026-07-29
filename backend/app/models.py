@@ -23,6 +23,7 @@ from app.modules.consultations.models import (
 )
 from app.modules.consultations.models import ConsultationReferral, ConsultationVital
 from app.modules.error_logs.models import ErrorLog
+from app.modules.files.models import FileDocument
 from app.modules.home_care.models import (
     HomeCareBooking,
     HomeCareBookingItem,
@@ -60,6 +61,7 @@ from app.modules.lab.models import (
 )
 from app.modules.lab.models import LabTestCatalog, LabTestPackage, LabTestPackageItem
 from app.modules.notifications.models import (
+    DocumentDelivery,
     InAppNotification,
     NotificationEvent,
     ProductAnnouncement,
@@ -114,6 +116,7 @@ __all__ = [
     "AuditEvent",
     "DocumentComment",
     "DocumentCommentMention",
+    "DocumentDelivery",
     "AuthSession",
     "Branch",
     "BillingAdjustmentRequest",
@@ -133,6 +136,7 @@ __all__ = [
     "HomeCareVisitLog",
     "DoctorSettlement",
     "ErrorLog",
+    "FileDocument",
     "DiscountApproval",
     "DiscountOffer",
     "CreditNote",

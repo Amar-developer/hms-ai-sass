@@ -7,15 +7,18 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.core.credentials import decrypt_credential
+from app.core.config import get_settings
 from app.modules.appointments.models import Appointment, AppointmentStatus
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import CreditNote, Invoice, InvoiceItem
 from app.modules.consultations.models import Consultation
 from app.modules.files.models import FileDocument
+from app.modules.files.storage.factory import get_storage_backend_for_document
 from app.modules.integrations.models import TenantIntegrationPlugin
 from app.modules.integrations.invoice_receipts import (
     create_signed_invoice_receipt_url,
 )
+from app.modules.integrations.document_links import create_signed_document_url
 from app.modules.integrations.service import decode_config, get_tenant_plugin
 from app.modules.integrations.whatsapp_gateway import (
     WhatsAppGateway,
@@ -33,6 +36,8 @@ from app.modules.integrations.whatsapp_consent import (
     patient_notification_mobile,
 )
 from app.modules.notifications.models import (
+    DocumentDelivery,
+    DocumentDeliveryStatus,
     NotificationEvent,
     NotificationProvider,
     NotificationStatus,
@@ -68,19 +73,37 @@ def _public_file_url(row: FileDocument | None) -> tuple[str | None, str | None]:
 
 
 def _invoice_media(
-    session: Session, invoice: Invoice, public_base_url: str
+    session: Session,
+    invoice: Invoice,
+    public_base_url: str,
+    *,
+    artifact_file_id: str | None = None,
+    artifact_version: int | None = None,
 ) -> tuple[str, str]:
-    row = session.exec(
-        select(FileDocument)
-        .where(
-            FileDocument.tenant_id == invoice.tenant_id,
-            FileDocument.attached_to_doctype == "Invoice",
-            FileDocument.attached_to_name == invoice.id,
-            FileDocument.attached_to_field == "invoice_pdf",
-            FileDocument.is_active == True,  # noqa: E712
-        )
-        .order_by(FileDocument.created_at.desc())
-    ).first()
+    row = session.get(FileDocument, artifact_file_id) if artifact_file_id else None
+    if row and not (
+        row.tenant_id == invoice.tenant_id
+        and row.attached_to_doctype == "Invoice"
+        and row.attached_to_name == invoice.id
+        and row.attached_to_field == "invoice_pdf"
+        and row.artifact_type == "final"
+        and row.document_status == "ready"
+        and (artifact_version is None or row.document_version == artifact_version)
+    ):
+        row = None
+    if not artifact_file_id:
+        # Compatibility for notification rows queued before artifact pinning existed.
+        row = session.exec(
+            select(FileDocument)
+            .where(
+                FileDocument.tenant_id == invoice.tenant_id,
+                FileDocument.attached_to_doctype == "Invoice",
+                FileDocument.attached_to_name == invoice.id,
+                FileDocument.attached_to_field == "invoice_pdf",
+                FileDocument.is_active == True,  # noqa: E712
+            )
+            .order_by(FileDocument.document_version.desc())
+        ).first()
     existing_url, existing_name = _public_file_url(row)
     if existing_url:
         return existing_url, existing_name or f"invoice-{invoice.invoice_number}.pdf"
@@ -88,6 +111,20 @@ def _invoice_media(
         raise NotificationCancelled(
             "The printed invoice PDF is missing. Use Send Invoice after payment."
         )
+    if row.storage_backend == "s3" and row.storage_key:
+        try:
+            backend = get_storage_backend_for_document(row)
+            return (
+                backend.create_download_url(
+                    key=row.storage_key,
+                    expires_in=get_settings().aws_s3_presigned_url_ttl_seconds,
+                ),
+                row.file_name,
+            )
+        except Exception as exc:
+            raise NotificationCancelled(
+                "The stored invoice PDF could not be prepared for delivery."
+            ) from exc
     if not public_base_url:
         raise NotificationCancelled("The public receipt base URL is missing.")
     return (
@@ -95,8 +132,49 @@ def _invoice_media(
             public_base_url=public_base_url,
             tenant_id=invoice.tenant_id,
             invoice_id=invoice.id,
+            # Pre-Phase-3 rows used the default "original" artifact type. Keep
+            # their legacy signed URL valid; all newly finalized invoices pin a
+            # cryptographically signed final artifact ID.
+            file_id=row.id if row.artifact_type == "final" else None,
         ),
         f"invoice-{invoice.invoice_number}.pdf",
+    )
+
+
+def _artifact_media(
+    session: Session,
+    event: NotificationEvent,
+    public_base_url: str,
+) -> tuple[str | None, str | None]:
+    if not event.artifact_file_id:
+        return None, None
+    row = session.get(FileDocument, event.artifact_file_id)
+    if not (
+        row
+        and row.tenant_id == event.tenant_id
+        and row.document_status == "ready"
+        and row.document_version == event.artifact_version
+    ):
+        raise NotificationCancelled("The pinned document artifact is unavailable.")
+    if row.storage_backend == "s3" and row.storage_key:
+        backend = get_storage_backend_for_document(row)
+        return (
+            backend.create_download_url(
+                key=row.storage_key,
+                expires_in=get_settings().aws_s3_presigned_url_ttl_seconds,
+            ),
+            row.file_name,
+        )
+    if not public_base_url:
+        raise NotificationCancelled("The public document base URL is missing.")
+    return (
+        create_signed_document_url(
+            public_base_url=public_base_url,
+            tenant_id=row.tenant_id,
+            file_id=row.id,
+            ttl_seconds=get_settings().aws_s3_presigned_url_ttl_seconds,
+        ),
+        row.file_name,
     )
 
 
@@ -203,7 +281,11 @@ def _message_values(
         ).all()
         service = ", ".join(dict.fromkeys(item.description for item in items))
         media_url, media_filename = _invoice_media(
-            session, invoice, str(config.get("public_media_base_url") or "")
+            session,
+            invoice,
+            str(config.get("public_media_base_url") or ""),
+            artifact_file_id=event.artifact_file_id,
+            artifact_version=event.artifact_version,
         )
         return (
             patient.full_name,
@@ -239,6 +321,9 @@ def _message_values(
         patient = session.get(Patient, order.patient_id)
         if not patient or patient.tenant_id != event.tenant_id:
             raise NotificationCancelled("The lab patient no longer exists.")
+        media_url, media_filename = _artifact_media(
+            session, event, str(config.get("public_media_base_url") or "")
+        )
         return (
             patient.full_name,
             [
@@ -246,8 +331,8 @@ def _message_values(
                 order.lab_order_number or order.id,
                 order.tests[:500],
             ],
-            None,
-            None,
+            media_url,
+            media_filename,
         )
     if event.template_key in {"prescription_ready_patient", "follow_up_advice_patient"}:
         consultation = session.get(Consultation, event.resource_id or "")
@@ -319,6 +404,17 @@ def _cancel(session: Session, event: NotificationEvent, reason: str) -> None:
     event.processing_started_at = None
     event.updated_at = now_utc()
     session.add(event)
+    delivery = session.exec(
+        select(DocumentDelivery).where(
+            DocumentDelivery.notification_event_id == event.id
+        )
+    ).first()
+    if delivery:
+        delivery.status = DocumentDeliveryStatus.CANCELLED
+        delivery.failure_reason = reason[:1000]
+        delivery.processing_started_at = None
+        delivery.updated_at = now_utc()
+        session.add(delivery)
     session.commit()
 
 
@@ -412,6 +508,24 @@ def _save_result(
         event.status = NotificationStatus.FAILED
         event.failure_reason = result.message[:500]
     session.add(event)
+    delivery = session.exec(
+        select(DocumentDelivery).where(
+            DocumentDelivery.notification_event_id == event.id
+        )
+    ).first()
+    if delivery:
+        delivery.attempt_count = event.attempt_count
+        delivery.provider_message_id = event.provider_message_id
+        delivery.failure_reason = event.failure_reason
+        delivery.processing_started_at = None
+        delivery.updated_at = now
+        delivery.sent_at = event.sent_at
+        delivery.status = {
+            NotificationStatus.SENT: DocumentDeliveryStatus.SENT,
+            NotificationStatus.FAILED: DocumentDeliveryStatus.FAILED,
+            NotificationStatus.CANCELLED: DocumentDeliveryStatus.CANCELLED,
+        }.get(event.status, DocumentDeliveryStatus.QUEUED)
+        session.add(delivery)
     session.commit()
     record_audit_event(
         session,

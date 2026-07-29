@@ -5,6 +5,7 @@ from fastapi import HTTPException, status
 from sqlmodel import Session
 
 from app.core.access_control import enforce_entitlement, require_user_branch_access
+from app.core.config import get_settings
 from app.modules.audit.service import diff_changes, record_audit_event
 from app.modules.billing.models import Invoice, InvoiceStatus, Payment
 from app.modules.billing.repositories.payment_repository import BillingPaymentRepository
@@ -94,6 +95,7 @@ def record_invoice_payment(
         patient
         and invoice.status == InvoiceStatus.PAID
         and before["status"] != InvoiceStatus.PAID
+        and get_settings().permanent_invoice_delivery_enabled
     ):
         paid_event = queue_whatsapp_template_if_allowed(
             session,

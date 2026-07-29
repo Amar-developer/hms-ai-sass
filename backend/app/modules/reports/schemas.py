@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
@@ -70,6 +71,8 @@ class ReportJobRead(BaseModel):
     cc: list[str]
     filters: dict
     attachment_filename: str | None
+    artifact_file_id: str | None
+    artifact_file_ids: list[str]
     provider_message_id: str | None
     failure_reason: str | None
     queued_by_user_id: str | None
@@ -77,6 +80,14 @@ class ReportJobRead(BaseModel):
     updated_at: str
     started_at: str | None
     sent_at: str | None
+
+
+class ReportResendRequest(BaseModel):
+    recipients: list[str] | None = None
+    cc: list[str] | None = None
+    idempotency_key: str = Field(
+        default_factory=lambda: str(uuid4()), min_length=8, max_length=120
+    )
 
 
 class MonthlySnapshotRead(BaseModel):

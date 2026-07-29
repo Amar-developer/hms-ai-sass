@@ -1,17 +1,65 @@
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
-from fastapi.responses import FileResponse
+from io import BytesIO
+from pathlib import Path
+
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
 from app.core.database import get_session
 from app.core.tenant_context import require_tenant_id
 from app.modules.files.models import FileDocument
-from app.modules.files.schemas import FileDocumentRead, FileDocumentUpdate
+from app.modules.files.schemas import (
+    FileDocumentRead,
+    FileDocumentUpdate,
+    FileOptimizationRead,
+    StorageMetricsRead,
+)
 from app.modules.files.services.file_service import FileService
+from app.modules.files.services.optimization_service import FileOptimizationService
+from app.modules.files.services.storage_metrics import read_storage_metrics
 from app.modules.identity import permissions
 from app.modules.identity.models import User
 
 router = APIRouter(prefix="/files")
+
+
+@router.get(
+    "/storage-metrics",
+    response_model=StorageMetricsRead,
+    summary="Read tenant document storage and delivery metrics",
+)
+def storage_metrics(
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    _current_user: User = Depends(
+        require_any_permission(permissions.FILES_MANAGE, permissions.BILLING_MANAGE)
+    ),
+) -> dict[str, object]:
+    return read_storage_metrics(session, tenant_id=tenant_id)
+
+
+def _stored_file_response(
+    *, row: FileDocument, content: Path | bytes, disposition: str
+) -> Response:
+    if isinstance(content, Path):
+        return FileResponse(
+            path=str(content),
+            media_type=row.content_type or "application/octet-stream",
+            filename=row.file_name or content.name,
+            content_disposition_type=disposition,
+        )
+    safe_name = (
+        (row.file_name or "download")
+        .replace('"', "")
+        .replace("\r", "")
+        .replace("\n", "")
+    )
+    return StreamingResponse(
+        BytesIO(content),
+        media_type=row.content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'{disposition}; filename="{safe_name}"'},
+    )
 
 
 @router.get("/invoice-logo", summary="Load the current tenant invoice logo")
@@ -27,18 +75,13 @@ def invoice_logo(
             permissions.FILES_READ,
         )
     ),
-) -> FileResponse:
-    row, resolved = FileService(session).prepare_invoice_logo(
+) -> Response:
+    row, content = FileService(session).prepare_invoice_logo(
         tenant_id=tenant_id,
         branch_id=current_user.branch_id,
         actor=current_user,
     )
-    return FileResponse(
-        path=str(resolved),
-        media_type=row.content_type or "application/octet-stream",
-        filename=row.file_name or resolved.name,
-        content_disposition_type="inline",
-    )
+    return _stored_file_response(row=row, content=content, disposition="inline")
 
 
 @router.get("/{file_id}/download", summary="Download a file (authorized)")
@@ -59,15 +102,79 @@ def download_file(
             permissions.INVOICES_READ,
         )
     ),
-) -> FileResponse:
-    row, resolved = FileService(session).prepare_download(
+) -> Response:
+    row, content = FileService(session).prepare_download(
         tenant_id=tenant_id, file_id=file_id, actor=current_user
     )
-    return FileResponse(
-        path=str(resolved),
-        media_type=row.content_type or "application/octet-stream",
-        filename=row.file_name or resolved.name,
-        content_disposition_type="attachment",
+    return _stored_file_response(row=row, content=content, disposition="attachment")
+
+
+@router.get(
+    "/{file_id}/renditions",
+    response_model=list[FileDocumentRead],
+    summary="List original and optimized file renditions",
+)
+def list_file_renditions(
+    file_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_READ,
+            permissions.LAB_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
+) -> list[FileDocument]:
+    return FileOptimizationService(session).list_renditions(
+        tenant_id=tenant_id, file_id=file_id, actor=current_user
+    )
+
+
+@router.get(
+    "/{file_id}/optimization-status",
+    response_model=FileOptimizationRead,
+    summary="Read file optimization status",
+)
+def file_optimization_status(
+    file_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_READ,
+            permissions.LAB_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
+) -> FileOptimizationRead:
+    return FileOptimizationService(session).read_status(
+        tenant_id=tenant_id, file_id=file_id, actor=current_user
+    )
+
+
+@router.post(
+    "/{file_id}/optimize",
+    response_model=FileOptimizationRead,
+    summary="Create or reuse an optimized delivery rendition",
+)
+def optimize_file(
+    file_id: str,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_EDIT,
+            permissions.LAB_MANAGE,
+            permissions.LAB_RESULTS_MANAGE,
+        )
+    ),
+) -> FileOptimizationRead:
+    return FileOptimizationService(session).optimize_file(
+        tenant_id=tenant_id, file_id=file_id, actor=current_user
     )
 
 
