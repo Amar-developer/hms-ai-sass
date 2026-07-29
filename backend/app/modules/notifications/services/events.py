@@ -114,6 +114,8 @@ def queue_whatsapp_template_if_allowed(
     resource_id: str,
     dedupe_key: str,
     queued_by_user_id: str | None = None,
+    artifact_file_id: str | None = None,
+    artifact_version: int | None = None,
 ) -> NotificationEvent | None:
     """Persist a provider-neutral template outbox row when its tenant flow is on."""
     try:
@@ -188,6 +190,8 @@ def queue_whatsapp_template_if_allowed(
         dedupe_key=dedupe_key,
         resource_type=resource_type,
         resource_id=resource_id,
+        artifact_file_id=artifact_file_id,
+        artifact_version=artifact_version,
         queued_by_user_id=queued_by_user_id,
         max_attempts=int(config.get("max_attempts") or 5),
     )

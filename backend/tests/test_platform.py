@@ -36,8 +36,38 @@ def test_readiness_contract_starts_without_external_dependencies(client: TestCli
     assert body["dependencies"] == {
         "database": "not_configured",
         "redis": "not_configured",
-        "object_storage": "not_configured",
+        "object_storage": "local_configured",
+        "permanent_invoice_delivery": "enabled",
     }
+
+
+def test_production_storage_configuration_is_environment_safe():
+    settings = Settings(
+        environment="production",
+        file_storage_backend="s3",
+        aws_s3_bucket="medizinhub-prod-documents",
+        aws_s3_region="ap-south-1",
+        enable_docs=False,
+        auto_create_tables=False,
+    )
+    assert settings.aws_s3_bucket == "medizinhub-prod-documents"
+
+    with pytest.raises(ValidationError, match="production must use"):
+        Settings(environment="production", file_storage_backend="local")
+    with pytest.raises(ValidationError, match="cannot use a local"):
+        Settings(
+            environment="production",
+            file_storage_backend="s3",
+            aws_s3_bucket="medizinhub-dev-documents",
+        )
+    with pytest.raises(ValidationError, match="cannot use a production bucket"):
+        Settings(
+            environment="staging",
+            file_storage_backend="s3",
+            aws_s3_bucket="medizinhub-prod-documents",
+        )
+    with pytest.raises(ValidationError, match="relative server-controlled"):
+        Settings(aws_s3_prefix="../unsafe")
 
 
 def test_tenant_context_echo_header(client: TestClient):

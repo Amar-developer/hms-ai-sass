@@ -42,6 +42,7 @@ __pycache__/
 # Keep only the safe templates in Git; never commit real secrets.
 !.env.example
 !.env.staging.example
+!.env.production.example
 
 # Local OS and database files
 .DS_Store

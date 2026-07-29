@@ -128,7 +128,8 @@ def test_lab_report_upload_replaces_same_order_attachment(client):
 
     assert first.status_code == 201
     assert second.status_code == 201
-    assert second.json()["id"] == first.json()["id"]
+    assert second.json()["id"] != first.json()["id"]
+    assert second.json()["document_version"] == 2
     assert second.json()["file_name"] == "final-report.png"
     assert len(listed.json()) == 1
 

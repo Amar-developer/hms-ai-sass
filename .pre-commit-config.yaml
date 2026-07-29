@@ -20,6 +20,9 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # CloudFormation intrinsic tags such as !Ref and !Sub require the AWS
+        # parser; these templates are syntax-checked by the Phase 4 verifier/CI.
+        exclude: ^infra/aws/
       - id: check-json
       - id: check-merge-conflict
       - id: detect-private-key

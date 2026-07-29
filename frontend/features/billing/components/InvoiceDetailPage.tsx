@@ -29,6 +29,7 @@ export function InvoiceDetailPage({
   collectPayment,
   collectSplitPayment,
   sendInvoice,
+  regenerateInvoice,
   applyMembershipBenefit,
   openReceipt,
   issueCreditNote,
@@ -159,6 +160,10 @@ export function InvoiceDetailPage({
   const taxAmount = numberValue(invoice.tax_amount);
   const balanceDue = numberValue(invoice.balance_amount);
   const invoiceDelivery = detail.invoice_delivery || {};
+  const invoiceDeliveries = Array.isArray(detail.invoice_deliveries)
+    ? detail.invoice_deliveries
+    : [];
+  const invoiceDocument = detail.invoice_document || {};
   const invoiceDeliveryStatus = String(
     invoiceDelivery.status || "not_sent",
   ).toLowerCase();
@@ -177,6 +182,7 @@ export function InvoiceDetailPage({
     canEditInvoices &&
     String(invoice.status || "").toLowerCase() === "paid" &&
     balanceDue <= 0;
+  const canEmailInvoice = canSendInvoice && Boolean(patient?.email);
   const [payRows, setPayRows] = useState<any[]>([
     { method: defaultPaymentMethod, amount: "", reference: "" },
   ]);
@@ -965,6 +971,27 @@ export function InvoiceDetailPage({
                           Attempt {invoiceDelivery.attempt_count} of {invoiceDelivery.max_attempts}
                         </p>
                       )}
+                      {invoiceDeliveries.length > 0 && (
+                        <div className="mt-3 border-t border-current/15 pt-2">
+                          <p className="mb-1 font-bold">Recent deliveries</p>
+                          {invoiceDeliveries.slice(0, 5).map((delivery: any) => (
+                            <div
+                              key={delivery.delivery_id || delivery.id}
+                              className="flex justify-between gap-3 py-0.5"
+                            >
+                              <span>
+                                {humanizeOptionLabel(delivery.channel || "whatsapp")}
+                                {delivery.artifact_version
+                                  ? ` · PDF v${delivery.artifact_version}`
+                                  : ""}
+                              </span>
+                              <span className="font-bold">
+                                {humanizeOptionLabel(delivery.status || "queued")}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
@@ -972,14 +999,14 @@ export function InvoiceDetailPage({
                       <ActionButton
                         onClick={() => sendInvoice(invoice)}
                         disabled={
-                          busy === `send-invoice-${invoice.id}` ||
+                          busy === `send-invoice-whatsapp-${invoice.id}` ||
                           invoiceDeliveryPending
                         }
                       >
                         <ButtonLoader
-                          loading={busy === `send-invoice-${invoice.id}`}
+                          loading={busy === `send-invoice-whatsapp-${invoice.id}`}
                         >
-                          {busy === `send-invoice-${invoice.id}`
+                          {busy === `send-invoice-whatsapp-${invoice.id}`
                             ? "Sending Invoice..."
                             : invoiceDeliveryPending
                               ? "Invoice Queued"
@@ -990,6 +1017,34 @@ export function InvoiceDetailPage({
                                     )
                                   ? "Retry Send Invoice"
                                   : "Send Invoice"}
+                        </ButtonLoader>
+                      </ActionButton>
+                    )}
+                    {canEmailInvoice && (
+                      <ActionButton
+                        onClick={() => sendInvoice(invoice, false, "email")}
+                        disabled={busy === `send-invoice-email-${invoice.id}`}
+                      >
+                        <ButtonLoader
+                          loading={busy === `send-invoice-email-${invoice.id}`}
+                        >
+                          {busy === `send-invoice-email-${invoice.id}`
+                            ? "Queueing Email..."
+                            : "Send Invoice by Email"}
+                        </ButtonLoader>
+                      </ActionButton>
+                    )}
+                    {canSendInvoice && invoiceDocument.exists && (
+                      <ActionButton
+                        onClick={() => regenerateInvoice(invoice)}
+                        disabled={busy === `regenerate-invoice-${invoice.id}`}
+                      >
+                        <ButtonLoader
+                          loading={busy === `regenerate-invoice-${invoice.id}`}
+                        >
+                          {busy === `regenerate-invoice-${invoice.id}`
+                            ? "Regenerating PDF..."
+                            : `Regenerate PDF (v${invoiceDocument.version || 1})`}
                         </ButtonLoader>
                       </ActionButton>
                     )}

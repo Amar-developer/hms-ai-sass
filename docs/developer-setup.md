@@ -492,9 +492,33 @@ Current backend environment variables:
 | `MEDIZINHUB_ENVIRONMENT` | `local` | Runtime environment |
 | `MEDIZINHUB_API_PREFIX` | `/api/v1` | API route prefix |
 | `MEDIZINHUB_ENABLE_DOCS` | `true` | Enable Swagger/ReDoc |
+| `MEDIZINHUB_FILE_STORAGE_BACKEND` | `local` | File storage adapter: `local` or `s3` |
+| `MEDIZINHUB_AWS_S3_BUCKET` | empty | Private S3 bucket required by the `s3` adapter |
+| `MEDIZINHUB_AWS_S3_REGION` | `ap-south-1` | S3 bucket region |
+| `MEDIZINHUB_AWS_S3_PREFIX` | empty | Optional server-controlled object-key prefix |
+| `MEDIZINHUB_AWS_S3_ENDPOINT_URL` | empty | Optional MinIO/LocalStack endpoint; leave empty for AWS |
+| `MEDIZINHUB_AWS_S3_KMS_KEY_ID` | empty | Optional KMS key ID; otherwise uploads use SSE-S3 |
+| `MEDIZINHUB_AWS_S3_PRESIGNED_URL_TTL_SECONDS` | `900` | Short-lived external download URL duration |
+| `MEDIZINHUB_PERMANENT_INVOICE_DELIVERY_ENABLED` | `true` | Rollout switch for invoice finalization, regeneration, and delivery |
 | `MEDIZINHUB_DATABASE_URL` | `sqlite:///./medizinhub_hms.db` | Database URL |
 | `MEDIZINHUB_REDIS_URL` | empty | Future Redis URL |
 | `MEDIZINHUB_AUTO_CREATE_TABLES` | `true` | Auto-create SQLModel tables on app startup. Keep `true` for SQLite quick-start; set `false` when relying strictly on Alembic migrations. |
+
+### Permanent invoice delivery flow
+
+Paid invoices use one immutable finalized PDF for normal WhatsApp resends:
+
+1. Read `GET /api/v1/billing/invoices/{invoice_id}/document`.
+2. When `exists` is false, generate the PDF once and upload it to
+   `POST /api/v1/billing/invoices/{invoice_id}/document/finalize`.
+3. Send or resend with JSON to `POST /api/v1/billing/invoices/{invoice_id}/send`.
+   This request never accepts or creates another PDF.
+4. Use `document/regenerate` only for a corrected invoice. Supply the current
+   `expected_version`, a replacement PDF, and an audit reason.
+
+Each notification row pins the exact artifact file ID and version. The worker
+creates a fresh short-lived S3 URL only when processing or retrying the message,
+so URL expiry never deletes or invalidates the permanent stored invoice.
 
 Example:
 

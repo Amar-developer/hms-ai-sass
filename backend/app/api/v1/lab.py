@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Depends, File, Response, UploadFile, status
-from fastapi.responses import FileResponse
+from io import BytesIO
+
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
@@ -46,6 +48,11 @@ from app.modules.lab.services.file_service import (
     upload_lab_order_files,
 )
 from app.modules.lab.services.report_service import render_lab_report_pdf
+from app.modules.lab.services.delivery_service import queue_lab_report_delivery
+from app.modules.notifications.schemas import (
+    DocumentDeliveryRead,
+    DocumentDeliveryRequest,
+)
 from app.modules.lab.services.result_service import add_lab_result_record
 from app.modules.lab.services.sample_service import collect_lab_sample_record
 from app.modules.lab.schemas import (
@@ -70,6 +77,32 @@ from app.core.access_control import scoped_branch_id
 from app.modules.subscriptions.service import enforce_module_enabled
 
 router = APIRouter(prefix="/lab")
+
+
+@router.post(
+    "/orders/{order_id}/send-report",
+    response_model=DocumentDeliveryRead,
+    summary="Queue an exact lab report artifact for WhatsApp or email delivery",
+)
+def send_lab_report(
+    order_id: str,
+    payload: DocumentDeliveryRequest,
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.LAB_MANAGE,
+            permissions.LAB_RESULTS_MANAGE,
+        )
+    ),
+):
+    return queue_lab_report_delivery(
+        session,
+        tenant_id=tenant_id,
+        order_id=order_id,
+        payload=payload,
+        actor=current_user,
+    )
 
 
 @router.get(
@@ -473,18 +506,30 @@ def download_lab_order_attachment(
             permissions.LAB_RESULTS_MANAGE,
         )
     ),
-) -> FileResponse:
-    row, resolved = prepare_lab_order_file_download(
+) -> Response:
+    row, content = prepare_lab_order_file_download(
         session,
         tenant_id=tenant_id,
         order_id=order_id,
         file_id=file_id,
         current_user=current_user,
     )
+    if isinstance(content, bytes):
+        safe_name = (
+            (row.file_name or "lab-report")
+            .replace('"', "")
+            .replace("\r", "")
+            .replace("\n", "")
+        )
+        return StreamingResponse(
+            BytesIO(content),
+            media_type=row.content_type or "application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}"'},
+        )
     return FileResponse(
-        path=str(resolved),
+        path=str(content),
         media_type=row.content_type or "application/octet-stream",
-        filename=row.file_name or resolved.name,
+        filename=row.file_name or content.name,
         content_disposition_type="attachment",
     )
 

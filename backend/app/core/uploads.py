@@ -72,18 +72,24 @@ async def _save_upload_to(
     Returns (filename, url_path, content_type) where content_type is the
     server-verified type — callers should store this, not the client's header.
     """
-    data = await _read_bounded(file)
-    if not data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file"
-        )
-    content_type, ext = _sniff(data)
+    data, content_type, ext = await read_validated_upload(file)
     # Filename is fully server-generated: opaque id + validated extension. The
     # client's original filename/extension is never used on disk.
     filename = f"{prefix}_{uuid.uuid4().hex}{ext}"
     _ensure_dir(directory)
     (directory / filename).write_bytes(data)
     return filename, f"{url_prefix}/{filename}", content_type
+
+
+async def read_validated_upload(file: UploadFile) -> tuple[bytes, str, str]:
+    """Read a bounded upload and return bytes plus server-verified type/extension."""
+    data = await _read_bounded(file)
+    if not data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file"
+        )
+    content_type, extension = _sniff(data)
+    return data, content_type, extension
 
 
 async def save_upload(file: UploadFile, prefix: str) -> tuple[str, str, str]:

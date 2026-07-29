@@ -29,6 +29,19 @@ class NotificationStatus(str, Enum):
     CANCELLED = "cancelled"
 
 
+class DocumentDeliveryChannel(str, Enum):
+    WHATSAPP = "whatsapp"
+    EMAIL = "email"
+
+
+class DocumentDeliveryStatus(str, Enum):
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    SENT = "sent"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
 class InAppNotificationCategory(str, Enum):
     APPOINTMENT = "appointment"
     QUEUE = "queue"
@@ -82,6 +95,10 @@ class NotificationEvent(SQLModel, table=True):
     dedupe_key: str | None = Field(default=None, max_length=240)
     resource_type: str | None = Field(default=None, index=True, max_length=80)
     resource_id: str | None = Field(default=None, index=True, max_length=120)
+    artifact_file_id: str | None = Field(
+        default=None, index=True, foreign_key="filedocument.id"
+    )
+    artifact_version: int | None = Field(default=None, ge=1)
     queued_by_user_id: str | None = Field(default=None, index=True)
     provider_message_id: str | None = Field(default=None, max_length=160)
     failure_reason: str | None = Field(default=None, max_length=500)
@@ -89,6 +106,55 @@ class NotificationEvent(SQLModel, table=True):
     max_attempts: int = Field(default=5, ge=1, le=10)
     next_attempt_at: datetime = Field(default_factory=now_utc, index=True)
     processing_started_at: datetime | None = Field(default=None, index=True)
+    created_at: datetime = Field(default_factory=now_utc, index=True)
+    updated_at: datetime = Field(default_factory=now_utc)
+    sent_at: datetime | None = Field(default=None, index=True)
+
+
+class DocumentDelivery(SQLModel, table=True):
+    """Channel-neutral outbox row pinned to immutable document artifacts."""
+
+    __table_args__ = (
+        UniqueConstraint(
+            "tenant_id",
+            "channel",
+            "idempotency_key",
+            name="uq_documentdelivery_tenant_channel_idempotency",
+        ),
+        Index(
+            "ix_documentdelivery_due",
+            "channel",
+            "status",
+            "next_attempt_at",
+        ),
+    )
+
+    id: str = Field(default_factory=lambda: new_id("delivery"), primary_key=True)
+    tenant_id: str = Field(index=True, foreign_key="tenant.id")
+    branch_id: str | None = Field(default=None, index=True, foreign_key="branch.id")
+    channel: DocumentDeliveryChannel = Field(index=True)
+    status: DocumentDeliveryStatus = Field(
+        default=DocumentDeliveryStatus.QUEUED, index=True
+    )
+    resource_type: str = Field(index=True, max_length=80)
+    resource_id: str = Field(index=True, max_length=120)
+    artifact_file_id: str = Field(index=True, foreign_key="filedocument.id")
+    artifact_version: int = Field(ge=1)
+    artifact_file_ids_json: str = Field(default="[]", max_length=8000)
+    recipient: str = Field(min_length=3, max_length=2000)
+    subject: str | None = Field(default=None, max_length=240)
+    message: str | None = Field(default=None, max_length=4000)
+    idempotency_key: str = Field(max_length=320)
+    notification_event_id: str | None = Field(
+        default=None, index=True, foreign_key="notificationevent.id"
+    )
+    provider_message_id: str | None = Field(default=None, max_length=200)
+    failure_reason: str | None = Field(default=None, max_length=1000)
+    attempt_count: int = Field(default=0, ge=0)
+    max_attempts: int = Field(default=5, ge=1, le=10)
+    next_attempt_at: datetime = Field(default_factory=now_utc, index=True)
+    processing_started_at: datetime | None = Field(default=None, index=True)
+    queued_by_user_id: str | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)
     sent_at: datetime | None = Field(default=None, index=True)
