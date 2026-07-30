@@ -39,12 +39,12 @@ import {
 import { status_options } from "./contants";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 
 export function Billing({
   apiSession,
   loadLiveData,
   appointments,
-  patients,
   liveInvoices,
   branchId,
 }: any) {
@@ -124,9 +124,9 @@ export function Billing({
     ? `?branch_id=${encodeURIComponent(branchId)}`
     : "";
 
-  const patientMap = useMemo(
-    () => new Map(patients.map((p: any) => [p.id, p])),
-    [patients],
+  const { patientMap } = usePatientReferencesQuery(
+    apiSession,
+    (liveInvoices || []).map((invoice: any) => invoice.patient_id),
   );
 
   useEffect(() => {

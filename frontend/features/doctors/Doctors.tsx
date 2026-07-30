@@ -27,10 +27,12 @@ import { activeTenantOptions } from "@/utils/helper";
 import { DoctorForm } from "@/features/doctors/forms/DoctorForm";
 import { Pagination } from "@/app/components/common/Pagination";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 
 const pageSize = 10;
 
-export function Doctors({ apiSession, clinic, setLivePractitioners }: any) {
+export function Doctors({ apiSession, clinic }: any) {
+  const { setLocal: setLivePractitioners } = usePractitionersQuery(apiSession);
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];

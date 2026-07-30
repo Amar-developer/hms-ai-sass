@@ -34,6 +34,7 @@ import {
 } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "../admin/components/RowActions";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 
 const MAX_REPORT_DOCUMENTS = 5;
 
@@ -51,7 +52,6 @@ function pickReportFile(onPick: (file: File) => void) {
 export function Lab({
   apiSession,
   branchId,
-  patients,
   appointments,
   loadLiveData,
   liveInvoices = [],
@@ -175,9 +175,9 @@ export function Lab({
     safePage * pageSize,
   );
 
-  const patientMap = useMemo(
-    () => new Map(patients.map((p: any) => [p.id, p])),
-    [patients],
+  const { patients, patientMap } = usePatientReferencesQuery(
+    apiSession,
+    orders.map((o: any) => o.patient_id),
   );
 
   const invoicedOrderIds = useMemo(
@@ -867,7 +867,7 @@ export function Lab({
     {
       key: "patient",
       header: "Patient",
-      width: "130px",
+      width: "150px",
       render: (o) => {
         const p: any = patientMap.get(o.patient_id);
 

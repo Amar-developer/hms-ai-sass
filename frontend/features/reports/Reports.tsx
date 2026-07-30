@@ -53,6 +53,9 @@ import {
   pharmacySettlementHeaders,
   settlementHeaders,
 } from "@/features/reports/constants";
+import { useIpAdmissionsQuery } from "@/features/ip/api";
+import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 
 function serviceCategoryRevenue(
   invoices: any[],
@@ -97,17 +100,20 @@ function serviceCategoryRevenue(
 
 export function Reports({
   scopedAppointments,
-  patients,
-  ipAdmissions,
   apiSession,
   branchId,
   liveInvoices = [],
-  livePractitioners = [],
   section,
   setSection,
   setActive,
   loadLiveData,
 }: any) {
+  const { ipAdmissions } = useIpAdmissionsQuery(apiSession);
+  const { livePractitioners } = usePractitionersQuery(apiSession);
+  const { patientMap: patientById } = usePatientReferencesQuery(
+    apiSession,
+    liveInvoices.map((invoice: any) => invoice.patient_id),
+  );
   const [period, setPeriod] = useState("monthly");
   const [refreshTick, setRefreshTick] = useState(0);
   async function refreshReports() {
@@ -164,10 +170,6 @@ export function Reports({
   const [homeCareBookings, setHomeCareBookings] = useState<any[]>([]);
   const [homeCareInvoiceDetails, setHomeCareInvoiceDetails] = useState<any[]>(
     [],
-  );
-  const patientById = useMemo(
-    () => new Map<string, any>(patients.map((row: any) => [row.id, row])),
-    [patients],
   );
   const appointmentById = useMemo(
     () =>

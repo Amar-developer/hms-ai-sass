@@ -26,6 +26,7 @@ import { PatientRow } from "./components/PatientRow";
 import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
+import { patient_status_options } from "./constants";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -600,7 +601,7 @@ export function Patient({
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+      <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 mt-3">
         <div
           className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "md:grid-cols-4 lg:grid-cols-4"}`}
         >
@@ -653,12 +654,7 @@ export function Patient({
                 setStatus(v);
                 setPage(1);
               }}
-              options={[
-                { value: "all", label: "All status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-                { value: "deceased", label: "Deceased" },
-              ]}
+              options={patient_status_options}
               searchable={false}
             />
           </FormField>
@@ -694,7 +690,7 @@ export function Patient({
           </div>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin mt-3">
         <div className="min-w-[1120px]">
           <div className="md:grid md:grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_.65fr]  lg:grid grid-cols-[1.25fr_.85fr_1fr_.75fr_.95fr_.65fr_1.35fr] items-center gap-4 bg-slate-50 px-5 py-3 text-xs font-bold uppercase text-slate-500 ">
             <span className="text-sm">Patient</span>

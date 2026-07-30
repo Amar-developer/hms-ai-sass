@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus } from "lucide-react";
 import { FormField } from "@/app/components/FormElements";
 import {
@@ -11,99 +11,50 @@ import {
   SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiFetch } from "@/lib/api";
-import { uniqueDepartmentRows } from "@/lib/options";
 import {
   groupSchedules,
   selectedSchedulePayloadsFromRHF,
 } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
-import { pageSize,weekdays } from "./constants";
+import { pageSize, weekdays } from "./constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Empty } from "@/app/components/common/Empty";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { ScheduleRow } from "./components/ScheduleRow";
 import { Pagination } from "@/app/components/common/Pagination";
 import { ScheduleFormValues } from "./schedule.schema";
-import { activeTenantOptions } from "@/utils/helper";
+import { useSchedulingData, useSchedulingActions } from "./api";
 
 export function Scheduling({ apiSession, branchId }: any) {
+  const [filterDepartment, setFilterDepartment] = useState("all");
+  const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
+
+  const { tenants, branches, departments, doctors, rows, loading, reload } =
+    useSchedulingData({
+      apiSession,
+      tenantId,
+      filterDepartment,
+    });
+
+  const { create, update, remove, busy } = useSchedulingActions(apiSession);
+
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const [view, setView] = useState("list");
-  const [tenants, setTenants] = useState<any[]>([]);
-  const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
-  const [branches, setBranches] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [doctors, setDoctors] = useState<any[]>([]);
-  const [rows, setRows] = useState<any[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [filterBranch, setFilterBranch] = useState("all");
-  const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterWeekday, setFilterWeekday] = useState("all");
   const [filterStatus, setFilterStatus] = useState("active");
   const [page, setPage] = useState(1);
-  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<any>(null);
+
   const scopedSession =
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
+
   const selected = groupSchedules(rows).find(
     (row: any) => row.id === selectedId,
   );
-
-  async function loadTenants() {
-    if (!apiSession?.user?.is_super_admin) return;
-    const tenantRows = activeTenantOptions(
-      await apiFetch("/tenants", apiSession),
-    );
-    setTenants(tenantRows);
-    if (!tenantId || !tenantRows.some((tenant: any) => tenant.id === tenantId))
-      setTenantId(
-        tenantRows.find((tenant: any) => !tenant.is_primary)?.id ||
-          tenantRows[0]?.id ||
-          apiSession.tenantId,
-      );
-  }
-
-  async function loadData(nextTenantId = tenantId) {
-    if (!apiSession || !nextTenantId) return;
-    setBusy(true);
-    setMessage("");
-    const session = { ...apiSession, tenantId: nextTenantId };
-    try {
-      const [branchRows, departmentRows, doctorRows, scheduleRows] =
-        await Promise.all([
-          apiFetch(`/tenants/${nextTenantId}/branches`, session).catch(
-            () => [],
-          ),
-          apiFetch(`/tenants/${nextTenantId}/departments`, session).catch(
-            () => [],
-          ),
-          apiFetch("/practitioners", session),
-          apiFetch("/practitioners/schedules", session),
-        ]);
-      setBranches(branchRows);
-      setDepartments(uniqueDepartmentRows(departmentRows, filterDepartment));
-      setDoctors(doctorRows);
-      setRows(scheduleRows);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load schedules.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  useEffect(() => {
-    if (apiSession) {
-      loadTenants();
-    }
-  }, [apiSession?.tenantId]);
-  useEffect(() => {
-    if (apiSession && tenantId) {
-      loadData(tenantId);
-    }
-  }, [apiSession?.tenantId, tenantId]);
 
   function open(nextView: string, id = "") {
     setSelectedId(id);
@@ -117,18 +68,15 @@ export function Scheduling({ apiSession, branchId }: any) {
     if (!scopedSession) return;
 
     const practitionerId = data.practitionerId;
-    const doctorBranchIds =
-      doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
-    const doctorDepartmentIds =
-      doctors.find((item: any) => item.id === practitionerId)?.department_ids ||
-      [];
+    const doctor = doctors.find((item: any) => item.id === practitionerId);
+    const doctorBranchIds = doctor?.branch_ids || [];
+    const doctorDepartmentIds = doctor?.department_ids || [];
 
     if (!practitionerId) {
       setMessage("Select a doctor.");
       return;
     }
 
-    // Convert RHF data to backend payloads
     const schedulePayloads = selectedSchedulePayloadsFromRHF(
       data,
       doctorBranchIds,
@@ -150,50 +98,34 @@ export function Scheduling({ apiSession, branchId }: any) {
       return;
     }
 
-    setBusy(true);
     setMessage("");
 
     try {
-      const createdRows = await Promise.all(
-        schedulePayloads.map((item) =>
-          apiFetch(
-            `/practitioners/${practitionerId}/schedules`,
-            scopedSession,
-            {
-              method: "POST",
-              body: JSON.stringify(item),
-            },
-          ),
-        ),
+      const createdRows = await create(
+        practitionerId,
+        schedulePayloads,
+        scopedSession,
       );
 
-      setRows((previous: any[]) => [
-        ...createdRows,
-        ...previous.filter(
-          (row: any) => !createdRows.some((item: any) => item.id === row.id),
-        ),
-      ]);
-
       open("list");
-      await loadData(tenantId);
+      await reload();
       setMessage(
-        `${createdRows.length} schedule ${createdRows.length === 1 ? "slot" : "slots"} created.`,
+        `${createdRows.length} schedule ${
+          createdRows.length === 1 ? "slot" : "slots"
+        } created.`,
       );
     } catch (err: any) {
       setMessage(err.message || "Could not create schedule.");
-    } finally {
-      setBusy(false);
     }
   }
 
   async function updateSchedule(data: ScheduleFormValues) {
     if (!scopedSession || !selected) return;
+
     const practitionerId = data.practitionerId || selected.practitioner_id;
-    const doctorBranchIds =
-      doctors.find((item: any) => item.id === practitionerId)?.branch_ids || [];
-    const doctorDepartmentIds =
-      doctors.find((item: any) => item.id === practitionerId)?.department_ids ||
-      [];
+    const doctor = doctors.find((item: any) => item.id === practitionerId);
+    const doctorBranchIds = doctor?.branch_ids || [];
+    const doctorDepartmentIds = doctor?.department_ids || [];
 
     const schedulePayloads = selectedSchedulePayloadsFromRHF(
       data,
@@ -216,112 +148,77 @@ export function Scheduling({ apiSession, branchId }: any) {
       return;
     }
 
-    const [firstPayload, ...extraPayloads] = schedulePayloads;
     const existingRows = (selected.schedules || [selected]).filter(
       (row: any) => row && row.is_active !== false,
     );
 
-    setBusy(true);
     setMessage("");
 
     try {
-      const updated = existingRows[0]
-        ? await apiFetch(
-            `/practitioners/schedules/${existingRows[0].id}`,
-            scopedSession,
-            {
-              method: "PATCH",
-              body: JSON.stringify({
-                ...firstPayload,
-                practitioner_id: practitionerId,
-              }),
-            },
-          )
-        : await apiFetch(
-            `/practitioners/${practitionerId}/schedules`,
-            scopedSession,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                ...firstPayload,
-                practitioner_id: practitionerId,
-              }),
-            },
-          );
+      const [firstPayload, ...extraPayloads] = schedulePayloads;
 
-      const createdRows = await Promise.all(
-        extraPayloads.map((item) =>
-          apiFetch(
-            `/practitioners/${practitionerId}/schedules`,
-            scopedSession,
-            {
-              method: "POST",
-              body: JSON.stringify(item),
-            },
-          ),
-        ),
-      );
+      // Update first existing row (or create if none exist)
+      if (existingRows[0]) {
+        await update(
+          existingRows[0].id,
+          {
+            ...firstPayload,
+            practitioner_id: practitionerId,
+          },
+          scopedSession,
+        );
+      } else {
+        await create(practitionerId, [firstPayload], scopedSession);
+      }
 
-      // Delete old extra rows
-      await Promise.all(
-        existingRows.slice(1).map((row: any) =>
-          apiFetch(`/practitioners/schedules/${row.id}`, scopedSession, {
-            method: "DELETE",
-          }),
-        ),
-      );
+      // Create any extra slots
+      if (extraPayloads.length > 0) {
+        await create(practitionerId, extraPayloads, scopedSession);
+      }
 
-      setRows((previous: any[]) => [
-        updated,
-        ...createdRows,
-        ...previous.filter(
-          (row: any) =>
-            !existingRows.some((item: any) => item.id === row.id) &&
-            !createdRows.some((item: any) => item.id === row.id),
-        ),
-      ]);
+      // Delete surplus old rows
+      if (existingRows.length > 1) {
+        await Promise.all(
+          existingRows
+            .slice(1)
+            .map((row: any) => remove(row.id, scopedSession)),
+        );
+      }
 
       open("list");
-      await loadData(tenantId);
-
+      await reload();
       setMessage(
-        createdRows.length
-          ? `Schedule updated and ${createdRows.length} extra ${createdRows.length === 1 ? "slot" : "slots"} created.`
+        extraPayloads.length
+          ? `Schedule updated and ${extraPayloads.length} extra ${
+              extraPayloads.length === 1 ? "slot" : "slots"
+            } created.`
           : "Schedule updated.",
       );
     } catch (err: any) {
       setMessage(err.message || "Could not update schedule.");
-    } finally {
-      setBusy(false);
     }
   }
 
   async function deleteSchedule(row: any) {
     if (!scopedSession) return;
+
     const rowsToDelete = row.schedules || [row];
-    setBusy(true);
     setMessage("");
+
     try {
       await Promise.all(
-        rowsToDelete.map((item: any) =>
-          apiFetch(`/practitioners/schedules/${item.id}`, scopedSession, {
-            method: "DELETE",
-          }),
-        ),
+        rowsToDelete.map((item: any) => remove(item.id, scopedSession)),
       );
-      setRows((previous: any[]) =>
-        previous.filter(
-          (item: any) =>
-            !rowsToDelete.some((deleted: any) => deleted.id === item.id),
-        ),
-      );
+
       setMessage(
-        `${rowsToDelete.length} schedule ${rowsToDelete.length === 1 ? "slot" : "slots"} deleted.`,
+        `${rowsToDelete.length} schedule ${
+          rowsToDelete.length === 1 ? "slot" : "slots"
+        } deleted.`,
       );
+      await reload();
     } catch (err: any) {
       setMessage(err.message || "Could not delete schedule.");
     } finally {
-      setBusy(false);
       setConfirm(null);
     }
   }
@@ -348,6 +245,7 @@ export function Scheduling({ apiSession, branchId }: any) {
         back={() => open("list")}
       />
     );
+
   if (view === "edit" && selected)
     return (
       <ScheduleForm
@@ -391,6 +289,7 @@ export function Scheduling({ apiSession, branchId }: any) {
         new Date(b.updated_at || b.created_at).getTime() -
         new Date(a.updated_at || a.created_at).getTime(),
     );
+
   const groupedRows = groupSchedules(filtered)
     .filter(
       (group: any) =>
@@ -402,6 +301,7 @@ export function Scheduling({ apiSession, branchId }: any) {
         new Date(b.updated_at || b.created_at).getTime() -
         new Date(a.updated_at || a.created_at).getTime(),
     );
+
   const totalPages = Math.max(1, Math.ceil(groupedRows.length / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageRows = groupedRows.slice(
@@ -422,7 +322,7 @@ export function Scheduling({ apiSession, branchId }: any) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <RefreshButton onRefresh={() => loadData(tenantId)} />
+          <RefreshButton onRefresh={reload} />
           <button
             type="button"
             onClick={() => open("create")}
@@ -433,7 +333,9 @@ export function Scheduling({ apiSession, branchId }: any) {
           </button>
         </div>
       </div>
+
       <StatusToast message={message} onClose={() => setMessage("")} />
+
       <div className="mt-4 grid gap-3 md:grid-cols-5 lg:grid-cols-5 xl:grid-cols-5">
         {isSuperAdmin && (
           <Field label="Tenant">
@@ -449,6 +351,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             />
           </Field>
         )}
+
         <FormField label="Search">
           <Input
             value={query}
@@ -459,6 +362,7 @@ export function Scheduling({ apiSession, branchId }: any) {
             placeholder="Doctor, room, medical department"
           />
         </FormField>
+
         <Field label="Branch">
           <SearchableSelect
             value={filterBranch}
@@ -533,9 +437,10 @@ export function Scheduling({ apiSession, branchId }: any) {
           />
         </Field>
       </div>
+
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1120px]">
-          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
+          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
             <span>Doctor</span>
             <span>Branch</span>
             <span>Department</span>
@@ -545,11 +450,12 @@ export function Scheduling({ apiSession, branchId }: any) {
             <span className="text-center">Status</span>
             <span className="text-center">Actions</span>
           </div>
+
           <div className="divide-y divide-slate-200">
-            {busy && pageRows.length === 0 && <TableSkeleton />}
-            {!busy && pageRows.length === 0 && (
+            {loading && pageRows.length === 0 && <TableSkeleton />}
+            {!loading && pageRows.length === 0 && (
               <Empty text="No schedules match your search." />
-            )}{" "}
+            )}
             {pageRows.map((row: any) => (
               <ScheduleRow
                 key={row.id}
@@ -564,12 +470,14 @@ export function Scheduling({ apiSession, branchId }: any) {
           </div>
         </div>
       </div>
+
       <Pagination
         page={safePage}
         totalPages={totalPages}
         total={groupedRows.length}
         onPage={setPage}
       />
+
       {confirm && (
         <ConfirmModal
           busy={busy}

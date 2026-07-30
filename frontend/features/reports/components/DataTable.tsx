@@ -27,6 +27,7 @@ export function DataTable<T>({
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
 
+
   return (
     <div>
       <div className="overflow-auto rounded-lg border">

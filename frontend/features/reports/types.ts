@@ -17,6 +17,16 @@ export type Column<T> = {
   disableRowClick?: boolean;
 };
 
+
+export type FileColumn<T> = {
+  key: keyof T | (string & {});
+  header: React.ReactNode;
+  width?: string;
+  className?: string;
+  cellClassName?: string;
+  disableRowClick?: boolean;
+  render?: (row: T, index: number) => React.ReactNode;
+};
 export type DataTableProps<T> = {
   columns: Column<T>[];
   data: T[];

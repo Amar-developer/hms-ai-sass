@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   CalendarDays,
@@ -23,29 +23,21 @@ import {
 import { Insight } from "./components/Insight";
 import { QuickAccess } from "./components/QuickAccess";
 import { NotificationWidget } from "./components/NotificationWidget";
-import { apiFetch } from "@/lib/api";
 import { Skeleton } from "@/app/components/common/loader/Skeleton";
+import { useDashboardData } from "./api";
+import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 
 export function Dashboard({
   scopedAppointments,
-  patients,
   liveSummary,
   liveInvoices = [],
   allowedDepartments = [],
-  livePractitioners = [],
   setActive,
   enabled,
   apiSession,
   branchId,
 }: any) {
-  const [monthlyCollections, setMonthlyCollections] = useState<any>(null);
-  const [todayCollections, setTodayCollections] = useState<any>(null);
-  const [monthlyDueReport, setMonthlyDueReport] = useState<any>(null);
-  const [loading, setLoading] = useState(false)
-  const [todayDueReport, setTodayDueReport] = useState<any>(null);
-  const [todayPatientCount, setTodayPatientCount] = useState<number | null>(
-    null,
-  );
+  const { livePractitioners } = usePractitionersQuery(apiSession);
   const now = new Date();
   const today = [
     now.getFullYear(),
@@ -64,48 +56,14 @@ export function Dashboard({
     from_date: monthStart,
     to_date: monthEnd,
   });
+
   if (branchId) monthlyParams.set("branch_id", branchId);
   const todayParams = new URLSearchParams({
     from_date: today,
     to_date: today,
   });
   if (branchId) todayParams.set("branch_id", branchId);
-  useEffect(() => {
-    if (!apiSession) return;
-    let active = true;
-    setLoading(true);
-    Promise.all([
-      apiFetch(`/billing/reports/collections?${monthlyParams}`, apiSession).catch(
-        () => null,
-      ),
-      apiFetch(`/billing/reports/collections?${todayParams}`, apiSession).catch(
-        () => null,
-      ),
-      apiFetch(`/billing/reports/due-collection?${monthlyParams}`, apiSession).catch(
-        () => null,
-      ),
-      apiFetch(`/billing/reports/due-collection?${todayParams}`, apiSession).catch(
-        () => null,
-      ),
-      apiFetch(
-        `/patients/count?from_date=${today}&to_date=${today}`,
-        apiSession,
-      ).catch(() => null),
-    ]).then(([collections, todayPaid, monthlyDue, todayDue, patientCount]) => {
-      if (!active) return;
-      setMonthlyCollections(collections);
-      setTodayCollections(todayPaid);
-      setMonthlyDueReport(monthlyDue);
-      setTodayDueReport(todayDue);
-      setTodayPatientCount(
-        patientCount?.total === undefined ? null : Number(patientCount.total),
-      );
-      setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
-  }, [apiSession?.tenantId, branchId, monthStart, monthEnd, today]);
+
   const todayAppointments = scopedAppointments.filter(
     (row: any) =>
       dateKey(row.appointmentDate || row.appointment_date) === today,
@@ -120,8 +78,7 @@ export function Dashboard({
     return monthKey(sourceDate) === currentMonth;
   });
   const activeMonthlyInvoices = monthlyInvoices.filter(
-    (row: any) =>
-      !["cancelled", "refunded"].includes(normalized(row.status)),
+    (row: any) => !["cancelled", "refunded"].includes(normalized(row.status)),
   );
   const todayInvoices = liveInvoices.filter((row: any) => {
     const sourceDate =
@@ -129,50 +86,52 @@ export function Dashboard({
     return dateKey(sourceDate) === today;
   });
   const activeTodayInvoices = todayInvoices.filter(
-    (row: any) =>
-      !["cancelled", "refunded"].includes(normalized(row.status)),
+    (row: any) => !["cancelled", "refunded"].includes(normalized(row.status)),
   );
   const fallbackMonthlyDue = activeMonthlyInvoices.reduce(
     (sum: number, row: any) => sum + invoiceBalance(row),
     0,
   );
+  const { data: dashboardData, loading } = useDashboardData({
+    apiSession,
+    branchId,
+    today,
+    monthStart,
+    monthEnd,
+  });
   const monthlyDue = Number(
-    monthlyDueReport?.total_due_amount ?? fallbackMonthlyDue,
+    dashboardData?.total_due_amount ?? fallbackMonthlyDue,
   );
   const todayDue = Number(
-    todayDueReport?.total_due_amount ??
+    dashboardData?.total_due_amount ??
       activeTodayInvoices.reduce(
         (sum: number, row: any) => sum + invoiceBalance(row),
         0,
       ),
   );
   const monthlyDueInvoiceCount = Number(
-    monthlyDueReport?.invoice_count ??
+    dashboardData?.invoice_count ??
       activeMonthlyInvoices.filter((row: any) => invoiceBalance(row) > 0)
         .length,
   );
   const todayDueInvoiceCount = Number(
-    todayDueReport?.invoice_count ??
+    dashboardData?.invoice_count ??
       activeTodayInvoices.filter((row: any) => invoiceBalance(row) > 0).length,
   );
   const monthlyPaid = Number(
-    monthlyCollections?.net_collected_amount ??
+    dashboardData?.net_collected_amount ??
       activeMonthlyInvoices.reduce(
         (sum: number, row: any) => sum + Number(row.paid_amount || 0),
         0,
       ),
   );
   const todayPaid = Number(
-    todayCollections?.net_collected_amount ??
+    dashboardData?.net_collected_amount ??
       activeTodayInvoices.reduce(
         (sum: number, row: any) => sum + Number(row.paid_amount || 0),
         0,
       ),
   );
-  const fallbackTodayPatientCount = patients.filter(
-    (patient: any) =>
-      dateKey(patient.created_at || patient.createdAt) === today,
-  ).length;
   const membershipPurchaseInvoices = monthlyInvoices.filter(
     isMembershipPlanInvoice,
   );
@@ -217,6 +176,7 @@ export function Dashboard({
       ].includes(status)
     );
   });
+
   const cards = [
     {
       title: "Booked Today",
@@ -227,15 +187,15 @@ export function Dashboard({
     },
     {
       title: "Patients Created Today",
-      value: todayPatientCount ?? fallbackTodayPatientCount,
+      value: dashboardData?.patientCount?.total ?? 0,
       detail: "New patient registrations today",
       icon: Users,
       target: "patients",
     },
     {
       title: "Total Patients",
-      value: liveSummary?.patients ?? patients.length,
-      detail: `${patients.length} loaded records`,
+      value: liveSummary?.patients ?? 0,
+      detail: "Tenant-wide total",
       icon: Users,
       target: "patients",
     },
@@ -275,33 +235,42 @@ export function Dashboard({
   return (
     <div className="space-y-6">
       <div className="grid gap-3 md:grid-cols-4 lg:grid-cols-4">
-        {cards.map(({ title, value, detail, icon: Icon, target, loading: cardLoading }: any) => (
-          <button
-            key={title}
-            type="button"
-            onClick={() => setActive?.(target)}
-            className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-          >
-            <div className="flex items-center mb-3 h-10">
-              <Icon className="text-slate-500 mr-2" />
-              <p className="md:text-[10px] lg:text-sm text-slate-500 font-bold  ">
-                {title}
-              </p>
-            </div>
-            {cardLoading ? (
-              <Skeleton className="mt-1 h-7 w-24" />
-            ) : (
-              <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
-            )}
-            {cardLoading ? (
-              <Skeleton className="mt-2 h-4 w-32" />
-            ) : (
-              <p className="mt-2 text-[10px] font-semibold text-slate-500 h-5">
-                {detail}
-              </p>
-            )}
-          </button>
-        ))}
+        {cards.map(
+          ({
+            title,
+            value,
+            detail,
+            icon: Icon,
+            target,
+            loading: cardLoading,
+          }: any) => (
+            <button
+              key={title}
+              type="button"
+              onClick={() => setActive?.(target)}
+              className="rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+            >
+              <div className="flex items-center mb-3 h-10">
+                <Icon className="text-slate-500 mr-2" />
+                <p className="md:text-[10px] lg:text-sm text-slate-500 font-bold  ">
+                  {title}
+                </p>
+              </div>
+              {cardLoading ? (
+                <Skeleton className="mt-1 h-7 w-24" />
+              ) : (
+                <p className="mt-1 text-xl lg:text-2xl font-bold">{value}</p>
+              )}
+              {cardLoading ? (
+                <Skeleton className="mt-2 h-4 w-32" />
+              ) : (
+                <p className="mt-2 text-[10px] font-semibold text-slate-500 h-5">
+                  {detail}
+                </p>
+              )}
+            </button>
+          ),
+        )}
       </div>
       <NotificationWidget apiSession={apiSession} setActive={setActive} />
       <Card>

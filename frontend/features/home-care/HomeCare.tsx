@@ -23,13 +23,13 @@ import { BookingDetail } from "./components/BookingDetail";
 import { pageSize } from "@/utils/constants";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 
 type View = "list" | "create" | "edit" | "view" | "invoice";
 
 export function HomeCare({
   apiSession,
   branchId,
-  patients = [],
   loadLiveData,
   setActive,
 }: any) {
@@ -83,9 +83,9 @@ export function HomeCare({
     notes: "",
   }));
 
-  const patientMap = useMemo(
-    () => new Map(patients.map((patient: any) => [patient.id, patient])),
-    [patients],
+  const { patients, patientMap } = usePatientReferencesQuery(
+    apiSession,
+    bookings.map((booking: any) => booking.patient_id),
   );
   const staffMap = useMemo(
     () => new Map(staff.map((user: any) => [user.id, user])),

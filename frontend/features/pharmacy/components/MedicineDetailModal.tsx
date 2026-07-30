@@ -1,6 +1,4 @@
-import { apiFetch } from "@/lib/api";
 import { displayDateTime } from "@/utils/helper";
-import { useEffect, useState } from "react";
 import { Card, ActionButton } from "@/app/components/common/ui";
 import { normalizeMedicineSchedule, parseMedicines } from "../helpers";
 import {
@@ -8,33 +6,15 @@ import {
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import { useMedicineDetail } from "../api/useMedicineDetail";
 
 export function MedicineDetailModal({ issue, apiSession, patient, onClose }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [consultMedicines, setConsultMedicines] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    async function loadLinkedConsultation() {
-      if (!apiSession || !issue?.consultation_id) return;
-      setLoading(true);
-      try {
-        const detail = await apiFetch(
-          `/consultations/${issue.consultation_id}`,
-          apiSession,
-        );
-        if (!cancelled) setConsultMedicines(detail?.medicines || []);
-      } catch {
-        if (!cancelled) setConsultMedicines([]);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    loadLinkedConsultation();
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.tenantId, issue?.consultation_id]);
+  const { detail, loading } = useMedicineDetail(
+    apiSession,
+    issue?.consultation_id,
+  );
+  const consultMedicines = detail?.medicines || [];
   const parsedMedicines = parseMedicines(issue?.medicine_text);
   const medicines = consultMedicines.length
     ? consultMedicines.map((m: any) =>

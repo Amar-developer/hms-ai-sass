@@ -31,13 +31,13 @@ import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 
 export function PatientSubscriptions({
   apiSession,
   branchId,
   branches,
   clinic,
-  patients,
   showEnrollment = false,
 }: any) {
   const [plans, setPlans] = useState<any[]>([]);
@@ -93,9 +93,9 @@ export function PatientSubscriptions({
   const [planPage, setPlanPage] = useState(1);
   const planTotalPages = Math.max(1, Math.ceil(plans.length / pageSize));
   const safePlanPage = Math.min(planPage, planTotalPages);
-  const patientMap = useMemo<Map<string, any>>(
-    () => new Map((patients || []).map((p: any) => [p.id, p])),
-    [patients],
+  const { patients, patientMap } = usePatientReferencesQuery(
+    apiSession,
+    enrollments.map((row: any) => row.patient_id),
   );
   const [confirm, setConfirm] = useState<any>(null);
   async function load() {
@@ -154,7 +154,7 @@ export function PatientSubscriptions({
 
   useEffect(() => {
     load();
-  }, [apiSession?.tenantId, branchId, patients?.length]);
+  }, [apiSession?.tenantId, branchId]);
   useEffect(() => {
     if (planPage !== safePlanPage) setPlanPage(safePlanPage);
   }, [planPage, safePlanPage]);

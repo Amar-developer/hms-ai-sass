@@ -69,6 +69,7 @@ function saveWorkspace(session: ApiSession, patch: WorkspaceState) {
 
 export function useAppController() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [apiSession, setApiSession] = useState<ApiSession | null>(null);
   const [liveSummary, setLiveSummary] = useState<LiveSummary | null>(null);
   const [liveBranchId, setLiveBranchId] = useState("");
@@ -76,7 +77,6 @@ export function useAppController() {
   const [liveDepartments, setLiveDepartments] = useState<any[]>([]);
   const [liveTenants, setLiveTenants] = useState<any[]>([]);
   const [doctorScope, setDoctorScope] = useState<any | null>(null);
-  const [livePractitioners, setLivePractitioners] = useState<any[]>([]);
   const [liveInvoices, setLiveInvoices] = useState<any[]>([]);
   const [enabledModules, setEnabledModules] = useState<string[]>(
     defaultEntitlementModuleIds,
@@ -91,7 +91,6 @@ export function useAppController() {
   const [departmentId, setDepartmentId] = useState(defaultDepartment.id);
   const [patients, setPatients] = useState<any[]>([]);
   const [appointments, setAppointments] = useState<any[]>([]);
-  const [ipAdmissions, setIpAdmissions] = useState<any[]>([]);
   const activeRef = useRef(active);
   const branchIdRef = useRef(branchId);
   const liveBranchIdRef = useRef(liveBranchId);
@@ -188,10 +187,8 @@ export function useAppController() {
     setLiveDepartments([]);
     setLiveTenants([]);
     setDoctorScope(null);
-    setLivePractitioners([]);
     setPatients([]);
     setAppointments([]);
-    setIpAdmissions([]);
     activeRef.current = "dashboard";
     liveBranchIdRef.current = "";
     departmentIdRef.current = defaultDepartment.id;
@@ -383,6 +380,10 @@ export function useAppController() {
             ["billing.manage", "billing.read", "invoices.read"],
             [],
           ),
+      // Admission rows themselves now come from useIpAdmissionsQuery (IP,
+      // Physiotherapy, Reports all share that query's cache) — this fetch
+      // stays only to feed IP-only-referenced patient ids into
+      // referencedPatientIds below, until patients get their own migration.
       !moduleAvailable("ip")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
@@ -391,6 +392,10 @@ export function useAppController() {
             ["ip.manage", "ip.read"],
             [],
           ),
+      // The practitioner list itself now comes from usePractitionersQuery
+      // (Doctors, Dashboard, DoctorConsultation, Reports all share that
+      // query's cache) — this fetch stays only to compute practitionerMap
+      // for appointment mapping and doctorScope below.
       !moduleAvailable("practitioners")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
@@ -511,9 +516,7 @@ export function useAppController() {
     );
 
     setPatients(mappedPatients);
-    setLivePractitioners(practitionerRows);
     setAppointments(mappedAppointments);
-    setIpAdmissions(ipRows);
     setLiveInvoices(invoiceRows);
     setEnabledModules(
       subscriptionUnavailable
@@ -633,6 +636,7 @@ export function useAppController() {
         localStorage.removeItem("medizinhub.session");
       }
     }
+    setInitializing(false);
 
     return () => {
       console.warn = originalConsoleWarn;
@@ -745,12 +749,12 @@ export function useAppController() {
     const body = await res.json();
     let tenantId = body.user?.tenant_id || "";
     const loginSessionUser = body.user || {};
-    const canLoadPlatformTenants = Boolean(
-      loginSessionUser.is_super_admin ||
-        loginSessionUser.permissions?.includes("platform.tenants.manage") ||
-        loginSessionUser.permissions?.includes("platform.subscriptions.manage") ||
-        loginSessionUser.permissions?.includes("platform.templates.manage"),
-    );
+    // Only true super admins lack a meaningful home tenant and need the
+    // full tenant list to pick a default. Non-super-admin users (e.g. the
+    // primary tenant's tenant_admin, who inherits platform.* permissions
+    // via the global role template) already have their own tenant_id above
+    // and hitting GET /tenants without an X-Tenant-ID header would 400.
+    const canLoadPlatformTenants = Boolean(loginSessionUser.is_super_admin);
     if (canLoadPlatformTenants) {
       let tenantsRes: Response;
       try {
@@ -948,14 +952,10 @@ export function useAppController() {
     setDepartmentId: updateDepartment,
     allowedDepartments,
     doctorScope,
-    livePractitioners,
-    setLivePractitioners,
     patients,
     setPatients,
     appointments,
     setAppointments,
-    ipAdmissions,
-    setIpAdmissions,
     scopedAppointments,
     apiSession,
     loadLiveData: refreshLiveDataInBackground,
@@ -972,6 +972,7 @@ export function useAppController() {
 
   return {
     authenticated,
+    initializing,
     authScreenProps: {
       role,
       setRole,

@@ -27,5 +27,11 @@ export const statusOptions = [
   { value: "deceased", label: "Deceased" },
 ];
 
-
 export const enrollmentPageSize = 10;
+
+export const patient_status_options = [
+  { value: "all", label: "All status" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "deceased", label: "Deceased" },
+];

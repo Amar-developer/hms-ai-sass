@@ -20,18 +20,19 @@ import { Info } from "@/app/components/common/Info";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Skeleton } from "@/app/components/common/loader/Skeleton";
+import { useIpAdmissionsQuery } from "@/features/ip/api";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 
 type View = "list" | "op" | "ip" | "detail";
 
 export function Physiotherapy({
   branchId,
   departmentId,
-  patients,
   appointments = [],
-  ipAdmissions = [],
   apiSession,
   loadLiveData,
 }: any) {
+  const { ipAdmissions } = useIpAdmissionsQuery(apiSession);
   const [view, setView] = useState<View>("list");
   const [cases, setCases] = useState<any[]>([]);
   const [equipment, setEquipment] = useState<any[]>([]);
@@ -45,9 +46,9 @@ export function Physiotherapy({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const patientMap = useMemo(
-    () => new Map(patients.map((p: any) => [p.id, p])),
-    [patients],
+  const { patients, patientMap } = usePatientReferencesQuery(
+    apiSession,
+    cases.map((row: any) => row.patient_id),
   );
   const departmentCases = cases.filter(
     (row: any) =>

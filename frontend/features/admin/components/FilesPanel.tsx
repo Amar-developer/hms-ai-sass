@@ -16,7 +16,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
+import { RowActions } from "./RowActions";
+import { DataTable } from "@/features/reports/components/DataTable";
+import { Column } from "@/features/reports/types";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 
 export function FilesPanel({
   apiSession,
@@ -24,10 +28,13 @@ export function FilesPanel({
   setFiles,
   setMessage,
   branches,
-  patients,
   busy,
   setBusy,
 }: any) {
+  const { patients } = usePatientReferencesQuery(
+    apiSession,
+    files.map((file: any) => file.patient_id),
+  );
   const {
     register,
     handleSubmit,
@@ -288,6 +295,81 @@ export function FilesPanel({
     }
   }
 
+  const fileColumns: Column<any>[] = [
+    {
+      key: "file_name",
+      header: "File",
+      width: "130px",
+      render: (file: any) => (
+        <div className="max-w-[200px]">
+          <p className="font-bold truncate text-xs" title={file?.file_name}>
+            {capitalizeFirst(file.file_name)}
+          </p>
+        </div>
+      ),
+    },
+    {
+      key: "category",
+      header: "Category",
+      width: "120px",
+      render: (file: any) => (
+        <Badge tone="blue" className="normal-badge">
+          {humanizeOptionLabel(file.category)}
+        </Badge>
+      ),
+    },
+    {
+      key: "attached_to_doctype",
+      header: "Attached To",
+      render: (file: any) => (
+        <div className="text-xs">{file.attached_to_doctype || "-"}</div>
+      ),
+    },
+    {
+      key: "patient_id",
+      header: "Patient",
+      render: (file: any) => (
+        <div className="text-xs">{patientLabel(patients, file.patient_id)}</div>
+      ),
+    },
+    {
+      key: "created_at",
+      header: "Created",
+      render: (file: any) => (
+        <div className="text-xs">
+          {file.created_at ? displayDateTime(file.created_at) : "-"}
+        </div>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      disableRowClick: true,
+      render: (file: any) => {
+        const actions = [
+          {
+            label: "Open",
+            onClick: () =>
+              window.open(
+                uploadAssetUrl(file.file_url),
+                "_blank",
+                "noopener,noreferrer",
+              ),
+          },
+          {
+            label: "Delete",
+            danger: true,
+            disabled: busy,
+            onClick: () =>
+              setConfirmDelete({ kind: "delete", entity: "file", file }),
+          },
+        ];
+
+        return <RowActions actions={actions} className="right-5 -bottom-7" />;
+      },
+    },
+  ];
+
   return (
     <div className="">
       <Card>
@@ -474,7 +556,7 @@ export function FilesPanel({
           </div>
         </form>
       </Card>
-      <Card>
+      <Card className="mt-3">
         <div className="flex flex-col justify-between gap-3 lg:flex-row lg:items-center">
           <div>
             <h4 className="card-title font-bold">File Registry</h4>
@@ -491,96 +573,13 @@ export function FilesPanel({
             />
           </FormField>
         </div>
-        <div className="mt-4 overflow-auto rounded-2xl border border-slate-200">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3 w-[100px]">File</th>
-                <th>Category</th>
-                <th>Attached To</th>
-                <th>Patient</th>
-                <th>Created</th>
-                <th className="pr-4">Open</th>
-                <th className="pr-4">Delete</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {visible.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-4 text-slate-500">
-                    No files found.
-                  </td>
-                </tr>
-              )}
-              {pagedFiles.map((file: any) => (
-                <tr key={file.id} className="align-top">
-                  <td className="px-2 py-2">
-                    <div className="max-w-[200px]">
-                      <p
-                        className="font-bold truncate text-xs"
-                        title={file?.file_name}
-                      >
-                        {capitalizeFirst(file.file_name)}
-                      </p>
-                    </div>
-                    {/* <div className="max-w-[200px]">
-                      <p
-                        className="truncate text-xs text-slate-500"
-                        title={file.file_url}
-                      >
-                        {file.file_url}
-                      </p>
-                    </div> */}
-                  </td>
-                  <td>
-                    <Badge
-                      tone="blue"
-                      className="rounded-full px-2 py-2 text-xs w-[50%]"
-                    >
-                      {humanizeOptionLabel(file.category)}
-                    </Badge>
-                  </td>
-                  <td className="flex justify-start items-start">
-                    <div className="text-xs  mt-2">
-                      {file.attached_to_doctype || "-"}
-                    </div>
-                  </td>
-                  <td className="text-xs">
-                    <div className="text-xs mt-2">
-                      {patientLabel(patients, file.patient_id)}
-                    </div>
-                  </td>
-                  <td className="text-xs">
-                    <div className="text-xs mt-2">
-                      {file.created_at ? displayDateTime(file.created_at) : "-"}
-                    </div>
-                  </td>
-                  <td className="pr-4 flex items-center">
-                    <a
-                      href={uploadAssetUrl(file.file_url)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-semibold text-xs text-blue-700 underline"
-                    >
-                      Open
-                    </a>
-                  </td>
-                  <td className="pr-4 ">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setConfirmDelete({ kind: "delete", entity: "file", file })
-                      }
-                      disabled={busy}
-                      className="font-semibold text-xs  mt-2 text-red-600 underline disabled:text-slate-300"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-4 rounded-2xl border border-slate-200">
+          <DataTable
+            columns={fileColumns}
+            data={pagedFiles}
+            emptyMessage="No files found."
+            paginate={false}
+          />
         </div>
         <Pagination
           page={safePage}

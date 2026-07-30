@@ -7,13 +7,11 @@ import {
   Badge,
   Button,
   Card,
-  Field,
   Input,
   SearchableSelect,
-  Select,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiFetch, type ApiSession } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import {
@@ -24,6 +22,7 @@ import {
 } from "@/app/components/FormElements";
 import { searchPatients } from "@/lib/hmsLogic";
 import { usePatientSearch } from "@/features/patients/components/PatientSearchSelect";
+import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import {
   humanizeOptionLabel,
   publicDisplayValue,
@@ -44,57 +43,15 @@ import {
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { SourceReferralFields } from "@/app/components/common/SourceReferralFields";
-
-type Props = {
-  clinic: any;
-  branchId: string;
-  departmentId: string;
-  setDepartmentId: (value: string) => void;
-  allowedDepartments: any[];
-  patients: any[];
-  setPatients: (value: any[]) => void;
-  appointments: any[];
-  setAppointments: (value: any[]) => void;
-  apiSession: ApiSession | null;
-  loadLiveData: (session: ApiSession) => Promise<void>;
-  setActive?: (page: string) => void;
-  isInitialLoading?: boolean;
-};
-
-type BookingStep = "appointment" | "newPatient" | "success";
+import { BookingStep, type Props } from "./types";
+import {
+  appointmentStatusInfo,
+  formatDisplayTime,
+  parseIntakeVitalsText,
+} from "./helpers";
 
 const pageSize = 8;
-function formatDisplayTime(value: any) {
-  const raw = String(value || "").slice(0, 5);
-  const [hourText, minuteText = "00"] = raw.split(":");
-  const hour = Number(hourText);
-  if (Number.isNaN(hour)) return raw || "-";
-  const period = hour >= 12 ? "PM" : "AM";
-  const hour12 = hour % 12 || 12;
-  return `${hour12}:${minuteText.padStart(2, "0")} ${period}`;
-}
 
-// Parses the comma-separated "Name=value" intake_vitals string (see
-// combinedIntakeVitals in useAppointmentBookingActions.ts) back into a
-// lookup by lowercase field name.
-function parseIntakeVitalsText(vitals: string) {
-  const byName: Record<string, string> = {};
-  String(vitals || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .forEach((item) => {
-      const [name, ...rest] = item.split("=");
-      if (!name?.trim()) return;
-      byName[name.trim().toLowerCase()] = rest.join("=").trim();
-    });
-  return byName;
-}
-
-// Click-to-fill hint shown under an intake field when the patient has a
-// previously recorded value for it. Never writes to the input on its own —
-// staff must click it, so a stale prior reading is never silently recorded
-// as this visit's vitals.
 function IntakeSuggestionChip({
   value,
   currentValue,
@@ -116,45 +73,6 @@ function IntakeSuggestionChip({
   );
 }
 
-// Normalizes an appointment (clinic or platform shape) into a display status
-// used for the badge, the status filter, and list ordering. `order` controls
-// sort position: active first, then cancelled, completed last.
-function appointmentStatusInfo(appointment: any) {
-  const consult = String(
-    appointment.consultationStatus || appointment.consultation_status || "",
-  ).toLowerCase();
-  const status = String(appointment.status || "").toLowerCase();
-  const queue = String(
-    appointment.queueStatus || appointment.queue_status || "",
-  ).toLowerCase();
-  if (status === "cancelled" || status === "no_show" || queue === "cancelled")
-    return {
-      key: "cancelled",
-      label: "Cancelled",
-      tone: "red" as const,
-      order: 1,
-    };
-  if (
-    consult === "signed" ||
-    status === "consultation_completed" ||
-    status === "billed" ||
-    queue === "completed" ||
-    queue === "consultation_completed"
-  )
-    return {
-      key: "completed",
-      label: "Completed",
-      tone: "green" as const,
-      order: 2,
-    };
-  return {
-    key: "active",
-    label: humanizeOptionLabel(queue || consult || status) || "Waiting",
-    tone: "slate" as const,
-    order: 0,
-  };
-}
-
 export function AppointmentCalendarBooking(props: Props) {
   const {
     clinic,
@@ -162,8 +80,6 @@ export function AppointmentCalendarBooking(props: Props) {
     departmentId,
     setDepartmentId,
     allowedDepartments,
-    patients,
-    setPatients,
     appointments,
     setAppointments,
     apiSession,
@@ -171,6 +87,13 @@ export function AppointmentCalendarBooking(props: Props) {
     setActive,
     isInitialLoading,
   } = props;
+  const [offlinePatients, setOfflinePatients] = useState<any[]>([]);
+  const { patients: referencedPatients, patientMap } = usePatientReferencesQuery(
+    apiSession,
+    appointments.map((a: any) => a.patientId || a.patient_id),
+  );
+  const patients = apiSession ? referencedPatients : offlinePatients;
+  const setPatients = setOfflinePatients;
   const [mode, setMode] = useState<"list" | "book">("list");
   const [query, setQuery] = useState("");
   const [filterDate, setFilterDate] = useState("");
@@ -180,9 +103,7 @@ export function AppointmentCalendarBooking(props: Props) {
   const [duplicateMatches, setDuplicateMatches] = useState<any[]>([]);
   const [patientLookupOpen, setPatientLookupOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState<BookingStep>("appointment");
-  const [appointmentDate, setAppointmentDate] = useState(
-    today(),
-  );
+  const [appointmentDate, setAppointmentDate] = useState(today());
   const [acquisitionSource, setAcquisitionSource] = useState("direct");
   const [referrerPatientId, setReferrerPatientId] = useState("");
   const [referrerName, setReferrerName] = useState("");
@@ -221,9 +142,9 @@ export function AppointmentCalendarBooking(props: Props) {
   const appointmentPermissions = apiSession?.user?.permissions || [];
   const canRescheduleAppointments = Boolean(
     apiSession?.user?.is_super_admin ||
-      appointmentPermissions.includes("*") ||
-      appointmentPermissions.includes("appointments.manage") ||
-      appointmentPermissions.includes("appointments.edit"),
+    appointmentPermissions.includes("*") ||
+    appointmentPermissions.includes("appointments.manage") ||
+    appointmentPermissions.includes("appointments.edit"),
   );
 
   useEffect(() => {
@@ -243,7 +164,8 @@ export function AppointmentCalendarBooking(props: Props) {
           setSelectedPatient(
             patients.find(
               (patient: any) =>
-                patient.id === (appointment.patient_id || appointment.patientId),
+                patient.id ===
+                (appointment.patient_id || appointment.patientId),
             ) || null,
           );
           setMode("book");
@@ -264,10 +186,6 @@ export function AppointmentCalendarBooking(props: Props) {
     setPage(1);
   }, [apiSession?.tenantId]);
 
-  const patientMap = useMemo(
-    () => new Map(patients.map((patient: any) => [patient.id, patient])),
-    [patients],
-  );
   const departmentOptions = useMemo(
     () => uniqueDepartmentRows(allowedDepartments, departmentId),
     [allowedDepartments, departmentId],
@@ -575,13 +493,14 @@ export function AppointmentCalendarBooking(props: Props) {
         booked?.appointment?.appointment_date ||
         booked?.appointment?.appointmentDate ||
         appointmentDate,
-      appointmentTime: booked?.appointment?.appointment_time ||
-      booked?.appointment?.appointmentTime
-        ? formatDisplayTime(
-            booked.appointment.appointment_time ||
-              booked.appointment.appointmentTime,
-          )
-        : "",
+      appointmentTime:
+        booked?.appointment?.appointment_time ||
+        booked?.appointment?.appointmentTime
+          ? formatDisplayTime(
+              booked.appointment.appointment_time ||
+                booked.appointment.appointmentTime,
+            )
+          : "",
       department: selectedDepartmentName,
       doctor: doctor?.full_name || doctor?.name || "",
       visitLabel: appointmentType.replaceAll("_", " ").toUpperCase(),
@@ -613,7 +532,9 @@ export function AppointmentCalendarBooking(props: Props) {
       mobile: patient?.mobile || appointment.patientMobile || "",
       tokenNumber: appointment.token || "-",
       appointmentDate: appointment.appointmentDate || "",
-      appointmentTime: appointmentTime ? formatDisplayTime(appointmentTime) : "",
+      appointmentTime: appointmentTime
+        ? formatDisplayTime(appointmentTime)
+        : "",
       department:
         departmentOptions.find((d: any) => d.id === appointment.departmentId)
           ?.name || publicDisplayValue(appointment.departmentId),
@@ -945,7 +866,7 @@ export function AppointmentCalendarBooking(props: Props) {
                 }}
               >
                 <div className="grid gap-3 md:grid-cols-4">
-                  <Field label="Department" required>
+                  <FormField label="Department" required>
                     <SearchableSelect
                       required
                       value={departmentId}
@@ -957,8 +878,8 @@ export function AppointmentCalendarBooking(props: Props) {
                         label: department.name,
                       }))}
                     />
-                  </Field>
-                  <Field label="Doctor" required>
+                  </FormField>
+                  <FormField label="Doctor" required>
                     <SearchableSelect
                       required
                       value={doctorId}
@@ -983,8 +904,8 @@ export function AppointmentCalendarBooking(props: Props) {
                             }))
                       }
                     />
-                  </Field>
-                  <Field label="Visit Type" required>
+                  </FormField>
+                  <FormField label="Visit Type" required>
                     <SearchableSelect
                       required
                       value={appointmentType}
@@ -1001,15 +922,15 @@ export function AppointmentCalendarBooking(props: Props) {
                         { value: "emergency", label: "Emergency" },
                       ]}
                     />
-                  </Field>
-                  <Field label="Appointment Date" required>
+                  </FormField>
+                  <FormField label="Appointment Date" required>
                     <Input
                       required
                       type="date"
                       value={appointmentDate}
                       onChange={(e: any) => setAppointmentDate(e.target.value)}
                     />
-                  </Field>
+                  </FormField>
                   <SourceReferralFields
                     apiSession={apiSession}
                     patients={patients}
@@ -1078,7 +999,7 @@ export function AppointmentCalendarBooking(props: Props) {
                       ]}
                     />
                     {isBillable && (
-                      <Field label="Consultation Price (₹)">
+                      <FormField label="Consultation Price (₹)">
                         <Input
                           type="number"
                           min={0}
@@ -1086,7 +1007,7 @@ export function AppointmentCalendarBooking(props: Props) {
                           onChange={(e: any) => setCustomFee(e.target.value)}
                           placeholder="Set price for this visit"
                         />
-                      </Field>
+                      </FormField>
                     )}
                     <FormField label="Billing Note">
                       <Input
@@ -1338,7 +1259,7 @@ export function AppointmentCalendarBooking(props: Props) {
               </button>
             </div>
             <div className="mt-5">
-              <Field label="New Appointment Date" required>
+              <FormField label="New Appointment Date" required>
                 <Input
                   required
                   type="date"
@@ -1348,7 +1269,7 @@ export function AppointmentCalendarBooking(props: Props) {
                     setRescheduleDate(event.target.value)
                   }
                 />
-              </Field>
+              </FormField>
               <p className="mt-2 text-xs text-slate-500">
                 Consultation time and token will be reassigned from the
                 doctor&apos;s available schedule.
@@ -1409,21 +1330,21 @@ export function AppointmentCalendarBooking(props: Props) {
             ]}
           />
         )}
-        <Field label="Patient name">
+        <FormField label="Patient name">
           <Input
             value={query}
             onChange={(e: any) => setQuery(e.target.value)}
             placeholder="Search patient or mobile"
           />
-        </Field>
-        <Field label="Select date">
+        </FormField>
+        <FormField label="Select date">
           <Input
             type="date"
             value={filterDate}
             onChange={(e: any) => setFilterDate(e.target.value)}
           />
-        </Field>
-        <Field label="Department">
+        </FormField>
+        <FormField label="Department">
           {isSuperAdmin ? (
             <SearchableSelect
               value={platformDepartment}
@@ -1444,9 +1365,9 @@ export function AppointmentCalendarBooking(props: Props) {
               searchable={false}
             />
           )}
-        </Field>
+        </FormField>
         {!isSuperAdmin && (
-          <Field label="Status">
+          <FormField label="Status">
             <SearchableSelect
               value={filterStatus}
               onChange={(val: string) => setFilterStatus(val)}
@@ -1457,7 +1378,7 @@ export function AppointmentCalendarBooking(props: Props) {
               placeholder="Select status"
               searchable={false}
             />
-          </Field>
+          </FormField>
         )}
       </div>
       <div className="mt-4 rounded-lg border border-slate-200 overflow-x-auto">
@@ -1467,7 +1388,7 @@ export function AppointmentCalendarBooking(props: Props) {
           >
             {isSuperAdmin && <span>Tenant</span>}
             <span className="text-sm">Patient</span>
-            <span className="text-sm">ID</span>
+            <span className="text-sm">Token</span>
             <span className="text-sm">Mobile</span>
             <span className="text-sm">Department</span>
             <span className="text-sm">Doctor</span>
@@ -1484,22 +1405,80 @@ export function AppointmentCalendarBooking(props: Props) {
                 No appointments found.
               </div>
             )}
-            {!rowsLoading && rows.map((appointment: any) => {
-              if (isSuperAdmin) {
+            {!rowsLoading &&
+              rows.map((appointment: any) => {
+                if (isSuperAdmin) {
+                  return (
+                    <div
+                      key={appointment.id}
+                      className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[220px_220px_140px_180px_180px_180px_120px] md:items-center"
+                    >
+                      <div>
+                        <b className="table-data">{appointment.tenant_name}</b>
+                        <p className="text-sm lg:text-xs text-slate-500">
+                          {appointment.branch_name}
+                        </p>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <b className="table-data">
+                            {appointment.patient_name}
+                          </b>
+                          <CopyIdButton
+                            value={appointment.id}
+                            label="Appointment ID"
+                            allowed={canCopyIds}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs text-slate-500">
+                          {appointment.token_number || "-"}
+                        </p>
+                      </div>
+                      <span className="table-data">
+                        {appointment.patient_mobile || "-"}
+                      </span>
+                      <span className="table-data">
+                        {appointment.department_name || "-"}
+                      </span>
+                      <span className="table-data">
+                        {appointment.practitioner_name || "-"}
+                      </span>
+                      <span className="table-data">
+                        {displayDate(appointment.appointment_date)}
+                        {appointment.appointment_time
+                          ? ` ${formatDisplayTime(appointment.appointment_time)}`
+                          : ""}
+                      </span>
+                      <Badge
+                        tone={appointmentStatusInfo(appointment).tone}
+                        className="table-status"
+                      >
+                        {appointmentStatusInfo(appointment).label}
+                      </Badge>
+                    </div>
+                  );
+                }
+                const patient = patientMap.get(appointment.patientId);
                 return (
                   <div
                     key={appointment.id}
-                    className="grid gap-3 px-4 py-4 text-sm md:grid-cols-[220px_220px_140px_180px_180px_180px_120px] md:items-center"
+                    tabIndex={0}
+                    onClick={() => openConsultation(appointment)}
+                    onKeyDown={(event: any) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        openConsultation(appointment);
+                      }
+                    }}
+                    className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_70px_140px_140px_150px_180px_120px_120px] md:items-center"
                   >
                     <div>
-                      <b className="table-data">{appointment.tenant_name}</b>
-                      <p className="text-sm lg:text-xs text-slate-500">
-                        {appointment.branch_name}
-                      </p>
-                    </div>
-                    <div>
                       <div className="flex items-center gap-2">
-                        <b className="table-data">{appointment.patient_name}</b>
+                        <p className="text-sm font-semibold break-all">
+                          {appointment.patient}
+                        </p>
                         <CopyIdButton
                           value={appointment.id}
                           label="Appointment ID"
@@ -1508,126 +1487,75 @@ export function AppointmentCalendarBooking(props: Props) {
                       </div>
                     </div>
                     <div>
-                      <p className="text-xs text-slate-500">
-                        {appointment.token_number || "-"}
+                      <p className="text-sm  text-slate-500">
+                        {appointment.token ||
+                          publicDisplayValue(appointment.id, "-")}
                       </p>
                     </div>
-                    <span className="table-data">
-                      {appointment.patient_mobile || "-"}
+                    <span className="text-sm ">{patient?.mobile || "-"}</span>
+                    <span className="text-sm  ">
+                      {departmentOptions.find(
+                        (d: any) => d.id === appointment.departmentId,
+                      )?.name || publicDisplayValue(appointment.departmentId)}
                     </span>
-                    <span className="table-data">
-                      {appointment.department_name || "-"}
+                    <span className="text-sm  ">
+                      {appointment.doctor ||
+                        publicDisplayValue(appointment.doctorId, "Doctor")}
                     </span>
-                    <span className="table-data">
-                      {appointment.practitioner_name || "-"}
-                    </span>
-                    <span className="table-data">
-                      {displayDate(appointment.appointment_date)}
-                      {appointment.appointment_time
-                        ? ` ${formatDisplayTime(appointment.appointment_time)}`
+                    <span className="text-sm  ">
+                      {appointment.appointmentDate || "-"}
+                      {appointment.appointmentTime ||
+                      appointment.appointment_time
+                        ? ` ${formatDisplayTime(
+                            appointment.appointmentTime ||
+                              appointment.appointment_time,
+                          )}`
                         : ""}
                     </span>
                     <Badge
                       tone={appointmentStatusInfo(appointment).tone}
-                      className="table-status"
+                      className="table-status text-sm "
                     >
                       {appointmentStatusInfo(appointment).label}
                     </Badge>
-                  </div>
-                );
-              }
-              const patient = patientMap.get(appointment.patientId);
-              return (
-                <div
-                  key={appointment.id}
-                  tabIndex={0}
-                  onClick={() => openConsultation(appointment)}
-                  onKeyDown={(event: any) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      openConsultation(appointment);
-                    }
-                  }}
-                  className="grid cursor-pointer gap-3 px-4 py-4 text-sm transition hover:bg-slate-50 focus:bg-slate-50 focus:outline-none md:grid-cols-[120px_70px_140px_140px_150px_180px_120px_120px] md:items-center"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold break-all">
-                        {appointment.patient}
-                      </p>
-                      <CopyIdButton
-                        value={appointment.id}
-                        label="Appointment ID"
-                        allowed={canCopyIds}
+                    <div className="flex items-center justify-center">
+                      <RowActions
+                        actions={[
+                          {
+                            label: "Reschedule",
+                            onClick: () => openReschedule(appointment),
+                            hidden:
+                              !canRescheduleAppointments ||
+                              appointmentStatusInfo(appointment).key !==
+                                "active" ||
+                              [
+                                appointment.status,
+                                appointment.queueStatus,
+                                appointment.consultationStatus,
+                              ]
+                                .map((value) =>
+                                  String(value || "")
+                                    .trim()
+                                    .toLowerCase(),
+                                )
+                                .includes("in_consultation"),
+                          },
+                          {
+                            label: "Patient Details",
+                            onClick: () => openPatient(appointment),
+                          },
+                          {
+                            label: "Print Token",
+                            onClick: () => printTokenSlipForRow(appointment),
+                          },
+                        ]}
+                        className="right-0 -bottom-5"
+                        width="w-36"
                       />
                     </div>
                   </div>
-                  <div>
-                    <p className="text-sm  text-slate-500">
-                      {appointment.token ||
-                        publicDisplayValue(appointment.id, "-")}
-                    </p>
-                  </div>
-                  <span className="text-sm ">{patient?.mobile || "-"}</span>
-                  <span className="text-sm  ">
-                    {departmentOptions.find(
-                      (d: any) => d.id === appointment.departmentId,
-                    )?.name || publicDisplayValue(appointment.departmentId)}
-                  </span>
-                  <span className="text-sm  ">
-                    {appointment.doctor ||
-                      publicDisplayValue(appointment.doctorId, "Doctor")}
-                  </span>
-                  <span className="text-sm  ">
-                    {appointment.appointmentDate || "-"}
-                    {appointment.appointmentTime || appointment.appointment_time
-                      ? ` ${formatDisplayTime(
-                          appointment.appointmentTime ||
-                            appointment.appointment_time,
-                        )}`
-                      : ""}
-                  </span>
-                  <Badge
-                    tone={appointmentStatusInfo(appointment).tone}
-                    className="table-status text-sm "
-                  >
-                    {appointmentStatusInfo(appointment).label}
-                  </Badge>
-                  <div className="flex items-center justify-center">
-                    <RowActions
-                      actions={[
-                        {
-                          label: "Reschedule",
-                          onClick: () => openReschedule(appointment),
-                          hidden:
-                            !canRescheduleAppointments ||
-                            appointmentStatusInfo(appointment).key !== "active" ||
-                            [
-                              appointment.status,
-                              appointment.queueStatus,
-                              appointment.consultationStatus,
-                            ]
-                              .map((value) =>
-                                String(value || "").trim().toLowerCase(),
-                              )
-                              .includes("in_consultation"),
-                        },
-                        {
-                          label: "Patient Details",
-                          onClick: () => openPatient(appointment),
-                        },
-                        {
-                          label: "Print Token",
-                          onClick: () => printTokenSlipForRow(appointment),
-                        },
-                      ]}
-                      className="right-0 -bottom-5"
-                      width="w-36"
-                    />
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       </div>

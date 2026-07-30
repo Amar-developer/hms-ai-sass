@@ -1,6 +1,6 @@
 import { Input, SearchableSelect } from "./ui";
 import { FormField } from "../FormElements";
-
+import React from "react";
 
 type FilterOption = {
   value: string;
@@ -14,12 +14,14 @@ type FilterConfig = {
 };
 
 type FilterSectionProps = {
-  title: string;
-  query: string;
-  setQuery: (value: string) => void;
+  title?: string;
+  query?: string;
+  setQuery?: (value: string) => void;
+  showSearch?: boolean;
   filters: FilterConfig[];
   filterValues: Record<string, string>;
   onFilterChange?: (key: string, value: string) => void;
+  children?: React.ReactNode;
 };
 
 export function FilterSection({
@@ -27,22 +29,25 @@ export function FilterSection({
   query,
   setQuery,
   filters,
+  showSearch = true,
   filterValues,
   onFilterChange,
+  children,
 }: FilterSectionProps) {
   return (
     <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {/* Search */}
-      <FormField label={title}>
-        <Input
-          value={query}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-            setQuery(e.target.value)
-          }
-          placeholder={`Search ${title.toLowerCase()}`}
-          className="search-filter"
-        />
-      </FormField>
+      {showSearch && (
+        <FormField label={title}>
+          <Input
+            value={query}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              setQuery(e.target.value)
+            }
+            placeholder={`Search ${title.toLowerCase()}`}
+          />
+        </FormField>
+      )}
 
       {/* Dynamic Filters */}
       {filters.map((filter) => (
@@ -50,9 +55,7 @@ export function FilterSection({
           <SearchableSelect
             name={filter.key}
             value={filterValues[filter.key] ?? "all"}
-            onChange={(value) =>
-              onFilterChange?.(filter.key, value)
-            }
+            onChange={(value) => onFilterChange?.(filter.key, value)}
             options={filter.options}
             searchable={false}
             placeholder={`Select ${filter.label}`}
@@ -60,6 +63,7 @@ export function FilterSection({
           />
         </FormField>
       ))}
+      {children}
     </div>
   );
 }

@@ -1,15 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleAlert,
-  Trash2,
-} from "lucide-react";
+import { useState } from "react";
+
+import { AlertTriangle, CheckCircle2, CircleAlert, Trash2 } from "lucide-react";
 
 import { FormField } from "@/app/components/FormElements";
 import { Pagination } from "@/app/components/common/Pagination";
+
 import {
   ActionButton,
   Badge,
@@ -20,26 +17,24 @@ import {
   SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiFetch } from "@/lib/api";
+
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
+
 import { pageSize } from "@/utils/constants";
 import { displayDateTime } from "@/utils/helper";
-import { category_options, error_level_options, source_options, status_options } from "./constants";
 
-function levelTone(level: string) {
-  if (level === "critical" || level === "error") return "red";
-  return "amber";
-}
+import {
+  category_options,
+  error_level_options,
+  source_options,
+  status_options,
+} from "./constants";
 
-function statusLabel(row: any) {
-  if (row.status_code) return `HTTP ${row.status_code}`;
-  return row.category?.replace(/_/g, " ") || "Application";
-}
+import { useErrorLogsData, useErrorLogsActions } from "./api";
+import { levelTone, statusLabel } from "./helpers";
 
 export function ErrorLogs({ apiSession }: any) {
-  const [rows, setRows] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
   const [appliedQuery, setAppliedQuery] = useState("");
@@ -49,112 +44,74 @@ export function ErrorLogs({ apiSession }: any) {
   const [resolved, setResolved] = useState("all");
   const [selected, setSelected] = useState<any>(null);
   const [resolutionNote, setResolutionNote] = useState("");
-  const [busy, setBusy] = useState("");
-  const [message, setMessage] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
   const permissions = apiSession?.user?.permissions || [];
+
   const canManage = Boolean(
     apiSession?.user?.is_super_admin ||
-      apiSession?.user?.user_type === "tenant_admin" ||
-      apiSession?.user?.roles?.includes("tenant_admin") ||
-      permissions.includes("*") ||
-      permissions.includes("error_logs.manage"),
+    apiSession?.user?.user_type === "tenant_admin" ||
+    apiSession?.user?.roles?.includes("tenant_admin") ||
+    permissions.includes("*") ||
+    permissions.includes("error_logs.manage"),
   );
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const [summary, setSummary] = useState({ errors: 0, warnings: 0, permission: 0 });
+  const { rows, total, summary, loading, error } = useErrorLogsData({
+    apiSession,
 
-  async function load() {
-    if (!apiSession) return;
-    setBusy("load");
-    try {
-      const params = new URLSearchParams({
-        limit: String(pageSize),
-        offset: String((page - 1) * pageSize),
-      });
-      if (appliedQuery) params.set("q", appliedQuery);
-      if (level !== "all") params.set("level", level);
-      if (source !== "all") params.set("source", source);
-      if (category !== "all") params.set("category", category);
-      if (resolved !== "all") params.set("resolved", String(resolved === "resolved"));
-      if (apiSession.user?.is_super_admin) params.set("include_global", "true");
-      const response = await apiFetch(`/error-logs?${params}`, apiSession);
-      setRows(response?.items || []);
-      setTotal(Number(response?.total || 0));
-      setSummary({
-        errors: Number(response?.summary?.errors || 0),
-        warnings: Number(response?.summary?.warnings || 0),
-        permission: Number(response?.summary?.permission_issues || 0),
-      });
-      if (selected) {
-        const updated = (response?.items || []).find(
-          (row: any) => row.id === selected.id,
-        );
-        if (updated) setSelected(updated);
-      }
-    } catch (error: any) {
-      setMessage(error.message || "Could not load error logs.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, [
-    apiSession?.tenantId,
     page,
+
     appliedQuery,
+
     level,
+
     source,
+
     category,
+
     resolved,
+
     refreshKey,
-  ]);
+  });
+
+  const { resolve, remove, busy, message, setMessage } =
+    useErrorLogsActions(apiSession);
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   function applySearch() {
     setPage(1);
+
     setAppliedQuery(query.trim());
   }
 
-  async function updateResolved(nextResolved: boolean) {
+  async function handleResolve() {
     if (!selected || !canManage) return;
-    setBusy("resolve");
-    try {
-      const updated = await apiFetch(`/error-logs/${selected.id}`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          resolved: nextResolved,
-          resolution_note: resolutionNote || null,
-        }),
-      });
-      setSelected(updated);
-      setResolutionNote(updated.resolution_note || "");
-      setMessage(nextResolved ? "Error log resolved." : "Error log reopened.");
-      setRefreshKey((value) => value + 1);
-    } catch (error: any) {
-      setMessage(error.message || "Could not update error log.");
-    } finally {
-      setBusy("");
-    }
+
+    const updated = await resolve(
+      selected,
+      !selected.is_resolved,
+      resolutionNote,
+    );
+
+    setSelected(updated);
+
+    setResolutionNote(updated.resolution_note || "");
+
+    setRefreshKey((value) => value + 1);
   }
 
-  async function deleteSelected() {
+  async function handleDelete() {
     if (!selected || !canManage) return;
-    if (!window.confirm("Delete this error log permanently?")) return;
-    setBusy("delete");
-    try {
-      await apiFetch(`/error-logs/${selected.id}`, apiSession, {
-        method: "DELETE",
-      });
-      setSelected(null);
-      setMessage("Error log deleted.");
-      setRefreshKey((value) => value + 1);
-    } catch (error: any) {
-      setMessage(error.message || "Could not delete error log.");
-    } finally {
-      setBusy("");
+
+    if (!window.confirm("Delete this error log permanently?")) {
+      return;
     }
+
+    await remove(selected);
+
+    setSelected(null);
+
+    setRefreshKey((value) => value + 1);
   }
 
   if (selected) {
@@ -195,7 +152,10 @@ export function ErrorLogs({ apiSession }: any) {
               ["Source", selected.source],
               ["Category", selected.category],
               ["Module", selected.module || "-"],
-              ["Method / Route", `${selected.method || ""} ${selected.route || "-"}`],
+              [
+                "Method / Route",
+                `${selected.method || ""} ${selected.route || "-"}`,
+              ],
               ["Request ID", selected.request_id || "-"],
               ["User ID", selected.user_id || "-"],
               ["First seen", displayDateTime(selected.first_seen_at)],
@@ -266,10 +226,7 @@ export function ErrorLogs({ apiSession }: any) {
                 />
               </FormField>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button
-                  disabled={busy === "resolve"}
-                  onClick={() => updateResolved(!selected.is_resolved)}
-                >
+                <Button disabled={busy === "resolve"} onClick={handleResolve}>
                   <ButtonLoader loading={busy === "resolve"}>
                     {busy === "resolve"
                       ? "Resolving..."
@@ -281,7 +238,7 @@ export function ErrorLogs({ apiSession }: any) {
                 <ActionButton
                   tone="danger"
                   disabled={busy === "delete"}
-                  onClick={deleteSelected}
+                  onClick={handleDelete}
                 >
                   <ButtonLoader loading={busy === "delete"}>
                     <Trash2 size={14} />{" "}
@@ -308,7 +265,9 @@ export function ErrorLogs({ apiSession }: any) {
               slow backend requests.
             </p>
           </div>
-          <RefreshButton onRefresh={() => setRefreshKey((value) => value + 1)} />
+          <RefreshButton
+            onRefresh={() => setRefreshKey((value) => value + 1)}
+          />
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -426,7 +385,12 @@ export function ErrorLogs({ apiSession }: any) {
                   className="cursor-pointer transition hover:bg-slate-50"
                 >
                   <td className="px-4 py-4">
-                    <Badge tone={levelTone(row.level) as any} className="normal-badge">{row.level}</Badge>
+                    <Badge
+                      tone={levelTone(row.level) as any}
+                      className="normal-badge"
+                    >
+                      {row.level}
+                    </Badge>
                   </td>
                   <td className="max-w-[420px] py-4 pr-4">
                     <p className="truncate font-bold text-slate-900">
@@ -444,7 +408,10 @@ export function ErrorLogs({ apiSession }: any) {
                     <p className="text-xs text-slate-500">{row.category}</p>
                   </td>
                   <td className="py-4 pr-4">
-                    <Badge tone={row.is_resolved ? "green" : "amber"} className="normal-badge">
+                    <Badge
+                      tone={row.is_resolved ? "green" : "amber"}
+                      className="normal-badge"
+                    >
                       {row.is_resolved ? "Resolved" : statusLabel(row)}
                     </Badge>
                   </td>

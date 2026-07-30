@@ -56,7 +56,6 @@ export function TenantAdmin({
   apiSession,
   clinic,
   branchId,
-  patients,
   section: externalSection,
   setSection: externalSetSection,
 }: any) {
@@ -920,7 +919,6 @@ export function TenantAdmin({
           apiSession={apiSession}
           branchId={branchId}
           branches={data.branches}
-          patients={patients}
         />
       )}
 
@@ -931,7 +929,6 @@ export function TenantAdmin({
           setFiles={data.setFiles}
           setMessage={data.setMessage}
           branches={data.branches}
-          patients={patients}
           busy={data.busy}
           setBusy={data.setBusy}
         />

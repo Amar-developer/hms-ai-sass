@@ -1,43 +1,49 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { createContext, useContext, useState, useRef, useEffect, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
-import { Card, SearchableSelect } from "@/app/components/common/ui";
+import { SearchableSelect } from "@/app/components/common/ui";
 import { ChangePassword } from "@/features/auth/ChangePassword";
-import { AppointmentCalendarBooking } from "@/features/appointments/AppointmentCalendarBooking";
-import { TenantAdmin } from "@/features/admin/TenantAdmin";
 import { canUseTenantAdminSection } from "../admin/permissions";
 import { tenantAdminSections } from "../admin/constants";
-import { Billing } from "@/features/billing/Billing";
-import { Dashboard } from "@/features/dashboard/Dashboard";
-import { DoctorConsultation } from "@/features/consulation/DoctorConsultation";
-import { IPAdmission } from "@/features/ip/IPAdmission";
-import { HomeCare } from "@/features/home-care/HomeCare";
-import { Items } from "@/features/items/Items";
-import { Lab } from "@/features/lab/Lab";
-import { Patient } from "@/features/patients/Patient";
-import { Pharmacy } from "@/features/pharmacy/Pharmacy";
-import { Physiotherapy } from "@/features/physiotherapy/Physiotherapy";
-import {
-  SuperAdminDashboard,
-  platformSectionsForUser,
-} from "@/features/superAdmin/SuperAdminDashboard";
-import { Doctors } from "@/features/doctors/Doctors";
-import { TokenQueue } from "@/features/queue/TokenQueue";
-import { Reports } from "@/features/reports/Reports";
+import { platformSectionsForUser } from "@/features/superAdmin/SuperAdminDashboard";
 import { reportSections } from "@/features/reports/constants";
-import { Scheduling } from "@/features/scheduling/Scheduling";
-import { PatientSubscriptions } from "@/features/patient_subscriptions/PatientSubscriptions";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
 import { activeTenantOptions } from "@/utils/helper";
-import { ErrorLogs } from "@/features/error-logs/ErrorLogs";
 import { PageLoader } from "@/app/components/common/loader/PageLoader";
 
-export function AppShell(props: any) {
+type ShellChromeValue = {
+  navigatePage: (target: string | { id: string; section?: string }) => void;
+  activePage: string;
+  enabled: (id: string) => boolean;
+  nav: any;
+  liveSummary: any;
+  apiSession: any;
+  switchTenant: any;
+  tenantAdminSection: string;
+  setTenantAdminSection: (value: string) => void;
+  reportsSection: string;
+  setReportsSection: (value: string) => void;
+  superAdminSection: string;
+  setSuperAdminSection: (value: string) => void;
+};
+
+const ShellChromeContext = createContext<ShellChromeValue | null>(null);
+
+/** Everything module routes need beyond the workspace `ctx` data blob — chrome-owned navigation and sub-section state. */
+export function useShellChrome(): ShellChromeValue {
+  const value = useContext(ShellChromeContext);
+  if (!value) {
+    throw new Error("useShellChrome must be used within AppShell");
+  }
+  return value;
+}
+
+export function AppShell({ children, ...props }: { children: ReactNode } & Record<string, any>) {
   const {
-    active,
     setActive,
     nav,
     enabled,
@@ -61,7 +67,6 @@ export function AppShell(props: any) {
     setShowPassword,
     handleLogout,
     switchTenant,
-    ctx,
     liveSummary,
     isInitialLoading,
   } = props;
@@ -84,11 +89,14 @@ export function AppShell(props: any) {
     ([id]: any) => enabled(id) && !(isSuperAdmin && id === "admin"),
   );
   const canAccessErrorLogs = enabled("error_logs");
+  const router = useRouter();
+  const pathname = usePathname();
+  const routeSegment = pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
   const activePage =
-    active === "error_logs" && canAccessErrorLogs
-      ? active
-      : visibleNav.some(([id]: any) => id === active)
-        ? active
+    routeSegment === "error_logs" && canAccessErrorLogs
+      ? routeSegment
+      : visibleNav.some(([id]: any) => id === routeSegment)
+        ? routeSegment
         : canAccessPlatformWorkspace
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
@@ -179,8 +187,6 @@ export function AppShell(props: any) {
   )
     ? tenantAdminSection
     : visibleTenantAdminSections[0]?.[0] || tenantAdminSection;
-  const [pageHistory, setPageHistory] = useState<string[]>([activePage]);
-  const [historyIndex, setHistoryIndex] = useState(0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [reportsOpen, setReportsOpen] = useState(true);
   const [reportsSection, setReportsSection] = useState("metrix");
@@ -217,8 +223,6 @@ export function AppShell(props: any) {
             )
           : "";
 
-  const canGoBack = historyIndex > 0;
-  const canGoForward = historyIndex < pageHistory.length - 1;
   const searchItems = [
     ...visibleNav.map(([id, label]: any) => ({
       id: `module-${id}`,
@@ -297,20 +301,17 @@ export function AppShell(props: any) {
     }
     if (id === activePage) return;
     setActive(id);
-    setPageHistory((prev) => {
-      const next = [...prev.slice(0, historyIndex + 1), id];
-      setHistoryIndex(next.length - 1);
-      return next;
-    });
+    router.push(`/${id}`);
   }
 
-  function goHistory(direction: -1 | 1) {
-    const nextIndex = historyIndex + direction;
-    const nextPage = pageHistory[nextIndex];
-    if (nextPage === undefined) return;
-    setHistoryIndex(nextIndex);
-    setActive(nextPage);
-  }
+  // Permission/entitlement gating can make the pathname's module unavailable
+  // (e.g. after a role/tenant switch) — redirect to the computed fallback
+  // rather than silently rendering a different module under a stale URL.
+  useEffect(() => {
+    if (activePage !== routeSegment) {
+      router.replace(`/${activePage}`);
+    }
+  }, [activePage, routeSegment, router]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -349,98 +350,21 @@ export function AppShell(props: any) {
     };
   }, [profileOpen]);
 
-  function renderPage() {
-    switch (activePage) {
-      case "dashboard":
-        return (
-          <Dashboard
-            {...ctx}
-            liveSummary={liveSummary}
-            setActive={navigatePage}
-            nav={nav}
-            enabled={enabled}
-          />
-        );
-      case "superadmin":
-        return (
-          <SuperAdminDashboard
-            apiSession={apiSession}
-            switchTenant={switchTenant}
-            section={activeSuperAdminSection}
-            setSection={setSuperAdminSection}
-          />
-        );
-      case "appointments":
-        return <AppointmentCalendarBooking {...ctx} setActive={navigatePage} />;
-      case "queue":
-        return <TokenQueue {...ctx} setActive={navigatePage} />;
-      case "patients":
-        return <Patient {...ctx} setActive={navigatePage} />;
-      case "practitioners":
-        return <Doctors {...ctx} />;
-      case "scheduling":
-        return <Scheduling {...ctx} />;
-      case "items":
-        return <Items {...ctx} />;
-      case "ip":
-        return <IPAdmission {...ctx} />;
-      case "doctor":
-        return (
-          <DoctorConsultation
-            {...ctx}
-            view="dashboard"
-            setActive={navigatePage}
-          />
-        );
-      case "consultation":
-        return (
-          <DoctorConsultation
-            {...ctx}
-            view="workspace"
-            setActive={navigatePage}
-          />
-        );
-      case "lab":
-        return <Lab {...ctx} setActive={navigatePage} />;
-      case "pharmacy":
-        return <Pharmacy {...ctx} />;
-      case "physiotherapy":
-        return <Physiotherapy {...ctx} />;
-      case "home_care":
-        return <HomeCare {...ctx} setActive={navigatePage} />;
-      case "billing":
-        return <Billing {...ctx} />;
-      case "admin":
-        return (
-          <TenantAdmin
-            {...ctx}
-            section={activeTenantAdminSection}
-            setSection={setTenantAdminSection}
-          />
-        );
-      case "subscriptions":
-        return <PatientSubscriptions {...ctx} />;
-      case "reports":
-        return (
-          <Reports
-            {...ctx}
-            section={reportsSection}
-            setActive={navigatePage}
-          />
-        );
-      case "error_logs":
-        return <ErrorLogs apiSession={apiSession} />;
-      default:
-        return (
-          <Card>
-            <h3 className="text-lg font-bold">Module unavailable</h3>
-            <p className="mt-2 text-sm text-slate-500">
-              This module is not enabled for the current role or tenant.
-            </p>
-          </Card>
-        );
-    }
-  }
+  const shellChromeValue: ShellChromeValue = {
+    navigatePage,
+    activePage,
+    enabled,
+    nav,
+    liveSummary,
+    apiSession,
+    switchTenant,
+    tenantAdminSection: activeTenantAdminSection,
+    setTenantAdminSection,
+    reportsSection,
+    setReportsSection,
+    superAdminSection: activeSuperAdminSection,
+    setSuperAdminSection,
+  };
 
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
@@ -606,19 +530,17 @@ export function AppShell(props: any) {
                 <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1">
                   <button
                     type="button"
-                    onClick={() => goHistory(-1)}
-                    disabled={!canGoBack}
+                    onClick={() => router.back()}
                     title="Previous page"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                   >
                     <ArrowLeft size={14} />
                   </button>
                   <button
                     type="button"
-                    onClick={() => goHistory(1)}
-                    disabled={!canGoForward}
+                    onClick={() => router.forward()}
                     title="Forward"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:shadow-none"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm"
                   >
                     <ArrowRight size={14} />
                   </button>
@@ -706,7 +628,11 @@ export function AppShell(props: any) {
             </div>
           </div>
 
-          <section className=" py-4 px-6">{renderPage()}</section>
+          <section className=" py-4 px-6">
+            <ShellChromeContext.Provider value={shellChromeValue}>
+              {children}
+            </ShellChromeContext.Provider>
+          </section>
         </main>
       </div>
     </div>

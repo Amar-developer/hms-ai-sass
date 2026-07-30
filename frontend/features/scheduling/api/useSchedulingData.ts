@@ -1,0 +1,87 @@
+"use client";
+import { useEffect, useState } from "react";
+import {
+  getTenants,
+  getBranches,
+  getDepartments,
+  getDoctors,
+  getSchedules,
+} from "../api";
+import { uniqueDepartmentRows } from "@/lib/options";
+import { activeTenantOptions } from "@/utils/helper";
+
+export function useSchedulingData({
+  apiSession,
+  tenantId,
+  filterDepartment,
+}: any) {
+  const [tenants, setTenants] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [rows, setRows] = useState<any[]>([]);
+  const [error, setError] = useState("");
+
+  async function loadTenants() {
+    if (!apiSession?.user?.is_super_admin) return;
+    const result = await getTenants(apiSession);
+    const options = activeTenantOptions(result);
+    setTenants(options);
+  }
+
+  async function loadData() {
+    if (!apiSession || !tenantId) return;
+
+    setLoading(true);
+
+    try {
+      const session = {
+        ...apiSession,
+        tenantId,
+      };
+
+      const [branchRows, departmentRows, doctorRows, scheduleRows] =
+        await Promise.all([
+          getBranches(tenantId, session),
+
+          getDepartments(tenantId, session),
+
+          getDoctors(session),
+
+          getSchedules(session),
+        ]);
+
+      setBranches(branchRows);
+
+      setDepartments(uniqueDepartmentRows(departmentRows, filterDepartment));
+
+      setDoctors(doctorRows);
+
+      setRows(scheduleRows);
+    } catch (err: any) {
+      setError(err.message || "Could not load schedules");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (apiSession) loadTenants();
+  }, [apiSession?.tenantId]);
+
+  useEffect(() => {
+    loadData();
+  }, [apiSession?.tenantId, tenantId]);
+
+  return {
+    tenants,
+    branches,
+    departments,
+    doctors,
+    rows,
+    loading,
+    error,
+    reload: loadData,
+  };
+}

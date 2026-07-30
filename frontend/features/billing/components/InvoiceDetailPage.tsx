@@ -945,7 +945,7 @@ export function InvoiceDetailPage({
                             : "border-amber-200 bg-amber-50 text-amber-900"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center justify-between gap-3 mt-2">
                         <span className="font-bold">Patient invoice delivery</span>
                         <Badge
                           tone={
@@ -957,6 +957,7 @@ export function InvoiceDetailPage({
                                 ? "red"
                                 : "amber"
                           }
+                          className="normal-badge"
                         >
                           {invoiceDeliveryLabel}
                         </Badge>
