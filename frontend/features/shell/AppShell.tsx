@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useState, useRef, useEffect, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useRef,
+  useEffect,
+  type ReactNode,
+} from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, HeartPulse, Home, Menu } from "lucide-react";
 import { SearchableSelect } from "@/app/components/common/ui";
@@ -42,7 +49,10 @@ export function useShellChrome(): ShellChromeValue {
   return value;
 }
 
-export function AppShell({ children, ...props }: { children: ReactNode } & Record<string, any>) {
+export function AppShell({
+  children,
+  ...props
+}: { children: ReactNode } & Record<string, any>) {
   const {
     setActive,
     nav,
@@ -70,16 +80,16 @@ export function AppShell({ children, ...props }: { children: ReactNode } & Recor
     liveSummary,
     isInitialLoading,
   } = props;
-
+  const [routeLoading, setRouteLoading] = useState(false);
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canAccessPlatformWorkspace = Boolean(
     isSuperAdmin ||
-      apiSession?.user?.user_type === "platform_admin" ||
-      apiSession?.user?.user_type === "support_admin",
+    apiSession?.user?.user_type === "platform_admin" ||
+    apiSession?.user?.user_type === "support_admin",
   );
   const canManagePlatformTenants = Boolean(
     isSuperAdmin ||
-      apiSession?.user?.permissions?.includes("platform.tenants.manage"),
+    apiSession?.user?.permissions?.includes("platform.tenants.manage"),
   );
   const visiblePlatformSections = platformSectionsForUser(apiSession?.user);
   const passwordChangeRequired = Boolean(
@@ -91,7 +101,8 @@ export function AppShell({ children, ...props }: { children: ReactNode } & Recor
   const canAccessErrorLogs = enabled("error_logs");
   const router = useRouter();
   const pathname = usePathname();
-  const routeSegment = pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
+  const routeSegment =
+    pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
   const activePage =
     routeSegment === "error_logs" && canAccessErrorLogs
       ? routeSegment
@@ -280,26 +291,35 @@ export function AppShell({ children, ...props }: { children: ReactNode } & Recor
     "ip",
     "physiotherapy",
   ].includes(activePage);
-
   function navigatePage(target: string | { id: string; section?: string }) {
     const id = typeof target === "string" ? target : target.id;
     const section = typeof target === "string" ? undefined : target.section;
+
     if (!id) return;
+
     if (id === "admin" && section) {
       setTenantAdminSettingsOpen(true);
       setTenantAdminSection(section);
     }
+
     if (id === "reports" && section) {
       setReportsOpen(true);
       setReportsSection(section);
     }
+
     if (id === "superadmin" && section) {
       setSuperAdminSettingsOpen(true);
+
       if (isVisibleSuperAdminSection(section)) {
         setSuperAdminSection(section);
       }
     }
+
     if (id === activePage) return;
+
+    // Show loader
+    setRouteLoading(true);
+
     setActive(id);
     router.push(`/${id}`);
   }
@@ -350,6 +370,10 @@ export function AppShell({ children, ...props }: { children: ReactNode } & Recor
     };
   }, [profileOpen]);
 
+  useEffect(() => {
+    setRouteLoading(false);
+  }, [pathname]);
+
   const shellChromeValue: ShellChromeValue = {
     navigatePage,
     activePage,
@@ -368,7 +392,7 @@ export function AppShell({ children, ...props }: { children: ReactNode } & Recor
 
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
-      {isInitialLoading && <PageLoader label={'Loading'}/>}
+      {isInitialLoading && <PageLoader label={"Loading"} />}
       {/* Sidebar */}
       {!isDesktop && (
         <div
@@ -417,6 +441,7 @@ export function AppShell({ children, ...props }: { children: ReactNode } & Recor
         </div>
       )}
       <div className="h-full lg:flex">
+        {routeLoading && <PageLoader label={"Loading...."}/>}
         <aside
           className={`scrollbar-hidden hidden h-screen md:w-64 lg:w-64  shrink-0 overflow-y-auto overflow-x-hidden border-r border-slate-200 bg-white p-2 px-0 lg:block`}
         >

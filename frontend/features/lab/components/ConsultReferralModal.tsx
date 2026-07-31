@@ -31,7 +31,7 @@ export function ConsultReferralModal({
         </div>
         {loading && <p className="mt-4 text-sm text-slate-500">Loading...</p>}
         {detail && display.length > 0 && (
-          <div className="mt-4 overflow-auto rounded-2xl border">
+          <div className="mt-4 max-h-[280px] overflow-auto rounded-2xl border scrollbar-thin">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>

@@ -1,5 +1,6 @@
 import { Input, SearchableSelect } from "./ui";
 import { FormField } from "../FormElements";
+import { Button } from "./ui";
 import React from "react";
 
 type FilterOption = {
@@ -21,6 +22,7 @@ type FilterSectionProps = {
   filters: FilterConfig[];
   filterValues: Record<string, string>;
   onFilterChange?: (key: string, value: string) => void;
+  onReset?: () => void;
   children?: React.ReactNode;
 };
 
@@ -33,7 +35,16 @@ export function FilterSection({
   filterValues,
   onFilterChange,
   children,
+  onReset,
 }: FilterSectionProps) {
+  function handleReset() {
+    setQuery?.("");
+    filters.forEach((filter) => {
+      onFilterChange?.(filter.key, "all");
+    });
+    onReset?.()
+  }
+
   return (
     <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {/* Search */}
@@ -42,9 +53,9 @@ export function FilterSection({
           <Input
             value={query}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setQuery(e.target.value)
+              setQuery?.(e.target.value)
             }
-            placeholder={`Search ${title.toLowerCase()}`}
+            placeholder={`Search ${title?.toLowerCase() ?? ""}`}
           />
         </FormField>
       )}
@@ -63,7 +74,19 @@ export function FilterSection({
           />
         </FormField>
       ))}
+
       {children}
+
+      {/* Reset */}
+      <div className="flex items-end ">
+        <Button
+          type="button"
+          onClick={handleReset}
+          className="h-[50%] w-[50%] text-xs"
+        >
+          Reset
+        </Button>
+      </div>
     </div>
   );
 }

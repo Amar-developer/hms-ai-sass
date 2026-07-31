@@ -31,7 +31,7 @@ export function PageLoader({
   const blades = Array.from({ length: BLADE_COUNT });
 
   return (
-    <div className={fullScreen ? "pl-fullscreen" : "pl-inline"}>
+    <div className={`${fullScreen ? "pl-fullscreen" : "pl-inline"} `}>
       <div
         className="pl-spinner"
         style={{ width: size, height: size }}
@@ -51,7 +51,7 @@ export function PageLoader({
         ))}
       </div>
 
-      {label && <p className="pl-label">{label}</p>}
+      <div className="">{label && <p className="pl-label ">{label}</p>}</div>
 
       <style jsx>{`
         .pl-fullscreen {
@@ -93,7 +93,7 @@ export function PageLoader({
           width: 15%;
           aspect-ratio: 1;
           margin-left: -4%;
-          margin:10%;
+          margin: 10%;
           border-radius: 50%;
           background: #000;
           transform-origin: 50% 300%;

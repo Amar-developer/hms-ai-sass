@@ -1,6 +1,6 @@
 "use client";
 
-import type { ApiSession } from "@/lib/api";
+import { apiFetch, type ApiSession } from "@/lib/api";
 import * as labApi from "./lab.api";
 
 type UseLabActionsParams = {
@@ -262,13 +262,19 @@ export function useLabActions({
     }
   }
 
-  async function openReport(order: any, downloadBlob: (blob: Blob, name: string) => void) {
+  async function openReport(
+    order: any,
+    downloadBlob: (blob: Blob, name: string) => void,
+  ) {
     setBusy(order.id);
     const docs = reportDocuments[order.id] || [];
     try {
       if (docs.length === 1) {
         const doc = docs[0];
-        const blob = await labApi.downloadFile(apiSession as ApiSession, doc.id);
+        const blob = await labApi.downloadFile(
+          apiSession as ApiSession,
+          doc.id,
+        );
         downloadBlob(blob, doc.file_name || `lab-report-${order.id}`);
         return;
       }
@@ -345,6 +351,38 @@ export function useLabActions({
     }
   }
 
+  async function removeReportDocument(order: any, doc: any) {
+    if (!apiSession || !order?.id || !doc?.id) return;
+
+    setBusy(`report-${order.id}`);
+    setMessage("");
+
+    try {
+      await apiFetch(
+        `/lab/orders/${order.id}/documents/${doc.id}`,
+        apiSession,
+        {
+          method: "DELETE",
+        },
+      );
+
+      // Update local state
+      setReportDocuments((prev: any) => {
+        const next = { ...prev };
+        next[order.id] = (next[order.id] || []).filter(
+          (d: any) => d.id !== doc.id,
+        );
+        return next;
+      });
+
+      setMessage("Document removed.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not remove document.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   return {
     handleCreateOrder,
     createFromConsultation,
@@ -356,5 +394,6 @@ export function useLabActions({
     openReport,
     generateInvoice,
     loadConsultDetail,
+    removeReportDocument
   };
 }

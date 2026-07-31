@@ -23,7 +23,11 @@ import PrescriptionDocument, {
   type PrescriptionReferral,
 } from "./PrescriptionDocument";
 import { exportPrescriptionPdf } from "../exportPrescriptionPdf";
-import { treatment_type_options, vitalFields } from "../constants";
+import {
+  COMPLAINT_SUGGESTIONS,
+  treatment_type_options,
+  vitalFields,
+} from "../constants";
 import { useConsultationWorkspaceData } from "../api";
 
 function safeFilename(value: unknown) {
@@ -157,8 +161,7 @@ export function ConsultationWorkspace(props: any) {
   const [medicineAddAttempted, setMedicineAddAttempted] = useState(false);
   const [labAddAttempted, setLabAddAttempted] = useState(false);
   const [showPrescriptionPrint, setShowPrescriptionPrint] = useState(false);
-  const [isExportingPrescription, setIsExportingPrescription] =
-    useState(false);
+  const [isExportingPrescription, setIsExportingPrescription] = useState(false);
   // The `patient` prop can arrive without `patient_number` (e.g. it hasn't
   // finished loading in the parent yet). The workspace data hook fetches it
   // directly so the printed Patient ID always matches the same
@@ -446,13 +449,6 @@ export function ConsultationWorkspace(props: any) {
               Call
             </button>
             <button
-              onClick={skipPatient}
-              disabled={queueActionDisabled}
-              className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Not Present
-            </button>
-            <button
               onClick={() => requeuePatient("after2")}
               disabled={queueActionDisabled}
               className="close-button font-bold disabled:cursor-not-allowed disabled:opacity-50"
@@ -618,6 +614,38 @@ export function ConsultationWorkspace(props: any) {
                     }`}
                     placeholder="Fever | 2 days | medium"
                   />
+
+                  {/* Suggestions – show at least 5 */}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {COMPLAINT_SUGGESTIONS.slice(0, 8).map((suggestion) => {
+                      const alreadyAdded = complaints
+                        .split("\n")
+                        .map((line) => line.trim())
+                        .includes(suggestion);
+
+                      return (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          disabled={alreadyAdded}
+                          onClick={() => {
+                            setComplaints((prev: string) =>
+                              prev.trim()
+                                ? `${prev.trim()}\n${suggestion}`
+                                : suggestion,
+                            );
+                          }}
+                          className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
+                            alreadyAdded
+                              ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
+                              : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                          }`}
+                        >
+                          {suggestion}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </FormField>
                 <FormField label="Diagnosis" required error={diagnosisError}>
                   <textarea
@@ -828,26 +856,39 @@ export function ConsultationWorkspace(props: any) {
                         </thead>
                         <tbody className="divide-y divide-slate-200">
                           {medicineItems.length ? (
-                            medicineItems.map((medicine: any, index: number) => (
-                              <tr key={`${medicine.name}-${index}`} className="h-[51px]">
-                                <td className="px-3 py-2.5 font-semibold text-slate-900">
-                                  {medicine.name || "-"}
-                                </td>
-                                <td className="px-3 py-2.5">{medicine.dosage || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.frequency || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.duration || "-"}</td>
-                                <td className="px-3 py-2.5">{medicine.instructions || "-"}</td>
-                                <td className="px-3 py-2.5 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => removeMedicineItem(index)}
-                                    className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
-                                  >
-                                    Remove
-                                  </button>
-                                </td>
-                              </tr>
-                            ))
+                            medicineItems.map(
+                              (medicine: any, index: number) => (
+                                <tr
+                                  key={`${medicine.name}-${index}`}
+                                  className="h-[51px]"
+                                >
+                                  <td className="px-3 py-2.5 font-semibold text-slate-900">
+                                    {medicine.name || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.dosage || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.frequency || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.duration || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5">
+                                    {medicine.instructions || "-"}
+                                  </td>
+                                  <td className="px-3 py-2.5 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => removeMedicineItem(index)}
+                                      className="rounded-md border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-50"
+                                    >
+                                      Remove
+                                    </button>
+                                  </td>
+                                </tr>
+                              ),
+                            )
                           ) : (
                             <tr>
                               <td
@@ -987,7 +1028,10 @@ export function ConsultationWorkspace(props: any) {
                             ) ? (
                               referralItems.map((item: any, index: number) =>
                                 item.type === "lab" ? (
-                                  <tr key={`${item.name}-${index}`} className="h-[51px]">
+                                  <tr
+                                    key={`${item.name}-${index}`}
+                                    className="h-[51px]"
+                                  >
                                     <td className="px-3 py-2.5 font-semibold text-slate-900">
                                       {item.name || "-"}
                                     </td>
@@ -1069,29 +1113,26 @@ export function ConsultationWorkspace(props: any) {
                       Refer another doctor
                     </label>
                     {referDoctor && (
-
-                        <SearchableSelect
-                          required
-                          name="referDoctorId"
-                          value={referDoctorId}
-                          onChange={(value) => setReferDoctorId(value)}
-                          searchable={false}
-                          options={[
-                            { value: "", label: "Select doctor" },
-                            ...practitioners
-                              .filter(
-                                (p: any) =>
-                                  p.role === "Doctor" && p.id !== doctor.id,
-                              )
-                              .map((p: any) => ({
-                                value: p.id,
-                                label: `${p.name} - ${p.specialty}`,
-                              })),
-                          ]}
-                          aria-invalid={
-                            Boolean(referralDoctorError) || undefined
-                          }
-                        />
+                      <SearchableSelect
+                        required
+                        name="referDoctorId"
+                        value={referDoctorId}
+                        onChange={(value) => setReferDoctorId(value)}
+                        searchable={false}
+                        options={[
+                          { value: "", label: "Select doctor" },
+                          ...practitioners
+                            .filter(
+                              (p: any) =>
+                                p.role === "Doctor" && p.id !== doctor.id,
+                            )
+                            .map((p: any) => ({
+                              value: p.id,
+                              label: `${p.name} - ${p.specialty}`,
+                            })),
+                        ]}
+                        aria-invalid={Boolean(referralDoctorError) || undefined}
+                      />
                     )}
                   </div>
                   <div className="rounded-lg bg-slate-50 p-4">
