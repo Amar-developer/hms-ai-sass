@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { apiFetch } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import {
   numberValue,
@@ -22,7 +21,6 @@ import {
   htmlTable,
   titledHtmlTable,
   parseEmailList,
-  isEmail,
   aggregateInvoiceMetrics,
 } from "./helpers";
 import { money } from "@/utils/helper";
@@ -56,6 +54,16 @@ import {
 import { useIpAdmissionsQuery } from "@/features/ip/api";
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import {
+  useHomeCareBookings,
+  useInvoiceDetailsBatch,
+  useInvoiceDetailsBatchEffect,
+  useLabSettlementData,
+  useMonthlySnapshots,
+  usePharmacySettlementData,
+  useReportsActions,
+  useReportsUsers,
+} from "./api";
 
 function serviceCategoryRevenue(
   invoices: any[],
@@ -134,7 +142,6 @@ export function Reports({
   });
   const [invoicePage, setInvoicePage] = useState(1);
   const [invoicePickerIds, setInvoicePickerIds] = useState<string[]>([]);
-  const [monthlySnapshots, setMonthlySnapshots] = useState<any[]>([]);
   const [recalculatingSnapshotId, setRecalculatingSnapshotId] = useState<
     string | null
   >(null);
@@ -151,26 +158,8 @@ export function Reports({
   const [emailLabSupplierIds, setEmailLabSupplierIds] = useState<string[]>([
     "all",
   ]);
-  const [labTests, setLabTests] = useState<any[]>([]);
-  const [labPackages, setLabPackages] = useState<any[]>([]);
-  const [labOrderDetails, setLabOrderDetails] = useState<any[]>([]);
-  const [medicineRows, setMedicineRows] = useState<any[]>([]);
-  const [pharmacyIssueDetails, setPharmacyIssueDetails] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
   const [invoiceDetails, setInvoiceDetails] = useState<any[]>([]);
   const [invoiceDetailsLoading, setInvoiceDetailsLoading] = useState(false);
-  const [labSettlementLoading, setLabSettlementLoading] = useState(false);
-  const [pharmacySettlementLoading, setPharmacySettlementLoading] =
-    useState(false);
-  const [homeCareBookingsLoading, setHomeCareBookingsLoading] =
-    useState(false);
-  const [homeCareInvoiceDetailsLoading, setHomeCareInvoiceDetailsLoading] =
-    useState(false);
-  const [homeCareBookings, setHomeCareBookings] = useState<any[]>([]);
-  const [homeCareInvoiceDetails, setHomeCareInvoiceDetails] = useState<any[]>(
-    [],
-  );
   const appointmentById = useMemo(
     () =>
       new Map<string, any>(scopedAppointments.map((row: any) => [row.id, row])),
@@ -187,6 +176,61 @@ export function Reports({
     [liveInvoices],
   );
   const homeCareInvoiceIdsKey = homeCareInvoiceIds.join("|");
+
+  const { users } = useReportsUsers({ apiSession, refreshTick });
+
+  const { labTests, labPackages, suppliers, labOrderDetails, labSettlementLoading } =
+    useLabSettlementData({ apiSession, liveInvoices, refreshTick });
+
+  // Closed-month income snapshots (frozen at month end). Branch-scoped to match
+  // the live dashboard's branch filter; no branch = all-branches aggregate.
+  const { monthlySnapshots } = useMonthlySnapshots({
+    apiSession,
+    branchId,
+    refreshTick,
+  });
+
+  const { homeCareBookings, homeCareBookingsLoading } = useHomeCareBookings({
+    apiSession,
+    branchId,
+    refreshTick,
+  });
+
+  const {
+    invoiceDetails: homeCareInvoiceDetails,
+    invoiceDetailsLoading: homeCareInvoiceDetailsLoading,
+  } = useInvoiceDetailsBatch({
+    apiSession,
+    invoiceIds: homeCareInvoiceIds,
+    invoiceIdsKey: homeCareInvoiceIdsKey,
+    refreshTick,
+  });
+
+  const { medicineRows, pharmacyIssueDetails, pharmacySettlementLoading } =
+    usePharmacySettlementData({ apiSession, liveInvoices, refreshTick });
+
+  const { recalculateMonthlySnapshot, sendEmailReport } = useReportsActions({
+    apiSession,
+    branchId,
+    fromDate,
+    toDate,
+    doctorId,
+    typeFilter,
+    supplierFilter,
+    emailLabSupplierIds,
+    emailReportSections,
+    recipientInput,
+    recentEmails,
+    setRecentEmails,
+    setSendBusy,
+    setSendMessage,
+    setSendError,
+    setSendPanelOpen,
+    setSnapshotMessage,
+    setRecalculatingSnapshotId,
+    refreshReports,
+  });
+
   const doctorById = useMemo(
     () =>
       new Map(
@@ -390,6 +434,15 @@ export function Reports({
     () => baseFilteredInvoices.map((invoice: any) => invoice.id).filter(Boolean),
     [baseFilteredInvoices],
   );
+  const filteredInvoiceIdsKey = filteredInvoiceIds.join("|");
+  useInvoiceDetailsBatchEffect({
+    apiSession,
+    invoiceIds: filteredInvoiceIds,
+    invoiceIdsKey: filteredInvoiceIdsKey,
+    refreshTick,
+    setInvoiceDetails,
+    setInvoiceDetailsLoading,
+  });
   const invoiceById = useMemo(
     () => new Map<string, any>(liveInvoices.map((row: any) => [row.id, row])),
     [liveInvoices],
@@ -422,7 +475,6 @@ export function Reports({
     if (ids.length === 1) openInvoice(ids[0]);
     else if (ids.length > 1) setInvoicePickerIds(ids);
   }
-  const filteredInvoiceIdsKey = filteredInvoiceIds.join("|");
 
   useEffect(() => {
     setInvoicePage(1);
@@ -468,226 +520,6 @@ export function Reports({
         );
     } catch {}
   }, [apiSession?.tenantId]);
-
-  useEffect(() => {
-    if (!apiSession?.tenantId) return;
-    let cancelled = false;
-    apiFetch("/identity/users", apiSession)
-      .then((rows) => {
-        if (!cancelled) setUsers(Array.isArray(rows) ? rows : []);
-      })
-      .catch(() => {
-        if (!cancelled) setUsers([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.tenantId, refreshTick]);
-
-  useEffect(() => {
-    if (!apiSession?.tenantId || filteredInvoiceIds.length === 0) {
-      setInvoiceDetails([]);
-      setInvoiceDetailsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    async function loadInvoiceDetails() {
-      setInvoiceDetailsLoading(true);
-      try {
-        const details = await Promise.all(
-          filteredInvoiceIds.map((invoiceId: string) =>
-            apiFetch(`/billing/invoices/${invoiceId}`, apiSession).catch(
-              () => null,
-            ),
-          ),
-        );
-        if (!cancelled) setInvoiceDetails(details.filter(Boolean));
-      } finally {
-        if (!cancelled) setInvoiceDetailsLoading(false);
-      }
-    }
-    loadInvoiceDetails();
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.tenantId, filteredInvoiceIdsKey, refreshTick]);
-
-  useEffect(() => {
-    if (!apiSession?.tenantId) return;
-    let cancelled = false;
-    async function loadLabSettlementData() {
-      setLabSettlementLoading(true);
-      try {
-        const [testRows, packageRows, supplierRows, orderRows] =
-          await Promise.all([
-            apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
-            apiFetch("/lab/catalog/packages", apiSession).catch(() => []),
-            apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
-            apiFetch("/lab/orders", apiSession).catch(() => []),
-          ]);
-        if (cancelled) return;
-        setLabTests(testRows || []);
-        setLabPackages(packageRows || []);
-        setSuppliers(supplierRows || []);
-        const relevantOrderIds = Array.from(
-          new Set(
-            liveInvoices
-              .filter((invoice: any) => invoice.lab_order_id)
-              .map((invoice: any) => invoice.lab_order_id),
-          ),
-        );
-        const sourceOrderIds = relevantOrderIds.length
-          ? relevantOrderIds
-          : (orderRows || []).slice(0, 200).map((order: any) => order.id);
-        const details = await Promise.all(
-          sourceOrderIds.map((orderId: any) =>
-            apiFetch(`/lab/orders/${orderId}`, apiSession).catch(() => null),
-          ),
-        );
-        if (!cancelled) setLabOrderDetails(details.filter(Boolean));
-      } finally {
-        if (!cancelled) setLabSettlementLoading(false);
-      }
-    }
-    loadLabSettlementData();
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.tenantId, liveInvoices.length, refreshTick]);
-
-  // Closed-month income snapshots (frozen at month end). Branch-scoped to match
-  // the live dashboard's branch filter; no branch = all-branches aggregate.
-  useEffect(() => {
-    if (!apiSession?.tenantId) {
-      setMonthlySnapshots([]);
-      return;
-    }
-    let cancelled = false;
-    apiFetch(
-      `/reports/monthly-snapshots${branchId ? `?branch_id=${branchId}` : ""}`,
-      apiSession,
-    )
-      .then((rows: any) => {
-        if (!cancelled) setMonthlySnapshots(Array.isArray(rows) ? rows : []);
-      })
-      .catch(() => {
-        if (!cancelled) setMonthlySnapshots([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.tenantId, branchId, refreshTick]);
-
-  async function recalculateMonthlySnapshot(snapshot: any) {
-    if (!apiSession?.tenantId || !snapshot) return;
-    setSnapshotMessage("");
-    setRecalculatingSnapshotId(snapshot.id);
-    try {
-      await apiFetch("/reports/monthly-snapshots/archive", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          year: snapshot.period_year,
-          month: snapshot.period_month,
-          overwrite: true,
-        }),
-      });
-      setSnapshotMessage(`${snapshot.period_label} recalculated`);
-      await refreshReports();
-    } catch (error: any) {
-      setSnapshotMessage(error?.message || "Recalculate failed");
-    } finally {
-      setRecalculatingSnapshotId(null);
-    }
-  }
-
-  useEffect(() => {
-    if (!apiSession?.tenantId) return;
-    let cancelled = false;
-    async function loadHomeCareBookings() {
-      setHomeCareBookingsLoading(true);
-      try {
-        const rows = await apiFetch(
-          `/home-care/bookings${branchId ? `?branch_id=${branchId}` : ""}`,
-          apiSession,
-        ).catch(() => []);
-        if (!cancelled) setHomeCareBookings(Array.isArray(rows) ? rows : []);
-      } finally {
-        if (!cancelled) setHomeCareBookingsLoading(false);
-      }
-    }
-    loadHomeCareBookings();
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.tenantId, branchId, refreshTick]);
-
-  useEffect(() => {
-    if (!apiSession?.tenantId || homeCareInvoiceIds.length === 0) {
-      setHomeCareInvoiceDetails([]);
-      setHomeCareInvoiceDetailsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    async function loadHomeCareInvoiceDetails() {
-      setHomeCareInvoiceDetailsLoading(true);
-      try {
-        const details = await Promise.all(
-          homeCareInvoiceIds.map((invoiceId: string) =>
-            apiFetch(`/billing/invoices/${invoiceId}`, apiSession).catch(
-              () => null,
-            ),
-          ),
-        );
-        if (!cancelled) setHomeCareInvoiceDetails(details.filter(Boolean));
-      } finally {
-        if (!cancelled) setHomeCareInvoiceDetailsLoading(false);
-      }
-    }
-    loadHomeCareInvoiceDetails();
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.tenantId, homeCareInvoiceIdsKey, refreshTick]);
-
-  useEffect(() => {
-    if (!apiSession?.tenantId) return;
-    let cancelled = false;
-    async function loadPharmacySettlementData() {
-      setPharmacySettlementLoading(true);
-      try {
-        const [medicines, issueRows] = await Promise.all([
-          apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
-          apiFetch("/pharmacy/issues", apiSession).catch(() => []),
-        ]);
-        if (cancelled) return;
-        setMedicineRows(medicines || []);
-        const relevantIssueIds = Array.from(
-          new Set(
-            liveInvoices
-              .filter((invoice: any) => invoice.pharmacy_issue_id)
-              .map((invoice: any) => invoice.pharmacy_issue_id),
-          ),
-        );
-        const sourceIssueIds = relevantIssueIds.length
-          ? relevantIssueIds
-          : (issueRows || []).slice(0, 200).map((issue: any) => issue.id);
-        const details = await Promise.all(
-          sourceIssueIds.map((issueId: any) =>
-            apiFetch(`/pharmacy/issues/${issueId}`, apiSession).catch(
-              () => null,
-            ),
-          ),
-        );
-        if (!cancelled) setPharmacyIssueDetails(details.filter(Boolean));
-      } finally {
-        if (!cancelled) setPharmacySettlementLoading(false);
-      }
-    }
-    loadPharmacySettlementData();
-    return () => {
-      cancelled = true;
-    };
-  }, [apiSession?.tenantId, liveInvoices.length, refreshTick]);
 
   const completedAppointments = scopedAppointments.filter((row: any) => {
     const appointmentDate = dateKey(
@@ -1863,62 +1695,6 @@ export function Reports({
       </html>
     `);
     win.document.close();
-  }
-
-  async function sendEmailReport() {
-    setSendMessage("");
-    setSendError("");
-    if (!fromDate || !toDate) {
-      setSendError("Select from date and to date before sending.");
-      return;
-    }
-    const recipients = Array.from(new Set(parseEmailList(recipientInput)));
-    if (recipients.length === 0) {
-      setSendError("Enter at least one email address.");
-      return;
-    }
-    const invalidEmail = recipients.find((email) => !isEmail(email));
-    if (invalidEmail) {
-      setSendError(`Check email address: ${invalidEmail}`);
-      return;
-    }
-    setSendBusy(true);
-    try {
-      const result = await apiFetch("/reports/profit-email/send", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          recipients,
-          from_date: fromDate,
-          to_date: toDate,
-          doctor_id: doctorId === "all" ? null : doctorId,
-          invoice_type: typeFilter,
-          supplier_id: supplierFilter === "all" ? null : supplierFilter,
-          supplier_ids: emailLabSupplierIds.includes("all")
-            ? []
-            : emailLabSupplierIds,
-          report_sections: emailReportSections,
-          branch_id: branchId || null,
-        }),
-      });
-      const nextRecent = Array.from(
-        new Set([...recipients, ...recentEmails]),
-      ).slice(0, 6);
-      setRecentEmails(nextRecent);
-      if (typeof window !== "undefined" && apiSession?.tenantId) {
-        window.localStorage.setItem(
-          `medizinhub.reportEmails.${apiSession.tenantId}`,
-          JSON.stringify(nextRecent),
-        );
-      }
-      setSendPanelOpen(false);
-      setSendMessage(
-        `Sent to ${result.recipients.join(", ")} with ${result.attachment_filenames.length} Excel files.`,
-      );
-    } catch (err: any) {
-      setSendError(err.message || "Could not send report email.");
-    } finally {
-      setSendBusy(false);
-    }
   }
 
   function addRecipientSuggestion(email: string) {

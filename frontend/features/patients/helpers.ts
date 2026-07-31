@@ -1,6 +1,5 @@
 import { displayDate } from "@/utils/helper";
 
-
 export function toRow(patient: any) {
   return { ...patient, active_alert_count: 0, critical_alert_count: 0 };
 }
@@ -8,20 +7,46 @@ export function toRow(patient: any) {
 export function patientDateInputValue(value: any) {
   const text = String(value || "").trim();
   const match = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+
   return match?.[1] || "";
 }
 
 export function calculateAgeYears(dateOfBirth: string) {
   if (!dateOfBirth) return "";
+
   const dob = new Date(`${dateOfBirth}T00:00:00`);
+
   if (Number.isNaN(dob.getTime())) return "";
+
   const today = new Date();
+
   let age = today.getFullYear() - dob.getFullYear();
+
   const monthDelta = today.getMonth() - dob.getMonth();
+
   if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dob.getDate())) {
     age -= 1;
   }
-  return age >= 0 && age <= 130 ? String(age) : "";
+
+  return age >= 0 && age <= 100 ? String(age) : "";
+}
+
+export function calculateDobFromAge(age: string | number) {
+  const numericAge = Number(age);
+
+  if (Number.isNaN(numericAge) || numericAge < 0 || numericAge > 100) {
+    return "";
+  }
+
+  const today = new Date();
+
+  const dob = new Date(
+    today.getFullYear() - numericAge,
+    today.getMonth(),
+    today.getDate(),
+  );
+
+  return dob.toISOString().split("T")[0];
 }
 
 export function displayPatientGender(value: any) {
@@ -35,12 +60,16 @@ export function displayPatientGender(value: any) {
 }
 
 export function isActivePatientRecord(patient: any) {
-  const status = String(patient?.status || "active").trim().toLowerCase();
+  const status = String(patient?.status || "active")
+    .trim()
+    .toLowerCase();
   return !["inactive", "deceased", "disabled", "archived"].includes(status);
 }
 
 export function patientDisplayName(patient: any) {
-  return patient?.full_name || patient?.name || patient?.patient_name || "Patient";
+  return (
+    patient?.full_name || patient?.name || patient?.patient_name || "Patient"
+  );
 }
 
 export function patientDisplayNumber(patient: any) {
@@ -97,8 +126,6 @@ export function fmtDate(val: string | null | undefined) {
   return displayDate(val);
 }
 
-
-
 export function splitListText(value: any) {
   const seen = new Set<string>();
   return String(value || "")
@@ -113,7 +140,10 @@ export function splitListText(value: any) {
     });
 }
 
-export function uniqueClinicalRecords(rows: any[], getKey: (row: any) => string) {
+export function uniqueClinicalRecords(
+  rows: any[],
+  getKey: (row: any) => string,
+) {
   const seen = new Set<string>();
   return rows.filter((row: any) => {
     const key = getKey(row).toLowerCase().replace(/\s+/g, " ").trim();
@@ -144,7 +174,6 @@ export function clinicalRecordsWithUniqueItems(
     })
     .filter(({ items }: any) => items.length > 0);
 }
-
 
 export type BranchOption = {
   id: string;
@@ -191,7 +220,11 @@ export function patientFormPayload(fd: FormData): PatientFormPayload {
   };
 }
 
-export function patientField(patient: any, snakeKey: string, camelKey?: string) {
+export function patientField(
+  patient: any,
+  snakeKey: string,
+  camelKey?: string,
+) {
   return patient?.[snakeKey] ?? patient?.[camelKey || snakeKey] ?? "";
 }
 
@@ -201,7 +234,6 @@ export function todayInputValue() {
   const day = String(today.getDate()).padStart(2, "0");
   return `${today.getFullYear()}-${month}-${day}`;
 }
-
 
 export function codeFromName(prefix: string, name: string) {
   const clean =

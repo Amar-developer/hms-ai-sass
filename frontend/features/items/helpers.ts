@@ -22,6 +22,28 @@ export function findDuplicateItem(
   );
 }
 
+const ITEM_CODE_PREFIXES: Record<string, string> = {
+  medicine: "MED",
+  lab_test: "LAB",
+  lab_package: "PKG",
+  physio_equipment: "PHY",
+  home_care_service: "HC",
+  home_visit_service: "HV",
+};
+
+function compactItemName(name: string) {
+  return String(name || "ITEM")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "")
+    .slice(0, 6);
+}
+
+export function generatedItemCode(type: string, name: string) {
+  const prefix = ITEM_CODE_PREFIXES[type] || "ITM";
+  const compactName = compactItemName(name) || "ITEM";
+  return `${prefix}-${compactName}-${Date.now().toString().slice(-5)}`;
+}
+
 export function itemEndpoint(
   type: string,
   editingId?: string | null,

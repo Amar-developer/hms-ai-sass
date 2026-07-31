@@ -10,19 +10,11 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
-import { apiFetch } from "@/lib/api";
-import { uniqueDepartmentRows } from "@/lib/options";
-import {
-  canDeleteMembershipPlans,
-  codeFromName,
-  mapQuantitiesToIds,
-  parsePharmacySlabs,
-  sameName,
-} from "../patients/helpers";
+import { canDeleteMembershipPlans } from "../patients/helpers";
 import { ActiveEnrollmentsTable } from "../patients/components/ActiveEnrollmentsTable";
 import { PlanDetailPage } from "../patients/components/PlanDetailPage";
 import { PlanForm } from "../patients/components/PlanForm";
-import { money, today } from "@/utils/helper";
+import { money } from "@/utils/helper";
 import { PlanTableRow } from "../patients/components/PlanTableRow";
 import { QueuedEnrollmentsTable } from "../patients/components/QueuedEnrollmentsTable";
 import { PatientSearchSelect } from "../patients/components/PatientSearchSelect";
@@ -32,6 +24,10 @@ import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import {
+  usePatientSubscriptionsActions,
+  usePatientSubscriptionsData,
+} from "./api";
 
 export function PatientSubscriptions({
   apiSession,
@@ -40,19 +36,12 @@ export function PatientSubscriptions({
   clinic,
   showEnrollment = false,
 }: any) {
-  const [plans, setPlans] = useState<any[]>([]);
-  const [enrollments, setEnrollments] = useState<any[]>([]);
-  const [labTests, setLabTests] = useState<any[]>([]);
-  const [medicines, setMedicines] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
   const [view, setView] = useState("list");
   const [toast, setToast] = useState<{
     text: string;
     kind: "success" | "error" | "warn";
   } | null>(null);
-  const [loadError, setLoadError] = useState("");
   const [busy, setBusy] = useState("");
-  const [loading, setLoading] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState("");
   const [selectedPlan, setSelectedPlan] = useState("");
   const [freeConsultDeptIds, setFreeConsultDeptIds] = useState<string[]>([]);
@@ -91,263 +80,105 @@ export function PatientSubscriptions({
   const [confirmDelete, setConfirmDelete] = useState("");
   const [detailPlanId, setDetailPlanId] = useState("");
   const [planPage, setPlanPage] = useState(1);
-  const planTotalPages = Math.max(1, Math.ceil(plans.length / pageSize));
-  const safePlanPage = Math.min(planPage, planTotalPages);
+  const [confirm, setConfirm] = useState<any>(null);
+  const {
+    plans,
+    enrollments,
+    labTests,
+    medicines,
+    departments,
+    loadError,
+    setLoadError,
+    loading,
+    load,
+  } = usePatientSubscriptionsData({
+    apiSession,
+    branchId,
+    setSelectedPlan,
+    setDetailPlanId,
+  });
   const { patients, patientMap } = usePatientReferencesQuery(
     apiSession,
     enrollments.map((row: any) => row.patient_id),
   );
-  const [confirm, setConfirm] = useState<any>(null);
-  async function load() {
-    if (!apiSession) return;
-    setLoadError("");
-    setLoading(true);
-    try {
-      const [planRows, enrollmentRows, testRows, medicineRows, departmentRows] =
-        await Promise.all([
-          apiFetch(
-            "/patient-subscriptions/plans?include_inactive=true",
-            apiSession,
-          ),
-          apiFetch("/patient-subscriptions/enrollments", apiSession),
-          apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
-          apiFetch(
-            `/pharmacy/medicines?branch_id=${encodeURIComponent(branchId || "")}`,
-            apiSession,
-          ).catch(() => []),
-          apiFetch(
-            `/tenants/${apiSession.tenantId}/departments`,
-            apiSession,
-          ).catch(() => []),
-        ]);
-      setPlans(planRows);
-      setEnrollments(enrollmentRows);
-      setLabTests(testRows);
-      setMedicines(medicineRows);
-      setDepartments(
-        uniqueDepartmentRows(
-          (departmentRows || []).filter(
-            (dept: any) => dept?.is_active !== false,
-          ),
-        ),
-      );
-      setDetailPlanId((current) =>
-        planRows.some((row: any) => row.id === current) ? current : "",
-      );
-      setSelectedPlan((current) =>
-        planRows.some((row: any) => row.id === current)
-          ? current
-          : planRows[0]?.id || "",
-      );
-      setSelectedPatient((current) =>
-        patients?.some((row: any) => row.id === current)
-          ? current
-          : patients?.[0]?.id || "",
-      );
-    } catch (err: any) {
-      const msg = err.message || "Could not load patient subscriptions.";
-      setLoadError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const planTotalPages = Math.max(1, Math.ceil(plans.length / pageSize));
+  const safePlanPage = Math.min(planPage, planTotalPages);
 
-  useEffect(() => {
-    load();
-  }, [apiSession?.tenantId, branchId]);
   useEffect(() => {
     if (planPage !== safePlanPage) setPlanPage(safePlanPage);
   }, [planPage, safePlanPage]);
 
-  async function resolveLabBenefitIds(values: string[], branchValue: string) {
-    const resolved: string[] = [];
-    for (const value of values) {
-      if (!value.startsWith("new:")) {
-        resolved.push(value);
-        continue;
-      }
-      const name = value.slice(4).trim();
-      if (!name) continue;
-      const existing = labTests.find((row: any) => sameName(row, name));
-      if (existing) {
-        resolved.push(existing.id);
-        continue;
-      }
-      const created = await apiFetch("/lab/catalog/tests", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchValue || branchId || null,
-          code: codeFromName("LAB", name),
-          name,
-          department: "Membership Benefit",
-          sample_type: null,
-          default_price: 0,
-          purchase_price: 0,
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      resolved.push(created.id);
-    }
-    return resolved;
-  }
+  useEffect(() => {
+    setSelectedPatient((current) =>
+      patients?.some((row: any) => row.id === current)
+        ? current
+        : patients?.[0]?.id || "",
+    );
+  }, [patients]);
 
-  async function resolveMedicineBenefitIds(
-    values: string[],
-    branchValue: string,
-  ) {
-    const resolved: string[] = [];
-    for (const value of values) {
-      if (!value.startsWith("new:")) {
-        resolved.push(value);
-        continue;
-      }
-      const name = value.slice(4).trim();
-      if (!name) continue;
-      const existing = medicines.find((row: any) => sameName(row, name));
-      if (existing) {
-        resolved.push(existing.id);
-        continue;
-      }
-      const created = await apiFetch("/pharmacy/medicines", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchValue || branchId || null,
-          code: codeFromName("MED", name),
-          name,
-          generic_name: null,
-          form: "Tablet",
-          default_sale_price: 0,
-          purchase_price: 0,
-          reorder_level: 0,
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      resolved.push(created.id);
-    }
-    return resolved;
-  }
+  const userPermissions = apiSession?.user?.permissions || [];
+  const hasPermission = (...keys: string[]) =>
+    Boolean(
+      apiSession?.user?.is_super_admin ||
+        userPermissions.includes("*") ||
+        keys.some((key) => userPermissions.includes(key)),
+    );
+  const canDeletePlans =
+    canDeleteMembershipPlans(apiSession?.user) ||
+    hasPermission(
+      "patient_subscriptions.manage",
+      "patient_subscriptions.delete",
+      "settings.manage",
+    );
 
-  async function createPlan(form: HTMLFormElement) {
-    const fd = new FormData(form);
-    if (busy === "plan") return;
-    setBusy("plan");
-    setToast(null);
-    try {
-      const basePayload = {
-        name: fd.get("name"),
-        code: fd.get("code") || null,
-        price_amount: Number(fd.get("priceAmount") || 0),
-        duration_days: Number(fd.get("durationDays") || 0),
-        activation_after_days: Number(fd.get("activationAfterDays") || 0),
-        free_consultations: Number(fd.get("freeConsultations") || 0),
-        free_consultation_department_ids: freeConsultDeptIds,
-        lab_discount_percentage: Number(fd.get("labDiscount") || 0),
-        pharmacy_discount_percentage: Number(fd.get("pharmacyDiscount") || 0),
-        min_discount_amount: Number(fd.get("minDiscountAmount") || 0),
-        pharmacy_discount_slabs: parsePharmacySlabs(fd),
-        created_by_user_id: apiSession.user?.id,
-      };
-      const freeLabIds = await resolveLabBenefitIds(
-        freeLabTestIds,
-        branchId || "",
-      );
-      const discountedLabIds = await resolveLabBenefitIds(
-        discountedLabTestIds,
-        branchId || "",
-      );
-      const freeMedIds = await resolveMedicineBenefitIds(
-        freeMedicineIds,
-        branchId || "",
-      );
-      const discountedMedIds = await resolveMedicineBenefitIds(
-        discountedMedicineIds,
-        branchId || "",
-      );
-      await apiFetch("/patient-subscriptions/plans", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          ...basePayload,
-          branch_id: null,
-          free_lab_test_ids: freeLabIds,
-          free_lab_test_quantities: mapQuantitiesToIds(
-            freeLabTestIds,
-            freeLabIds,
-            freeLabQuantities,
-          ),
-          discounted_lab_test_ids: discountedLabIds,
-          free_medicine_ids: freeMedIds,
-          free_medicine_quantities: mapQuantitiesToIds(
-            freeMedicineIds,
-            freeMedIds,
-            freeMedicineQuantities,
-          ),
-          discounted_medicine_ids: discountedMedIds,
-        }),
-      });
-      form.reset();
-      setFreeConsultDeptIds([]);
-      setFreeLabTestIds([]);
-      setFreeLabQuantities({});
-      setDiscountedLabTestIds([]);
-      setFreeMedicineIds([]);
-      setFreeMedicineQuantities({});
-      setDiscountedMedicineIds([]);
-      setView("list");
-      await load();
-      setToast({
-        text: "Tenant-scoped patient subscription plan created.",
-        kind: "success",
-      });
-    } catch (err: any) {
-      setToast({
-        text: err.message || "Could not create plan.",
-        kind: "error",
-      });
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function enroll(event: any) {
-    event.preventDefault();
-    if (!selectedPatient || !selectedPlan) {
-      setToast({ text: "Select patient and plan.", kind: "warn" });
-      return;
-    }
-    setBusy("enroll");
-    setToast(null);
-    try {
-      const created = await apiFetch(
-        "/patient-subscriptions/enrollments",
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            branch_id: branchId,
-            patient_id: selectedPatient,
-            plan_id: selectedPlan,
-            starts_on: today(),
-            created_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await load();
-      setToast({
-        text:
-          created?.status === "queued"
-            ? "Patient already has an active plan — this one is queued and will activate automatically once it ends."
-            : "Patient enrolled in subscription plan.",
-        kind: "success",
-      });
-    } catch (err: any) {
-      setToast({
-        text: err.message || "Could not enroll patient.",
-        kind: "error",
-      });
-    } finally {
-      setBusy("");
-    }
-  }
+  const {
+    createPlan,
+    enroll,
+    updatePlan,
+    togglePlanActive,
+    deletePlan,
+    updateEnrollment,
+    cancelEnrollment,
+  } = usePatientSubscriptionsActions({
+    apiSession,
+    branchId,
+    labTests,
+    medicines,
+    patientMap,
+    canDeletePlans,
+    busy,
+    selectedPatient,
+    selectedPlan,
+    freeConsultDeptIds,
+    freeLabTestIds,
+    freeLabQuantities,
+    discountedLabTestIds,
+    freeMedicineIds,
+    freeMedicineQuantities,
+    discountedMedicineIds,
+    editingPlan,
+    editFreeConsultDeptIds,
+    editFreeLabIds,
+    editFreeLabQuantities,
+    editDiscountedLabIds,
+    editFreeMedIds,
+    editFreeMedQuantities,
+    editDiscountedMedIds,
+    setBusy,
+    setToast,
+    setView,
+    setEditingPlan,
+    setConfirmDelete,
+    setDetailPlanId,
+    setFreeConsultDeptIds,
+    setFreeLabTestIds,
+    setFreeLabQuantities,
+    setDiscountedLabTestIds,
+    setFreeMedicineIds,
+    setFreeMedicineQuantities,
+    setDiscountedMedicineIds,
+    load,
+  });
 
   function startEdit(plan: any) {
     setEditingPlan(plan);
@@ -368,160 +199,13 @@ export function PatientSubscriptions({
     setView("list");
   }
 
-  async function updatePlan(form: HTMLFormElement) {
-    if (!editingPlan) return;
-    const fd = new FormData(form);
-    setBusy("edit");
-    setToast(null);
-    try {
-      await apiFetch(
-        `/patient-subscriptions/plans/${editingPlan.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: fd.get("name"),
-            code: fd.get("code") || null,
-            price_amount: Number(fd.get("priceAmount") || 0),
-            duration_days: Number(fd.get("durationDays") || 0),
-            activation_after_days: Number(fd.get("activationAfterDays") || 0),
-            free_consultations: Number(fd.get("freeConsultations") || 0),
-            free_consultation_department_ids: editFreeConsultDeptIds,
-            lab_discount_percentage: Number(fd.get("labDiscount") || 0),
-            pharmacy_discount_percentage: Number(
-              fd.get("pharmacyDiscount") || 0,
-            ),
-            min_discount_amount: Number(fd.get("minDiscountAmount") || 0),
-            pharmacy_discount_slabs: parsePharmacySlabs(fd),
-            free_lab_test_ids: editFreeLabIds,
-            free_lab_test_quantities: mapQuantitiesToIds(
-              editFreeLabIds,
-              editFreeLabIds,
-              editFreeLabQuantities,
-            ),
-            discounted_lab_test_ids: editDiscountedLabIds,
-            free_medicine_ids: editFreeMedIds,
-            free_medicine_quantities: mapQuantitiesToIds(
-              editFreeMedIds,
-              editFreeMedIds,
-              editFreeMedQuantities,
-            ),
-            discounted_medicine_ids: editDiscountedMedIds,
-            updated_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      setEditingPlan(null);
-      setView("list");
-      await load();
-      setToast({ text: "Plan updated successfully.", kind: "success" });
-    } catch (err: any) {
-      setToast({
-        text: err.message || "Could not update plan.",
-        kind: "error",
-      });
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function togglePlanActive(plan: any) {
-    setBusy(`toggle-${plan.id}`);
-    setToast(null);
-    try {
-      await apiFetch(`/patient-subscriptions/plans/${plan.id}`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          is_active: !plan.is_active,
-          updated_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setToast({
-        text: `Plan ${plan.is_active ? "paused" : "activated"}.`,
-        kind: "success",
-      });
-    } catch (err: any) {
-      setToast({
-        text: err.message || "Could not update plan status.",
-        kind: "error",
-      });
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function deletePlan(planId: string) {
-    setBusy(`delete-${planId}`);
-    setToast(null);
-    try {
-      await apiFetch(`/patient-subscriptions/plans/${planId}`, apiSession, {
-        method: "DELETE",
-      });
-      setConfirmDelete("");
-      setDetailPlanId((current) => (current === planId ? "" : current));
-      await load();
-      setToast({ text: "Plan deactivated.", kind: "success" });
-    } catch (err: any) {
-      const message = String(err.message || "");
-      setToast({
-        text: message || "Could not deactivate plan.",
-        kind: "error",
-      });
-      setConfirmDelete("");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function updateEnrollment(row: any, updates: any) {
-    if (!canDeletePlans) {
-      setToast({ kind: "warn", text: "Tenant admin access required." });
-      return;
-    }
-    setBusy(`enrollment-${row.id}`);
-    setToast(null);
-    try {
-      await apiFetch(
-        `/patient-subscriptions/enrollments/${row.id}`,
-        apiSession,
-        {
-          method: "PATCH",
-          body: JSON.stringify({
-            ...updates,
-            updated_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await load();
-      setToast({ kind: "success", text: "Enrollment updated." });
-    } catch (err: any) {
-      setToast({
-        kind: "error",
-        text: err.message || "Could not update enrollment.",
-      });
-    } finally {
-      setBusy("");
-    }
-  }
   function requestCancelEnrollment(row: any) {
     setConfirm(row);
   }
-  function cancelEnrollment(row: any) {
-    const patientName =
-      row.patient_name ||
-      patientMap.get(row.patient_id)?.name ||
-      patientMap.get(row.patient_id)?.full_name ||
-      "this patient";
-    const planName = row.plan?.name || "membership plan";
-    // if (!window.confirm(`Cancel ${planName} enrollment for ${patientName}?`)) {
-    //   return;
-    // }
-    updateEnrollment(row, {
-      status: "cancelled",
-      ends_on: today(),
-    });
-    setConfirm(false)
+
+  function cancelEnrollmentAndClose(row: any) {
+    cancelEnrollment(row);
+    setConfirm(false);
   }
 
   if (!apiSession)
@@ -540,20 +224,6 @@ export function PatientSubscriptions({
   const queuedEnrollments = enrollments.filter(
     (row: any) => row.status === "queued",
   );
-  const userPermissions = apiSession.user?.permissions || [];
-  const hasPermission = (...keys: string[]) =>
-    Boolean(
-      apiSession.user?.is_super_admin ||
-      userPermissions.includes("*") ||
-      keys.some((key) => userPermissions.includes(key)),
-    );
-  const canDeletePlans =
-    canDeleteMembershipPlans(apiSession.user) ||
-    hasPermission(
-      "patient_subscriptions.manage",
-      "patient_subscriptions.delete",
-      "settings.manage",
-    );
   const canEditPlans =
     canDeletePlans ||
     hasPermission(
@@ -853,7 +523,7 @@ export function PatientSubscriptions({
           }}
           busy={busy === `enrollment-${confirm.id}`}
           onCancel={() => setConfirm(null)}
-          onConfirm={() => cancelEnrollment(confirm)}
+          onConfirm={() => cancelEnrollmentAndClose(confirm)}
         />
       )}
     </div>

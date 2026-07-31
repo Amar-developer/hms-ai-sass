@@ -11,7 +11,6 @@ import {
   SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiFetch } from "@/lib/api";
 import {
   FormField,
   NumberField,
@@ -33,24 +32,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { RowActions } from "../admin/components/RowActions";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
-import { findDuplicateItem, itemEndpoint } from "./helpers";
+import { generatedItemCode } from "./helpers";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
-
-function generatedItemCode(type: string, name: string) {
-  const prefixes: Record<string, string> = {
-    medicine: "MED",
-    lab_test: "LAB",
-    lab_package: "PKG",
-    physio_equipment: "PHY",
-    home_care_service: "HC",
-    home_visit_service: "HV",
-  };
-  const compactName = String(name || "ITEM")
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "")
-    .slice(0, 6);
-  return `${prefixes[type] || "ITM"}-${compactName || "ITEM"}-${Date.now().toString().slice(-5)}`;
-}
+import { useItemsActions, useItemsData } from "./api";
 
 function itemCodePreview(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -118,12 +102,17 @@ export function Items({ apiSession, branchId }: any) {
   const [type, setType] = useState("medicine");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [medicines, setMedicines] = useState<any[]>([]);
-  const [tests, setTests] = useState<any[]>([]);
-  const [packages, setPackages] = useState<any[]>([]);
-  const [equipment, setEquipment] = useState<any[]>([]);
-  const [homeCareServices, setHomeCareServices] = useState<any[]>([]);
+  const {
+    medicines,
+    tests,
+    packages,
+    equipment,
+    homeCareServices,
+    stockSuppliers,
+    loading,
+    loadError,
+    load,
+  } = useItemsData({ apiSession, branchId });
   const [packageTestIds, setPackageTestIds] = useState<string[]>([]);
   const [editing, setEditing] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<any>(null);
@@ -141,7 +130,6 @@ export function Items({ apiSession, branchId }: any) {
     setFilters(f);
     setPage(1);
   }
-  const [stockSuppliers, setStockSuppliers] = useState<any[]>([]);
   const [form, setForm] = useState<any>(() => createEmptyForm("medicine"));
   const autoCode = editing
     ? type === "physio_equipment"
@@ -278,8 +266,8 @@ export function Items({ apiSession, branchId }: any) {
   }, [filteredRows, filters.sortBy]);
 
   useEffect(() => {
-    load();
-  }, [apiSession?.tenantId, branchId]);
+    if (loadError) setMessage(loadError);
+  }, [loadError]);
 
   function setField(key: string, value: any) {
     setForm((prev: any) => ({ ...prev, [key]: value }));
@@ -309,285 +297,21 @@ export function Items({ apiSession, branchId }: any) {
     setPackageTestIds([]);
   }
 
-  async function load() {
-    if (!apiSession) return;
-    setLoading(true);
-    try {
-      const [
-        medicineRows,
-        testRows,
-        packageRows,
-        equipmentRows,
-        homeCareServiceRows,
-        supplierRows,
-      ] = await Promise.all([
-        apiFetch("/pharmacy/medicines", apiSession).catch(() => []),
-        apiFetch("/lab/catalog/tests", apiSession).catch(() => []),
-        apiFetch("/lab/catalog/packages", apiSession).catch(() => []),
-        apiFetch("/physiotherapy/equipment", apiSession).catch(() => []),
-        apiFetch("/home-care/services", apiSession).catch(() => []),
-        apiFetch("/pharmacy/suppliers", apiSession).catch(() => []),
-      ]);
-      setMedicines(medicineRows);
-      setTests(testRows);
-      setPackages(packageRows);
-      setEquipment(equipmentRows);
-      setHomeCareServices(homeCareServiceRows);
-      setStockSuppliers(supplierRows);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load items.");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { handleItemSubmit, confirmDelete } = useItemsActions({
+    apiSession,
+    type,
+    editing,
+    rows,
+    packageTestIds,
+    setEditing,
+    setBusy,
+    setMessage,
+    setConfirmAction,
+    confirmAction,
+    resetItemForm,
+    load,
+  });
 
-  async function createItem(e: any) {
-    e.preventDefault();
-    if (!apiSession) return;
-    setBusy("save");
-    setMessage("");
-    try {
-      const method = editing ? "PATCH" : "POST";
-      const supplierId = form.supplier_id || null;
-      const purchasePrice = Number(form.purchase_price || 0);
-      const itemCode = editing
-        ? type === "physio_equipment"
-          ? form.serial_number ||
-            form.code ||
-            generatedItemCode(type, form.name)
-          : form.code || generatedItemCode(type, form.name)
-        : generatedItemCode(type, form.name);
-      let savedHomeCareService: any = null;
-      if (type === "medicine") {
-        await apiFetch(
-          editing ? `/pharmacy/medicines/${editing.id}` : "/pharmacy/medicines",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              branch_id: null,
-              code: itemCode,
-              name: form.name,
-              generic_name: form.generic_name || null,
-              form: "Tablet",
-              supplier_id: supplierId,
-              mrp_price: Number(form.mrp_price || 0),
-              purchase_price: purchasePrice,
-              default_sale_price: Number(form.price || 0),
-              reorder_level: Number(form.reorder_level || 0),
-              created_by_user_id: apiSession.user?.id,
-              updated_by_user_id: apiSession.user?.id,
-            }),
-          },
-        );
-      } else if (type === "lab_test") {
-        await apiFetch(
-          editing ? `/lab/catalog/tests/${editing.id}` : "/lab/catalog/tests",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              branch_id: null,
-              code: itemCode,
-              name: form.name,
-              supplier_id: supplierId,
-              mrp_price: Number(form.mrp_price || 0),
-              purchase_price: purchasePrice,
-              sample_type: form.sample_type || null,
-              default_price: Number(form.price || 0),
-              created_by_user_id: apiSession.user?.id,
-              updated_by_user_id: apiSession.user?.id,
-            }),
-          },
-        );
-      } else if (type === "lab_package") {
-        await apiFetch(
-          editing
-            ? `/lab/catalog/packages/${editing.id}`
-            : "/lab/catalog/packages",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              code: itemCode,
-              name: form.name,
-              branch_id: null,
-              description: form.description || null,
-              supplier_id: null,
-              mrp_price: Number(form.mrp_price || 0),
-              purchase_price: 0,
-              package_price: Number(form.price || 0),
-              test_ids: packageTestIds,
-              created_by_user_id: apiSession.user?.id,
-              updated_by_user_id: apiSession.user?.id,
-            }),
-          },
-        );
-        setPackageTestIds([]);
-      } else if (homeServiceTypes.includes(type)) {
-        savedHomeCareService = await apiFetch(
-          editing ? `/home-care/services/${editing.id}` : "/home-care/services",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              branch_id: null,
-              code: itemCode,
-              name: form.name,
-              description: form.description || null,
-              mrp_price: Number(form.mrp_price || 0),
-              default_price: Number(form.price || 0),
-            }),
-          },
-        );
-      } else {
-        await apiFetch(
-          editing
-            ? `/physiotherapy/equipment/${editing.id}`
-            : "/physiotherapy/equipment",
-          apiSession,
-          {
-            method,
-            body: JSON.stringify({
-              branch_id: null,
-              name: form.name,
-              modality_type: form.modality_type,
-              supplier_id: supplierId,
-              mrp_price: Number(form.mrp_price || 0),
-              purchase_price: purchasePrice,
-              manufacturer: form.manufacturer || null,
-              model_number: form.model_number || null,
-              serial_number: itemCode,
-              is_portable: form.is_portable === "true",
-            }),
-          },
-        );
-      }
-      const wasEditing = Boolean(editing);
-      setEditing(null);
-      setPackageTestIds([]);
-      resetItemForm(type);
-      if (homeServiceTypes.includes(type) && savedHomeCareService) {
-        setHomeCareServices((prev: any[]) =>
-          wasEditing
-            ? prev.map((row) =>
-                row.id === savedHomeCareService.id ? savedHomeCareService : row,
-              )
-            : [savedHomeCareService, ...prev],
-        );
-        void load();
-      } else {
-        await load();
-      }
-      setMessage(wasEditing ? "Item updated." : "Item saved.");
-    } catch (err: any) {
-      setMessage(err.detail || err.message || "Could not save item.");
-    } finally {
-      setBusy("");
-    }
-  }
-  async function handleItemSubmit(data: ItemFormValues) {
-    if (!apiSession) return;
-
-    const duplicate = findDuplicateItem(rows, data.name, editing?.id);
-    if (duplicate) {
-      setMessage(`An item named "${data.name.trim()}" already exists.`);
-      return false;
-    }
-
-    setBusy("save");
-    setMessage("");
-
-    try {
-      const isEditing = !!editing;
-      const method = isEditing ? "PATCH" : "POST";
-      const itemCode = isEditing
-        ? type === "physio_equipment"
-          ? editing.serial_number ||
-            editing.code ||
-            generatedItemCode(type, data.name)
-          : editing.code || generatedItemCode(type, data.name)
-        : generatedItemCode(type, data.name);
-
-      const endpoint = itemEndpoint(type, editing?.id);
-      let body: any = { code: itemCode, name: data.name };
-
-      if (type === "medicine") {
-        body = {
-          ...body,
-          generic_name: data.generic_name || null,
-          supplier_id: data.supplier_id || null,
-          mrp_price: Number(data.mrp_price || 0),
-          purchase_price: Number(data.purchase_price || 0),
-          default_sale_price: Number(data.price || 0),
-          reorder_level: Number(data.reorder_level || 0),
-        };
-      } else if (type === "lab_test") {
-        body = {
-          ...body,
-          supplier_id: data.supplier_id || null,
-          mrp_price: Number(data.mrp_price || 0),
-          purchase_price: Number(data.purchase_price || 0),
-          default_price: Number(data.price || 0),
-          sample_type: data.sample_type || null,
-        };
-      } else if (type === "lab_package") {
-        body = {
-          ...body,
-          description: data.description || null,
-          mrp_price: Number(data.mrp_price || 0),
-          purchase_price: 0,
-          package_price: Number(data.price || 0),
-          test_ids: packageTestIds,
-          ...(isEditing
-            ? { updated_by_user_id: apiSession.user?.id }
-            : { created_by_user_id: apiSession.user?.id }),
-        };
-      } else if (homeServiceTypes.includes(type)) {
-        body = {
-          ...body,
-          description: data.description || null,
-          mrp_price: Number(data.mrp_price || 0),
-          default_price: Number(data.price || 0),
-        };
-      } else if (type === "physio_equipment") {
-        body = {
-          ...body,
-          modality_type: data.modality_type,
-          supplier_id: data.supplier_id || null,
-          mrp_price: Number(data.mrp_price),
-          purchase_price: Number(data.purchase_price || 0),
-          manufacturer: data.manufacturer || null,
-          model_number: data.model_number || null,
-          serial_number: itemCode,
-          is_portable: data.is_portable === "true",
-        };
-      }
-
-      await apiFetch(endpoint, apiSession, {
-        method,
-        body: JSON.stringify(body),
-      });
-
-      // ✅ Refresh data
-      await load();
-
-      // ✅ Reset form + editing state
-      setEditing(null);
-      resetItemForm(type); // This should clear the form
-
-      setMessage(
-        isEditing ? "Item updated successfully." : "Item created successfully.",
-      );
-      return true;
-    } catch (err: any) {
-      console.error(err);
-      setMessage(err.detail || err.message || "Failed to save item.");
-      return false;
-    } finally {
-      setBusy("");
-    }
-  }
   function startEdit(row: any) {
     const raw = row.raw;
     setEditing(row);
@@ -611,41 +335,6 @@ export function Items({ apiSession, branchId }: any) {
       entity: "item",
       row,
     });
-  }
-
-  async function confirmDelete() {
-    if (!apiSession || !confirmAction) return;
-
-    const row = confirmAction.row;
-
-    setBusy(`delete-${row.id}`);
-    setMessage("");
-
-    const path =
-      row.type === "medicine"
-        ? `/pharmacy/medicines/${row.id}`
-        : row.type === "lab_test"
-          ? `/lab/catalog/tests/${row.id}`
-          : row.type === "lab_package"
-            ? `/lab/catalog/packages/${row.id}`
-            : homeServiceTypes.includes(row.type)
-              ? `/home-care/services/${row.id}`
-              : `/physiotherapy/equipment/${row.id}`;
-
-    try {
-      await apiFetch(path, apiSession, {
-        method: "DELETE",
-      });
-
-      await load();
-
-      setMessage("Item deleted.");
-      setConfirmAction(null);
-    } catch (err: any) {
-      setMessage(err.message || "Could not delete item.");
-    } finally {
-      setBusy("");
-    }
   }
 
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));

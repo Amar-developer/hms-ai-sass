@@ -1414,7 +1414,7 @@ export function Billing({
       )}
 
       {canCreateInvoices && (
-        <Card>
+        <Card className="mt-3">
           <h3 className="card-title font-bold">
             Pending Consultation Invoices
           </h3>
@@ -1476,7 +1476,7 @@ export function Billing({
         </Card>
       )}
 
-      <Card>
+      <Card className="mt-3">
         <div className="flex flex-col justify-between gap-2 md:flex-row md:items-end">
           <div>
             <h3 className="card-title font-bold">Invoices & Payments</h3>

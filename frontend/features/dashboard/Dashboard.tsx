@@ -277,7 +277,7 @@ export function Dashboard({
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h3 className="card-title font-bold">Tenant Operations Analysis</h3>
-            <p className="table-data text-slate-500">
+            <p className="card-desc text-slate-500">
               Today workload, collections, queue pressure, and module usage.
             </p>
           </div>

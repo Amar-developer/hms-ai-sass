@@ -9,7 +9,6 @@ import {
   RefreshButton,
   StatusToast,
 } from "@/app/components/common/ui";
-import { apiBlob, apiFetch, apiUpload, uploadAssetUrl } from "@/lib/api";
 import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate, displayDateTime, formatPrice } from "@/utils/helper";
 import { pageSize } from "./constants";
@@ -35,6 +34,11 @@ import {
 import { RowActions } from "../admin/components/RowActions";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import {
+  useLabActions,
+  useLabAvailableTestSearch,
+  useLabWorkspaceData,
+} from "./api";
 
 const MAX_REPORT_DOCUMENTS = 5;
 
@@ -58,20 +62,27 @@ export function Lab({
   setActive,
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [orders, setOrders] = useState<LabOrderSummary[]>([]);
-  const [ordersLoaded, setOrdersLoaded] = useState(false);
-  const [consultationReferrals, setConsultationReferrals] = useState<any[]>([]);
-  const [tests, setTests] = useState<any[]>([]);
-  const [packages, setPackages] = useState<any[]>([]);
-  const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [templates, setTemplates] = useState<any[]>([]);
+  const {
+    orders,
+    ordersLoaded,
+    consultationReferrals,
+    tests,
+    packages,
+    suppliers,
+    templates,
+    reportDocuments,
+    setReportDocuments,
+    loadError,
+    load,
+  } = useLabWorkspaceData({ apiSession });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState("");
-  const [selectedTestIds, setSelectedTestIds] = useState<string[]>([]);
-  const [availableTests, setAvailableTests] = useState<any[]>([]);
   const [testSearch, setTestSearch] = useState("");
   const [selectedAvailableTestId, setSelectedAvailableTestId] = useState("");
-  const [testLoading, setTestLoading] = useState(false);
+  const { availableTests, testLoading } = useLabAvailableTestSearch({
+    apiSession,
+    testSearch,
+  });
   const [orderTests, setOrderTests] = useState<any[]>([]);
   const [dismissedConsultations, setDismissedConsultations] = useState<
     string[]
@@ -85,14 +96,6 @@ export function Lab({
       return [];
     }
   });
-  const [testName, setTestName] = useState("Complete Blood Count");
-  const [testCode, setTestCode] = useState("CBC");
-  const [sampleType, setSampleType] = useState("Blood");
-  const [price, setPrice] = useState("350");
-  const [templateName, setTemplateName] = useState("Standard Result Template");
-  const [reportDocuments, setReportDocuments] = useState<Record<string, any[]>>(
-    {},
-  );
   const [replaceDocPicker, setReplaceDocPicker] = useState<{
     order: any;
     docs: any[];
@@ -216,11 +219,6 @@ export function Lab({
     );
   }, [liveInvoices]);
 
-  // Load data
-  useEffect(() => {
-    load();
-  }, [apiSession?.tenantId]);
-
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
@@ -234,36 +232,8 @@ export function Lab({
   }, [dismissedConsultations]);
 
   useEffect(() => {
-    if (!apiSession?.tenantId) {
-      setAvailableTests([]);
-      return;
-    }
-    let alive = true;
-    const search = testSearch.trim();
-    const timer = window.setTimeout(
-      async () => {
-        setTestLoading(true);
-        try {
-          const params = new URLSearchParams();
-          if (search) params.set("search", search);
-          const rows = await apiFetch(
-            `/lab/catalog/available-tests${params.toString() ? `?${params}` : ""}`,
-            apiSession,
-          );
-          if (alive) setAvailableTests(Array.isArray(rows) ? rows : []);
-        } catch {
-          if (alive) setAvailableTests([]);
-        } finally {
-          if (alive) setTestLoading(false);
-        }
-      },
-      search ? 250 : 0,
-    );
-    return () => {
-      alive = false;
-      window.clearTimeout(timer);
-    };
-  }, [apiSession, apiSession?.tenantId, testSearch]);
+    if (loadError) setMessage(loadError);
+  }, [loadError]);
 
   const localAvailableTests = useMemo(
     () => [
@@ -337,187 +307,37 @@ export function Lab({
       0,
   );
 
-  async function load() {
-    if (!apiSession) {
-      setOrders([]);
-      setConsultationReferrals([]);
-      return;
-    }
-    try {
-      const [
-        orderRows,
-        referralRows,
-        testRows,
-        packageRows,
-        templateRows,
-        supplierRows,
-        reportRows,
-      ] = await Promise.all([
-        apiFetch("/lab/orders", apiSession),
-        apiFetch("/lab/consultation-referrals", apiSession).catch(() => []),
-        apiFetch("/lab/catalog/tests", apiSession),
-        apiFetch("/lab/catalog/packages", apiSession),
-        apiFetch("/lab/result-templates", apiSession),
-        apiFetch("/pharmacy/suppliers", apiSession),
-        apiFetch("/files?category=lab_report&limit=500", apiSession).catch(
-          () => [],
-        ),
-      ]);
-      setOrders(orderRows);
-      setConsultationReferrals(referralRows || []);
-      setTests(testRows);
-      setPackages(packageRows);
-      setTemplates(templateRows);
-      setSuppliers(supplierRows || []);
-      const documentsByOrder: Record<string, any[]> = {};
-      for (const file of reportRows || []) {
-        if (file.attached_to_doctype !== "LabOrder" || !file.attached_to_name)
-          continue;
-        (documentsByOrder[file.attached_to_name] ||= []).push(file);
-      }
-      setReportDocuments(documentsByOrder);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load lab workspace.");
-    } finally {
-      setOrdersLoaded(true);
-    }
-  }
-
-  async function createTest(e: any) {
-    e.preventDefault();
-    if (!apiSession) return;
-    setBusy("test");
-    setMessage("");
-    try {
-      await apiFetch("/lab/catalog/tests", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          code: testCode,
-          name: testName,
-          sample_type: sampleType,
-          default_price: Number(price || 0),
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Lab test added to catalog.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create lab test.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function createPackage() {
-    if (!apiSession || selectedTestIds.length === 0) return;
-    setBusy("package");
-    setMessage("");
-    try {
-      await apiFetch("/lab/catalog/packages", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          code: `PKG-${Date.now().toString().slice(-4)}`,
-          name: `Package ${selectedTestIds.length} Tests`,
-          package_price: selectedTestIds.reduce(
-            (sum, id) =>
-              sum +
-              Number(tests.find((t: any) => t.id === id)?.default_price || 0),
-            0,
-          ),
-          test_ids: selectedTestIds,
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      setSelectedTestIds([]);
-      await load();
-      setMessage("Lab package created.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create package.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function createTemplate() {
-    if (!apiSession) return;
-    setBusy("template");
-    setMessage("");
-    try {
-      await apiFetch("/lab/result-templates", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          test_id: selectedTestIds[0] || null,
-          name: templateName,
-          content: { fields: ["Observed value", "Reference range", "Remarks"] },
-          created_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Result template created.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not create result template.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function handleCreateOrder(data: LabOrderFormValues) {
-    if (!apiSession) return false;
-    setBusy("create");
-    setMessage("");
-    const selectedNames = orderTests.map((t: any) => t.name).filter(Boolean);
-    const localTestIds = orderTests
-      .filter((t: any) => t.id && t.item_type !== "lab_package")
-      .map((t: any) => t.id);
-    const packageIds = orderTests
-      .filter((t: any) => t.id && t.item_type === "lab_package")
-      .map((t: any) => t.id);
-    const testsText = selectedNames.filter(Boolean).join(", ");
-    if (!testsText) {
-      setMessage("Select at least one lab test.");
-      setBusy("");
-      return false;
-    }
-    try {
-      await apiFetch("/lab/orders", apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          branch_id: branchId,
-          patient_id: data.patient_id,
-          order_date: data.order_date,
-          source:
-            data.acquisition_source === "referral"
-              ? "external_referral"
-              : "op_direct",
-          acquisition_source: data.acquisition_source,
-          referrer_patient_id: data.referrer_patient_id || null,
-          referrer_name: data.referrer_name || null,
-          tests: testsText,
-          test_ids: localTestIds,
-          package_ids: packageIds,
-          external_items: [],
-          external_referrer:
-            data.acquisition_source === "referral"
-              ? data.referrer_name
-              : null,
-          amount: 0,
-          ordered_by_user_id: apiSession.user?.id,
-        }),
-      });
-      setOrderTests([]);
-      setSelectedAvailableTestId("");
-      setTestSearch("");
-      await load();
-      setMessage("Lab & Service order created.");
-      return true;
-    } catch (err: any) {
-      setMessage(err.message || "Could not create lab / service order.");
-      return false;
-    } finally {
-      setBusy("");
-    }
-  }
+  const {
+    handleCreateOrder,
+    createFromConsultation,
+    collectSample,
+    updateStatus,
+    addReportDocument,
+    replaceReportDocument,
+    releaseResult,
+    openReport,
+    generateInvoice,
+    loadConsultDetail,
+  } = useLabActions({
+    apiSession,
+    branchId,
+    loadLiveData,
+    templates,
+    orderTests,
+    reportDocuments,
+    setReportDocuments,
+    setBusy,
+    setMessage,
+    setOrderTests,
+    setSelectedAvailableTestId,
+    setTestSearch,
+    setLocalInvoicedOrderIds,
+    setLocalInvoiceIdsByOrder,
+    setViewConsult,
+    setConsultDetail,
+    setLoadingDetail,
+    load,
+  });
 
   function addOrderTest() {
     const t = selectedAvailableTest;
@@ -546,147 +366,6 @@ export function Lab({
     );
   }
 
-  async function createFromConsultation(a: any) {
-    setBusy(a.consultationId);
-    setMessage("");
-    try {
-      await apiFetch(
-        `/lab/orders/from-consultation/${a.consultationId}`,
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            amount: 0,
-            priority: a.tokenType === "Emergency" ? "urgent" : "routine",
-            ordered_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      await load();
-      setMessage(
-        "Lab order created. Release the result before generating invoice.",
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not create referral order.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function collectSample(order: any) {
-    setBusy(order.id);
-    setMessage("");
-    try {
-      await apiFetch(`/lab/orders/${order.id}/samples`, apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          barcode: `${order.id}-S1`,
-          sample_type: "Blood",
-          collected_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage("Sample collected.");
-    } catch (err: any) {
-      setMessage(err.message || "Could not collect sample.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function updateStatus(order: any, status: string) {
-    setBusy(order.id);
-    setMessage("");
-    try {
-      await apiFetch(`/lab/orders/${order.id}/status`, apiSession, {
-        method: "PATCH",
-        body: JSON.stringify({
-          status,
-          actor_user_id: apiSession.user?.id,
-          reason:
-            status === "cancelled" ? "Cancelled from lab screen" : undefined,
-        }),
-      });
-      await load();
-    } catch (err: any) {
-      setMessage(err.message || "Could not update lab order.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function uploadOrderDocument(order: any, file: File) {
-    const upload = new FormData();
-    upload.append("file", file);
-    upload.append("branch_id", order.branch_id || branchId || "");
-    upload.append("patient_id", order.patient_id);
-    upload.append("category", "lab_report");
-    upload.append("source_module", "lab");
-    upload.append("attached_to_doctype", "LabOrder");
-    upload.append("attached_to_name", order.id);
-    upload.append("attached_to_field", "report_url");
-    upload.append("attached_to_label", "Lab Report");
-    return apiUpload("/files", apiSession, upload);
-  }
-
-  async function addReportDocument(order: any, file: File | null) {
-    if (!file || !apiSession) return;
-    if ((reportDocuments[order.id] || []).length >= MAX_REPORT_DOCUMENTS) {
-      setMessage(
-        `Maximum ${MAX_REPORT_DOCUMENTS} documents allowed per report.`,
-      );
-      return;
-    }
-    setBusy(`report-${order.id}`);
-    setMessage("");
-    try {
-      const document = await uploadOrderDocument(order, file);
-      setReportDocuments((current) => ({
-        ...current,
-        [order.id]: [...(current[order.id] || []), document],
-      }));
-      setMessage(`Report uploaded: ${document.file_name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not upload report.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function replaceReportDocument(
-    order: any,
-    oldDocument: any,
-    file: File | null,
-  ) {
-    if (!file || !apiSession) return;
-    setBusy(`report-${order.id}`);
-    setMessage("");
-    try {
-      const document = await uploadOrderDocument(order, file);
-      if (oldDocument?.id) {
-        try {
-          await apiFetch(`/files/${oldDocument.id}`, apiSession, {
-            method: "DELETE",
-          });
-        } catch (_) {
-          // Lab roles may not hold files.delete — the new document still
-          // becomes the active one even if the stale file can't be purged.
-        }
-      }
-      setReportDocuments((current) => ({
-        ...current,
-        [order.id]: (current[order.id] || []).map((doc: any) =>
-          doc.id === oldDocument?.id ? document : doc,
-        ),
-      }));
-      setMessage(`Report replaced: ${document.file_name}`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not replace report.");
-    } finally {
-      setBusy("");
-    }
-  }
-
   function handleReuploadReport(order: any) {
     const docs = reportDocuments[order.id] || [];
     if (docs.length > 1) {
@@ -700,105 +379,6 @@ export function Lab({
     if ((reportDocuments[order.id] || []).length >= MAX_REPORT_DOCUMENTS)
       return;
     pickReportFile((file) => addReportDocument(order, file));
-  }
-
-  async function releaseResult(order: any) {
-    setBusy(order.id);
-    setMessage("");
-    const reportDocument = (reportDocuments[order.id] || [])[0];
-    try {
-      await apiFetch(`/lab/orders/${order.id}/results`, apiSession, {
-        method: "POST",
-        body: JSON.stringify({
-          template_id: templates[0]?.id || null,
-          result_summary: "Result released from MedizinHub lab screen.",
-          abnormal_flag: false,
-          report_url: reportDocument?.file_url || null,
-          report_file_name: reportDocument?.file_name || null,
-          released_by_user_id: apiSession.user?.id,
-        }),
-      });
-      await load();
-      setMessage(
-        "Lab result released and notification queued when provider settings allow.",
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not release result.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function openReport(order: any) {
-    setBusy(order.id);
-    const docs = reportDocuments[order.id] || [];
-
-    try {
-      // Case 1: Single document → direct download
-      if (docs.length === 1) {
-        const doc = docs[0];
-        const blob = await apiBlob(`/files/${doc.id}/download`, apiSession);
-        downloadBlob(blob, doc.file_name || `lab-report-${order.id}`);
-        return;
-      }
-
-      // Case 2: Multiple documents → download as ZIP
-      if (docs.length > 1) {
-        const zipBlob = await apiBlob(
-          `/lab/orders/${order.id}/reports.zip`,
-          apiSession,
-        );
-        downloadBlob(zipBlob, `lab-reports-${order.id}.zip`);
-        return;
-      }
-
-      // Fallback: No documents → try backend-generated PDF
-      const blob = await apiBlob(
-        `/lab/orders/${order.id}/report.pdf`,
-        apiSession,
-      );
-      downloadBlob(blob, `lab-report-${order.id}.pdf`);
-    } catch (err: any) {
-      setMessage(err.message || "Could not download report.");
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function generateInvoice(order: any) {
-    setBusy(`invoice-${order.id}`);
-    setMessage("");
-    try {
-      const detail = await apiFetch(
-        "/billing/invoices/from-lab-order",
-        apiSession,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            lab_order_id: order.id,
-            created_by_user_id: apiSession.user?.id,
-          }),
-        },
-      );
-      setLocalInvoicedOrderIds((ids) =>
-        ids.includes(order.id) ? ids : [...ids, order.id],
-      );
-      if (detail.invoice?.id) {
-        setLocalInvoiceIdsByOrder((current) => ({
-          ...current,
-          [order.id]: detail.invoice.id,
-        }));
-      }
-      await load();
-      await loadLiveData?.(apiSession);
-      setMessage(
-        `Lab invoice ${detail.invoice?.invoice_number || ""} generated.`,
-      );
-    } catch (err: any) {
-      setMessage(err.message || "Could not generate lab invoice.");
-    } finally {
-      setBusy("");
-    }
   }
 
   function viewInvoice(order: any) {
@@ -815,30 +395,10 @@ export function Lab({
     if (action === "release") return releaseResult(order);
     if (action === "invoice") return generateInvoice(order);
     if (action === "view-invoice") return viewInvoice(order);
-    if (action === "pdf") return openReport(order);
+    if (action === "pdf") return openReport(order, downloadBlob);
     if (action === "cancel") return updateStatus(order, "cancelled");
   }
 
-  async function loadConsultDetail(a: any) {
-    setViewConsult(a);
-    if (a.referrals?.length) {
-      setConsultDetail({ referrals: a.referrals });
-      return;
-    }
-    setConsultDetail(null);
-    setLoadingDetail(true);
-    try {
-      const detail = await apiFetch(
-        `/consultations/${a.consultationId}`,
-        apiSession,
-      );
-      setConsultDetail(detail);
-    } catch (err: any) {
-      setMessage(err.message || "Could not load consultation.");
-    } finally {
-      setLoadingDetail(false);
-    }
-  }
   const worklistColumns: Column<any>[] = [
     {
       key: "index",

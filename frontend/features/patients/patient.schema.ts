@@ -53,12 +53,15 @@ export const patientSchema = z
     address: z.string().trim().min(1, "Address is required"),
 
     status: z.string().optional(),
+
     whatsappConsentStatus: z.enum([
       "not_recorded",
       "opted_in",
       "opted_out",
     ]),
+
     whatsappConsentSource: z.string().optional(),
+
     whatsappPreferredLanguage: z.enum([
       "tenant_default",
       "en",
@@ -75,10 +78,24 @@ export const patientSchema = z
     ]),
   })
   .superRefine((values, context) => {
+    const mobile = values.mobile?.trim();
+    const alternateMobile = values.alternateMobile?.trim();
+
+    // At least one contact number is required
+    if (!mobile && !alternateMobile) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["mobile"],
+        message:
+          "Mobile number or alternate mobile number is required",
+      });
+    }
+
+    // Prevent same number in both fields
     if (
-      values.mobile &&
-      values.alternateMobile &&
-      values.mobile === values.alternateMobile
+      mobile &&
+      alternateMobile &&
+      mobile === alternateMobile
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,

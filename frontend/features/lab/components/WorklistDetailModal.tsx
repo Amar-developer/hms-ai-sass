@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { Card, ActionButton, Button } from "@/app/components/common/ui";
 import { displayDateTime } from "@/utils/helper";
-import { apiFetch } from "@/lib/api";
+import { useLabOrderDetail } from "../api";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
@@ -27,26 +27,10 @@ export function WorklistDetailModal({
   packages = [],
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const [detail, setDetail] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setLoadError("");
-    apiFetch(`/lab/orders/${id}`, apiSession, { signal: controller.signal })
-      .then(setDetail)
-      .catch((error: any) => {
-        if (error?.name !== "AbortError") {
-          setLoadError(error?.message || "Could not load order prices.");
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [apiSession, id]);
+  const { detail, loading, loadError } = useLabOrderDetail({
+    apiSession,
+    orderId: id,
+  });
 
   const pricedItems = useMemo(() => {
     if (Array.isArray(detail?.items) && detail.items.length > 0) {

@@ -1,11 +1,30 @@
 import { displayDateTime, money } from "@/utils/helper";
-import { claimedDetail, formatPercentage, invoiceDiscountParts, invoiceHasAppliedMembershipBenefit, invoiceItemPriceBreakdown, invoiceLinkedRecord, invoiceMembershipLabel, invoiceSource, invoiceTaxAdjustedDiscount, isMembershipPlanInvoice, itemTypeLabel, numberValue, percentLabel } from "../helpers";
+import {
+  claimedDetail,
+  formatPercentage,
+  invoiceDiscountParts,
+  invoiceHasAppliedMembershipBenefit,
+  invoiceItemPriceBreakdown,
+  invoiceLinkedRecord,
+  invoiceMembershipLabel,
+  invoiceSource,
+  invoiceTaxAdjustedDiscount,
+  isMembershipPlanInvoice,
+  itemTypeLabel,
+  numberValue,
+  percentLabel,
+} from "../helpers";
 import { useEffect, useState } from "react";
 import { humanizeOptionLabel } from "@/lib/options";
 import { Input, SearchableSelect } from "@/app/components/common/ui";
 import { BillLine } from "./BillLine";
 import { InvoiceMeta } from "./InvoiceMeta";
-import { Badge,ActionButton,ActionGroup,Card } from "@/app/components/common/ui";
+import {
+  Badge,
+  ActionButton,
+  ActionGroup,
+  Card,
+} from "@/app/components/common/ui";
 import { ActivityLog } from "@/app/components/common/ActivityLog";
 import {
   canCopyDatabaseIds,
@@ -55,8 +74,8 @@ export function InvoiceDetailPage({
   const hasPermission = (...keys: string[]) =>
     Boolean(
       currentUser?.is_super_admin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const currentUserRoles = Array.isArray(currentUser?.roles)
     ? currentUser.roles
@@ -67,27 +86,21 @@ export function InvoiceDetailPage({
     currentUserRoles.includes("tenant_admin") ||
     currentUserRoles.includes("super_admin");
   const canEditInvoices = hasPermission("billing.manage", "invoices.edit");
-  const canRequestDiscountPermission = hasPermission(
-    "billing.discounts.request",
-  ) || isTenantBillingAdmin;
-  const canRequestRefundPermission = hasPermission(
-    "billing.refunds.request",
-  ) || isTenantBillingAdmin;
-  const canRequestCancelPermission = hasPermission(
-    "invoices.cancel_request",
-  ) || isTenantBillingAdmin;
-  const canRecordPayments = hasPermission(
-    "payments.manage",
-    "payments.create",
-  );
+  const canRequestDiscountPermission =
+    hasPermission("billing.discounts.request") || isTenantBillingAdmin;
+  const canRequestRefundPermission =
+    hasPermission("billing.refunds.request") || isTenantBillingAdmin;
+  const canRequestCancelPermission =
+    hasPermission("invoices.cancel_request") || isTenantBillingAdmin;
+  const canRecordPayments = hasPermission("payments.manage", "payments.create");
   const source = invoiceSource(invoice);
   const isMembershipInvoice = isMembershipPlanInvoice(invoice);
   const sourceUsesVendor = Boolean(
     invoice.consultation_id ||
-      invoice.appointment_id ||
-      invoice.home_care_booking_id ||
-      invoice.lab_order_id ||
-      invoice.pharmacy_issue_id,
+    invoice.appointment_id ||
+    invoice.home_care_booking_id ||
+    invoice.lab_order_id ||
+    invoice.pharmacy_issue_id,
   );
   const showItemVendor =
     !isMembershipInvoice &&
@@ -105,9 +118,9 @@ export function InvoiceDetailPage({
     );
   const isConsultationInvoice = Boolean(
     (invoice.consultation_id || invoice.appointment_id) &&
-      !invoice.lab_order_id &&
-      !invoice.pharmacy_issue_id &&
-      !invoice.home_care_booking_id,
+    !invoice.lab_order_id &&
+    !invoice.pharmacy_issue_id &&
+    !invoice.home_care_booking_id,
   );
   const vendorLabel = isConsultationInvoice ? "Doctor" : "Vendor";
   const vendorPriceLabel = isConsultationInvoice
@@ -170,14 +183,15 @@ export function InvoiceDetailPage({
   const invoiceDeliveryPending = ["queued", "processing"].includes(
     invoiceDeliveryStatus,
   );
-  const invoiceDeliveryLabel = {
-    not_sent: "Not sent",
-    queued: "Queued",
-    processing: "Sending",
-    sent: "Sent",
-    failed: "Failed",
-    cancelled: "Cancelled",
-  }[invoiceDeliveryStatus] || humanizeOptionLabel(invoiceDeliveryStatus);
+  const invoiceDeliveryLabel =
+    {
+      not_sent: "Not sent",
+      queued: "Queued",
+      processing: "Sending",
+      sent: "Sent",
+      failed: "Failed",
+      cancelled: "Cancelled",
+    }[invoiceDeliveryStatus] || humanizeOptionLabel(invoiceDeliveryStatus);
   const canSendInvoice =
     canEditInvoices &&
     String(invoice.status || "").toLowerCase() === "paid" &&
@@ -419,7 +433,9 @@ export function InvoiceDetailPage({
                         ? "blue"
                         : invoice.status === "partially_paid"
                           ? "amber"
-                          : "slate"
+                          : invoice.status == "cancelled"
+                            ? "red"
+                            : "slate"
                   }
                   className="normal-badge"
                 >
@@ -507,11 +523,19 @@ export function InvoiceDetailPage({
                 >
                   <thead className="bg-slate-100 text-[11px] font-medium text-slate-500">
                     <tr>
-                      <th className="w-12 border-r border-slate-200 px-3 py-2 text-center">No.</th>
-                      <th className="min-w-52 border-r border-slate-200 px-3 py-2">Item</th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">Quantity</th>
+                      <th className="w-12 border-r border-slate-200 px-3 py-2 text-center">
+                        No.
+                      </th>
+                      <th className="min-w-52 border-r border-slate-200 px-3 py-2">
+                        Item
+                      </th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">
+                        Quantity
+                      </th>
                       {showItemVendor && (
-                        <th className="min-w-36 border-r border-slate-200 px-3 py-2">{vendorLabel}</th>
+                        <th className="min-w-36 border-r border-slate-200 px-3 py-2">
+                          {vendorLabel}
+                        </th>
                       )}
                       {showItemVendor && (
                         <th className="border-r border-slate-200 px-3 py-2 text-right">
@@ -519,10 +543,16 @@ export function InvoiceDetailPage({
                         </th>
                       )}
                       {showItemPricing && (
-                        <th className="border-r border-slate-200 px-3 py-2 text-right">MRP</th>
+                        <th className="border-r border-slate-200 px-3 py-2 text-right">
+                          MRP
+                        </th>
                       )}
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">Rate (INR)</th>
-                      <th className="border-r border-slate-200 px-3 py-2 text-right">Discount %</th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">
+                        Rate (INR)
+                      </th>
+                      <th className="border-r border-slate-200 px-3 py-2 text-right">
+                        Discount %
+                      </th>
                       <th className="border-r border-slate-200 px-3 py-2 text-right">
                         Discount amount
                       </th>
@@ -561,7 +591,10 @@ export function InvoiceDetailPage({
                           ? numberValue(itemSupplierOptions[0].buying_price)
                           : 0);
                       return (
-                        <tr key={item.id} className="align-middle hover:bg-slate-50/70">
+                        <tr
+                          key={item.id}
+                          className="align-middle hover:bg-slate-50/70"
+                        >
                           <td className="border-r border-t border-slate-200 px-3 py-2.5 text-center tabular-nums text-slate-600">
                             {index + 1}
                           </td>
@@ -666,7 +699,7 @@ export function InvoiceDetailPage({
               ) : null}
             </div>
 
-            <aside className="rounded-lg border border-slate-200 bg-white">
+            <aside className="rounded-lg border mt-3 border-slate-200 bg-white">
               <div className="border-b border-slate-200 px-4 py-4">
                 <h4 className="card-title font-bold">Payment Summary</h4>
                 <p className="card-desc text-slate-500">
@@ -802,7 +835,7 @@ export function InvoiceDetailPage({
                     </div>
                   </div>
                   {canCollectPayment ? (
-                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="rounded-2xl my-3 border border-slate-200 bg-white p-4">
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-bold text-slate-900">
@@ -940,13 +973,17 @@ export function InvoiceDetailPage({
                       className={`rounded-lg border p-3 text-xs ${
                         invoiceDeliveryStatus === "sent"
                           ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                          : ["failed", "cancelled"].includes(invoiceDeliveryStatus)
+                          : ["failed", "cancelled"].includes(
+                                invoiceDeliveryStatus,
+                              )
                             ? "border-red-200 bg-red-50 text-red-900"
                             : "border-amber-200 bg-amber-50 text-amber-900"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3 mt-2">
-                        <span className="font-bold">Patient invoice delivery</span>
+                        <span className="font-bold">
+                          Patient invoice delivery
+                        </span>
                         <Badge
                           tone={
                             invoiceDeliveryStatus === "sent"
@@ -969,28 +1006,35 @@ export function InvoiceDetailPage({
                       )}
                       {Number(invoiceDelivery.attempt_count || 0) > 0 && (
                         <p className="mt-1 opacity-80">
-                          Attempt {invoiceDelivery.attempt_count} of {invoiceDelivery.max_attempts}
+                          Attempt {invoiceDelivery.attempt_count} of{" "}
+                          {invoiceDelivery.max_attempts}
                         </p>
                       )}
                       {invoiceDeliveries.length > 0 && (
                         <div className="mt-3 border-t border-current/15 pt-2">
                           <p className="mb-1 font-bold">Recent deliveries</p>
-                          {invoiceDeliveries.slice(0, 5).map((delivery: any) => (
-                            <div
-                              key={delivery.delivery_id || delivery.id}
-                              className="flex justify-between gap-3 py-0.5"
-                            >
-                              <span>
-                                {humanizeOptionLabel(delivery.channel || "whatsapp")}
-                                {delivery.artifact_version
-                                  ? ` · PDF v${delivery.artifact_version}`
-                                  : ""}
-                              </span>
-                              <span className="font-bold">
-                                {humanizeOptionLabel(delivery.status || "queued")}
-                              </span>
-                            </div>
-                          ))}
+                          {invoiceDeliveries
+                            .slice(0, 5)
+                            .map((delivery: any) => (
+                              <div
+                                key={delivery.delivery_id || delivery.id}
+                                className="flex justify-between gap-3 py-0.5"
+                              >
+                                <span>
+                                  {humanizeOptionLabel(
+                                    delivery.channel || "whatsapp",
+                                  )}
+                                  {delivery.artifact_version
+                                    ? ` · PDF v${delivery.artifact_version}`
+                                    : ""}
+                                </span>
+                                <span className="font-bold">
+                                  {humanizeOptionLabel(
+                                    delivery.status || "queued",
+                                  )}
+                                </span>
+                              </div>
+                            ))}
                         </div>
                       )}
                     </div>
@@ -1005,7 +1049,9 @@ export function InvoiceDetailPage({
                         }
                       >
                         <ButtonLoader
-                          loading={busy === `send-invoice-whatsapp-${invoice.id}`}
+                          loading={
+                            busy === `send-invoice-whatsapp-${invoice.id}`
+                          }
                         >
                           {busy === `send-invoice-whatsapp-${invoice.id}`
                             ? "Sending Invoice..."
@@ -1073,7 +1119,9 @@ export function InvoiceDetailPage({
                             numberValue(invoice.paid_amount) > 0
                           }
                         >
-                          <ButtonLoader loading={busy === `cancel-${invoice.id}`}>
+                          <ButtonLoader
+                            loading={busy === `cancel-${invoice.id}`}
+                          >
                             {busy === `cancel-${invoice.id}`
                               ? "Cancelling..."
                               : "Cancel"}
@@ -1084,7 +1132,9 @@ export function InvoiceDetailPage({
                           onClick={() => amendInvoice?.(invoice)}
                           disabled={busy === `amend-${invoice.id}`}
                         >
-                          <ButtonLoader loading={busy === `amend-${invoice.id}`}>
+                          <ButtonLoader
+                            loading={busy === `amend-${invoice.id}`}
+                          >
                             {busy === `amend-${invoice.id}`
                               ? "Amending..."
                               : "Amend"}
@@ -1258,7 +1308,8 @@ export function InvoiceDetailPage({
                           </Badge>
                         </td>
                         <td className="px-4 py-3">
-                          {canDecideAdjustment(row) && row.status === "pending" ? (
+                          {canDecideAdjustment(row) &&
+                          row.status === "pending" ? (
                             <ActionGroup>
                               <ActionButton
                                 onClick={() => approveAdjustment?.(row)}
@@ -1403,7 +1454,11 @@ export function InvoiceDetailPage({
           )}
         </div>
       </Card>
-      <ActivityLog resourceType="invoice" resourceId={invoice?.id} apiSession={apiSession} />
+      <ActivityLog
+        resourceType="invoice"
+        resourceId={invoice?.id}
+        apiSession={apiSession}
+      />
     </div>
   );
 }

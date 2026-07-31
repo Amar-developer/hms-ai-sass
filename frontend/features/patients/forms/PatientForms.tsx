@@ -10,11 +10,19 @@ import { paymentMethodOptions } from "@/lib/options";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateAgeYears,
+  calculateDobFromAge,
   patientDateInputValue,
   patientField,
   todayInputValue,
 } from "../helpers";
-import { bloodGroups, genders, statusOptions } from "../constants";
+import {
+  bloodGroups,
+  genders,
+  language_options,
+  source_options,
+  statusOptions,
+  whatsup_options,
+} from "../constants";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PatientFormValues, patientSchema } from "../patient.schema";
@@ -95,6 +103,7 @@ export function PatientForm({
     },
   });
   const today = todayInputValue();
+  const updatingFromAge = useRef(false);
 
   const branchOptions = useMemo(() => {
     const selectedBranchId = watch("branchId");
@@ -210,8 +219,16 @@ export function PatientForm({
       skipFirstDobEffect.current = false;
       return;
     }
+
+    if (updatingFromAge.current) {
+      updatingFromAge.current = false;
+      return;
+    }
+
     if (!dateOfBirth) {
-      setValue("ageYears", "");
+      setValue("ageYears", "", {
+        shouldDirty: true,
+      });
       return;
     }
 
@@ -317,10 +334,33 @@ export function PatientForm({
           <Input
             type="number"
             min="0"
-            max="130"
+            max="100"
             placeholder="Age"
-            {...register("ageYears")}
+            {...register("ageYears", {
+              onChange: (e) => {
+                const age = e.target.value;
+
+                if (!age) {
+                  setValue("dateOfBirth", "", {
+                    shouldDirty: true,
+                  });
+                  return;
+                }
+
+                const numericAge = Number(age);
+
+                if (numericAge >= 0 && numericAge <= 100) {
+                  updatingFromAge.current = true;
+
+                  setValue("dateOfBirth", calculateDobFromAge(numericAge), {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  });
+                }
+              },
+            })}
           />
+
           <FormError error={errors.ageYears?.message} />
         </FormField>
         <FormField label="Guardian Name">
@@ -347,7 +387,9 @@ export function PatientForm({
             })}
             placeholder="Enter shared family contact number"
           />
+
           <FormError error={errors.alternateMobile?.message} />
+
           <p className="mt-1 text-[11px] text-slate-500">
             A family member&apos;s existing mobile number can be used here.
           </p>
@@ -360,11 +402,7 @@ export function PatientForm({
           <SearchableSelect
             value={whatsappConsentStatus}
             searchable={false}
-            options={[
-              { value: "not_recorded", label: "Not recorded" },
-              { value: "opted_in", label: "Patient opted in" },
-              { value: "opted_out", label: "Patient opted out" },
-            ]}
+            options={whatsup_options}
             onChange={(value) => {
               setValue("whatsappConsentStatus", value as any, {
                 shouldDirty: true,
@@ -387,13 +425,7 @@ export function PatientForm({
             <SearchableSelect
               value={watch("whatsappConsentSource") || ""}
               searchable={false}
-              options={[
-                { value: "", label: "Select source" },
-                { value: "patient_verbal", label: "Patient verbal" },
-                { value: "patient_written", label: "Patient written" },
-                { value: "digital", label: "Digital consent" },
-                { value: "imported", label: "Imported record" },
-              ]}
+              options={source_options}
               onChange={(value) =>
                 setValue("whatsappConsentSource", value, {
                   shouldDirty: true,
@@ -408,10 +440,7 @@ export function PatientForm({
           <SearchableSelect
             value={watch("whatsappPreferredLanguage")}
             searchable={false}
-            options={[
-              { value: "en", label: "English (default)" },
-              { value: "ta", label: "Tamil" },
-            ]}
+            options={language_options}
             onChange={(value) =>
               setValue("whatsappPreferredLanguage", value as any, {
                 shouldDirty: true,
@@ -482,9 +511,7 @@ export function MembershipEnrollForm({
   const activePlans = membershipPlans.filter((plan: any) => plan.is_active);
   const [planId, setPlanId] = useState("");
   const [branchId, setBranchId] = useState(patient?.branch_id || "");
-  const [startsOn, setStartsOn] = useState(
-    todayInputValue(),
-  );
+  const [startsOn, setStartsOn] = useState(todayInputValue());
   const [paidAmount, setPaidAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const selectedPlan = activePlans.find((plan: any) => plan.id === planId);
