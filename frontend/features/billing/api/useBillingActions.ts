@@ -15,16 +15,20 @@ import {
   createInvoicePayment,
   executeInvoiceAdjustmentRequest,
   fetchInvoiceDelivery,
+  fetchInvoiceDeliveries,
   fetchInvoiceDetail,
+  fetchInvoiceDocument,
   fetchInvoiceItemSupplierOptions,
   finalizeDoctorSettlement,
+  finalizeInvoiceDocument,
+  regenerateInvoiceDocument as regenerateInvoiceDocumentRequest,
   reviewInvoiceAdjustmentRequest,
+  sendInvoiceDocument,
   updateInvoiceItemSupplierRequest,
   updateInvoiceLifecycle,
-  uploadInvoiceForDelivery,
 } from "./billing.api";
 
-const MAX_INVOICE_PDF_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_INVOICE_PDF_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 export function useBillingActions(
   session: ApiSession | null | undefined,
@@ -103,7 +107,18 @@ export function useBillingActions(
       const delivery = await fetchInvoiceDelivery(session, invoice.id).catch(
         () => ({ status: "not_sent" }),
       );
-      setDetail({ ...row, invoice_delivery: delivery });
+      const document = await fetchInvoiceDocument(session, invoice.id).catch(
+        () => ({ exists: false }),
+      );
+      const deliveries = await fetchInvoiceDeliveries(session, invoice.id).catch(
+        () => [],
+      );
+      setDetail({
+        ...row,
+        invoice_delivery: delivery,
+        invoice_deliveries: deliveries,
+        invoice_document: document,
+      });
       await loadInvoiceSupplierOptions(row);
     } catch (err: any) {
       setMessage(err.message || "Could not load invoice details.");
@@ -134,43 +149,118 @@ export function useBillingActions(
     }
   }
 
-  async function sendInvoice(invoice: any, automatic = false) {
+  async function sendInvoice(
+    invoice: any,
+    automatic = false,
+    channel: "whatsapp" | "email" = "whatsapp",
+  ) {
     if (!session || !invoice?.id) return null;
     if (!automatic) {
-      setBusy(`send-invoice-${invoice.id}`);
+      setBusy(`send-invoice-${channel}-${invoice.id}`);
       setMessage("");
     }
     try {
-      const { blob, filename } = await createInvoiceReceiptPdf(
-        invoice.id,
-        session,
-      );
-      if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
-        throw new Error(
-          `The generated invoice PDF is ${(blob.size / (1024 * 1024)).toFixed(1)} MB. The maximum allowed size is 10 MB.`,
+      let artifact = await fetchInvoiceDocument(session, invoice.id);
+      if (!artifact?.exists) {
+        const { blob, filename } = await createInvoiceReceiptPdf(
+          invoice.id,
+          session,
         );
+        if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
+          throw new Error(
+            `The generated invoice PDF is ${(blob.size / (1024 * 1024)).toFixed(1)} MB. The maximum allowed size is 5 MB.`,
+          );
+        }
+        const form = new FormData();
+        form.append("file", blob, filename);
+        artifact = await finalizeInvoiceDocument(session, invoice.id, form);
       }
-      const form = new FormData();
-      form.append("file", blob, filename);
-      const result = await uploadInvoiceForDelivery(session, invoice.id, form);
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `invoice-send-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const result = await sendInvoiceDocument(session, invoice.id, {
+        channel,
+        idempotency_key: idempotencyKey,
+      });
+      const deliveries = await fetchInvoiceDeliveries(
+        session,
+        invoice.id,
+      ).catch(() => []);
       setDetail((current: any) =>
         current?.invoice?.id === invoice.id
-          ? { ...current, invoice_delivery: result }
+          ? {
+              ...current,
+              ...(channel === "whatsapp" ? { invoice_delivery: result } : {}),
+              invoice_deliveries: deliveries,
+              invoice_document: result?.artifact || artifact,
+            }
           : current,
       );
       if (!automatic) {
         setMessage(
           result?.message ||
-            `Invoice ${invoice.invoice_number} queued for delivery.`,
+            `Invoice ${invoice.invoice_number} queued for ${channel} delivery.`,
         );
       }
       return result;
     } catch (err: any) {
+      if (
+        automatic &&
+        Number(err?.status) === 503 &&
+        String(err?.detail || err?.message || "").includes(
+          "Permanent invoice delivery is temporarily disabled",
+        )
+      ) {
+        return { disabled: true };
+      }
       if (automatic) throw err;
       setMessage(err.message || "Could not send the invoice.");
       return null;
     } finally {
       if (!automatic) setBusy("");
+    }
+  }
+
+  async function regenerateInvoiceDocument(invoice: any, reason: string) {
+    if (!session || !invoice?.id) return;
+    setBusy(`regenerate-invoice-${invoice.id}`);
+    setMessage("");
+    try {
+      const current = await fetchInvoiceDocument(session, invoice.id);
+      if (!current?.exists) {
+        throw new Error("Finalize the invoice before regenerating its PDF.");
+      }
+      const { blob, filename } = await createInvoiceReceiptPdf(
+        invoice.id,
+        session,
+      );
+      if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
+        throw new Error("The regenerated invoice PDF exceeds the 5 MB limit.");
+      }
+      const form = new FormData();
+      form.append("file", blob, filename);
+      form.append("reason", reason);
+      form.append("expected_version", String(current.version));
+      const artifact = await regenerateInvoiceDocumentRequest(
+        session,
+        invoice.id,
+        form,
+      );
+      setDetail((value: any) =>
+        value?.invoice?.id === invoice.id
+          ? { ...value, invoice_document: artifact }
+          : value,
+      );
+      setMessage(
+        `Invoice PDF regenerated as version ${artifact.version}. Existing queued deliveries still use their original version.`,
+      );
+      return true;
+    } catch (err: any) {
+      setMessage(err.message || "Could not regenerate the invoice PDF.");
+      return false;
+    } finally {
+      setBusy("");
     }
   }
 
@@ -202,9 +292,11 @@ export function useBillingActions(
         Number(paymentResult?.invoice?.balance_amount || 0) <= 0
       ) {
         try {
-          await sendInvoice(paymentResult.invoice, true);
+          const delivery = await sendInvoice(paymentResult.invoice, true);
           setMessage(
-            `Payment recorded and invoice ${invoice.invoice_number} queued for delivery.`,
+            delivery?.disabled
+              ? "Payment recorded. Automatic invoice delivery is temporarily disabled."
+              : `Payment recorded and invoice ${invoice.invoice_number} queued for delivery.`,
           );
         } catch (deliveryError: any) {
           setMessage(
@@ -269,9 +361,11 @@ export function useBillingActions(
         Number(paymentResult?.invoice?.balance_amount || 0) <= 0
       ) {
         try {
-          await sendInvoice(paymentResult.invoice, true);
+          const delivery = await sendInvoice(paymentResult.invoice, true);
           setMessage(
-            `Recorded ${money(total)} (${modes}); invoice queued for delivery.`,
+            delivery?.disabled
+              ? `Recorded ${money(total)} (${modes}); automatic invoice delivery is temporarily disabled.`
+              : `Recorded ${money(total)} (${modes}); invoice queued for delivery.`,
           );
         } catch (deliveryError: any) {
           setMessage(
@@ -493,6 +587,7 @@ export function useBillingActions(
     detailLoading,
     generateInvoice,
     sendInvoice,
+    regenerateInvoiceDocument,
     openInvoiceDetail,
     collectPayment,
     collectSplitPayment,

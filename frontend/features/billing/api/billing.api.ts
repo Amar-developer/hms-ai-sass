@@ -43,15 +43,56 @@ export function createInvoiceFromConsultation(
   });
 }
 
-export function uploadInvoiceForDelivery(
+export function fetchInvoiceDocument(session: ApiSession, invoiceId: string) {
+  return apiFetch(
+    `/billing/invoices/${encodeURIComponent(invoiceId)}/document`,
+    session,
+  );
+}
+
+export function finalizeInvoiceDocument(
   session: ApiSession,
   invoiceId: string,
   form: FormData,
 ) {
   return apiUpload(
-    `/billing/invoices/${encodeURIComponent(invoiceId)}/send`,
+    `/billing/invoices/${encodeURIComponent(invoiceId)}/document/finalize`,
     session,
     form,
+  );
+}
+
+export function regenerateInvoiceDocument(
+  session: ApiSession,
+  invoiceId: string,
+  form: FormData,
+) {
+  return apiUpload(
+    `/billing/invoices/${encodeURIComponent(invoiceId)}/document/regenerate`,
+    session,
+    form,
+  );
+}
+
+export function fetchInvoiceDeliveries(session: ApiSession, invoiceId: string) {
+  return apiFetch(
+    `/billing/invoices/${encodeURIComponent(invoiceId)}/deliveries`,
+    session,
+  );
+}
+
+export function sendInvoiceDocument(
+  session: ApiSession,
+  invoiceId: string,
+  payload: { channel: "whatsapp" | "email"; idempotency_key: string },
+) {
+  return apiFetch(
+    `/billing/invoices/${encodeURIComponent(invoiceId)}/send`,
+    session,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
   );
 }
 

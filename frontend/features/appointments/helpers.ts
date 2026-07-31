@@ -24,9 +24,6 @@ export function parseIntakeVitalsText(vitals: string) {
   return byName;
 }
 
-
-
-
 export function appointmentStatusInfo(appointment: any) {
   const consult = String(
     appointment.consultationStatus || appointment.consultation_status || "",
@@ -35,30 +32,102 @@ export function appointmentStatusInfo(appointment: any) {
   const queue = String(
     appointment.queueStatus || appointment.queue_status || "",
   ).toLowerCase();
-  if (status === "cancelled" || status === "no_show" || queue === "cancelled")
+
+  // Cancelled
+  if (status === "cancelled" || status === "no_show" || queue === "cancelled") {
     return {
       key: "cancelled",
       label: "Cancelled",
       tone: "red" as const,
-      order: 1,
+      order: 6,
     };
+  }
+
+  // Completed
   if (
     consult === "signed" ||
     status === "consultation_completed" ||
     status === "billed" ||
     queue === "completed" ||
     queue === "consultation_completed"
-  )
+  ) {
     return {
-      key: "completed",
+      key: "consultation_completed",
       label: "Completed",
       tone: "green" as const,
+      order: 5,
+    };
+  }
+
+  // In Consultation
+  if (
+    queue === "in_consultation" ||
+    consult === "in_consultation" ||
+    status === "in_consultation"
+  ) {
+    return {
+      key: "in_consultation",
+      label: "In Consultation",
+      tone: "blue" as const,
+      order: 4,
+    };
+  }
+
+  // Called
+  if (queue === "called" || status === "called") {
+    return {
+      key: "called",
+      label: "Called",
+      tone: "amber" as const,
+      order: 3,
+    };
+  }
+
+  // Requeued
+  if (queue === "requeued" || status === "requeued") {
+    return {
+      key: "requeued",
+      label: "Requeued",
+      tone: "orange" as const,
       order: 2,
     };
+  }
+
+  // Waiting (default)
+  if (
+    queue === "waiting" ||
+    status === "waiting" ||
+    (!queue && !consult && !status)
+  ) {
+    return {
+      key: "waiting",
+      label: "Waiting",
+      tone: "slate" as const,
+      order: 1,
+    };
+  }
+
+  // Fallback
   return {
     key: "active",
-    label: humanizeOptionLabel(queue || consult || status) || "Waiting",
+    label: humanizeOptionLabel(queue || consult || status) || "Active",
     tone: "slate" as const,
     order: 0,
   };
+}
+
+export function calculateBMI(weightKg: number, heightCm: number): number {
+  if (
+    !Number.isFinite(weightKg) ||
+    !Number.isFinite(heightCm) ||
+    weightKg <= 0 ||
+    heightCm <= 0
+  ) {
+    return 0;
+  }
+
+  const heightM = heightCm / 100;
+  const bmi = weightKg / (heightM * heightM);
+
+  return Number(bmi.toFixed(1));
 }

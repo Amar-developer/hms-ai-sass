@@ -106,11 +106,29 @@ export function Lab({
   const [localInvoiceIdsByOrder, setLocalInvoiceIdsByOrder] = useState<
     Record<string, string>
   >({});
-  const [selectedOrder, setSelectedOrder] =
-    useState<LabOrderSummary | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<LabOrderSummary | null>(
+    null,
+  );
   const [viewConsult, setViewConsult] = useState<any>(null);
   const [consultDetail, setConsultDetail] = useState<any>(null);
+  const [removeDocPicker, setRemoveDocPicker] = useState<{
+    order: any;
+    docs: any[];
+  } | null>(null);
 
+  function handleRemoveDocument(order: any) {
+    const docs = reportDocuments[order.id] || [];
+    if (docs.length === 0) return;
+
+    if (docs.length === 1) {
+      // Single document → remove directly
+      removeReportDocument(order, docs[0]);
+      return;
+    }
+
+    // Multiple documents → show picker
+    setRemoveDocPicker({ order, docs });
+  }
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -318,6 +336,7 @@ export function Lab({
     openReport,
     generateInvoice,
     loadConsultDetail,
+    removeReportDocument
   } = useLabActions({
     apiSession,
     branchId,
@@ -496,7 +515,7 @@ export function Lab({
     {
       key: "report",
       header: "Report",
-      className:'text-center',
+      className: "text-center",
       width: "170px",
       disableRowClick: true,
       render: (o) => {
@@ -510,7 +529,7 @@ export function Lab({
         return (
           <div className="relative group">
             <label
-              className={`flex cursor-pointer items-center justify-center rounded-2xl border px-3 py-3 text-xs font-bold transition-colors ${
+              className={`relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border px-3 py-3 text-xs font-bold transition-colors ${
                 disabled || isBusy
                   ? "cursor-not-allowed bg-slate-50 text-slate-300"
                   : hasDocuments
@@ -528,27 +547,38 @@ export function Lab({
                   if (file) addReportDocument(o, file);
                 }}
               />
-              {isBusy
-                ? "Uploading..."
-                : hasDocuments
-                  ? `File Uploaded (${docs.length})`
-                  : "Upload Report"}
+
+              {isBusy ? (
+                <div className="flex w-full flex-col items-center gap-1.5">
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Uploading...
+                  </span>
+                  {/* Indeterminate progress bar */}
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                    <div className="h-full w-1/2 animate-[progress_1.2s_ease-in-out_infinite] rounded-full bg-blue-500" />
+                  </div>
+                </div>
+              ) : hasDocuments ? (
+                `File Uploaded (${docs.length})`
+              ) : (
+                "Upload Report"
+              )}
             </label>
 
             {/* Tooltip */}
-            {hasDocuments && (
-              <div className="absolute hidden group-hover:block bg-white border border-slate-200 rounded-lg shadow-lg p-3 text-xs z-50 w-64 -top-2 left-1/2 -translate-x-1/2">
-                <div className="font-medium mb-2 text-slate-700">
+            {hasDocuments && !isBusy && (
+              <div className="absolute -top-2 left-1/2 z-50 hidden w-64 -translate-x-1/2 rounded-lg border border-slate-200 bg-white p-3 text-xs shadow-lg group-hover:block">
+                <div className="mb-2 font-medium text-slate-700">
                   Uploaded Documents
                 </div>
-                <ul className="space-y-1 max-h-48 overflow-auto">
+                <ul className="max-h-48 space-y-1 overflow-auto">
                   {docs.map((doc: any, idx: number) => (
                     <li
                       key={`${doc.id}-${idx}`}
                       className="flex justify-between text-slate-600"
                     >
                       <span>Document {idx + 1}</span>
-                      <span className="text-right truncate max-w-[140px]">
+                      <span className="max-w-[140px] truncate text-right">
                         {doc.file_name}
                       </span>
                     </li>
@@ -560,11 +590,10 @@ export function Lab({
         );
       },
     },
-
     {
       key: "action",
       header: "Action",
-      className:'text-center',
+      className: "text-center",
       width: "140px",
       disableRowClick: true,
       render: (o) => {
@@ -594,6 +623,17 @@ export function Lab({
                   disabled: actionsBusy || (!invoiced && cancelled),
                 },
                 {
+                  label: "Remove Document",
+                  onClick: () => handleRemoveDocument(o),
+                  disabled:
+                    actionsBusy ||
+                    released ||
+                    cancelled ||
+                    (reportDocuments[o.id] || []).length === 0,
+                  hidden: !canEditLabOrder,
+                  danger: true,
+                },
+                {
                   label: "Download Report",
                   onClick: () => handleOrderAction(o, "pdf"),
                   disabled: actionsBusy || cancelled,
@@ -602,12 +642,6 @@ export function Lab({
                   label: "Reupload Report",
                   onClick: () => handleReuploadReport(o),
                   disabled: actionsBusy || released || cancelled,
-                  hidden: !canEditLabOrder,
-                },
-                {
-                  label: canAddMore ? "Add Document" : "Max Documents Reached",
-                  onClick: () => handleAddDocument(o),
-                  disabled: actionsBusy || !canAddMore || released || cancelled,
                   hidden: !canEditLabOrder,
                 },
                 {
@@ -635,7 +669,7 @@ export function Lab({
       </Card>
     );
   return (
-    <div className="space-y-6">
+    <div className="">
       {selectedOrder && (
         <WorklistDetailModal
           title="Lab Test List"
@@ -655,9 +689,7 @@ export function Lab({
           invoiceGenerated={invoicedOrderIds.has(selectedOrder.id)}
           packages={packages}
           onGenerateInvoice={() => handleOrderAction(selectedOrder, "invoice")}
-          onViewInvoice={() =>
-            handleOrderAction(selectedOrder, "view-invoice")
-          }
+          onViewInvoice={() => handleOrderAction(selectedOrder, "view-invoice")}
         />
       )}
       {viewConsult && (
@@ -722,7 +754,7 @@ export function Lab({
           />
         </Card>
       )}
-      <Card>
+      <Card className="mt-3">
         <h3 className="card-title font-bold">Consultation Referrals</h3>
         <div className="mt-4 overflow-auto rounded-lg border border-slate-200">
           {(() => {
@@ -808,7 +840,7 @@ export function Lab({
           })()}
         </div>
       </Card>
-      <Card>
+      <Card className="mt-3">
         <div className="flex items-center justify-between gap-2">
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
           <RefreshButton onRefresh={load} />
@@ -862,6 +894,40 @@ export function Lab({
             <div className="flex justify-end mt-6">
               <Button
                 onClick={() => setReplaceDocPicker(null)}
+                variant="outline"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {removeDocPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="w-full max-w-md rounded-xl bg-white p-6">
+            <h3 className="mb-4 font-semibold">Choose document to remove</h3>
+            <div className="max-h-80 space-y-2 overflow-auto">
+              {removeDocPicker.docs.map((doc: any, idx: number) => (
+                <button
+                  key={`${doc.id}-${idx}`}
+                  type="button"
+                  onClick={() => {
+                    removeReportDocument(removeDocPicker.order, doc);
+                    setRemoveDocPicker(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left hover:bg-red-50"
+                >
+                  <span>Document {idx + 1}</span>
+                  <span className="truncate text-sm text-slate-500">
+                    {doc.file_name}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <Button
+                type="button"
+                onClick={() => setRemoveDocPicker(null)}
                 variant="outline"
               >
                 Cancel
