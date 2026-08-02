@@ -24,7 +24,7 @@ export function usePharmacyWorkspace(
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [lowStock, setLowStock] = useState<any[]>([]);
 
-  async function load() {
+  async function load(signal?: AbortSignal) {
     if (!session) {
       setIssues([]);
       return;
@@ -32,27 +32,31 @@ export function usePharmacyWorkspace(
     try {
       const [issueRows, medicineRows, batchRows, supplierRows, lowRows] =
         await Promise.all([
-          fetchPharmacyIssues(session),
-          fetchPharmacyMedicines(session),
-          fetchPharmacyBatches(session),
-          fetchPharmacySuppliers(session),
-          fetchLowStock(session, branchId),
+          fetchPharmacyIssues(session, signal),
+          fetchPharmacyMedicines(session, signal),
+          fetchPharmacyBatches(session, signal),
+          fetchPharmacySuppliers(session, signal),
+          fetchLowStock(session, branchId, signal),
         ]);
+      if (signal?.aborted) return;
       setIssues(issueRows);
       setMedicines(medicineRows);
       setBatches(batchRows);
       setSuppliers(supplierRows);
       setLowStock(lowRows);
     } catch (err: any) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       setMessage(err.message || "Could not load pharmacy workspace.");
     } finally {
-      setIssuesLoaded(true);
+      if (!signal?.aborted) setIssuesLoaded(true);
     }
   }
 
   useEffect(() => {
-    load();
-  }, [session?.tenantId]);
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [session?.tenantId, branchId]);
 
   return {
     issues,

@@ -22,6 +22,7 @@ from app.modules.identity.services.helpers import (
     assert_tenant_permission,
     ensure_permission,
     get_tenant_role_or_404,
+    invalidate_role_users,
     is_primary_tenant,
     normalize_role_key,
     permission_read,
@@ -249,6 +250,8 @@ class RoleService:
         self.roles.add(role)
         self.session.commit()
         self.session.refresh(role)
+        if "is_active" in updates:
+            invalidate_role_users(self.session, role.id)
         record_audit_event(
             self.session,
             tenant_id=tenant_id,
@@ -283,6 +286,7 @@ class RoleService:
         self.roles.add(role)
         self.session.commit()
         self.session.refresh(role)
+        invalidate_role_users(self.session, role.id)
         record_audit_event(
             self.session,
             tenant_id=tenant_id,
@@ -312,6 +316,7 @@ class RoleService:
         role.updated_at = now_utc()
         self.roles.add(role)
         self.session.commit()
+        invalidate_role_users(self.session, role.id)
         record_audit_event(
             self.session,
             tenant_id=tenant_id,

@@ -32,8 +32,8 @@ from app.modules.integrations.whatsapp_templates import resolve_template_identif
 from app.modules.integrations.whatsapp_consent import (
     patient_allows_whatsapp,
     patient_for_notification_resource,
+    patient_notification_destination,
     patient_notification_language,
-    patient_notification_mobile,
 )
 from app.modules.notifications.models import (
     DocumentDelivery,
@@ -56,6 +56,10 @@ logger = logging.getLogger("medizinhub.whatsapp")
 
 
 class NotificationCancelled(ValueError):
+    pass
+
+
+class NotificationRetryable(RuntimeError):
     pass
 
 
@@ -114,6 +118,13 @@ def _invoice_media(
     if row.storage_backend == "s3" and row.storage_key:
         try:
             backend = get_storage_backend_for_document(row)
+            stored = backend.head(key=row.storage_key)
+            if stored.size <= 0:
+                raise NotificationCancelled("The stored invoice PDF is empty.")
+            if stored.content_type and stored.content_type != "application/pdf":
+                raise NotificationCancelled(
+                    "The stored invoice artifact is not a PDF document."
+                )
             return (
                 backend.create_download_url(
                     key=row.storage_key,
@@ -121,9 +132,11 @@ def _invoice_media(
                 ),
                 row.file_name,
             )
+        except NotificationCancelled:
+            raise
         except Exception as exc:
-            raise NotificationCancelled(
-                "The stored invoice PDF could not be prepared for delivery."
+            raise NotificationRetryable(
+                "The stored invoice PDF is temporarily unavailable for delivery."
             ) from exc
     if not public_base_url:
         raise NotificationCancelled("The public receipt base URL is missing.")
@@ -475,10 +488,14 @@ def _delivery_recipient(session: Session, event: NotificationEvent) -> str:
         resource_type=event.resource_type or "",
         resource_id=event.resource_id or "",
     )
-    recipient = patient_notification_mobile(patient)
+    integration = get_tenant_plugin(session, event.tenant_id, "whatsapp")
+    config = decode_config(integration.config_json) if integration else {}
+    recipient = patient_notification_destination(
+        patient, str(config.get("default_country_code") or "+91")
+    )
     if not recipient:
         raise NotificationCancelled(
-            "The patient does not have a primary or alternate mobile number."
+            "The patient does not have a valid primary or alternate mobile number."
         )
     return recipient
 
@@ -579,6 +596,12 @@ def process_due_whatsapp_notifications(
             _save_result(session, event, result)
         except NotificationCancelled as exc:
             _cancel(session, event, str(exc))
+        except NotificationRetryable as exc:
+            _save_result(
+                session,
+                event,
+                WhatsAppGatewayResult(False, "send_failed", str(exc)),
+            )
         except ValueError as exc:
             _save_result(
                 session,

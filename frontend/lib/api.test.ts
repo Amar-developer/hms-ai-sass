@@ -12,6 +12,7 @@ import {
   uploadAssetUrl,
   type ApiSession,
 } from "./api";
+import { mapWithConcurrency } from "./concurrency";
 
 const session: ApiSession = {
   tenantId: "tenant-one",
@@ -47,6 +48,28 @@ describe("request timeouts", () => {
     const assertion = expect(request).rejects.toBeInstanceOf(RequestTimeoutError);
     await vi.advanceTimersByTimeAsync(50);
     await assertion;
+  });
+});
+
+describe("bounded API fan-out", () => {
+  it("never runs more than the requested number of record tasks", async () => {
+    let active = 0;
+    let peak = 0;
+    const rows = await mapWithConcurrency(
+      Array.from({ length: 20 }, (_, index) => index),
+      async (index) => {
+        active += 1;
+        peak = Math.max(peak, active);
+        await new Promise((resolve) => globalThis.setTimeout(resolve, 1));
+        active -= 1;
+        return index * 2;
+      },
+      3,
+    );
+
+    expect(peak).toBe(3);
+    expect(rows).toHaveLength(20);
+    expect(rows[19]).toBe(38);
   });
 });
 

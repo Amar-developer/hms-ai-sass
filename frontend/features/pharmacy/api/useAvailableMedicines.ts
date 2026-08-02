@@ -17,8 +17,14 @@ export function useAvailableMedicines(
       setAvailableMedicines([]);
       return undefined;
     }
-    let alive = true;
     const search = medicineSearch.trim();
+    if (search.length < 2) {
+      setAvailableMedicines([]);
+      setMedicineLoading(false);
+      return undefined;
+    }
+    let alive = true;
+    const controller = new AbortController();
     const timer = window.setTimeout(
       async () => {
         setMedicineLoading(true);
@@ -29,19 +35,22 @@ export function useAvailableMedicines(
           const rows = await fetchAvailableMedicines(
             session,
             params.toString() ? `?${params}` : "",
+            controller.signal,
           );
           if (alive) setAvailableMedicines(Array.isArray(rows) ? rows : []);
-        } catch {
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
           if (alive) setAvailableMedicines([]);
         } finally {
           if (alive) setMedicineLoading(false);
         }
       },
-      search ? 250 : 0,
+      250,
     );
     return () => {
       alive = false;
       window.clearTimeout(timer);
+      controller.abort();
     };
   }, [session, session?.tenantId, branchId, medicineSearch]);
 

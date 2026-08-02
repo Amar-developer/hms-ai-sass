@@ -173,6 +173,48 @@ def test_available_medicines_uses_external_graphql_catalog(test_engine, monkeypa
     assert rows[0]["source"] == "graphql"
 
 
+def test_local_available_medicines_applies_requested_page(monkeypatch):
+    from app.modules.pharmacy.services import catalog as pharmacy_catalog
+
+    captured = {}
+
+    class FakeRepository:
+        def __init__(self, _session):
+            pass
+
+        def list_active_medicines(self, **kwargs):
+            captured.update(kwargs)
+            return []
+
+    monkeypatch.setattr(
+        pharmacy_catalog, "enforce_module_enabled", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        pharmacy_catalog, "external_medicine_items_enabled", lambda *_args: False
+    )
+    monkeypatch.setattr(pharmacy_catalog, "PharmacyCatalogRepository", FakeRepository)
+    actor = User(
+        tenant_id="tenant_local_catalog",
+        user_type="tenant_admin",
+        name="Tenant Admin",
+        email="local-catalog@example.test",
+    )
+
+    rows = pharmacy_catalog.list_available_medicines_service(
+        object(),
+        tenant_id="tenant_local_catalog",
+        branch_id=None,
+        search="dolo",
+        page_size=10,
+        current_page=3,
+        actor=actor,
+    )
+
+    assert rows == []
+    assert captured["limit"] == 10
+    assert captured["offset"] == 20
+
+
 def setup_lab_pharmacy_tenant(client):
     tenant = client.post(
         "/api/v1/tenants", json={"name": "Diagnostics Pharmacy Clinic"}

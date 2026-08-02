@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch, type ApiSession } from "@/lib/api";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { activeTenantOptions, displayDate } from "@/utils/helper";
 
 interface UseAppointmentBookingDataArgs {
@@ -156,8 +157,9 @@ export function useAppointmentBookingData({
           department_id: departmentId,
         });
         const rows = await fetchDoctors(`/practitioners?${params.toString()}`);
-        const availabilityRows = await Promise.all(
-          rows.map(async (row: any) => {
+        const availabilityRows = await mapWithConcurrency(
+          rows,
+          async (row: any) => {
             try {
               const calendarParams = new URLSearchParams({
                 branch_id: branchId,
@@ -177,7 +179,8 @@ export function useAppointmentBookingData({
             } catch {
               return null;
             }
-          }),
+          },
+          4,
         );
         const availableRows = availabilityRows.filter(Boolean);
         if (!alive) return;

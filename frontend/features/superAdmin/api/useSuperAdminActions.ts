@@ -613,8 +613,7 @@ export function useSuperAdminActions({
         ...previous.filter((tenant: any) => tenant.id !== tenantRow.id),
       ]);
       openListing("tenants");
-      await reload();
-      await loadTenantAccess(updated.id);
+      await Promise.all([reload(), loadTenantAccess(updated.id)]);
       setMessage(`Tenant has been updated successfully: ${updated.name}`);
     } catch (err: any) {
       setMessage(err.message || "Could not update tenant.");

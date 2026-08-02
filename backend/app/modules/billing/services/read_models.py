@@ -1,5 +1,4 @@
 from collections import defaultdict
-from collections.abc import Callable
 from dataclasses import dataclass
 
 from sqlmodel import Session
@@ -275,13 +274,10 @@ def normalize_invoice_status(session: Session, invoice: Invoice) -> Invoice:
 def read_invoice_detail(
     session: Session,
     invoice: Invoice,
-    *,
-    ensure_invoice_submit_ledger: Callable[[Session, Invoice], None],
-    ensure_invoice_membership_benefit_ledger: Callable[[Session, Invoice], None],
 ) -> InvoiceDetailRead:
-    invoice = normalize_invoice_status(session, invoice)
-    ensure_invoice_submit_ledger(session, invoice)
-    ensure_invoice_membership_benefit_ledger(session, invoice)
+    # GET/detail rendering must remain read-only. Historical status/ledger
+    # repairs belong in command handlers or an explicit backfill, otherwise a
+    # burst of readers becomes a burst of commits and lock contention.
     read_repo = BillingReadRepository(session)
     items = read_repo.list_invoice_items(invoice)
     payments = read_repo.list_payments(invoice)

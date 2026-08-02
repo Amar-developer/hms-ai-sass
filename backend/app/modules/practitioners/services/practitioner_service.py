@@ -4,15 +4,17 @@ from sqlmodel import Session
 
 from app.modules.audit.service import record_audit_event
 from app.modules.practitioners.models import Practitioner
-from app.modules.practitioners.repositories import PractitionerRepository
+from app.modules.practitioners.repositories import (
+    PractitionerLinkRepository,
+    PractitionerRepository,
+)
 from app.modules.practitioners.schemas import (
     PractitionerCreate,
     PractitionerRead,
     PractitionerUpdate,
 )
 from app.modules.practitioners.services.read_models import (
-    practitioner_branch_ids,
-    practitioner_department_ids,
+    practitioner_read_with_links,
     read_practitioner,
 )
 from app.modules.practitioners.services.validation import (
@@ -74,11 +76,21 @@ def list_practitioners(
         tenant_id=tenant_id,
         practitioner_id=doctor_practitioner_id,
     )
+    practitioner_ids = {practitioner.id for practitioner in practitioners}
+    links = PractitionerLinkRepository(session)
+    branch_ids_by_practitioner = links.active_branch_ids_by_practitioner(
+        tenant_id=tenant_id,
+        practitioner_ids=practitioner_ids,
+    )
+    department_ids_by_practitioner = links.active_department_ids_by_practitioner(
+        tenant_id=tenant_id,
+        practitioner_ids=practitioner_ids,
+    )
     if branch_id:
         practitioners = [
             practitioner
             for practitioner in practitioners
-            if branch_id in practitioner_branch_ids(session, tenant_id, practitioner.id)
+            if branch_id in branch_ids_by_practitioner.get(practitioner.id, [])
         ]
     if department_id:
         department_ids = department_filter_ids(session, tenant_id, department_id)
@@ -86,10 +98,17 @@ def list_practitioners(
             practitioner
             for practitioner in practitioners
             if department_ids.intersection(
-                practitioner_department_ids(session, tenant_id, practitioner.id)
+                department_ids_by_practitioner.get(practitioner.id, [])
             )
         ]
-    return [read_practitioner(session, practitioner) for practitioner in practitioners]
+    return [
+        practitioner_read_with_links(
+            practitioner,
+            branch_ids=branch_ids_by_practitioner.get(practitioner.id, []),
+            department_ids=department_ids_by_practitioner.get(practitioner.id, []),
+        )
+        for practitioner in practitioners
+    ]
 
 
 def get_practitioner_read(

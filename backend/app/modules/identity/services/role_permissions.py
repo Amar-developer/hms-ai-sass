@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
+from app.core import auth_cache
 from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole
 from app.modules.identity.repositories import (
     IdentityPermissionRepository,
@@ -50,6 +51,18 @@ def get_tenant_role_or_404(session: Session, tenant_id: str, role_id: str) -> Ro
     return role
 
 
+def invalidate_role_users(session: Session, role_id: str) -> None:
+    """Every user holding this role has a stale cached permission/role set
+    after any change to the role's permissions or its is_active flag. This
+    is only called from infrequent admin actions, so it's fine to pay for
+    the lookup here rather than leaving it to the TTL alone."""
+    affected_user_ids = session.exec(
+        select(UserRole.user_id).where(UserRole.role_id == role_id)
+    ).all()
+    for user_id in affected_user_ids:
+        auth_cache.invalidate_user(user_id)
+
+
 def replace_role_permissions(
     session: Session, role: Role, permission_keys: list[str]
 ) -> None:
@@ -62,6 +75,7 @@ def replace_role_permissions(
         role_permissions.add(
             RolePermission(role_id=role.id, permission_id=permission.id)
         )
+    invalidate_role_users(session, role.id)
 
 
 def role_permission_keys(session: Session, role: Role) -> list[str]:
@@ -145,3 +159,4 @@ def replace_user_roles(
                 detail=f"Unknown role: {role_key}",
             )
         user_roles.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=tenant_id))
+    auth_cache.invalidate_user(user.id)

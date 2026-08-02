@@ -12,6 +12,7 @@ import {
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch, apiUpload } from "@/lib/api";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import {
   FormField,
   SelectField,
@@ -31,8 +32,7 @@ import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQu
 
 const pageSize = 10;
 
-export function Doctors({ apiSession, clinic }: any) {
-  const { setLocal: setLivePractitioners } = usePractitionersQuery(apiSession);
+export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];
@@ -54,22 +54,34 @@ export function Doctors({ apiSession, clinic }: any) {
   const [view, setView] = useState("list");
   const [tenants, setTenants] = useState<any[]>([]);
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
-  const [branches, setBranches] = useState<any[]>([]);
-  const [departments, setDepartments] = useState<any[]>([]);
+  const scopedSession =
+    apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
+  const {
+    livePractitioners: rows,
+    isLoading: practitionersLoading,
+    error: practitionersError,
+    refetch: refetchPractitioners,
+    setLocal: setLivePractitioners,
+  } = usePractitionersQuery(scopedSession);
+  const [branches, setBranches] = useState<any[]>(clinic?.branches || []);
+  const [departments, setDepartments] = useState<any[]>(
+    uniqueDepartmentRows(allowedDepartments),
+  );
   const [users, setUsers] = useState<any[]>([]);
   const [feeRules, setFeeRules] = useState<any[]>([]);
-  const [rows, setRows] = useState<any[]>([]);
+  const [usersTenantId, setUsersTenantId] = useState("");
+  const [feeRulesTenantId, setFeeRulesTenantId] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [type, setType] = useState("all");
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [referenceLoading, setReferenceLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<any>(null);
   const selected = rows.find((row: any) => row.id === selectedId);
-  const scopedSession =
-    apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
+  const listLoading = practitionersLoading || referenceLoading;
 
   function syncSharedPractitioner(practitioner: any) {
     if (!setLivePractitioners || !practitioner?.id) return;
@@ -96,35 +108,63 @@ export function Doctors({ apiSession, clinic }: any) {
       );
   }
 
-  async function loadData(nextTenantId = tenantId) {
+  async function loadReferenceData(nextTenantId = tenantId, force = false) {
     if (!apiSession || !nextTenantId) return;
-    setBusy(true);
+    if (!force && nextTenantId === apiSession.tenantId) {
+      setBranches(clinic?.branches || []);
+      setDepartments(uniqueDepartmentRows(allowedDepartments));
+      return;
+    }
+    setReferenceLoading(true);
     setMessage("");
     const session = { ...apiSession, tenantId: nextTenantId };
     try {
-      const [
-        branchRows,
-        departmentRows,
-        userRows,
-        practitionerRows,
-        feeRuleRows,
-      ] = await Promise.all([
+      const [branchRows, departmentRows] = await Promise.all([
         apiFetch(`/tenants/${nextTenantId}/branches`, session),
         apiFetch(`/tenants/${nextTenantId}/departments`, session),
-        apiFetch("/identity/users", session).catch(() => []),
-        apiFetch("/practitioners", session),
-        apiFetch("/billing/doctor-fee-rules", session).catch(() => []),
       ]);
       setBranches(branchRows);
       setDepartments(uniqueDepartmentRows(departmentRows));
-      setUsers(userRows);
-      setRows(practitionerRows);
-      setFeeRules(feeRuleRows);
     } catch (err: any) {
       setMessage(err.message || "Could not load doctors.");
     } finally {
-      setBusy(false);
+      setReferenceLoading(false);
     }
+  }
+
+  async function loadUsers(nextTenantId = tenantId) {
+    if (!apiSession || !nextTenantId) return;
+    if (usersTenantId === nextTenantId) return;
+    const session = { ...apiSession, tenantId: nextTenantId };
+    const userRows = await apiFetch("/identity/users", session).catch(() => []);
+    setUsers(userRows);
+    setUsersTenantId(nextTenantId);
+  }
+
+  async function loadFeeRules(nextTenantId = tenantId, force = false) {
+    if (!apiSession || !nextTenantId) return;
+    if (!force && feeRulesTenantId === nextTenantId) return;
+    const session = { ...apiSession, tenantId: nextTenantId };
+    const feeRuleRows = await apiFetch(
+      "/billing/doctor-fee-rules",
+      session,
+    ).catch(() => []);
+    setFeeRules(feeRuleRows);
+    setFeeRulesTenantId(nextTenantId);
+  }
+
+  async function loadEditorData(nextTenantId = tenantId) {
+    await Promise.all([
+      loadUsers(nextTenantId),
+      loadFeeRules(nextTenantId),
+    ]);
+  }
+
+  async function refreshList() {
+    await Promise.all([
+      refetchPractitioners(),
+      loadReferenceData(tenantId, true),
+    ]);
   }
   useEffect(() => {
     if (apiSession) {
@@ -133,16 +173,50 @@ export function Doctors({ apiSession, clinic }: any) {
   }, [apiSession?.tenantId]);
   useEffect(() => {
     if (apiSession && tenantId) {
-      loadData(tenantId);
+      setUsersTenantId("");
+      setFeeRulesTenantId("");
+      setUsers([]);
+      setFeeRules([]);
+      loadReferenceData(tenantId);
     }
   }, [apiSession?.tenantId, tenantId]);
 
+  useEffect(() => {
+    if (practitionersError) {
+      setMessage(
+        (practitionersError as Error).message || "Could not load doctors.",
+      );
+    }
+  }, [practitionersError]);
+
+  useEffect(() => {
+    if (listLoading || !rows.length || feeRulesTenantId === tenantId) return;
+    // Fee labels enrich the table, but they must not delay the first useful
+    // render. Form-only users remain completely deferred until Create/Edit.
+    const timer = window.setTimeout(() => void loadFeeRules(tenantId), 300);
+    return () => window.clearTimeout(timer);
+  }, [feeRulesTenantId, listLoading, rows.length, tenantId]);
+
   function open(nextView: string, id = "") {
-    setSelectedId(id);
-    setView(nextView);
-    requestAnimationFrame(() =>
-      window.scrollTo({ top: 0, behavior: "smooth" }),
-    );
+    const finish = () => {
+      setSelectedId(id);
+      setView(nextView);
+      requestAnimationFrame(() =>
+        window.scrollTo({ top: 0, behavior: "smooth" }),
+      );
+    };
+    if (nextView !== "create" && nextView !== "edit") {
+      finish();
+      return;
+    }
+    setBusy(true);
+    setMessage("");
+    void loadEditorData()
+      .then(finish)
+      .catch((err: any) => {
+        setMessage(err.message || "Could not load doctor editor data.");
+      })
+      .finally(() => setBusy(false));
   }
 
   async function saveDoctorFeeRules(practitionerId: string, data: any) {
@@ -162,8 +236,9 @@ export function Doctors({ apiSession, clinic }: any) {
           ),
         })),
     );
-    await Promise.all(
-      targets.map((target) => {
+    await mapWithConcurrency(
+      targets,
+      (target) => {
         const existing = [...feeRules]
           .filter(
             (rule: any) =>
@@ -209,7 +284,8 @@ export function Doctors({ apiSession, clinic }: any) {
             share_tax_with_doctor: data.shareTaxWithDoctor === "true",
           }),
         });
-      }),
+      },
+      4,
     );
   }
 
@@ -238,13 +314,9 @@ export function Doctors({ apiSession, clinic }: any) {
           err.message || "Doctor created, but fee rule could not be saved.",
         );
       });
-      setRows((previous: any[]) => [
-        created,
-        ...previous.filter((row: any) => row.id !== created.id),
-      ]);
       syncSharedPractitioner(created);
       open("list");
-      await loadData(tenantId);
+      await loadFeeRules(tenantId, true);
       setMessage(`Doctor created: ${created.full_name}`);
     } catch (err: any) {
       setMessage(err.message || "Could not create doctor.");
@@ -283,13 +355,9 @@ export function Doctors({ apiSession, clinic }: any) {
           err.message || "Doctor updated, but fee rule could not be saved.",
         );
       });
-      setRows((previous: any[]) => [
-        updated,
-        ...previous.filter((row: any) => row.id !== updated.id),
-      ]);
       syncSharedPractitioner(updated);
       open("list");
-      await loadData(tenantId);
+      await loadFeeRules(tenantId, true);
       setMessage("Doctor updated.");
     } catch (err: any) {
       setMessage(err.message || "Could not update doctor.");
@@ -313,13 +381,6 @@ export function Doctors({ apiSession, clinic }: any) {
       upload.append("attached_to_label", "Doctor Signature");
       upload.append("folder", "Signatures");
       const created = await apiUpload("/files", scopedSession, upload);
-      setRows((previous: any[]) =>
-        previous.map((row: any) =>
-          row.id === practitionerId
-            ? { ...row, signature_url: created.file_url }
-            : row,
-        ),
-      );
       if (setLivePractitioners) {
         setLivePractitioners((previous: any[]) =>
           previous.map((row: any) =>
@@ -329,7 +390,6 @@ export function Doctors({ apiSession, clinic }: any) {
           ),
         );
       }
-      await loadData(tenantId);
       setMessage("Signature uploaded.");
     } catch (err: any) {
       setMessage(err.message || "Could not upload signature.");
@@ -356,10 +416,6 @@ export function Doctors({ apiSession, clinic }: any) {
           }),
         },
       );
-      setRows((previous: any[]) => [
-        updated,
-        ...previous.filter((item: any) => item.id !== updated.id),
-      ]);
       syncSharedPractitioner(updated);
       setMessage(
         `Doctor ${updated.status === "active" ? "activated" : "deactivated"}.`,
@@ -380,11 +436,6 @@ export function Doctors({ apiSession, clinic }: any) {
       await apiFetch(`/practitioners/${row.id}`, scopedSession, {
         method: "DELETE",
       });
-      setRows((previous: any[]) =>
-        previous.map((item: any) =>
-          item.id === row.id ? { ...item, status: "inactive" } : item,
-        ),
-      );
       if (setLivePractitioners) {
         setLivePractitioners((previous: any[]) =>
           previous.map((item: any) =>
@@ -483,7 +534,7 @@ export function Doctors({ apiSession, clinic }: any) {
           </p>
         </div>
         <div className="flex justify-start items-center gap-2">
-          <RefreshButton onRefresh={() => loadData(tenantId)} />
+          <RefreshButton onRefresh={refreshList} />
           {canCreateDoctor && (
             <button
               type="button"
@@ -559,7 +610,7 @@ export function Doctors({ apiSession, clinic }: any) {
             <span className="text-sm text-center">Actions</span>
           </div>
           <div className="divide-y divide-slate-200">
-            {busy ? (
+            {listLoading ? (
               <TableSkeleton rows={pageSize} />
             ) : (
               <>

@@ -33,12 +33,26 @@ def test_readiness_contract_starts_without_external_dependencies(client: TestCli
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ready"
-    assert body["dependencies"] == {
-        "database": "not_configured",
-        "redis": "not_configured",
-        "object_storage": "local_configured",
-        "permanent_invoice_delivery": "enabled",
-    }
+    assert body["dependencies"]["database"] == "configured"
+    assert body["dependencies"]["database_pool"].startswith("checked_out=")
+    assert body["dependencies"]["redis"] == "not_configured"
+    assert body["dependencies"]["object_storage"] == "local_configured"
+    assert body["dependencies"]["permanent_invoice_delivery"] == "enabled"
+
+
+def test_platform_observability_metrics_are_private_and_include_queue_health(
+    client: TestClient, unauthenticated_client: TestClient
+):
+    denied = unauthenticated_client.get("/api/v1/platform/observability/metrics")
+    assert denied.status_code == 401
+
+    response = client.get("/api/v1/platform/observability/metrics")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["runtime"]["scope"] == "current_api_process"
+    assert "checked_out" in body["database_pool"]
+    assert body["queues"]["notification_events"]["depth"] == 0
+    assert body["queues"]["document_deliveries"]["oldest_age_seconds"] is None
 
 
 def test_production_storage_configuration_is_environment_safe():

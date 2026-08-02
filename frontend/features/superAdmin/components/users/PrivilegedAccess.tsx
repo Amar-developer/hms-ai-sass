@@ -106,20 +106,22 @@ export function PrivilegedAccess({
     if (!apiSession) return;
     setBusy(true);
     try {
-      const [optionRows, grantRows] = await Promise.all([
+      const [optionRows, grantRows, accountRows] = await Promise.all([
         apiFetch<Options>("/identity/privileged-access/options", apiSession),
         apiFetch<SupportGrant[]>(
           "/identity/support-access-grants",
           apiSession,
         ),
+        isRoot
+          ? apiFetch<PrivilegedAccount[]>(
+              "/identity/privileged-accounts",
+              apiSession,
+            )
+          : Promise.resolve<PrivilegedAccount[]>([]),
       ]);
       setOptions(optionRows);
       setGrants(grantRows);
       if (isRoot) {
-        const accountRows = await apiFetch<PrivilegedAccount[]>(
-          "/identity/privileged-accounts",
-          apiSession,
-        );
         setAccounts(accountRows);
         setEditablePermissions(
           Object.fromEntries(

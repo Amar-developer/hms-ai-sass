@@ -7,6 +7,10 @@ export function practitionersQueryKey(apiSession: ApiSession | null | undefined)
   return ["practitioners", apiSession?.tenantId] as const;
 }
 
+export function fetchPractitioners(apiSession: ApiSession) {
+  return apiFetch<any[]>("/practitioners", apiSession);
+}
+
 /**
  * The shared practitioner list, keyed by tenant. Doctors owns full CRUD and
  * fetches its own richer bootstrap (branches/departments/users/fee-rules)
@@ -20,8 +24,9 @@ export function usePractitionersQuery(apiSession: ApiSession | null | undefined)
 
   const query = useQuery<any[]>({
     queryKey,
-    queryFn: () => apiFetch("/practitioners", apiSession as ApiSession),
+    queryFn: () => fetchPractitioners(apiSession as ApiSession),
     enabled: Boolean(apiSession),
+    staleTime: 60_000,
   });
 
   function setLocal(updater: any[] | ((previous: any[]) => any[])) {
@@ -33,6 +38,9 @@ export function usePractitionersQuery(apiSession: ApiSession | null | undefined)
   return {
     livePractitioners: query.data ?? [],
     isLoading: query.isLoading,
+    isFetching: query.isFetching,
+    error: query.error,
+    refetch: query.refetch,
     setLocal,
   };
 }

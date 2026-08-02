@@ -1,27 +1,43 @@
 import { apiFetch, type ApiSession } from "@/lib/api";
 
-export function fetchPharmacyIssues(session: ApiSession) {
-  return apiFetch("/pharmacy/issues", session);
+export function fetchPharmacyIssues(session: ApiSession, signal?: AbortSignal) {
+  return apiFetch("/pharmacy/issues", session, { signal });
 }
 
-export function fetchPharmacyMedicines(session: ApiSession) {
-  return apiFetch("/pharmacy/medicines", session);
+export function fetchPharmacyMedicines(session: ApiSession, signal?: AbortSignal) {
+  return apiFetch("/pharmacy/medicines", session, { signal });
 }
 
-export function fetchPharmacyBatches(session: ApiSession) {
-  return apiFetch("/pharmacy/batches", session);
+export function fetchPharmacyBatches(session: ApiSession, signal?: AbortSignal) {
+  return apiFetch("/pharmacy/batches", session, { signal });
 }
 
-export function fetchPharmacySuppliers(session: ApiSession) {
-  return apiFetch("/pharmacy/suppliers", session);
+export function fetchPharmacySuppliers(session: ApiSession, signal?: AbortSignal) {
+  return apiFetch("/pharmacy/suppliers", session, { signal });
 }
 
-export function fetchLowStock(session: ApiSession, branchId?: string) {
-  return apiFetch(`/pharmacy/low-stock?branch_id=${branchId}`, session);
+export function fetchLowStock(
+  session: ApiSession,
+  branchId?: string,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams();
+  if (branchId) params.set("branch_id", branchId);
+  return apiFetch(
+    `/pharmacy/low-stock${params.toString() ? `?${params}` : ""}`,
+    session,
+    { signal },
+  );
 }
 
-export function fetchAvailableMedicines(session: ApiSession, query = "") {
-  return apiFetch(`/pharmacy/catalog/available-medicines${query}`, session);
+export function fetchAvailableMedicines(
+  session: ApiSession,
+  query = "",
+  signal?: AbortSignal,
+) {
+  return apiFetch(`/pharmacy/catalog/available-medicines${query}`, session, {
+    signal,
+  });
 }
 
 export function createPharmacyMedicine(

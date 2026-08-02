@@ -4,6 +4,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
+import pytest
 from sqlmodel import Session, select
 
 from app.core.credentials import encrypt_credential
@@ -196,7 +197,7 @@ def test_queue_deduplicates_and_processor_sends_template(test_engine, monkeypatc
 
     with Session(test_engine) as session:
         tenant, branch, patient, appointment = _configured_tenant(session)
-        patient.mobile = None
+        patient.mobile = "invalid-primary"
         patient.alternate_mobile = "98765 43210"
         patient.whatsapp_preferred_language = "ta"
         integration = session.exec(
@@ -248,7 +249,7 @@ def test_queue_deduplicates_and_processor_sends_template(test_engine, monkeypatc
         assert first.attempt_count == 1
         assert first.provider_message_id == "provider-message-1"
         assert captured["api_key"] == "queue-secret-key"
-        assert first.recipient == patient.alternate_mobile
+        assert first.recipient == "+919876543210"
         assert captured["campaign_name"] == "patient_booking_ta"
         assert captured["destination"] == "+919876543210"
         assert captured["template_parameters"] == [
@@ -609,6 +610,131 @@ def test_paid_invoice_job_serves_signed_stored_printed_receipt(
         )
         assert rendered == printed_pdf
         assert filename == "Queue-Patient-INV-QUEUE-1.pdf"
+
+
+def test_s3_invoice_media_verifies_pdf_before_creating_download_url(
+    test_engine, monkeypatch
+):
+    calls = []
+
+    class FakeStorage:
+        def head(self, *, key):
+            calls.append(("head", key))
+            return SimpleNamespace(size=2048, content_type="application/pdf")
+
+        def create_download_url(self, *, key, expires_in):
+            calls.append(("url", key, expires_in))
+            return "https://documents.example.com/invoice.pdf?signature=test"
+
+    with Session(test_engine) as session:
+        tenant, branch, patient, _appointment = _configured_tenant(session)
+        invoice = Invoice(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            invoice_number="INV-S3-1",
+            status=InvoiceStatus.PAID,
+            total_amount=Decimal("500"),
+            paid_amount=Decimal("500"),
+            balance_amount=Decimal("0"),
+        )
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+        artifact = FileDocument(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            file_name="invoice.pdf",
+            file_url=f"/api/v1/files/{invoice.id}/download",
+            content_type="application/pdf",
+            storage_backend="s3",
+            storage_key=f"invoices/{invoice.id}.pdf",
+            storage_bucket="test-documents",
+            document_status="ready",
+            artifact_type="final",
+            document_version=1,
+            attached_to_doctype="Invoice",
+            attached_to_name=invoice.id,
+            attached_to_field="invoice_pdf",
+        )
+        session.add(artifact)
+        session.commit()
+        session.refresh(artifact)
+        monkeypatch.setattr(
+            whatsapp_processor,
+            "get_storage_backend_for_document",
+            lambda _row: FakeStorage(),
+        )
+
+        url, filename = whatsapp_processor._invoice_media(
+            session,
+            invoice,
+            "https://api.example.com",
+            artifact_file_id=artifact.id,
+            artifact_version=1,
+        )
+
+        assert url.startswith("https://documents.example.com/")
+        assert filename == "invoice.pdf"
+        assert calls[0] == ("head", artifact.storage_key)
+        assert calls[1][0:2] == ("url", artifact.storage_key)
+
+
+def test_s3_invoice_media_preparation_failure_is_retryable(test_engine, monkeypatch):
+    class UnavailableStorage:
+        def head(self, *, key):
+            raise RuntimeError(f"S3 unavailable for {key}")
+
+    with Session(test_engine) as session:
+        tenant, branch, patient, _appointment = _configured_tenant(session)
+        invoice = Invoice(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            invoice_number="INV-S3-RETRY",
+            status=InvoiceStatus.PAID,
+            total_amount=Decimal("500"),
+            paid_amount=Decimal("500"),
+            balance_amount=Decimal("0"),
+        )
+        session.add(invoice)
+        session.commit()
+        session.refresh(invoice)
+        artifact = FileDocument(
+            tenant_id=tenant.id,
+            branch_id=branch.id,
+            patient_id=patient.id,
+            file_name="invoice.pdf",
+            file_url=f"/api/v1/files/{invoice.id}/download",
+            content_type="application/pdf",
+            storage_backend="s3",
+            storage_key=f"invoices/{invoice.id}.pdf",
+            storage_bucket="test-documents",
+            document_status="ready",
+            artifact_type="final",
+            document_version=1,
+            attached_to_doctype="Invoice",
+            attached_to_name=invoice.id,
+            attached_to_field="invoice_pdf",
+        )
+        session.add(artifact)
+        session.commit()
+        session.refresh(artifact)
+        monkeypatch.setattr(
+            whatsapp_processor,
+            "get_storage_backend_for_document",
+            lambda _row: UnavailableStorage(),
+        )
+
+        with pytest.raises(whatsapp_processor.NotificationRetryable):
+            whatsapp_processor._invoice_media(
+                session,
+                invoice,
+                "https://api.example.com",
+                artifact_file_id=artifact.id,
+                artifact_version=1,
+            )
 
 
 def test_queue_management_masks_recipient_and_supports_cancel_retry(

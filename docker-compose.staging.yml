@@ -2,6 +2,12 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: medizinhub-postgres-staging
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
     env_file:
       - .env.staging
     environment:
@@ -25,6 +31,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  pgbouncer:
+    # See docker-compose.yml for the full rationale — bounds real Postgres
+    # connections independent of backend worker/process count.
+    image: edoburu/pgbouncer:1.21.0
+    container_name: medizinhub-pgbouncer-staging
+    env_file:
+      - .env.staging
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "20"
+      MIN_POOL_SIZE: "5"
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
 
   # Production Dockerfile (multi-stage `next build` + standalone server) —
@@ -77,6 +102,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
       redis:
         condition: service_healthy
     env_file:
@@ -85,11 +112,18 @@ services:
       - medizinhub_uploads_data_staging:/app/uploads
     command: >
       bash -c "
-      alembic -c alembic/alembic.ini upgrade head &&
+      MEDIZINHUB_DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms} alembic -c alembic/alembic.ini upgrade head &&
+      MEDIZINHUB_DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms} python scripts/verify_runtime_readiness.py --ensure-pg-stat-statements &&
       uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers ${MEDIZINHUB_WEB_CONCURRENCY:-2}
       "
     environment:
       PYTHONPATH: /app
+      # Alembic (above) overrides this back to a direct postgres:5432
+      # connection for the migration step only — DDL/advisory locks don't
+      # work reliably through pgbouncer's transaction pooling mode.
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@pgbouncer:6432/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_DB_POOL_SIZE: "10"
+      MEDIZINHUB_DB_MAX_OVERFLOW: "10"
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
       MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
       MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
@@ -116,6 +150,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
     env_file:
       - .env.staging
     volumes:
@@ -123,6 +159,9 @@ services:
     command: python -m app.modules.reports.worker
     environment:
       PYTHONPATH: /app
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@pgbouncer:6432/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_DB_POOL_SIZE: "5"
+      MEDIZINHUB_DB_MAX_OVERFLOW: "5"
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
       MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
       MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}

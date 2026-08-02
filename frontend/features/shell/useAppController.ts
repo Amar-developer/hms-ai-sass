@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   API_BASE,
   AUTH_SESSION_EXPIRED_EVENT,
@@ -24,6 +25,10 @@ import { nav } from "@/lib/navigation";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { navigationModulesForPermissions } from "@/lib/permissionNavigation";
 import { activeTenantOptions } from "@/utils/helper";
+import {
+  fetchPractitioners,
+  practitionersQueryKey,
+} from "@/features/doctors/api/usePractitionersQuery";
 
 const allModuleIds = nav.map(([id]) => id);
 const defaultEntitlementModuleIds = Array.from(
@@ -68,6 +73,7 @@ function saveWorkspace(session: ApiSession, patch: WorkspaceState) {
 }
 
 export function useAppController() {
+  const queryClient = useQueryClient();
   const [authenticated, setAuthenticated] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [apiSession, setApiSession] = useState<ApiSession | null>(null);
@@ -398,12 +404,16 @@ export function useAppController() {
       // for appointment mapping and doctorScope below.
       !moduleAvailable("practitioners")
         ? Promise.resolve<any[]>([])
-        : apiFetchIfAllowed<any[]>(
-        "/practitioners",
-        session,
-        [...referenceReadPermissions, "practitioners.create"],
-        [],
-      ),
+        : sessionHasAnyPermission(
+              session,
+              [...referenceReadPermissions, "practitioners.create"],
+            )
+          ? queryClient.fetchQuery({
+              queryKey: practitionersQueryKey(session),
+              queryFn: () => fetchPractitioners(session),
+              staleTime: 60_000,
+            })
+          : Promise.resolve<any[]>([]),
       !moduleAvailable("scheduling")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
@@ -662,8 +672,11 @@ export function useAppController() {
         // Session may have been revoked; loadLiveData below will surface any auth error.
       }
     };
-    const refreshLiveData = () => {
+    const refreshSession = () => {
       if (document.visibilityState === "hidden") return;
+      refreshCurrentUser();
+    };
+    const refreshEntitlementsAndWorkspace = () => {
       refreshCurrentUser();
       loadLiveData(apiSession).catch((err: any) => {
         setLiveStatus(
@@ -681,7 +694,7 @@ export function useAppController() {
       // multi-request operations into one shared refresh.
       mutationRefreshTimerRef.current = setTimeout(() => {
         mutationRefreshTimerRef.current = null;
-        refreshLiveData();
+        refreshEntitlementsAndWorkspace();
       }, 50);
     };
     const handleStorage = (event: StorageEvent) => {
@@ -699,22 +712,25 @@ export function useAppController() {
         scheduleMutationRefresh();
       }
     };
-    window.addEventListener("focus", refreshLiveData);
+    window.addEventListener("focus", refreshSession);
     window.addEventListener("storage", handleStorage);
-    window.addEventListener("medizinhub.entitlements.refresh", refreshLiveData);
-    document.addEventListener("visibilitychange", refreshLiveData);
+    window.addEventListener(
+      "medizinhub.entitlements.refresh",
+      refreshEntitlementsAndWorkspace,
+    );
+    document.addEventListener("visibilitychange", refreshSession);
     return () => {
       if (mutationRefreshTimerRef.current) {
         clearTimeout(mutationRefreshTimerRef.current);
         mutationRefreshTimerRef.current = null;
       }
-      window.removeEventListener("focus", refreshLiveData);
+      window.removeEventListener("focus", refreshSession);
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener(
         "medizinhub.entitlements.refresh",
-        refreshLiveData,
+        refreshEntitlementsAndWorkspace,
       );
-      document.removeEventListener("visibilitychange", refreshLiveData);
+      document.removeEventListener("visibilitychange", refreshSession);
     };
     // }, [apiSession?.tenantId]);
   }, [apiSession, apiSession?.tenantId]);

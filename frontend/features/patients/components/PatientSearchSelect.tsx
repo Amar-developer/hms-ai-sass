@@ -16,6 +16,7 @@ import {
 } from "@/features/patients/helpers";
 import { searchPatients } from "@/lib/hmsLogic";
 import type { PatientReference } from "@/lib/contracts";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 const MIN_QUERY_LENGTH = 2;
 const SEARCH_LIMIT = 20;
@@ -70,15 +71,17 @@ export async function fetchPatientReferences(
   for (let index = 0; index < ids.length; index += 100) {
     chunks.push(ids.slice(index, index + 100));
   }
-  const responses = await Promise.all(
-    chunks.map((chunk) => {
+  const responses = await mapWithConcurrency(
+    chunks,
+    (chunk) => {
       const params = new URLSearchParams();
       chunk.forEach((id) => params.append("ids", id));
       return apiFetch<PatientReference[]>(
         `/patients/references?${params}`,
         apiSession,
       );
-    }),
+    },
+    4,
   );
   return mergePatients(
     ...responses.map((rows) => (Array.isArray(rows) ? rows : [])),

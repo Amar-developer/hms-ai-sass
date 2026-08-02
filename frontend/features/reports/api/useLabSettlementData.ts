@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ApiSession } from "@/lib/api";
 import * as reportsApi from "./reports.api";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 type UseLabSettlementDataParams = {
   apiSession: ApiSession | null | undefined;
@@ -52,12 +53,13 @@ export function useLabSettlementData({
         const sourceOrderIds = relevantOrderIds.length
           ? relevantOrderIds
           : (orderRows || []).slice(0, 200).map((order: any) => order.id);
-        const details = await Promise.all(
-          sourceOrderIds.map((orderId: any) =>
+        const details = await mapWithConcurrency(
+          sourceOrderIds,
+          (orderId: any) =>
             reportsApi
               .getLabOrderDetail(apiSession as ApiSession, orderId)
               .catch(() => null),
-          ),
+          4,
         );
         if (!cancelled) setLabOrderDetails(details.filter(Boolean));
       } finally {

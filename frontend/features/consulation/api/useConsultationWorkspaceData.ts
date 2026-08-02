@@ -73,8 +73,17 @@ export function useConsultationWorkspaceData({
       setAvailableMedicineCatalog([]);
       return;
     }
-    let alive = true;
     const search = medicineSearch.trim();
+    if (search.length < 2) {
+      setAvailableMedicineCatalog(
+        Array.isArray(medicineCatalog) ? medicineCatalog : [],
+      );
+      setMedicineCatalogLoading(false);
+      setMedicineCatalogError("");
+      return;
+    }
+    let alive = true;
+    const controller = new AbortController();
     const timer = window.setTimeout(
       async () => {
         setMedicineCatalogLoading(true);
@@ -82,11 +91,13 @@ export function useConsultationWorkspaceData({
         try {
           const rows = await consulationApi.listAvailableMedicines(
             apiSession,
-            search || undefined,
+            search,
+            controller.signal,
           );
           if (alive)
             setAvailableMedicineCatalog(Array.isArray(rows) ? rows : []);
         } catch (err: any) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
           if (alive) {
             setAvailableMedicineCatalog([]);
             setMedicineCatalogError(
@@ -97,11 +108,12 @@ export function useConsultationWorkspaceData({
           if (alive) setMedicineCatalogLoading(false);
         }
       },
-      search ? 250 : 0,
+      250,
     );
     return () => {
       alive = false;
       window.clearTimeout(timer);
+      controller.abort();
     };
   }, [apiSession, apiSession?.tenantId, medicineSearch]);
 

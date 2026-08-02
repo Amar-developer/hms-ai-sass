@@ -5,6 +5,7 @@ from app.modules.billing.models import CreditNote, Invoice
 from app.modules.consultations.models import Consultation
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
+from app.modules.integrations.whatsapp_gateway import normalize_whatsapp_number
 
 
 def patient_for_notification_resource(
@@ -49,14 +50,20 @@ def patient_allows_whatsapp(patient: Patient | None) -> bool:
     )
 
 
-def patient_notification_mobile(patient: Patient | None) -> str | None:
-    """Use the patient's primary mobile, falling back to the alternate mobile."""
+def patient_notification_destination(
+    patient: Patient | None, default_country_code: str
+) -> str | None:
+    """Return the first valid primary/alternate destination in priority order."""
     if not patient:
         return None
     for value in (patient.mobile, patient.alternate_mobile):
         normalized = str(value or "").strip()
-        if normalized:
-            return normalized
+        if not normalized:
+            continue
+        try:
+            return normalize_whatsapp_number(normalized, default_country_code)
+        except ValueError:
+            continue
     return None
 
 

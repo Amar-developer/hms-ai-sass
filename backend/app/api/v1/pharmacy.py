@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 
 from app.core.auth import require_any_permission
@@ -124,8 +126,8 @@ def list_available_medicines(
     tenant_id: str = Depends(require_tenant_id),
     branch_id: str | None = None,
     search: str | None = None,
-    page_size: int = 10,
-    current_page: int = 1,
+    page_size: Annotated[int, Query(ge=1, le=50)] = 10,
+    current_page: Annotated[int, Query(ge=1)] = 1,
     session: Session = Depends(get_session),
     current_user: User = Depends(
         require_any_permission(

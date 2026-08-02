@@ -10,6 +10,7 @@ import {
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { apiFetch } from "@/lib/api";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import {
   catalogSubscriptionPlans,
   entitlementModules,
@@ -97,19 +98,22 @@ export function SubscriptionManagement({
         ...apiSession,
         tenantId: selectedId || apiSession.tenantId,
       };
-      const subscriptionCalls = tenants.map((tenant: any) =>
-        apiFetch("/subscription-plans/tenant-subscriptions", {
-          ...apiSession,
-          tenantId: tenant.id,
-        })
-          .then((rows: any[]) =>
-            rows.map((row) => ({ ...row, tenant_name: tenant.name })),
-          )
-          .catch(() => []),
+      const subscriptionCalls = mapWithConcurrency(
+        tenants,
+        (tenant: any) =>
+          apiFetch("/subscription-plans/tenant-subscriptions", {
+            ...apiSession,
+            tenantId: tenant.id,
+          })
+            .then((rows: any[]) =>
+              rows.map((row) => ({ ...row, tenant_name: tenant.name })),
+            )
+            .catch(() => []),
+        4,
       );
       const calls: any[] = [
         apiFetch("/subscription-plans/platform/revenue-summary", apiSession),
-        Promise.all(subscriptionCalls),
+        subscriptionCalls,
       ];
       if (selectedId) {
         calls.push(apiFetch("/subscription-plans/usage", scoped));

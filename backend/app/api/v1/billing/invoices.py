@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi import Query
@@ -17,9 +18,12 @@ from app.modules.billing.schemas import (
     InvoiceDetailRead,
     InvoiceItemSupplierOptionRead,
     InvoiceItemSupplierUpdate,
+    InvoiceItemRead,
     InvoiceRead,
+    PaymentRead,
 )
 from app.modules.billing.models import Invoice, InvoiceStatus
+from app.modules.billing.repositories.read_repository import BillingReadRepository
 from app.modules.files.services.file_service import FileService
 from app.modules.files.models import FileDocument
 from app.modules.audit.service import record_audit_event
@@ -53,7 +57,8 @@ from app.modules.notifications.services.document_delivery import (
     queue_document_delivery,
 )
 from app.modules.patients.models import Patient
-from app.modules.integrations.whatsapp_consent import patient_notification_mobile
+from app.modules.integrations.service import decode_config, get_tenant_plugin
+from app.modules.integrations.whatsapp_consent import patient_notification_destination
 from app.modules.subscriptions.service import enforce_module_enabled
 from app.modules.tenants.models import new_id, now_utc
 
@@ -272,6 +277,66 @@ def list_invoices(
         limit=limit,
         current_user=current_user,
     )
+
+
+@router.get("/invoices/report-details")
+def list_invoice_report_details(
+    ids: list[str] = Query(...),
+    tenant_id: str = Depends(require_tenant_id),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
+) -> list[dict[str, object]]:
+    """Read the item/payment fields reports need using three bounded queries."""
+    invoice_ids = set(ids)
+    if not invoice_ids or len(invoice_ids) > 50:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Between 1 and 50 unique invoice identifiers are required",
+        )
+    invoices = list(
+        session.exec(
+            select(Invoice).where(
+                Invoice.tenant_id == tenant_id,
+                Invoice.id.in_(invoice_ids),
+            )
+        ).all()
+    )
+    for invoice in invoices:
+        require_user_branch_access(current_user, invoice.branch_id)
+    allowed_ids = {invoice.id for invoice in invoices}
+    repo = BillingReadRepository(session)
+    items_by_invoice: dict[str, list[InvoiceItemRead]] = {
+        invoice_id: [] for invoice_id in allowed_ids
+    }
+    for item in repo.list_invoice_items_for_invoices(
+        tenant_id=tenant_id, invoice_ids=allowed_ids
+    ):
+        items_by_invoice[item.invoice_id].append(
+            InvoiceItemRead.model_validate(item, from_attributes=True)
+        )
+    payments_by_invoice: dict[str, list[PaymentRead]] = {
+        invoice_id: [] for invoice_id in allowed_ids
+    }
+    for payment in repo.list_payments_for_invoices(
+        tenant_id=tenant_id, invoice_ids=allowed_ids
+    ):
+        payments_by_invoice[payment.invoice_id].append(
+            PaymentRead.model_validate(payment, from_attributes=True)
+        )
+    return [
+        {
+            "invoice": {"id": invoice.id},
+            "items": items_by_invoice[invoice.id],
+            "payments": payments_by_invoice[invoice.id],
+        }
+        for invoice in invoices
+    ]
 
 
 @router.get("/invoices/{invoice_id}", response_model=InvoiceDetailRead)
@@ -510,11 +575,18 @@ def send_paid_invoice(
             "artifact": _artifact_payload(stored),
             "message": f"Invoice {invoice.invoice_number} queued for email delivery",
         }
-    patient_mobile = patient_notification_mobile(patient)
+    integration = get_tenant_plugin(session, tenant_id, "whatsapp")
+    integration_config = decode_config(integration.config_json) if integration else {}
+    patient_mobile = patient_notification_destination(
+        patient, str(integration_config.get("default_country_code") or "+91")
+    )
     if not patient_mobile:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="The invoice patient does not have a primary or alternate mobile number",
+            detail=(
+                "The invoice patient does not have a valid primary or alternate "
+                "mobile number"
+            ),
         )
 
     automatic_key = f"whatsapp:invoice:{invoice.id}:paid"
@@ -534,8 +606,9 @@ def send_paid_invoice(
         automatic_event.status = NotificationStatus.QUEUED
         automatic_event.failure_reason = None
         automatic_event.processing_started_at = None
-        automatic_event.next_attempt_at = now_utc()
+        automatic_event.next_attempt_at = now_utc() + timedelta(seconds=5)
         automatic_event.updated_at = now_utc()
+        automatic_event.recipient = patient_mobile
         automatic_event.artifact_file_id = stored.id
         automatic_event.artifact_version = stored.document_version
         session.add(automatic_event)
@@ -555,6 +628,7 @@ def send_paid_invoice(
             queued_by_user_id=current_user.id,
             artifact_file_id=stored.id,
             artifact_version=stored.document_version,
+            not_before=now_utc() + timedelta(seconds=5),
         )
     if not event:
         raise HTTPException(

@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import HTTPException
 from sqlmodel import Session, select
 
@@ -16,12 +18,13 @@ from app.modules.integrations.whatsapp_schemas import WhatsAppFlowSettings
 from app.modules.integrations.whatsapp_consent import (
     patient_allows_whatsapp,
     patient_for_notification_resource,
+    patient_notification_destination,
     patient_notification_language,
-    patient_notification_mobile,
 )
 from app.modules.integrations.whatsapp_templates import resolve_template_identifier
 from app.modules.integrations.whatsapp_usage import enforce_whatsapp_monthly_limit
 from app.modules.subscriptions.service import enforce_module_enabled
+from app.modules.tenants.models import now_utc
 
 
 def queue_notification(
@@ -116,6 +119,7 @@ def queue_whatsapp_template_if_allowed(
     queued_by_user_id: str | None = None,
     artifact_file_id: str | None = None,
     artifact_version: int | None = None,
+    not_before: datetime | None = None,
 ) -> NotificationEvent | None:
     """Persist a provider-neutral template outbox row when its tenant flow is on."""
     try:
@@ -152,7 +156,9 @@ def queue_whatsapp_template_if_allowed(
         )
         if not patient_allows_whatsapp(patient):
             return None
-        recipient = patient_notification_mobile(patient)
+        recipient = patient_notification_destination(
+            patient, str(config.get("default_country_code") or "+91")
+        )
     if not recipient:
         return None
     template_identifier, _language = resolve_template_identifier(
@@ -194,6 +200,7 @@ def queue_whatsapp_template_if_allowed(
         artifact_version=artifact_version,
         queued_by_user_id=queued_by_user_id,
         max_attempts=int(config.get("max_attempts") or 5),
+        next_attempt_at=not_before or now_utc(),
     )
     session.add(event)
     session.commit()

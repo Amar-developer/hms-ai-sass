@@ -16,6 +16,7 @@ import {
   selectedSchedulePayloadsFromRHF,
 } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import { pageSize, weekdays } from "./constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Empty } from "@/app/components/common/Empty";
@@ -178,10 +179,10 @@ export function Scheduling({ apiSession, branchId }: any) {
 
       // Delete surplus old rows
       if (existingRows.length > 1) {
-        await Promise.all(
-          existingRows
-            .slice(1)
-            .map((row: any) => remove(row.id, scopedSession)),
+        await mapWithConcurrency(
+          existingRows.slice(1),
+          (row: any) => remove(row.id, scopedSession),
+          4,
         );
       }
 
@@ -206,8 +207,10 @@ export function Scheduling({ apiSession, branchId }: any) {
     setMessage("");
 
     try {
-      await Promise.all(
-        rowsToDelete.map((item: any) => remove(item.id, scopedSession)),
+      await mapWithConcurrency(
+        rowsToDelete,
+        (item: any) => remove(item.id, scopedSession),
+        4,
       );
 
       setMessage(

@@ -3,17 +3,23 @@
 import { useEffect, useState } from "react";
 import type { ApiSession } from "@/lib/api";
 import * as reportsApi from "./reports.api";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 async function fetchInvoiceDetailsBatch(
   apiSession: ApiSession,
   invoiceIds: string[],
 ) {
-  const details = await Promise.all(
-    invoiceIds.map((invoiceId: string) =>
-      reportsApi.getInvoiceDetail(apiSession, invoiceId).catch(() => null),
-    ),
+  const chunks: string[][] = [];
+  for (let index = 0; index < invoiceIds.length; index += 50) {
+    chunks.push(invoiceIds.slice(index, index + 50));
+  }
+  const responses = await mapWithConcurrency(
+    chunks,
+    (chunk) =>
+      reportsApi.getInvoiceReportDetails(apiSession, chunk).catch(() => []),
+    2,
   );
-  return details.filter(Boolean);
+  return responses.flat().filter(Boolean);
 }
 
 type UseInvoiceDetailsBatchParams = {
@@ -24,7 +30,7 @@ type UseInvoiceDetailsBatchParams = {
 };
 
 /**
- * Fetches `/billing/invoices/:id` for a batch of invoice ids in parallel.
+ * Fetches report-only invoice items/payments in server-side batches.
  * Owns its own `invoiceDetails`/`invoiceDetailsLoading` state — use this
  * when nothing needs to read that state before this hook's ids are ready
  * (e.g. the home-care invoice ids, known from `liveInvoices` alone).
