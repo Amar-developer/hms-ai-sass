@@ -27,6 +27,8 @@ import { mapPatient } from "@/lib/liveData";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { patient_status_options } from "./constants";
+import { useQueryClient } from "@tanstack/react-query";
+import { getTenantBranches } from "@/features/tenants/api/tenantReferenceQueries";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -51,6 +53,7 @@ export function Patient({
   setActive,
   setPatients,
 }: PatientProps) {
+  const queryClient = useQueryClient();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];
@@ -125,7 +128,7 @@ export function Patient({
     const session = { ...apiSession, tenantId: nextTenantId };
     try {
       const [branchRows, patientRows] = await Promise.all([
-        apiFetch(`/tenants/${nextTenantId}/branches`, session).catch(() => []),
+        getTenantBranches(queryClient, session, nextTenantId).catch(() => []),
         apiFetch(
           `/patients?limit=100&active_only=false${query ? `&q=${encodeURIComponent(query)}` : ""}`,
           session,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import type { ApiSession } from "@/lib/api";
 import { money } from "@/utils/helper";
@@ -40,6 +41,7 @@ export function useBillingActions(
     branchId?: string;
   },
 ) {
+  const queryClient = useQueryClient();
   const { loadLiveData, loadReports, setSettlement, branchId } = options;
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
@@ -167,6 +169,7 @@ export function useBillingActions(
         const { blob, filename } = await createInvoiceReceiptPdf(
           invoice.id,
           session,
+          queryClient,
         );
         if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
           throw new Error(
@@ -236,6 +239,7 @@ export function useBillingActions(
       const { blob, filename } = await createInvoiceReceiptPdf(
         invoice.id,
         session,
+        queryClient,
       );
       if (blob.size > MAX_INVOICE_PDF_UPLOAD_BYTES) {
         throw new Error("The regenerated invoice PDF exceeds the 5 MB limit.");
@@ -432,7 +436,7 @@ export function useBillingActions(
     setBusy(`receipt-${invoice.id}`);
     setMessage("");
     try {
-      await downloadInvoiceReceipt(invoice.id, session);
+      await downloadInvoiceReceipt(invoice.id, session, queryClient);
     } catch (err: any) {
       setMessage(err.message || "Could not generate the invoice PDF.");
     } finally {

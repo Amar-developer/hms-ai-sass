@@ -1,4 +1,6 @@
 import { apiFetch } from "@/lib/api";
+import type { QueryClient } from "@tanstack/react-query";
+import { getBillingReport } from "@/features/billing/api/billingReportQueries";
 
 interface DashboardApiParams {
   branchId?: string;
@@ -6,6 +8,7 @@ interface DashboardApiParams {
   monthStart: string;
   monthEnd: string;
   apiSession: any;
+  queryClient?: QueryClient;
 }
 
 export async function getDashboardReports({
@@ -14,6 +17,7 @@ export async function getDashboardReports({
   monthStart,
   monthEnd,
   apiSession,
+  queryClient,
 }: DashboardApiParams) {
   const monthlyParams = new URLSearchParams({
     from_date: monthStart,
@@ -32,23 +36,52 @@ export async function getDashboardReports({
 
   const [collections, todayPaid, monthlyDue, todayDue, patientCount] =
     await Promise.all([
-      apiFetch(
-        `/billing/reports/collections?${monthlyParams}`,
-        apiSession,
+      (queryClient
+        ? getBillingReport(
+            queryClient,
+            apiSession,
+            `/billing/reports/collections?${monthlyParams}`,
+          )
+        : apiFetch(
+            `/billing/reports/collections?${monthlyParams}`,
+            apiSession,
+          )
       ).catch(() => null),
 
-      apiFetch(`/billing/reports/collections?${todayParams}`, apiSession).catch(
-        () => null,
-      ),
-
-      apiFetch(
-        `/billing/reports/due-collection?${monthlyParams}`,
-        apiSession,
+      (queryClient
+        ? getBillingReport(
+            queryClient,
+            apiSession,
+            `/billing/reports/collections?${todayParams}`,
+          )
+        : apiFetch(
+            `/billing/reports/collections?${todayParams}`,
+            apiSession,
+          )
       ).catch(() => null),
 
-      apiFetch(
-        `/billing/reports/due-collection?${todayParams}`,
-        apiSession,
+      (queryClient
+        ? getBillingReport(
+            queryClient,
+            apiSession,
+            `/billing/reports/due-collection?${monthlyParams}`,
+          )
+        : apiFetch(
+            `/billing/reports/due-collection?${monthlyParams}`,
+            apiSession,
+          )
+      ).catch(() => null),
+
+      (queryClient
+        ? getBillingReport(
+            queryClient,
+            apiSession,
+            `/billing/reports/due-collection?${todayParams}`,
+          )
+        : apiFetch(
+            `/billing/reports/due-collection?${todayParams}`,
+            apiSession,
+          )
       ).catch(() => null),
 
       apiFetch(

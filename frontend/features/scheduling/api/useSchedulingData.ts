@@ -1,20 +1,24 @@
 "use client";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   getTenants,
-  getBranches,
-  getDepartments,
   getDoctors,
   getSchedules,
 } from "../api";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { activeTenantOptions } from "@/utils/helper";
+import {
+  getTenantBranches,
+  getTenantDepartments,
+} from "@/features/tenants/api/tenantReferenceQueries";
 
 export function useSchedulingData({
   apiSession,
   tenantId,
   filterDepartment,
 }: any) {
+  const queryClient = useQueryClient();
   const [tenants, setTenants] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -43,9 +47,9 @@ export function useSchedulingData({
 
       const [branchRows, departmentRows, doctorRows, scheduleRows] =
         await Promise.all([
-          getBranches(tenantId, session),
+          getTenantBranches(queryClient, session, tenantId),
 
-          getDepartments(tenantId, session),
+          getTenantDepartments(queryClient, session, tenantId),
 
           getDoctors(session),
 

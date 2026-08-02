@@ -21,16 +21,14 @@ import json
 from functools import lru_cache
 
 from app.core.config import get_settings
+from app.infrastructure.integrations.factories import get_cache_store
 
 _PREFIX = "medizinhub:authcache"
 
 
 @lru_cache
 def _client():
-    from redis import Redis
-
-    settings = get_settings()
-    return Redis.from_url(settings.redis_url, decode_responses=True)
+    return get_cache_store()
 
 
 def _ttl() -> int:

@@ -1,13 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ApiSession } from "@/lib/api";
-import {
-  fetchCollectionsReport,
-  fetchDueCollectionReport,
-  fetchRevenueReport,
-  fetchSettlementSummary,
-} from "./billing.api";
+import { getBillingReport } from "./billingReportQueries";
 
 export function useBillingReports(
   session: ApiSession | null | undefined,
@@ -20,6 +16,7 @@ export function useBillingReports(
     canViewSettlementSummary: boolean;
   },
 ) {
+  const queryClient = useQueryClient();
   const {
     branchId,
     invoiceCount,
@@ -44,32 +41,54 @@ export function useBillingReports(
   if (branchId) monthlyReportParams.set("branch_id", branchId);
   const monthlyReportQuery = monthlyReportParams.toString();
 
-  async function loadReports() {
+  async function loadReports(force = false) {
     if (!session) return;
+    const duePath = `/billing/reports/due-collection${branchReportQuery}`;
+    const currentMonthDuePath =
+      `/billing/reports/due-collection?${monthlyReportQuery}`;
+    const revenuePath =
+      `/billing/reports/revenue?group_by=doctor&${monthlyReportQuery}`;
+    const collectionsPath =
+      `/billing/reports/collections?${monthlyReportQuery}`;
+    const settlementPath =
+      `/billing/doctor-settlements/summary${branchReportQuery}`;
     const [due, currentMonthDue, revenue, collections, summary] =
       await Promise.all([
         canViewRevenueSummary
-          ? fetchDueCollectionReport(session, branchReportQuery).catch(
+          ? getBillingReport(queryClient, session, duePath, force).catch(
               () => null,
             )
           : Promise.resolve(null),
         canViewRevenueSummary
-          ? fetchDueCollectionReport(session, `?${monthlyReportQuery}`).catch(
+          ? getBillingReport(
+              queryClient,
+              session,
+              currentMonthDuePath,
+              force,
+            ).catch(() => null)
+          : Promise.resolve(null),
+        canViewRevenueSummary
+          ? getBillingReport(queryClient, session, revenuePath, force).catch(
               () => null,
             )
           : Promise.resolve(null),
         canViewRevenueSummary
-          ? fetchRevenueReport(session, monthlyReportQuery).catch(() => null)
-          : Promise.resolve(null),
-        canViewRevenueSummary
-          ? fetchCollectionsReport(session, monthlyReportQuery).catch(
+          ? getBillingReport(
+              queryClient,
+              session,
+              collectionsPath,
+              force,
+            ).catch(
               () => null,
             )
           : Promise.resolve(null),
         canViewSettlementSummary
-          ? fetchSettlementSummary(session, branchReportQuery).catch(
-              () => null,
-            )
+          ? getBillingReport(
+              queryClient,
+              session,
+              settlementPath,
+              force,
+            ).catch(() => null)
           : Promise.resolve(null),
       ]);
     setDueReport(due);

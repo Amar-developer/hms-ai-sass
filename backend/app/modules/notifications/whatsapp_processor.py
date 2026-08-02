@@ -20,10 +20,13 @@ from app.modules.integrations.invoice_receipts import (
 )
 from app.modules.integrations.document_links import create_signed_document_url
 from app.modules.integrations.service import decode_config, get_tenant_plugin
-from app.modules.integrations.whatsapp_gateway import (
-    WhatsAppGateway,
-    WhatsAppGatewayResult,
-    normalize_whatsapp_number,
+from app.infrastructure.integrations.adapters.messaging.http_template import (
+    normalize_mobile_number,
+)
+from app.infrastructure.integrations.factories import get_template_message_gateway
+from app.infrastructure.integrations.ports.messaging import (
+    TemplateMessageGateway,
+    TemplateMessageResult,
 )
 from app.modules.integrations.whatsapp_schemas import (
     WhatsAppFlowSettings,
@@ -503,7 +506,7 @@ def _delivery_recipient(session: Session, event: NotificationEvent) -> str:
 def _save_result(
     session: Session,
     event: NotificationEvent,
-    result: WhatsAppGatewayResult,
+    result: TemplateMessageResult,
 ) -> None:
     now = now_utc()
     event.attempt_count += 1
@@ -565,10 +568,10 @@ def process_due_whatsapp_notifications(
     session: Session,
     *,
     limit: int = 10,
-    gateway: WhatsAppGateway | None = None,
+    gateway: TemplateMessageGateway | None = None,
 ) -> int:
     processed = 0
-    sender = gateway or WhatsAppGateway()
+    sender = gateway or get_template_message_gateway()
     for _index in range(limit):
         event = _claim_next(session)
         if not event:
@@ -578,7 +581,7 @@ def process_due_whatsapp_notifications(
             recipient_name, values, media_url, media_filename = _message_values(
                 session, event, config
             )
-            destination = normalize_whatsapp_number(
+            destination = normalize_mobile_number(
                 _delivery_recipient(session, event),
                 str(config.get("default_country_code") or "+91"),
             )
@@ -600,13 +603,13 @@ def process_due_whatsapp_notifications(
             _save_result(
                 session,
                 event,
-                WhatsAppGatewayResult(False, "send_failed", str(exc)),
+                TemplateMessageResult(False, "send_failed", str(exc)),
             )
         except ValueError as exc:
             _save_result(
                 session,
                 event,
-                WhatsAppGatewayResult(False, "invalid_configuration", str(exc)),
+                TemplateMessageResult(False, "invalid_configuration", str(exc)),
             )
         except Exception:
             session.rollback()
@@ -621,7 +624,7 @@ def process_due_whatsapp_notifications(
             _save_result(
                 session,
                 event,
-                WhatsAppGatewayResult(
+                TemplateMessageResult(
                     False,
                     "send_failed",
                     "An unexpected delivery error occurred.",

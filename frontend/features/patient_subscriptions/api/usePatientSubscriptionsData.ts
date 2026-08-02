@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ApiSession } from "@/lib/api";
 import { uniqueDepartmentRows } from "@/lib/options";
 import * as patientSubscriptionsApi from "./patientSubscriptions.api";
+import { getTenantDepartments } from "@/features/tenants/api/tenantReferenceQueries";
 
 type UsePatientSubscriptionsDataParams = {
   apiSession: ApiSession | null | undefined;
@@ -28,6 +30,7 @@ export function usePatientSubscriptionsData({
   setSelectedPlan,
   setDetailPlanId,
 }: UsePatientSubscriptionsDataParams) {
+  const queryClient = useQueryClient();
   const [plans, setPlans] = useState<any[]>([]);
   const [enrollments, setEnrollments] = useState<any[]>([]);
   const [labTests, setLabTests] = useState<any[]>([]);
@@ -49,9 +52,7 @@ export function usePatientSubscriptionsData({
           patientSubscriptionsApi
             .listMedicines(apiSession, branchId)
             .catch(() => []),
-          patientSubscriptionsApi
-            .listDepartments(apiSession, apiSession.tenantId)
-            .catch(() => []),
+          getTenantDepartments(queryClient, apiSession).catch(() => []),
         ]);
       setPlans(planRows);
       setEnrollments(enrollmentRows);

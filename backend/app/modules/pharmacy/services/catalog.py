@@ -109,9 +109,19 @@ def list_available_medicines_service(
     actor: User,
 ) -> list[dict[str, str]]:
     enforce_module_enabled(session, tenant_id, "pharmacy")
+    normalized_search = (search or "").strip()
+    # The external catalog is a type-ahead search, not workspace bootstrap
+    # data. Popular medicines provide the initial suggestions; refusing empty
+    # and one-character lookups prevents slow broad third-party requests from
+    # every Doctor/Consultation mount and protects the provider from accidental
+    # request amplification by older clients.
+    if len(normalized_search) < 2:
+        return []
     if external_medicine_items_enabled(session, tenant_id):
         return medicine_graphql_client().get_products(
-            search, page_size=page_size, current_page=current_page
+            normalized_search,
+            page_size=page_size,
+            current_page=current_page,
         )
 
     branch_id = scoped_branch_id(actor, branch_id)
@@ -120,7 +130,7 @@ def list_available_medicines_service(
         for row in PharmacyCatalogRepository(session).list_active_medicines(
             tenant_id=tenant_id,
             branch_id=branch_id,
-            search=search,
+            search=normalized_search,
             limit=page_size,
             offset=(current_page - 1) * page_size,
         )

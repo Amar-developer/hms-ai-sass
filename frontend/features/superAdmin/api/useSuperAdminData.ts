@@ -1,8 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { tenantSelectOptions } from "../helpers";
+import {
+  getTenantBranches,
+  getTenantDepartments,
+} from "@/features/tenants/api/tenantReferenceQueries";
 
 function hasPermission(apiSession: any, permission: string) {
   const keys = apiSession?.user?.permissions || [];
@@ -18,6 +23,7 @@ function hasAnyPermission(apiSession: any, permissions: string[]) {
 }
 
 export function useSuperAdminData(apiSession: any) {
+  const queryClient = useQueryClient();
   const [tenants, setTenants] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -45,8 +51,8 @@ export function useSuperAdminData(apiSession: any) {
       const scoped = { ...apiSession, tenantId: primaryTenantId };
       const [roleRows, departmentRows, branchRows] = await Promise.all([
         apiFetch("/identity/roles", scoped),
-        apiFetch(`/tenants/${primaryTenantId}/departments`, scoped),
-        apiFetch(`/tenants/${primaryTenantId}/branches`, scoped),
+        getTenantDepartments(queryClient, scoped, primaryTenantId),
+        getTenantBranches(queryClient, scoped, primaryTenantId),
       ]);
       setPrimaryTemplates({
         roles: roleRows.filter((role: any) => role.key !== "super_admin"),
@@ -138,8 +144,8 @@ export function useSuperAdminData(apiSession: any) {
       ] = await Promise.all([
         apiFetch("/identity/roles", scoped),
         apiFetch("/identity/users", scoped),
-        apiFetch(`/tenants/${tenantId}/departments`, scoped),
-        apiFetch(`/tenants/${tenantId}/branches`, scoped),
+        getTenantDepartments(queryClient, scoped, tenantId),
+        getTenantBranches(queryClient, scoped, tenantId),
         apiFetch("/identity/permissions", scoped),
         apiFetch("/subscription-plans/tenant-subscriptions", scoped).catch(
           () => [],

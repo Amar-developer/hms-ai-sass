@@ -1,7 +1,12 @@
 import { apiFetch, type ApiSession, uploadAssetUrl } from "@/lib/api";
+import type { QueryClient } from "@tanstack/react-query";
 import { resolveInvoiceLogoAsset } from "@/lib/imageAssets";
 import { invoiceItemPriceBreakdown } from "./helpers";
 import type { InvoiceProps } from "./types";
+import {
+  fetchResolvedSetting,
+  getResolvedSetting,
+} from "@/features/settings/api/resolvedSettingQueries";
 
 export function safeFilename(value: unknown) {
   return String(value || "")
@@ -101,6 +106,7 @@ export function toInvoiceProps(
 export async function loadInvoiceReceiptProps(
   invoiceId: string,
   session: ApiSession,
+  queryClient?: QueryClient,
 ): Promise<{ props: InvoiceProps; release: () => void }> {
   const detail = await apiFetch(
     `/billing/invoices/${encodeURIComponent(invoiceId)}`,
@@ -115,12 +121,27 @@ export async function loadInvoiceReceiptProps(
           )
         : Promise.resolve(null),
       apiFetch("/tenants/current/branding", session).catch(() => null),
-      apiFetch("/settings/resolve?module=invoice&key=invoice.logo_url", session).catch(
-        () => null,
-      ),
-      apiFetch(
-        "/settings/resolve?module=accounts&key=accounts.bank_details",
-        session,
+      (queryClient
+        ? getResolvedSetting(
+            queryClient,
+            session,
+            "invoice",
+            "invoice.logo_url",
+          )
+        : fetchResolvedSetting(session, "invoice", "invoice.logo_url")
+      ).catch(() => null),
+      (queryClient
+        ? getResolvedSetting(
+            queryClient,
+            session,
+            "accounts",
+            "accounts.bank_details",
+          )
+        : fetchResolvedSetting(
+            session,
+            "accounts",
+            "accounts.bank_details",
+          )
       ).catch(() => null),
       apiFetch("/files?category=logo&attached_to_doctype=Tenant&limit=20", session).catch(
         () => [],

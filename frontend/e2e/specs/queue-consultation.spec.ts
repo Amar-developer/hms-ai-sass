@@ -1,4 +1,10 @@
-import { test, expect, openModule, selectBranch } from "../support/fixtures";
+import {
+  test,
+  expect,
+  openModule,
+  selectBranch,
+  selectDepartment,
+} from "../support/fixtures";
 import { authFile } from "../support/paths";
 import { expectApi } from "../support/api";
 
@@ -20,9 +26,20 @@ test.describe("queue and consultation workflow", () => {
     );
     const target = queueRows.find((row) => row.id === seed.queueEntryId);
     expect(target).toBeTruthy();
+    const departments = await expectApi<any[]>(
+      await adminApi.get(`/tenants/${seed.tenantId}/departments`, {
+        headers: adminHeaders,
+      }),
+      200,
+    );
+    const targetDepartment = departments.find(
+      (row) => row.id === seed.departmentId,
+    );
+    expect(targetDepartment).toBeTruthy();
 
     await page.goto("/");
     await selectBranch(page, seed.branchName);
+    await selectDepartment(page, targetDepartment.name);
     await openModule(page, "Token Queue");
     const targetRow = () =>
       page

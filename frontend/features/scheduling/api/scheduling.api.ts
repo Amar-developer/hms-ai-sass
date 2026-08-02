@@ -4,14 +4,6 @@ export function getTenants(apiSession: any) {
   return apiFetch("/tenants", apiSession);
 }
 
-export function getBranches(tenantId: string, session: any) {
-  return apiFetch(`/tenants/${tenantId}/branches`, session);
-}
-
-export function getDepartments(tenantId: string, session: any) {
-  return apiFetch(`/tenants/${tenantId}/departments`, session);
-}
-
 export function getDoctors(session: any) {
   return apiFetch("/practitioners", session);
 }

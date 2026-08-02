@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import type { ApiSession } from "@/lib/api";
 import * as consulationApi from "./consulation.api";
 
+const EMPTY_MEDICINE_CATALOG: any[] = [];
+
 type UseConsultationDataParams = {
   apiSession: ApiSession | null | undefined;
   branchId?: string;
@@ -24,7 +26,6 @@ export function useConsultationData({
 }: UseConsultationDataParams) {
   const [scopedPractitioners, setScopedPractitioners] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
-  const [medicineCatalog, setMedicineCatalog] = useState<any[]>([]);
   const [labCatalog, setLabCatalog] = useState<any[]>([]);
 
   useEffect(() => {
@@ -69,29 +70,28 @@ export function useConsultationData({
   useEffect(() => {
     if (!apiSession) return;
     let alive = true;
-    Promise.all([
-      consulationApi.listAvailableMedicines(apiSession).catch(() => []),
-      consulationApi
-        .listAvailableLabTests(apiSession, { branchId })
-        .catch(() => []),
-    ])
-      .then(([medicines, tests]) => {
-        if (!alive) return;
-        setMedicineCatalog(medicines);
-        setLabCatalog(tests);
+    consulationApi
+      .listAvailableLabTests(apiSession, { branchId })
+      .then((tests) => {
+        if (alive) setLabCatalog(Array.isArray(tests) ? tests : []);
       })
       .catch(() => {
-        if (alive) {
-          setMedicineCatalog([]);
-          setLabCatalog([]);
-        }
+        if (alive) setLabCatalog([]);
       });
     return () => {
       alive = false;
     };
   }, [apiSession?.tenantId, branchId]);
 
-  return { scopedPractitioners, templates, medicineCatalog, labCatalog };
+  // Medicine suggestions are supplied by prescription history. The full
+  // external catalog is queried by ConsultationWorkspace only after the
+  // doctor types at least two characters.
+  return {
+    scopedPractitioners,
+    templates,
+    medicineCatalog: EMPTY_MEDICINE_CATALOG,
+    labCatalog,
+  };
 }
 
 /**

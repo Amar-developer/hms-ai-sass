@@ -134,6 +134,7 @@ Error Logs is intentionally hidden from the sidebar. Users with `error_logs.read
 | `GET` | `/api/v1/subscription-plans/reports/revenue` | `reports.read` |
 | `GET` | `/api/v1/subscription-plans/reports/revenue?export=csv|xls|pdf` | `reports.read` |
 | `GET` | `/api/v1/subscription-plans/platform/revenue-summary` | `platform.subscriptions.manage` |
+| `GET` | `/api/v1/platform/observability/metrics` | Super admin only; process, database-pool, and delivery-queue operational metrics |
 
 ## Identity and RBAC
 
@@ -324,6 +325,7 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/from-lab-order` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/from-pharmacy-issue` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices` | `billing.manage` |
+| `GET` | `/api/v1/billing/invoices/report-details` | Any of `billing.manage`, `billing.read`, `invoices.read`; bounded report enrichment for up to 50 invoices |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/document` | `billing.manage`, `billing.read`, or `invoices.read` |
 | `POST` | `/api/v1/billing/invoices/{invoice_id}/document/finalize` | `billing.manage` or `invoices.edit` |
@@ -489,6 +491,7 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `POST` | `/api/v1/notifications/in-app/read-all` | Authenticated tenant user; current user's inbox only |
 | `POST` | `/api/v1/notifications/in-app/announcements` | Tenant Admin for own tenant; Super Admin may publish platform-wide |
 | `GET` | `/api/v1/communications/public/invoice-receipts/{invoice_id}.pdf` | Public with short-lived signed query parameters |
+| `GET` | `/api/v1/communications/public/document-artifacts/{file_id}` | Public only with tenant-, artifact-, and expiry-bound signature |
 | `GET` | `/api/v1/communications/whatsapp/settings` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
 | `PUT` | `/api/v1/communications/whatsapp/settings` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
 | `POST` | `/api/v1/communications/whatsapp/test` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |

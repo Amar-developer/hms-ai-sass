@@ -1,6 +1,7 @@
 import re
 import uuid
-from pathlib import PurePosixPath
+
+from app.infrastructure.integrations.object_storage_keys import validate_storage_key
 
 
 _SAFE_SEGMENT = re.compile(r"[^A-Za-z0-9._-]+")
@@ -10,19 +11,6 @@ _SAFE_EXTENSION = re.compile(r"^\.[a-z0-9]{1,10}$")
 def _segment(value: str, fallback: str) -> str:
     cleaned = _SAFE_SEGMENT.sub("-", str(value or "").strip()).strip(".-_")
     return (cleaned or fallback)[:160]
-
-
-def validate_storage_key(key: str) -> str:
-    normalized = str(PurePosixPath(key))
-    if (
-        not key
-        or key.startswith("/")
-        or "\\" in key
-        or normalized == "."
-        or any(part in {"", ".", ".."} for part in key.split("/"))
-    ):
-        raise ValueError("Invalid storage key")
-    return normalized
 
 
 def build_storage_key(

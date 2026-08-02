@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import type { QueryClient } from "@tanstack/react-query";
 import type { ApiSession } from "@/lib/api";
 import Invoice from "./components/Invoice";
 import { exportInvoicePdf, renderInvoicePdfBlob } from "./exportInvoicePdf";
@@ -13,8 +14,13 @@ import { invoiceReceiptFilename, loadInvoiceReceiptProps } from "./invoiceReceip
 export async function downloadInvoiceReceipt(
   invoiceId: string,
   session: ApiSession,
+  queryClient?: QueryClient,
 ): Promise<void> {
-  const { props, release } = await loadInvoiceReceiptProps(invoiceId, session);
+  const { props, release } = await loadInvoiceReceiptProps(
+    invoiceId,
+    session,
+    queryClient,
+  );
 
   const container = document.createElement("div");
   container.style.position = "fixed";
@@ -46,8 +52,13 @@ export async function downloadInvoiceReceipt(
 export async function createInvoiceReceiptPdf(
   invoiceId: string,
   session: ApiSession,
+  queryClient?: QueryClient,
 ): Promise<{ blob: Blob; filename: string }> {
-  const { props, release } = await loadInvoiceReceiptProps(invoiceId, session);
+  const { props, release } = await loadInvoiceReceiptProps(
+    invoiceId,
+    session,
+    queryClient,
+  );
   const container = document.createElement("div");
   container.style.position = "fixed";
   container.style.top = "0";

@@ -1,62 +1,12 @@
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+"""Compatibility imports for the Files domain's storage contract.
 
+New code should import the contract from ``app.infrastructure.integrations.ports``.
+"""
 
-@dataclass(frozen=True)
-class StorageObject:
-    key: str
-    size: int
-    checksum_sha256: str
-    bucket: str | None = None
-    region: str | None = None
-    version_id: str | None = None
-    storage_class: str | None = None
+from app.infrastructure.integrations.ports.object_storage import (
+    StorageBackend,
+    StorageObject,
+    StorageObjectMetadata,
+)
 
-
-@dataclass(frozen=True)
-class StorageObjectMetadata:
-    key: str
-    size: int
-    content_type: str | None = None
-    checksum_sha256: str | None = None
-    bucket: str | None = None
-    region: str | None = None
-    version_id: str | None = None
-    storage_class: str | None = None
-
-
-class StorageBackend(ABC):
-    name: str
-
-    @abstractmethod
-    def put(
-        self,
-        *,
-        key: str,
-        data: bytes,
-        content_type: str,
-        checksum_sha256: str,
-        metadata: dict[str, str] | None = None,
-        tags: dict[str, str] | None = None,
-    ) -> StorageObject:
-        raise NotImplementedError
-
-    @abstractmethod
-    def get_bytes(self, *, key: str) -> bytes:
-        raise NotImplementedError
-
-    @abstractmethod
-    def exists(self, *, key: str) -> bool:
-        raise NotImplementedError
-
-    @abstractmethod
-    def head(self, *, key: str) -> StorageObjectMetadata:
-        raise NotImplementedError
-
-    @abstractmethod
-    def delete(self, *, key: str, version_id: str | None = None) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def create_download_url(self, *, key: str, expires_in: int) -> str:
-        raise NotImplementedError
+__all__ = ["StorageBackend", "StorageObject", "StorageObjectMetadata"]

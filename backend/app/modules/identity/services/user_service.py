@@ -30,6 +30,7 @@ from app.modules.identity.services.helpers import (
     replace_user_roles,
     resolve_role_for_user_assignment,
     user_read,
+    user_reads,
 )
 from app.modules.identity.services.privileged_policy import PRIVILEGED_USER_TYPES
 from app.modules.settings.numbering import next_document_number
@@ -152,7 +153,7 @@ class UserService:
             permissions.IDENTITY_USERS_READ,
         )
         users = self.users.list_for_tenant(tenant_id)
-        return [user_read(self.session, user) for user in users]
+        return user_reads(self.session, users)
 
     def update_user(
         self, *, tenant_id: str, user_id: str, payload: UserUpdate, actor: User

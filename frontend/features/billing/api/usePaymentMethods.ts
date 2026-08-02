@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ApiSession } from "@/lib/api";
 import { paymentMethodOptions } from "@/lib/options";
-import { fetchEnabledPaymentMethods } from "./billing.api";
+import { getResolvedSetting } from "@/features/settings/api/resolvedSettingQueries";
 
 export function usePaymentMethods(session: ApiSession | null | undefined) {
+  const queryClient = useQueryClient();
   const [enabledPaymentMethods, setEnabledPaymentMethods] = useState<string[]>(
     paymentMethodOptions.map((option) => option.value),
   );
@@ -13,7 +15,12 @@ export function usePaymentMethods(session: ApiSession | null | undefined) {
   useEffect(() => {
     let alive = true;
     if (!session) return undefined;
-    fetchEnabledPaymentMethods(session)
+    getResolvedSetting(
+      queryClient,
+      session,
+      "payment",
+      "payment.methods_enabled",
+    )
       .then((row: any) => {
         const values = Array.isArray(row?.value) ? row.value : [];
         const allowed = new Set<string>(

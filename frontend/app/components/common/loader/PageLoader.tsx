@@ -53,7 +53,7 @@ export function PageLoader({
 
       <div className="">{label && <p className="pl-label ">{label}</p>}</div>
 
-      <style jsx>{`
+      <style>{`
         .pl-fullscreen {
           position: fixed;
           inset: 0;

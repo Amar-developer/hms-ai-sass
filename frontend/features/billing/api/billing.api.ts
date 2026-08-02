@@ -1,36 +1,10 @@
 import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
 
-export function fetchEnabledPaymentMethods(session: ApiSession) {
-  return apiFetch(
-    "/settings/resolve?module=payment&key=payment.methods_enabled",
-    session,
-  );
-}
-
 export function fetchInvoiceDelivery(session: ApiSession, invoiceId: string) {
   return apiFetch(
     `/billing/invoices/${encodeURIComponent(invoiceId)}/delivery`,
     session,
   );
-}
-
-export function fetchDueCollectionReport(session: ApiSession, query = "") {
-  return apiFetch(`/billing/reports/due-collection${query}`, session);
-}
-
-export function fetchRevenueReport(session: ApiSession, query: string) {
-  return apiFetch(
-    `/billing/reports/revenue?group_by=doctor&${query}`,
-    session,
-  );
-}
-
-export function fetchCollectionsReport(session: ApiSession, query: string) {
-  return apiFetch(`/billing/reports/collections?${query}`, session);
-}
-
-export function fetchSettlementSummary(session: ApiSession, query = "") {
-  return apiFetch(`/billing/doctor-settlements/summary${query}`, session);
 }
 
 export function createInvoiceFromConsultation(

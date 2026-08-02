@@ -12,7 +12,7 @@ def test_health_contract(unauthenticated_client: TestClient):
     body = response.json()
     assert body["status"] == "ok"
     assert body["service"] == "MedizinHub HMS API"
-    assert body["version"] == "0.1.0"
+    assert body["version"] == Settings().app_version
     assert body["build_commit"] == "unknown"
     assert body["built_at"] is None
     assert body["environment"] == "local"

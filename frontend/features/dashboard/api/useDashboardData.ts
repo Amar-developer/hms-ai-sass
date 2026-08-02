@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { getDashboardReports } from "../api";
 
 export function useDashboardData({
@@ -10,6 +11,7 @@ export function useDashboardData({
   monthStart,
   monthEnd,
 }: any) {
+  const queryClient = useQueryClient();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -27,6 +29,7 @@ export function useDashboardData({
         today,
         monthStart,
         monthEnd,
+        queryClient,
       });
 
       if (mounted) {

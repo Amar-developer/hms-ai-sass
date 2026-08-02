@@ -1,9 +1,23 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiFetch, type ApiSession } from "@/lib/api";
+import { type ApiSession } from "@/lib/api";
 import { mapAppointment } from "@/lib/liveData";
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
+import {
+  APPOINTMENT_ROWS_STALE_MS,
+  CONSULTATION_ROWS_STALE_MS,
+  QUEUE_ROWS_STALE_MS,
+  SCHEDULE_ROWS_STALE_MS,
+  appointmentRowsQueryKey,
+  consultationRowsQueryKey,
+  fetchAppointmentRows,
+  fetchConsultationRows,
+  fetchQueueRows,
+  fetchScheduleRows,
+  queueRowsQueryKey,
+  scheduleRowsQueryKey,
+} from "./appointmentWorkspaceQueries";
 
 export function appointmentsQueryKey(apiSession: ApiSession | null | undefined) {
   return ["appointments", apiSession?.tenantId] as const;
@@ -36,10 +50,26 @@ export function useAppointmentsQuery(
     queryFn: async () => {
       const session = apiSession as ApiSession;
       const [appointmentRows, queueRows, consultationRows, scheduleRows] = await Promise.all([
-        apiFetch("/appointments", session),
-        apiFetch("/queue?include_completed=true", session),
-        apiFetch("/consultations", session),
-        apiFetch("/practitioners/schedules?is_active=true", session),
+        queryClient.fetchQuery({
+          queryKey: appointmentRowsQueryKey(session.tenantId),
+          queryFn: () => fetchAppointmentRows(session),
+          staleTime: APPOINTMENT_ROWS_STALE_MS,
+        }),
+        queryClient.fetchQuery({
+          queryKey: queueRowsQueryKey(session.tenantId),
+          queryFn: () => fetchQueueRows(session),
+          staleTime: QUEUE_ROWS_STALE_MS,
+        }),
+        queryClient.fetchQuery({
+          queryKey: consultationRowsQueryKey(session.tenantId),
+          queryFn: () => fetchConsultationRows(session),
+          staleTime: CONSULTATION_ROWS_STALE_MS,
+        }),
+        queryClient.fetchQuery({
+          queryKey: scheduleRowsQueryKey(session.tenantId),
+          queryFn: () => fetchScheduleRows(session),
+          staleTime: SCHEDULE_ROWS_STALE_MS,
+        }),
       ]);
       const patientMap = new Map(patients.map((p: any) => [p.id, p]));
       const practitionerMap = new Map(

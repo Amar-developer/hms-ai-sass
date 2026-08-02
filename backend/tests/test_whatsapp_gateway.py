@@ -2,10 +2,10 @@ import json
 
 import pytest
 
-from app.modules.integrations import whatsapp_gateway
-from app.modules.integrations.whatsapp_gateway import (
-    WhatsAppGateway,
-    normalize_whatsapp_number,
+from app.infrastructure.integrations.adapters.messaging import http_template
+from app.infrastructure.integrations.adapters.messaging.http_template import (
+    HttpTemplateMessageGateway,
+    normalize_mobile_number,
 )
 
 
@@ -19,12 +19,12 @@ from app.modules.integrations.whatsapp_gateway import (
     ],
 )
 def test_normalizes_mobile_numbers(value, expected):
-    assert normalize_whatsapp_number(value, "+91") == expected
+    assert normalize_mobile_number(value, "+91") == expected
 
 
 def test_rejects_invalid_mobile_number():
     with pytest.raises(ValueError, match="valid mobile number"):
-        normalize_whatsapp_number("123", "+91")
+        normalize_mobile_number("123", "+91")
 
 
 def test_gateway_sends_expected_template_payload(monkeypatch):
@@ -49,12 +49,10 @@ def test_gateway_sends_expected_template_payload(monkeypatch):
             captured["timeout"] = timeout
             return FakeResponse()
 
-    monkeypatch.setattr(whatsapp_gateway, "build_opener", lambda *_args: FakeOpener())
-    monkeypatch.setattr(
-        whatsapp_gateway, "validate_public_https_url", lambda _value: None
-    )
+    monkeypatch.setattr(http_template, "build_opener", lambda *_args: FakeOpener())
+    monkeypatch.setattr(http_template, "validate_public_https_url", lambda _value: None)
 
-    result = WhatsAppGateway().send_template(
+    result = HttpTemplateMessageGateway().send_template(
         api_url="https://gateway.example.com/messages",
         api_key="secret-key",
         campaign_name="doctor_appointment_confirmation",
