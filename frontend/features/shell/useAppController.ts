@@ -29,6 +29,21 @@ import {
   fetchPractitioners,
   practitionersQueryKey,
 } from "@/features/doctors/api/usePractitionersQuery";
+import {
+  APPOINTMENT_ROWS_STALE_MS,
+  CONSULTATION_ROWS_STALE_MS,
+  QUEUE_ROWS_STALE_MS,
+  SCHEDULE_ROWS_STALE_MS,
+  appointmentRowsQueryKey,
+  consultationRowsQueryKey,
+  queueRowsQueryKey,
+  scheduleRowsQueryKey,
+} from "@/features/appointments/api/appointmentWorkspaceQueries";
+import {
+  TENANT_REFERENCE_STALE_MS,
+  tenantBranchesQueryKey,
+  tenantDepartmentsQueryKey,
+} from "@/features/tenants/api/tenantReferenceQueries";
 
 const allModuleIds = nav.map(([id]) => id);
 const defaultEntitlementModuleIds = Array.from(
@@ -255,18 +270,32 @@ export function useAppController() {
       : Promise.resolve<any[]>([]);
     const [tenantRows, branchRows, departmentRows] = await Promise.all([
       tenantRowsPromise,
-      apiFetchIfAllowed<any[]>(
-        `/tenants/${session.tenantId}/branches`,
-        session,
-        referenceReadPermissions,
-        [],
-      ),
-      apiFetchIfAllowed<any[]>(
-        `/tenants/${session.tenantId}/departments`,
-        session,
-        referenceReadPermissions,
-        [],
-      ),
+      sessionHasAnyPermission(session, referenceReadPermissions)
+        ? queryClient.fetchQuery({
+            queryKey: tenantBranchesQueryKey(session.tenantId),
+            queryFn: () =>
+              apiFetchIfAllowed<any[]>(
+                `/tenants/${session.tenantId}/branches`,
+                session,
+                referenceReadPermissions,
+                [],
+              ),
+            staleTime: TENANT_REFERENCE_STALE_MS,
+          })
+        : Promise.resolve<any[]>([]),
+      sessionHasAnyPermission(session, referenceReadPermissions)
+        ? queryClient.fetchQuery({
+            queryKey: tenantDepartmentsQueryKey(session.tenantId),
+            queryFn: () =>
+              apiFetchIfAllowed<any[]>(
+                `/tenants/${session.tenantId}/departments`,
+                session,
+                referenceReadPermissions,
+                [],
+              ),
+            staleTime: TENANT_REFERENCE_STALE_MS,
+          })
+        : Promise.resolve<any[]>([]),
     ]);
     if (requestRevision !== liveDataRequestRef.current) return;
     const activeTenant = tenantRows.find(
@@ -356,28 +385,57 @@ export function useAppController() {
           ),
       !moduleAvailable("appointments")
         ? Promise.resolve<any[]>([])
-        : apiFetchIfAllowed<any[]>(
-            "/appointments",
-            session,
-            ["appointments.manage", "appointments.read", "appointments.create"],
-            [],
-          ),
+        : sessionHasAnyPermission(session, [
+              "appointments.manage",
+              "appointments.read",
+              "appointments.create",
+            ])
+          ? queryClient.fetchQuery({
+              queryKey: appointmentRowsQueryKey(session.tenantId),
+              queryFn: () =>
+                apiFetchIfAllowed<any[]>(
+                  "/appointments",
+                  session,
+                  [
+                    "appointments.manage",
+                    "appointments.read",
+                    "appointments.create",
+                  ],
+                  [],
+                ),
+              staleTime: APPOINTMENT_ROWS_STALE_MS,
+            })
+          : Promise.resolve<any[]>([]),
       !moduleAvailable("queue")
         ? Promise.resolve<any[]>([])
-        : apiFetchIfAllowed<any[]>(
-            "/queue?include_completed=true",
-            session,
-            ["queue.manage", "queue.read"],
-            [],
-          ),
+        : sessionHasAnyPermission(session, ["queue.manage", "queue.read"])
+          ? queryClient.fetchQuery({
+              queryKey: queueRowsQueryKey(session.tenantId),
+              queryFn: () =>
+                apiFetchIfAllowed<any[]>(
+                  "/queue?include_completed=true",
+                  session,
+                  ["queue.manage", "queue.read"],
+                  [],
+                ),
+              staleTime: QUEUE_ROWS_STALE_MS,
+            })
+          : Promise.resolve<any[]>([]),
       !moduleAvailable("consultations")
         ? Promise.resolve<any[]>([])
-        : apiFetchIfAllowed<any[]>(
-            "/consultations",
-            session,
-            "consultations.read",
-            [],
-          ),
+        : sessionHasAnyPermission(session, ["consultations.read"])
+          ? queryClient.fetchQuery({
+              queryKey: consultationRowsQueryKey(session.tenantId),
+              queryFn: () =>
+                apiFetchIfAllowed<any[]>(
+                  "/consultations",
+                  session,
+                  ["consultations.read"],
+                  [],
+                ),
+              staleTime: CONSULTATION_ROWS_STALE_MS,
+            })
+          : Promise.resolve<any[]>([]),
       !moduleAvailable("billing_basic", "billing_advanced", "billing")
         ? Promise.resolve<any[]>([])
         : apiFetchIfAllowed<any[]>(
@@ -416,12 +474,27 @@ export function useAppController() {
           : Promise.resolve<any[]>([]),
       !moduleAvailable("scheduling")
         ? Promise.resolve<any[]>([])
-        : apiFetchIfAllowed<any[]>(
-        "/practitioners/schedules?is_active=true",
-        session,
-        ["scheduling.manage", "scheduling.read", "practitioners.manage"],
-        [],
-      ),
+        : sessionHasAnyPermission(session, [
+              "scheduling.manage",
+              "scheduling.read",
+              "practitioners.manage",
+            ])
+          ? queryClient.fetchQuery({
+              queryKey: scheduleRowsQueryKey(session.tenantId),
+              queryFn: () =>
+                apiFetchIfAllowed<any[]>(
+                  "/practitioners/schedules?is_active=true",
+                  session,
+                  [
+                    "scheduling.manage",
+                    "scheduling.read",
+                    "practitioners.manage",
+                  ],
+                  [],
+                ),
+              staleTime: SCHEDULE_ROWS_STALE_MS,
+            })
+          : Promise.resolve<any[]>([]),
     ]);
     const referencedPatientIds = [
       ...appointmentRows.map((row: any) => row.patient_id),

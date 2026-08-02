@@ -1,8 +1,67 @@
 from datetime import date
 
+from sqlalchemy import event
+from sqlmodel import Session
+
+from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole
+from app.modules.identity.repositories import IdentityUserRepository
+from app.modules.identity.services.read_models import user_reads
+from app.modules.tenants.models import Tenant
+
 from app.modules.identity.services.helpers import (
     normalize_user_access as _normalize_user_access,
 )
+
+
+def test_tenant_user_list_batches_roles_and_permissions(test_engine):
+    tenant_id = "tenant_user_list_batch"
+    with Session(test_engine) as session:
+        session.add(Tenant(id=tenant_id, name="User List Batch Clinic"))
+        role = Role(
+            tenant_id=tenant_id,
+            name="Front Desk",
+            key="front_desk",
+        )
+        permission = Permission(
+            key="appointments.read",
+            description="Appointments Read",
+        )
+        session.add(role)
+        session.add(permission)
+        session.flush()
+        session.add(RolePermission(role_id=role.id, permission_id=permission.id))
+        for index in range(20):
+            user = User(
+                tenant_id=tenant_id,
+                name=f"Front Desk {index}",
+                email=f"frontdesk-{index}@batch.test",
+            )
+            session.add(user)
+            session.flush()
+            session.add(UserRole(user_id=user.id, role_id=role.id, tenant_id=tenant_id))
+        session.commit()
+
+    statements = 0
+
+    def count_statement(*_args):
+        nonlocal statements
+        statements += 1
+
+    with Session(test_engine) as session:
+        users = IdentityUserRepository(session).list_for_tenant(tenant_id)
+        event.listen(test_engine, "before_cursor_execute", count_statement)
+        try:
+            rows = user_reads(session, users)
+        finally:
+            event.remove(test_engine, "before_cursor_execute", count_statement)
+
+    assert len(rows) == 20
+    assert all(row.roles == ["front_desk"] for row in rows)
+    assert all(row.permissions == ["appointments.read"] for row in rows)
+    assert all(row.tenant_name == "User List Batch Clinic" for row in rows)
+    # Role assignments, canonical roles, permissions, and tenant names are
+    # loaded once each, independent of the number of users.
+    assert statements == 4
 
 
 def bootstrap_super_admin(client):

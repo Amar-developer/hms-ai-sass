@@ -29,10 +29,16 @@ import { DoctorForm } from "@/features/doctors/forms/DoctorForm";
 import { Pagination } from "@/app/components/common/Pagination";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getTenantBranches,
+  getTenantDepartments,
+} from "@/features/tenants/api/tenantReferenceQueries";
 
 const pageSize = 10;
 
 export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
+  const queryClient = useQueryClient();
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const userPermissions = apiSession?.user?.permissions || [];
@@ -120,8 +126,8 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
     const session = { ...apiSession, tenantId: nextTenantId };
     try {
       const [branchRows, departmentRows] = await Promise.all([
-        apiFetch(`/tenants/${nextTenantId}/branches`, session),
-        apiFetch(`/tenants/${nextTenantId}/departments`, session),
+        getTenantBranches(queryClient, session, nextTenantId, force),
+        getTenantDepartments(queryClient, session, nextTenantId, force),
       ]);
       setBranches(branchRows);
       setDepartments(uniqueDepartmentRows(departmentRows));

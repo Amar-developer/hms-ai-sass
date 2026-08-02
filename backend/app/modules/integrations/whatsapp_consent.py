@@ -5,7 +5,9 @@ from app.modules.billing.models import CreditNote, Invoice
 from app.modules.consultations.models import Consultation
 from app.modules.lab.models import LabOrder
 from app.modules.patients.models import Patient, WhatsAppConsentStatus
-from app.modules.integrations.whatsapp_gateway import normalize_whatsapp_number
+from app.infrastructure.integrations.adapters.messaging.http_template import (
+    normalize_mobile_number,
+)
 
 
 def patient_for_notification_resource(
@@ -61,7 +63,7 @@ def patient_notification_destination(
         if not normalized:
             continue
         try:
-            return normalize_whatsapp_number(normalized, default_country_code)
+            return normalize_mobile_number(normalized, default_country_code)
         except ValueError:
             continue
     return None

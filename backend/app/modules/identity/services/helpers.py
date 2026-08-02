@@ -25,6 +25,7 @@ from app.modules.identity.services.read_models import (  # noqa: F401
     permission_read,
     role_read,
     user_read,
+    user_reads,
 )
 from app.modules.identity.services.role_permissions import (  # noqa: F401
     ensure_permission,

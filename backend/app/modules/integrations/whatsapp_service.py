@@ -18,10 +18,11 @@ from app.modules.integrations.whatsapp_schemas import (
     WhatsAppTestRequest,
     WhatsAppTemplateSettings,
 )
-from app.modules.integrations.whatsapp_gateway import (
-    WhatsAppGateway,
-    normalize_whatsapp_number,
+from app.infrastructure.integrations.adapters.messaging.http_template import (
+    normalize_mobile_number,
 )
+from app.infrastructure.integrations.factories import get_template_message_gateway
+from app.infrastructure.integrations.ports.messaging import TemplateMessageGateway
 from app.modules.integrations.whatsapp_templates import resolve_template_identifier
 from app.modules.integrations.whatsapp_usage import read_whatsapp_usage
 from app.modules.integrations.whatsapp_health import read_whatsapp_health
@@ -204,7 +205,7 @@ def test_whatsapp_integration(
     tenant_id: str,
     payload: WhatsAppTestRequest,
     actor: User,
-    gateway: WhatsAppGateway | None = None,
+    gateway: TemplateMessageGateway | None = None,
 ) -> WhatsAppTestRead:
     _enforce_entitlement(session, tenant_id)
     row = get_tenant_plugin(session, tenant_id, PLUGIN_KEY)
@@ -239,10 +240,10 @@ def test_whatsapp_integration(
     _enforce_test_rate_limit(session, tenant_id, actor.id)
     try:
         api_key = decrypt_credential(row.secret_ciphertext)
-        destination = normalize_whatsapp_number(
+        destination = normalize_mobile_number(
             payload.mobile, str(config.get("default_country_code") or "+91")
         )
-        result = (gateway or WhatsAppGateway()).send_template(
+        result = (gateway or get_template_message_gateway()).send_template(
             api_url=str(config.get("api_url") or ""),
             api_key=api_key,
             campaign_name=campaign_name,

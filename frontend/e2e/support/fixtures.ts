@@ -88,6 +88,25 @@ export async function selectBranch(page: Page, branchName: string) {
   await expect(branchControl).toContainText(branchName);
 }
 
+export async function selectDepartment(page: Page, departmentName: string) {
+  const departmentControl = page
+    .getByText("Department", { exact: true })
+    .filter({ visible: true })
+    .first()
+    .locator("..")
+    .getByRole("button")
+    .first();
+  if (!(await departmentControl.isVisible().catch(() => false))) return;
+  if ((await departmentControl.innerText()).includes(departmentName)) return;
+  await departmentControl.click();
+  await page
+    .getByRole("button", { name: departmentName, exact: true })
+    .filter({ visible: true })
+    .last()
+    .click();
+  await expect(departmentControl).toContainText(departmentName);
+}
+
 export function visibleNavButton(page: Page, label: string) {
   return page
     .locator("nav")

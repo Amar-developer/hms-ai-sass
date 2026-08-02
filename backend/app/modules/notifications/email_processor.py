@@ -1,13 +1,14 @@
 import json
 import logging
-import mimetypes
-import smtplib
 from datetime import timedelta
-from email.message import EmailMessage
 
 from sqlmodel import Session, select
 
-from app.core.config import get_settings
+from app.infrastructure.integrations.factories import get_email_sender
+from app.infrastructure.integrations.ports.email import (
+    EmailAttachment,
+    EmailMessageRequest,
+)
 from app.modules.audit.service import record_audit_event
 from app.modules.files.models import FileDocument
 from app.modules.files.services.artifact_service import ArtifactService
@@ -35,27 +36,21 @@ class SmtpEmailSender:
         body: str,
         attachments: list[tuple[str, str, bytes]],
     ) -> str:
-        settings = get_settings()
-        if not settings.smtp_host:
-            raise RuntimeError("SMTP is not configured")
-        message = EmailMessage()
-        message["Subject"] = subject
-        message["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
-        message["To"] = recipient
-        message.set_content(body)
-        for filename, content_type, content in attachments:
-            guessed = content_type or mimetypes.guess_type(filename)[0]
-            maintype, subtype = (guessed or "application/octet-stream").split("/", 1)
-            message.add_attachment(
-                content, maintype=maintype, subtype=subtype, filename=filename
+        return get_email_sender().send_message(
+            EmailMessageRequest(
+                recipients=[recipient],
+                subject=subject,
+                body=body,
+                attachments=[
+                    EmailAttachment(
+                        filename=filename,
+                        content_type=content_type,
+                        content=content,
+                    )
+                    for filename, content_type, content in attachments
+                ],
             )
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
-            if settings.smtp_use_tls:
-                smtp.starttls()
-            if settings.smtp_username:
-                smtp.login(settings.smtp_username, settings.smtp_password or "")
-            smtp.send_message(message)
-        return message["Message-ID"] or ""
+        )
 
 
 def _claim_next(session: Session) -> DocumentDelivery | None:

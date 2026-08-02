@@ -173,6 +173,52 @@ def test_available_medicines_uses_external_graphql_catalog(test_engine, monkeypa
     assert rows[0]["source"] == "graphql"
 
 
+def test_available_medicines_skips_external_catalog_without_meaningful_search(
+    monkeypatch,
+):
+    from app.modules.pharmacy.services import catalog as pharmacy_catalog
+
+    monkeypatch.setattr(
+        pharmacy_catalog, "enforce_module_enabled", lambda *_args, **_kwargs: None
+    )
+
+    def unexpected_client():
+        raise AssertionError("blank searches must not call the external catalog")
+
+    monkeypatch.setattr(pharmacy_catalog, "medicine_graphql_client", unexpected_client)
+    actor = User(
+        tenant_id="tenant_medicine_search",
+        user_type="tenant_admin",
+        name="Tenant Admin",
+        email="tenant-admin@example.test",
+    )
+
+    assert (
+        pharmacy_catalog.list_available_medicines_service(
+            object(),
+            tenant_id="tenant_medicine_search",
+            branch_id=None,
+            search=None,
+            page_size=10,
+            current_page=1,
+            actor=actor,
+        )
+        == []
+    )
+    assert (
+        pharmacy_catalog.list_available_medicines_service(
+            object(),
+            tenant_id="tenant_medicine_search",
+            branch_id=None,
+            search=" d ",
+            page_size=10,
+            current_page=1,
+            actor=actor,
+        )
+        == []
+    )
+
+
 def test_local_available_medicines_applies_requested_page(monkeypatch):
     from app.modules.pharmacy.services import catalog as pharmacy_catalog
 

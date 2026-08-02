@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import Invoice from "@/features/billing/components/Invoice";
 import { exportInvoicePdf } from "@/features/billing/exportInvoicePdf";
@@ -22,6 +23,7 @@ function readSession(): ApiSession | null {
 }
 
 export default function ReceiptPage() {
+  const queryClient = useQueryClient();
   const [invoiceProps, setInvoiceProps] = useState<InvoiceProps | null>(null);
   const [error, setError] = useState("");
   const [isExporting, setIsExporting] = useState(false);
@@ -47,6 +49,7 @@ export default function ReceiptPage() {
         const { props, release } = await loadInvoiceReceiptProps(
           invoiceId,
           session,
+          queryClient,
         );
         if (cancelled) {
           release();

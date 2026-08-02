@@ -22,10 +22,6 @@ export function listMedicines(session: ApiSession, branchId?: string) {
   );
 }
 
-export function listDepartments(session: ApiSession, tenantId: string) {
-  return apiFetch(`/tenants/${tenantId}/departments`, session);
-}
-
 export function createLabTest(session: ApiSession, payload: any) {
   return apiFetch("/lab/catalog/tests", session, {
     method: "POST",

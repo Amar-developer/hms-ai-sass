@@ -1,7 +1,5 @@
 export {
   getTenants,
-  getBranches,
-  getDepartments,
   getDoctors,
   getSchedules,
   createSchedule,
