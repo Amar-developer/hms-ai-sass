@@ -87,6 +87,22 @@ class BillingReadRepository:
             ).all()
         )
 
+    def list_invoice_items_for_invoices(
+        self, *, tenant_id: str, invoice_ids: set[str]
+    ) -> list[InvoiceItem]:
+        if not invoice_ids:
+            return []
+        return list(
+            self.session.exec(
+                select(InvoiceItem)
+                .where(
+                    InvoiceItem.tenant_id == tenant_id,
+                    InvoiceItem.invoice_id.in_(invoice_ids),
+                )
+                .order_by(InvoiceItem.invoice_id, InvoiceItem.created_at)
+            ).all()
+        )
+
     def list_payments(self, invoice: Invoice) -> list[Payment]:
         return list(
             self.session.exec(
@@ -96,6 +112,22 @@ class BillingReadRepository:
                     Payment.invoice_id == invoice.id,
                 )
                 .order_by(Payment.collected_at)
+            ).all()
+        )
+
+    def list_payments_for_invoices(
+        self, *, tenant_id: str, invoice_ids: set[str]
+    ) -> list[Payment]:
+        if not invoice_ids:
+            return []
+        return list(
+            self.session.exec(
+                select(Payment)
+                .where(
+                    Payment.tenant_id == tenant_id,
+                    Payment.invoice_id.in_(invoice_ids),
+                )
+                .order_by(Payment.invoice_id, Payment.collected_at)
             ).all()
         )
 

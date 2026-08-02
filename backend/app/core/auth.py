@@ -4,6 +4,7 @@ from typing import Annotated
 from fastapi import Cookie, Depends, Header, HTTPException, status
 from sqlmodel import Session, select
 
+from app.core import auth_cache
 from app.core.database import get_session
 from app.modules.identity.models import (
     AuthSession,
@@ -109,20 +110,28 @@ def get_current_auth_session(
 def user_role_keys(session: Session, user: User) -> list[str]:
     if user.is_super_admin:
         return ["super_admin"]
+    cached = auth_cache.get_role_keys(user.id)
+    if cached is not None:
+        return cached
     rows = session.exec(
         select(Role)
         .join(UserRole, UserRole.role_id == Role.id)
         .where(UserRole.user_id == user.id, Role.is_active == True)  # noqa: E712
         .order_by(Role.key)
     ).all()
-    return list(
+    keys = list(
         dict.fromkeys(_canonical_tenant_role(session, role).key for role in rows)
     )
+    auth_cache.set_role_keys(user.id, keys)
+    return keys
 
 
 def user_permission_keys(session: Session, user: User) -> list[str]:
     if user.is_super_admin:
         return ["*"]
+    cached = auth_cache.get_permission_keys(user.id)
+    if cached is not None:
+        return cached
     assigned_roles = session.exec(
         select(Role)
         .join(UserRole, UserRole.role_id == Role.id)
@@ -134,6 +143,7 @@ def user_permission_keys(session: Session, user: User) -> list[str]:
         )
     )
     if not role_ids:
+        auth_cache.set_permission_keys(user.id, [])
         return []
     rows = session.exec(
         select(Permission)
@@ -141,13 +151,31 @@ def user_permission_keys(session: Session, user: User) -> list[str]:
         .where(RolePermission.role_id.in_(role_ids))
         .order_by(Permission.key)
     ).all()
-    return sorted({permission.key for permission in rows})
+    keys = sorted({permission.key for permission in rows})
+    auth_cache.set_permission_keys(user.id, keys)
+    return keys
 
 
 def is_tenant_admin_user(session: Session, user: User) -> bool:
     return user.user_type == "tenant_admin" or "tenant_admin" in user_role_keys(
         session, user
     )
+
+
+def _tenant_status_cached(
+    session: Session, tenant_id: str
+) -> tuple[bool, TenantStatus | None]:
+    cached = auth_cache.get_tenant_status(tenant_id)
+    if cached is not None:
+        status_value = cached["status"]
+        return cached["exists"], TenantStatus(status_value) if status_value else None
+    tenant = session.get(Tenant, tenant_id)
+    auth_cache.set_tenant_status(
+        tenant_id,
+        exists=tenant is not None,
+        status=tenant.status.value if tenant else None,
+    )
+    return (tenant is not None), (tenant.status if tenant else None)
 
 
 def require_super_admin(current_user: User = Depends(get_current_user)) -> User:
@@ -221,8 +249,8 @@ def require_permission(permission_key: str):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="X-Tenant-ID header is required",
             )
-        tenant = session.get(Tenant, x_tenant_id)
-        if not tenant:
+        tenant_exists, tenant_status = _tenant_status_cached(session, x_tenant_id)
+        if not tenant_exists:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
             )
@@ -232,7 +260,7 @@ def require_permission(permission_key: str):
             tenant_id=x_tenant_id,
             permission_keys={permission_key},
         )
-        if tenant.status == TenantStatus.SUSPENDED and not platform_operation:
+        if tenant_status == TenantStatus.SUSPENDED and not platform_operation:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended"
             )
@@ -264,8 +292,8 @@ def require_any_permission(*permission_keys: str):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="X-Tenant-ID header is required",
             )
-        tenant = session.get(Tenant, x_tenant_id)
-        if not tenant:
+        tenant_exists, tenant_status = _tenant_status_cached(session, x_tenant_id)
+        if not tenant_exists:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found"
             )
@@ -275,7 +303,7 @@ def require_any_permission(*permission_keys: str):
             tenant_id=x_tenant_id,
             permission_keys=set(permission_keys),
         )
-        if tenant.status == TenantStatus.SUSPENDED and not platform_operation:
+        if tenant_status == TenantStatus.SUSPENDED and not platform_operation:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Tenant is suspended"
             )

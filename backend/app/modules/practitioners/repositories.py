@@ -109,6 +109,50 @@ class PractitionerLinkRepository:
             ).all()
         ]
 
+    def active_branch_ids_by_practitioner(
+        self, *, tenant_id: str, practitioner_ids: set[str]
+    ) -> dict[str, list[str]]:
+        if not practitioner_ids:
+            return {}
+        result: dict[str, list[str]] = {}
+        rows = self.session.exec(
+            select(PractitionerBranch.practitioner_id, PractitionerBranch.branch_id)
+            .where(
+                PractitionerBranch.tenant_id == tenant_id,
+                PractitionerBranch.practitioner_id.in_(practitioner_ids),
+                PractitionerBranch.is_active == True,  # noqa: E712
+            )
+            .order_by(PractitionerBranch.practitioner_id, PractitionerBranch.branch_id)
+        ).all()
+        for practitioner_id, branch_id in rows:
+            result.setdefault(practitioner_id, []).append(branch_id)
+        return result
+
+    def active_department_ids_by_practitioner(
+        self, *, tenant_id: str, practitioner_ids: set[str]
+    ) -> dict[str, list[str]]:
+        if not practitioner_ids:
+            return {}
+        result: dict[str, list[str]] = {}
+        rows = self.session.exec(
+            select(
+                PractitionerDepartment.practitioner_id,
+                PractitionerDepartment.department_id,
+            )
+            .where(
+                PractitionerDepartment.tenant_id == tenant_id,
+                PractitionerDepartment.practitioner_id.in_(practitioner_ids),
+                PractitionerDepartment.is_active == True,  # noqa: E712
+            )
+            .order_by(
+                PractitionerDepartment.practitioner_id,
+                PractitionerDepartment.department_id,
+            )
+        ).all()
+        for practitioner_id, department_id in rows:
+            result.setdefault(practitioner_id, []).append(department_id)
+        return result
+
     def get_branch_link(
         self, *, tenant_id: str, practitioner_id: str, branch_id: str
     ) -> PractitionerBranch | None:

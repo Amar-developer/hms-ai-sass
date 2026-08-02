@@ -1,4 +1,5 @@
 import { reportClientError } from "./clientLogging";
+import { limitApiRequest } from "./concurrency";
 
 export const API_BASE = (
   process.env.NEXT_PUBLIC_MEDIZINHUB_API_URL || "http://127.0.0.1:8000/api/v1"
@@ -217,6 +218,31 @@ function requestBodySignature(body: BodyInit | null | undefined) {
   return String(body);
 }
 
+function retryDelayMs(response: Response) {
+  const retryAfter = Number(response.headers.get("retry-after") || 0);
+  const base =
+    Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1000;
+  return base + Math.floor(Math.random() * 500);
+}
+
+function waitForRetry(delayMs: number, signal?: AbortSignal | null) {
+  return new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException("Request cancelled", "AbortError"));
+      return;
+    }
+    const onAbort = () => {
+      globalThis.clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException("Request cancelled", "AbortError"));
+    };
+    const timer = globalThis.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 function idempotencyKeyFor(
   path: string,
   session: ApiSession,
@@ -277,18 +303,27 @@ export async function apiFetch<T = any>(
   const idempotencyKey = idempotencyKeyFor(path, session, fetchOptions);
   const correlationId = requestId();
   try {
-    res = await fetchWithTimeout(`${API_BASE}${path}`, {
-      ...fetchOptions,
-      cache: fetchOptions.cache ?? "no-store",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
-        ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
-        ...(fetchOptions.headers || {}),
-      },
-    });
+    const attempts = method === "GET" || method === "HEAD" ? 2 : 1;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      res = await limitApiRequest(
+        () =>
+          fetchWithTimeout(`${API_BASE}${path}`, {
+            ...fetchOptions,
+            cache: fetchOptions.cache ?? "no-store",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Tenant-ID": session.tenantId,
+              "X-Request-ID": correlationId,
+              ...(idempotencyKey ? { "X-Idempotency-Key": idempotencyKey } : {}),
+              ...(fetchOptions.headers || {}),
+            },
+          }),
+        fetchOptions.signal,
+      );
+      if (res.status !== 503 || attempt === attempts) break;
+      await waitForRetry(retryDelayMs(res), fetchOptions.signal);
+    }
   } catch (error) {
     if (
       error instanceof RequestTimeoutError ||
@@ -311,7 +346,10 @@ export async function apiFetch<T = any>(
   if (!res.ok) {
     const detail = await readErrorDetail(res);
     if (res.status === 401) notifySessionExpired();
-    if (!suppressErrorReportStatuses.includes(res.status)) {
+    if (
+      res.status !== 503 &&
+      !suppressErrorReportStatuses.includes(res.status)
+    ) {
       reportApiFailure(
         path,
         res.status,
@@ -339,16 +377,20 @@ export async function apiBlob(
   let res: Response;
   const correlationId = requestId();
   try {
-    res = await fetchWithTimeout(`${API_BASE}${path}`, {
-      ...options,
-      cache: options.cache ?? "no-store",
-      credentials: "include",
-      headers: {
-        "X-Tenant-ID": session.tenantId,
-        "X-Request-ID": correlationId,
-        ...(options.headers || {}),
-      },
-    });
+    res = await limitApiRequest(
+      () =>
+        fetchWithTimeout(`${API_BASE}${path}`, {
+          ...options,
+          cache: options.cache ?? "no-store",
+          credentials: "include",
+          headers: {
+            "X-Tenant-ID": session.tenantId,
+            "X-Request-ID": correlationId,
+            ...(options.headers || {}),
+          },
+        }),
+      options.signal,
+    );
   } catch (error) {
     if (
       error instanceof RequestTimeoutError ||
@@ -395,19 +437,21 @@ export async function apiUpload(
   let res: Response;
   const correlationId = requestId();
   try {
-    res = await fetchWithTimeout(
-      `${API_BASE}${path}`,
-      {
-        method: "POST",
-        cache: "no-store",
-        credentials: "include",
-        headers: {
-          "X-Tenant-ID": session.tenantId,
-          "X-Request-ID": correlationId,
+    res = await limitApiRequest(() =>
+      fetchWithTimeout(
+        `${API_BASE}${path}`,
+        {
+          method: "POST",
+          cache: "no-store",
+          credentials: "include",
+          headers: {
+            "X-Tenant-ID": session.tenantId,
+            "X-Request-ID": correlationId,
+          },
+          body: formData,
         },
-        body: formData,
-      },
-      UPLOAD_API_TIMEOUT_MS,
+        UPLOAD_API_TIMEOUT_MS,
+      ),
     );
   } catch (error) {
     if (error instanceof RequestTimeoutError) throw error;

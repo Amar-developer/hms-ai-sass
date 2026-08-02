@@ -36,6 +36,8 @@ class PharmacyCatalogRepository:
         tenant_id: str,
         branch_id: str | None = None,
         search: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> list[MedicineCatalog]:
         statement = select(MedicineCatalog).where(
             MedicineCatalog.tenant_id == tenant_id,
@@ -53,7 +55,12 @@ class PharmacyCatalogRepository:
                 | (MedicineCatalog.generic_name.ilike(pattern))
                 | (MedicineCatalog.code.ilike(pattern))
             )
-        return list(self.session.exec(statement.order_by(MedicineCatalog.name)).all())
+        statement = statement.order_by(MedicineCatalog.name)
+        if offset:
+            statement = statement.offset(offset)
+        if limit is not None:
+            statement = statement.limit(limit)
+        return list(self.session.exec(statement).all())
 
     def list_popular_prescribed_names(
         self, *, tenant_id: str, limit: int

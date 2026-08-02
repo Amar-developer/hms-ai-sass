@@ -138,12 +138,7 @@ def ensure_invoice_membership_benefit_ledger(
 
 
 def read_invoice_detail_full(session: Session, invoice: Invoice) -> InvoiceDetailRead:
-    return read_invoice_detail(
-        session,
-        invoice,
-        ensure_invoice_submit_ledger=ensure_invoice_submit_ledger,
-        ensure_invoice_membership_benefit_ledger=ensure_invoice_membership_benefit_ledger,
-    )
+    return read_invoice_detail(session, invoice)
 
 
 def create_service_invoice(

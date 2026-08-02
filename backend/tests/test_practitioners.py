@@ -1,6 +1,65 @@
 from datetime import date
 
 
+def test_practitioner_list_batches_branch_and_department_links(monkeypatch):
+    from app.modules.practitioners.models import Practitioner
+    from app.modules.practitioners.services import practitioner_service
+
+    practitioners = [
+        Practitioner(id="doctor_one", tenant_id="tenant_one", full_name="Dr. One"),
+        Practitioner(id="doctor_two", tenant_id="tenant_one", full_name="Dr. Two"),
+        Practitioner(id="doctor_three", tenant_id="tenant_one", full_name="Dr. Three"),
+    ]
+    calls = {"branches": 0, "departments": 0}
+
+    class FakePractitionerRepository:
+        def __init__(self, _session):
+            pass
+
+        def list_for_tenant(self, **_kwargs):
+            return practitioners
+
+    class FakeLinkRepository:
+        def __init__(self, _session):
+            pass
+
+        def active_branch_ids_by_practitioner(self, **_kwargs):
+            calls["branches"] += 1
+            return {
+                "doctor_one": ["branch_one"],
+                "doctor_two": ["branch_one"],
+                "doctor_three": ["branch_two"],
+            }
+
+        def active_department_ids_by_practitioner(self, **_kwargs):
+            calls["departments"] += 1
+            return {
+                "doctor_one": ["general"],
+                "doctor_two": ["general"],
+                "doctor_three": ["ped"],
+            }
+
+    monkeypatch.setattr(
+        practitioner_service, "PractitionerRepository", FakePractitionerRepository
+    )
+    monkeypatch.setattr(
+        practitioner_service, "PractitionerLinkRepository", FakeLinkRepository
+    )
+
+    rows = practitioner_service.list_practitioners(
+        object(),
+        tenant_id="tenant_one",
+        branch_id=None,
+        department_id=None,
+        doctor_practitioner_id=None,
+    )
+
+    assert len(rows) == 3
+    assert calls == {"branches": 1, "departments": 1}
+    assert rows[0].branch_ids == ["branch_one"]
+    assert rows[2].department_ids == ["ped"]
+
+
 def setup_tenant_branch_departments_patient(client):
     tenant = client.post("/api/v1/tenants", json={"name": "Practitioner Clinic"}).json()
     branch = client.post(

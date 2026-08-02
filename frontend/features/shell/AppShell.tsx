@@ -21,6 +21,7 @@ import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
 import { activeTenantOptions } from "@/utils/helper";
 import { PageLoader } from "@/app/components/common/loader/PageLoader";
+import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
 
 type ShellChromeValue = {
   navigatePage: (target: string | { id: string; section?: string }) => void;
@@ -80,7 +81,6 @@ export function AppShell({
     liveSummary,
     isInitialLoading,
   } = props;
-  const [routeLoading, setRouteLoading] = useState(false);
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const canAccessPlatformWorkspace = Boolean(
     isSuperAdmin ||
@@ -101,9 +101,10 @@ export function AppShell({
   const canAccessErrorLogs = enabled("error_logs");
   const router = useRouter();
   const pathname = usePathname();
+  const [pendingPage, setPendingPage] = useState("");
   const routeSegment =
     pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
-  const activePage =
+  const resolvedActivePage =
     routeSegment === "error_logs" && canAccessErrorLogs
       ? routeSegment
       : visibleNav.some(([id]: any) => id === routeSegment)
@@ -111,6 +112,7 @@ export function AppShell({
         : canAccessPlatformWorkspace
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
+  const activePage = pendingPage || resolvedActivePage;
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
     demoUsers.find((u: any) => u[0] === primaryRole)?.[1] ||
@@ -317,9 +319,7 @@ export function AppShell({
 
     if (id === activePage) return;
 
-    // Show loader
-    setRouteLoading(true);
-
+    setPendingPage(id);
     setActive(id);
     router.push(`/${id}`);
   }
@@ -328,10 +328,14 @@ export function AppShell({
   // (e.g. after a role/tenant switch) — redirect to the computed fallback
   // rather than silently rendering a different module under a stale URL.
   useEffect(() => {
-    if (activePage !== routeSegment) {
-      router.replace(`/${activePage}`);
+    if (resolvedActivePage !== routeSegment) {
+      router.replace(`/${resolvedActivePage}`);
     }
-  }, [activePage, routeSegment, router]);
+  }, [resolvedActivePage, routeSegment, router]);
+
+  useEffect(() => {
+    setPendingPage("");
+  }, [pathname]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -366,13 +370,25 @@ export function AppShell({
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.addEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [profileOpen]);
 
   useEffect(() => {
-    setRouteLoading(false);
-  }, [pathname]);
+    const highTrafficRoutes = new Set([
+      "dashboard",
+      "appointments",
+      "patients",
+      "practitioners",
+      "queue",
+      "billing",
+    ]);
+    visibleNav.forEach(([id]: any) => {
+      if (highTrafficRoutes.has(id) && id !== activePage) {
+        router.prefetch(`/${id}`);
+      }
+    });
+  }, [activePage, router, visibleNav.map(([id]: any) => id).join("|")]);
 
   const shellChromeValue: ShellChromeValue = {
     navigatePage,
@@ -441,7 +457,6 @@ export function AppShell({
         </div>
       )}
       <div className="h-full lg:flex">
-        {routeLoading && <PageLoader label={"Loading...."}/>}
         <aside
           className={`scrollbar-hidden hidden h-screen md:w-64 lg:w-64  shrink-0 overflow-y-auto overflow-x-hidden border-r border-slate-200 bg-white p-2 px-0 lg:block`}
         >
@@ -655,7 +670,11 @@ export function AppShell({
 
           <section className=" py-4 px-6">
             <ShellChromeContext.Provider value={shellChromeValue}>
-              {children}
+              {pendingPage && pendingPage !== routeSegment ? (
+                <ModuleSkeleton label={`Loading ${activeNavLabel}`} />
+              ) : (
+                children
+              )}
             </ShellChromeContext.Provider>
           </section>
         </main>

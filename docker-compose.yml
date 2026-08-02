@@ -2,6 +2,12 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: medizinhub-postgres
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - pg_stat_statements.track=all
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-medizinhub_hms}
       POSTGRES_USER: ${POSTGRES_USER:-medizinhub}
@@ -23,6 +29,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  pgbouncer:
+    # Sits between the app processes and Postgres so the number of real
+    # Postgres connections is bounded by DEFAULT_POOL_SIZE regardless of how
+    # many backend/report-worker processes exist — each process's own
+    # SQLAlchemy pool (MEDIZINHUB_DB_POOL_SIZE/MAX_OVERFLOW) only bounds its
+    # client connections to pgbouncer, not to Postgres itself. This is what
+    # actually prevents `QueuePool ... TimeoutError` under concurrent load,
+    # rather than just raising the app-side pool numbers.
+    image: edoburu/pgbouncer:1.21.0-p2
+    container_name: medizinhub-pgbouncer
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms}
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "200"
+      DEFAULT_POOL_SIZE: "20"
+      MIN_POOL_SIZE: "5"
+      AUTH_TYPE: scram-sha-256
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # No container-native healthcheck here: the image doesn't reliably bundle
+    # a client that can probe the pgbouncer port from inside the container.
+    # `backend`/`report-worker` depend on it with the default service_started
+    # condition and will simply fail their own DB calls (and their health
+    # endpoint) if pgbouncer isn't actually accepting connections yet.
     restart: unless-stopped
 
   frontend:
@@ -66,6 +99,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
       redis:
         condition: service_healthy
     env_file:
@@ -74,11 +109,27 @@ services:
       - medizinhub_uploads_data:/app/uploads
     command: >
       bash -c "
-      alembic -c alembic/alembic.ini upgrade head &&
+      MEDIZINHUB_DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms} alembic -c alembic/alembic.ini upgrade head &&
+      MEDIZINHUB_DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms} python scripts/verify_runtime_readiness.py --ensure-pg-stat-statements &&
       uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers ${MEDIZINHUB_WEB_CONCURRENCY:-2}
       "
     environment:
       PYTHONPATH: /app
+      # Routed through pgbouncer (not directly at postgres:5432) so the
+      # number of real Postgres connections stays bounded no matter how many
+      # workers/processes run — see the pgbouncer service comment above.
+      # Alembic (the command above) overrides this back to a direct
+      # postgres:5432 connection for the migration step only: DDL and
+      # advisory locks don't work reliably through pgbouncer's transaction
+      # pooling mode.
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@pgbouncer:6432/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_DB_POOL_SIZE: "10"
+      MEDIZINHUB_DB_MAX_OVERFLOW: "10"
+      MEDIZINHUB_DB_POOL_TIMEOUT: "5"
+      MEDIZINHUB_DB_STATEMENT_TIMEOUT_MS: "30000"
+      MEDIZINHUB_DB_LOCK_TIMEOUT_MS: "5000"
+      MEDIZINHUB_DB_IDLE_TRANSACTION_TIMEOUT_MS: "60000"
+      MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS: "true"
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
       MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
       MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
@@ -104,6 +155,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+      pgbouncer:
+        condition: service_started
     env_file:
       - .env
     volumes:
@@ -111,6 +164,17 @@ services:
     command: python -m app.modules.reports.worker
     environment:
       PYTHONPATH: /app
+      # Same reasoning as the backend service: go through pgbouncer so this
+      # long-lived process's pool doesn't add its own uncoordinated slice of
+      # direct Postgres connections.
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@pgbouncer:6432/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_DB_POOL_SIZE: "5"
+      MEDIZINHUB_DB_MAX_OVERFLOW: "5"
+      MEDIZINHUB_DB_POOL_TIMEOUT: "5"
+      MEDIZINHUB_DB_STATEMENT_TIMEOUT_MS: "30000"
+      MEDIZINHUB_DB_LOCK_TIMEOUT_MS: "5000"
+      MEDIZINHUB_DB_IDLE_TRANSACTION_TIMEOUT_MS: "60000"
+      MEDIZINHUB_DB_DISABLE_PREPARED_STATEMENTS: "true"
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
       MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
       MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}

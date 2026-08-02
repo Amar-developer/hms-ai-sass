@@ -121,6 +121,8 @@ def list_available_medicines_service(
             tenant_id=tenant_id,
             branch_id=branch_id,
             search=search,
+            limit=page_size,
+            offset=(current_page - 1) * page_size,
         )
     ]
 

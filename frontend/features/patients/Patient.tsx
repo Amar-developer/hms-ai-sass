@@ -473,8 +473,7 @@ export function Patient({
           created_by_user_id: apiSession.user?.id,
         }),
       });
-      await loadPatientDetail(selectedId);
-      if (loadLiveData) await loadLiveData(scopedSession);
+      await Promise.all([loadPatientDetail(selectedId), loadLiveData?.(scopedSession)]);
       setMessage("Patient membership enrolled and purchase invoice created.");
       return true;
     } catch (err: any) {

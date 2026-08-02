@@ -23,6 +23,7 @@ export function useIpAdmissionsQuery(apiSession: ApiSession | null | undefined) 
     queryKey,
     queryFn: () => ipApi.listAdmissions(apiSession as ApiSession),
     enabled: Boolean(apiSession),
+    staleTime: 30_000,
   });
 
   async function refetch() {

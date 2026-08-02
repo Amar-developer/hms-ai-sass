@@ -59,6 +59,9 @@ export function useAppointmentsQuery(
       );
     },
     enabled: Boolean(apiSession),
+    // Queue and consultation consumers share this operational snapshot, but
+    // it is intentionally short-lived because appointment state changes often.
+    staleTime: 15_000,
   });
 
   const appointments = query.data ?? [];

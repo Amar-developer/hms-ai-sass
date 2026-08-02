@@ -305,8 +305,7 @@ export function Billing({
     if (!apiSession) return;
     setMessage("");
     try {
-      await loadLiveData(apiSession);
-      await loadReports();
+      await Promise.all([loadLiveData(apiSession), loadReports()]);
       setMessage("Invoices refreshed.");
     } catch (err: any) {
       setMessage(err.message || "Could not refresh invoices.");

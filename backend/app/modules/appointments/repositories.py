@@ -150,13 +150,19 @@ class AppointmentGridRepository:
         return (
             select(
                 Appointment,
-                Tenant,
-                Branch,
-                Patient,
-                Department,
-                Practitioner,
-                QueueEntry,
-                Consultation,
+                Tenant.id,
+                Tenant.name,
+                Branch.id,
+                Branch.name,
+                Patient.id,
+                Patient.full_name,
+                Patient.mobile,
+                Department.id,
+                Department.name,
+                Practitioner.id,
+                Practitioner.full_name,
+                QueueEntry.token_number,
+                Consultation.status,
             )
             .join(Tenant, Tenant.id == Appointment.tenant_id)
             .join(Branch, Branch.id == Appointment.branch_id)

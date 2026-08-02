@@ -8,6 +8,15 @@ export function getInvoiceDetail(session: ApiSession, invoiceId: string) {
   return apiFetch(`/billing/invoices/${invoiceId}`, session);
 }
 
+export function getInvoiceReportDetails(
+  session: ApiSession,
+  invoiceIds: string[],
+) {
+  const params = new URLSearchParams();
+  invoiceIds.forEach((invoiceId) => params.append("ids", invoiceId));
+  return apiFetch(`/billing/invoices/report-details?${params}`, session);
+}
+
 export function listLabTests(session: ApiSession) {
   return apiFetch("/lab/catalog/tests", session);
 }

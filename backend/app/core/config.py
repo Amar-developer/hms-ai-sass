@@ -48,7 +48,25 @@ class Settings(BaseSettings):
     enable_docs: bool = Field(default=True)
 
     database_url: str = Field(default="sqlite:///./medizinhub_hms.db")
+    # With PgBouncer in front of Postgres (recommended in production), these
+    # only bound how many client connections *this process* holds against
+    # PgBouncer, not Postgres itself — PgBouncer's own pool_size is what
+    # bounds real Postgres connections. Keep these modest per-process; raising
+    # them without also raising PgBouncer/Postgres capacity just moves the
+    # exhaustion point.
+    db_pool_size: int = Field(default=10, ge=1)
+    db_max_overflow: int = Field(default=20, ge=0)
+    db_pool_timeout: int = Field(default=10, ge=1)
+    db_statement_timeout_ms: int = Field(default=30000, ge=0)
+    db_lock_timeout_ms: int = Field(default=5000, ge=0)
+    db_idle_transaction_timeout_ms: int = Field(default=60000, ge=0)
+    db_disable_prepared_statements: bool = Field(default=False)
     redis_url: str = Field(default="redis://localhost:6379/0")
+    # TTL for caching per-user permission/role keys and tenant lookups in
+    # Redis so the auth hot path (run on almost every request) doesn't hit
+    # Postgres each time. Bounds how long a revoked permission or suspended
+    # tenant can still appear valid.
+    auth_cache_ttl_seconds: int = Field(default=30, ge=0)
     credential_encryption_key: str = Field(
         default="local-development-credential-key-change-before-production",
         min_length=32,

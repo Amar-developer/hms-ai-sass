@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from app.core.config import get_settings
 from app.core.database import engine, get_session
 from app.core.logging import request_id_context, tenant_id_context
+from app.core.runtime_metrics import record_request
 from app.modules.error_logs.service import record_error_log
 from app.modules.identity.models import AuthSession, User
 from app.modules.identity.security import hash_token
@@ -40,6 +41,16 @@ def _request_session(scope: dict):
         return
     with Session(engine) as session:
         yield session
+
+
+def _pool_has_logging_headroom() -> bool:
+    """Reserve overflow connections for application traffic, not DB logging."""
+    pool = engine.pool
+    capacity = getattr(pool, "size", None)
+    checked_out = getattr(pool, "checkedout", None)
+    if not callable(capacity) or not callable(checked_out):
+        return True
+    return checked_out() < capacity()
 
 
 def _header_token(headers: dict[bytes, bytes]) -> str | None:
@@ -113,6 +124,26 @@ def _persist_request_issue(
     stack_trace: str | None = None,
     slow: bool = False,
 ) -> None:
+    if slow:
+        # Slow requests are already emitted as structured application logs.
+        # Persisting them synchronously creates another DB checkout precisely
+        # when the database is slow and can turn congestion into an outage.
+        return
+    if stack_trace and (
+        "sqlalchemy.exc.TimeoutError" in stack_trace or "QueuePool limit" in stack_trace
+    ):
+        return
+    if not _pool_has_logging_headroom():
+        # The DB pool is already the problem for this request. Opening a
+        # second session here to persist an ErrorLog row would just queue
+        # for another connection and time out too, turning one saturation
+        # event into a cascade of identical failures in the logs. Skip the
+        # DB write entirely — the stdout log below is enough to see it.
+        request_logger.warning(
+            "error_log.persistence_skipped_pool_saturated",
+            extra={"request_id": request_id, "path": path},
+        )
+        return
     try:
         with _request_session(scope) as session:
             valid_tenant_id, valid_branch_id, user_id = _request_identity(
@@ -210,6 +241,14 @@ class ObservabilityMiddleware:
             await self.app(scope, receive, send_with_request_id)
         except Exception:
             duration_ms = round((time.perf_counter() - started) * 1000, 2)
+            route = scope.get("route")
+            route_path = str(getattr(route, "path", None) or path)
+            record_request(
+                route=route_path,
+                method=method,
+                status_code=500,
+                duration_ms=duration_ms,
+            )
             stack_trace = traceback.format_exc()
             request_logger.exception(
                 "request.unhandled_error",
@@ -238,6 +277,14 @@ class ObservabilityMiddleware:
             raise
 
         duration_ms = round((time.perf_counter() - started) * 1000, 2)
+        route = scope.get("route")
+        route_path = str(getattr(route, "path", None) or path)
+        record_request(
+            route=route_path,
+            method=method,
+            status_code=response_status,
+            duration_ms=duration_ms,
+        )
         event = (
             "request.slow"
             if duration_ms >= self.slow_request_ms
@@ -259,7 +306,7 @@ class ObservabilityMiddleware:
                 "duration_ms": duration_ms,
             },
         )
-        if response_status >= 400 or duration_ms >= self.slow_request_ms:
+        if response_status >= 400 and response_status != 503:
             _persist_request_issue(
                 scope,
                 headers=headers,
@@ -270,7 +317,7 @@ class ObservabilityMiddleware:
                 path=path,
                 status_code=response_status,
                 duration_ms=duration_ms,
-                slow=duration_ms >= self.slow_request_ms and response_status < 400,
+                slow=False,
             )
         request_id_context.reset(request_context_token)
         tenant_id_context.reset(tenant_context_token)

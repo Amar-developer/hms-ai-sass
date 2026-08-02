@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { mapWithConcurrency } from "@/lib/concurrency";
 import type { ApiSession } from "@/lib/api";
 import { money } from "@/utils/helper";
 import {
@@ -88,12 +89,13 @@ export function useBillingActions(
       setSupplierOptions({});
       return;
     }
-    const optionRows = await Promise.all(
-      (row.items || []).map((item: any) =>
+    const optionRows = await mapWithConcurrency(
+      row.items || [],
+      (item: any) =>
         fetchInvoiceItemSupplierOptions(session, row.invoice.id, item.id)
           .then((opts: any) => [item.id, Array.isArray(opts) ? opts : []])
           .catch(() => [item.id, []]),
-      ),
+      4,
     );
     setSupplierOptions(Object.fromEntries(optionRows));
   }

@@ -915,3 +915,54 @@ def test_queue_display_supports_tamil_token_calling_text(client: TestClient):
     assert display.status_code == 200
     assert display.json()[0]["token_number"] == "N-001"
     assert "maruththuva" in display.json()[0]["call_message"]
+
+
+def test_appointment_grid_projects_only_display_fields():
+    from app.modules.appointments.repositories import AppointmentGridRepository
+
+    sql = str(AppointmentGridRepository(object())._statement())
+
+    assert "patient.full_name" in sql
+    assert "queueentry.token_number" in sql
+    assert "patient.whatsapp_consent_status" not in sql
+    assert "consultation.clinical_notes" not in sql
+
+
+def test_appointment_grid_projection_preserves_response_fields():
+    from datetime import date
+
+    from app.modules.appointments.models import Appointment
+    from app.modules.appointments.services.query_service import appointment_grid_row
+
+    appointment = Appointment(
+        id="appointment_one",
+        tenant_id="tenant_one",
+        branch_id="branch_one",
+        patient_id="patient_one",
+        department_id="general",
+        practitioner_id="doctor_one",
+        appointment_date=date(2026, 8, 2),
+    )
+    row = appointment_grid_row(
+        (
+            appointment,
+            "tenant_one",
+            "Clinic",
+            "branch_one",
+            "Main Branch",
+            "patient_one",
+            "Patient One",
+            "9000000001",
+            "general",
+            "General Medicine",
+            "doctor_one",
+            "Dr. One",
+            "N-001",
+            "signed",
+        )
+    )
+
+    assert row.patient_name == "Patient One"
+    assert row.practitioner_name == "Dr. One"
+    assert row.token_number == "N-001"
+    assert row.consultation_status == "signed"

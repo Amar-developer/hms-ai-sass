@@ -27,15 +27,28 @@ def practitioner_department_ids(
 
 
 def read_practitioner(session: Session, practitioner: Practitioner) -> PractitionerRead:
+    return practitioner_read_with_links(
+        practitioner,
+        branch_ids=practitioner_branch_ids(
+            session, practitioner.tenant_id, practitioner.id
+        ),
+        department_ids=practitioner_department_ids(
+            session, practitioner.tenant_id, practitioner.id
+        ),
+    )
+
+
+def practitioner_read_with_links(
+    practitioner: Practitioner,
+    *,
+    branch_ids: list[str],
+    department_ids: list[str],
+) -> PractitionerRead:
     data = PractitionerRead.model_validate(
         practitioner, from_attributes=True
     ).model_dump()
-    data["branch_ids"] = practitioner_branch_ids(
-        session, practitioner.tenant_id, practitioner.id
-    )
-    data["department_ids"] = practitioner_department_ids(
-        session, practitioner.tenant_id, practitioner.id
-    )
+    data["branch_ids"] = branch_ids
+    data["department_ids"] = department_ids
     return PractitionerRead(**data)
 
 

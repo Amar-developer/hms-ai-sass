@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { ApiSession } from "@/lib/api";
 import * as reportsApi from "./reports.api";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 type UsePharmacySettlementDataParams = {
   apiSession: ApiSession | null | undefined;
@@ -44,12 +45,13 @@ export function usePharmacySettlementData({
         const sourceIssueIds = relevantIssueIds.length
           ? relevantIssueIds
           : (issueRows || []).slice(0, 200).map((issue: any) => issue.id);
-        const details = await Promise.all(
-          sourceIssueIds.map((issueId: any) =>
+        const details = await mapWithConcurrency(
+          sourceIssueIds,
+          (issueId: any) =>
             reportsApi
               .getPharmacyIssueDetail(apiSession as ApiSession, issueId)
               .catch(() => null),
-          ),
+          4,
         );
         if (!cancelled) setPharmacyIssueDetails(details.filter(Boolean));
       } finally {

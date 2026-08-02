@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ApiSession } from "@/lib/api";
 import * as ipApi from "./ip.api";
 import { defaultRooms } from "../helpers";
+import { mapWithConcurrency } from "@/lib/concurrency";
 
 type UseIPAdmissionDataParams = {
   apiSession: ApiSession | null | undefined;
@@ -42,10 +43,10 @@ export function useIPAdmissionData({
         const rows = await ipApi.listRooms(apiSession, filters);
         if (rows.length === 0 && !roomSeedAttemptedRef.current) {
           roomSeedAttemptedRef.current = true;
-          await Promise.all(
-            defaultRooms(branchId).map((room) =>
-              ipApi.createRoom(apiSession, room).catch(() => null),
-            ),
+          await mapWithConcurrency(
+            defaultRooms(branchId),
+            (room) => ipApi.createRoom(apiSession, room).catch(() => null),
+            3,
           );
           const seededRows = await ipApi.listRooms(apiSession, filters);
           if (alive) setIpRooms(seededRows);

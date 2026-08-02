@@ -41,12 +41,17 @@ export function listClinicalTemplates(
   );
 }
 
-export function listAvailableMedicines(session: ApiSession, search?: string) {
+export function listAvailableMedicines(
+  session: ApiSession,
+  search?: string,
+  signal?: AbortSignal,
+) {
   const params = new URLSearchParams();
   if (search) params.set("search", search);
   return apiFetch(
     `/pharmacy/catalog/available-medicines${params.toString() ? `?${params}` : ""}`,
     session,
+    { signal },
   );
 }
 
