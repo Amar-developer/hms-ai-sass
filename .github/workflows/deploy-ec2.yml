@@ -82,7 +82,11 @@ jobs:
             docker compose -f docker-compose.yml build --pull
             docker compose -f docker-compose.yml run --rm --no-deps backend \
               python scripts/verify_production_environment.py
-            docker compose -f docker-compose.yml up -d --remove-orphans
+            if ! docker compose -f docker-compose.yml up -d --remove-orphans --wait --wait-timeout 180; then
+              docker compose -f docker-compose.yml ps
+              docker compose -f docker-compose.yml logs postgres pgbouncer backend --tail=200
+              exit 1
+            fi
 
             # Check disk after deploy
             docker system df
