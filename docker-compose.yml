@@ -41,7 +41,7 @@ services:
     # client connections to pgbouncer, not to Postgres itself. This is what
     # actually prevents `QueuePool ... TimeoutError` under concurrent load,
     # rather than just raising the app-side pool numbers.
-    image: edoburu/pgbouncer:1.21.0-p2
+    image: edoburu/pgbouncer:v1.25.2-p0
     container_name: medizinhub-pgbouncer
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms}
