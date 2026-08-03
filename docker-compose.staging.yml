@@ -13,13 +13,13 @@ services:
     env_file:
       - .env.staging
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-medizinhub_hms}
-      POSTGRES_USER: ${POSTGRES_USER:-medizinhub}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medizinhub_dev}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB is required}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
     volumes:
       - medizinhub_postgres_data_staging:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medizinhub} -d ${POSTGRES_DB:-medizinhub_hms}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:?POSTGRES_USER is required} -d ${POSTGRES_DB:?POSTGRES_DB is required}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -43,7 +43,11 @@ services:
     env_file:
       - .env.staging
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms}
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:?POSTGRES_DB is required}
+      DB_USER: ${POSTGRES_USER:?POSTGRES_USER is required}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POOL_MODE: transaction
       MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-200}
       DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-20}
@@ -52,6 +56,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$${DB_PASSWORD}\" psql -h 127.0.0.1 -p 5432 -U \"$${DB_USER}\" -d \"$${DB_NAME}\" -c 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
 
   # Production Dockerfile (multi-stage `next build` + standalone server) —
@@ -105,7 +114,7 @@ services:
       postgres:
         condition: service_healthy
       pgbouncer:
-        condition: service_started
+        condition: service_healthy
       redis:
         condition: service_healthy
     env_file:
@@ -117,8 +126,8 @@ services:
       PYTHONPATH: /app
       # start_api.py serializes migrations with a PostgreSQL advisory lock and
       # uses PgBouncer only after the deployment gate succeeds.
-      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@pgbouncer:6432/${POSTGRES_DB:-medizinhub_hms}
-      MEDIZINHUB_MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/${POSTGRES_DB:?POSTGRES_DB is required}
+      MEDIZINHUB_MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       MEDIZINHUB_DB_POOL_SIZE: "10"
       MEDIZINHUB_DB_MAX_OVERFLOW: "10"
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
@@ -149,7 +158,7 @@ services:
       backend:
         condition: service_healthy
       pgbouncer:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env.staging
     volumes:
@@ -157,7 +166,7 @@ services:
     command: python -m app.modules.reports.worker
     environment:
       PYTHONPATH: /app
-      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@pgbouncer:6432/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:?POSTGRES_USER is required}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@pgbouncer:5432/${POSTGRES_DB:?POSTGRES_DB is required}
       MEDIZINHUB_DB_POOL_SIZE: "5"
       MEDIZINHUB_DB_MAX_OVERFLOW: "5"
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0

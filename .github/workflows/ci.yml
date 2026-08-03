@@ -300,7 +300,11 @@ jobs:
             # only .env.staging differs (test DB, demo creds off). See
             # docker-compose.staging.yml / .env.staging.example.
             docker compose --env-file .env.staging -f docker-compose.staging.yml build --pull
-            docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --remove-orphans
+            if ! docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --remove-orphans --wait --wait-timeout 180; then
+              docker compose --env-file .env.staging -f docker-compose.staging.yml ps
+              docker compose --env-file .env.staging -f docker-compose.staging.yml logs postgres pgbouncer backend --tail=200
+              exit 1
+            fi
 
             # Check disk after deploy
             docker system df
