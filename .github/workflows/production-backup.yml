@@ -1,0 +1,40 @@
+name: Production Database Backup
+
+on:
+  schedule:
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: production-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Create encrypted production backup
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Back up PostgreSQL over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          MEDIZINHUB_BACKUP_PASSPHRASE: ${{ secrets.PRODUCTION_BACKUP_PASSPHRASE }}
+          MEDIZINHUB_BACKUP_DIR: ${{ secrets.PRODUCTION_BACKUP_DIR }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_SSH_PORT }}
+          envs: MEDIZINHUB_BACKUP_PASSPHRASE,MEDIZINHUB_BACKUP_DIR
+          script_stop: true
+          script: |
+            cd "${{ secrets.EC2_APP_DIR }}"
+            if [ -z "${MEDIZINHUB_BACKUP_DIR:-}" ]; then
+              echo "PRODUCTION_BACKUP_DIR is required"
+              exit 1
+            fi
+            bash scripts/backup_postgres.sh \
+              --compose-file docker-compose.yml \
+              --env-file .env \
+              --output-dir "${MEDIZINHUB_BACKUP_DIR}" \
+              --application-commit "$(git rev-parse HEAD)"

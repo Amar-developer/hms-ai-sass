@@ -36,13 +36,20 @@ export function useBillingActions(
   session: ApiSession | null | undefined,
   options: {
     loadLiveData: (session: ApiSession) => Promise<void>;
+    refreshInvoices: () => Promise<void>;
     loadReports: () => Promise<void>;
     setSettlement: (value: any) => void;
     branchId?: string;
   },
 ) {
   const queryClient = useQueryClient();
-  const { loadLiveData, loadReports, setSettlement, branchId } = options;
+  const {
+    loadLiveData,
+    refreshInvoices,
+    loadReports,
+    setSettlement,
+    branchId,
+  } = options;
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [detail, setDetail] = useState<any>(null);
@@ -107,16 +114,16 @@ export function useBillingActions(
     setDetailLoading(invoice.id);
     setMessage("");
     try {
-      const row = await fetchInvoiceDetail(session, invoice.id);
-      const delivery = await fetchInvoiceDelivery(session, invoice.id).catch(
-        () => ({ status: "not_sent" }),
-      );
-      const document = await fetchInvoiceDocument(session, invoice.id).catch(
-        () => ({ exists: false }),
-      );
-      const deliveries = await fetchInvoiceDeliveries(session, invoice.id).catch(
-        () => [],
-      );
+      const [row, delivery, document, deliveries] = await Promise.all([
+        fetchInvoiceDetail(session, invoice.id),
+        fetchInvoiceDelivery(session, invoice.id).catch(() => ({
+          status: "not_sent",
+        })),
+        fetchInvoiceDocument(session, invoice.id).catch(() => ({
+          exists: false,
+        })),
+        fetchInvoiceDeliveries(session, invoice.id).catch(() => []),
+      ]);
       setDetail({
         ...row,
         invoice_delivery: delivery,
@@ -140,8 +147,11 @@ export function useBillingActions(
         consultation_id: a.consultationId,
         created_by_user_id: session.user?.id,
       });
-      await loadLiveData(session);
-      await loadReports();
+      await Promise.all([
+        loadLiveData(session),
+        refreshInvoices(),
+        loadReports(),
+      ]);
       setDetail(row);
       setMessage(
         `Invoice ${row.invoice?.invoice_number || ""} generated for ${a.patient}.`,
@@ -290,8 +300,7 @@ export function useBillingActions(
         reference_number: input.reference || null,
         collected_by_user_id: session.user?.id,
       });
-      await loadLiveData(session);
-      await loadReports();
+      await Promise.all([refreshInvoices(), loadReports()]);
       if (
         String(paymentResult?.invoice?.status || "").toLowerCase() ===
           "paid" &&
@@ -356,8 +365,7 @@ export function useBillingActions(
           collected_by_user_id: session.user?.id,
         });
       }
-      await loadLiveData(session);
-      await loadReports();
+      await Promise.all([refreshInvoices(), loadReports()]);
       await openInvoiceDetail(invoice);
       const modes =
         valid.length > 1 ? `${valid.length} payment modes` : valid[0].method;
@@ -399,8 +407,7 @@ export function useBillingActions(
     try {
       const row = await applyInvoiceMembershipBenefit(session, invoice.id);
       setDetail(row);
-      await loadLiveData(session);
-      await loadReports();
+      await Promise.all([refreshInvoices(), loadReports()]);
       setMessage(`Membership benefit applied to ${invoice.invoice_number}.`);
     } catch (err: any) {
       setMessage(err.message || "Could not apply membership benefit.");
@@ -418,8 +425,7 @@ export function useBillingActions(
         reason,
         created_by_user_id: session.user?.id,
       });
-      await loadLiveData(session);
-      await loadReports();
+      await Promise.all([refreshInvoices(), loadReports()]);
       await openInvoiceDetail(invoice);
       setMessage(`Credit note issued for ${invoice.invoice_number}.`);
       return true;
@@ -483,8 +489,7 @@ export function useBillingActions(
         actor_user_id: session.user?.id,
       });
       setDetail(row);
-      await loadLiveData(session);
-      await loadReports();
+      await Promise.all([refreshInvoices(), loadReports()]);
       setMessage(
         kind === "cancel"
           ? `Invoice ${invoice.invoice_number} cancelled and ledger reversed.`
@@ -543,8 +548,7 @@ export function useBillingActions(
           actor_user_id: session.user?.id,
         });
         setDetail(next);
-        await loadLiveData(session);
-        await loadReports();
+        await Promise.all([refreshInvoices(), loadReports()]);
         setMessage("Request executed and ledger updated.");
       } else {
         await reviewInvoiceAdjustmentRequest(session, row.id, kind, {

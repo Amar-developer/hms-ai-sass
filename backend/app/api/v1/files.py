@@ -7,6 +7,7 @@ from sqlmodel import Session
 
 from app.core.auth import require_any_permission
 from app.core.database import get_session
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.files.models import FileDocument
 from app.modules.files.schemas import (
@@ -95,6 +96,12 @@ def download_file(
             permissions.FILES_READ,
             permissions.SETTINGS_MANAGE,
             permissions.SETTINGS_READ,
+            permissions.PATIENTS_READ,
+            permissions.IP_READ,
+            permissions.PHYSIOTHERAPY_READ,
+            permissions.LAB_READ,
+            permissions.REPORTS_READ,
+            permissions.INVOICES_READ,
             permissions.PATIENTS_READ,
             permissions.LAB_READ,
             permissions.IP_READ,
@@ -216,6 +223,52 @@ def list_files(
         attached_to_doctype=attached_to_doctype,
         attached_to_name=attached_to_name,
         q=q,
+        offset=0,
+        limit=limit,
+        actor=current_user,
+    )
+
+
+@router.get(
+    "/page",
+    response_model=Page[FileDocumentRead],
+    summary="List a page of files",
+)
+def list_file_page(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    patient_id: str | None = None,
+    category: str | None = None,
+    attached_to_doctype: str | None = None,
+    attached_to_name: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.FILES_MANAGE,
+            permissions.FILES_READ,
+            permissions.SETTINGS_MANAGE,
+            permissions.SETTINGS_READ,
+            permissions.PATIENTS_READ,
+            permissions.IP_READ,
+            permissions.PHYSIOTHERAPY_READ,
+            permissions.LAB_READ,
+            permissions.REPORTS_READ,
+            permissions.INVOICES_READ,
+        )
+    ),
+) -> Page[FileDocumentRead]:
+    return FileService(session).list_file_page(
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        category=category,
+        attached_to_doctype=attached_to_doctype,
+        attached_to_name=attached_to_name,
+        q=q,
+        offset=offset,
         limit=limit,
         actor=current_user,
     )

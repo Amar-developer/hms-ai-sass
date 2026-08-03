@@ -11,6 +11,7 @@ from app.modules.billing.models import (
 from app.modules.billing.repositories.read_repository import BillingReadRepository
 from app.modules.billing.services.read_models import invoice_reads
 from app.modules.billing.services.ledger import read_invoice_detail_full
+from app.modules.patients.models import Patient
 
 
 def test_invoice_list_batches_related_data_queries(test_engine):
@@ -64,6 +65,68 @@ def test_invoice_list_batches_related_data_queries(test_engine):
     # Payments, adjustments/discount metadata, and patient display references
     # are fetched in three bounded queries regardless of invoice count.
     assert statements == 3
+
+
+def test_invoice_page_filters_and_count_run_in_database(test_engine):
+    tenant_id = "tenant_invoice_page"
+    with Session(test_engine) as session:
+        patient = Patient(
+            tenant_id=tenant_id,
+            patient_number="PAT-PAGE-001",
+            full_name="Anitha Billing Patient",
+            mobile="9000000099",
+        )
+        session.add(patient)
+        session.flush()
+        session.add_all(
+            [
+                Invoice(
+                    tenant_id=tenant_id,
+                    branch_id="branch_invoice_page",
+                    patient_id=patient.id,
+                    invoice_number="PAGE-LAB-001",
+                    lab_order_id="lab-page-1",
+                    status=InvoiceStatus.PAID,
+                    total_amount=100,
+                    paid_amount=100,
+                    balance_amount=0,
+                ),
+                Invoice(
+                    tenant_id=tenant_id,
+                    branch_id="branch_invoice_page",
+                    patient_id=patient.id,
+                    invoice_number="PAGE-PHARMACY-001",
+                    pharmacy_issue_id="pharmacy-page-1",
+                    status=InvoiceStatus.ISSUED,
+                    total_amount=200,
+                    paid_amount=0,
+                    balance_amount=200,
+                ),
+            ]
+        )
+        session.commit()
+
+    with Session(test_engine) as session:
+        repo = BillingReadRepository(session)
+        paid_lab_rows = repo.list_invoices(
+            tenant_id=tenant_id,
+            branch_id=None,
+            patient_id=None,
+            q="Anitha Billing",
+            source="lab_scan",
+            payment_state="paid",
+            limit=10,
+        )
+        due_count = repo.count_invoices(
+            tenant_id=tenant_id,
+            branch_id=None,
+            patient_id=None,
+            source="pharmacy",
+            payment_state="due",
+        )
+
+    assert [row.invoice_number for row in paid_lab_rows] == ["PAGE-LAB-001"]
+    assert due_count == 1
 
 
 def test_invoice_detail_read_does_not_repair_or_write_ledger(test_engine):

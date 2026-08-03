@@ -215,6 +215,46 @@ class AppointmentGridRepository:
             .limit(limit)
         )
 
+    def count_for_tenant(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None = None,
+        department_id: str | None = None,
+        practitioner_id: str | None = None,
+        appointment_date: date | None = None,
+        q: str | None = None,
+    ) -> int:
+        statement = select(func.count(func.distinct(Appointment.id))).where(
+            Appointment.tenant_id == tenant_id
+        )
+        if branch_id:
+            statement = statement.where(Appointment.branch_id == branch_id)
+        if department_id:
+            statement = statement.where(Appointment.department_id == department_id)
+        if practitioner_id:
+            statement = statement.where(Appointment.practitioner_id == practitioner_id)
+        if appointment_date:
+            statement = statement.where(
+                Appointment.appointment_date == appointment_date
+            )
+        if q:
+            pattern = f"%{q.strip().lower()}%"
+            statement = (
+                statement.join(Patient, Patient.id == Appointment.patient_id)
+                .outerjoin(QueueEntry, QueueEntry.appointment_id == Appointment.id)
+                .where(
+                    or_(
+                        func.lower(Patient.patient_number).like(pattern),
+                        func.lower(Patient.full_name).like(pattern),
+                        func.lower(Patient.mobile).like(pattern),
+                        func.lower(Patient.guardian_mobile).like(pattern),
+                        func.lower(QueueEntry.token_number).like(pattern),
+                    )
+                )
+            )
+        return int(self.session.exec(statement).one())
+
     def list_platform(
         self,
         *,

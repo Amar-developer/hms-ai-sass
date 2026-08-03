@@ -182,6 +182,7 @@ Secondary tenant admins keep the existing tenant-scoped screens and APIs. They c
 | `POST` | `/api/v1/patients` | `patients.write` | Creates patient audit |
 | `POST` | `/api/v1/patients/duplicates` | `patients.read` | Detects likely duplicate patient before registration |
 | `GET` | `/api/v1/patients` | `patients.read` | Search/list |
+| `GET` | `/api/v1/patients/page` | `patients.read` | Paginated patient registry search |
 | `GET` | `/api/v1/patients/references` | `patients.read` | Resolves only patient IDs referenced by the current page |
 | `GET` | `/api/v1/patients/count` | `patients.read` | Tenant patient count for dashboard summaries |
 | `GET` | `/api/v1/patients/{patient_id}` | `patients.read` | Patient detail |
@@ -240,6 +241,7 @@ For `user_type=doctor`, `GET /api/v1/practitioners` is restricted to the practit
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/appointments` | `appointments.manage` | Creates appointment, token queue entry, notification trigger; prevents duplicate active patient/doctor/slot bookings |
 | `GET` | `/api/v1/appointments` | `appointments.manage` | List appointments |
+| `GET` | `/api/v1/appointments/page` | `appointments.manage` | Paginated appointment list |
 | `GET` | `/api/v1/appointments/{appointment_id}` | `appointments.manage` | Appointment detail |
 | `POST` | `/api/v1/appointments/{appointment_id}/follow-up` | `appointments.manage` | Books follow-up using source appointment context |
 | `PATCH` | `/api/v1/appointments/{appointment_id}/reschedule` | `appointments.manage` or `appointments.edit` | Reschedules an eligible, unfinished appointment to a different available date/slot |
@@ -325,6 +327,7 @@ IP admission APIs enforce tenant, branch, room availability, and module entitlem
 | `POST` | `/api/v1/billing/invoices/from-lab-order` | `billing.manage` |
 | `POST` | `/api/v1/billing/invoices/from-pharmacy-issue` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices` | `billing.manage` |
+| `GET` | `/api/v1/billing/invoices/page` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/report-details` | Any of `billing.manage`, `billing.read`, `invoices.read`; bounded report enrichment for up to 50 invoices |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}` | `billing.manage` |
 | `GET` | `/api/v1/billing/invoices/{invoice_id}/document` | `billing.manage`, `billing.read`, or `invoices.read` |
@@ -471,6 +474,7 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | --- | --- | --- |
 | `POST` | `/api/v1/files` | Authenticated tenant user |
 | `GET` | `/api/v1/files` | Authenticated tenant user |
+| `GET` | `/api/v1/files/page` | Authenticated tenant user |
 | `GET` | `/api/v1/files/storage-metrics` | `files.manage` or `billing.manage` |
 | `GET` | `/api/v1/files/{file_id}/download` | Authenticated tenant user |
 | `GET` | `/api/v1/files/{file_id}/renditions` | `files.manage`, `files.read`, `lab.read`, or `invoices.read` |
@@ -500,6 +504,7 @@ Home-care APIs enforce the `home_care` module entitlement and branch scope for s
 | `POST` | `/api/v1/communications/whatsapp/queue/{event_id}/cancel` | `communications.whatsapp.manage`, `communications.manage`, or `settings.manage` |
 | `POST` | `/api/v1/audit-events` | `audit.read` |
 | `GET` | `/api/v1/audit-events` | `audit.read` |
+| `GET` | `/api/v1/audit-events/page` | `audit.read` |
 | `GET` | `/api/v1/audit-events/{event_id}` | `audit.read` |
 | `GET` | `/api/v1/activity/mention-users` | Authenticated tenant user; active users in current tenant only |
 | `GET` | `/api/v1/activity/{resource_type}/{resource_id}` | Authenticated tenant user |

@@ -170,6 +170,8 @@ Required `.env` values:
 ```env
 MEDIZINHUB_REDIS_URL=redis://redis:6379/0
 MEDIZINHUB_REPORT_QUEUE_NAME=medizinhub:reports:monthly
+MEDIZINHUB_REPORT_WORKER_HEARTBEAT_KEY=medizinhub:workers:reports:heartbeat
+MEDIZINHUB_REPORT_JOB_STALE_AFTER_SECONDS=900
 MEDIZINHUB_SMTP_HOST=smtp.gmail.com
 MEDIZINHUB_SMTP_PORT=587
 MEDIZINHUB_SMTP_USERNAME=your-mailbox@example.com
@@ -184,6 +186,12 @@ After editing `.env`, recreate backend and worker so Docker reloads env values:
 ```bash
 docker compose -f docker-compose.local.yml up -d --force-recreate backend report-worker
 ```
+
+`ReportJob` rows in PostgreSQL are the durable queue. Redis only wakes the
+worker quickly, so queued reports are still recovered after a Redis restart or
+temporary outage. A worker that exits while a report is `running` is reclaimed
+after `MEDIZINHUB_REPORT_JOB_STALE_AFTER_SECONDS`. Super admins can check the
+worker heartbeat and queue ages at `GET /api/v1/platform/observability/metrics`.
 
 ## Windows Setup
 

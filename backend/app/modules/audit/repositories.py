@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from app.modules.audit.models import AuditEvent, DocumentComment
@@ -17,13 +18,32 @@ class AuditEventRepository:
             return None
         return event
 
-    def list_for_tenant(self, tenant_id: str) -> list[AuditEvent]:
-        return list(
+    def list_for_tenant(
+        self,
+        tenant_id: str,
+        *,
+        offset: int = 0,
+        limit: int | None = None,
+        descending: bool = False,
+    ) -> list[AuditEvent]:
+        order = AuditEvent.created_at.desc() if descending else AuditEvent.created_at
+        statement = (
+            select(AuditEvent)
+            .where(AuditEvent.tenant_id == tenant_id)
+            .order_by(order)
+            .offset(offset)
+        )
+        if limit is not None:
+            statement = statement.limit(limit)
+        return list(self.session.exec(statement).all())
+
+    def count_for_tenant(self, tenant_id: str) -> int:
+        return int(
             self.session.exec(
-                select(AuditEvent)
+                select(func.count())
+                .select_from(AuditEvent)
                 .where(AuditEvent.tenant_id == tenant_id)
-                .order_by(AuditEvent.created_at)
-            ).all()
+            ).one()
         )
 
     def list_for_resource(

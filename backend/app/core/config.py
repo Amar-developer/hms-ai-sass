@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     environment: str = Field(default="local")
     log_level: str = Field(default="INFO")
     slow_request_ms: int = Field(default=1000, ge=1)
+    web_concurrency: int = Field(default=2, ge=1, le=64)
+    web_limit_concurrency: int = Field(default=80, ge=10, le=10000)
+    web_backlog: int = Field(default=2048, ge=128, le=65535)
+    web_timeout_keep_alive: int = Field(default=5, ge=1, le=120)
+    web_graceful_shutdown_seconds: int = Field(default=30, ge=5, le=600)
 
     api_prefix: str = Field(default="/api/v1")
     uploads_dir: Path = Field(
@@ -67,6 +72,10 @@ class Settings(BaseSettings):
     # Postgres each time. Bounds how long a revoked permission or suspended
     # tenant can still appear valid.
     auth_cache_ttl_seconds: int = Field(default=30, ge=0)
+    login_rate_limit_attempts: int = Field(default=10, ge=3, le=100)
+    login_rate_limit_ip_attempts: int = Field(default=50, ge=10, le=1000)
+    login_rate_limit_window_seconds: int = Field(default=900, ge=60, le=86400)
+    secure_cookie: bool | None = Field(default=None)
     credential_encryption_key: str = Field(
         default="local-development-credential-key-change-before-production",
         min_length=32,
@@ -75,6 +84,12 @@ class Settings(BaseSettings):
     report_scheduler_lock_key: str = Field(
         default="medizinhub:reports:monthly:scheduler"
     )
+    report_worker_heartbeat_key: str = Field(
+        default="medizinhub:workers:reports:heartbeat"
+    )
+    report_worker_heartbeat_ttl_seconds: int = Field(default=30, ge=10)
+    report_queue_dedupe_ttl_seconds: int = Field(default=60, ge=10)
+    report_job_stale_after_seconds: int = Field(default=900, ge=60)
     # A finished month is frozen into a snapshot once it ends. For this many days
     # into the new month the snapshot is kept in sync with late same-period
     # entries (payments collected a day into the new month, backdated invoices);
@@ -149,6 +164,10 @@ class Settings(BaseSettings):
                 "aws_s3_bucket is required when file_storage_backend is s3"
             )
         if environment in {"production", "prod"}:
+            if self.secure_cookie is False:
+                raise ValueError(
+                    "production cannot disable secure authentication cookies"
+                )
             if self.file_storage_backend != "s3":
                 raise ValueError("production must use the s3 file storage backend")
             if self.aws_s3_endpoint_url:
@@ -170,6 +189,12 @@ class Settings(BaseSettings):
                     "non-production environments cannot use a production bucket"
                 )
         return self
+
+    @property
+    def secure_cookie_enabled(self) -> bool:
+        if self.secure_cookie is not None:
+            return self.secure_cookie
+        return self.environment.strip().lower() in {"production", "prod"}
 
     model_config = SettingsConfigDict(
         env_prefix="MEDIZINHUB_",

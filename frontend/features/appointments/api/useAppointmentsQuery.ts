@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ApiSession } from "@/lib/api";
 import { mapAppointment } from "@/lib/liveData";
@@ -94,7 +95,35 @@ export function useAppointmentsQuery(
     staleTime: 15_000,
   });
 
-  const appointments = query.data ?? [];
+  // The network snapshot is shared by tenant, while patient/practitioner
+  // references can arrive just after the query completes. Re-enrich the cached
+  // rows from the current references so the UI never remains stuck showing an
+  // internal id. This is local derivation and does not trigger another request.
+  const appointments = useMemo(() => {
+    const patientMap = new Map(patients.map((p: any) => [p.id, p]));
+    const practitionerMap = new Map(
+      livePractitioners.map((p: any) => [p.id, p]),
+    );
+    return (query.data ?? []).map((appointment: any) => {
+      const patient = patientMap.get(
+        appointment.patientId || appointment.patient_id,
+      );
+      const practitioner = practitionerMap.get(
+        appointment.doctorId || appointment.practitioner_id,
+      );
+      return {
+        ...appointment,
+        patient:
+          patient?.name || patient?.full_name || appointment.patient,
+        patientMobile:
+          patient?.mobile || appointment.patientMobile || "",
+        doctor:
+          practitioner?.full_name ||
+          practitioner?.name ||
+          appointment.doctor,
+      };
+    });
+  }, [query.data, patients, livePractitioners]);
   const isSuperAdmin = Boolean(apiSession?.user?.is_super_admin);
   const scopedAppointments = appointments.filter((a: any) => {
     if (isSuperAdmin) return true;

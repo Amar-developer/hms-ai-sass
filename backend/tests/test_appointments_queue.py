@@ -187,6 +187,26 @@ def test_list_appointments_supports_patient_search_date_and_department_filters(
     assert department.json()[0]["patient_id"] == other_patient["id"]
 
 
+def test_appointment_page_reports_filtered_total(client: TestClient):
+    tenant = create_tenant(client)
+    branch = create_branch(client, tenant["id"])
+    first = create_patient(client, tenant["id"], "First Page Patient")
+    second = create_patient(client, tenant["id"], "Second Page Patient")
+    book(client, tenant["id"], branch["id"], first["id"])
+    book(client, tenant["id"], branch["id"], second["id"])
+
+    response = client.get(
+        "/api/v1/appointments/page?limit=1&offset=1",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["total"] == 2
+    assert len(response.json()["items"]) == 1
+    assert response.json()["limit"] == 1
+    assert response.json()["offset"] == 1
+
+
 def _create_doctor_login(
     client: TestClient, tenant_id: str, branch_id: str, name: str, email: str
 ) -> tuple[dict, dict, dict]:

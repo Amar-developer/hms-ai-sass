@@ -3,6 +3,7 @@ from sqlmodel import Session
 
 from app.core.auth import get_current_user, require_permission
 from app.core.database import get_session
+from app.core.pagination import Page
 from app.core.tenant_context import require_tenant_id
 from app.modules.identity import permissions
 from app.modules.identity.models import User
@@ -83,6 +84,29 @@ def list_audit_events(
     session: Session = Depends(get_session),
 ) -> list[AuditEvent]:
     return AuditEventRepository(session).list_for_tenant(tenant_id)
+
+
+@router.get(
+    "/page",
+    response_model=Page[AuditEventRead],
+    summary="List a page of audit events",
+    dependencies=[Depends(require_permission(permissions.AUDIT_READ))],
+)
+def list_audit_event_page(
+    tenant_id: str = Depends(require_tenant_id),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> Page[AuditEventRead]:
+    repository = AuditEventRepository(session)
+    return Page(
+        items=repository.list_for_tenant(
+            tenant_id, offset=offset, limit=limit, descending=True
+        ),
+        total=repository.count_for_tenant(tenant_id),
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(

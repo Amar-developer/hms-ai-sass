@@ -219,7 +219,9 @@ When a bug is found:
 Recommended when the app becomes more production-critical:
 
 - add Redis/worker E2E only for workflows where process-boundary behavior is critical
-- add deployment smoke test in `deploy-ec2.yml`
-- add staging deployment before production
-- add database backup before each production deploy
 - add rollback command or image tag based deployment
+
+Deployment identity/readiness verification, production-like deployment to the
+dev/staging EC2 stack, and the pre-production-deploy database backup are now
+implemented. See `docs/release-acceptance-runbook.md` and
+`docs/backup-restore-runbook.md`.

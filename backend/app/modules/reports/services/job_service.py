@@ -2,12 +2,16 @@ import json
 from datetime import date
 
 from fastapi import HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.modules.identity.models import User
 from app.modules.files.models import FileDocument
 from app.modules.files.services.artifact_service import ArtifactService
-from app.modules.notifications.models import DocumentDeliveryChannel
+from app.modules.notifications.models import (
+    DocumentDelivery,
+    DocumentDeliveryChannel,
+    DocumentDeliveryStatus,
+)
 from app.modules.notifications.services.document_delivery import queue_document_delivery
 from app.modules.reports.models import ReportJob, ReportJobStatus
 from app.modules.reports.queue import enqueue_monthly_report_job
@@ -26,14 +30,47 @@ from app.modules.tenants.models import now_utc
 
 
 def process_report_job(session: Session, job_id: str) -> ReportJob:
-    job = session.get(ReportJob, job_id)
+    # Claim under a row lock. Duplicate Redis hints and multiple worker
+    # processes are therefore harmless: only a queued job can transition.
+    job = session.exec(
+        select(ReportJob).where(ReportJob.id == job_id).with_for_update()
+    ).first()
     if not job:
         raise RuntimeError(f"Report job {job_id} not found")
+    if job.status != ReportJobStatus.QUEUED:
+        return job
     job.status = ReportJobStatus.RUNNING
     job.started_at = now_utc()
     job.updated_at = now_utc()
     session.add(job)
     session.commit()
+    # queue_document_delivery commits independently. If a worker stopped after
+    # that commit but before the final ReportJob update, recovery must reuse the
+    # existing outbox row and artifacts instead of generating a second set.
+    existing_delivery = session.exec(
+        select(DocumentDelivery).where(
+            DocumentDelivery.tenant_id == job.tenant_id,
+            DocumentDelivery.channel == DocumentDeliveryChannel.EMAIL,
+            DocumentDelivery.idempotency_key == f"report-job:{job.id}:email",
+        )
+    ).first()
+    if existing_delivery:
+        if existing_delivery.status == DocumentDeliveryStatus.SENT:
+            job.status = ReportJobStatus.SENT
+            job.sent_at = existing_delivery.sent_at
+            job.provider_message_id = existing_delivery.provider_message_id
+            job.failure_reason = None
+        elif existing_delivery.status == DocumentDeliveryStatus.FAILED:
+            job.status = ReportJobStatus.FAILED
+            job.failure_reason = existing_delivery.failure_reason
+        else:
+            job.status = ReportJobStatus.DELIVERING
+            job.failure_reason = None
+        job.updated_at = now_utc()
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        return job
     try:
         recipients = json.loads(job.recipients_json)
         cc = json.loads(job.cc_json)
@@ -157,8 +194,12 @@ def queue_monthly_report(
     try:
         enqueue_monthly_report_job(job.id)
     except Exception as exc:
-        job.status = ReportJobStatus.FAILED
-        job.failure_reason = str(exc)
+        # Redis is only a low-latency wake-up signal. Keeping the durable row
+        # queued lets the worker's database fallback pick it up after a cache
+        # outage instead of incorrectly declaring the report failed.
+        job.failure_reason = f"Queue wake-up unavailable; recovery pending: {exc}"[
+            :1000
+        ]
         job.updated_at = now_utc()
         session.add(job)
         session.commit()

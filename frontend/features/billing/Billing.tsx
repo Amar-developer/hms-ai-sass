@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActionButton,
   Badge,
@@ -16,10 +16,9 @@ import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
 import {
   formatInvoiceDate,
-  invoiceDateKey,
-  invoicePaidStatus,
   invoiceSource,
   invoiceSourceKey,
+  invoiceSourceOptions,
 } from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
@@ -35,6 +34,7 @@ import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { useBillingActions, useBillingReports, usePaymentMethods } from "./api";
+import { fetchInvoicePage } from "./api/billing.api";
 
 export function Billing({
   apiSession,
@@ -69,6 +69,10 @@ export function Billing({
     toDate: "",
   });
   const [page, setPage] = useState(1);
+  const [invoiceRows, setInvoiceRows] = useState<any[]>([]);
+  const [invoiceTotal, setInvoiceTotal] = useState(0);
+  const [invoiceListLoading, setInvoiceListLoading] = useState(false);
+  const invoiceLoadSequence = useRef(0);
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -96,8 +100,45 @@ export function Billing({
 
   const { patientMap } = usePatientReferencesQuery(
     apiSession,
-    (liveInvoices || []).map((invoice: any) => invoice.patient_id),
+    invoiceRows.map((invoice: any) => invoice.patient_id),
   );
+
+  async function loadInvoicePage(
+    nextPage = page,
+    filterOverrides: Partial<typeof filters> = {},
+  ) {
+    if (!apiSession) return;
+    const requestSequence = ++invoiceLoadSequence.current;
+    const effectiveFilters = { ...filters, ...filterOverrides };
+    const params = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String((nextPage - 1) * pageSize),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    if (effectiveFilters.query.trim())
+      params.set("q", effectiveFilters.query.trim());
+    if (effectiveFilters.source !== "all")
+      params.set("source", effectiveFilters.source);
+    if (effectiveFilters.paidStatus !== "all")
+      params.set("payment_state", effectiveFilters.paidStatus);
+    if (effectiveFilters.fromDate)
+      params.set("from_date", effectiveFilters.fromDate);
+    if (effectiveFilters.toDate)
+      params.set("to_date", effectiveFilters.toDate);
+    setInvoiceListLoading(true);
+    try {
+      const result = await fetchInvoicePage(apiSession, params);
+      if (requestSequence !== invoiceLoadSequence.current) return;
+      setInvoiceRows(Array.isArray(result?.items) ? result.items : []);
+      setInvoiceTotal(Number(result?.total || 0));
+    } catch (err: any) {
+      if (requestSequence !== invoiceLoadSequence.current) return;
+      setMessage(err.message || "Could not load invoices.");
+    } finally {
+      if (requestSequence === invoiceLoadSequence.current)
+        setInvoiceListLoading(false);
+    }
+  }
 
   const { invoicePaymentOptions, defaultPaymentMethod } =
     usePaymentMethods(apiSession);
@@ -143,86 +184,16 @@ export function Billing({
     finalizeSettlement,
   } = useBillingActions(apiSession, {
     loadLiveData,
+    refreshInvoices: () => loadInvoicePage(page),
     loadReports,
     setSettlement,
     branchId,
   });
 
-  const invoices = useMemo(
-    () =>
-      [...(liveInvoices || [])].sort(
-        (a: any, b: any) =>
-          new Date(b.created_at || 0).getTime() -
-          new Date(a.created_at || 0).getTime(),
-      ),
-    [liveInvoices],
-  );
-  const sourceOptions = useMemo(() => {
-    const seen = new Set<string>();
-    return invoices
-      .map((invoice: any) => ({
-        key: invoiceSourceKey(invoice),
-        ...invoiceSource(invoice),
-      }))
-      .filter((source: any) => {
-        if (seen.has(source.key)) return false;
-        seen.add(source.key);
-        return true;
-      });
-  }, [invoices]);
-  const filteredInvoices = useMemo(
-    () =>
-      invoices.filter((invoice: any) => {
-        const source = invoiceSource(invoice);
-        const patient: any = patientMap.get(invoice.patient_id);
-        const haystack = [
-          invoice.invoice_number,
-          invoice.patient_name,
-          invoice.patient_mobile,
-          patient?.name,
-          patient?.full_name,
-          patient?.patient_number,
-          patient?.mobile,
-          patient?.alternate_mobile,
-          patient?.guardian_mobile,
-          patient?.guardianMobile,
-          source.label,
-          invoice.status,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        const query = String(filters.query || "")
-          .trim()
-          .toLowerCase();
-        if (query && !haystack.includes(query)) return false;
-        if (
-          filters.source !== "all" &&
-          invoiceSourceKey(invoice) !== filters.source
-        )
-          return false;
-        if (filters.paidStatus === "due") {
-          if (Number(invoice.balance_amount || 0) <= 0) return false;
-        } else if (
-          filters.paidStatus !== "all" &&
-          invoicePaidStatus(invoice) !== filters.paidStatus
-        )
-          return false;
-        const dateKey = invoiceDateKey(invoice);
-        if (filters.fromDate && (!dateKey || dateKey < filters.fromDate))
-          return false;
-        if (filters.toDate && (!dateKey || dateKey > filters.toDate))
-          return false;
-        return true;
-      }),
-    [filters, invoices, patientMap],
-  );
-  const totalPages = Math.max(1, Math.ceil(filteredInvoices.length / pageSize));
+  const invoices = invoiceRows;
+  const totalPages = Math.max(1, Math.ceil(invoiceTotal / pageSize));
   const safePage = Math.min(page, totalPages);
-  const invoicePageRows = filteredInvoices.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
+  const invoicePageRows = invoices;
 
   const consultationInvoices = invoices.filter((i: any) => {
     const key = invoiceSourceKey(i);
@@ -278,6 +249,22 @@ export function Billing({
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
   useEffect(() => {
+    if (!apiSession) return;
+    const timer = window.setTimeout(() => {
+      void loadInvoicePage(page);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    apiSession?.tenantId,
+    branchId,
+    page,
+    filters.query,
+    filters.source,
+    filters.paidStatus,
+    filters.fromDate,
+    filters.toDate,
+  ]);
+  useEffect(() => {
     if (!apiSession || typeof window === "undefined") return;
     const invoiceId =
       window.sessionStorage.getItem("medizinhub.billingInvoiceId") ||
@@ -305,7 +292,11 @@ export function Billing({
     if (!apiSession) return;
     setMessage("");
     try {
-      await Promise.all([loadLiveData(apiSession), loadReports(true)]);
+      await Promise.all([
+        loadLiveData(apiSession),
+        loadInvoicePage(page),
+        loadReports(true),
+      ]);
       setMessage("Invoices refreshed.");
     } catch (err: any) {
       setMessage(err.message || "Could not refresh invoices.");
@@ -888,7 +879,7 @@ export function Billing({
           <div className="flex items-center gap-2">
             <RefreshButton onRefresh={refreshBillingData} />
             <Badge tone="slate" className="normal-badge">
-              {filteredInvoices.length} of {invoices.length} invoices
+              Showing {invoicePageRows.length} of {invoiceTotal} invoices
             </Badge>
           </div>
         </div>
@@ -908,7 +899,7 @@ export function Billing({
               onChange={(v) => updateFilter("source", v)}
               options={[
                 { value: "all", label: "All sources" },
-                ...sourceOptions.map((s: any) => ({
+                ...invoiceSourceOptions.map((s) => ({
                   value: s.key,
                   label: s.label,
                 })),
@@ -939,7 +930,9 @@ export function Billing({
             columns={invoiceColumns}
             data={invoicePageRows}
             emptyMessage={
-              invoices.length === 0
+              invoiceListLoading
+                ? "Loading invoices..."
+                : invoiceTotal === 0
                 ? "No invoices yet."
                 : "No invoices match the selected filters."
             }
@@ -949,7 +942,7 @@ export function Billing({
         <Pagination
           page={safePage}
           totalPages={totalPages}
-          total={filteredInvoices.length}
+          total={invoiceTotal}
           onPage={setPage}
         />
       </Card>

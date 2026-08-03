@@ -171,6 +171,36 @@ Minimum production requirements:
 - Vulnerability scanning and dependency updates.
 - Centralized logging and alerting.
 
+Implemented application controls:
+
+- Login failures are limited in Redis by hashed account identifier and client
+  IP. The default window allows 10 failures per account and 50 per client IP in
+  15 minutes. Redis errors fail open and are logged so a cache outage cannot
+  lock every user out.
+- Unknown accounts perform a dummy password verification so login response
+  timing does not provide a simple account-enumeration signal.
+- Authentication responses use `Cache-Control: no-store`; API responses set
+  `nosniff`, deny framing, suppress referrers, and disable browser camera,
+  microphone, and geolocation access.
+- Production authentication cookies are always `Secure`, `HttpOnly`, and
+  `SameSite=Lax`. Production startup rejects an explicit attempt to disable the
+  secure-cookie setting.
+- Password changes revoke every other active session belonging to that user
+  while preserving the session used to perform the verified change.
+- Public document and invoice endpoints require tenant-bound, artifact-bound,
+  expiring HMAC signatures and return sensitive documents with `no-store`.
+- S3-backed deployments do not mount the local `/uploads` directory, preventing
+  leftover container files from bypassing private object-storage controls.
+
+Authentication rate-limit settings:
+
+```env
+MEDIZINHUB_LOGIN_RATE_LIMIT_ATTEMPTS=10
+MEDIZINHUB_LOGIN_RATE_LIMIT_IP_ATTEMPTS=50
+MEDIZINHUB_LOGIN_RATE_LIMIT_WINDOW_SECONDS=900
+MEDIZINHUB_SECURE_COOKIE=true
+```
+
 ## India Healthcare Compliance Checklist
 
 Before production release, review each module against this checklist:
