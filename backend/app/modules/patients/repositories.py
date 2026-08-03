@@ -108,13 +108,95 @@ class PatientRepository:
         q: str | None = None,
         branch_id: str | None = None,
         active_only: bool = True,
+        status: PatientStatus | None = None,
+        gender: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        offset: int = 0,
         limit: int = 25,
     ) -> list[Patient]:
+        statement = self._search_statement(
+            tenant_id=tenant_id,
+            q=q,
+            branch_id=branch_id,
+            active_only=active_only,
+            status=status,
+            gender=gender,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        if q:
+            term = q.strip().lower()
+            statement = statement.order_by(
+                case(
+                    (func.lower(Patient.patient_number) == term, 0),
+                    (func.lower(Patient.mobile) == term, 0),
+                    (func.lower(Patient.full_name) == term, 1),
+                    (func.lower(Patient.patient_number).startswith(term), 2),
+                    (func.lower(Patient.mobile).startswith(term), 2),
+                    (func.lower(Patient.full_name).startswith(term), 3),
+                    else_=4,
+                ),
+                Patient.updated_at.desc(),
+            )
+        else:
+            statement = statement.order_by(Patient.updated_at.desc())
+        return list(self.session.exec(statement.offset(offset).limit(limit)).all())
+
+    def count_search(
+        self,
+        *,
+        tenant_id: str,
+        q: str | None = None,
+        branch_id: str | None = None,
+        active_only: bool = True,
+        status: PatientStatus | None = None,
+        gender: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> int:
+        filtered = self._search_statement(
+            tenant_id=tenant_id,
+            q=q,
+            branch_id=branch_id,
+            active_only=active_only,
+            status=status,
+            gender=gender,
+            from_date=from_date,
+            to_date=to_date,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def _search_statement(
+        self,
+        *,
+        tenant_id: str,
+        q: str | None,
+        branch_id: str | None,
+        active_only: bool,
+        status: PatientStatus | None,
+        gender: str | None,
+        from_date: date | None,
+        to_date: date | None,
+    ):
         statement = select(Patient).where(Patient.tenant_id == tenant_id)
-        if active_only:
+        if status:
+            statement = statement.where(Patient.status == status)
+        elif active_only:
             statement = statement.where(Patient.status == PatientStatus.ACTIVE)
         if branch_id:
             statement = statement.where(Patient.branch_id == branch_id)
+        if gender:
+            statement = statement.where(Patient.gender == gender)
+        if from_date:
+            statement = statement.where(
+                Patient.created_at >= datetime.combine(from_date, time.min)
+            )
+        if to_date:
+            statement = statement.where(
+                Patient.created_at
+                < datetime.combine(to_date + timedelta(days=1), time.min)
+            )
         if q:
             term = q.strip().lower()
             search_columns = (
@@ -134,21 +216,8 @@ class PatientRepository:
                         for column in search_columns
                     )
                 )
-            ).order_by(
-                case(
-                    (func.lower(Patient.patient_number) == term, 0),
-                    (func.lower(Patient.mobile) == term, 0),
-                    (func.lower(Patient.full_name) == term, 1),
-                    (func.lower(Patient.patient_number).startswith(term), 2),
-                    (func.lower(Patient.mobile).startswith(term), 2),
-                    (func.lower(Patient.full_name).startswith(term), 3),
-                    else_=4,
-                ),
-                Patient.updated_at.desc(),
             )
-        else:
-            statement = statement.order_by(Patient.updated_at.desc())
-        return list(self.session.exec(statement.limit(limit)).all())
+        return statement
 
     def doctor_has_patient_appointment(
         self,

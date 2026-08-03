@@ -11,6 +11,7 @@ from app.core.access_control import (
     require_user_branch_access,
     scoped_branch_id,
 )
+from app.core.pagination import Page
 from app.modules.appointments.models import Appointment
 from app.modules.appointments.repositories import (
     AppointmentGridRepository,
@@ -151,6 +152,29 @@ class AppointmentQueryService:
             limit=limit,
         )
         return [appointment_grid_row(row) for row in rows]
+
+    def list_appointment_page(self, **kwargs) -> Page[AppointmentGridRead]:
+        items = self.list_appointments(**kwargs)
+        actor = kwargs["actor"]
+        branch_id = scoped_branch_id(actor, kwargs["branch_id"])
+        doctor_practitioner_id = current_doctor_practitioner_id(
+            self.session, kwargs["tenant_id"], actor
+        )
+        practitioner_id = doctor_practitioner_id or kwargs["practitioner_id"]
+        total = self.grid.count_for_tenant(
+            tenant_id=kwargs["tenant_id"],
+            branch_id=branch_id,
+            department_id=kwargs["department_id"],
+            practitioner_id=practitioner_id,
+            appointment_date=kwargs["appointment_date"],
+            q=kwargs["q"],
+        )
+        return Page(
+            items=items,
+            total=total,
+            limit=kwargs["limit"],
+            offset=kwargs["skip"],
+        )
 
     def get_appointment(
         self, *, tenant_id: str, appointment_id: str, actor: User

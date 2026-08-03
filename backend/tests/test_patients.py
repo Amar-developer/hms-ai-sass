@@ -226,6 +226,54 @@ def test_patient_search_is_tenant_isolated(client: TestClient):
     assert [row["full_name"] for row in response.json()] == ["Tenant One Patient"]
 
 
+def test_patient_page_returns_database_total_and_applies_filters(client: TestClient):
+    tenant = create_tenant(client)
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Active Female",
+        gender="female",
+        mobile="9000000001",
+    )
+    inactive = create_patient(
+        client,
+        tenant["id"],
+        full_name="Inactive Female",
+        gender="female",
+        mobile="9000000002",
+    )
+    client.patch(
+        f"/api/v1/patients/{inactive['id']}",
+        headers={"X-Tenant-ID": tenant["id"]},
+        json={"status": "inactive"},
+    )
+    create_patient(
+        client,
+        tenant["id"],
+        full_name="Active Male",
+        gender="male",
+        mobile="9000000003",
+    )
+
+    first_page = client.get(
+        "/api/v1/patients/page?active_only=false&limit=1&offset=0&gender=female",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+    inactive_page = client.get(
+        "/api/v1/patients/page?status=inactive&limit=10",
+        headers={"X-Tenant-ID": tenant["id"]},
+    )
+
+    assert first_page.status_code == 200
+    assert first_page.json()["total"] == 2
+    assert len(first_page.json()["items"]) == 1
+    assert first_page.json()["limit"] == 1
+    assert first_page.json()["offset"] == 0
+    assert inactive_page.status_code == 200
+    assert inactive_page.json()["total"] == 1
+    assert inactive_page.json()["items"][0]["full_name"] == "Inactive Female"
+
+
 def test_patient_search_includes_subscription_plan_name_and_status(
     client: TestClient,
     test_engine,

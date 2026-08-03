@@ -1,10 +1,24 @@
 from datetime import date
+from types import SimpleNamespace
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import event
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from app.modules.identity.models import Permission, Role, RolePermission, User, UserRole
+from app.modules.identity.models import (
+    AuthSession,
+    Permission,
+    Role,
+    RolePermission,
+    User,
+    UserRole,
+)
 from app.modules.identity.repositories import IdentityUserRepository
+from app.modules.identity.schemas import ChangePasswordRequest
+from app.modules.identity.security import create_access_session, hash_password
+from app.modules.identity.services import auth_service as auth_service_module
+from app.modules.identity.services.auth_service import AuthService
 from app.modules.identity.services.read_models import user_reads
 from app.modules.tenants.models import Tenant
 
@@ -102,6 +116,11 @@ def create_tenant_with_paid_plan(client, super_token):
 def test_bootstrap_login_me_and_change_password(unauthenticated_client):
     client = unauthenticated_client
     token = bootstrap_super_admin(client)
+    second_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@medizinhub.test", "password": "SecretPass123"},
+    )
+    second_token = second_login.cookies["access_token"]
 
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
@@ -115,11 +134,158 @@ def test_bootstrap_login_me_and_change_password(unauthenticated_client):
         json={"current_password": "SecretPass123", "new_password": "NewSecretPass123"},
     )
     assert changed.status_code == 200
+    assert (
+        client.get(
+            "/api/v1/auth/me",
+            headers={"Authorization": f"Bearer {second_token}"},
+        ).status_code
+        == 401
+    )
+    assert (
+        client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"}
+        ).status_code
+        == 200
+    )
     login = client.post(
         "/api/v1/auth/login",
         json={"email": "admin@medizinhub.test", "password": "NewSecretPass123"},
     )
     assert login.status_code == 200
+
+
+def test_login_rate_limit_is_shared_and_returns_retry_after(
+    unauthenticated_client, monkeypatch
+):
+    client = unauthenticated_client
+    bootstrap_super_admin(client)
+
+    class FakeCache:
+        def __init__(self):
+            self.values = {}
+            self.expirations = {}
+
+        def get(self, key):
+            return self.values.get(key)
+
+        def incr(self, key):
+            self.values[key] = int(self.values.get(key, 0)) + 1
+            return self.values[key]
+
+        def expire(self, key, seconds):
+            self.expirations[key] = seconds
+
+        def delete(self, *keys):
+            for key in keys:
+                self.values.pop(key, None)
+
+    cache = FakeCache()
+    settings = SimpleNamespace(
+        login_rate_limit_attempts=3,
+        login_rate_limit_ip_attempts=20,
+        login_rate_limit_window_seconds=120,
+    )
+    monkeypatch.setattr(
+        "app.modules.identity.services.auth_service.get_settings", lambda: settings
+    )
+    monkeypatch.setattr(
+        "app.modules.identity.services.auth_service.get_cache_store",
+        lambda *_args, **_kwargs: cache,
+    )
+
+    for _attempt in range(3):
+        failed = client.post(
+            "/api/v1/auth/login",
+            json={
+                "email": "admin@medizinhub.test",
+                "password": "WrongPassword123",
+            },
+        )
+        assert failed.status_code == 401
+
+    blocked = client.post(
+        "/api/v1/auth/login",
+        json={"email": "admin@medizinhub.test", "password": "SecretPass123"},
+    )
+    assert blocked.status_code == 429
+    assert blocked.headers["Retry-After"] == "120"
+
+
+def test_login_rate_limit_counter_blocks_without_storing_plain_identifiers(
+    monkeypatch,
+):
+    class FakeCache:
+        def __init__(self):
+            self.values = {}
+
+        def get(self, key):
+            return self.values.get(key)
+
+        def incr(self, key):
+            self.values[key] = int(self.values.get(key, 0)) + 1
+            return self.values[key]
+
+        def expire(self, _key, _seconds):
+            return True
+
+        def delete(self, *keys):
+            for key in keys:
+                self.values.pop(key, None)
+
+    cache = FakeCache()
+    settings = SimpleNamespace(
+        login_rate_limit_attempts=3,
+        login_rate_limit_ip_attempts=20,
+        login_rate_limit_window_seconds=120,
+    )
+    monkeypatch.setattr(auth_service_module, "get_settings", lambda: settings)
+    monkeypatch.setattr(auth_service_module, "_rate_limit_store", lambda: cache)
+
+    for _attempt in range(3):
+        context = auth_service_module._enforce_login_rate_limit(
+            "patient@example.test", "192.0.2.10"
+        )
+        auth_service_module._record_failed_login(
+            context, "patient@example.test", "192.0.2.10"
+        )
+
+    with pytest.raises(HTTPException) as blocked:
+        auth_service_module._enforce_login_rate_limit(
+            "patient@example.test", "192.0.2.10"
+        )
+    assert blocked.value.status_code == 429
+    assert all("patient@example.test" not in key for key in cache.values)
+    assert all("192.0.2.10" not in key for key in cache.values)
+
+
+def test_password_change_revokes_other_active_sessions(test_engine):
+    with Session(test_engine) as session:
+        user = User(
+            name="Session Security User",
+            email="session-security@example.test",
+            password_hash=hash_password("OriginalPass123"),
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        _first_token, current_session = create_access_session(session, user)
+        _second_token, other_session = create_access_session(session, user)
+
+        AuthService(session).change_password(
+            current_user=user,
+            current_auth_session=current_session,
+            payload=ChangePasswordRequest(
+                current_password="OriginalPass123",
+                new_password="ReplacementPass123",
+            ),
+        )
+
+        sessions = session.exec(
+            select(AuthSession).where(AuthSession.user_id == user.id)
+        ).all()
+        by_id = {row.id: row for row in sessions}
+        assert by_id[current_session.id].revoked_at is None
+        assert by_id[other_session.id].revoked_at is not None
 
 
 def test_bootstrap_creates_primary_super_admin_role(unauthenticated_client):

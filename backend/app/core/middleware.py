@@ -367,3 +367,50 @@ class TenantContextMiddleware:
             scope["state"].branch_id = branch_id
 
         await self.app(scope, receive, send_with_tenant)
+
+
+class SecurityHeadersMiddleware:
+    """Apply browser security policy consistently, including API errors."""
+
+    def __init__(self, app: Callable) -> None:
+        self.app = app
+        self.production = get_settings().environment.strip().lower() in {
+            "production",
+            "prod",
+        }
+
+    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = str(scope.get("path") or "")
+
+        async def send_with_security_headers(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                headers = list(message.get("headers", []))
+                existing = {name.lower() for name, _value in headers}
+
+                def add(name: bytes, value: bytes) -> None:
+                    if name not in existing:
+                        headers.append((name, value))
+
+                add(b"x-content-type-options", b"nosniff")
+                add(b"x-frame-options", b"DENY")
+                add(b"referrer-policy", b"no-referrer")
+                add(
+                    b"permissions-policy",
+                    b"camera=(), microphone=(), geolocation=()",
+                )
+                if path.startswith("/api/v1/auth/"):
+                    add(b"cache-control", b"no-store")
+                    add(b"pragma", b"no-cache")
+                if self.production:
+                    add(
+                        b"strict-transport-security",
+                        b"max-age=31536000; includeSubDomains",
+                    )
+                message = {**message, "headers": headers}
+            await send(message)
+
+        await self.app(scope, receive, send_with_security_headers)

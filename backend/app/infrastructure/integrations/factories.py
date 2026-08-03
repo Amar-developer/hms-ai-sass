@@ -11,8 +11,17 @@ from app.infrastructure.integrations.ports.email import EmailSender
 from app.infrastructure.integrations.ports.messaging import TemplateMessageGateway
 
 
-def get_cache_store(settings: Settings | None = None) -> KeyValueStore:
-    return create_redis_client(settings)
+def get_cache_store(
+    settings: Settings | None = None,
+    *,
+    socket_connect_timeout: float | None = None,
+    socket_timeout: float | None = None,
+) -> KeyValueStore:
+    return create_redis_client(
+        settings,
+        socket_connect_timeout=socket_connect_timeout,
+        socket_timeout=socket_timeout,
+    )
 
 
 def get_email_sender(settings: Settings | None = None) -> EmailSender:

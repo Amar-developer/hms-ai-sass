@@ -8,6 +8,8 @@ services:
       - shared_preload_libraries=pg_stat_statements
       - -c
       - pg_stat_statements.track=all
+      - -c
+      - max_connections=${POSTGRES_MAX_CONNECTIONS:-100}
     env_file:
       - .env.staging
     environment:
@@ -43,9 +45,9 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms}
       POOL_MODE: transaction
-      MAX_CLIENT_CONN: "200"
-      DEFAULT_POOL_SIZE: "20"
-      MIN_POOL_SIZE: "5"
+      MAX_CLIENT_CONN: ${PGBOUNCER_MAX_CLIENT_CONN:-200}
+      DEFAULT_POOL_SIZE: ${PGBOUNCER_DEFAULT_POOL_SIZE:-20}
+      MIN_POOL_SIZE: ${PGBOUNCER_MIN_POOL_SIZE:-5}
       AUTH_TYPE: scram-sha-256
     depends_on:
       postgres:
@@ -110,24 +112,20 @@ services:
       - .env.staging
     volumes:
       - medizinhub_uploads_data_staging:/app/uploads
-    command: >
-      bash -c "
-      MEDIZINHUB_DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms} alembic -c alembic/alembic.ini upgrade head &&
-      MEDIZINHUB_DATABASE_URL=postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms} python scripts/verify_runtime_readiness.py --ensure-pg-stat-statements &&
-      uvicorn app.main:app --host 0.0.0.0 --port 8080 --workers ${MEDIZINHUB_WEB_CONCURRENCY:-2}
-      "
+    command: python scripts/start_api.py
     environment:
       PYTHONPATH: /app
-      # Alembic (above) overrides this back to a direct postgres:5432
-      # connection for the migration step only — DDL/advisory locks don't
-      # work reliably through pgbouncer's transaction pooling mode.
+      # start_api.py serializes migrations with a PostgreSQL advisory lock and
+      # uses PgBouncer only after the deployment gate succeeds.
       MEDIZINHUB_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@pgbouncer:6432/${POSTGRES_DB:-medizinhub_hms}
+      MEDIZINHUB_MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-medizinhub}:${POSTGRES_PASSWORD:-medizinhub_dev}@postgres:5432/${POSTGRES_DB:-medizinhub_hms}
       MEDIZINHUB_DB_POOL_SIZE: "10"
       MEDIZINHUB_DB_MAX_OVERFLOW: "10"
       MEDIZINHUB_REDIS_URL: redis://redis:6379/0
       MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
       MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
       MEDIZINHUB_BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
+    stop_grace_period: 45s
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3).read()\""]
       interval: 30s
@@ -166,6 +164,7 @@ services:
       MEDIZINHUB_APP_VERSION: ${MEDIZINHUB_APP_VERSION:-0.1.0}
       MEDIZINHUB_BUILD_COMMIT: ${MEDIZINHUB_BUILD_COMMIT:-unknown}
       MEDIZINHUB_BUILD_TIME: ${MEDIZINHUB_BUILD_TIME:-}
+    stop_grace_period: 45s
     restart: unless-stopped
 
 volumes:

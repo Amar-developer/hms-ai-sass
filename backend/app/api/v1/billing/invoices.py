@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi import Query
@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 from app.core.auth import require_any_permission
 from app.core.access_control import require_user_branch_access
 from app.core.database import get_session
+from app.core.pagination import Page
 from app.core.config import get_settings
 from app.core.tenant_context import require_tenant_id
 from app.modules.billing.schemas import (
@@ -34,6 +35,7 @@ from app.modules.billing.services.invoice_items import (
 from app.modules.billing.services.invoice_queries import (
     get_billing_invoice_detail,
     list_billing_invoices,
+    list_billing_invoice_page,
 )
 from app.modules.billing.services.ledger import (
     create_service_invoice,
@@ -274,6 +276,53 @@ def list_invoices(
         tenant_id=tenant_id,
         branch_id=branch_id,
         patient_id=patient_id,
+        offset=0,
+        limit=limit,
+        current_user=current_user,
+    )
+
+
+@router.get("/invoices/page", response_model=Page[InvoiceRead])
+def list_invoice_page(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    patient_id: str | None = None,
+    q: str | None = Query(default=None, max_length=120),
+    source: str | None = Query(
+        default=None,
+        pattern="^(lab_scan|pharmacy|physiotherapy|home_care|ip_billing|consultation|membership|direct)$",
+    ),
+    payment_state: str | None = Query(
+        default=None,
+        pattern="^(paid|due|partially_paid|partially_refunded|refunded|unpaid|cancelled)$",
+    ),
+    from_date: date | None = None,
+    to_date: date | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_READ,
+            permissions.INVOICES_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_READ,
+            permissions.PATIENT_SUBSCRIPTIONS_MANAGE,
+            permissions.PATIENT_SUBSCRIPTIONS_CREATE,
+        )
+    ),
+) -> Page[InvoiceRead]:
+    return list_billing_invoice_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        patient_id=patient_id,
+        q=q,
+        source=source,
+        payment_state=payment_state,
+        from_date=from_date,
+        to_date=to_date,
+        offset=offset,
         limit=limit,
         current_user=current_user,
     )

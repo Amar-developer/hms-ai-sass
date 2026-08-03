@@ -11,6 +11,17 @@ const OPERATIONAL_INVOICE_LINKS = [
   "appointment_id",
 ] as const;
 
+export const invoiceSourceOptions = [
+  { key: "lab_scan", label: "Lab & Service" },
+  { key: "pharmacy", label: "Pharmacy" },
+  { key: "physiotherapy", label: "Physiotherapy" },
+  { key: "home_care", label: "Home Care / Visit" },
+  { key: "ip_billing", label: "IP Billing" },
+  { key: "consultation", label: "Consultation" },
+  { key: "membership", label: "Membership" },
+  { key: "direct", label: "Direct" },
+] as const;
+
 export function isMembershipPlanInvoice(invoice: any) {
   const hasMembershipPurchaseReference = Boolean(
     invoice?.patient_subscription_enrollment_id ||

@@ -12,6 +12,7 @@ from app.modules.notifications.models import (
     NotificationStatus,
 )
 from app.modules.reports.models import ReportJob, ReportJobStatus
+from app.modules.reports.queue import read_worker_heartbeat
 
 
 def _aware(value: datetime | None) -> datetime | None:
@@ -69,4 +70,16 @@ def read_queue_metrics(session: Session) -> dict[str, dict[str, object]]:
                 ReportJobStatus.DELIVERING,
             ],
         ),
+    }
+
+
+def read_worker_metrics() -> dict[str, object]:
+    """Return best-effort worker liveness without making metrics unavailable."""
+    try:
+        heartbeat = read_worker_heartbeat()
+    except Exception:
+        return {"status": "unavailable", "last_heartbeat_at": None}
+    return {
+        "status": "healthy" if heartbeat else "stale",
+        "last_heartbeat_at": heartbeat,
     }

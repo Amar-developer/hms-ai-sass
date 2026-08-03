@@ -58,7 +58,8 @@ Required deployment components:
 
 Backup and restore:
 
-- Daily encrypted database backups.
+- Daily encrypted database backups, plus an encrypted recovery point before
+  every production deployment. See `docs/backup-restore-runbook.md`.
 - Point-in-time recovery where supported.
 - Encrypted object storage backup or versioning.
 - Monthly restore drill to a separate environment.
@@ -155,7 +156,8 @@ QA rules:
 1. Build the automated test matrix for RBAC, tenant isolation, branch isolation, module entitlements, and audit events.
 2. Add PostgreSQL CI, Alembic migration safety tests, and seeded production-like test fixtures.
 3. Add production deployment templates, environment configuration, structured logging, and health checks.
-4. Add backup/restore scripts and a restore drill runbook.
+4. Run the implemented backup/restore scripts and record a real monthly restore
+   drill using `docs/backup-restore-runbook.md`.
 5. Build consent, retention, audit export, breach workflow, and ABDM readiness foundations.
 6. Run full tablet/mobile responsive QA and fix all critical screens.
 7. Add performance/load tests and publish pilot launch baselines.

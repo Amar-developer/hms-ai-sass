@@ -3,7 +3,11 @@ from app.infrastructure.integrations.ports.cache import KeyValueStore
 
 
 def create_redis_client(
-    settings: Settings | None = None, *, decode_responses: bool = True
+    settings: Settings | None = None,
+    *,
+    decode_responses: bool = True,
+    socket_connect_timeout: float | None = None,
+    socket_timeout: float | None = None,
 ) -> KeyValueStore:
     """Create the shared Redis adapter without leaking the Redis package to domains."""
 
@@ -14,4 +18,9 @@ def create_redis_client(
             "Redis client is not installed. Install backend requirements."
         ) from exc
     resolved = settings or get_settings()
-    return Redis.from_url(resolved.redis_url, decode_responses=decode_responses)
+    return Redis.from_url(
+        resolved.redis_url,
+        decode_responses=decode_responses,
+        socket_connect_timeout=socket_connect_timeout,
+        socket_timeout=socket_timeout,
+    )

@@ -9,7 +9,11 @@ from app.api.router import api_router
 from app.api.v1.health import HealthResponse, ReadinessResponse, health, readiness
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.core.middleware import ObservabilityMiddleware, TenantContextMiddleware
+from app.core.middleware import (
+    ObservabilityMiddleware,
+    SecurityHeadersMiddleware,
+    TenantContextMiddleware,
+)
 from app.core.runtime_metrics import record_pool_timeout
 from app.core.uploads import UPLOADS_DIR
 
@@ -58,6 +62,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Request-ID", "X-Tenant-ID", "Retry-After"],
     )
+    app.add_middleware(SecurityHeadersMiddleware)
 
     app.add_exception_handler(SQLAlchemyTimeoutError, database_pool_timeout_handler)
 
@@ -85,8 +90,12 @@ def create_app() -> FastAPI:
     )
     app.include_router(api_router, prefix=settings.api_prefix)
 
-    UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+    # Local development assets use the legacy static path. S3-backed
+    # environments must never expose a leftover container upload directory;
+    # private objects are read only through authenticated or signed endpoints.
+    if settings.file_storage_backend == "local":
+        UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
     return app
 

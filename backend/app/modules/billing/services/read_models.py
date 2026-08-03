@@ -16,6 +16,7 @@ from app.modules.billing.models import (
     InvoiceItem,
     InvoiceStatus,
     PaymentMethod,
+    PaymentStatus,
     TaxRule,
 )
 from app.modules.billing.repositories.read_repository import BillingReadRepository
@@ -70,6 +71,8 @@ def invoice_read(
     invoice: Invoice,
     *,
     context: InvoiceReadContext | None = None,
+    payment_methods_override: list[PaymentMethod] | None = None,
+    adjustment_requests_override: list[BillingAdjustmentRequest] | None = None,
 ) -> InvoiceRead:
     invoice_response = InvoiceRead.model_validate(invoice, from_attributes=True)
     patient = (
@@ -85,9 +88,13 @@ def invoice_read(
         invoice_response.patient_name = patient.name
         invoice_response.patient_number = patient.number
     invoice_response.payment_methods = (
-        context.payment_methods.get(invoice.id, [])
-        if context
-        else invoice_payment_methods(session, invoice)
+        payment_methods_override
+        if payment_methods_override is not None
+        else (
+            context.payment_methods.get(invoice.id, [])
+            if context
+            else invoice_payment_methods(session, invoice)
+        )
     )
     repo = BillingReadRepository(session)
     if invoice.tax_rule_id:
@@ -104,9 +111,13 @@ def invoice_read(
         money_value(invoice.membership_discount_amount), total_discount
     )
     adjustment_requests = (
-        context.adjustment_requests.get(invoice.id, [])
-        if context
-        else repo.list_adjustment_requests(invoice)
+        adjustment_requests_override
+        if adjustment_requests_override is not None
+        else (
+            context.adjustment_requests.get(invoice.id, [])
+            if context
+            else repo.list_adjustment_requests(invoice)
+        )
     )
     approved_discount = sum(
         money_value(row.amount)
@@ -223,9 +234,12 @@ def read_adjustment_request(
 
 
 def invoice_adjustment_requests(
-    session: Session, invoice: Invoice
+    session: Session,
+    invoice: Invoice,
+    rows: list[BillingAdjustmentRequest] | None = None,
 ) -> list[BillingAdjustmentRequestRead]:
-    rows = BillingReadRepository(session).list_adjustment_requests(invoice)
+    if rows is None:
+        rows = BillingReadRepository(session).list_adjustment_requests(invoice)
     names = actor_names(
         session,
         {
@@ -281,6 +295,7 @@ def read_invoice_detail(
     read_repo = BillingReadRepository(session)
     items = read_repo.list_invoice_items(invoice)
     payments = read_repo.list_payments(invoice)
+    adjustment_requests = read_repo.list_adjustment_requests(invoice)
     credit_notes = read_repo.list_credit_notes(invoice)
     ledger_entries = read_repo.list_ledger_entries(invoice)
     actor_ids = {entry.actor_user_id for entry in ledger_entries if entry.actor_user_id}
@@ -305,6 +320,15 @@ def read_invoice_detail(
         if invoice.home_care_booking_id
         else None
     )
+    home_care_visits = read_repo.home_care_visit_logs(
+        tenant_id=invoice.tenant_id,
+        visit_ids={
+            item.external_item_code
+            for item in items
+            if item.item_type == "home_care"
+            and item.external_slug == "home_visit_service"
+        },
+    )
 
     def item_read(item: InvoiceItem) -> InvoiceItemRead:
         read = InvoiceItemRead.model_validate(item, from_attributes=True)
@@ -312,12 +336,7 @@ def read_invoice_detail(
             read.vendor_name = consultation_vendor_name or "Doctor"
             read.vendor_amount = consultation_vendor_amount
         elif item.item_type == "home_care":
-            visit = (
-                read_repo.get_home_care_visit_log(item.external_item_code)
-                if item.external_item_code
-                and item.external_slug == "home_visit_service"
-                else None
-            )
+            visit = home_care_visits.get(str(item.external_item_code or ""))
             read.vendor_name = (
                 getattr(visit, "assigned_staff_name", None)
                 or getattr(home_care_booking, "assigned_staff_name", None)
@@ -353,7 +372,23 @@ def read_invoice_detail(
         read.actor_user_name = entry_actor_names.get(str(entry.actor_user_id or ""))
         return read
 
-    invoice_response = invoice_read(session, invoice)
+    payment_methods: list[PaymentMethod] = []
+    seen_payment_methods: set[PaymentMethod] = set()
+    for payment in payments:
+        if (
+            payment.status != PaymentStatus.RECORDED
+            or payment.amount <= 0
+            or payment.method in seen_payment_methods
+        ):
+            continue
+        seen_payment_methods.add(payment.method)
+        payment_methods.append(payment.method)
+    invoice_response = invoice_read(
+        session,
+        invoice,
+        payment_methods_override=payment_methods,
+        adjustment_requests_override=adjustment_requests,
+    )
     return InvoiceDetailRead(
         status=invoice_response.status,
         invoice=invoice_response,
@@ -367,6 +402,8 @@ def read_invoice_detail(
             for credit_note in credit_notes
         ],
         ledger_entries=[ledger_read(entry) for entry in ledger_entries],
-        adjustment_requests=invoice_adjustment_requests(session, invoice),
+        adjustment_requests=invoice_adjustment_requests(
+            session, invoice, adjustment_requests
+        ),
         membership_benefit=invoice_membership_benefit(session, invoice),
     )

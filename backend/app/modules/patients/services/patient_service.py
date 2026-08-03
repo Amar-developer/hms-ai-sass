@@ -8,6 +8,7 @@ from app.core.access_control import (
     enforce_entitlement,
     require_branch_in_tenant,
 )
+from app.core.pagination import Page
 from app.core.auth import user_permission_keys
 from app.core.uploads import UPLOADS_DIR, save_upload
 from app.modules.audit.service import diff_changes, record_audit_event
@@ -207,6 +208,36 @@ class PatientService:
             q=q,
             branch_id=branch_id,
             active_only=active_only,
+            limit=limit,
+        )
+
+    def search_patient_page(
+        self,
+        *,
+        tenant_id: str,
+        q: str | None,
+        branch_id: str | None,
+        active_only: bool,
+        status: PatientStatus | None,
+        gender: str | None,
+        from_date: date | None,
+        to_date: date | None,
+        offset: int,
+        limit: int,
+    ) -> Page[PatientSearchResult]:
+        enforce_entitlement(self.session, tenant_id, "patients")
+        if branch_id:
+            require_branch_in_tenant(self.session, tenant_id, branch_id)
+        return PatientSearchService(self.session).search_page(
+            tenant_id=tenant_id,
+            q=q,
+            branch_id=branch_id,
+            active_only=active_only,
+            status=status,
+            gender=gender,
+            from_date=from_date,
+            to_date=to_date,
+            offset=offset,
             limit=limit,
         )
 

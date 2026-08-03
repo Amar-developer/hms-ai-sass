@@ -80,11 +80,13 @@ an item complete only after its test passes locally or in the intended CI job.
 
 ## Priority 5 — Performance, Security, and Recovery
 
-- [ ] Add load tests for patient search, appointments, queue, billing, and
-  reports.
+- [x] Add a protected read-only load gate for patient, appointment, queue,
+  billing, and report endpoints.
 - [ ] Publish baseline response-time and concurrency targets.
 - [ ] Add production-like database-volume tests.
-- [ ] Automate backup creation and restore verification.
+- [x] Automate encrypted backup creation and isolated restore verification.
+- [x] Gate staging and production deployments on release identity, API
+  readiness, frontend reachability, and bounded staging health latency.
 - [ ] Run and document a restore drill using a recent production-like backup.
 - [ ] Add rate-limiting security tests.
 - [ ] Add malicious file-upload and content-type tests.

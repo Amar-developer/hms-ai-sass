@@ -1,5 +1,12 @@
 import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
 
+export function fetchInvoicePage(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(`/billing/invoices/page?${params.toString()}`, session);
+}
+
 export function fetchInvoiceDelivery(session: ApiSession, invoiceId: string) {
   return apiFetch(
     `/billing/invoices/${encodeURIComponent(invoiceId)}/delivery`,

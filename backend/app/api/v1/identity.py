@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlmodel import Session
 
 from app.core.auth import (
@@ -187,10 +187,12 @@ def bootstrap_super_admin(
 @router.post("/auth/login", response_model=LoginResponse)
 def login(
     payload: LoginRequest,
+    request: Request,
     response: Response,
     session: Session = Depends(get_session),
 ) -> LoginResponse:
-    result = AuthService(session).login(payload)
+    client_ip = request.client.host if request.client else "unknown"
+    result = AuthService(session).login(payload, client_ip=client_ip)
     response.set_cookie(
         key="access_token",
         value=result.response.access_token,
@@ -227,10 +229,13 @@ def logout(
 def change_password(
     payload: ChangePasswordRequest,
     current_user: User = Depends(get_current_user),
+    auth_session: AuthSession = Depends(get_current_auth_session),
     session: Session = Depends(get_session),
 ) -> User:
     return AuthService(session).change_password(
-        current_user=current_user, payload=payload
+        current_user=current_user,
+        current_auth_session=auth_session,
+        payload=payload,
     )
 
 

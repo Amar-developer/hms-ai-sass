@@ -1,6 +1,7 @@
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func
+from sqlalchemy import and_, func, or_
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
@@ -12,6 +13,7 @@ from app.modules.billing.models import (
     DiscountApproval,
     DiscountOffer,
     Invoice,
+    InvoiceStatus,
     InvoiceItem,
     Payment,
     PaymentStatus,
@@ -21,6 +23,7 @@ from app.modules.identity.models import User
 from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
 from app.modules.pharmacy.models import PharmacySupplier
 from app.modules.practitioners.models import Practitioner
+from app.modules.patients.models import Patient
 
 
 class BillingReadRepository:
@@ -49,8 +52,19 @@ class BillingReadRepository:
     def get_home_care_booking(self, booking_id: str) -> HomeCareBooking | None:
         return self.session.get(HomeCareBooking, booking_id)
 
-    def get_home_care_visit_log(self, visit_id: str) -> HomeCareVisitLog | None:
-        return self.session.get(HomeCareVisitLog, visit_id)
+    def home_care_visit_logs(
+        self, *, tenant_id: str, visit_ids: set[str | None]
+    ) -> dict[str, HomeCareVisitLog]:
+        ids = {str(visit_id) for visit_id in visit_ids if visit_id}
+        if not ids:
+            return {}
+        rows = self.session.exec(
+            select(HomeCareVisitLog).where(
+                HomeCareVisitLog.tenant_id == tenant_id,
+                HomeCareVisitLog.id.in_(ids),
+            )
+        ).all()
+        return {row.id: row for row in rows}
 
     def get_payment_for_update(self, payment_id: str) -> Payment | None:
         return self.session.exec(
@@ -63,17 +77,168 @@ class BillingReadRepository:
         tenant_id: str,
         branch_id: str | None,
         patient_id: str | None,
+        q: str | None = None,
+        source: str | None = None,
+        payment_state: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        offset: int = 0,
         limit: int | None = None,
     ) -> list[Invoice]:
+        statement = self._invoice_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=patient_id,
+            q=q,
+            source=source,
+            payment_state=payment_state,
+            from_date=from_date,
+            to_date=to_date,
+        )
+        statement = statement.order_by(Invoice.created_at.desc())
+        statement = statement.offset(offset)
+        if limit:
+            statement = statement.limit(limit)
+        return list(self.session.exec(statement).all())
+
+    def count_invoices(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        patient_id: str | None,
+        q: str | None = None,
+        source: str | None = None,
+        payment_state: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> int:
+        filtered = self._invoice_list_statement(
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            patient_id=patient_id,
+            q=q,
+            source=source,
+            payment_state=payment_state,
+            from_date=from_date,
+            to_date=to_date,
+        ).subquery()
+        return int(self.session.exec(select(func.count()).select_from(filtered)).one())
+
+    def _invoice_list_statement(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        patient_id: str | None,
+        q: str | None,
+        source: str | None,
+        payment_state: str | None,
+        from_date: date | None,
+        to_date: date | None,
+    ):
         statement = select(Invoice).where(Invoice.tenant_id == tenant_id)
         if branch_id:
             statement = statement.where(Invoice.branch_id == branch_id)
         if patient_id:
             statement = statement.where(Invoice.patient_id == patient_id)
-        statement = statement.order_by(Invoice.created_at.desc())
-        if limit:
-            statement = statement.limit(limit)
-        return list(self.session.exec(statement).all())
+        if q:
+            term = q.strip().lower()
+            pattern = f"%{term}%"
+            statement = statement.join(Patient, Patient.id == Invoice.patient_id).where(
+                or_(
+                    func.lower(Invoice.invoice_number).like(pattern),
+                    func.lower(Patient.patient_number).like(pattern),
+                    func.lower(Patient.full_name).like(pattern),
+                    func.lower(Patient.mobile).like(pattern),
+                    func.lower(Patient.alternate_mobile).like(pattern),
+                    func.lower(Patient.guardian_mobile).like(pattern),
+                )
+            )
+        if source:
+            source_condition = {
+                "lab_scan": Invoice.lab_order_id.is_not(None),
+                "pharmacy": Invoice.pharmacy_issue_id.is_not(None),
+                "physiotherapy": Invoice.physiotherapy_case_id.is_not(None),
+                "home_care": Invoice.home_care_booking_id.is_not(None),
+                "ip_billing": Invoice.ip_admission_id.is_not(None),
+                "consultation": and_(
+                    Invoice.lab_order_id.is_(None),
+                    Invoice.pharmacy_issue_id.is_(None),
+                    Invoice.physiotherapy_case_id.is_(None),
+                    Invoice.home_care_booking_id.is_(None),
+                    Invoice.ip_admission_id.is_(None),
+                    or_(
+                        Invoice.consultation_id.is_not(None),
+                        Invoice.appointment_id.is_not(None),
+                    ),
+                ),
+                "membership": and_(
+                    or_(
+                        Invoice.patient_subscription_enrollment_id.is_not(None),
+                        Invoice.patient_subscription_plan_id.is_not(None),
+                    ),
+                    Invoice.lab_order_id.is_(None),
+                    Invoice.pharmacy_issue_id.is_(None),
+                    Invoice.physiotherapy_case_id.is_(None),
+                    Invoice.home_care_booking_id.is_(None),
+                    Invoice.ip_admission_id.is_(None),
+                    Invoice.consultation_id.is_(None),
+                    Invoice.appointment_id.is_(None),
+                ),
+                "direct": and_(
+                    Invoice.lab_order_id.is_(None),
+                    Invoice.pharmacy_issue_id.is_(None),
+                    Invoice.physiotherapy_case_id.is_(None),
+                    Invoice.home_care_booking_id.is_(None),
+                    Invoice.ip_admission_id.is_(None),
+                    Invoice.consultation_id.is_(None),
+                    Invoice.appointment_id.is_(None),
+                    Invoice.patient_subscription_enrollment_id.is_(None),
+                    Invoice.patient_subscription_plan_id.is_(None),
+                ),
+            }.get(source)
+            if source_condition is not None:
+                statement = statement.where(source_condition)
+        if payment_state:
+            terminal = (InvoiceStatus.REFUNDED, InvoiceStatus.CANCELLED)
+            if payment_state == "due":
+                statement = statement.where(Invoice.balance_amount > 0)
+            elif payment_state == "paid":
+                statement = statement.where(
+                    Invoice.status.not_in(terminal),
+                    or_(
+                        Invoice.status == InvoiceStatus.PAID,
+                        Invoice.balance_amount <= 0,
+                    ),
+                )
+            elif payment_state == "partially_paid":
+                statement = statement.where(
+                    Invoice.status.not_in(terminal),
+                    Invoice.balance_amount > 0,
+                    or_(
+                        Invoice.status == InvoiceStatus.PARTIALLY_PAID,
+                        Invoice.paid_amount > 0,
+                    ),
+                )
+            elif payment_state == "unpaid":
+                statement = statement.where(
+                    Invoice.status.not_in(terminal),
+                    Invoice.balance_amount > 0,
+                    Invoice.paid_amount <= 0,
+                )
+            else:
+                statement = statement.where(Invoice.status == payment_state)
+        if from_date:
+            statement = statement.where(
+                Invoice.created_at >= datetime.combine(from_date, time.min)
+            )
+        if to_date:
+            statement = statement.where(
+                Invoice.created_at
+                < datetime.combine(to_date + timedelta(days=1), time.min)
+            )
+        return statement
 
     def list_invoice_items(self, invoice: Invoice) -> list[InvoiceItem]:
         return list(

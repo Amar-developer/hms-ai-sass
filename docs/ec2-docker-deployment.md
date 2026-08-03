@@ -164,6 +164,26 @@ If only backend Python code changed, a rebuild is still safest:
 docker compose up -d --build backend report-worker
 ```
 
+For the staging stack, always pass its file as Compose's interpolation source;
+`env_file:` injects variables into containers but does not resolve `${...}` in
+the Compose YAML itself:
+
+```bash
+docker compose --env-file .env.staging -f docker-compose.staging.yml up -d --build
+```
+
+After deployment, verify the worker is running and its heartbeat is current:
+
+```bash
+docker compose ps report-worker
+docker compose logs --tail=100 report-worker
+```
+
+The super-admin `GET /api/v1/platform/observability/metrics` response reports
+`workers.report_worker.status`, durable queue depth, and oldest queued-job age.
+Redis is a wake-up accelerator; pending report jobs remain in PostgreSQL and
+are processed after a Redis or worker restart.
+
 If frontend code or `NEXT_PUBLIC_MEDIZINHUB_API_URL` changed:
 
 ```bash
@@ -229,8 +249,15 @@ This repository includes two workflows:
 | --- | --- |
 | `.github/workflows/ci.yml` | Runs frontend tests/build, backend lint/tests, and Docker Compose config validation |
 | `.github/workflows/deploy-ec2.yml` | Deploys the `main` branch to EC2 with SSH and Docker Compose |
+| `.github/workflows/production-backup.yml` | Creates and verifies the daily encrypted production database backup |
 
 See `docs/ci-cd-testing-strategy.md` for the full testing and release-gate approach.
+
+Production deployment also requires the `PRODUCTION_BACKUP_PASSPHRASE` and
+`PRODUCTION_BACKUP_DIR` GitHub environment secrets. Before replacing any
+container, the workflow creates and validates an encrypted database recovery
+point. Follow `docs/backup-restore-runbook.md` for secret handling, retention,
+restore drills, and rollback decisions.
 
 ### CI Flow
 

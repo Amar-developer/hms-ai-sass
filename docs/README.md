@@ -30,6 +30,9 @@ operations documents take priority over older product-planning material.
 - [Pending frontend/backend testing checklist](testing-pending-checklist.md)
 - [EC2 Docker deployment](ec2-docker-deployment.md)
 - [Production logging runbook](production-logging-runbook.md)
+- [Scalability and capacity runbook](scalability-capacity-runbook.md)
+- [Production backup and restore runbook](backup-restore-runbook.md)
+- [Release acceptance runbook](release-acceptance-runbook.md)
 - [Production-to-development database restore](prod-to-dev-db-restore.md)
 - [Production readiness plan](production-readiness-plan.md)
 

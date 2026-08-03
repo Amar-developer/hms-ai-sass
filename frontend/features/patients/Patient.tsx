@@ -18,7 +18,7 @@ import { readNotificationTarget } from "@/lib/notificationTarget";
 import {
   FormField,
 } from "@/app/components/FormElements";
-import { patientSearchText, toRow, todayInputValue } from "./helpers";
+import { toRow, todayInputValue } from "./helpers";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { PatientDetail } from "./components/PatientDetail";
 import { activeTenantOptions } from "@/utils/helper";
@@ -39,13 +39,6 @@ type PatientProps = {
 };
 
 const pageSize = 10;
-const genders = [
-  ["male", "Male"],
-  ["female", "Female"],
-  ["other", "Other"],
-  ["unknown", "Unknown"],
-] as const;
-
 export function Patient({
   apiSession,
   branchId,
@@ -71,6 +64,7 @@ export function Patient({
   const [tenantId, setTenantId] = useState(apiSession?.tenantId || "");
   const [branches, setBranches] = useState<any[]>([]);
   const [rows, setRows] = useState<any[]>([]);
+  const [totalRows, setTotalRows] = useState(0);
   const [selectedId, setSelectedId] = useState("");
   const [selectedDetail, setSelectedDetail] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
@@ -121,22 +115,48 @@ export function Patient({
       );
   }
 
-  async function loadData(nextTenantId = tenantId) {
+  async function loadData(
+    nextTenantId = tenantId,
+    nextPage = page,
+    filterOverrides: Record<string, string> = {},
+  ) {
     if (!apiSession || !nextTenantId) return;
     setBusy(true);
     setMessage("");
     const session = { ...apiSession, tenantId: nextTenantId };
     try {
+      const filters = {
+        query,
+        status,
+        gender,
+        branchFilter,
+        fromDate,
+        toDate,
+        ...filterOverrides,
+      };
+      const params = new URLSearchParams({
+        limit: String(pageSize),
+        offset: String((nextPage - 1) * pageSize),
+        active_only: "false",
+      });
+      if (filters.query) params.set("q", filters.query);
+      if (filters.status && filters.status !== "all")
+        params.set("status", filters.status);
+      if (filters.gender && filters.gender !== "all")
+        params.set("gender", filters.gender);
+      if (filters.branchFilter && filters.branchFilter !== "all")
+        params.set("branch_id", filters.branchFilter);
+      if (filters.fromDate) params.set("from_date", filters.fromDate);
+      if (filters.toDate) params.set("to_date", filters.toDate);
       const [branchRows, patientRows] = await Promise.all([
         getTenantBranches(queryClient, session, nextTenantId).catch(() => []),
-        apiFetch(
-          `/patients?limit=100&active_only=false${query ? `&q=${encodeURIComponent(query)}` : ""}`,
-          session,
-        ),
+        apiFetch(`/patients/page?${params.toString()}`, session),
       ]);
       setBranches(branchRows);
-      setRows(patientRows);
-      if (!selectedId && patientRows[0]?.id) setSelectedId(patientRows[0].id);
+      setRows(patientRows.items || []);
+      setTotalRows(patientRows.total || 0);
+      if (!selectedId && patientRows.items?.[0]?.id)
+        setSelectedId(patientRows.items[0].id);
     } catch (err: any) {
       setMessage(err.message || "Could not load patients.");
     } finally {
@@ -228,7 +248,8 @@ export function Patient({
   }, [apiSession?.email]);
   useEffect(() => {
     if (apiSession && tenantId) {
-      loadData(tenantId);
+      setPage(1);
+      loadData(tenantId, 1);
     }
   }, [apiSession?.email, tenantId]);
 
@@ -547,36 +568,9 @@ export function Patient({
       />
     );
 
-  const filtered = rows
-    .filter((row: any) => {
-      const search = String(query || "").trim().toLowerCase();
-      const created = row.created_at ? new Date(row.created_at).getTime() : 0;
-      const from = fromDate ? new Date(fromDate).getTime() : 0;
-      const to = toDate
-        ? new Date(`${toDate}T23:59:59`).getTime()
-        : Number.MAX_SAFE_INTEGER;
-      const branch = branches.find((item: any) => item.id === row.branch_id);
-      const text = patientSearchText(row, branch);
-      return (
-        (!search || text.includes(search)) &&
-        (status === "all" || row.status === status) &&
-        (gender === "all" || row.gender === gender) &&
-        (branchFilter === "all" || row.branch_id === branchFilter) &&
-        (!fromDate || created >= from) &&
-        (!toDate || created <= to)
-      );
-    })
-    .sort(
-      (a: any, b: any) =>
-        new Date(b.updated_at || b.created_at).getTime() -
-        new Date(a.updated_at || a.created_at).getTime(),
-    );
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
+  const pageRows = rows;
 
   return (
     <Card className="">
@@ -666,7 +660,7 @@ export function Patient({
               // className="min-h-[46px] px-5  rounded-lg text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
               onClick={() => {
                 setPage(1);
-                loadData(tenantId);
+                loadData(tenantId, 1);
               }}
               disabled={busy}
               className="save-button"
@@ -683,7 +677,14 @@ export function Patient({
                 setFromDate("");
                 setToDate("");
                 setPage(1);
-                setTimeout(() => loadData(tenantId), 0);
+                loadData(tenantId, 1, {
+                  query: "",
+                  status: "all",
+                  gender: "all",
+                  branchFilter: "all",
+                  fromDate: "",
+                  toDate: "",
+                });
               }}
               className="save-button"
             >
@@ -726,8 +727,11 @@ export function Patient({
       <Pagination
         page={safePage}
         totalPages={totalPages}
-        total={filtered.length}
-        onPage={setPage}
+        total={totalRows}
+        onPage={(nextPage) => {
+          setPage(nextPage);
+          loadData(tenantId, nextPage);
+        }}
       />
       {confirm && (
         <ConfirmModal

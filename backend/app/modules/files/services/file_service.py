@@ -11,6 +11,7 @@ from app.core.uploads import UPLOADS_DIR, read_validated_upload
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import Invoice
 from app.modules.files.models import FileDocument
+from app.core.pagination import Page
 from app.modules.files.optimization import (
     OptimizationError,
     optimize_document,
@@ -265,6 +266,7 @@ class FileService:
         attached_to_doctype: str | None,
         attached_to_name: str | None,
         q: str | None,
+        offset: int = 0,
         limit: int,
         actor: User,
     ) -> list[FileDocument]:
@@ -277,7 +279,28 @@ class FileService:
             attached_to_doctype=attached_to_doctype,
             attached_to_name=attached_to_name,
             q=q,
+            offset=offset,
             limit=limit,
+        )
+
+    def list_file_page(self, **kwargs) -> Page[FileDocument]:
+        actor = kwargs["actor"]
+        branch_id = scoped_branch_id(actor, kwargs["branch_id"])
+        items = self.list_files(**kwargs)
+        total = self.files.count_active(
+            tenant_id=kwargs["tenant_id"],
+            branch_id=branch_id,
+            patient_id=kwargs["patient_id"],
+            category=kwargs["category"],
+            attached_to_doctype=kwargs["attached_to_doctype"],
+            attached_to_name=kwargs["attached_to_name"],
+            q=kwargs["q"],
+        )
+        return Page(
+            items=items,
+            total=total,
+            limit=kwargs["limit"],
+            offset=kwargs["offset"],
         )
 
     def prepare_download(
