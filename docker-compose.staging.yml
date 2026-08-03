@@ -38,7 +38,7 @@ services:
   pgbouncer:
     # See docker-compose.yml for the full rationale — bounds real Postgres
     # connections independent of backend worker/process count.
-    image: edoburu/pgbouncer:1.21.0
+    image: edoburu/pgbouncer:v1.25.2-p0
     container_name: medizinhub-pgbouncer-staging
     env_file:
       - .env.staging
