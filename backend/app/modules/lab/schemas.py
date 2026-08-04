@@ -254,6 +254,7 @@ class LabOrderRead(BaseModel):
     patient_id: str
     patient_name: str | None = None
     patient_number: str | None = None
+    billing_invoice_id: str | None = None
     order_date: date
     acquisition_source: str
     referrer_patient_id: str | None

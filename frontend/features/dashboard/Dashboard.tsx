@@ -52,18 +52,6 @@ export function Dashboard({
     0,
   );
   const monthEnd = `${currentMonth}-${String(monthEndDate.getDate()).padStart(2, "0")}`;
-  const monthlyParams = new URLSearchParams({
-    from_date: monthStart,
-    to_date: monthEnd,
-  });
-
-  if (branchId) monthlyParams.set("branch_id", branchId);
-  const todayParams = new URLSearchParams({
-    from_date: today,
-    to_date: today,
-  });
-  if (branchId) todayParams.set("branch_id", branchId);
-
   const todayAppointments = scopedAppointments.filter(
     (row: any) =>
       dateKey(row.appointmentDate || row.appointment_date) === today,
@@ -100,33 +88,33 @@ export function Dashboard({
     monthEnd,
   });
   const monthlyDue = Number(
-    dashboardData?.total_due_amount ?? fallbackMonthlyDue,
+    dashboardData?.monthlyDue?.total_due_amount ?? fallbackMonthlyDue,
   );
   const todayDue = Number(
-    dashboardData?.total_due_amount ??
+    dashboardData?.todayDue?.total_due_amount ??
       activeTodayInvoices.reduce(
         (sum: number, row: any) => sum + invoiceBalance(row),
         0,
       ),
   );
   const monthlyDueInvoiceCount = Number(
-    dashboardData?.invoice_count ??
+    dashboardData?.monthlyDue?.invoice_count ??
       activeMonthlyInvoices.filter((row: any) => invoiceBalance(row) > 0)
         .length,
   );
   const todayDueInvoiceCount = Number(
-    dashboardData?.invoice_count ??
+    dashboardData?.todayDue?.invoice_count ??
       activeTodayInvoices.filter((row: any) => invoiceBalance(row) > 0).length,
   );
   const monthlyPaid = Number(
-    dashboardData?.net_collected_amount ??
+    dashboardData?.collections?.net_collected_amount ??
       activeMonthlyInvoices.reduce(
         (sum: number, row: any) => sum + Number(row.paid_amount || 0),
         0,
       ),
   );
   const todayPaid = Number(
-    dashboardData?.net_collected_amount ??
+    dashboardData?.todayPaid?.net_collected_amount ??
       activeTodayInvoices.reduce(
         (sum: number, row: any) => sum + Number(row.paid_amount || 0),
         0,

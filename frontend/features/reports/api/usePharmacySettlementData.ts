@@ -20,6 +20,14 @@ export function usePharmacySettlementData({
   const [pharmacyIssueDetails, setPharmacyIssueDetails] = useState<any[]>([]);
   const [pharmacySettlementLoading, setPharmacySettlementLoading] =
     useState(false);
+  const pharmacyInvoiceIssueIds = Array.from(
+    new Set(
+      liveInvoices
+        .map((invoice: any) => invoice.pharmacy_issue_id)
+        .filter(Boolean),
+    ),
+  ).sort();
+  const pharmacyInvoiceIssueIdsKey = pharmacyInvoiceIssueIds.join("|");
 
   useEffect(() => {
     if (!apiSession?.tenantId) return;
@@ -35,15 +43,8 @@ export function usePharmacySettlementData({
         ]);
         if (cancelled) return;
         setMedicineRows(medicines || []);
-        const relevantIssueIds = Array.from(
-          new Set(
-            liveInvoices
-              .filter((invoice: any) => invoice.pharmacy_issue_id)
-              .map((invoice: any) => invoice.pharmacy_issue_id),
-          ),
-        );
-        const sourceIssueIds = relevantIssueIds.length
-          ? relevantIssueIds
+        const sourceIssueIds = pharmacyInvoiceIssueIds.length
+          ? pharmacyInvoiceIssueIds
           : (issueRows || []).slice(0, 200).map((issue: any) => issue.id);
         const details = await mapWithConcurrency(
           sourceIssueIds,
@@ -63,7 +64,7 @@ export function usePharmacySettlementData({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiSession?.tenantId, liveInvoices.length, refreshTick]);
+  }, [apiSession?.tenantId, pharmacyInvoiceIssueIdsKey, refreshTick]);
 
   return { medicineRows, pharmacyIssueDetails, pharmacySettlementLoading };
 }

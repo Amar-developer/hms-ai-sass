@@ -802,6 +802,47 @@ def test_existing_consultation_invoice_is_returned_for_refresh(client: TestClien
     assert refreshed.json()["invoice"]["total_amount"] == 500
 
 
+def test_pending_consultation_invoice_page_uses_authoritative_invoice_links(
+    client: TestClient,
+):
+    data = setup_signed_consultation(client, "op")
+    tenant_id = data["tenant"]["id"]
+    consultation_id = data["consultation"]["id"]
+    headers = {"X-Tenant-ID": tenant_id}
+
+    pending = client.get(
+        "/api/v1/billing/pending-consultation-invoices/page?limit=10&offset=0",
+        headers=headers,
+    )
+    assert pending.status_code == 200
+    assert pending.json()["total"] == 1
+    assert pending.json()["items"][0]["consultation_id"] == consultation_id
+
+    create_fee_rule(client, tenant_id, "op", 500, practitioner_id="doctor_demo")
+    generated = client.post(
+        "/api/v1/billing/invoices/from-consultation",
+        headers=headers,
+        json={"consultation_id": consultation_id},
+    )
+    assert generated.status_code == 201
+    invoice_id = generated.json()["invoice"]["id"]
+    paid = client.post(
+        f"/api/v1/billing/invoices/{invoice_id}/payments",
+        headers=headers,
+        json={"method": "cash", "amount": 500},
+    )
+    assert paid.status_code == 201
+    assert paid.json()["invoice"]["status"] == "paid"
+
+    after_payment = client.get(
+        "/api/v1/billing/pending-consultation-invoices/page?limit=10&offset=0",
+        headers=headers,
+    )
+    assert after_payment.status_code == 200
+    assert after_payment.json()["items"] == []
+    assert after_payment.json()["total"] == 0
+
+
 def test_invoice_generation_requires_matching_fee_rule(client: TestClient):
     data = setup_signed_consultation(client, "online")
 

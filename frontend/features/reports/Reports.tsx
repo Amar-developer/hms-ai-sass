@@ -61,6 +61,7 @@ import {
   useLabSettlementData,
   useMonthlySnapshots,
   usePharmacySettlementData,
+  useReportInvoices,
   useReportsActions,
   useReportsUsers,
 } from "./api";
@@ -118,10 +119,6 @@ export function Reports({
 }: any) {
   const { ipAdmissions } = useIpAdmissionsQuery(apiSession);
   const { livePractitioners } = usePractitionersQuery(apiSession);
-  const { patientMap: patientById } = usePatientReferencesQuery(
-    apiSession,
-    liveInvoices.map((invoice: any) => invoice.patient_id),
-  );
   const [period, setPeriod] = useState("monthly");
   const [refreshTick, setRefreshTick] = useState(0);
   async function refreshReports() {
@@ -131,6 +128,27 @@ export function Reports({
   const [rangeStart, rangeEnd] = currentRange(period);
   const [fromDate, setFromDate] = useState(rangeStart);
   const [toDate, setToDate] = useState(rangeEnd);
+  const reportNow = new Date();
+  const previousMonthStart = toInputDate(
+    new Date(reportNow.getFullYear(), reportNow.getMonth() - 1, 1),
+  );
+  const previousMonthEnd = toInputDate(
+    new Date(reportNow.getFullYear(), reportNow.getMonth(), 0),
+  );
+  const serverReportInvoices = useReportInvoices({
+    apiSession,
+    branchId,
+    ranges: [
+      [fromDate, toDate],
+      [previousMonthStart, previousMonthEnd],
+    ],
+    refreshTick,
+  });
+  const reportInvoiceRows = serverReportInvoices ?? liveInvoices;
+  const { patientMap: patientById } = usePatientReferencesQuery(
+    apiSession,
+    reportInvoiceRows.map((invoice: any) => invoice.patient_id),
+  );
   const [doctorId, setDoctorId] = useState("all");
   const [typeFilter, setTypeFilter] = useState("overall");
   const [supplierFilter, setSupplierFilter] = useState("all");
@@ -168,19 +186,23 @@ export function Reports({
   const pageSize = 10;
   const homeCareInvoiceIds = useMemo(
     () =>
-      liveInvoices
+      reportInvoiceRows
         .filter((invoice: any) => invoice.home_care_booking_id)
         .map((invoice: any) => invoice.id)
         .filter(Boolean)
         .sort(),
-    [liveInvoices],
+    [reportInvoiceRows],
   );
   const homeCareInvoiceIdsKey = homeCareInvoiceIds.join("|");
 
   const { users } = useReportsUsers({ apiSession, refreshTick });
 
   const { labTests, labPackages, suppliers, labOrderDetails, labSettlementLoading } =
-    useLabSettlementData({ apiSession, liveInvoices, refreshTick });
+    useLabSettlementData({
+      apiSession,
+      liveInvoices: reportInvoiceRows,
+      refreshTick,
+    });
 
   // Closed-month income snapshots (frozen at month end). Branch-scoped to match
   // the live dashboard's branch filter; no branch = all-branches aggregate.
@@ -207,7 +229,11 @@ export function Reports({
   });
 
   const { medicineRows, pharmacyIssueDetails, pharmacySettlementLoading } =
-    usePharmacySettlementData({ apiSession, liveInvoices, refreshTick });
+    usePharmacySettlementData({
+      apiSession,
+      liveInvoices: reportInvoiceRows,
+      refreshTick,
+    });
 
   const { recalculateMonthlySnapshot, sendEmailReport } = useReportsActions({
     apiSession,
@@ -399,7 +425,7 @@ export function Reports({
     return type === typeFilter;
   }
 
-  const baseFilteredInvoices = liveInvoices.filter((invoice: any) => {
+  const baseFilteredInvoices = reportInvoiceRows.filter((invoice: any) => {
     const invoiceDate = rowDateKey(invoice);
     const appointment = appointmentById.get(invoice.appointment_id);
     const invoiceDoctorId =
@@ -444,8 +470,9 @@ export function Reports({
     setInvoiceDetailsLoading,
   });
   const invoiceById = useMemo(
-    () => new Map<string, any>(liveInvoices.map((row: any) => [row.id, row])),
-    [liveInvoices],
+    () =>
+      new Map<string, any>(reportInvoiceRows.map((row: any) => [row.id, row])),
+    [reportInvoiceRows],
   );
   const invoiceDetailById = useMemo(
     () =>
@@ -644,7 +671,7 @@ export function Reports({
       new Date(now.getFullYear(), now.getMonth() - 1, 1),
     );
     const endKey = toInputDate(new Date(now.getFullYear(), now.getMonth(), 0));
-    const previousMonthInvoices = liveInvoices.filter((invoice: any) => {
+    const previousMonthInvoices = reportInvoiceRows.filter((invoice: any) => {
       if (!isPaidInvoice(invoice)) return false;
       const appointment = appointmentById.get(invoice.appointment_id);
       const invoiceBranchId =
@@ -667,7 +694,7 @@ export function Reports({
       ),
     };
   }, [
-    liveInvoices,
+    reportInvoiceRows,
     branchId,
     appointmentById,
     homeVisitBookingIds,

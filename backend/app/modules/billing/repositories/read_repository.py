@@ -1,7 +1,7 @@
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, exists, func, or_
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
@@ -19,11 +19,13 @@ from app.modules.billing.models import (
     PaymentStatus,
     TaxRule,
 )
+from app.modules.consultations.models import Consultation, ConsultationStatus
 from app.modules.identity.models import User
 from app.modules.home_care.models import HomeCareBooking, HomeCareVisitLog
 from app.modules.pharmacy.models import PharmacySupplier
 from app.modules.practitioners.models import Practitioner
 from app.modules.patients.models import Patient
+from app.modules.queue.models import QueueEntry
 
 
 class BillingReadRepository:
@@ -42,6 +44,82 @@ class BillingReadRepository:
         if not invoice or invoice.tenant_id != tenant_id:
             return None
         return invoice
+
+    @staticmethod
+    def _consultation_invoice_exists():
+        return exists(
+            select(Invoice.id).where(
+                Invoice.tenant_id == Consultation.tenant_id,
+                Invoice.consultation_id == Consultation.id,
+                Invoice.lab_order_id.is_(None),
+                Invoice.pharmacy_issue_id.is_(None),
+                Invoice.ip_admission_id.is_(None),
+                Invoice.physiotherapy_case_id.is_(None),
+            )
+        )
+
+    def list_pending_consultation_invoices(
+        self,
+        *,
+        tenant_id: str,
+        branch_id: str | None,
+        offset: int,
+        limit: int,
+    ):
+        token_number = (
+            select(QueueEntry.token_number)
+            .where(QueueEntry.appointment_id == Appointment.id)
+            .order_by(QueueEntry.created_at.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        statement = (
+            select(
+                Consultation.id,
+                Appointment.id,
+                Consultation.branch_id,
+                Patient.id,
+                Patient.full_name,
+                Practitioner.id,
+                Practitioner.full_name,
+                token_number,
+                Appointment.appointment_date,
+                Appointment.appointment_time,
+                Consultation.signed_at,
+                Consultation.created_at,
+            )
+            .join(Appointment, Appointment.id == Consultation.appointment_id)
+            .join(Patient, Patient.id == Consultation.patient_id)
+            .outerjoin(Practitioner, Practitioner.id == Consultation.practitioner_id)
+            .where(
+                Consultation.tenant_id == tenant_id,
+                Consultation.status == ConsultationStatus.SIGNED,
+                ~self._consultation_invoice_exists(),
+            )
+        )
+        if branch_id:
+            statement = statement.where(Consultation.branch_id == branch_id)
+        return list(
+            self.session.exec(
+                statement.order_by(
+                    Consultation.signed_at.desc(), Consultation.created_at.desc()
+                )
+                .offset(offset)
+                .limit(limit)
+            ).all()
+        )
+
+    def count_pending_consultation_invoices(
+        self, *, tenant_id: str, branch_id: str | None
+    ) -> int:
+        statement = select(func.count(Consultation.id)).where(
+            Consultation.tenant_id == tenant_id,
+            Consultation.status == ConsultationStatus.SIGNED,
+            ~self._consultation_invoice_exists(),
+        )
+        if branch_id:
+            statement = statement.where(Consultation.branch_id == branch_id)
+        return int(self.session.exec(statement).one())
 
     def get_discount_approval(self, approval_id: str) -> DiscountApproval | None:
         return self.session.get(DiscountApproval, approval_id)

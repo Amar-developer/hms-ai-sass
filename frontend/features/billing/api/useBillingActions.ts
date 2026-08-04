@@ -37,6 +37,7 @@ export function useBillingActions(
   options: {
     loadLiveData: (session: ApiSession) => Promise<void>;
     refreshInvoices: () => Promise<void>;
+    refreshPendingConsultations: () => Promise<void>;
     loadReports: () => Promise<void>;
     setSettlement: (value: any) => void;
     branchId?: string;
@@ -46,6 +47,7 @@ export function useBillingActions(
   const {
     loadLiveData,
     refreshInvoices,
+    refreshPendingConsultations,
     loadReports,
     setSettlement,
     branchId,
@@ -150,6 +152,7 @@ export function useBillingActions(
       await Promise.all([
         loadLiveData(session),
         refreshInvoices(),
+        refreshPendingConsultations(),
         loadReports(),
       ]);
       setDetail(row);

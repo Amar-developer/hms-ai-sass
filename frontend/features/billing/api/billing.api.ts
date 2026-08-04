@@ -7,6 +7,16 @@ export function fetchInvoicePage(
   return apiFetch(`/billing/invoices/page?${params.toString()}`, session);
 }
 
+export function fetchPendingConsultationInvoicePage(
+  session: ApiSession,
+  params: URLSearchParams,
+) {
+  return apiFetch(
+    `/billing/pending-consultation-invoices/page?${params.toString()}`,
+    session,
+  );
+}
+
 export function fetchInvoiceDelivery(session: ApiSession, invoiceId: string) {
   return apiFetch(
     `/billing/invoices/${encodeURIComponent(invoiceId)}/delivery`,

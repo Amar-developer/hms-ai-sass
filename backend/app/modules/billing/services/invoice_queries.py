@@ -10,12 +10,60 @@ from app.core.access_control import (
 )
 from app.core.pagination import Page
 from app.modules.billing.repositories.read_repository import BillingReadRepository
-from app.modules.billing.schemas import InvoiceDetailRead, InvoiceRead
+from app.modules.billing.schemas import (
+    InvoiceDetailRead,
+    InvoiceRead,
+    PendingConsultationInvoiceRead,
+)
 from app.modules.billing.services.ledger import read_invoice_detail_full
 from app.modules.billing.services.read_models import (
     invoice_reads,
 )
 from app.modules.identity.models import User
+
+
+def list_pending_consultation_invoice_page(
+    session: Session,
+    *,
+    tenant_id: str,
+    branch_id: str | None,
+    offset: int,
+    limit: int,
+    current_user: User,
+) -> Page[PendingConsultationInvoiceRead]:
+    """Return the authoritative queue of signed, not-yet-invoiced consultations."""
+
+    enforce_entitlement(session, tenant_id, "billing_basic")
+    scoped_branch = scoped_branch_id(current_user, branch_id)
+    repository = BillingReadRepository(session)
+    rows = repository.list_pending_consultation_invoices(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch,
+        offset=offset,
+        limit=limit,
+    )
+    items = [
+        PendingConsultationInvoiceRead(
+            consultation_id=row[0],
+            appointment_id=row[1],
+            branch_id=row[2],
+            patient_id=row[3],
+            patient_name=row[4],
+            practitioner_id=row[5],
+            practitioner_name=row[6],
+            token_number=row[7],
+            appointment_date=row[8],
+            appointment_time=row[9],
+            consultation_signed_at=row[10],
+            consultation_created_at=row[11],
+        )
+        for row in rows
+    ]
+    total = repository.count_pending_consultation_invoices(
+        tenant_id=tenant_id,
+        branch_id=scoped_branch,
+    )
+    return Page(items=items, total=total, limit=limit, offset=offset)
 
 
 def list_billing_invoices(

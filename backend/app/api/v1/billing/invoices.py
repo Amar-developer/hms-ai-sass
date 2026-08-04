@@ -22,6 +22,7 @@ from app.modules.billing.schemas import (
     InvoiceItemRead,
     InvoiceRead,
     PaymentRead,
+    PendingConsultationInvoiceRead,
 )
 from app.modules.billing.models import Invoice, InvoiceStatus
 from app.modules.billing.repositories.read_repository import BillingReadRepository
@@ -36,6 +37,7 @@ from app.modules.billing.services.invoice_queries import (
     get_billing_invoice_detail,
     list_billing_invoices,
     list_billing_invoice_page,
+    list_pending_consultation_invoice_page,
 )
 from app.modules.billing.services.ledger import (
     create_service_invoice,
@@ -70,6 +72,34 @@ router = APIRouter(prefix="/billing")
 class InvoiceSendRequest(BaseModel):
     channel: DocumentDeliveryChannel = DocumentDeliveryChannel.WHATSAPP
     idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
+
+
+@router.get(
+    "/pending-consultation-invoices/page",
+    response_model=Page[PendingConsultationInvoiceRead],
+)
+def list_pending_consultation_invoices(
+    tenant_id: str = Depends(require_tenant_id),
+    branch_id: str | None = None,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=25, ge=1, le=100),
+    session: Session = Depends(get_session),
+    current_user: User = Depends(
+        require_any_permission(
+            permissions.BILLING_MANAGE,
+            permissions.BILLING_CREATE,
+            permissions.INVOICES_CREATE,
+        )
+    ),
+) -> Page[PendingConsultationInvoiceRead]:
+    return list_pending_consultation_invoice_page(
+        session,
+        tenant_id=tenant_id,
+        branch_id=branch_id,
+        offset=offset,
+        limit=limit,
+        current_user=current_user,
+    )
 
 
 def _invoice_artifact(
