@@ -612,7 +612,7 @@ def test_paid_invoice_job_serves_signed_stored_printed_receipt(
         assert filename == "Queue-Patient-INV-QUEUE-1.pdf"
 
 
-def test_s3_invoice_media_verifies_pdf_before_creating_download_url(
+def test_s3_invoice_media_verifies_pdf_then_uses_signed_receipt_url(
     test_engine, monkeypatch
 ):
     calls = []
@@ -623,6 +623,9 @@ def test_s3_invoice_media_verifies_pdf_before_creating_download_url(
             return SimpleNamespace(size=2048, content_type="application/pdf")
 
         def create_download_url(self, *, key, expires_in):
+            # A raw S3 presigned URL is short-lived and WhatsApp providers
+            # fetch media asynchronously, so this path must not be used for
+            # WhatsApp delivery — only the app's own signed receipt endpoint.
             calls.append(("url", key, expires_in))
             return "https://documents.example.com/invoice.pdf?signature=test"
 
@@ -675,10 +678,11 @@ def test_s3_invoice_media_verifies_pdf_before_creating_download_url(
             artifact_version=1,
         )
 
-        assert url.startswith("https://documents.example.com/")
-        assert filename == "invoice.pdf"
-        assert calls[0] == ("head", artifact.storage_key)
-        assert calls[1][0:2] == ("url", artifact.storage_key)
+        assert url.startswith(
+            "https://api.example.com/api/v1/communications/public/invoice-receipts/"
+        )
+        assert filename == "invoice-INV-S3-1.pdf"
+        assert calls == [("head", artifact.storage_key)]
 
 
 def test_s3_invoice_media_preparation_failure_is_retryable(test_engine, monkeypatch):

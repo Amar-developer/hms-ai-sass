@@ -7,7 +7,6 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.core.credentials import decrypt_credential
-from app.core.config import get_settings
 from app.modules.appointments.models import Appointment, AppointmentStatus
 from app.modules.audit.service import record_audit_event
 from app.modules.billing.models import CreditNote, Invoice, InvoiceItem
@@ -118,6 +117,8 @@ def _invoice_media(
         raise NotificationCancelled(
             "The printed invoice PDF is missing. Use Send Invoice after payment."
         )
+    if not public_base_url:
+        raise NotificationCancelled("The public receipt base URL is missing.")
     if row.storage_backend == "s3" and row.storage_key:
         try:
             backend = get_storage_backend_for_document(row)
@@ -128,21 +129,16 @@ def _invoice_media(
                 raise NotificationCancelled(
                     "The stored invoice artifact is not a PDF document."
                 )
-            return (
-                backend.create_download_url(
-                    key=row.storage_key,
-                    expires_in=get_settings().aws_s3_presigned_url_ttl_seconds,
-                ),
-                row.file_name,
-            )
         except NotificationCancelled:
             raise
         except Exception as exc:
             raise NotificationRetryable(
                 "The stored invoice PDF is temporarily unavailable for delivery."
             ) from exc
-    if not public_base_url:
-        raise NotificationCancelled("The public receipt base URL is missing.")
+    # WhatsApp providers fetch media asynchronously and can lag well past a
+    # short-lived S3 presigned URL's expiry, leaving the message marked
+    # "sent" with a broken attachment. Route through our own long-lived
+    # signed receipt endpoint (server-side S3 fetch) instead of a raw URL.
     return (
         create_signed_invoice_receipt_url(
             public_base_url=public_base_url,
@@ -172,15 +168,6 @@ def _artifact_media(
         and row.document_version == event.artifact_version
     ):
         raise NotificationCancelled("The pinned document artifact is unavailable.")
-    if row.storage_backend == "s3" and row.storage_key:
-        backend = get_storage_backend_for_document(row)
-        return (
-            backend.create_download_url(
-                key=row.storage_key,
-                expires_in=get_settings().aws_s3_presigned_url_ttl_seconds,
-            ),
-            row.file_name,
-        )
     if not public_base_url:
         raise NotificationCancelled("The public document base URL is missing.")
     return (
@@ -188,7 +175,6 @@ def _artifact_media(
             public_base_url=public_base_url,
             tenant_id=row.tenant_id,
             file_id=row.id,
-            ttl_seconds=get_settings().aws_s3_presigned_url_ttl_seconds,
         ),
         row.file_name,
     )
