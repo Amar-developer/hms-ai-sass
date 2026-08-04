@@ -10,6 +10,7 @@ from app.modules.reports.services.calculations import (
     allocate_values,
     invoice_approved_discount,
     invoice_billing_discount,
+    invoice_due_balance,
     invoice_item_total,
     invoice_membership_benefit,
     invoice_offer_discount,
@@ -233,7 +234,7 @@ def build_profit_report_email_attachments(
         )
         bucket["gross"] += invoice_report_total(invoice)
         bucket["paid"] += paid
-        bucket["balance"] += int(invoice.balance_amount or 0)
+        bucket["balance"] += invoice_due_balance(invoice)
         bucket["offer"] += invoice_offer_discount(invoice)
         bucket["approved"] += invoice_approved_discount(invoice)
         bucket["billing_discount"] += invoice_billing_discount(invoice)
@@ -421,7 +422,7 @@ def build_profit_report_email_attachments(
                 invoice_billing_discount(invoice),
                 invoice_report_total(invoice),
                 paid,
-                int(invoice.balance_amount or 0),
+                invoice_due_balance(invoice),
                 payment_mode(invoice),
                 paid_tax,
                 doctor_fee,
@@ -446,7 +447,7 @@ def build_profit_report_email_attachments(
                 sum(invoice_billing_discount(invoice) for invoice in paid_invoices),
                 sum(invoice_report_total(invoice) for invoice in paid_invoices),
                 sum(int(invoice.paid_amount or 0) for invoice in paid_invoices),
-                sum(int(invoice.balance_amount or 0) for invoice in paid_invoices),
+                sum(invoice_due_balance(invoice) for invoice in paid_invoices),
                 "Multiple",
                 sum(tax_paid_basis(invoice) for invoice in paid_invoices),
                 sum(invoice_doctor_fee(invoice) for invoice in paid_invoices),
@@ -515,7 +516,7 @@ def build_profit_report_email_attachments(
             line_amounts, subtotal, int(invoice.paid_amount or 0)
         )
         balance_values = allocate_values(
-            line_amounts, subtotal, int(invoice.balance_amount or 0)
+            line_amounts, subtotal, invoice_due_balance(invoice)
         )
         tax_values = allocate_values(line_amounts, subtotal, tax_paid_basis(invoice))
         for index, item in enumerate(related_items):
@@ -733,7 +734,7 @@ def build_profit_report_email_attachments(
             line_amounts, subtotal, int(invoice.paid_amount or 0)
         )
         balance_values = allocate_values(
-            line_amounts, subtotal, int(invoice.balance_amount or 0)
+            line_amounts, subtotal, invoice_due_balance(invoice)
         )
         tax_values = allocate_values(line_amounts, subtotal, tax_paid_basis(invoice))
         for index, item in enumerate(related_items):

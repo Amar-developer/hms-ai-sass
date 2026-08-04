@@ -102,6 +102,21 @@ export function AppShell({
   const router = useRouter();
   const pathname = usePathname();
   const [pendingPage, setPendingPage] = useState("");
+
+  // Sidebar navigation uses router.push() on click rather than <Link>, so it
+  // gets none of Next.js's automatic hover/viewport prefetching — every
+  // click was a cold fetch, which is why the URL and page appeared to hang
+  // on the old route until the new one finished loading. Warm the cache for
+  // every reachable module route up front so clicks resolve instantly.
+  useEffect(() => {
+    for (const [id] of visibleNav) {
+      router.prefetch(`/${id}`);
+    }
+    if (canAccessErrorLogs) {
+      router.prefetch("/error_logs");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleNav.map(([id]: any) => id).join(","), canAccessErrorLogs]);
   const routeSegment =
     pathname === "/" ? "dashboard" : pathname.split("/")[1] || "dashboard";
   const resolvedActivePage =
@@ -188,7 +203,16 @@ export function AppShell({
     ? superAdminSection
     : visiblePlatformSections[0]?.[0] || superAdminSection;
   const [superAdminSettingsOpen, setSuperAdminSettingsOpen] = useState(true);
-  const [tenantAdminSection, setTenantAdminSection] = useState("users");
+  // Tenant Admin sections are real nested routes (/admin/users, /admin/roles,
+  // ...) now, so the current section is derived from the URL instead of
+  // tracked as independent state — that's what keeps the breadcrumb and
+  // sidebar highlight correct on back/forward and direct navigation too.
+  const tenantAdminSection = pathname.startsWith("/admin/")
+    ? pathname.split("/")[2] || "users"
+    : "users";
+  function setTenantAdminSection(value: string) {
+    router.push(`/admin/${value}`);
+  }
   const [tenantAdminSettingsOpen, setTenantAdminSettingsOpen] = useState(false);
   const visibleTenantAdminSections = tenantAdminSections.filter(
     ([sectionId]: any) =>
@@ -302,6 +326,7 @@ export function AppShell({
     if (id === "admin" && section) {
       setTenantAdminSettingsOpen(true);
       setTenantAdminSection(section);
+      return;
     }
 
     if (id === "reports" && section) {
@@ -321,7 +346,7 @@ export function AppShell({
 
     setPendingPage(id);
     setActive(id);
-    router.push(`/${id}`);
+    router.push(id === "admin" ? `/admin/${tenantAdminSection}` : `/${id}`);
   }
 
   // Permission/entitlement gating can make the pathname's module unavailable

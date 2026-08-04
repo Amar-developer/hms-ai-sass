@@ -412,6 +412,7 @@ export function Lab({
     addReportDocument,
     replaceReportDocument,
     releaseResult,
+    sendReport,
     openReport,
     generateInvoice,
     loadConsultDetail,
@@ -494,6 +495,7 @@ export function Lab({
     if (action === "invoice") return generateInvoice(order);
     if (action === "view-invoice") return viewInvoice(order);
     if (action === "pdf") return openReport(order, downloadBlob);
+    if (action === "send-report") return sendReport(order);
     if (action === "cancel") return updateStatus(order, "cancelled");
   }
 
@@ -682,7 +684,8 @@ export function Lab({
         const invoiced = invoicedOrderIds.has(o.id);
         const rowBusy = busy === o.id;
         const invoiceBusy = busy === `invoice-${o.id}`;
-        const actionsBusy = rowBusy || invoiceBusy;
+        const sendReportBusy = busy === `send-report-${o.id}`;
+        const actionsBusy = rowBusy || invoiceBusy || sendReportBusy;
 
         const canAddMore = docs.length < MAX_REPORT_DOCUMENTS;
 
@@ -716,6 +719,13 @@ export function Lab({
                   label: "Download Report",
                   onClick: () => handleOrderAction(o, "pdf"),
                   disabled: actionsBusy || cancelled,
+                },
+                {
+                  label: sendReportBusy
+                    ? "Sending..."
+                    : "Send Report (WhatsApp)",
+                  onClick: () => handleOrderAction(o, "send-report"),
+                  disabled: actionsBusy || cancelled || docs.length === 0,
                 },
                 {
                   label: "Reupload Report",

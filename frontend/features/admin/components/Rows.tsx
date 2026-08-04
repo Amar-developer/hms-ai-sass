@@ -16,6 +16,7 @@ export function UserRow({
   branches,
   canCopyIds = false,
   onEdit,
+  onRowClick,
   onStatus,
   onDelete,
   canEdit = true,
@@ -45,7 +46,7 @@ export function UserRow({
   return (
     <tr
       className="border-b hover:bg-slate-50 cursor-pointer"
-      onClick={canEdit ? onEdit : undefined}
+      onClick={canEdit ? onRowClick || onEdit : undefined}
     >
       <td className="px-4 py-3 font-bold whitespace-nowrap">
         <div className="flex items-center gap-2">
@@ -83,6 +84,7 @@ export function RoleRow({
   role,
   canCopyIds = false,
   onEdit,
+  onRowClick,
   onStatus,
   onDelete,
   canEdit = true,
@@ -111,7 +113,7 @@ export function RoleRow({
 
   return (
     <tr
-      onClick={canEdit ? onEdit : undefined}
+      onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
       <td className="px-4 py-3 text-sm">
@@ -167,6 +169,7 @@ export function RoleRow({
 export function DepartmentRow({
   department,
   onEdit,
+  onRowClick,
   onStatus,
   onDelete,
   canEdit = true,
@@ -193,7 +196,7 @@ export function DepartmentRow({
 
   return (
     <tr
-      onClick={canEdit ? onEdit : undefined}
+      onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
       <td className="px-4 py-3 text-sm">
@@ -230,6 +233,7 @@ export function BranchRow({
   branch,
   canCopyIds = false,
   onEdit,
+  onRowClick,
   onStatus,
   onDelete,
   canEdit = true,
@@ -255,7 +259,7 @@ export function BranchRow({
   ];
   return (
     <tr
-      onClick={canEdit ? onEdit : undefined}
+      onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
       <td className="px-4 py-3 text-sm">
@@ -297,6 +301,7 @@ export function BranchRow({
 export function SupplierRow({
   supplier,
   onEdit,
+  onRowClick,
   onStatus,
   onDelete,
   canEdit = true,
@@ -322,7 +327,7 @@ export function SupplierRow({
   ];
   return (
     <tr
-      onClick={canEdit ? onEdit : undefined}
+      onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
       <td className="px-4 py-3 text-sm">
@@ -362,6 +367,7 @@ export function TaxRuleRow({
   rule,
   branches,
   onEdit,
+  onRowClick,
   onStatus,
   onDelete,
   canEdit = true,
@@ -388,7 +394,7 @@ export function TaxRuleRow({
   ];
   return (
     <tr
-      onClick={canEdit ? onEdit : undefined}
+      onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
       <td className="px-4 py-3 text-sm">
@@ -426,6 +432,7 @@ export function DiscountOfferRow({
   offer,
   branches,
   onEdit,
+  onRowClick,
   onStatus,
   onDelete,
   canEdit = true,
@@ -459,7 +466,7 @@ export function DiscountOfferRow({
 
   return (
     <tr
-      onClick={canEdit ? onEdit : undefined}
+      onClick={canEdit ? onRowClick || onEdit : undefined}
       className="cursor-pointer border-b hover:bg-slate-50"
     >
       <td className="px-4 py-3 text-sm">

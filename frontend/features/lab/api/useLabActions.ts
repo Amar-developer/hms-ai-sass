@@ -182,6 +182,28 @@ export function useLabActions({
     return labApi.uploadOrderDocument(apiSession as ApiSession, upload);
   }
 
+  // Best-effort: fires after a report upload/reupload so the patient gets
+  // the WhatsApp copy immediately, without blocking the upload UI on it.
+  // A 409 means the order isn't released yet (RESULT_READY/REPORT_DELIVERED)
+  // — that's an expected, silent no-op here, not an upload failure.
+  async function autoSendReportAfterUpload(order: any) {
+    if (!apiSession) return null;
+    try {
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `lab-send-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await labApi.sendReport(apiSession, order.id, {
+        channel: "whatsapp",
+        idempotency_key: idempotencyKey,
+      });
+      return true;
+    } catch (err: any) {
+      if (Number(err?.status) === 409) return null;
+      return false;
+    }
+  }
+
   async function addReportDocument(order: any, file: File | null) {
     if (!file || !apiSession) return;
     if ((reportDocuments[order.id] || []).length >= MAX_REPORT_DOCUMENTS) {
@@ -198,7 +220,14 @@ export function useLabActions({
         ...current,
         [order.id]: [...(current[order.id] || []), document],
       }));
-      setMessage(`Report uploaded: ${document.file_name}`);
+      const sent = await autoSendReportAfterUpload(order);
+      setMessage(
+        sent === true
+          ? `Report uploaded and sent to patient on WhatsApp: ${document.file_name}`
+          : sent === false
+            ? `Report uploaded: ${document.file_name} (WhatsApp send failed — use Send Report to retry).`
+            : `Report uploaded: ${document.file_name}`,
+      );
     } catch (err: any) {
       setMessage(err.message || "Could not upload report.");
     } finally {
@@ -230,7 +259,14 @@ export function useLabActions({
           doc.id === oldDocument?.id ? document : doc,
         ),
       }));
-      setMessage(`Report replaced: ${document.file_name}`);
+      const sent = await autoSendReportAfterUpload(order);
+      setMessage(
+        sent === true
+          ? `Report replaced and sent to patient on WhatsApp: ${document.file_name}`
+          : sent === false
+            ? `Report replaced: ${document.file_name} (WhatsApp send failed — use Send Report to retry).`
+            : `Report replaced: ${document.file_name}`,
+      );
     } catch (err: any) {
       setMessage(err.message || "Could not replace report.");
     } finally {
@@ -257,6 +293,26 @@ export function useLabActions({
       );
     } catch (err: any) {
       setMessage(err.message || "Could not release result.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function sendReport(order: any) {
+    setBusy(`send-report-${order.id}`);
+    setMessage("");
+    try {
+      const idempotencyKey =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `lab-send-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      await labApi.sendReport(apiSession as ApiSession, order.id, {
+        channel: "whatsapp",
+        idempotency_key: idempotencyKey,
+      });
+      setMessage("Lab report queued for WhatsApp delivery.");
+    } catch (err: any) {
+      setMessage(err.message || "Could not send lab report.");
     } finally {
       setBusy("");
     }
@@ -391,6 +447,7 @@ export function useLabActions({
     addReportDocument,
     replaceReportDocument,
     releaseResult,
+    sendReport,
     openReport,
     generateInvoice,
     loadConsultDetail,

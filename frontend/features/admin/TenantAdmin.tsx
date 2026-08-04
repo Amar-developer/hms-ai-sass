@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { sections, status_filters } from "./constants";
 import { canUseTenantAdminSection } from "./permissions";
 import { Card, StatusToast } from "@/app/components/common/ui";
@@ -37,7 +38,7 @@ import {
   TAX_RULE_COLUMNS,
   USER_COLUMNS,
 } from "@/utils/constants";
-import { useTenantAdminData } from "./api/useTenantAdminData";
+import { useAdminData } from "./AdminDataContext";
 import { useTenantAdminActions } from "./api/useTenantAdminActions";
 import { Role } from "./types";
 import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
@@ -56,14 +57,11 @@ export function TenantAdmin({
   apiSession,
   clinic,
   branchId,
-  section: externalSection,
-  setSection: externalSetSection,
+  section,
+  view,
+  selectedId,
 }: any) {
-  const [localSection, setLocalSection] = useState("users");
-  const section = externalSection || localSection;
-  const setSection = externalSetSection || setLocalSection;
-  const [view, setView] = useState("list");
-  const [selectedId, setSelectedId] = useState("");
+  const router = useRouter();
   const [confirm, setConfirm] = useState<any>(null);
   const [passwordUser, setPasswordUser] = useState<any>(null);
   const [reportBusy, setReportBusy] = useState("");
@@ -97,7 +95,7 @@ export function TenantAdmin({
     status: "all",
   });
 
-  const data = useTenantAdminData(apiSession, clinic);
+  const data = useAdminData();
   const whatsappModuleEnabled = Boolean(
     clinic?.modules?.includes("whatsapp"),
   );
@@ -113,22 +111,48 @@ export function TenantAdmin({
         permissionKeys.includes(`${prefix}.${action}`),
     );
 
-  function open(nextSection: string, nextView = "list") {
-    setSection(nextSection);
-    setView(nextView);
-    setSelectedId("");
+  function goTo(
+    nextSection: string,
+    nextView = "list",
+    nextId = "",
+    opts: { replace?: boolean; detail?: boolean } = {},
+  ) {
+    const path =
+      nextView === "create"
+        ? `/admin/${nextSection}/new`
+        : nextView === "edit"
+          ? opts.detail
+            ? `/admin/${nextSection}/${nextId}`
+            : `/admin/${nextSection}/${nextId}/edit`
+          : `/admin/${nextSection}`;
+    if (opts.replace) {
+      router.replace(path);
+    } else {
+      router.push(path);
+    }
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
     );
   }
 
+  function open(nextSection: string, nextView = "list") {
+    goTo(nextSection, nextView);
+  }
+
   function openRolePermissions(role: any) {
-    setSection("roles");
-    setView("edit");
-    setSelectedId(role.id);
-    requestAnimationFrame(() =>
-      window.scrollTo({ top: 0, behavior: "smooth" }),
-    );
+    goTo("roles", "edit", role.id);
+  }
+
+  function openCreate() {
+    goTo(section, "create");
+  }
+
+  function openEdit(id: string) {
+    goTo(section, "edit", id);
+  }
+
+  function openDetail(id: string) {
+    goTo(section, "edit", id, { detail: true });
   }
 
   const actions = useTenantAdminActions({
@@ -302,13 +326,17 @@ export function TenantAdmin({
   );
 
   useEffect(() => {
-    setView("list");
-    setSelectedId("");
+    // view/selectedId now come straight from the URL, so they're always
+    // correct on navigation — only transient, non-URL modal state needs
+    // resetting when the section changes.
     setConfirm(null);
     setPasswordUser(null);
   }, [section]);
   useEffect(() => {
-    if (view !== "edit") return;
+    // Wait for the admin data fetch to finish before concluding a row is
+    // missing — otherwise a direct/bookmarked visit to an edit URL bounces
+    // back to the list while data.departments (etc.) is still loading.
+    if (view !== "edit" || !selectedId || data.busy) return;
     const selectedExists =
       (section === "users" && Boolean(selectedUser)) ||
       (section === "roles" && Boolean(selectedRole)) ||
@@ -318,12 +346,13 @@ export function TenantAdmin({
       (section === "tax" && Boolean(selectedTaxRule)) ||
       (section === "offers" && Boolean(selectedOffer));
     if (!selectedExists) {
-      setView("list");
-      setSelectedId("");
+      router.replace(`/admin/${section}`);
     }
   }, [
     section,
     view,
+    selectedId,
+    data.busy,
     selectedUser,
     selectedRole,
     selectedDepartment,
@@ -338,7 +367,7 @@ export function TenantAdmin({
       visibleSections.length &&
       !visibleSections.some(([sectionId]) => sectionId === section)
     ) {
-      open(visibleSections[0][0]);
+      goTo(visibleSections[0][0], "list", "", { replace: true });
     }
   }, [
     apiSession?.tenantId,
@@ -375,7 +404,7 @@ export function TenantAdmin({
           searchKeys={["name", "email", "mobile", "user_type", "roles", "id"]}
           createLabel="Create User"
           canCreate={hasAdminAction("identity.users", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
           loading={data.busy}
           columns={USER_COLUMNS}
@@ -425,10 +454,8 @@ export function TenantAdmin({
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("identity.users", "edit")}
               canDelete={hasAdminAction("identity.users", "delete")}
-              onEdit={() => {
-                setSelectedId(user.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(user.id)}
+              onRowClick={() => openDetail(user.id)}
               onStatus={() =>
                 setConfirm({ entity: "users", kind: "status", row: user })
               }
@@ -474,7 +501,7 @@ export function TenantAdmin({
           searchKeys={["name", "key", "id"]}
           createLabel="Create Role"
           canCreate={hasAdminAction("identity.roles", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
           loading={data.busy}
           columns={ROLE_COLUMNS}
@@ -493,10 +520,8 @@ export function TenantAdmin({
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("identity.roles", "edit")}
               canDelete={hasAdminAction("identity.roles", "delete")}
-              onEdit={() => {
-                setSelectedId(role.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(role.id)}
+              onRowClick={() => openDetail(role.id)}
               onStatus={() =>
                 setConfirm({ entity: "roles", kind: "status", row: role })
               }
@@ -525,7 +550,7 @@ export function TenantAdmin({
           permissions={data.permissions}
           busy={data.busy}
           onSubmit={(e: any) => actions.updateRole(e, selectedRole)}
-          onRoleChange={setSelectedId}
+          onRoleChange={openEdit}
           back={() => open("roles")}
         />
       )}
@@ -537,7 +562,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "branch_names", "description", "id"]}
           createLabel="Create  Department"
           canCreate={hasAdminAction("departments", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
           loading={data.busy}
           columns={DEPARTMENT_COLUMNS}
@@ -569,10 +594,8 @@ export function TenantAdmin({
               canEdit={hasAdminAction("departments", "edit")}
               canDelete={hasAdminAction("departments", "delete")}
               branches={data.branches}
-              onEdit={() => {
-                setSelectedId(department.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(department.id)}
+              onRowClick={() => openDetail(department.id)}
               onStatus={() =>
                 setConfirm({
                   entity: "departments",
@@ -622,7 +645,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "city", "state", "id"]}
           createLabel="Create Branch"
           canCreate={hasAdminAction("branches", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
           loading={data.busy}
           columns={BRANCH_COLUMNS}
@@ -651,10 +674,8 @@ export function TenantAdmin({
               canCopyIds={canCopyIds}
               canEdit={hasAdminAction("branches", "edit")}
               canDelete={hasAdminAction("branches", "delete")}
-              onEdit={() => {
-                setSelectedId(branch.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(branch.id)}
+              onRowClick={() => openDetail(branch.id)}
               onStatus={() =>
                 setConfirm({ entity: "branches", kind: "status", row: branch })
               }
@@ -697,7 +718,7 @@ export function TenantAdmin({
           searchKeys={["name", "gstin", "phone", "email", "address", "id"]}
           createLabel="Create Supplier"
           canCreate={hasAdminAction("suppliers", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
           loading={data.busy}
           columns={SUPPLIER_COLUMNS}
@@ -725,10 +746,7 @@ export function TenantAdmin({
               supplier={supplier}
               canEdit={hasAdminAction("suppliers", "edit")}
               canDelete={hasAdminAction("suppliers", "delete")}
-              onEdit={() => {
-                setSelectedId(supplier.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(supplier.id)}
               onStatus={() =>
                 setConfirm({
                   entity: "suppliers",
@@ -774,7 +792,7 @@ export function TenantAdmin({
           searchKeys={["name", "tax_label", "service_scope", "id"]}
           createLabel="Create Tax Rule"
           canCreate={hasAdminAction("tax", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
           loading={data.busy}
           columns={TAX_RULE_COLUMNS}
@@ -803,10 +821,7 @@ export function TenantAdmin({
               canEdit={hasAdminAction("tax", "edit")}
               canDelete={hasAdminAction("tax", "delete")}
               branches={data.branches}
-              onEdit={() => {
-                setSelectedId(rule.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(rule.id)}
               onStatus={() =>
                 setConfirm({ entity: "tax", kind: "status", row: rule })
               }
@@ -846,7 +861,7 @@ export function TenantAdmin({
           searchKeys={["name", "code", "service_scope", "discount_type", "id"]}
           createLabel="Create Offer"
           canCreate={hasAdminAction("discounts", "create")}
-          onCreate={() => setView("create")}
+          onCreate={openCreate}
           onRefresh={data.reload}
           loading={data.busy}
           columns={DISCOUNT_OFFER_COLUMNS}
@@ -875,10 +890,7 @@ export function TenantAdmin({
               canEdit={hasAdminAction("discounts", "edit")}
               canDelete={hasAdminAction("discounts", "delete")}
               branches={data.branches}
-              onEdit={() => {
-                setSelectedId(offer.id);
-                setView("edit");
-              }}
+              onEdit={() => openEdit(offer.id)}
               onStatus={() =>
                 setConfirm({ entity: "offers", kind: "status", row: offer })
               }

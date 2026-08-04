@@ -23,6 +23,7 @@ from app.modules.lab.models import LabTestPackage
 from app.modules.reports.models import MonthlyRevenueSnapshot
 from app.modules.reports.services.calculations import (
     allocate_values,
+    invoice_due_balance,
     invoice_report_total,
     is_paid_invoice,
     report_doctor_fee,
@@ -221,7 +222,7 @@ def compute_dashboard_metrics(
     for invoice in paid:
         total = invoice_report_total(invoice)
         amount_paid = int(invoice.paid_amount or 0)
-        balance = int(invoice.balance_amount or 0)
+        balance = invoice_due_balance(invoice)
         doctor_share = int(invoice.doctor_share_amount or 0)
         kind = _invoice_type(invoice)
         doctor_fee = report_doctor_fee(invoice, kind)

@@ -279,9 +279,20 @@ class BillingReadRepository:
             if source_condition is not None:
                 statement = statement.where(source_condition)
         if payment_state:
-            terminal = (InvoiceStatus.REFUNDED, InvoiceStatus.CANCELLED)
+            # A refund never reduces total_amount, so balance_amount stays
+            # inflated by the refunded amount even though nothing further is
+            # owed by the patient — the case is closed by refund, not by
+            # collection. Every payment-state bucket below excludes refunded
+            # invoices so refunded money never appears as still due.
+            terminal = (
+                InvoiceStatus.REFUNDED,
+                InvoiceStatus.PARTIALLY_REFUNDED,
+                InvoiceStatus.CANCELLED,
+            )
             if payment_state == "due":
-                statement = statement.where(Invoice.balance_amount > 0)
+                statement = statement.where(
+                    Invoice.status.not_in(terminal), Invoice.balance_amount > 0
+                )
             elif payment_state == "paid":
                 statement = statement.where(
                     Invoice.status.not_in(terminal),
