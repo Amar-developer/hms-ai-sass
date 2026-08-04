@@ -29,7 +29,7 @@ export function DataTable<T>({
 
 
   return (
-    <div>
+    <div className={className}>
       <div className="overflow-auto rounded-lg border">
         <table
           className={`w-full min-w-[920px] table-fixed text-left text-sm ${className ?? ""}`}

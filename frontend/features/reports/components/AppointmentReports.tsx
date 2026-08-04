@@ -122,7 +122,7 @@ const AppointmentReports = ({
           setOpenSections((state: any) => ({ ...state, doctor: !state.doctor }))
         }
       >
-        <div className="mt-4 overflow-auto rounded-2xl border">
+        <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
           <DataTable
             columns={columns}
             data={doctorRows}

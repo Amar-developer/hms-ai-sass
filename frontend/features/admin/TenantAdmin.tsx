@@ -379,15 +379,12 @@ export function TenantAdmin({
           onRefresh={data.reload}
           loading={data.busy}
           columns={USER_COLUMNS}
+          filter_className="lg:grid-cols-5 xl:grid-cols-5"
           filters={[
             {
               key: "status",
               label: "Status",
-              options: [
-                { value: "all", label: "All Status" },
-                { value: "active", label: "Active" },
-                { value: "inactive", label: "Inactive" },
-              ],
+              options: status_filters.options,
             },
             {
               key: "role",

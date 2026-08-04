@@ -243,7 +243,7 @@ const InvoiceReport = ({
         </div>
         <Badge tone="green" className="normal-badge">{filteredInvoices.length} paid invoices</Badge>
       </div>
-      <div className="mt-4 overflow-auto rounded-lg border">
+      <div className="mt-4 overflow-auto scrollbar-hidden rounded-lg border">
         <DataTable
           className="w-full min-w-[1120px] text-left text-sm"
           columns={invoiceColumns}

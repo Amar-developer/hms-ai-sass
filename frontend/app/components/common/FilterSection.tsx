@@ -24,6 +24,7 @@ type FilterSectionProps = {
   onFilterChange?: (key: string, value: string) => void;
   onReset?: () => void;
   children?: React.ReactNode;
+  className?:string
 };
 
 export function FilterSection({
@@ -31,6 +32,7 @@ export function FilterSection({
   query,
   setQuery,
   filters,
+  className='lg:grid-cols-4 xl:grid-cols-5',
   showSearch = true,
   filterValues,
   onFilterChange,
@@ -46,7 +48,7 @@ export function FilterSection({
   }
 
   return (
-    <div className="mt-4 grid gap-3 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+    <div className={`mt-4 grid gap-3 md:grid-cols-2 ${className}`}>
       {/* Search */}
       {showSearch && (
         <FormField label={title}>

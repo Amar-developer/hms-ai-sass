@@ -963,14 +963,14 @@ export function InvoiceDetailPage({
                       <span>Payment locked</span>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
+                    <div className="flex items-center justify-between rounded-lg bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800 mt-3">
                       <span>Payment settled</span>
                       <span>{money(invoice.paid_amount)}</span>
                     </div>
                   )}
                   {String(invoice.status || "").toLowerCase() === "paid" && (
                     <div
-                      className={`rounded-lg border p-3 text-xs ${
+                      className={`rounded-lg border p-3 mt-3 text-xs ${
                         invoiceDeliveryStatus === "sent"
                           ? "border-emerald-200 bg-emerald-50 text-emerald-900"
                           : ["failed", "cancelled"].includes(
@@ -980,7 +980,7 @@ export function InvoiceDetailPage({
                             : "border-amber-200 bg-amber-50 text-amber-900"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-3 mt-2">
+                      <div className="flex items-center justify-between  gap-3 mt-2">
                         <span className="font-bold">
                           Patient invoice delivery
                         </span>
@@ -1049,6 +1049,7 @@ export function InvoiceDetailPage({
                           busy === `send-invoice-whatsapp-${invoice.id}` ||
                           invoiceDeliveryPending
                         }
+                        className='mt-3 rounded-lg border px-3 lg:text-xs'
                       >
                         <ButtonLoader
                           loading={

@@ -9,6 +9,7 @@ export function ListCard({
   title,
   rows,
   searchKeys,
+  filter_className,
   createLabel,
   onCreate,
   canCreate = true,
@@ -81,6 +82,7 @@ export function ListCard({
         setQuery={setQuery}
         filters={filters}
         filterValues={filterValues}
+        className={filter_className}
         onFilterChange={onFilterChange}
       />
       <div>

@@ -603,7 +603,7 @@ export function Billing({
       cellClassName: "text-right",
       disableRowClick: true,
       render: (a: any) => (
-        <Button disabled={busy === a.id} onClick={() => generateInvoice(a)}>
+        <Button disabled={busy === a.id} onClick={() => generateInvoice(a)} className="save-button">
           <ButtonLoader loading={busy === a.id}>
             {busy === a.id ? "Generating..." : "Generate Invoice"}
           </ButtonLoader>

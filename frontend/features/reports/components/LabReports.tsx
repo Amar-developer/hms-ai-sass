@@ -123,7 +123,7 @@ const LabReports = ({
           setOpenSections((state: any) => ({ ...state, lab: !state.lab }))
         }
       >
-        <div className="mt-4 overflow-auto rounded-2xl border">
+        <div className="mt-4 overflow-auto scrollbar-hidden rounded-2xl border">
           <DataTable
             columns={columns}
             data={labSettlementRows}

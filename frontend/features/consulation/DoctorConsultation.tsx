@@ -264,7 +264,14 @@ export function DoctorConsultation({
   }, []);
   useEffect(() => {
     const scopedDoctorId = doctorScope?.practitionerId || "";
-    const selectedAppointment = scopedAppointments.find(
+    // Look up the explicitly-selected appointment in the full (unscoped)
+    // list, not `scopedAppointments` — a row opened from Appointments/Queue
+    // can belong to a branch other than the one currently active in the
+    // shell, and `scopedAppointments` filters those out. Falling back to
+    // `scopedAppointments` here would make this effect think the doctor/
+    // department don't fit and clear the selection, showing "No appointment
+    // selected" even though the appointment is valid.
+    const selectedAppointment = appointments.find(
       (appointment: any) => appointment.id === selectedAppointmentId,
     );
     const selectedAppointmentDoctorId =
@@ -287,11 +294,22 @@ export function DoctorConsultation({
         !selectedAppointmentDepartmentId ||
         selectedAppointmentDepartmentId === departmentId),
     );
+    // `doctorList` merges two independently-loading async sources
+    // (livePractitioners + scopedPractitioners) and is empty for a beat on
+    // every mount/refresh. Falling back to `doctorList[0]?.id` while it's
+    // still empty resets `doctorId` to "" before the real list arrives —
+    // and once it does, `doctorList.find(d => d.id === doctorId)` no longer
+    // matches (doctorId is now ""), so it locks onto an arbitrary "first"
+    // doctor instead of the one the session actually had selected. That
+    // shows as the queue flashing real cards then collapsing to "No waiting
+    // patients" once the wrong doctor gets picked. Only fall back to
+    // "first in list" once the list has actually loaded; otherwise leave
+    // `doctorId` untouched so the remembered selection survives the load.
     const nextDoctorId =
       scopedDoctorId ||
       (selectedAppointmentFits ? selectedAppointmentDoctorId : "") ||
       doctorList.find((doctor: any) => doctor.id === doctorId)?.id ||
-      doctorList[0]?.id ||
+      (doctorList.length ? doctorList[0]?.id : doctorId) ||
       "";
     if (nextDoctorId !== doctorId) {
       const keepSelection = Boolean(
@@ -316,6 +334,7 @@ export function DoctorConsultation({
     doctorList.length,
     selectedAppointmentId,
     scopedAppointments.length,
+    appointments.length,
   ]);
   const doctor: any = doctorList.find((p: any) => p.id === doctorId) ||
     doctorList[0] || { id: "", name: "No practitioner", specialty: "" };
@@ -325,8 +344,17 @@ export function DoctorConsultation({
     feeType,
     ipBaseAmount,
   );
+  // `scopedAppointments` is filtered to the shell's currently active branch,
+  // but the branch context can be stale/unset relative to where appointments
+  // actually live (e.g. right after login, or when it hasn't been synced
+  // from another module). Rather than silently rendering an empty queue when
+  // that happens, fall back to the full clinic-wide list — the same list the
+  // Appointments module itself displays without any branch filtering.
+  const queueBaseAppointments = scopedAppointments.length
+    ? scopedAppointments
+    : appointments;
   const doctorQueue = sortQueue(
-    scopedAppointments.filter((a: any) => {
+    queueBaseAppointments.filter((a: any) => {
       if (doctorScope?.practitionerId)
         return (
           a.doctorId === doctorScope.practitionerId ||
@@ -365,7 +393,13 @@ export function DoctorConsultation({
     });
   }
   const selected =
-    doctorQueue.find((a: any) => a.id === selectedAppointmentId) || current;
+    doctorQueue.find((a: any) => a.id === selectedAppointmentId) ||
+    // Same branch-scoping gap as above: an appointment opened from another
+    // module can be outside the current branch/doctor queue scope. Fall back
+    // to the full appointment list so its details still render instead of
+    // showing "No appointment selected".
+    appointments.find((a: any) => a.id === selectedAppointmentId) ||
+    current;
   useEffect(() => {
     setConsultationValidationAttempted(false);
     if (selected?.treatmentType) setTreatmentType(selected.treatmentType);
@@ -969,7 +1003,6 @@ export function DoctorConsultation({
                     setSelectedAppointmentId("");
                   }}
                   disabled={isDoctorUser}
-                  // className="select-filter"
                   searchable={doctorList.length > 8}
                   options={doctorList.map((d: any) => ({
                     value: d.id,

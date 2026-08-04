@@ -3,6 +3,7 @@ import { money } from "@/utils/helper";
 import { pharmacyBenefitLabel } from "../helpers";
 import { BenefitList } from "./BenefitList";
 import { PharmacySlabList } from "./PharmacySlabList";
+import { PlanMetric } from "./PlanMetric";
 // import { PlanActionButton } from "@/app/components/patient/Shared";
 
 

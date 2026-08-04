@@ -6,6 +6,7 @@ import {
   Badge,
   Button,
   Card,
+  Input,
   RefreshButton,
   StatusToast,
 } from "@/app/components/common/ui";
@@ -34,6 +35,8 @@ import {
 import { RowActions } from "../admin/components/RowActions";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
+import { FilterSection } from "@/app/components/common/FilterSection";
+import { FormField } from "@/app/components/FormElements";
 import {
   useLabActions,
   useLabAvailableTestSearch,
@@ -148,6 +151,12 @@ export function Lab({
 
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [page, setPage] = useState(1);
+  const [worklistQuery, setWorklistQuery] = useState("");
+  const [worklistFilters, setWorklistFilters] = useState<
+    Record<string, string>
+  >({ source: "all", status: "all" });
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
 
   const orderedConsultationIds = useMemo(
     () =>
@@ -188,16 +197,91 @@ export function Lab({
     ordersLoaded,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(orders.length / pageSize));
-  const safePage = Math.min(page, totalPages);
-  const labPageRows = orders.slice(
-    (safePage - 1) * pageSize,
-    safePage * pageSize,
-  );
-
   const { patients, patientMap } = usePatientReferencesQuery(
     apiSession,
     orders.map((o: any) => o.patient_id),
+  );
+
+  const worklistSourceOptions = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((o: any) => {
+      const source = o.acquisition_source || o.source;
+      if (source) set.add(String(source));
+    });
+    return [
+      { value: "all", label: "All Sources" },
+      ...Array.from(set).map((source) => ({
+        value: source,
+        label: humanizeOptionLabel(source),
+      })),
+    ];
+  }, [orders]);
+
+  const worklistStatusOptions = useMemo(() => {
+    const set = new Set<string>();
+    orders.forEach((o: any) => {
+      if (o.status) set.add(String(o.status));
+    });
+    return [
+      { value: "all", label: "All Status" },
+      ...Array.from(set).map((status) => ({
+        value: status,
+        label: humanizeOptionLabel(status),
+      })),
+    ];
+  }, [orders]);
+
+  const worklistFilterConfigs = [
+    { key: "source", label: "Source", options: worklistSourceOptions },
+    { key: "status", label: "Status", options: worklistStatusOptions },
+  ];
+
+  function onWorklistFilterChange(key: string, value: string) {
+    setWorklistFilters((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const filteredOrders = useMemo(() => {
+    const q = worklistQuery.trim().toLowerCase();
+    const min = amountMin.trim() === "" ? null : Number(amountMin);
+    const max = amountMax.trim() === "" ? null : Number(amountMax);
+
+    return orders.filter((o: any) => {
+      if (q) {
+        const name = String(
+          o.patient_name || (patientMap.get(o.patient_id) as any)?.name || "",
+        ).toLowerCase();
+        if (!name.includes(q)) return false;
+      }
+
+      if (worklistFilters.source !== "all") {
+        const source = String(o.acquisition_source || o.source || "");
+        if (source !== worklistFilters.source) return false;
+      }
+
+      if (worklistFilters.status !== "all") {
+        if (String(o.status || "") !== worklistFilters.status) return false;
+      }
+
+      const amount = Number(o.amount);
+      if (min !== null && amount < min) return false;
+      if (max !== null && amount > max) return false;
+
+      return true;
+    });
+  }, [
+    orders,
+    worklistQuery,
+    worklistFilters,
+    amountMin,
+    amountMax,
+    patientMap,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const labPageRows = filteredOrders.slice(
+    (safePage - 1) * pageSize,
+    safePage * pageSize,
   );
 
   const invoicedOrderIds = useMemo(
@@ -231,6 +315,10 @@ export function Lab({
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [worklistQuery, worklistFilters, amountMin, amountMax]);
 
   useEffect(() => {
     if (typeof window !== "undefined")
@@ -327,7 +415,7 @@ export function Lab({
     openReport,
     generateInvoice,
     loadConsultDetail,
-    removeReportDocument
+    removeReportDocument,
   } = useLabActions({
     apiSession,
     branchId,
@@ -836,6 +924,38 @@ export function Lab({
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
+          <FilterSection
+            title="Patient"
+            query={worklistQuery}
+            className="lg:grid-cols-6 xl:grid-cols-6"
+            setQuery={setWorklistQuery}
+            filters={worklistFilterConfigs}
+            filterValues={worklistFilters}
+            onFilterChange={onWorklistFilterChange}
+            onReset={() => {
+              setAmountMin("");
+              setAmountMax("");
+            }}
+          >
+            <FormField label="Min Amount">
+              <Input
+                type="number"
+                min="0"
+                value={amountMin}
+                onChange={(e: any) => setAmountMin(e.target.value)}
+                placeholder="Min amount"
+              />
+            </FormField>
+            <FormField label="Max Amount">
+              <Input
+                type="number"
+                min="0"
+                value={amountMax}
+                onChange={(e: any) => setAmountMax(e.target.value)}
+                placeholder="Max amount"
+              />
+            </FormField>
+          </FilterSection>
         <div className="mt-4">
           {!ordersLoaded ? (
             <div className="overflow-auto rounded-lg border">
@@ -845,7 +965,7 @@ export function Lab({
             <DataTable
               columns={worklistColumns}
               data={labPageRows}
-              emptyMessage="No lab orders yet."
+              emptyMessage="No lab orders match your filters."
               onRowClick={setSelectedOrder}
             />
           )}
@@ -854,7 +974,7 @@ export function Lab({
           <Pagination
             page={safePage}
             totalPages={totalPages}
-            total={orders.length}
+            total={filteredOrders.length}
             onPage={setPage}
           />
         )}

@@ -80,8 +80,8 @@ export function WorklistDetailModal({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/40 p-4">
-      <Card className="w-full max-w-3xl">
-        <div className="flex items-start justify-between gap-3">
+      <Card className="flex w-full max-w-3xl max-h-[85vh] flex-col overflow-hidden p-5">
+        <div className="flex items-start justify-between gap-3 sticky top-0 z-10 bg-white pb-3">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-xl font-bold">{title}</h3>
@@ -98,7 +98,8 @@ export function WorklistDetailModal({
           </div>
           <ActionButton onClick={onClose}>Close</ActionButton>
         </div>
-        <div className="mt-5 overflow-auto rounded-lg border border-slate-200">
+        <div className="flex-1 overflow-y-auto">
+        <div className="rounded-lg border border-slate-200">
           {loading ? (
             <p className="p-4 text-sm text-slate-500">Loading prices...</p>
           ) : pricedItems.length === 0 ? (
@@ -150,8 +151,9 @@ export function WorklistDetailModal({
         {loadError && (
           <p className="mt-2 text-xs font-semibold text-red-600">{loadError}</p>
         )}
+        </div>
         {canGenerateInvoice && (
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex justify-end sticky bottom-0 bg-white pt-3">
             <Button
               type="button"
               disabled={
