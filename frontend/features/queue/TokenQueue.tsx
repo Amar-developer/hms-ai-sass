@@ -29,6 +29,7 @@ import { DataTable } from "../reports/components/DataTable";
 import { useQueueActions, useQueueDisplay } from "./api";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { useAppointmentsQuery } from "@/features/appointments/api/useAppointmentsQuery";
+import { call_language_options, display_mode_options } from "./constants";
 
 export function TokenQueue({
   apiSession,
@@ -39,8 +40,16 @@ export function TokenQueue({
   doctorScope,
   setActive,
 }: TokenQueueProps) {
-  const { appointments, scopedAppointments, refetch, setLocal: setAppointments } =
-    useAppointmentsQuery(apiSession, { clinicId: clinic?.id, branchId, patients });
+  const {
+    appointments,
+    scopedAppointments,
+    refetch,
+    setLocal: setAppointments,
+  } = useAppointmentsQuery(apiSession, {
+    clinicId: clinic?.id,
+    branchId,
+    patients,
+  });
   const { busyId, transition, cancelRemaining } = useQueueActions(apiSession);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [message, setMessage] = useState("");
@@ -300,9 +309,7 @@ export function TokenQueue({
             </p>
           </div>
           <div className="flex justify-center  items-center">
-            {apiSession ? (
-              <RefreshButton onRefresh={() => refetch()} />
-            ) : null}
+            {apiSession ? <RefreshButton onRefresh={() => refetch()} /> : null}
           </div>
         </div>
         <div
@@ -324,10 +331,7 @@ export function TokenQueue({
               onChange={(value: string) =>
                 setDisplayMode(value as "reception" | "called_only")
               }
-              options={[
-                { value: "reception", label: "Reception Queue" },
-                { value: "called_only", label: "Called Tokens" },
-              ]}
+              options={display_mode_options}
               placeholder="Select display mode"
               searchable={false}
             />
@@ -338,11 +342,7 @@ export function TokenQueue({
               onChange={(value: string) =>
                 setTokenLanguage(value as "english" | "tamil" | "both")
               }
-              options={[
-                { value: "english", label: "English" },
-                { value: "tamil", label: "Tamil" },
-                { value: "both", label: "English + Tamil" },
-              ]}
+              options={call_language_options}
               placeholder="Select language"
               searchable={false}
             />
@@ -397,12 +397,14 @@ export function TokenQueue({
             },
           )}
       </div>
-      <DataTable
-        columns={queueColumns}
-        data={pagedQueue}
-        onRowClick={openConsultation}
-        paginate={false}
-      />
+      <div className="mt-3">
+        <DataTable
+          columns={queueColumns}
+          data={pagedQueue}
+          onRowClick={openConsultation}
+          paginate={false}
+        />
+      </div>
       <Pagination
         page={safePage}
         totalPages={totalPages}

@@ -13,6 +13,8 @@ import { fetchPatientReferences } from "@/features/patients/components/PatientSe
  * list — only the ids the caller actually asks for, chunked and deduped
  * via the same `fetchPatientReferences` used by PatientSearchSelect.
  */
+const EMPTY_PATIENT_REFERENCES: any[] = [];
+
 export function usePatientReferencesQuery(
   apiSession: ApiSession | null | undefined,
   patientIds: Array<string | null | undefined>,
@@ -30,7 +32,7 @@ export function usePatientReferencesQuery(
     enabled: Boolean(apiSession) && idKey.length > 0,
   });
 
-  const patients = query.data ?? [];
+  const patients = query.data ?? EMPTY_PATIENT_REFERENCES;
   const patientMap = useMemo(
     () => new Map(patients.map((p: any) => [p.id, p])),
     [patients],

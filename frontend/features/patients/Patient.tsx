@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus } from "lucide-react";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Empty } from "@/app/components/common/Empty";
@@ -15,9 +15,7 @@ import {
 } from "@/app/components/common/ui";
 import { apiFetch, apiUpload, type ApiSession } from "@/lib/api";
 import { readNotificationTarget } from "@/lib/notificationTarget";
-import {
-  FormField,
-} from "@/app/components/FormElements";
+import { FormField } from "@/app/components/FormElements";
 import { toRow, todayInputValue } from "./helpers";
 import { PatientForm } from "@/features/patients/forms/PatientForms";
 import { PatientDetail } from "./components/PatientDetail";
@@ -29,6 +27,7 @@ import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { patient_status_options } from "./constants";
 import { useQueryClient } from "@tanstack/react-query";
 import { getTenantBranches } from "@/features/tenants/api/tenantReferenceQueries";
+import { FilterSection } from "@/app/components/common/FilterSection";
 
 type PatientProps = {
   apiSession: ApiSession | null;
@@ -53,8 +52,8 @@ export function Patient({
   const hasPermission = (...keys: string[]) =>
     Boolean(
       isSuperAdmin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const canCreatePatient = hasPermission("patients.write", "patients.create");
   const canEditPatient = hasPermission("patients.edit");
@@ -253,6 +252,20 @@ export function Patient({
     }
   }, [apiSession?.email, tenantId]);
 
+  const skipFirstQuerySearch = useRef(true);
+  useEffect(() => {
+    if (skipFirstQuerySearch.current) {
+      skipFirstQuerySearch.current = false;
+      return;
+    }
+    if (!apiSession || !tenantId) return;
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      loadData(tenantId, 1);
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
   useEffect(() => {
     if (!apiSession || !tenantId || typeof window === "undefined") return;
     const pendingPatientId =
@@ -272,6 +285,7 @@ export function Patient({
     if (id) setSelectedId(id);
     if (nextView === "detail" && id) loadPatientDetail(id);
     setView(nextView);
+    setMessage("");
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
     );
@@ -326,11 +340,9 @@ export function Patient({
           area: data.area || null,
           address: data.address || null,
           blood_group: data.bloodGroup || null,
-          whatsapp_consent_status:
-            data.whatsappConsentStatus || "not_recorded",
+          whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
           whatsapp_consent_source: data.whatsappConsentSource || null,
-          whatsapp_preferred_language:
-            data.whatsappPreferredLanguage || "en",
+          whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
         }),
       });
       setRows((previous: any[]) => [
@@ -371,11 +383,9 @@ export function Patient({
           address: data.address || null,
           blood_group: data.bloodGroup || null,
           status: data.status || "active",
-          whatsapp_consent_status:
-            data.whatsappConsentStatus || "not_recorded",
+          whatsapp_consent_status: data.whatsappConsentStatus || "not_recorded",
           whatsapp_consent_source: data.whatsappConsentSource || null,
-          whatsapp_preferred_language:
-            data.whatsappPreferredLanguage || "en",
+          whatsapp_preferred_language: data.whatsappPreferredLanguage || "en",
         }),
       });
       setRows((previous: any[]) => [
@@ -497,7 +507,10 @@ export function Patient({
           created_by_user_id: apiSession.user?.id,
         }),
       });
-      await Promise.all([loadPatientDetail(selectedId), loadLiveData?.(scopedSession)]);
+      await Promise.all([
+        loadPatientDetail(selectedId),
+        loadLiveData?.(scopedSession),
+      ]);
       setMessage("Patient membership enrolled and purchase invoice created.");
       return true;
     } catch (err: any) {
@@ -525,6 +538,7 @@ export function Patient({
         branches={branches}
         defaultBranchId={branchId || apiSession?.user?.branch_id || ""}
         busy={busy}
+        error={message}
         onSubmit={createPatient}
         back={() => open("list")}
       />
@@ -538,6 +552,7 @@ export function Patient({
         branches={branches}
         defaultBranchId={branchId || apiSession?.user?.branch_id || ""}
         busy={busy}
+        error={message}
         onSubmit={updatePatient}
         back={() => open("detail", selected.id)}
       />
@@ -572,6 +587,50 @@ export function Patient({
   const safePage = Math.min(page, totalPages);
   const pageRows = rows;
 
+  const patientFilters = [
+    {
+      key: "branch",
+      label: "Branch",
+      options: [
+        { value: "all", label: "All branches" },
+        ...branches.map((b: any) => ({
+          value: b.id,
+          label: b.name,
+        })),
+      ],
+    },
+    {
+      key: "status",
+      label: "Status",
+      options: patient_status_options,
+    },
+  ];
+
+  const filterValues = {
+    branch: branchFilter,
+    status,
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    setPage(1);
+
+    const overrides: Record<string, string> = {};
+
+    switch (key) {
+      case "branch":
+        setBranchFilter(value);
+        overrides.branchFilter = value; // ← force the new value
+        break;
+
+      case "status":
+        setStatus(value);
+        overrides.status = value; // ← force the new value
+        break;
+    }
+
+    loadData(tenantId, 1, overrides);
+  };
+
   return (
     <Card className="">
       <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-start">
@@ -599,7 +658,7 @@ export function Patient({
       <StatusToast message={message} onClose={() => setMessage("")} />
       <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-4 mt-3">
         <div
-          className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "md:grid-cols-4 lg:grid-cols-4"}`}
+          className={`grid gap-3 ${isSuperAdmin ? "md:grid-cols-3 lg:grid-cols-[1.2fr_1.1fr_.9fr_.9fr_.85fr_.85fr_auto]" : "  "}`}
         >
           {isSuperAdmin && (
             <FormField label="Tenant">
@@ -614,83 +673,34 @@ export function Patient({
               />
             </FormField>
           )}
-          <FormField label="Patient / Mobile">
-            <Input
-              value={query}
-              onChange={(event: any) => {
-                setQuery(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Name, mobile, area"
-            />
-          </FormField>
-          <FormField label="Branch">
-            <SearchableSelect
-              name="branch"
-              value={branchFilter}
-              onChange={(v: string) => {
-                setBranchFilter(v);
-                setPage(1);
-              }}
-              options={[
-                { value: "all", label: "All branches" },
-                ...branches.map((b: any) => ({
-                  value: b.id,
-                  label: b.name,
-                })),
-              ]}
-              placeholder="Select branch"
-              searchable={branches.length > 8}
-            />
-          </FormField>
-          <FormField label="Status">
-            <SearchableSelect
-              value={status}
-              onChange={(v) => {
-                setStatus(v);
-                setPage(1);
-              }}
-              options={patient_status_options}
-              searchable={false}
-            />
-          </FormField>
 
-          <div className="flex items-end gap-2">
-            <Button
-              // className="min-h-[46px] px-5  rounded-lg text-xs lg:text-sm py-2 px-2 lg:py-3 lg:px-4"
-              onClick={() => {
-                setPage(1);
-                loadData(tenantId, 1);
-              }}
-              disabled={busy}
-              className="save-button"
-            >
-              {busy ? "Searching..." : "Search"}
-            </Button>
-            <Button
-              type="button"
-              onClick={() => {
-                setQuery("");
-                setStatus("all");
-                setGender("all");
-                setBranchFilter("all");
-                setFromDate("");
-                setToDate("");
-                setPage(1);
-                loadData(tenantId, 1, {
-                  query: "",
-                  status: "all",
-                  gender: "all",
-                  branchFilter: "all",
-                  fromDate: "",
-                  toDate: "",
-                });
-              }}
-              className="save-button"
-            >
-              Reset
-            </Button>
-          </div>
+          <FilterSection
+            title="Patient / Mobile"
+            filters={patientFilters}
+            filterValues={filterValues}
+            className="lg:grid-cols-4"
+            query={query}
+            setQuery={setQuery}
+            onFilterChange={handleFilterChange}
+            onReset={() => {
+              setStatus("all");
+              setGender("all");
+              setBranchFilter("all");
+              setFromDate("");
+              setToDate("");
+              setPage(1);
+
+              loadData(tenantId, 1, {
+                query: "",
+                status: "all",
+                gender: "all",
+                branchFilter: "all",
+                fromDate: "",
+                toDate: "",
+              });
+            }}
+          >
+          </FilterSection>
         </div>
       </div>
       <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white z-0 scrollbar-thin mt-3">
@@ -709,18 +719,25 @@ export function Patient({
             {!busy && pageRows.length === 0 && (
               <Empty text="No patients match your search." />
             )}{" "}
-            {!busy && pageRows.map((row: any) => (
-              <PatientRow
-                key={row.id}
-                row={row}
-                branches={branches}
-                canCopyIds={canCopyIds}
-                onView={() => open("detail", row.id)}
-                onEdit={canEditPatient ? () => openPatientEdit(row.id) : undefined}
-                onDelete={canDeletePatient ? () => setConfirm({ row }) : undefined}
-                onActivate={canEditPatient ? () => activatePatient(row) : undefined}
-              />
-            ))}
+            {!busy &&
+              pageRows.map((row: any) => (
+                <PatientRow
+                  key={row.id}
+                  row={row}
+                  branches={branches}
+                  canCopyIds={canCopyIds}
+                  onView={() => open("detail", row.id)}
+                  onEdit={
+                    canEditPatient ? () => openPatientEdit(row.id) : undefined
+                  }
+                  onDelete={
+                    canDeletePatient ? () => setConfirm({ row }) : undefined
+                  }
+                  onActivate={
+                    canEditPatient ? () => activatePatient(row) : undefined
+                  }
+                />
+              ))}
           </div>
         </div>
       </div>

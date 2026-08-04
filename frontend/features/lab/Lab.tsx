@@ -285,11 +285,7 @@ export function Lab({
   );
 
   const invoicedOrderIds = useMemo(
-    () =>
-      new Set([
-        ...invoicedLabOrderIds(orders),
-        ...localInvoicedOrderIds,
-      ]),
+    () => new Set([...invoicedLabOrderIds(orders), ...localInvoicedOrderIds]),
     [orders, localInvoicedOrderIds],
   );
   const invoiceIdsByOrder = useMemo(() => {
@@ -303,9 +299,7 @@ export function Lab({
   }, [orders, localInvoiceIdsByOrder]);
 
   useEffect(() => {
-    const serverOrderIds = new Set(
-      invoicedLabOrderIds(orders),
-    );
+    const serverOrderIds = new Set(invoicedLabOrderIds(orders));
     if (!serverOrderIds.size) return;
     setLocalInvoicedOrderIds((ids) =>
       ids.filter((orderId) => !serverOrderIds.has(orderId)),
@@ -934,6 +928,7 @@ export function Lab({
           <h3 className="card-title font-bold">Lab / Service Worklist</h3>
           <RefreshButton onRefresh={load} />
         </div>
+        <div className="">
           <FilterSection
             title="Patient"
             query={worklistQuery}
@@ -946,26 +941,8 @@ export function Lab({
               setAmountMin("");
               setAmountMax("");
             }}
-          >
-            <FormField label="Min Amount">
-              <Input
-                type="number"
-                min="0"
-                value={amountMin}
-                onChange={(e: any) => setAmountMin(e.target.value)}
-                placeholder="Min amount"
-              />
-            </FormField>
-            <FormField label="Max Amount">
-              <Input
-                type="number"
-                min="0"
-                value={amountMax}
-                onChange={(e: any) => setAmountMax(e.target.value)}
-                placeholder="Max amount"
-              />
-            </FormField>
-          </FilterSection>
+          />
+        </div>
         <div className="mt-4">
           {!ordersLoaded ? (
             <div className="overflow-auto rounded-lg border">

@@ -38,7 +38,8 @@ export function DoctorForm({
 }: any) {
   const fallbackFeeRule = activeDoctorFeeRule(feeRules, doctor);
   const departmentFeeRules = activeDoctorDepartmentFeeRules(feeRules, doctor);
-
+console.log(doctor,'doctor')
+console.log(doctors,'doctors')
   // Better initial data
   const initialSpecialtyFees = React.useMemo(() => {
     if (!doctor) {
