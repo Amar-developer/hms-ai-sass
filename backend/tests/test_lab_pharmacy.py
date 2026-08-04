@@ -20,6 +20,9 @@ def test_cancelled_lab_invoice_does_not_lock_order_for_billing(test_engine):
     from app.modules.billing.repositories.source_repository import (
         BillingSourceRepository,
     )
+    from app.modules.billing.services.source_references import (
+        active_lab_invoice_reference_map,
+    )
 
     with Session(test_engine) as session:
         order = LabOrder(
@@ -53,6 +56,14 @@ def test_cancelled_lab_invoice_does_not_lock_order_for_billing(test_engine):
             )
             is None
         )
+        assert (
+            active_lab_invoice_reference_map(
+                session,
+                tenant_id=order.tenant_id,
+                lab_order_ids={order.id},
+            )
+            == {}
+        )
 
         invoice.status = InvoiceStatus.ISSUED
         session.add(invoice)
@@ -64,6 +75,11 @@ def test_cancelled_lab_invoice_does_not_lock_order_for_billing(test_engine):
         )
         assert active_invoice is not None
         assert active_invoice.id == invoice.id
+        assert active_lab_invoice_reference_map(
+            session,
+            tenant_id=order.tenant_id,
+            lab_order_ids={order.id},
+        ) == {order.id: invoice.id}
 
 
 def test_lab_package_read_includes_updated_mrp_and_purchase_price(test_engine):

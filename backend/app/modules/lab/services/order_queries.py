@@ -1,6 +1,9 @@
 from sqlmodel import Session
 
 from app.core.access_control import require_user_branch_access
+from app.modules.billing.services.source_references import (
+    active_lab_invoice_reference_map,
+)
 from app.modules.identity.models import User
 from app.modules.lab.models import LabOrderStatus
 from app.modules.lab.repositories import LabOrderRepository
@@ -31,6 +34,11 @@ def list_lab_orders_records(
         tenant_id=tenant_id,
         patient_ids={order.patient_id for order in rows},
     )
+    invoice_references = active_lab_invoice_reference_map(
+        session,
+        tenant_id=tenant_id,
+        lab_order_ids={order.id for order in rows},
+    )
     result: list[LabOrderRead] = []
     for order in rows:
         read = LabOrderRead.model_validate(order, from_attributes=True)
@@ -38,6 +46,7 @@ def list_lab_orders_records(
         if patient:
             read.patient_name = patient.name
             read.patient_number = patient.number
+        read.billing_invoice_id = invoice_references.get(order.id)
         result.append(read)
     return result
 

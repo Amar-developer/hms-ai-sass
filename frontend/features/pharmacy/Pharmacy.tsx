@@ -46,7 +46,6 @@ export function Pharmacy({
   branchId,
   appointments,
   loadLiveData,
-  liveInvoices = [],
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
   const [patientId, setPatientId] = useState("");
@@ -155,12 +154,12 @@ export function Pharmacy({
   const invoicedIssueIds = useMemo(
     () =>
       new Set([
-        ...(liveInvoices || [])
-          .map((inv: any) => inv.pharmacy_issue_id)
-          .filter(Boolean),
+        ...issues
+          .filter((issue: any) => Boolean(issue.billing_invoice_id))
+          .map((issue: any) => issue.id),
         ...localInvoicedIssueIds,
       ]),
-    [liveInvoices, localInvoicedIssueIds],
+    [issues, localInvoicedIssueIds],
   );
   const totalPages = Math.max(1, Math.ceil(issues.length / pageSize));
   const safePage = Math.min(page, totalPages);

@@ -1,5 +1,8 @@
 from sqlmodel import Session
 
+from app.modules.billing.services.source_references import (
+    active_lab_invoice_reference_map,
+)
 from app.modules.lab.models import LabOrder
 from app.modules.lab.repositories import LabOrderRepository
 from app.modules.lab.schemas import (
@@ -27,6 +30,11 @@ def read_order_detail(session: Session, order: LabOrder) -> LabOrderDetailRead:
     if patient:
         order_read.patient_name = patient.name
         order_read.patient_number = patient.number
+    order_read.billing_invoice_id = active_lab_invoice_reference_map(
+        session,
+        tenant_id=order.tenant_id,
+        lab_order_ids={order.id},
+    ).get(order.id)
     return LabOrderDetailRead(
         order=order_read,
         items=[

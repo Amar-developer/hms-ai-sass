@@ -15,16 +15,11 @@ export function isCancelled(order: any) {
   return String(order?.status || "") === "cancelled";
 }
 
-export function activeLabInvoiceOrderIds(invoices: any[]) {
+export function invoicedLabOrderIds(orders: any[]) {
   return new Set(
-    (invoices || [])
-      .filter(
-        (invoice) =>
-          !["cancelled", "refunded"].includes(
-            String(invoice?.status || "").toLowerCase(),
-          ),
-      )
-      .map((invoice) => invoice.lab_order_id)
+    (orders || [])
+      .filter((order) => Boolean(order?.billing_invoice_id))
+      .map((order) => order.id)
       .filter(Boolean),
   );
 }

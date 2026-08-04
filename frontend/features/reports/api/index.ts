@@ -9,3 +9,4 @@ export { useMonthlySnapshots } from "./useMonthlySnapshots";
 export { useHomeCareBookings } from "./useHomeCareBookings";
 export { usePharmacySettlementData } from "./usePharmacySettlementData";
 export { useReportsActions } from "./useReportsActions";
+export { useReportInvoices } from "./useReportInvoices";

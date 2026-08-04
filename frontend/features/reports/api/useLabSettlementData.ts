@@ -21,6 +21,14 @@ export function useLabSettlementData({
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [labOrderDetails, setLabOrderDetails] = useState<any[]>([]);
   const [labSettlementLoading, setLabSettlementLoading] = useState(false);
+  const labInvoiceOrderIds = Array.from(
+    new Set(
+      liveInvoices
+        .map((invoice: any) => invoice.lab_order_id)
+        .filter(Boolean),
+    ),
+  ).sort();
+  const labInvoiceOrderIdsKey = labInvoiceOrderIds.join("|");
 
   useEffect(() => {
     if (!apiSession?.tenantId) return;
@@ -43,15 +51,8 @@ export function useLabSettlementData({
         setLabTests(testRows || []);
         setLabPackages(packageRows || []);
         setSuppliers(supplierRows || []);
-        const relevantOrderIds = Array.from(
-          new Set(
-            liveInvoices
-              .filter((invoice: any) => invoice.lab_order_id)
-              .map((invoice: any) => invoice.lab_order_id),
-          ),
-        );
-        const sourceOrderIds = relevantOrderIds.length
-          ? relevantOrderIds
+        const sourceOrderIds = labInvoiceOrderIds.length
+          ? labInvoiceOrderIds
           : (orderRows || []).slice(0, 200).map((order: any) => order.id);
         const details = await mapWithConcurrency(
           sourceOrderIds,
@@ -71,7 +72,7 @@ export function useLabSettlementData({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiSession?.tenantId, liveInvoices.length, refreshTick]);
+  }, [apiSession?.tenantId, labInvoiceOrderIdsKey, refreshTick]);
 
   return {
     labTests,

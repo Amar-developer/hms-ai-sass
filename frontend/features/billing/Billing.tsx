@@ -34,12 +34,14 @@ import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { useBillingActions, useBillingReports, usePaymentMethods } from "./api";
-import { fetchInvoicePage } from "./api/billing.api";
+import {
+  fetchInvoicePage,
+  fetchPendingConsultationInvoicePage,
+} from "./api/billing.api";
 
 export function Billing({
   apiSession,
   loadLiveData,
-  appointments,
   liveInvoices,
   branchId,
 }: any) {
@@ -73,6 +75,12 @@ export function Billing({
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoiceListLoading, setInvoiceListLoading] = useState(false);
   const invoiceLoadSequence = useRef(0);
+  const [pendingConsultationRows, setPendingConsultationRows] = useState<any[]>([]);
+  const [pendingConsultationTotal, setPendingConsultationTotal] = useState(0);
+  const [pendingConsultationPage, setPendingConsultationPage] = useState(1);
+  const [pendingConsultationLoading, setPendingConsultationLoading] =
+    useState(false);
+  const pendingConsultationLoadSequence = useRef(0);
   const userPermissions = apiSession?.user?.permissions || [];
   const hasPermission = (...keys: string[]) =>
     Boolean(
@@ -140,6 +148,51 @@ export function Billing({
     }
   }
 
+  async function loadPendingConsultationPage(
+    nextPage = pendingConsultationPage,
+  ) {
+    if (!apiSession) return;
+    const requestSequence = ++pendingConsultationLoadSequence.current;
+    const params = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String((nextPage - 1) * pageSize),
+    });
+    if (branchId) params.set("branch_id", branchId);
+    setPendingConsultationLoading(true);
+    try {
+      const result = await fetchPendingConsultationInvoicePage(
+        apiSession,
+        params,
+      );
+      if (requestSequence !== pendingConsultationLoadSequence.current) return;
+      const rows = Array.isArray(result?.items) ? result.items : [];
+      setPendingConsultationRows(
+        rows.map((row: any) => ({
+          id: row.appointment_id,
+          consultationId: row.consultation_id,
+          branchId: row.branch_id,
+          patientId: row.patient_id,
+          patient: row.patient_name,
+          doctorId: row.practitioner_id,
+          doctor: row.practitioner_name || "Unassigned",
+          token: row.token_number,
+          appointmentDate: row.appointment_date,
+          appointmentTime: row.appointment_time,
+          consultationSignedAt: row.consultation_signed_at,
+          consultationCreatedAt: row.consultation_created_at,
+        })),
+      );
+      setPendingConsultationTotal(Number(result?.total || 0));
+    } catch (err: any) {
+      if (requestSequence !== pendingConsultationLoadSequence.current) return;
+      setMessage(err.message || "Could not load pending consultation invoices.");
+    } finally {
+      if (requestSequence === pendingConsultationLoadSequence.current) {
+        setPendingConsultationLoading(false);
+      }
+    }
+  }
+
   const { invoicePaymentOptions, defaultPaymentMethod } =
     usePaymentMethods(apiSession);
 
@@ -185,6 +238,8 @@ export function Billing({
   } = useBillingActions(apiSession, {
     loadLiveData,
     refreshInvoices: () => loadInvoicePage(page),
+    refreshPendingConsultations: () =>
+      loadPendingConsultationPage(pendingConsultationPage),
     loadReports,
     setSettlement,
     branchId,
@@ -195,31 +250,15 @@ export function Billing({
   const safePage = Math.min(page, totalPages);
   const invoicePageRows = invoices;
 
-  const consultationInvoices = invoices.filter((i: any) => {
-    const key = invoiceSourceKey(i);
-    return key === "consultation";
-  });
-  const invoicedConsultations = new Set(
-    consultationInvoices.map((i: any) => i.consultation_id).filter(Boolean),
+  const signedReady = pendingConsultationRows;
+  const pendingConsultationTotalPages = Math.max(
+    1,
+    Math.ceil(pendingConsultationTotal / pageSize),
   );
-  const invoicedAppointments = new Set(
-    consultationInvoices
-      .filter((i: any) => i.consultation_id)
-      .map((i: any) => i.appointment_id)
-      .filter(Boolean),
+  const safePendingConsultationPage = Math.min(
+    pendingConsultationPage,
+    pendingConsultationTotalPages,
   );
-  const signedReady = appointments.filter((a: any) => {
-    const status = String(
-      a.consultationStatus || a.consultation_status || "",
-    ).toLowerCase();
-    const consultationId = a.consultationId || a.consultation_id;
-    return (
-      consultationId &&
-      status === "signed" &&
-      !invoicedConsultations.has(consultationId) &&
-      !invoicedAppointments.has(a.id)
-    );
-  });
   const payableSettlement = Number(
     settlement?.payable_settlement_amount ??
       settlement?.doctor_share_paid_basis ??
@@ -248,6 +287,23 @@ export function Billing({
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
+  useEffect(() => {
+    setPendingConsultationPage(1);
+  }, [apiSession?.tenantId, branchId]);
+  useEffect(() => {
+    if (pendingConsultationPage !== safePendingConsultationPage) {
+      setPendingConsultationPage(safePendingConsultationPage);
+    }
+  }, [pendingConsultationPage, safePendingConsultationPage]);
+  useEffect(() => {
+    if (!apiSession || !canCreateInvoices) return;
+    void loadPendingConsultationPage(pendingConsultationPage);
+  }, [
+    apiSession?.tenantId,
+    branchId,
+    canCreateInvoices,
+    pendingConsultationPage,
+  ]);
   useEffect(() => {
     if (!apiSession) return;
     const timer = window.setTimeout(() => {
@@ -295,6 +351,7 @@ export function Billing({
       await Promise.all([
         loadLiveData(apiSession),
         loadInvoicePage(page),
+        loadPendingConsultationPage(pendingConsultationPage),
         loadReports(true),
       ]);
       setMessage("Invoices refreshed.");
@@ -861,7 +918,17 @@ export function Billing({
             <DataTable
               columns={consulationPendingColumns}
               data={signedReady}
-              emptyMessage="All completed consultations already have invoices."
+              emptyMessage={
+                pendingConsultationLoading
+                  ? "Loading pending consultation invoices..."
+                  : "All completed consultations already have invoices."
+              }
+            />
+            <Pagination
+              page={safePendingConsultationPage}
+              totalPages={pendingConsultationTotalPages}
+              total={pendingConsultationTotal}
+              onPage={setPendingConsultationPage}
             />
           </div>
         </Card>

@@ -1015,9 +1015,11 @@ export function InvoiceDetailPage({
                           <p className="mb-1 font-bold">Recent deliveries</p>
                           {invoiceDeliveries
                             .slice(0, 5)
-                            .map((delivery: any) => (
+                            .map((delivery: any, index: number) => (
                               <div
-                                key={delivery.delivery_id || delivery.id}
+                                key={
+                                  delivery.delivery_id || delivery.id || index
+                                }
                                 className="flex justify-between gap-3 py-0.5"
                               >
                                 <span>

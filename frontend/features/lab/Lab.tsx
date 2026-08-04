@@ -13,8 +13,8 @@ import { humanizeOptionLabel, publicDisplayValue } from "@/lib/options";
 import { displayDate, displayDateTime, formatPrice } from "@/utils/helper";
 import { pageSize } from "./constants";
 import {
-  activeLabInvoiceOrderIds,
   downloadBlob,
+  invoicedLabOrderIds,
   isCancelled,
   isReleased,
   splitList,
@@ -58,7 +58,6 @@ export function Lab({
   branchId,
   appointments,
   loadLiveData,
-  liveInvoices = [],
   setActive,
 }: any) {
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
@@ -204,38 +203,30 @@ export function Lab({
   const invoicedOrderIds = useMemo(
     () =>
       new Set([
-        ...activeLabInvoiceOrderIds(liveInvoices),
+        ...invoicedLabOrderIds(orders),
         ...localInvoicedOrderIds,
       ]),
-    [liveInvoices, localInvoicedOrderIds],
+    [orders, localInvoicedOrderIds],
   );
   const invoiceIdsByOrder = useMemo(() => {
     const rows: Record<string, string> = { ...localInvoiceIdsByOrder };
-    (liveInvoices || []).forEach((invoice: any) => {
-      if (
-        invoice?.id &&
-        invoice?.lab_order_id &&
-        !["cancelled", "refunded"].includes(
-          String(invoice.status || "").toLowerCase(),
-        )
-      ) {
-        rows[invoice.lab_order_id] = invoice.id;
+    orders.forEach((order: any) => {
+      if (order?.id && order?.billing_invoice_id) {
+        rows[order.id] = order.billing_invoice_id;
       }
     });
     return rows;
-  }, [liveInvoices, localInvoiceIdsByOrder]);
+  }, [orders, localInvoiceIdsByOrder]);
 
   useEffect(() => {
     const serverOrderIds = new Set(
-      (liveInvoices || [])
-        .map((invoice: any) => invoice.lab_order_id)
-        .filter(Boolean),
+      invoicedLabOrderIds(orders),
     );
     if (!serverOrderIds.size) return;
     setLocalInvoicedOrderIds((ids) =>
       ids.filter((orderId) => !serverOrderIds.has(orderId)),
     );
-  }, [liveInvoices]);
+  }, [orders]);
 
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
