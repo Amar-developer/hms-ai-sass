@@ -1,3 +1,5 @@
+name: medizinhub-hms-local
+
 services:
   postgres:
     image: postgres:16-alpine
