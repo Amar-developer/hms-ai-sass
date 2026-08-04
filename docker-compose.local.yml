@@ -1,4 +1,4 @@
-name: medizinhub-hms-local
+name: medizinhub-hms
 
 services:
   postgres:

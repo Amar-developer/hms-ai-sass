@@ -91,10 +91,44 @@ def activate_due_subscriptions(session: Session, tenant_id: str) -> None:
         session.commit()
 
 
+def _ensure_primary_tenant_subscription(
+    session: Session, tenant_id: str
+) -> tuple[TenantSubscription, SubscriptionPlan]:
+    """The primary/platform tenant can't be assigned a plan through the
+    customer-facing subscription flow (create_tenant_subscription rejects
+    it — "does not need a customer subscription"), so it must be
+    auto-provisioned here instead of going through the normal purchase path.
+    """
+    subscriptions = TenantSubscriptionRepository(session)
+    existing = subscriptions.latest_for_tenant(tenant_id)
+    if existing and existing.is_active and existing.status == SubscriptionStatus.ACTIVE:
+        plan = session.get(SubscriptionPlan, existing.plan_id)
+        if plan and plan.is_active:
+            return existing, plan
+    ensure_default_plans(session)
+    plan = session.exec(
+        select(SubscriptionPlan).where(SubscriptionPlan.key == "hospital")
+    ).one()
+    subscription = TenantSubscription(
+        tenant_id=tenant_id,
+        plan_id=plan.id,
+        starts_on=date.today(),
+        status=SubscriptionStatus.ACTIVE,
+        is_active=True,
+    )
+    session.add(subscription)
+    session.commit()
+    session.refresh(subscription)
+    return subscription, plan
+
+
 def get_active_subscription(
     session: Session, tenant_id: str
 ) -> tuple[TenantSubscription, SubscriptionPlan]:
     activate_due_subscriptions(session, tenant_id)
+    tenant = SubscriptionTenantRepository(session).get(tenant_id)
+    if tenant and tenant.is_primary:
+        return _ensure_primary_tenant_subscription(session, tenant_id)
     subscription = session.exec(
         select(TenantSubscription)
         .where(

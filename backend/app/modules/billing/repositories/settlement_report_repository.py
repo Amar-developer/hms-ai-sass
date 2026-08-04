@@ -91,7 +91,17 @@ class BillingSettlementReportRepository:
         statement = select(Invoice).where(
             Invoice.tenant_id == tenant_id,
             Invoice.balance_amount > 0,
-            Invoice.status.notin_([InvoiceStatus.CANCELLED, InvoiceStatus.REFUNDED]),
+            # A refund never reduces total_amount, so balance_amount stays
+            # inflated by the refunded amount for PARTIALLY_REFUNDED invoices
+            # too, not just fully REFUNDED ones — exclude both so refunded
+            # money never appears as still due.
+            Invoice.status.notin_(
+                [
+                    InvoiceStatus.CANCELLED,
+                    InvoiceStatus.REFUNDED,
+                    InvoiceStatus.PARTIALLY_REFUNDED,
+                ]
+            ),
         )
         if branch_id:
             statement = statement.where(Invoice.branch_id == branch_id)

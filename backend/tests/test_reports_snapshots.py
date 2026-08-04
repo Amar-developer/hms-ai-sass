@@ -72,13 +72,16 @@ def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
                 status=InvoiceStatus.CANCELLED,
             )
         )
-        # Partially refunded -> kept at net paid (balance settled to 0 by backend).
+        # Partially refunded: 1000 billed, 1000 collected, 200 later refunded.
+        # update_invoice_payment_status never reduces total_amount on refund,
+        # so balance_amount is 200 here (the real backend behavior) even
+        # though nothing further is owed — it's refunded, not outstanding.
         session.add(
             _invoice(
                 tenant.id,
                 invoice_number="INV-4",
                 paid_amount=800,
-                balance_amount=0,
+                balance_amount=200,
                 status=InvoiceStatus.PARTIALLY_REFUNDED,
             )
         )
@@ -101,6 +104,9 @@ def test_compute_metrics_excludes_refunds_and_keeps_partial_net(test_engine):
     assert totals["doctorFee"] == 200 + 160
     assert totals["settlement"] == 0
     assert metrics["finalProfit"] == 1800 - (200 + 160)
+    # INV-4's 200 balance is refunded money, not money still due from the
+    # patient — it must not inflate the dashboard's outstanding balance.
+    assert totals["balance"] == 0
 
 
 def test_service_revenue_uses_paid_share_of_lab_package_items(test_engine):

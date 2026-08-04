@@ -106,6 +106,17 @@ export function releaseResult(
   });
 }
 
+export function sendReport(
+  session: ApiSession,
+  orderId: string,
+  payload: { channel: "whatsapp" | "email"; idempotency_key: string },
+) {
+  return apiFetch(`/lab/orders/${orderId}/send-report`, session, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function downloadFile(session: ApiSession, fileId: string) {
   return apiBlob(`/files/${fileId}/download`, session);
 }

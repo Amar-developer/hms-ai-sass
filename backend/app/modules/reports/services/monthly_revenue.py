@@ -8,6 +8,7 @@ from app.modules.reports.services.classification import ReportInvoiceClassifier
 from app.modules.reports.services.calculations import (
     invoice_approved_discount,
     invoice_billing_discount,
+    invoice_due_balance,
     invoice_item_total,
     invoice_membership_benefit,
     invoice_offer_discount,
@@ -208,7 +209,7 @@ def build_monthly_revenue_report(
             bucket["membership"] += invoice_membership_benefit(invoice)
             bucket["invoice"] += int(invoice.total_amount or 0)
             bucket["paid"] += int(invoice.paid_amount or 0)
-            bucket["balance"] += int(invoice.balance_amount or 0)
+            bucket["balance"] += invoice_due_balance(invoice)
             bucket["payment_modes"].add(payment_mode(invoice))
             bucket["doctor"] += invoice_doctor_fee(invoice)
             bucket["settlement"] += invoice_settlement(invoice)
@@ -301,7 +302,7 @@ def build_monthly_revenue_report(
                     _money(invoice_billing_discount(report_invoice)),
                     _money(int(invoice.total_amount or 0)),
                     _money(paid),
-                    _money(int(invoice.balance_amount or 0)),
+                    _money(invoice_due_balance(invoice)),
                     payment_mode(invoice),
                     _money(paid_tax),
                     _money(doctor_fee),

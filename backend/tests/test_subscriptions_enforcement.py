@@ -9,6 +9,10 @@ from app.modules.subscriptions.service import (
     modules_from_json,
     read_plan as _plan_read,
 )
+from app.modules.subscriptions.services.tenant_subscriptions import (
+    get_active_subscription,
+)
+from app.modules.tenants.models import Tenant
 
 
 def create_tenant(client, name: str = "Trial Clinic"):
@@ -67,6 +71,32 @@ def test_subscription_plan_read_tolerates_legacy_null_updated_at():
 
     assert read.created_at is not None
     assert read.updated_at is not None
+
+
+def test_primary_tenant_is_auto_provisioned_with_full_access(test_engine):
+    # The primary/platform tenant is explicitly barred from the
+    # customer-facing subscription-purchase flow (see
+    # create_tenant_subscription's "does not need a customer subscription"
+    # check), so get_active_subscription must auto-provision it instead of
+    # 402ing every module-gated endpoint for the platform's own tenant.
+    with Session(test_engine) as session:
+        tenant = Tenant(name="Primary Platform Tenant", is_primary=True)
+        session.add(tenant)
+        session.commit()
+        session.refresh(tenant)
+
+        subscription, plan = get_active_subscription(session, tenant.id)
+
+        assert plan.key == "hospital"
+        assert "physiotherapy" in modules_from_json(plan.enabled_modules_json)
+        assert "ip" in modules_from_json(plan.enabled_modules_json)
+        assert subscription.tenant_id == tenant.id
+        assert subscription.is_active is True
+
+        # Calling again must reuse the same subscription, not create a
+        # second one on every request.
+        subscription_again, _plan_again = get_active_subscription(session, tenant.id)
+        assert subscription_again.id == subscription.id
 
 
 def test_new_tenant_gets_free_trial_subscription(client):
