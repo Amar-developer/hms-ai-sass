@@ -4,22 +4,15 @@ import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import {
   Card,
-  Field,
-  Input,
   RefreshButton,
-  SearchableSelect,
-  Select,
   StatusToast,
 } from "@/app/components/common/ui";
 import { apiFetch, apiUpload } from "@/lib/api";
 import { mapWithConcurrency } from "@/lib/concurrency";
 import {
-  FormField,
   SelectField,
-  TextField,
 } from "@/app/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
-import { doctorTypes } from "./constants";
 import { Empty } from "@/app/components/common/Empty";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { DoctorRow } from "./components/DoctorRow";
@@ -34,6 +27,8 @@ import {
   getTenantBranches,
   getTenantDepartments,
 } from "@/features/tenants/api/tenantReferenceQueries";
+import { status_options } from "../superAdmin/constants";
+import { FilterSection } from "@/app/components/common/FilterSection";
 
 const pageSize = 10;
 
@@ -45,14 +40,17 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
   const hasPermission = (...keys: string[]) =>
     Boolean(
       isSuperAdmin ||
-        userPermissions.includes("*") ||
-        keys.some((key) => userPermissions.includes(key)),
+      userPermissions.includes("*") ||
+      keys.some((key) => userPermissions.includes(key)),
     );
   const canCreateDoctor = hasPermission(
     "practitioners.manage",
     "practitioners.create",
   );
-  const canEditDoctor = hasPermission("practitioners.manage", "practitioners.edit");
+  const canEditDoctor = hasPermission(
+    "practitioners.manage",
+    "practitioners.edit",
+  );
   const canDeleteDoctor = hasPermission(
     "practitioners.manage",
     "practitioners.delete",
@@ -80,7 +78,8 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
-  const [type, setType] = useState("all");
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [departmentFilter, setDepartmentFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [busy, setBusy] = useState(false);
   const [referenceLoading, setReferenceLoading] = useState(false);
@@ -160,10 +159,7 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
   }
 
   async function loadEditorData(nextTenantId = tenantId) {
-    await Promise.all([
-      loadUsers(nextTenantId),
-      loadFeeRules(nextTenantId),
-    ]);
+    await Promise.all([loadUsers(nextTenantId), loadFeeRules(nextTenantId)]);
   }
 
   async function refreshList() {
@@ -185,7 +181,7 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
       setFeeRules([]);
       loadReferenceData(tenantId);
     }
-  }, [apiSession?.tenantId, tenantId]);
+  }, [apiSession?.tenantId, tenantId, clinic, allowedDepartments]);
 
   useEffect(() => {
     if (practitionersError) {
@@ -514,7 +510,10 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
       return (
         (!query || text.includes(query.toLowerCase())) &&
         (status === "all" || row.status === status) &&
-        (type === "all" || row.practitioner_type === type)
+        (branchFilter === "all" ||
+          (row.branch_ids || []).includes(branchFilter)) &&
+        (departmentFilter === "all" ||
+          (row.department_ids || []).includes(departmentFilter))
       );
     })
     .sort(
@@ -528,6 +527,57 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
+  const doctorFilters = [
+    {
+      key: "branch",
+      label: "Branch",
+      options: [
+        { value: "all", label: "All branches" },
+        ...branches.map((branch: any) => ({
+          value: branch.id,
+          label: branch.name,
+        })),
+      ],
+    },
+    {
+      key: "department",
+      label: "Department",
+      options: [
+        { value: "all", label: "All departments" },
+        ...departments.map((department: any) => ({
+          value: department.id,
+          label: department.name,
+        })),
+      ],
+    },
+    {
+      key: "status",
+      label: "Status",
+      options: status_options,
+    },
+  ];
+
+  const filterValues = {
+    branch: branchFilter,
+    department: departmentFilter,
+    status,
+  };
+
+  const handleFilterChange = (key: string, value: string) => {
+    setPage(1);
+    switch (key) {
+      case "branch":
+        setBranchFilter(value);
+        break;
+      case "department":
+        setDepartmentFilter(value);
+        break;
+      case "status":
+        setStatus(value);
+        break;
+    }
+    loadUsers(tenantId);
+  };
 
   return (
     <Card>
@@ -554,7 +604,7 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
         </div>
       </div>
       <StatusToast message={message} onClose={() => setMessage("")} />
-      <div className="mt-4 grid gap-3 md:grid-cols-4 xl:grid-cols-6">
+      <div className="mt-4 grid grid-2">
         {isSuperAdmin && (
           <SelectField
             label="Tenant"
@@ -563,45 +613,20 @@ export function Doctors({ apiSession, clinic, allowedDepartments = [] }: any) {
             options={tenants.map((t: any) => ({ value: t.id, label: t.name }))}
           />
         )}
-        <FormField  label="Search">
-          <Input
-            value={query}
-            onChange={(event: any) => {
-              setQuery(event.target.value);
-              setPage(1);
-            }}
-            placeholder="Name, specialty, mobile, email"
-          />
-        </FormField>
-        <FormField label="Type">
-          <SearchableSelect
-            value={type}
-            onChange={(v) => {
-              setType(v);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All types" },
-              ...doctorTypes.map(([value, label]) => ({ value, label })),
-            ]}
-            searchable={false}
-          />
-        </FormField>
-        <FormField label="Status">
-          <SearchableSelect
-            value={status}
-            onChange={(v) => {
-              setStatus(v);
-              setPage(1);
-            }}
-            options={[
-              { value: "all", label: "All status" },
-              { value: "active", label: "Active" },
-              { value: "inactive", label: "Inactive" },
-            ]}
-            searchable={false}
-          />
-        </FormField>
+        <FilterSection
+          title="Doctors"
+          filters={doctorFilters}
+          filterValues={filterValues}
+          query={query}
+          setQuery={setQuery}
+          onReset={() => {
+            setBranchFilter("all");
+            setDepartmentFilter("all");
+            setStatus("all");
+            setPage(1);
+          }}
+          onFilterChange={handleFilterChange}
+        />
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1280px]">

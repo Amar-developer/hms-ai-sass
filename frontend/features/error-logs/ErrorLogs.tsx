@@ -28,7 +28,7 @@ import {
   category_options,
   error_level_options,
   source_options,
-  status_options,
+  eror_status_options,
 } from "./constants";
 
 import { useErrorLogsData, useErrorLogsActions } from "./api";
@@ -340,7 +340,7 @@ export function ErrorLogs({ apiSession }: any) {
                 setResolved(value);
               }}
               searchable={false}
-              options={status_options}
+              options={eror_status_options}
             />
           </FormField>
           <Button onClick={applySearch}>Search</Button>

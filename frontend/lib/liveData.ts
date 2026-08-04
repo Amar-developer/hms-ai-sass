@@ -67,6 +67,8 @@ export function mapAppointment(
 
   return {
     id: row.id,
+    updated_at: row.updated_at,
+    created_at: row.created_at,
     queueEntryId: q?.id,
     queuePosition: Number(q?.queue_position || 0),
     queue_position: Number(q?.queue_position || 0),

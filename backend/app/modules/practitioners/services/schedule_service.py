@@ -87,6 +87,20 @@ def update_schedule(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Practitioner is not assigned to this branch and department",
         )
+    if department_id and any(
+        row.id != schedule.id
+        for row in PractitionerScheduleRepository(
+            session
+        ).active_for_practitioner_department(
+            tenant_id=tenant_id,
+            practitioner_id=practitioner_id,
+            department_id=department_id,
+        )
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This doctor already has a schedule for this department",
+        )
     start_time = updates.get("start_time", schedule.start_time)
     end_time = updates.get("end_time", schedule.end_time)
     validate_time_window(start_time, end_time)
@@ -155,6 +169,17 @@ def create_schedule(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Practitioner is not assigned to this branch and department",
+        )
+    if payload.department_id and PractitionerScheduleRepository(
+        session
+    ).active_for_practitioner_department(
+        tenant_id=tenant_id,
+        practitioner_id=practitioner_id,
+        department_id=payload.department_id,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This doctor already has a schedule for this department",
         )
     validate_time_window(payload.start_time, payload.end_time)
     schedule = PractitionerSchedule.model_validate(

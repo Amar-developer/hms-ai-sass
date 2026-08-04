@@ -60,6 +60,7 @@ export function Scheduling({ apiSession, branchId }: any) {
   function open(nextView: string, id = "") {
     setSelectedId(id);
     setView(nextView);
+    setMessage("");
     requestAnimationFrame(() =>
       window.scrollTo({ top: 0, behavior: "smooth" }),
     );
@@ -96,6 +97,19 @@ export function Scheduling({ apiSession, branchId }: any) {
       )
     ) {
       setMessage("Select a medical department mapped to this doctor.");
+      return;
+    }
+
+    const duplicateDepartmentId = data.departmentId;
+    const hasDuplicateSchedule = rows.some(
+      (row: any) =>
+        row.is_active !== false &&
+        String(row.practitioner_id) === String(practitionerId) &&
+        String(row.department_id) === String(duplicateDepartmentId),
+    );
+
+    if (hasDuplicateSchedule) {
+      setMessage("This doctor already has a schedule for this department.");
       return;
     }
 
@@ -152,6 +166,23 @@ export function Scheduling({ apiSession, branchId }: any) {
     const existingRows = (selected.schedules || [selected]).filter(
       (row: any) => row && row.is_active !== false,
     );
+
+    const currentGroupIds = new Set(
+      (selected.schedules || [selected]).map((row: any) => row.id),
+    );
+    const duplicateDepartmentId = data.departmentId;
+    const hasDuplicateSchedule = rows.some(
+      (row: any) =>
+        row.is_active !== false &&
+        !currentGroupIds.has(row.id) &&
+        String(row.practitioner_id) === String(practitionerId) &&
+        String(row.department_id) === String(duplicateDepartmentId),
+    );
+
+    if (hasDuplicateSchedule) {
+      setMessage("This doctor already has a schedule for this department.");
+      return;
+    }
 
     setMessage("");
 
@@ -244,6 +275,7 @@ export function Scheduling({ apiSession, branchId }: any) {
         departments={departments}
         doctors={doctors}
         busy={busy}
+        error={message}
         onSubmit={createSchedule}
         back={() => open("list")}
       />
@@ -258,6 +290,7 @@ export function Scheduling({ apiSession, branchId }: any) {
         departments={departments}
         doctors={doctors}
         busy={busy}
+        error={message}
         onSubmit={updateSchedule}
         back={() => open("list")}
       />

@@ -21,7 +21,6 @@ import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
 import { activeTenantOptions } from "@/utils/helper";
 import { PageLoader } from "@/app/components/common/loader/PageLoader";
-import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
 
 type ShellChromeValue = {
   navigatePage: (target: string | { id: string; section?: string }) => void;
@@ -433,7 +432,7 @@ export function AppShell({
 
   return (
     <div className="h-screen overflow-hidden bg-white text-slate-900">
-      {isInitialLoading && <PageLoader label={"Loading"} />}
+      {/* {isInitialLoading && <PageLoader label={"Loading"} />} */}
       {/* Sidebar */}
       {!isDesktop && (
         <div
@@ -695,11 +694,7 @@ export function AppShell({
 
           <section className=" py-4 px-6">
             <ShellChromeContext.Provider value={shellChromeValue}>
-              {pendingPage && pendingPage !== routeSegment ? (
-                <ModuleSkeleton label={`Loading ${activeNavLabel}`} />
-              ) : (
-                children
-              )}
+              {children}
             </ShellChromeContext.Provider>
           </section>
         </main>

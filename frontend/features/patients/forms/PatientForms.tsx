@@ -34,6 +34,7 @@ export function PatientForm({
   branches,
   defaultBranchId,
   busy,
+  error,
   onSubmit,
   back,
 }: any) {
@@ -252,6 +253,9 @@ export function PatientForm({
           Back
         </button>
       </div>
+      {error && (
+        <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
+      )}
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3"

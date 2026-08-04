@@ -21,7 +21,7 @@ export const category_options = [
   { value: "not_found", label: "Not found" },
 ];
 
-export const status_options = [
+export const eror_status_options = [
   { value: "all", label: "All" },
   { value: "open", label: "Open" },
   { value: "resolved", label: "Resolved" },

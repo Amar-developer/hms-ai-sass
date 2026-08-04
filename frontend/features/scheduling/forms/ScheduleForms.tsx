@@ -31,6 +31,7 @@ export function ScheduleForm({
   departments,
   doctors,
   busy,
+  error,
   onSubmit,
   back,
 }: any) {
@@ -196,6 +197,10 @@ export function ScheduleForm({
           Back to Schedules
         </button>
       </div>
+
+      {error && (
+        <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
+      )}
 
       <form
         onSubmit={handleSubmit(onFormSubmit)}

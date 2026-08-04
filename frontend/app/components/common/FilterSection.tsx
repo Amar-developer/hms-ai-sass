@@ -24,7 +24,7 @@ type FilterSectionProps = {
   onFilterChange?: (key: string, value: string) => void;
   onReset?: () => void;
   children?: React.ReactNode;
-  className?:string
+  className?: string;
 };
 
 export function FilterSection({
@@ -32,7 +32,7 @@ export function FilterSection({
   query,
   setQuery,
   filters,
-  className='lg:grid-cols-4 xl:grid-cols-5',
+  className = "lg:grid-cols-4 xl:grid-cols-5",
   showSearch = true,
   filterValues,
   onFilterChange,
@@ -44,7 +44,7 @@ export function FilterSection({
     filters.forEach((filter) => {
       onFilterChange?.(filter.key, "all");
     });
-    onReset?.()
+    onReset?.();
   }
 
   return (
@@ -77,14 +77,12 @@ export function FilterSection({
         </FormField>
       ))}
 
-      {children}
-
-      {/* Reset */}
-      <div className="flex items-end ">
+      <div className="flex  jusitfy-between items-end">
+        {children}
         <Button
           type="button"
           onClick={handleReset}
-          className="h-[50%] w-[50%] text-xs"
+          className="h-[50%] w-[45%] text-xs"
         >
           Reset
         </Button>

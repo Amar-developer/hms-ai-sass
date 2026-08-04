@@ -237,6 +237,24 @@ class PractitionerScheduleRepository:
             ).all()
         )
 
+    def active_for_practitioner_department(
+        self,
+        *,
+        tenant_id: str,
+        practitioner_id: str,
+        department_id: str,
+    ) -> list[PractitionerSchedule]:
+        return list(
+            self.session.exec(
+                select(PractitionerSchedule).where(
+                    PractitionerSchedule.tenant_id == tenant_id,
+                    PractitionerSchedule.practitioner_id == practitioner_id,
+                    PractitionerSchedule.department_id == department_id,
+                    PractitionerSchedule.is_active == True,  # noqa: E712
+                )
+            ).all()
+        )
+
     def active_for_weekday(
         self,
         *,

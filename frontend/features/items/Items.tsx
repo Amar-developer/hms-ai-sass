@@ -3,20 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActionButton,
-  ActionGroup,
   Badge,
-  Button,
   Card,
   RefreshButton,
-  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
-import {
-  FormField,
-  NumberField,
-  SelectField,
-} from "@/app/components/FormElements";
-import { Input } from "@/app/components/common/ui";
+import { NumberField, SelectField } from "@/app/components/FormElements";
 import { humanizeOptionLabel } from "@/lib/options";
 import {
   homeServiceTypes,
@@ -33,8 +25,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { RowActions } from "../admin/components/RowActions";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { generatedItemCode } from "./helpers";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
 import { useItemsActions, useItemsData } from "./api";
+import { DataTable } from "@/features/reports/components/DataTable";
+import type { Column } from "@/features/reports/types";
+import { FilterSection } from "@/app/components/common/FilterSection";
 
 function itemCodePreview(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -126,10 +120,6 @@ export function Items({ apiSession, branchId }: any) {
   const [page, setPage] = useState(1);
   const containerRef = useRef<HTMLDivElement>(null);
   const PAGE_SIZE = 10;
-  function setFiltersAndReset(f: any) {
-    setFilters(f);
-    setPage(1);
-  }
   const [form, setForm] = useState<any>(() => createEmptyForm("medicine"));
   const autoCode = editing
     ? type === "physio_equipment"
@@ -340,6 +330,123 @@ export function Items({ apiSession, branchId }: any) {
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
   const pagedRows = sortedRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
+  function updateFilter(key: string, value: string) {
+    setFilters((prev: any) => ({ ...prev, [key]: value }));
+    setPage(1);
+  }
+
+  const itemFilters = [
+    {
+      key: "type",
+      label: "Type",
+      options: [
+        { value: "all", label: "All item types" },
+        ...itemTypes.map(([value, label]) => ({ value, label })),
+      ],
+    },
+    {
+      key: "sortBy",
+      label: "Sort By",
+      options: sort_type_options,
+    },
+    {
+      key: "priceBand",
+      label: "Price",
+      options: price_options,
+    },
+  ];
+
+  const filterValues = {
+    type: filters.type,
+    sortBy: filters.sortBy,
+    priceBand: filters.priceBand,
+  };
+
+  const itemColumns: Column<any>[] = [
+    {
+      key: "type",
+      header: "Type",
+      render: (row: any) => (
+        <p className="text-sm font-bold">{humanizeOptionLabel(row.kind)}</p>
+      ),
+    },
+    {
+      key: "name",
+      header: "Item",
+      render: (row: any) => <b className="text-sm">{row.name}</b>,
+    },
+    {
+      key: "supplier",
+      header: "Supplier",
+      render: (row: any) => <span className="text-sm">{row.supplier}</span>,
+    },
+    {
+      key: "mrp_price",
+      header: "MRP",
+      render: (row: any) => (
+        <span className="text-sm">
+          {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
+        </span>
+      ),
+    },
+    {
+      key: "purchase_price",
+      header: "Purchase",
+      render: (row: any) => (
+        <span className="text-sm">
+          {row.purchase_price === null ? "-" : `₹${row.purchase_price || 0}`}
+        </span>
+      ),
+    },
+    {
+      key: "price",
+      header: "Sale Price",
+      className: "text-center",
+      cellClassName: "text-center",
+      render: (row: any) => (
+        <span className="text-sm">
+          {row.price === null ? "-" : `₹${row.price}`}
+        </span>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "text-right",
+      cellClassName: "text-right",
+      disableRowClick: true,
+      render: (row: any) => (
+        <div className="flex justify-end">
+          <RowActions
+            actions={[
+              {
+                label: "Edit",
+                onClick: () => {
+                  startEdit(row);
+
+                  setTimeout(() => {
+                    containerRef.current?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }, 100);
+                },
+              },
+              {
+                label:
+                  busy === `delete-${row.id}` ? "Deleting..." : "Delete",
+                onClick: () => deleteItem(row),
+                disabled: busy === `delete-${row.id}`,
+                danger: true,
+              },
+            ]}
+            className="right-8 -bottom-5"
+          />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-6 scroll-mt-24" ref={containerRef}>
       <Card>
@@ -378,138 +485,33 @@ export function Items({ apiSession, branchId }: any) {
               Configure items used across healthcare services
             </p>
           </div>
-          <div className="grid w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
-            <FormField label="Search">
-              <Input
-                value={filters.query}
-                onChange={(event: any) =>
-                  setFiltersAndReset({
-                    ...filters,
-                    query: event.target.value,
-                  })
-                }
-                placeholder="Name, code, type"
-              />
-            </FormField>
-            <FormField label="Type">
-              <SearchableSelect
-                value={filters.type}
-                onChange={(v) => setFiltersAndReset({ ...filters, type: v })}
-                searchable={false}
-                options={[
-                  { value: "all", label: "All item types" },
-                  ...itemTypes.map(([value, label]) => ({
-                    value,
-                    label,
-                  })),
-                ]}
-              />
-            </FormField>
-            <FormField label="Sort By">
-              <SearchableSelect
-                value={filters.sortBy}
-                onChange={(v) => setFiltersAndReset({ ...filters, sortBy: v })}
-                searchable={false}
-                options={sort_type_options}
-              />
-            </FormField>
-            <FormField label="Price">
-              <SearchableSelect
-                value={filters.priceBand}
-                onChange={(v) =>
-                  setFiltersAndReset({ ...filters, priceBand: v })
-                }
-                searchable={false}
-                options={price_options}
-              />
-            </FormField>
-          </div>
+          <FilterSection
+            title="Items"
+            filters={itemFilters}
+            filterValues={filterValues}
+            className="lg:grid-cols-5"
+            query={filters.query}
+            setQuery={(value: string) => updateFilter("query", value)}
+            onFilterChange={updateFilter}
+            onReset={() => {
+              setFilters({
+                type: "all",
+                query: "",
+                labOnly: "all",
+                priceBand: "all",
+                sortBy: "name",
+              });
+              setPage(1);
+            }}
+          />
         </div>
-        <div className="mt-4 overflow-auto rounded-2xl border">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-3 ">Type</th>
-                <th>Item</th>
-                <th>Supplier</th>
-                <th>MRP</th>
-                <th>Purchase</th>
-                <th>Sale Price</th>
-                <th className="pr-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {loading && (
-                <tr>
-                  <td colSpan={9} className="p-0">
-                    <TableSkeleton />
-                  </td>
-                </tr>
-              )}
-              {!loading && sortedRows.length === 0 && (
-                <tr>
-                  <td colSpan={9} className="px-4 py-4 text-slate-500">
-                    No items match your filter.
-                  </td>
-                </tr>
-              )}
-              {!loading && pagedRows.map((row: any) => (
-                <tr key={`${row.kind}-${row.id}`}>
-                  <td className="px-4 py-3">
-                    <p className="text-xs font-bold">
-                      {humanizeOptionLabel(row.kind)}
-                    </p>
-                  </td>
-                  <td className="text-xs">
-                    <b>{row.name}</b>
-                  </td>
-                  <td className="text-xs">{row.supplier}</td>
-                  <td className="text-xs">
-                    {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
-                  </td>
-                  <td className="text-xs">
-                    {row.purchase_price === null
-                      ? "-"
-                      : `₹${row.purchase_price || 0}`}
-                  </td>
-
-                  <td className="text-xs text-center pr-2">
-                    {row.price === null ? "-" : `₹${row.price}`}
-                  </td>
-                  <td className="pr-4">
-                    <div className="flex justify-end">
-                      <RowActions
-                        actions={[
-                          {
-                            label: "Edit",
-                            onClick: () => {
-                              startEdit(row);
-
-                              setTimeout(() => {
-                                containerRef.current?.scrollIntoView({
-                                  behavior: "smooth",
-                                  block: "start",
-                                });
-                              }, 100);
-                            },
-                          },
-                          {
-                            label:
-                              busy === `delete-${row.id}`
-                                ? "Deleting..."
-                                : "Delete",
-                            onClick: () => deleteItem(row),
-                            disabled: busy === `delete-${row.id}`,
-                            danger: true,
-                          },
-                        ]}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-4">
+          <DataTable
+            columns={itemColumns}
+            data={pagedRows}
+            loading={loading}
+            emptyMessage="No items match your filter."
+          />
           {confirmAction && (
             <ConfirmModal
               action={confirmAction}
