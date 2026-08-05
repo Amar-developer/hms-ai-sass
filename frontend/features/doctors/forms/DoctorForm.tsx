@@ -38,8 +38,6 @@ export function DoctorForm({
 }: any) {
   const fallbackFeeRule = activeDoctorFeeRule(feeRules, doctor);
   const departmentFeeRules = activeDoctorDepartmentFeeRules(feeRules, doctor);
-console.log(doctor,'doctor')
-console.log(doctors,'doctors')
   // Better initial data
   const initialSpecialtyFees = React.useMemo(() => {
     if (!doctor) {
@@ -87,6 +85,7 @@ console.log(doctors,'doctors')
     setValue,
     control,
     trigger,
+    reset,
     formState: { errors },
   } = useForm<DoctorFormValues>({
     resolver: zodResolver(doctorSchema),
@@ -195,6 +194,28 @@ console.log(doctors,'doctors')
     setSpecialtyFees(initialSpecialtyFees);
     setValue("specialtyFees", initialSpecialtyFees);
   }, [initialSpecialtyFees, setValue]);
+
+  // `doctor` can arrive asynchronously after this form has already mounted
+  // (e.g. a direct URL to an edit link, before the doctors list loads), so
+  // react-hook-form's initial defaultValues alone would leave every field
+  // blank. Reset once the real record shows up.
+  useEffect(() => {
+    if (!doctor?.id) return;
+    reset({
+      userId: doctor?.user_id ?? "",
+      fullName: doctor?.full_name ?? "",
+      practitionerType: doctor?.practitioner_type ?? "doctor",
+      registrationNumber: doctor?.registration_number ?? "",
+      mobile: doctor?.mobile ?? "",
+      email: doctor?.email ?? "",
+      status: doctor?.status ?? "active",
+      branchIds: doctor?.branch_ids ?? [],
+      departmentIds: doctor?.department_ids ?? [],
+      specialtyFees: initialSpecialtyFees,
+      shareTaxWithDoctor: fallbackFeeRule?.share_tax_with_doctor ?? false,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doctor?.id]);
   return (
     <Card>
       <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">

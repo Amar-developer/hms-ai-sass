@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getTenants,
   getDoctors,
-  getGroupedSchedules,
+  getSchedules,
 } from "../api";
 import { uniqueDepartmentRows } from "@/lib/options";
 import { activeTenantOptions } from "@/utils/helper";
@@ -59,7 +59,7 @@ export function useSchedulingData({
 
           getDoctors(session),
 
-          getGroupedSchedules(session),
+          getSchedules(session),
         ]);
 
       setBranches(branchRows);

@@ -12,11 +12,6 @@ export function getSchedules(session: any) {
   return apiFetch("/practitioners/schedules", session);
 }
 
-/** One row per editable schedule, each with its timings under `slots`. */
-export function getGroupedSchedules(session: any) {
-  return apiFetch("/practitioners/schedules/grouped", session);
-}
-
 export function createSchedule(
   practitionerId: string,
   payload: any,

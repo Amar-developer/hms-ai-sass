@@ -221,7 +221,6 @@ Patient subscription APIs enforce the `patient_subscriptions` module entitlement
 | `PATCH` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` or `practitioners.edit` | Admin update |
 | `DELETE` | `/api/v1/practitioners/{practitioner_id}` | `practitioners.manage` or `practitioners.delete` | Soft delete by deactivating practitioner |
 | `GET` | `/api/v1/practitioners/schedules` | `scheduling.manage` or `scheduling.read` | Tenant-wide schedule management list |
-| `GET` | `/api/v1/practitioners/schedules/grouped` | `scheduling.manage` or `scheduling.read` | Schedules grouped per doctor/branch/department/room with timings nested under `slots` |
 | `PATCH` | `/api/v1/practitioners/schedules/{schedule_id}` | `scheduling.manage` or `scheduling.edit` | Update weekly schedule |
 | `DELETE` | `/api/v1/practitioners/schedules/{schedule_id}` | `scheduling.manage` or `scheduling.delete` | Soft delete by deactivating schedule |
 | `POST` | `/api/v1/practitioners/{practitioner_id}/schedules` | `scheduling.manage` or `scheduling.create` | Create weekly schedule |

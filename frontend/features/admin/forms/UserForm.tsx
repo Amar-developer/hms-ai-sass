@@ -5,7 +5,7 @@ import { Header } from "../components/Header";
 import { CheckboxList } from "../components/CheckboxList";
 import { UserFormValues, userSchema } from "../settings.schema";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { tenantRoleOptions } from "../helpers";
 import { canResetTenantUserPassword } from "../permissions";
 import { Card,Input, SearchableSelect } from "@/app/components/common/ui";
@@ -38,6 +38,7 @@ export function UserForm({
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors },
   } = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -58,6 +59,30 @@ export function UserForm({
           : [],
     },
   });
+
+  // `user` can arrive asynchronously after this form has already mounted
+  // (e.g. a direct URL to an edit link, before the list loads), so
+  // react-hook-form's initial defaultValues alone would leave every field
+  // blank. Reset once the real record shows up.
+  useEffect(() => {
+    if (!user?.id) return;
+    reset({
+      name: user?.name || "",
+      email: user?.email || "",
+      userType: user?.user_type || defaultUserType || "staff",
+      mobile: user?.mobile || "",
+      branchId: user?.branch_id || "",
+      password: undefined,
+      mustChangePassword: String(user?.must_change_password ?? true),
+      isActive: String(user?.is_active ?? true),
+      roleKeys: user?.roles?.length
+        ? user.roles
+        : (user?.user_type || defaultUserType) === "tenant_admin"
+          ? ["tenant_admin"]
+          : [],
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   const userType = watch("userType");
   const selectedRoleKeys = watch("roleKeys") || [];

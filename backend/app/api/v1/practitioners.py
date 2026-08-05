@@ -13,7 +13,6 @@ from app.modules.identity.models import User
 from app.modules.practitioners.models import (
     PractitionerLeave,
     PractitionerRoomAssignment,
-    PractitionerSchedule,
 )
 from app.modules.practitioners.schemas import (
     PractitionerAvailabilityRead,
@@ -26,7 +25,6 @@ from app.modules.practitioners.schemas import (
     PractitionerRoomAssignmentCreate,
     PractitionerRoomAssignmentRead,
     PractitionerScheduleCreate,
-    PractitionerScheduleGroupRead,
     PractitionerScheduleRead,
     PractitionerScheduleUpdate,
     PractitionerUpdate,
@@ -111,32 +109,6 @@ def list_all_practitioner_schedules(
     )
 
 
-@router.get("/schedules/grouped", response_model=list[PractitionerScheduleGroupRead])
-def list_grouped_practitioner_schedules(
-    tenant_id: str = Depends(require_tenant_id),
-    practitioner_id: PractitionerId | None = None,
-    branch_id: BranchId | None = None,
-    department_id: DepartmentId | None = None,
-    is_active: bool | None = None,
-    session: Session = Depends(get_session),
-    _current_user=Depends(
-        require_any_permission(
-            permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_READ
-        )
-    ),
-) -> list[PractitionerScheduleGroupRead]:
-    """Schedules as the UI edits them: one row per doctor/branch/department/
-    room/slot-size, with each timing nested under `slots`."""
-    return practitioner_service.list_all_schedules_grouped(
-        session,
-        tenant_id=tenant_id,
-        practitioner_id=practitioner_id,
-        branch_id=branch_id,
-        department_id=department_id,
-        is_active=is_active,
-    )
-
-
 @router.patch("/schedules/{schedule_id}", response_model=PractitionerScheduleRead)
 def update_practitioner_schedule(
     schedule_id: str,
@@ -148,7 +120,7 @@ def update_practitioner_schedule(
             permissions.SCHEDULING_MANAGE, permissions.SCHEDULING_EDIT
         )
     ),
-) -> PractitionerSchedule:
+) -> PractitionerScheduleRead:
     return practitioner_service.update_schedule(
         session, tenant_id=tenant_id, schedule_id=schedule_id, payload=payload
     )
@@ -244,7 +216,7 @@ def create_practitioner_schedule(
             permissions.SCHEDULING_CREATE,
         )
     ),
-) -> PractitionerSchedule:
+) -> PractitionerScheduleRead:
     return practitioner_service.create_schedule(
         session,
         tenant_id=tenant_id,

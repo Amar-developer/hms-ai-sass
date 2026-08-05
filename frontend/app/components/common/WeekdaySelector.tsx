@@ -61,11 +61,9 @@ export function WeekdaySelector({
     }
 
     if (value === "mon-saturday") {
-      // Select Monday to Saturday only
+      // Select Monday to Saturday only (excludes Sunday, value "6")
       onDaysChange(
-        WEEKDAYS.filter((day) => day.value !== "Sunday").map(
-          (day) => day.value,
-        ),
+        WEEKDAYS.filter((day) => day.value !== "6").map((day) => day.value),
       );
     }
 

@@ -14,7 +14,6 @@ import {
 } from "@/app/components/common/ui";
 import { selectedSchedulePayloadsFromRHF } from "@/features/scheduling/helpers";
 import { ScheduleForm } from "@/features/scheduling/forms/ScheduleForms";
-import { mapWithConcurrency } from "@/lib/concurrency";
 import { pageSize, weekdays } from "./constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { Empty } from "@/app/components/common/Empty";
@@ -55,9 +54,8 @@ export function Scheduling({
   const scopedSession =
     apiSession && tenantId ? { ...apiSession, tenantId } : apiSession;
 
-  // `rows` now arrives pre-grouped from /practitioners/schedules/grouped —
-  // one object per editable schedule, timings nested under `slots`.
-  const selected = rows.find((row: any) => row.group_key === selectedId);
+  // One row is one editable schedule now — no more client-side grouping.
+  const selected = rows.find((row: any) => row.id === selectedId);
 
   // Bounce back to the list if a direct/bookmarked edit link no longer
   // resolves to a real schedule, but only once loading has finished.
@@ -93,6 +91,9 @@ export function Scheduling({
       return;
     }
 
+    // One row per branch (for "all branches") and per time range — no more
+    // per-weekday fan-out, since a schedule's weekday set now lives on one
+    // row.
     const schedulePayloads = selectedSchedulePayloadsFromRHF(
       data,
       doctorBranchIds,
@@ -121,18 +122,16 @@ export function Scheduling({
     setMessage("");
 
     try {
-      const createdRows = await create(
-        practitionerId,
-        schedulePayloads,
-        scopedSession,
+      const createdRows = await Promise.all(
+        schedulePayloads.map((payload) =>
+          create(practitionerId, payload, scopedSession),
+        ),
       );
 
       open("list");
       await reload();
       setMessage(
-        `${createdRows.length} schedule ${
-          createdRows.length === 1 ? "slot" : "slots"
-        } created.`,
+        `${createdRows.length} schedule${createdRows.length === 1 ? "" : "s"} created.`,
       );
     } catch (err: any) {
       setMessage(err.message || "Could not create schedule.");
@@ -168,41 +167,27 @@ export function Scheduling({
       return;
     }
 
-    const existingRows = (selected.slots || []).filter(
-      (row: any) => row && row.is_active !== false,
-    );
-
     // As with create, overlap-based duplicate detection is the server's job.
     setMessage("");
 
     try {
       const [firstPayload, ...extraPayloads] = schedulePayloads;
 
-      // Update first existing row (or create if none exist)
-      if (existingRows[0]) {
-        await update(
-          existingRows[0].id,
-          {
-            ...firstPayload,
-            practitioner_id: practitionerId,
-          },
-          scopedSession,
-        );
-      } else {
-        await create(practitionerId, [firstPayload], scopedSession);
-      }
+      // The edited row is updated in place; any additional payloads (a
+      // second time range, or "all branches") become brand new rows — no
+      // delete/recreate dance needed since a row's weekdays never need to
+      // be split or merged with another row's anymore.
+      await update(
+        selected.id,
+        { ...firstPayload, practitioner_id: practitionerId },
+        scopedSession,
+      );
 
-      // Create any extra slots
       if (extraPayloads.length > 0) {
-        await create(practitionerId, extraPayloads, scopedSession);
-      }
-
-      // Delete surplus old rows
-      if (existingRows.length > 1) {
-        await mapWithConcurrency(
-          existingRows.slice(1),
-          (row: any) => remove(row.id, scopedSession),
-          4,
+        await Promise.all(
+          extraPayloads.map((payload) =>
+            create(practitionerId, payload, scopedSession),
+          ),
         );
       }
 
@@ -210,8 +195,8 @@ export function Scheduling({
       await reload();
       setMessage(
         extraPayloads.length
-          ? `Schedule updated and ${extraPayloads.length} extra ${
-              extraPayloads.length === 1 ? "slot" : "slots"
+          ? `Schedule updated and ${extraPayloads.length} extra schedule${
+              extraPayloads.length === 1 ? "" : "s"
             } created.`
           : "Schedule updated.",
       );
@@ -223,21 +208,11 @@ export function Scheduling({
   async function deleteSchedule(row: any) {
     if (!scopedSession) return;
 
-    const rowsToDelete = row.slots || [row];
     setMessage("");
 
     try {
-      await mapWithConcurrency(
-        rowsToDelete,
-        (item: any) => remove(item.id, scopedSession),
-        4,
-      );
-
-      setMessage(
-        `${rowsToDelete.length} schedule ${
-          rowsToDelete.length === 1 ? "slot" : "slots"
-        } deleted.`,
-      );
+      await remove(row.id, scopedSession);
+      setMessage("Schedule deleted.");
       await reload();
     } catch (err: any) {
       setMessage(err.message || "Could not delete schedule.");
@@ -285,7 +260,7 @@ export function Scheduling({
       />
     );
 
-  const groupedRows = rows
+  const filteredRows = rows
     .filter((row: any) => {
       const doctor = doctors.find(
         (item: any) => item.id === row.practitioner_id,
@@ -295,9 +270,7 @@ export function Scheduling({
       );
       const text = [
         row.practitioner_full_name || doctor?.full_name,
-        row.room_number,
         row.department_name || department?.name,
-        row.group_key,
       ]
         .join(" ")
         .toLowerCase();
@@ -306,11 +279,8 @@ export function Scheduling({
         (filterBranch === "all" || row.branch_id === filterBranch) &&
         (filterDepartment === "all" ||
           row.department_id === filterDepartment) &&
-        // A schedule matches a weekday filter when any of its timings do.
         (filterWeekday === "all" ||
-          (row.slots || []).some(
-            (slot: any) => String(slot.weekday) === filterWeekday,
-          )) &&
+          (row.weekdays || []).includes(Number(filterWeekday))) &&
         (filterStatus === "all" ||
           (filterStatus === "active" ? row.is_active : !row.is_active))
       );
@@ -321,9 +291,9 @@ export function Scheduling({
         new Date(a.updated_at || a.created_at).getTime(),
     );
 
-  const totalPages = Math.max(1, Math.ceil(groupedRows.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const safePage = Math.min(page, totalPages);
-  const pageRows = groupedRows.slice(
+  const pageRows = filteredRows.slice(
     (safePage - 1) * pageSize,
     safePage * pageSize,
   );
@@ -459,13 +429,13 @@ export function Scheduling({
 
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1120px]">
-          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.8fr_.8fr_.65fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
+          <div className="md:grid grid-cols-[1.1fr_.9fr_.9fr_.9fr_.8fr_.65fr_.7fr_.7fr] gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500">
             <span>Doctor</span>
             <span>Branch</span>
             <span>Department</span>
-            <span>Room No.</span>
+            <span>Days</span>
             <span>Timing</span>
-            <span>Slots</span>
+            <span>Slot</span>
             <span className="text-center">Status</span>
             <span className="text-center">Actions</span>
           </div>
@@ -477,12 +447,12 @@ export function Scheduling({
             )}
             {pageRows.map((row: any) => (
               <ScheduleRow
-                key={row.group_key}
+                key={row.id}
                 row={row}
                 branches={branches}
                 departments={departments}
                 doctors={doctors}
-                onEdit={() => open("edit", row.group_key)}
+                onEdit={() => open("edit", row.id)}
                 onDelete={() => setConfirm({ row })}
               />
             ))}
@@ -493,7 +463,7 @@ export function Scheduling({
       <Pagination
         page={safePage}
         totalPages={totalPages}
-        total={groupedRows.length}
+        total={filteredRows.length}
         onPage={setPage}
       />
 

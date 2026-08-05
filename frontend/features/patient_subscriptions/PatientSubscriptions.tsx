@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -123,8 +123,17 @@ export function PatientSubscriptions({
   // Populate the edit-form working state once per target plan, not on
   // every render — editingPlan is re-derived from `plans` each render, but
   // the fields below hold in-progress edits the user is actively changing.
+  // `plans` loads asynchronously, so on a fresh mount `editingPlan` is still
+  // undefined the first time this runs; the ref lets the effect retry once
+  // the data actually arrives instead of only firing on `view`/`selectedId`.
+  const populatedEditPlanIdRef = useRef("");
   useEffect(() => {
-    if (view !== "edit" || !editingPlan) return;
+    if (view !== "edit" || !selectedId) {
+      populatedEditPlanIdRef.current = "";
+      return;
+    }
+    if (!editingPlan || populatedEditPlanIdRef.current === selectedId) return;
+    populatedEditPlanIdRef.current = selectedId;
     setEditFreeConsultDeptIds(
       editingPlan.free_consultation_department_ids || [],
     );
@@ -135,8 +144,7 @@ export function PatientSubscriptions({
     setEditFreeMedQuantities(editingPlan.free_medicine_quantities || {});
     setEditDiscountedMedIds(editingPlan.discounted_medicine_ids || []);
     setToast(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selectedId]);
+  }, [view, selectedId, editingPlan]);
 
   // Bounce back to the list if a direct/bookmarked edit or detail link no
   // longer resolves to a real plan, but only once loading has actually
@@ -342,6 +350,8 @@ export function PatientSubscriptions({
           onBack={() => goTo("list")}
           onEdit={() => startEdit(detailPlan)}
           onToggle={() => togglePlanActive(detailPlan)}
+          toggleBusy={busy === `toggle-${detailPlan.id}`}
+          canEditPlans={canEditPlans}
           activeEnrollmentCount={
             activeEnrollmentCountByPlan.get(detailPlan.id) || 0
           }
