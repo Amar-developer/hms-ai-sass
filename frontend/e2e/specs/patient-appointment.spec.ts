@@ -46,7 +46,7 @@ test.describe("patient and appointment workflow", () => {
     expect(created.branch_id).toBe(seed.branchId);
 
     await page.getByRole("button", { name: "Back to Patients" }).click();
-    await page.getByPlaceholder("Name, mobile, area").fill(patientName);
+    await page.getByPlaceholder("Search patient / mobile").fill(patientName);
     const patientRow = patientListRow(page, patientName);
     await expect(patientRow).toBeVisible();
     await patientRow.click();

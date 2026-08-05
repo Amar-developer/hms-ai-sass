@@ -22,7 +22,7 @@ test.describe("patient membership", () => {
     await page.goto("/");
     await selectBranch(page, seed.branchName);
     await openModule(page, "EMR / Patient Management");
-    await page.getByPlaceholder("Name, mobile, area").fill(seed.patientName);
+    await page.getByPlaceholder("Search patient / mobile").fill(seed.patientName);
     const patientRow = patientListRow(page, seed.patientName);
     await expect(patientRow).toBeVisible();
     await patientRow.click();

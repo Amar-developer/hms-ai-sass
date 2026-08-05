@@ -123,7 +123,6 @@ export function Patient({
   ) {
     if (!apiSession || !nextTenantId) return;
     setBusy(true);
-    setMessage("");
     const session = { ...apiSession, tenantId: nextTenantId };
     try {
       const filters = {
@@ -166,7 +165,6 @@ export function Patient({
   async function loadPatientDetail(id: string) {
     if (!scopedSession || !id) return;
     setBusy(true);
-    setMessage("");
     setConsultations([]);
     setLabOrders([]);
     setPharmacyIssues([]);
@@ -260,6 +258,7 @@ export function Patient({
     if (!apiSession || !tenantId) return;
     const timer = window.setTimeout(() => {
       setPage(1);
+      setMessage("");
       loadData(tenantId, 1);
     }, 400);
     return () => window.clearTimeout(timer);
@@ -281,6 +280,38 @@ export function Patient({
     router.push(`/patients/${pendingPatientId}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiSession?.email, tenantId, view]);
+
+  // The App Router remounts this page component on every navigation (unlike
+  // layouts, page-level state isn't preserved across URL changes), so a
+  // success message set right before navigating to a new view — e.g. after
+  // create/update — is discarded before the fresh instance can render it.
+  // Stash it in sessionStorage and consume it once on mount instead.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = sessionStorage.getItem("medizinhub.patientPendingMessage");
+    if (!raw) return;
+    sessionStorage.removeItem("medizinhub.patientPendingMessage");
+    try {
+      const pending = JSON.parse(raw);
+      if (
+        pending?.id === selectedId &&
+        pending?.message &&
+        Date.now() - pending.at < 10000
+      )
+        setMessage(pending.message);
+    } catch {
+      // ignore malformed payloads
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function setPendingMessage(id: string, text: string) {
+    if (typeof window === "undefined") return;
+    sessionStorage.setItem(
+      "medizinhub.patientPendingMessage",
+      JSON.stringify({ id, message: text, at: Date.now() }),
+    );
+  }
 
   // Fetch (or refetch) the full record whenever the URL names a different
   // patient than what's currently cached — covers detail/edit views for
@@ -367,8 +398,8 @@ export function Patient({
       ]);
       syncSharedPatient(created);
       await loadData(tenantId);
+      setPendingMessage(created.id, `Patient created: ${created.full_name}`);
       open("detail", created.id);
-      setMessage(`Patient created: ${created.full_name}`);
     } catch (err: any) {
       setMessage(err.message || "Could not create patient.");
     } finally {
@@ -410,8 +441,8 @@ export function Patient({
       syncSharedPatient(updated);
       setSelectedDetail(updated);
       await loadData(tenantId);
+      setPendingMessage(updated.id, "Patient updated.");
       open("detail", updated.id);
-      setMessage("Patient updated.");
     } catch (err: any) {
       setMessage(err.message || "Could not update patient.");
     } finally {
@@ -628,6 +659,7 @@ export function Patient({
 
   const handleFilterChange = (key: string, value: string) => {
     setPage(1);
+    setMessage("");
 
     const overrides: Record<string, string> = {};
 
@@ -657,7 +689,12 @@ export function Patient({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <RefreshButton onRefresh={() => loadData(tenantId)} />
+          <RefreshButton
+            onRefresh={() => {
+              setMessage("");
+              loadData(tenantId);
+            }}
+          />
           {canCreatePatient && (
             <button
               type="button"
@@ -704,6 +741,7 @@ export function Patient({
               setFromDate("");
               setToDate("");
               setPage(1);
+              setMessage("");
 
               loadData(tenantId, 1, {
                 query: "",
@@ -762,6 +800,7 @@ export function Patient({
         total={totalRows}
         onPage={(nextPage) => {
           setPage(nextPage);
+          setMessage("");
           loadData(tenantId, nextPage);
         }}
       />
