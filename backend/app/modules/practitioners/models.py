@@ -3,7 +3,6 @@ from enum import Enum
 
 from sqlmodel import Field, SQLModel
 
-from app.modules.practitioners.schedule_days import ScheduleMode
 from app.modules.tenants.models import new_id, now_utc
 
 
@@ -65,8 +64,11 @@ class PractitionerSchedule(SQLModel, table=True):
     # Custom) on edit — every query and availability check filters on
     # `weekdays_json` instead, which the service layer always populates
     # consistently with `mode` (daily -> all 7 days, mon_saturday -> Mon-Sat,
-    # custom -> whatever was picked).
-    mode: ScheduleMode = Field(default=ScheduleMode.CUSTOM, index=True)
+    # custom -> whatever was picked). Plain str, not the ScheduleMode enum
+    # type directly — SQLAlchemy's auto-derived Enum column type stores the
+    # member NAME ("DAILY") by default, not `.value` ("daily"), which would
+    # collide with the plain lowercase strings the service layer writes.
+    mode: str = Field(default="custom", index=True, max_length=20)
     weekdays_json: str = Field(max_length=40)
     start_time: time
     end_time: time

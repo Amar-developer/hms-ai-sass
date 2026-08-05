@@ -195,6 +195,18 @@ export function DoctorForm({
     setValue("specialtyFees", initialSpecialtyFees);
   }, [initialSpecialtyFees, setValue]);
 
+  // `feeRules` can load after `doctor` (separate parallel fetches), and the
+  // reset() below only re-runs when `doctor?.id` changes — so if this field
+  // depended solely on that effect, a late feeRules arrival would leave it
+  // frozen on the default `false` forever. Correct it independently, same as
+  // specialtyFees above.
+  useEffect(() => {
+    setValue(
+      "shareTaxWithDoctor",
+      fallbackFeeRule?.share_tax_with_doctor ?? false,
+    );
+  }, [fallbackFeeRule?.share_tax_with_doctor, setValue]);
+
   // `doctor` can arrive asynchronously after this form has already mounted
   // (e.g. a direct URL to an edit link, before the doctors list loads), so
   // react-hook-form's initial defaultValues alone would leave every field

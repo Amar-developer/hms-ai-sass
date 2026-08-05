@@ -589,7 +589,20 @@ export function Patient({
         back={() => open("list")}
       />
     );
-  if (view === "edit" && selected && canEditPatient)
+  if (view === "edit" && selected && canEditPatient) {
+    // `selected` can still be the lightweight list row (missing
+    // date_of_birth/blood_group, which aren't part of that shape) if the
+    // full-detail fetch hasn't resolved yet — e.g. navigating here directly
+    // rather than via the detail page. The form's defaultValues are only
+    // evaluated once at mount, so mounting on the partial row would freeze
+    // those fields blank; wait for the full record instead of guessing.
+    if (selectedDetail?.id !== selectedId) {
+      return (
+        <Card>
+          <p className="text-sm text-slate-500">Loading patient...</p>
+        </Card>
+      );
+    }
     return (
       <PatientForm
         key={selected.id}
@@ -603,6 +616,7 @@ export function Patient({
         back={() => open("detail", selected.id)}
       />
     );
+  }
   if (view === "detail" && selected)
     return (
       <PatientDetail

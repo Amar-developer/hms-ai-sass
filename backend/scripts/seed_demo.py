@@ -712,7 +712,7 @@ def ensure_demo_practitioner(
                 tenant_id=tenant.id,
                 practitioner_id=DEMO_DOCTOR_ID,
                 branch_id=branch.id,
-                mode=ScheduleMode.MON_SATURDAY,
+                mode=ScheduleMode.MON_SATURDAY.value,
                 weekdays_json=dump_weekdays(
                     resolve_weekdays(ScheduleMode.MON_SATURDAY, None)
                 ),

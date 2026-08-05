@@ -114,6 +114,12 @@ export function ScheduleForm({
   );
   const isSingleBranchDoctor = doctorBranches.length === 1;
 
+  // Only auto-fills defaults for a genuine user pick (wired into the picker's
+  // onChange below) — NOT reactive to every `practitionerId` change, since
+  // the edit-resync effect above also sets `practitionerId` programmatically
+  // via `reset()`, and this would otherwise clobber the just-restored
+  // branch/department (e.g. a doctor's second department) with their first
+  // one on every edit-page load.
   const applyDoctorLinks = (doctorId: string) => {
     const doctor = doctors.find((item: any) => item.id === doctorId);
     if (!doctor) return;
@@ -124,10 +130,6 @@ export function ScheduleForm({
     setValue("branchId", branchIds[0] || "", { shouldValidate: true });
     setValue("departmentId", departmentIds[0] || "", { shouldValidate: true });
   };
-
-  useEffect(() => {
-    if (selectedDoctorId) applyDoctorLinks(selectedDoctorId);
-  }, [selectedDoctorId]);
 
   // Range helpers
   const updateRange = (index: number, key: string, value: any) => {
@@ -191,6 +193,7 @@ export function ScheduleForm({
                   value={field.value}
                   onChange={(id) => {
                     field.onChange(id);
+                    applyDoctorLinks(id);
                   }}
                 />
               )}

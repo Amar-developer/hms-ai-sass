@@ -53,6 +53,13 @@ def resolve_weekdays(
     )
 
 
+def mode_value(mode: "ScheduleMode | str") -> str:
+    """Plain lowercase string to store in the `mode` column, regardless of
+    whether the caller passed a ScheduleMode member or an already-plain
+    string — the DB column is a plain str, not a native enum type."""
+    return ScheduleMode(mode).value
+
+
 def infer_mode(weekdays: list[int]) -> ScheduleMode:
     """Reconstruct which preset a stored weekday set corresponds to, so the
     UI can round-trip the picker (Daily/Mon-Saturday/Custom) on edit."""

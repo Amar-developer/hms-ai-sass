@@ -16,6 +16,7 @@ from app.modules.practitioners.repositories import (
 )
 from app.modules.practitioners.schedule_days import (
     dump_weekdays,
+    mode_value,
     parse_weekdays,
     resolve_weekdays,
 )
@@ -126,7 +127,7 @@ def update_schedule(
     start_time = updates.get("start_time", schedule.start_time)
     end_time = updates.get("end_time", schedule.end_time)
     validate_time_window(start_time, end_time)
-    mode = updates.pop("mode", schedule.mode)
+    mode = mode_value(updates.pop("mode", schedule.mode))
     weekdays = updates.pop("weekdays", None)
     resolved_weekdays = (
         resolve_weekdays(mode, weekdays)
@@ -242,6 +243,7 @@ def create_schedule(
         update={
             "tenant_id": tenant_id,
             "practitioner_id": practitioner_id,
+            "mode": mode_value(payload.mode),
             "weekdays_json": dump_weekdays(resolved_weekdays),
         },
     )

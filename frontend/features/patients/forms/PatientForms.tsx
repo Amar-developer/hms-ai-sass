@@ -105,6 +105,12 @@ export function PatientForm({
   });
   const today = todayInputValue();
   const updatingFromAge = useRef(false);
+  // Set right before the resync effect below calls reset(), so the DOB
+  // watch-effect further down knows the resulting dateOfBirth change came
+  // from server data, not the user — otherwise it would call setValue with
+  // shouldDirty:true as a side effect, permanently marking the form dirty
+  // and blocking every future corrective reset() for this patient.
+  const justResetRef = useRef(false);
 
   const branchOptions = useMemo(() => {
     const selectedBranchId = watch("branchId");
@@ -127,6 +133,7 @@ export function PatientForm({
     // reference), a dirty form must keep the user's unsaved input instead
     // of silently reverting to server data underneath them.
     if (isDirty) return;
+    justResetRef.current = true;
     reset({
       fullName: patientField(patient, "full_name", "fullName") || "",
       mobile: patientField(patient, "mobile") || "",
@@ -223,6 +230,11 @@ export function PatientForm({
 
     if (updatingFromAge.current) {
       updatingFromAge.current = false;
+      return;
+    }
+
+    if (justResetRef.current) {
+      justResetRef.current = false;
       return;
     }
 

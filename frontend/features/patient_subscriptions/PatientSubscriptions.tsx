@@ -103,7 +103,7 @@ export function PatientSubscriptions({
         ? "/admin/membership/new"
         : nextView === "edit"
           ? `/admin/membership/${id}/edit`
-          : nextView === "detail"
+          : nextView === "view"
             ? `/admin/membership/${id}`
             : "/admin/membership";
     if (opts.replace) {
@@ -116,7 +116,7 @@ export function PatientSubscriptions({
   const editingPlan =
     view === "edit" ? plans.find((plan: any) => plan.id === selectedId) : null;
   const detailPlan =
-    view === "detail"
+    view === "view"
       ? plans.find((plan: any) => plan.id === selectedId)
       : null;
 
@@ -150,7 +150,7 @@ export function PatientSubscriptions({
   // longer resolves to a real plan, but only once loading has actually
   // finished — otherwise this fires while `plans` is still empty.
   useEffect(() => {
-    if ((view !== "edit" && view !== "detail") || !selectedId || loading)
+    if ((view !== "edit" && view !== "view") || !selectedId || loading)
       return;
     if (!plans.some((plan: any) => plan.id === selectedId)) {
       goTo("list", "", { replace: true });
@@ -341,7 +341,7 @@ export function PatientSubscriptions({
         }
         onClose={() => setToast(null)}
       />
-      {view === "detail" && detailPlan && (
+      {view === "view" && detailPlan && (
         <PlanDetailPage
           plan={detailPlan}
           labTests={labTests}
@@ -526,7 +526,7 @@ export function PatientSubscriptions({
                               togglePlanActive={togglePlanActive}
                               canDeletePlans={canDeletePlans}
                               canEditPlans={canEditPlans}
-                              openDetail={() => goTo("detail", plan.id)}
+                              openDetail={() => goTo("view", plan.id)}
                             />
                           );
                         })}
