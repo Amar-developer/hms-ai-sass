@@ -1,7 +1,7 @@
 import React from "react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
-import { DataTable } from "./DataTable";
 import { LabReportsProps } from "../types";
+import { DataTable } from "@/app/components/common/DataTable";
 
 
 

@@ -39,7 +39,7 @@ export function Badge({
   className = "px-2 py-2  text-xs lg:text-sm flex justify-center items-center",
 }: {
   children: React.ReactNode;
-  tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple" | "orange";
+  tone?: "slate" | "red" | "green" | "blue" | "amber" | "purple" | "orange" |'skyblue' | string;
   className?: string;
 }) {
   const m: any = {
@@ -50,6 +50,7 @@ export function Badge({
     amber: "bg-warning-soft text-warning-fg",
     purple: "bg-purple-100 text-purple-700",
     orange: "bg-orange-100 text-orange-700",
+    skyblue: "bg-cyan-100 text-cyan-700",
   };
   return (
     <span

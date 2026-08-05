@@ -1,6 +1,6 @@
+import { DataTable } from "@/app/components/common/DataTable";
 import { AppointmentReportsProps } from "../types";
 import CollapsibleReportSection from "./CollapsibleReportSection";
-import { DataTable } from "./DataTable";
 
 const AppointmentReports = ({
   doctorRows,

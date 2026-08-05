@@ -1,8 +1,8 @@
 import React from "react";
 import CollapsibleReportSection from "./CollapsibleReportSection";
-import { DataTable } from "./DataTable";
 import { HomeCareReportsProps } from "../types";
 import { rowDate } from "../helpers";
+import { DataTable } from "@/app/components/common/DataTable";
 
 
 

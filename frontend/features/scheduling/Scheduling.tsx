@@ -473,7 +473,7 @@ export function Scheduling({
           <div className="divide-y divide-slate-200">
             {loading && pageRows.length === 0 && <TableSkeleton />}
             {!loading && pageRows.length === 0 && (
-              <Empty text="No schedules match your search." />
+              <Empty text="No schedules match  search." />
             )}
             {pageRows.map((row: any) => (
               <ScheduleRow

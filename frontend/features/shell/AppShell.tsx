@@ -24,7 +24,9 @@ import { uniqueDepartmentRows } from "@/lib/options";
 import { Sidebar } from "@/app/components/common/Sidebar";
 import AppHeader from "@/app/components/common/AppHeader";
 import { activeTenantOptions } from "@/utils/helper";
-import { PageLoader } from "@/app/components/common/loader/PageLoader";
+import { useNavigationSkeleton } from "@/app/components/common/loader/useNavigationSkeleton";
+import { ModuleSkeleton } from "@/app/components/common/loader/ModuleSkeleton";
+import { BreadcrumbBarSkeleton } from "@/app/components/common/loader/BreadcrumbBarSkeleton";
 
 type ShellChromeValue = {
   navigatePage: (target: string | { id: string; section?: string }) => void;
@@ -131,6 +133,14 @@ export function AppShell({
           ? "superadmin"
           : visibleNav[0]?.[0] || "dashboard";
   const activePage = pendingPage || resolvedActivePage;
+  // pendingPage is set the instant a nav click fires and cleared once the
+  // pathname actually lands (see the effect below) — that window is exactly
+  // "a route change or module switch is in flight", independent of the
+  // sidebar, which keeps rendering the live nav state throughout. Next's
+  // own loading.tsx Suspense fallback only fires for server data fetches,
+  // so client-rendered modules swap with no transition state at all unless
+  // we drive the header + content skeletons off this signal ourselves.
+  const showNavigationSkeleton = useNavigationSkeleton(Boolean(pendingPage));
   const primaryRole = apiSession?.user?.roles?.[0] || role;
   const roleLabel =
     demoUsers.find((u: any) => u[0] === primaryRole)?.[1] ||
@@ -618,7 +628,10 @@ export function AppShell({
             />
           )}
 
-          <div className="bg-white px-4 py-2 lg:px-6">
+          {showNavigationSkeleton ? (
+            <BreadcrumbBarSkeleton />
+          ) : (
+            <div className="bg-white px-4 py-2 lg:px-6">
             <div className="flex min-w-0 flex-col gap-2 text-sm sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
                 {/* Back / Forward group */}
@@ -722,10 +735,19 @@ export function AppShell({
               )}
             </div>
           </div>
+          )}
 
-          <section className=" py-4 px-6">
+          <section
+            className=" py-4 px-6"
+            aria-busy={showNavigationSkeleton}
+            aria-live="polite"
+          >
             <ShellChromeContext.Provider value={shellChromeValue}>
-              {children}
+              {showNavigationSkeleton ? (
+                <ModuleSkeleton label="Loading page" />
+              ) : (
+                children
+              )}
             </ShellChromeContext.Provider>
           </section>
         </main>

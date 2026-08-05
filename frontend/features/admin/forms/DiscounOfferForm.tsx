@@ -20,6 +20,8 @@ export function DiscountOfferForm({
   busy,
   onSubmit,
   back,
+  readOnly = false,
+  onEdit,
 }: any) {
   const {
     register,
@@ -66,11 +68,14 @@ export function DiscountOfferForm({
         title={title}
         subtitle="Offers can be applied to consultation, lab, pharmacy, or item invoices with an optional minimum bill amount."
         back={back}
+        readOnly={readOnly}
+        onEdit={onEdit}
       />
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
+        <fieldset disabled={readOnly} className="contents">
         <FormField label="Offer Name" required>
           <Input {...register("name")} placeholder="Enter offer name" />
           {errors.name && <FormError error={errors.name?.message} />}
@@ -149,11 +154,15 @@ export function DiscountOfferForm({
             />
           </FormField>
         )}
-        <Actions
-          busy={busy}
-          back={back}
-          label={offer ? "Save Offer" : "Create Offer"}
-        />
+        </fieldset>
+
+        {!readOnly && (
+          <Actions
+            busy={busy}
+            back={back}
+            label={offer ? "Save Offer" : "Create Offer"}
+          />
+        )}
       </form>
     </Card>
   );

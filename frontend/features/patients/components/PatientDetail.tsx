@@ -1,7 +1,5 @@
 import { ApiSession, uploadAssetUrl } from "@/lib/api";
 import { clinicalRecordsWithUniqueItems, displayPatientGender, fmtDate, patientDisplayMobile, uniqueClinicalRecords } from "../helpers";
-import { DataTable } from "@/features/reports/components/DataTable";
-import { Column } from "@/features/reports/types";
 import { MembershipEnrollForm } from "../forms/PatientForms";
 import { CompactMetric } from "./CompactMetric";
 import {
@@ -22,6 +20,8 @@ import {
   CopyIdButton,
 } from "@/app/components/common/CopyIdButton";
 import { OverlayLoader } from "@/app/components/common/loader/OverlayLoader";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function PatientDetail({
   apiSession,

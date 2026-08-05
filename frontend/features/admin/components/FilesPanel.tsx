@@ -13,7 +13,6 @@ import {
   SearchableSelect,
   Badge,
   ActionButton,
-  DateInput,
 } from "@/app/components/common/ui";
 import { asOptionList, patientLabel } from "../helpers";
 import { humanizeOptionLabel } from "@/lib/options";
@@ -29,11 +28,11 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { RowActions } from "./RowActions";
-import { DataTable } from "@/features/reports/components/DataTable";
-import { Column } from "@/features/reports/types";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { usePatientReferencesQuery } from "@/features/patients/api/usePatientReferencesQuery";
 import { FilterSection } from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function FilesPanel({
   apiSession,

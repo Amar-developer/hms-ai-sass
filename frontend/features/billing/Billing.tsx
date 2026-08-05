@@ -8,23 +8,20 @@ import {
   Card,
   Input,
   RefreshButton,
-  SearchableSelect,
   StatusToast,
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
+import { FilterSection } from "@/app/components/common/FilterSection";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { Pagination } from "@/app/components/common/Pagination";
 import {
   formatInvoiceDate,
   invoiceSource,
-  invoiceSourceKey,
   invoiceSourceOptions,
 } from "./helpers";
 import { pageSize } from "@/utils/constants";
 import { InvoiceDetailPage } from "./components/InvoiceDetailPage";
-import { Column } from "../reports/types";
-import { DataTable } from "../reports/components/DataTable";
-import { displayDateTime, money } from "@/utils/helper";
+import { capitalizeFirst, displayDateTime, money } from "@/utils/helper";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
@@ -38,6 +35,8 @@ import {
   fetchInvoicePage,
   fetchPendingConsultationInvoicePage,
 } from "./api/billing.api";
+import { Column } from "@/utils/types";
+import { DataTable } from "@/app/components/common/DataTable";
 
 export function Billing({
   apiSession,
@@ -75,7 +74,9 @@ export function Billing({
   const [invoiceTotal, setInvoiceTotal] = useState(0);
   const [invoiceListLoading, setInvoiceListLoading] = useState(false);
   const invoiceLoadSequence = useRef(0);
-  const [pendingConsultationRows, setPendingConsultationRows] = useState<any[]>([]);
+  const [pendingConsultationRows, setPendingConsultationRows] = useState<any[]>(
+    [],
+  );
   const [pendingConsultationTotal, setPendingConsultationTotal] = useState(0);
   const [pendingConsultationPage, setPendingConsultationPage] = useState(1);
   const [pendingConsultationLoading, setPendingConsultationLoading] =
@@ -131,8 +132,7 @@ export function Billing({
       params.set("payment_state", effectiveFilters.paidStatus);
     if (effectiveFilters.fromDate)
       params.set("from_date", effectiveFilters.fromDate);
-    if (effectiveFilters.toDate)
-      params.set("to_date", effectiveFilters.toDate);
+    if (effectiveFilters.toDate) params.set("to_date", effectiveFilters.toDate);
     setInvoiceListLoading(true);
     try {
       const result = await fetchInvoicePage(apiSession, params);
@@ -185,7 +185,9 @@ export function Billing({
       setPendingConsultationTotal(Number(result?.total || 0));
     } catch (err: any) {
       if (requestSequence !== pendingConsultationLoadSequence.current) return;
-      setMessage(err.message || "Could not load pending consultation invoices.");
+      setMessage(
+        err.message || "Could not load pending consultation invoices.",
+      );
     } finally {
       if (requestSequence === pendingConsultationLoadSequence.current) {
         setPendingConsultationLoading(false);
@@ -450,10 +452,10 @@ export function Billing({
   const invoiceColumns: Column<any>[] = [
     {
       key: "index",
-      header: "#",
+      header: "S.No",
       width: "60px",
       render: (_, index) => (safePage - 1) * pageSize + index + 1,
-      cellClassName: "font-semibold text-slate-500",
+      cellClassName: "font-semibold text-slate-500 text-center",
     },
     {
       key: "invoice_number",
@@ -476,16 +478,28 @@ export function Billing({
       ),
     },
     {
+      key: "invoice_date",
+      className: "text-center",
+      header: "Date",
+      width: "100px",
+      render: (invoice) => (
+        <>
+          <p className="text-sm ">{formatInvoiceDate(invoice)}</p>
+        </>
+      ),
+    },
+    {
       key: "source",
       header: "Source",
-      width: "150px",
+      width: "160px",
+      className: "text-center",
       render: (invoice) => {
         const source = invoiceSource(invoice);
 
         return (
           <Badge
             tone={source.tone as any}
-            className="table-status text-sm text-center "
+            className="table-status text-xs text-center "
           >
             {source.label}
           </Badge>
@@ -499,7 +513,7 @@ export function Billing({
       render: (invoice) => {
         const p: any = patientMap.get(invoice.patient_id);
 
-        return invoice.patient_name || p?.name || p?.full_name || "Patient";
+        return capitalizeFirst(invoice.patient_name || p?.name || p?.full_name || "Patient")
       },
       cellClassName: "font-medium",
     },
@@ -522,13 +536,15 @@ export function Billing({
                     ? "red"
                     : "slate"
           }
-          className="table-status text-sm text-center"
+          className="table-status text-xs text-center"
         >
-          {invoice.status === "partially_paid"
-            ? "Partially Paid"
-            : invoice.status === "partially_refunded"
-              ? "Partially Refunded"
-              : invoice.status}
+          {capitalizeFirst(
+            invoice.status === "partially_paid"
+              ? "Partially Paid"
+              : invoice.status === "partially_refunded"
+                ? "Partially Refunded"
+                : invoice.status,
+          )}
         </Badge>
       ),
     },
@@ -605,7 +621,11 @@ export function Billing({
       cellClassName: "text-right",
       disableRowClick: true,
       render: (a: any) => (
-        <Button disabled={busy === a.id} onClick={() => generateInvoice(a)} className="save-button">
+        <Button
+          disabled={busy === a.id}
+          onClick={() => generateInvoice(a)}
+          className="save-button"
+        >
           <ButtonLoader loading={busy === a.id}>
             {busy === a.id ? "Generating..." : "Generate Invoice"}
           </ButtonLoader>
@@ -954,48 +974,52 @@ export function Billing({
             </Badge>
           </div>
         </div>
-        <div className="mt-4 grid gap-3 grid-cols-6 xl:grid-cols-[1.4fr_.85fr_.85fr_.65fr_.65fr_auto] xl:items-end items-end">
-          <FormField label="Search">
-            <Input
-              value={filters.query}
-              onChange={(event: any) =>
-                updateFilter("query", event.target.value)
-              }
-              placeholder="Invoice, patient, source"
-            />
-          </FormField>
-          <FormField label="Source">
-            <SearchableSelect
-              value={filters.source}
-              onChange={(v) => updateFilter("source", v)}
-              options={[
+        <FilterSection
+          title="Invoices"
+          query={filters.query}
+          setQuery={(value: string) => updateFilter("query", value)}
+          className="lg:grid-cols-6 xl:grid-cols-6"
+          filters={[
+            {
+              key: "source",
+              label: "Source",
+              options: [
                 { value: "all", label: "All sources" },
                 ...invoiceSourceOptions.map((s) => ({
                   value: s.key,
                   label: s.label,
                 })),
-              ]}
-              searchable={false}
+              ],
+            },
+            {
+              key: "paidStatus",
+              label: "Paid Status",
+              options: status_options,
+            },
+          ]}
+          filterValues={filters}
+          onFilterChange={updateFilter}
+          onReset={clearFilters}
+        >
+          <FormField label="From">
+            <Input
+              type="date"
+              value={filters.fromDate}
+              onChange={(event: any) =>
+                updateFilter("fromDate", event.target.value)
+              }
             />
           </FormField>
-          <FormField label="Paid Status">
-            <SearchableSelect
-              value={filters.paidStatus}
-              onChange={(v) => updateFilter("paidStatus", v)}
-              options={status_options}
-              searchable={false}
+          <FormField label="To">
+            <Input
+              type="date"
+              value={filters.toDate}
+              onChange={(event: any) =>
+                updateFilter("toDate", event.target.value)
+              }
             />
           </FormField>
-          <div className="h-[50%]">
-            <Button
-            type="button"
-            onClick={clearFilters}
-            className="w-[50%] h-full text-xs"
-          >
-            Reset
-          </Button>
-          </div>
-        </div>
+        </FilterSection>
         <div className="scrollbar-hidden mt-4 overflow-auto rounded-2xl border border-slate-200">
           <DataTable
             columns={invoiceColumns}
@@ -1004,8 +1028,8 @@ export function Billing({
               invoiceListLoading
                 ? "Loading invoices..."
                 : invoiceTotal === 0
-                ? "No invoices yet."
-                : "No invoices match the selected filters."
+                  ? "No invoices yet."
+                  : "No invoices match the selected filters."
             }
             onRowClick={openInvoiceDetail}
           />

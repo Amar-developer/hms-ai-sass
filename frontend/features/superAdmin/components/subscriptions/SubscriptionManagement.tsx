@@ -20,7 +20,6 @@ import {
   moduleKeysWithDependencies,
 } from "../../helpers";
 import { CreateActionButton } from "../shared/CreateActionButton";
-import { Empty } from "@/app/components/common/Empty";
 import { PlanDetailModal } from "./PlanDetailModal";
 import { SubscriptionAssignPlan } from "./SubscriptionAssignPlan";
 import { SubscriptionCreatePlan } from "./SubscriptionCreatePlan";
@@ -29,9 +28,9 @@ import { SubscriptionDetailModal } from "./SubscriptionDetailModal";
 import { SubscriptionEditPlan } from "./SubscriptionEditPlan";
 import { Info } from "@/app/components/common/Info";
 import { Pagination } from "@/app/components/common/Pagination";
-import { Column } from "@/features/reports/types";
-import { DataTable } from "@/features/reports/components/DataTable";
 import { RowActions } from "@/features/admin/components/RowActions";
+import { Column } from "@/utils/types";
+import { DataTable } from "@/app/components/common/DataTable";
 
 export function SubscriptionManagement({
   apiSession,

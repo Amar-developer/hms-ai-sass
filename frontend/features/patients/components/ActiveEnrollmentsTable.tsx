@@ -3,8 +3,8 @@ import { Card, Badge } from "@/app/components/common/ui";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { displayDate, money } from "@/utils/helper";
 import { enrollmentPageSize } from "../constants";
-import { DataTable } from "@/features/reports/components/DataTable";
 import { FilterSection } from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
 
 export function ActiveEnrollmentsTable({
   rows,

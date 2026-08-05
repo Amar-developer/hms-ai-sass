@@ -7,17 +7,6 @@ export type AppointmentReportsProps = {
   onOpenInvoices: any;
 };
 
-export type Column<T> = {
-  key: keyof T | string;
-  header: string;
-  width?: string;
-  className?: string;
-  cellClassName?: string;
-  render?: (row: T, index: number) => React.ReactNode;
-  disableRowClick?: boolean;
-};
-
-
 export type FileColumn<T> = {
   key: keyof T | (string & {});
   header: React.ReactNode;
@@ -26,17 +15,6 @@ export type FileColumn<T> = {
   cellClassName?: string;
   disableRowClick?: boolean;
   render?: (row: T, index: number) => React.ReactNode;
-};
-export type DataTableProps<T> = {
-  columns: Column<T>[];
-  data: T[];
-  emptyMessage?: string;
-  className?: string;
-  onRowClick?: (row: T) => void;
-  footer?: React.ReactNode;
-  paginate?: boolean;
-  pageSize?: number;
-  loading?: boolean;
 };
 
 export type HomeCareReportsProps = {

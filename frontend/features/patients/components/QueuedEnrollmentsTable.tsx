@@ -3,7 +3,7 @@ import { Badge, Card } from "@/app/components/common/ui";
 import { useEffect, useState } from "react";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize } from "@/utils/constants";
-import { DataTable } from "@/features/reports/components/DataTable";
+import { DataTable } from "@/app/components/common/DataTable";
 
 export function QueuedEnrollmentsTable({ rows, patientMap }: any) {
   const [page, setPage] = useState(1);

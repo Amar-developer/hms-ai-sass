@@ -30,6 +30,8 @@ export function UserForm({
   setSelectedId,
   defaultUserType,
   canResetPassword: canResetPasswordProp,
+  readOnly = false,
+  onEdit,
 }: any) {
   const {
     register,
@@ -156,12 +158,15 @@ export function UserForm({
         title={title}
         subtitle={user?.email || "Create tenant-scoped users only."}
         back={back}
+        readOnly={readOnly}
+        onEdit={onEdit}
       />
 
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-6 md:grid-cols-2"
       >
+        <fieldset disabled={readOnly} className="contents">
         {tenants && !user && (
           <TenantPicker
             tenants={tenants}
@@ -323,11 +328,15 @@ export function UserForm({
           </div>
         )}
 
-        <Actions
-          busy={busy}
-          back={back}
-          label={user ? "Save User" : "Create User"}
-        />
+        </fieldset>
+
+        {!readOnly && (
+          <Actions
+            busy={busy}
+            back={back}
+            label={user ? "Save User" : "Create User"}
+          />
+        )}
       </form>
     </Card>
   );

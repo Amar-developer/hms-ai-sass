@@ -46,7 +46,6 @@ export function FilterSection({
     });
     onReset?.();
   }
-
   return (
     <div className={`mt-4 grid gap-3 md:grid-cols-2 ${className}`}>
       {/* Search */}
@@ -77,16 +76,16 @@ export function FilterSection({
         </FormField>
       ))}
 
-      <div className="flex  jusitfy-between items-end">
-        {children}
+      {children}
+      <FormField label="" >
         <Button
           type="button"
           onClick={handleReset}
-          className="h-[50%] w-[45%] text-xs"
+          className="px-4 py-2.5 mt-4 text-xs"
         >
           Reset
         </Button>
-      </div>
+      </FormField>
     </div>
   );
 }

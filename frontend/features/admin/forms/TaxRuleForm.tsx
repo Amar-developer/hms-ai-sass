@@ -16,6 +16,8 @@ export function TaxRuleForm({
   busy,
   onSubmit,
   back,
+  readOnly = false,
+  onEdit,
 }: any) {
   const {
     register,
@@ -41,12 +43,15 @@ export function TaxRuleForm({
         title={title}
         subtitle="Tax is selected by branch and service scope during invoice generation."
         back={back}
+        readOnly={readOnly}
+        onEdit={onEdit}
       />
 
       <form
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
+        <fieldset disabled={readOnly} className="contents">
         <FormField label="Name" required>
           <Input
             {...register("name")}
@@ -113,11 +118,15 @@ export function TaxRuleForm({
           </FormField>
         )}
 
-        <Actions
-          busy={busy}
-          back={back}
-          label={rule ? "Save Tax Rule" : "Create Tax Rule"}
-        />
+        </fieldset>
+
+        {!readOnly && (
+          <Actions
+            busy={busy}
+            back={back}
+            label={rule ? "Save Tax Rule" : "Create Tax Rule"}
+          />
+        )}
       </form>
     </Card>
   );
