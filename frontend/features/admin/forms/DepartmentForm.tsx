@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
@@ -30,6 +31,7 @@ export function DepartmentForm({
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors },
   } = useForm<DepartmentFormValues>({
     resolver: zodResolver(departmentSchema),
@@ -44,6 +46,21 @@ export function DepartmentForm({
       isActive: String(department?.is_active ?? true),
     },
   });
+
+  // `department` can arrive asynchronously after this form has already
+  // mounted (e.g. a direct URL to an edit link, before the list loads), so
+  // react-hook-form's initial defaultValues alone would leave every field
+  // blank. Reset once the real record shows up.
+  useEffect(() => {
+    if (!department?.id) return;
+    reset({
+      name: department?.name || "",
+      branchId: department?.branch_id || "",
+      description: department?.description || "",
+      isActive: String(department?.is_active ?? true),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [department?.id]);
 
   const departmentName = watch("name");
   const selectedBranchId = watch("branchId");

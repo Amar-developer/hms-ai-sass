@@ -54,36 +54,25 @@ class PractitionerDepartment(SQLModel, table=True):
     created_at: datetime = Field(default_factory=now_utc)
 
 
-class ScheduleDateMode(str, Enum):
-    """How a date-specific schedule interacts with the weekly recurrence.
-
-    OVERRIDE replaces the practitioner's normal weekday hours for that date
-    (e.g. "this Tuesday 2pm-5pm instead of the usual 9am-12pm"). EXTRA adds
-    availability on top of them (e.g. "additional Saturday clinic").
-    """
-
-    OVERRIDE = "override"
-    EXTRA = "extra"
-
-
 class PractitionerSchedule(SQLModel, table=True):
     id: str = Field(default_factory=lambda: new_id("psch"), primary_key=True)
     tenant_id: str = Field(index=True, foreign_key="tenant.id")
     practitioner_id: str = Field(index=True, foreign_key="practitioner.id")
     branch_id: str = Field(index=True, foreign_key="branch.id")
     department_id: str | None = Field(default=None, index=True)
-    # weekday is the recurring weekly slot. schedule_date pins the row to one
-    # calendar date instead; exactly one of the two applies to a given row,
-    # and date rows carry date_mode to say whether they replace or supplement
-    # the recurrence for that date.
-    weekday: int = Field(index=True, ge=0, le=6)
-    schedule_date: date | None = Field(default=None, index=True)
-    date_mode: ScheduleDateMode | None = Field(default=None)
+    # `mode` only matters for reconstructing the UI picker (Daily / Mon-Sat /
+    # Custom) on edit — every query and availability check filters on
+    # `weekdays_json` instead, which the service layer always populates
+    # consistently with `mode` (daily -> all 7 days, mon_saturday -> Mon-Sat,
+    # custom -> whatever was picked). Plain str, not the ScheduleMode enum
+    # type directly — SQLAlchemy's auto-derived Enum column type stores the
+    # member NAME ("DAILY") by default, not `.value` ("daily"), which would
+    # collide with the plain lowercase strings the service layer writes.
+    mode: str = Field(default="custom", index=True, max_length=20)
+    weekdays_json: str = Field(max_length=40)
     start_time: time
     end_time: time
     slot_minutes: int = Field(default=15, ge=1, le=240)
-    room_name: str | None = Field(default=None, max_length=120)
-    room_number: str | None = Field(default=None, max_length=10)
     is_active: bool = Field(default=True, index=True)
     created_at: datetime = Field(default_factory=now_utc, index=True)
     updated_at: datetime = Field(default_factory=now_utc)

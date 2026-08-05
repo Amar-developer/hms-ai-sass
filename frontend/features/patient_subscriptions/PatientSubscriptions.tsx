@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -103,7 +103,7 @@ export function PatientSubscriptions({
         ? "/admin/membership/new"
         : nextView === "edit"
           ? `/admin/membership/${id}/edit`
-          : nextView === "detail"
+          : nextView === "view"
             ? `/admin/membership/${id}`
             : "/admin/membership";
     if (opts.replace) {
@@ -116,15 +116,24 @@ export function PatientSubscriptions({
   const editingPlan =
     view === "edit" ? plans.find((plan: any) => plan.id === selectedId) : null;
   const detailPlan =
-    view === "detail"
+    view === "view"
       ? plans.find((plan: any) => plan.id === selectedId)
       : null;
 
   // Populate the edit-form working state once per target plan, not on
   // every render — editingPlan is re-derived from `plans` each render, but
   // the fields below hold in-progress edits the user is actively changing.
+  // `plans` loads asynchronously, so on a fresh mount `editingPlan` is still
+  // undefined the first time this runs; the ref lets the effect retry once
+  // the data actually arrives instead of only firing on `view`/`selectedId`.
+  const populatedEditPlanIdRef = useRef("");
   useEffect(() => {
-    if (view !== "edit" || !editingPlan) return;
+    if (view !== "edit" || !selectedId) {
+      populatedEditPlanIdRef.current = "";
+      return;
+    }
+    if (!editingPlan || populatedEditPlanIdRef.current === selectedId) return;
+    populatedEditPlanIdRef.current = selectedId;
     setEditFreeConsultDeptIds(
       editingPlan.free_consultation_department_ids || [],
     );
@@ -135,14 +144,13 @@ export function PatientSubscriptions({
     setEditFreeMedQuantities(editingPlan.free_medicine_quantities || {});
     setEditDiscountedMedIds(editingPlan.discounted_medicine_ids || []);
     setToast(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selectedId]);
+  }, [view, selectedId, editingPlan]);
 
   // Bounce back to the list if a direct/bookmarked edit or detail link no
   // longer resolves to a real plan, but only once loading has actually
   // finished — otherwise this fires while `plans` is still empty.
   useEffect(() => {
-    if ((view !== "edit" && view !== "detail") || !selectedId || loading)
+    if ((view !== "edit" && view !== "view") || !selectedId || loading)
       return;
     if (!plans.some((plan: any) => plan.id === selectedId)) {
       goTo("list", "", { replace: true });
@@ -333,7 +341,7 @@ export function PatientSubscriptions({
         }
         onClose={() => setToast(null)}
       />
-      {view === "detail" && detailPlan && (
+      {view === "view" && detailPlan && (
         <PlanDetailPage
           plan={detailPlan}
           labTests={labTests}
@@ -342,6 +350,8 @@ export function PatientSubscriptions({
           onBack={() => goTo("list")}
           onEdit={() => startEdit(detailPlan)}
           onToggle={() => togglePlanActive(detailPlan)}
+          toggleBusy={busy === `toggle-${detailPlan.id}`}
+          canEditPlans={canEditPlans}
           activeEnrollmentCount={
             activeEnrollmentCountByPlan.get(detailPlan.id) || 0
           }
@@ -516,7 +526,7 @@ export function PatientSubscriptions({
                               togglePlanActive={togglePlanActive}
                               canDeletePlans={canDeletePlans}
                               canEditPlans={canEditPlans}
-                              openDetail={() => goTo("detail", plan.id)}
+                              openDetail={() => goTo("view", plan.id)}
                             />
                           );
                         })}

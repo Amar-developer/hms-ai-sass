@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { readNotificationTarget } from "@/lib/notificationTarget";
 import { humanizeOptionLabel } from "@/lib/options";
@@ -325,9 +325,19 @@ export function HomeCare({
 
   // Populate the edit-form line items once per target booking, not on
   // every render — startEdit no longer does this directly since it (and
-  // direct/bookmarked links) only navigate; this reacts to the URL.
+  // direct/bookmarked links) only navigate; this reacts to the URL. `editing`
+  // is derived from an async-loaded list, so on a fresh mount (direct link)
+  // it can still be undefined the first time this runs; the ref lets the
+  // effect retry once the data actually arrives instead of only firing on
+  // `view`/`selectedId`.
+  const populatedEditBookingIdRef = useRef("");
   useEffect(() => {
-    if (view !== "edit" || !editing) return;
+    if (view !== "edit" || !selectedId) {
+      populatedEditBookingIdRef.current = "";
+      return;
+    }
+    if (!editing || populatedEditBookingIdRef.current === selectedId) return;
+    populatedEditBookingIdRef.current = selectedId;
     setLineItems(
       editing.services?.length
         ? editing.services.map((row: any) => ({
@@ -338,8 +348,7 @@ export function HomeCare({
           }))
         : [{ ...emptyLine }],
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, selectedId]);
+  }, [view, selectedId, editing]);
 
   function resetForm() {
     setLineItems([{ ...emptyLine }]);

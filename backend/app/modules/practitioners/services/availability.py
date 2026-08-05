@@ -245,7 +245,7 @@ def check_practitioner_availability(
         appointment_date=appointment_date,
         appointment_time=appointment_time,
     )
-    room_name = room_assignment.room_name if room_assignment else schedule.room_name
+    room_name = room_assignment.room_name if room_assignment else None
     return PractitionerAvailability(True, schedule_id=schedule.id, room_name=room_name)
 
 
@@ -299,9 +299,7 @@ def check_practitioner_date_availability(
             )
 
     schedule = matching_schedules[0]
-    return PractitionerAvailability(
-        True, schedule_id=schedule.id, room_name=schedule.room_name
-    )
+    return PractitionerAvailability(True, schedule_id=schedule.id)
 
 
 def room_assignment_conflicts(
@@ -396,7 +394,7 @@ def generate_practitioner_calendar(
                         available=availability.available,
                         reason=availability.reason,
                         schedule_id=availability.schedule_id or schedule.id,
-                        room_name=availability.room_name or schedule.room_name,
+                        room_name=availability.room_name,
                     )
                 )
                 slot_time = _add_minutes(current_date, slot_time, schedule.slot_minutes)

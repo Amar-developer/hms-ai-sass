@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   API_BASE,
   AUTH_SESSION_EXPIRED_EVENT,
+  LIVE_DATA_CHANGED_EVENT,
   LIVE_DATA_CHANGED_STORAGE_KEY,
   RequestTimeoutError,
   apiFetch,
@@ -785,8 +786,22 @@ export function useAppController() {
         scheduleMutationRefresh();
       }
     };
+    // `storage` only fires in OTHER tabs — apiFetch also dispatches this
+    // same-tab CustomEvent on every mutation so the tab that made the change
+    // (e.g. creating/activating a branch) refreshes its own header/liveData
+    // snapshot too, instead of only picking it up via react-query cache
+    // invalidation (QueryProvider) which this hook's own fetchQuery doesn't
+    // subscribe to.
+    const handleLiveDataChanged = (event: Event) => {
+      const detail = (event as CustomEvent).detail as
+        | { tenantId?: string }
+        | undefined;
+      if (detail?.tenantId && detail.tenantId !== apiSession.tenantId) return;
+      scheduleMutationRefresh();
+    };
     window.addEventListener("focus", refreshSession);
     window.addEventListener("storage", handleStorage);
+    window.addEventListener(LIVE_DATA_CHANGED_EVENT, handleLiveDataChanged);
     window.addEventListener(
       "medizinhub.entitlements.refresh",
       refreshEntitlementsAndWorkspace,
@@ -799,6 +814,7 @@ export function useAppController() {
       }
       window.removeEventListener("focus", refreshSession);
       window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(LIVE_DATA_CHANGED_EVENT, handleLiveDataChanged);
       window.removeEventListener(
         "medizinhub.entitlements.refresh",
         refreshEntitlementsAndWorkspace,

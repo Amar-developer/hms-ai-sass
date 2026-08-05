@@ -20,15 +20,11 @@ export const scheduleSchema = z
   .object({
   practitionerId: z.string().min(1, "Doctor is required"),
   branchId: z.string().min(1, "Branch is required"),
-  departmentId: z.string().min(1,'Department is required'),
+  departmentId: z.string().min(1, "Department is required"),
 
-  // "weekly" repeats on the chosen weekdays; "date" pins the schedule to one
-  // calendar date that either replaces or supplements the weekly hours.
-  scheduleMode: z.enum(["weekly", "date"]),
-  scheduleDate: z.string(),
-  dateMode: z.enum(["override", "extra"]),
-
-  // Multiple weekdays
+  // "" | "daily" | "mon-saturday" | "custom" (WeekdaySelector's WeekdayMode)
+  weekdayMode: z.enum(["", "daily", "mon-saturday", "custom"]),
+  // Only consulted when weekdayMode === "custom".
   weekdays: z.array(z.string()),
 
   // Time ranges
@@ -40,24 +36,15 @@ export const scheduleSchema = z
     .refine((val) => !isNaN(Number(val)) && Number(val) >= 1 && Number(val) <= 240, {
       message: "Slot minutes must be between 1 and 240",
     }),
-
-  roomNumber: z
-    .string()
-    .optional()
-    .refine((val) => !val || (!isNaN(Number(val)) && Number(val) >= 1), {
-      message: "Room number must be a positive number",
-    }),
   })
   .superRefine((data, ctx) => {
-    if (data.scheduleMode === "date") {
-      if (!data.scheduleDate) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["scheduleDate"],
-          message: "Pick the date this schedule applies to",
-        });
-      }
-    } else if (data.weekdays.length === 0) {
+    if (!data.weekdayMode) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["weekdayMode"],
+        message: "Select Daily, Mon - Saturday, or Custom",
+      });
+    } else if (data.weekdayMode === "custom" && data.weekdays.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["weekdays"],

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Form, useForm } from "react-hook-form";
 import { Actions } from "../components/Actions";
 import { Header } from "../components/Header";
@@ -25,6 +26,7 @@ export function TaxRuleForm({
     formState: { errors },
     setValue,
     watch,
+    reset,
   } = useForm<TaxRuleFormValues>({
     resolver: zodResolver(taxRuleSchema),
     defaultValues: {
@@ -36,6 +38,23 @@ export function TaxRuleForm({
       isActive: rule ? String(rule.is_active) : undefined,
     },
   });
+
+  // `rule` can arrive asynchronously after this form has already mounted
+  // (e.g. a direct URL to an edit link, before the list loads), so
+  // react-hook-form's initial defaultValues alone would leave every field
+  // blank. Reset once the real record shows up.
+  useEffect(() => {
+    if (!rule?.id) return;
+    reset({
+      name: rule?.name || "",
+      branchId: rule?.branch_id || "",
+      serviceScope: rule?.service_scope || "all",
+      taxLabel: rule?.tax_label || "GST",
+      taxPercentage: rule?.tax_percentage ?? 0,
+      isActive: rule ? String(rule.is_active) : undefined,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rule?.id]);
 
   return (
     <Card>

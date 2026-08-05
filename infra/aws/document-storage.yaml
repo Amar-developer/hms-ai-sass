@@ -76,6 +76,8 @@ Resources:
 
   DocumentBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Bucket: !Ref DocumentBucket
       PolicyDocument:
@@ -94,6 +96,8 @@ Resources:
 
   DocumentStorageApplicationPolicy:
     Type: AWS::IAM::ManagedPolicy
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       Description: !Sub "MedizinHub ${Environment} document storage access"
       PolicyDocument:

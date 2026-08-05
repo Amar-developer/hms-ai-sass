@@ -1,6 +1,5 @@
 from datetime import date, time
 
-from sqlalchemy import or_
 from sqlmodel import Session, select
 
 from app.modules.appointments.models import Appointment
@@ -12,8 +11,8 @@ from app.modules.practitioners.models import (
     PractitionerLeave,
     PractitionerRoomAssignment,
     PractitionerSchedule,
-    ScheduleDateMode,
 )
+from app.modules.practitioners.schedule_days import parse_weekdays
 from app.modules.tenants.models import Branch, Department
 
 
@@ -245,46 +244,17 @@ class PractitionerScheduleRepository:
         tenant_id: str,
         practitioner_id: str,
         department_id: str,
-        schedule_date: date | None = None,
-        weekday: int | None = None,
     ) -> list[PractitionerSchedule]:
-        """Active schedules that occupy the same recurrence slot.
-
-        Scoped by recurrence kind so the duplicate rule compares like with
-        like: a recurring row only clashes with another recurring row on the
-        same weekday, and a dated row only with another row on the same date.
-        Without this, a date override could never be added for a department
-        that already has weekly hours, and a doctor could not run separate
-        morning and evening sessions for one department.
-        """
-        conditions = [
-            PractitionerSchedule.tenant_id == tenant_id,
-            PractitionerSchedule.practitioner_id == practitioner_id,
-            PractitionerSchedule.department_id == department_id,
-            PractitionerSchedule.schedule_date == schedule_date,
-            PractitionerSchedule.is_active == True,  # noqa: E712
-        ]
-        if weekday is not None:
-            conditions.append(PractitionerSchedule.weekday == weekday)
-        return list(
-            self.session.exec(select(PractitionerSchedule).where(*conditions)).all()
-        )
-
-    def active_for_weekday(
-        self,
-        *,
-        tenant_id: str,
-        practitioner_id: str,
-        branch_id: str,
-        weekday: int,
-    ) -> list[PractitionerSchedule]:
+        """Active schedules for this practitioner/department, for the
+        overlap/duplicate check. The caller compares weekday sets and time
+        windows in Python since a schedule can cover an arbitrary subset of
+        weekdays."""
         return list(
             self.session.exec(
                 select(PractitionerSchedule).where(
                     PractitionerSchedule.tenant_id == tenant_id,
                     PractitionerSchedule.practitioner_id == practitioner_id,
-                    PractitionerSchedule.branch_id == branch_id,
-                    PractitionerSchedule.weekday == weekday,
+                    PractitionerSchedule.department_id == department_id,
                     PractitionerSchedule.is_active == True,  # noqa: E712
                 )
             ).all()
@@ -298,43 +268,18 @@ class PractitionerScheduleRepository:
         branch_id: str,
         appointment_date: date,
     ) -> list[PractitionerSchedule]:
-        """Effective schedules for one calendar date.
-
-        Resolves date-specific rows against the weekly recurrence: an
-        OVERRIDE row replaces the recurring hours for that date, an EXTRA
-        row supplements them. Override is scoped per department, so
-        rescheduling one clinic never silently cancels another running the
-        same day.
-        """
-        candidates = list(
-            self.session.exec(
-                select(PractitionerSchedule).where(
-                    PractitionerSchedule.tenant_id == tenant_id,
-                    PractitionerSchedule.practitioner_id == practitioner_id,
-                    PractitionerSchedule.branch_id == branch_id,
-                    PractitionerSchedule.weekday == appointment_date.weekday(),
-                    PractitionerSchedule.is_active == True,  # noqa: E712
-                    or_(
-                        PractitionerSchedule.schedule_date.is_(None),
-                        PractitionerSchedule.schedule_date == appointment_date,
-                    ),
-                )
-            ).all()
-        )
-        dated = [row for row in candidates if row.schedule_date == appointment_date]
-        recurring = [row for row in candidates if row.schedule_date is None]
-        overridden_departments = {
-            row.department_id
-            for row in dated
-            if row.date_mode == ScheduleDateMode.OVERRIDE
-        }
-        # A department_id of None means "any department", so an override with
-        # no department replaces the whole day rather than only other
-        # department-less rows.
-        if None in overridden_departments:
-            return dated
-        return dated + [
-            row for row in recurring if row.department_id not in overridden_departments
+        """Active schedules covering this calendar date's weekday."""
+        target_weekday = appointment_date.weekday()
+        rows = self.session.exec(
+            select(PractitionerSchedule).where(
+                PractitionerSchedule.tenant_id == tenant_id,
+                PractitionerSchedule.practitioner_id == practitioner_id,
+                PractitionerSchedule.branch_id == branch_id,
+                PractitionerSchedule.is_active == True,  # noqa: E712
+            )
+        ).all()
+        return [
+            row for row in rows if target_weekday in parse_weekdays(row.weekdays_json)
         ]
 
 
