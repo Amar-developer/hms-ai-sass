@@ -115,16 +115,16 @@ export function TenantAdmin({
     nextSection: string,
     nextView = "list",
     nextId = "",
-    opts: { replace?: boolean; detail?: boolean } = {},
+    opts: { replace?: boolean } = {},
   ) {
     const path =
       nextView === "create"
         ? `/admin/${nextSection}/new`
         : nextView === "edit"
-          ? opts.detail
+          ? `/admin/${nextSection}/${nextId}/edit`
+          : nextView === "view"
             ? `/admin/${nextSection}/${nextId}`
-            : `/admin/${nextSection}/${nextId}/edit`
-          : `/admin/${nextSection}`;
+            : `/admin/${nextSection}`;
     if (opts.replace) {
       router.replace(path);
     } else {
@@ -151,8 +151,10 @@ export function TenantAdmin({
     goTo(section, "edit", id);
   }
 
+  // Row click opens a read-only view of the record — only the Edit action
+  // in the row's Actions menu (openEdit, above) makes it editable.
   function openDetail(id: string) {
-    goTo(section, "edit", id, { detail: true });
+    goTo(section, "view", id);
   }
 
   const actions = useTenantAdminActions({
@@ -348,7 +350,7 @@ export function TenantAdmin({
       "offers",
     ];
     if (
-      view !== "edit" ||
+      (view !== "edit" && view !== "view") ||
       !selectedId ||
       data.busy ||
       !guardedSections.includes(section)
@@ -495,22 +497,26 @@ export function TenantAdmin({
           back={() => open("users")}
         />
       )}
-      {section === "users" && view === "edit" && selectedUser && (
-        <UserForm
-          title="Edit User"
-          user={selectedUser}
-          roles={data.roles}
-          branches={data.branches}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateUser(formData, selectedUser)
-          }
-          onRoleOpen={openRolePermissions}
-          apiSession={apiSession}
-          onResetPassword={setPasswordUser}
-          back={() => open("users")}
-        />
-      )}
+      {section === "users" &&
+        (view === "edit" || view === "view") &&
+        selectedUser && (
+          <UserForm
+            title={view === "view" ? "View User" : "Edit User"}
+            user={selectedUser}
+            roles={data.roles}
+            branches={data.branches}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateUser(formData, selectedUser)
+            }
+            onRoleOpen={openRolePermissions}
+            apiSession={apiSession}
+            onResetPassword={setPasswordUser}
+            back={() => open("users")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedUser.id)}
+          />
+        )}
       {section === "roles" && view === "list" && (
         <ListCard
           title="Roles"
@@ -558,19 +564,23 @@ export function TenantAdmin({
           back={() => open("roles")}
         />
       )}
-      {section === "roles" && view === "edit" && selectedRole && (
-        <RoleForm
-          key={selectedRole.id}
-          title="Edit Role"
-          role={selectedRole}
-          roles={data.roles}
-          permissions={data.permissions}
-          busy={data.busy}
-          onSubmit={(e: any) => actions.updateRole(e, selectedRole)}
-          onRoleChange={openEdit}
-          back={() => open("roles")}
-        />
-      )}
+      {section === "roles" &&
+        (view === "edit" || view === "view") &&
+        selectedRole && (
+          <RoleForm
+            key={selectedRole.id}
+            title={view === "view" ? "View Role" : "Edit Role"}
+            role={selectedRole}
+            roles={data.roles}
+            permissions={data.permissions}
+            busy={data.busy}
+            onSubmit={(e: any) => actions.updateRole(e, selectedRole)}
+            onRoleChange={openEdit}
+            back={() => open("roles")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedRole.id)}
+          />
+        )}
 
       {section === "departments" && view === "list" && (
         <ListCard
@@ -641,19 +651,23 @@ export function TenantAdmin({
           back={() => open("departments")}
         />
       )}
-      {section === "departments" && view === "edit" && selectedDepartment && (
-        <DepartmentForm
-          title="Edit Department"
-          department={selectedDepartment}
-          departments={data.departments}
-          branches={data.branches}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateDepartment(formData, selectedDepartment)
-          }
-          back={() => open("departments")}
-        />
-      )}
+      {section === "departments" &&
+        (view === "edit" || view === "view") &&
+        selectedDepartment && (
+          <DepartmentForm
+            title={view === "view" ? "View Department" : "Edit Department"}
+            department={selectedDepartment}
+            departments={data.departments}
+            branches={data.branches}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateDepartment(formData, selectedDepartment)
+            }
+            back={() => open("departments")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedDepartment.id)}
+          />
+        )}
 
       {section === "branches" && view === "list" && (
         <ListCard
@@ -716,17 +730,21 @@ export function TenantAdmin({
           back={() => open("branches")}
         />
       )}
-      {section === "branches" && view === "edit" && selectedBranch && (
-        <BranchForm
-          title="Edit Branch"
-          branch={selectedBranch}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateBranch(formData, selectedBranch)
-          }
-          back={() => open("branches")}
-        />
-      )}
+      {section === "branches" &&
+        (view === "edit" || view === "view") &&
+        selectedBranch && (
+          <BranchForm
+            title={view === "view" ? "View Branch" : "Edit Branch"}
+            branch={selectedBranch}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateBranch(formData, selectedBranch)
+            }
+            back={() => open("branches")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedBranch.id)}
+          />
+        )}
 
       {section === "suppliers" && view === "list" && (
         <ListCard
@@ -764,6 +782,7 @@ export function TenantAdmin({
               canEdit={hasAdminAction("suppliers", "edit")}
               canDelete={hasAdminAction("suppliers", "delete")}
               onEdit={() => openEdit(supplier.id)}
+              onRowClick={() => openDetail(supplier.id)}
               onStatus={() =>
                 setConfirm({
                   entity: "suppliers",
@@ -790,17 +809,21 @@ export function TenantAdmin({
           back={() => open("suppliers")}
         />
       )}
-      {section === "suppliers" && view === "edit" && selectedSupplier && (
-        <SupplierForm
-          title="Edit Supplier"
-          supplier={selectedSupplier}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateSupplier(formData, selectedSupplier)
-          }
-          back={() => open("suppliers")}
-        />
-      )}
+      {section === "suppliers" &&
+        (view === "edit" || view === "view") &&
+        selectedSupplier && (
+          <SupplierForm
+            title={view === "view" ? "View Supplier" : "Edit Supplier"}
+            supplier={selectedSupplier}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateSupplier(formData, selectedSupplier)
+            }
+            back={() => open("suppliers")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedSupplier.id)}
+          />
+        )}
 
       {section === "tax" && view === "list" && (
         <ListCard
@@ -839,6 +862,7 @@ export function TenantAdmin({
               canDelete={hasAdminAction("tax", "delete")}
               branches={data.branches}
               onEdit={() => openEdit(rule.id)}
+              onRowClick={() => openDetail(rule.id)}
               onStatus={() =>
                 setConfirm({ entity: "tax", kind: "status", row: rule })
               }
@@ -858,18 +882,22 @@ export function TenantAdmin({
           back={() => open("tax")}
         />
       )}
-      {section === "tax" && view === "edit" && selectedTaxRule && (
-        <TaxRuleForm
-          title="Edit Tax Rule"
-          rule={selectedTaxRule}
-          branches={data.branches}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateTaxRule(formData, selectedTaxRule)
-          }
-          back={() => open("tax")}
-        />
-      )}
+      {section === "tax" &&
+        (view === "edit" || view === "view") &&
+        selectedTaxRule && (
+          <TaxRuleForm
+            title={view === "view" ? "View Tax Rule" : "Edit Tax Rule"}
+            rule={selectedTaxRule}
+            branches={data.branches}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateTaxRule(formData, selectedTaxRule)
+            }
+            back={() => open("tax")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedTaxRule.id)}
+          />
+        )}
 
       {section === "offers" && view === "list" && (
         <ListCard
@@ -908,6 +936,7 @@ export function TenantAdmin({
               canDelete={hasAdminAction("discounts", "delete")}
               branches={data.branches}
               onEdit={() => openEdit(offer.id)}
+              onRowClick={() => openDetail(offer.id)}
               onStatus={() =>
                 setConfirm({ entity: "offers", kind: "status", row: offer })
               }
@@ -927,18 +956,22 @@ export function TenantAdmin({
           back={() => open("offers")}
         />
       )}
-      {section === "offers" && view === "edit" && selectedOffer && (
-        <DiscountOfferForm
-          title="Edit Discount Offer"
-          offer={selectedOffer}
-          branches={data.branches}
-          busy={data.busy}
-          onSubmit={(formData: any) =>
-            actions.updateDiscountOffer(formData, selectedOffer)
-          }
-          back={() => open("offers")}
-        />
-      )}
+      {section === "offers" &&
+        (view === "edit" || view === "view") &&
+        selectedOffer && (
+          <DiscountOfferForm
+            title={view === "view" ? "View Discount Offer" : "Edit Discount Offer"}
+            offer={selectedOffer}
+            branches={data.branches}
+            busy={data.busy}
+            onSubmit={(formData: any) =>
+              actions.updateDiscountOffer(formData, selectedOffer)
+            }
+            back={() => open("offers")}
+            readOnly={view === "view"}
+            onEdit={() => openEdit(selectedOffer.id)}
+          />
+        )}
 
       {section === "membership" && (
         <PatientSubscriptions

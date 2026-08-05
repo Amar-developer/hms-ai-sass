@@ -996,7 +996,7 @@ export function InvoiceDetailPage({
                       </button>
                     </div>
                   ) : isPaymentClosed ? (
-                    <div className="flex items-center justify-between rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">
+                    <div className="flex mt-3 items-center justify-between rounded-lg bg-slate-100 px-4 py-3 text-sm font-bold text-slate-700">
                       <span>{humanizeOptionLabel(invoice.status)} invoice</span>
                       <span>Payment locked</span>
                     </div>
@@ -1079,7 +1079,7 @@ export function InvoiceDetailPage({
                       )}
                     </div>
                   )}
-                  <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
+                  <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1 mt-3 ">
                     {canSendInvoice && (
                       <ActionButton
                         onClick={() => sendInvoice(invoice)}
@@ -1087,7 +1087,7 @@ export function InvoiceDetailPage({
                           busy === `send-invoice-whatsapp-${invoice.id}` ||
                           invoiceDeliveryPending
                         }
-                        className='mt-3 rounded-lg border px-3 lg:text-xs'
+                        className='rounded-lg border px-3 lg:text-xs'
                       >
                         <ButtonLoader
                           loading={

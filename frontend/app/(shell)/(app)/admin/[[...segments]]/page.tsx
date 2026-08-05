@@ -31,13 +31,20 @@ export default function AdminPage() {
   const section = SECTION_IDS.includes(rawSection as any)
     ? (rawSection as string)
     : defaultSection;
-  // /admin/{section}/{id} (row click, "detail") and /admin/{section}/{id}/edit
-  // (explicit Edit action) both render the same edit form — only the URL
-  // shape differs, not the view.
-  const isEditPath =
-    third === "edit" || (Boolean(second) && second !== "new" && !third);
-  const view = isEditPath ? "edit" : second === "new" ? "create" : "list";
-  const selectedId = view === "edit" ? second : "";
+  // /admin/{section}/{id} (row click) opens a read-only "view" of the
+  // record; /admin/{section}/{id}/edit (explicit Edit action) opens it for
+  // editing. Same form component renders both — only whether its fields are
+  // disabled differs (see TenantAdmin's `readOnly` wiring).
+  const isEditPath = third === "edit";
+  const isViewPath = Boolean(second) && second !== "new" && !third;
+  const view = isEditPath
+    ? "edit"
+    : isViewPath
+      ? "view"
+      : second === "new"
+        ? "create"
+        : "list";
+  const selectedId = view === "edit" || view === "view" ? second : "";
 
   useEffect(() => {
     if (segments.length === 0 || !SECTION_IDS.includes(rawSection as any)) {

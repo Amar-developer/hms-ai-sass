@@ -8,9 +8,9 @@ import {
 } from "@/app/components/common/ui";
 import { FormField } from "@/app/components/FormElements";
 import { Pagination } from "@/app/components/common/Pagination";
-import { DataTable } from "@/features/reports/components/DataTable";
 import { today } from "@/utils/helper";
 import { APPOINTMENT_STATUS_FILTER_OPTIONS } from "../constants";
+import { DataTable } from "@/app/components/common/DataTable";
 
 export function AppointmentList(props: any) {
   const {

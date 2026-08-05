@@ -255,11 +255,7 @@ export function useHomeCareActions({
 
   async function cancelBooking() {
     if (!apiSession || !selected) return;
-    if (
-      !confirm("Cancel this booking? This will stop further edits and billing.")
-    ) {
-      return;
-    }
+
     setBusy("cancel-booking");
     setMessage("");
     setError("");

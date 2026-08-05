@@ -42,7 +42,6 @@ export function ConfirmModal({
   const [amount, setAmount] = useState("");
 
   const isDelete = action?.kind === "delete";
-
   const item =
     action?.branch ||
     action?.department ||

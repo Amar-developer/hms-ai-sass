@@ -3,7 +3,7 @@ import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { publicDisplayValue } from "@/lib/options";
 import { displayDate } from "@/utils/helper";
-import type { Column } from "@/features/reports/types";
+import type { Column } from "@/utils/types";
 import { appointmentStatusInfo, formatDisplayTime } from "./helpers";
 
 export function getAppointmentColumns({

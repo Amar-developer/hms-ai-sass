@@ -26,9 +26,10 @@ import { RowActions } from "../admin/components/RowActions";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { generatedItemCode } from "./helpers";
 import { useItemsActions, useItemsData } from "./api";
-import { DataTable } from "@/features/reports/components/DataTable";
-import type { Column } from "@/features/reports/types";
 import { FilterSection } from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
+import { Pagination } from "@/app/components/common/Pagination";
 
 function itemCodePreview(type: string, name: string) {
   const prefixes: Record<string, string> = {
@@ -187,24 +188,24 @@ export function Items({ apiSession, branchId }: any) {
         id: row.id,
         raw: row,
       })),
-      ...homeCareServices.filter((row: any) =>
-        String(row.code || "").startsWith("HV-"),
-      ).map((row: any) => {
-        return {
-          type: "home_visit_service",
-          kind: "Home Visit Service",
-          name: row.name,
-          code: row.code,
-          mrp_price: row.mrp_price || 0,
-          price: row.default_price,
-          purchase_price: null,
-          supplier: "-",
-          meta: row.description || "Home visit",
-          created_at: row.created_at || row.updated_at || "",
-          id: row.id,
-          raw: row,
-        };
-      }),
+      ...homeCareServices
+        .filter((row: any) => String(row.code || "").startsWith("HV-"))
+        .map((row: any) => {
+          return {
+            type: "home_visit_service",
+            kind: "Home Visit Service",
+            name: row.name,
+            code: row.code,
+            mrp_price: row.mrp_price || 0,
+            price: row.default_price,
+            purchase_price: null,
+            supplier: "-",
+            meta: row.description || "Home visit",
+            created_at: row.created_at || row.updated_at || "",
+            id: row.id,
+            raw: row,
+          };
+        }),
     ],
     [medicines, tests, packages, equipment, homeCareServices, stockSuppliers],
   );
@@ -366,6 +367,7 @@ export function Items({ apiSession, branchId }: any) {
     {
       key: "type",
       header: "Type",
+      width: "180px",
       render: (row: any) => (
         <p className="text-sm font-bold">{humanizeOptionLabel(row.kind)}</p>
       ),
@@ -373,16 +375,19 @@ export function Items({ apiSession, branchId }: any) {
     {
       key: "name",
       header: "Item",
+      width: "180px",
       render: (row: any) => <b className="text-sm">{row.name}</b>,
     },
     {
       key: "supplier",
       header: "Supplier",
+      width: "130px",
       render: (row: any) => <span className="text-sm">{row.supplier}</span>,
     },
     {
       key: "mrp_price",
       header: "MRP",
+      width: "100px",
       render: (row: any) => (
         <span className="text-sm">
           {row.mrp_price === null ? "-" : `₹${row.mrp_price || 0}`}
@@ -392,6 +397,7 @@ export function Items({ apiSession, branchId }: any) {
     {
       key: "purchase_price",
       header: "Purchase",
+      width: "100px",
       render: (row: any) => (
         <span className="text-sm">
           {row.purchase_price === null ? "-" : `₹${row.purchase_price || 0}`}
@@ -401,6 +407,7 @@ export function Items({ apiSession, branchId }: any) {
     {
       key: "price",
       header: "Sale Price",
+      width: "120px",
       className: "text-center",
       cellClassName: "text-center",
       render: (row: any) => (
@@ -412,6 +419,7 @@ export function Items({ apiSession, branchId }: any) {
     {
       key: "actions",
       header: "Actions",
+      width: "100px",
       className: "text-right",
       cellClassName: "text-right",
       disableRowClick: true,
@@ -433,8 +441,7 @@ export function Items({ apiSession, branchId }: any) {
                 },
               },
               {
-                label:
-                  busy === `delete-${row.id}` ? "Deleting..." : "Delete",
+                label: busy === `delete-${row.id}` ? "Deleting..." : "Delete",
                 onClick: () => deleteItem(row),
                 disabled: busy === `delete-${row.id}`,
                 danger: true,
@@ -477,6 +484,8 @@ export function Items({ apiSession, branchId }: any) {
           onTypeChange={changeItemType}
         />
       </Card>
+
+      {/* Item List */}
       <Card>
         <div className="flex flex-col gap-4">
           <div>
@@ -521,25 +530,12 @@ export function Items({ apiSession, branchId }: any) {
             />
           )}
         </div>
-        <div className="flex items-center justify-between border-t px-4 py-3 text-sm">
-          <span className="text-slate-500">
-            Page {page} of {totalPages} · {sortedRows.length} items
-          </span>
-          <div className="flex gap-2">
-            <ActionButton
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              Previous
-            </ActionButton>
-            <ActionButton
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-            >
-              Next
-            </ActionButton>
-          </div>
-        </div>
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={sortedRows.length}
+          onPage={setPage}
+        />
       </Card>
     </div>
   );

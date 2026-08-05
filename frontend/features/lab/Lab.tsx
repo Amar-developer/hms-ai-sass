@@ -26,8 +26,6 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { LabOrderForm } from "@/features/lab/forms/LabForms";
 import { LabOrderFormValues } from "@/features/lab/lab.schema";
 import type { LabOrderSummary } from "@/lib/contracts";
-import { DataTable } from "../reports/components/DataTable";
-import { Column } from "../reports/types";
 import {
   canCopyDatabaseIds,
   CopyIdButton,
@@ -42,6 +40,8 @@ import {
   useLabAvailableTestSearch,
   useLabWorkspaceData,
 } from "./api";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 const MAX_REPORT_DOCUMENTS = 5;
 
@@ -157,6 +157,8 @@ export function Lab({
   >({ source: "all", status: "all" });
   const [amountMin, setAmountMin] = useState("");
   const [amountMax, setAmountMax] = useState("");
+  const [worklistFromDate, setWorklistFromDate] = useState("");
+  const [worklistToDate, setWorklistToDate] = useState("");
 
   const orderedConsultationIds = useMemo(
     () =>
@@ -232,8 +234,8 @@ export function Lab({
   }, [orders]);
 
   const worklistFilterConfigs = [
-    { key: "source", label: "Source", options: worklistSourceOptions },
-    { key: "status", label: "Status", options: worklistStatusOptions },
+    // { key: "source", label: "Source", options: worklistSourceOptions },
+    // { key: "status", label: "Status", options: worklistStatusOptions },
   ];
 
   function onWorklistFilterChange(key: string, value: string) {
@@ -244,6 +246,10 @@ export function Lab({
     const q = worklistQuery.trim().toLowerCase();
     const min = amountMin.trim() === "" ? null : Number(amountMin);
     const max = amountMax.trim() === "" ? null : Number(amountMax);
+    const from = worklistFromDate ? new Date(worklistFromDate).getTime() : null;
+    const to = worklistToDate
+      ? new Date(`${worklistToDate}T23:59:59`).getTime()
+      : null;
 
     return orders.filter((o: any) => {
       if (q) {
@@ -266,6 +272,11 @@ export function Lab({
       if (min !== null && amount < min) return false;
       if (max !== null && amount > max) return false;
 
+      const createdAt = o.created_at ? new Date(o.created_at).getTime() : null;
+      if (from !== null && (createdAt === null || createdAt < from))
+        return false;
+      if (to !== null && (createdAt === null || createdAt > to)) return false;
+
       return true;
     });
   }, [
@@ -274,6 +285,8 @@ export function Lab({
     worklistFilters,
     amountMin,
     amountMax,
+    worklistFromDate,
+    worklistToDate,
     patientMap,
   ]);
 
@@ -312,7 +325,14 @@ export function Lab({
 
   useEffect(() => {
     setPage(1);
-  }, [worklistQuery, worklistFilters, amountMin, amountMax]);
+  }, [
+    worklistQuery,
+    worklistFilters,
+    amountMin,
+    amountMax,
+    worklistFromDate,
+    worklistToDate,
+  ]);
 
   useEffect(() => {
     if (typeof window !== "undefined")
@@ -940,8 +960,41 @@ export function Lab({
             onReset={() => {
               setAmountMin("");
               setAmountMax("");
+              setWorklistFromDate("");
+              setWorklistToDate("");
             }}
-          />
+          >
+            <FormField label="Price Min">
+              <Input
+                type="number"
+                value={amountMin}
+                onChange={(e: any) => setAmountMin(e.target.value)}
+                placeholder="Min amount"
+              />
+            </FormField>
+            <FormField label="Price Max">
+              <Input
+                type="number"
+                value={amountMax}
+                onChange={(e: any) => setAmountMax(e.target.value)}
+                placeholder="Max amount"
+              />
+            </FormField>
+            <FormField label="From">
+              <Input
+                type="date"
+                value={worklistFromDate}
+                onChange={(e: any) => setWorklistFromDate(e.target.value)}
+              />
+            </FormField>
+            <FormField label="To">
+              <Input
+                type="date"
+                value={worklistToDate}
+                onChange={(e: any) => setWorklistToDate(e.target.value)}
+              />
+            </FormField>
+          </FilterSection>
         </div>
         <div className="mt-4">
           {!ordersLoaded ? (

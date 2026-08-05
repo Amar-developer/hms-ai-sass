@@ -27,6 +27,8 @@ export function BranchForm({
   tenants,
   selectedId,
   setSelectedId,
+  readOnly = false,
+  onEdit,
 }: any) {
   const {
     register,
@@ -73,6 +75,8 @@ export function BranchForm({
             : "Branch creation is checked against the active subscription limit."
         }
         back={back}
+        readOnly={readOnly}
+        onEdit={onEdit}
       />
       {planLimitReached && (
         <div className="mb-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800">
@@ -85,6 +89,7 @@ export function BranchForm({
         onSubmit={handleSubmit(onSubmit)}
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
+        <fieldset disabled={readOnly} className="contents">
         {tenants && !branch && (
           <TenantPicker
             tenants={tenants}
@@ -166,12 +171,16 @@ export function BranchForm({
             )}
           </FormField>
         </div>
-        <Actions
-          busy={busy}
-          back={back}
-          disabled={isLocked(branch) || planLimitReached}
-          label={branch ? "Save Branch" : "Create Branch"}
-        />
+        </fieldset>
+
+        {!readOnly && (
+          <Actions
+            busy={busy}
+            back={back}
+            disabled={isLocked(branch) || planLimitReached}
+            label={branch ? "Save Branch" : "Create Branch"}
+          />
+        )}
       </form>
     </Card>
   );

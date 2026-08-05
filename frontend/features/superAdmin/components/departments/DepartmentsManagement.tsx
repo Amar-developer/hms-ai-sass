@@ -10,8 +10,8 @@ import { displayDate } from "@/utils/helper";
 import { Pagination } from "@/app/components/common/Pagination";
 import { RowActions } from "@/features/admin/components/RowActions";
 import { FormField } from "@/app/components/FormElements";
-import { Column } from "@/features/reports/types";
-import { DataTable } from "@/features/reports/components/DataTable";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function DepartmentsManagement({
   tenants,

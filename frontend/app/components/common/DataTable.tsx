@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { DataTableProps } from "../types";
 import { Pagination } from "@/app/components/common/Pagination";
 import { pageSize as defaultPageSize } from "@/utils/constants";
 import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
+import { DataTableProps } from "@/utils/types";
 
 export function DataTable<T>({
   columns,
@@ -30,7 +30,7 @@ export function DataTable<T>({
 
   return (
     <div className={className}>
-      <div className="overflow-auto rounded-lg border">
+      <div className="overflow-auto  rounded-lg border">
         <table
           className={`w-full min-w-[920px] table-fixed text-left text-sm ${className ?? ""}`}
         >

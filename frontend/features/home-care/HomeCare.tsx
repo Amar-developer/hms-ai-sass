@@ -10,7 +10,6 @@ import { isBookingLocked, patientCode, userName } from "./helpers";
 import { BookingsList } from "./components/BookingList";
 import { InvoiceCard } from "./components/InvoiceCard";
 import { BookingForm } from "@/features/home-care/forms/HomeCareForms";
-import { BookingFormValues } from "@/features/home-care/homecare.schema";
 import { patientName } from "@/utils/helper";
 import { StatusToast } from "@/app/components/common/ui";
 import { BookingDetail } from "./components/BookingDetail";
@@ -36,12 +35,27 @@ export function HomeCare({
 }: any) {
   const router = useRouter();
   const canCopyIds = canCopyDatabaseIds(apiSession?.user);
-  const { services, bookings, staff, loading, dataError, serviceLoadError, load } =
-    useHomeCareData({ apiSession, branchId });
+  // const [view, setView] = useState<View>("list");
+  const {
+    services,
+    bookings,
+    staff,
+    loading,
+    dataError,
+    serviceLoadError,
+    load,
+  } = useHomeCareData({ apiSession, branchId });
+  // const [selectedId, setSelectedId] = useState("");
+  // const [editing, setEditing] = useState<any>(null);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
-  const [filters, setFilters] = useState({ query: "", status: "all" });
+  const [filters, setFilters] = useState({
+    query: "",
+    status: "all",
+    fromDate: "",
+    toDate: "",
+  });
   const [page, setPage] = useState(1);
   const [lineItems, setLineItems] = useState<any[]>([{ ...emptyLine }]);
   const [confirmAction, setConfirmAction] = useState<any>(null);
@@ -144,6 +158,22 @@ export function HomeCare({
         if (query && !haystack.includes(query)) return false;
         if (filters.status !== "all" && booking.status !== filters.status)
           return false;
+        const from = filters.fromDate
+          ? new Date(filters.fromDate).getTime()
+          : null;
+        const to = filters.toDate
+          ? new Date(`${filters.toDate}T23:59:59`).getTime()
+          : null;
+        const bookingStart = booking.start_date
+          ? new Date(booking.start_date).getTime()
+          : null;
+        const bookingEnd = booking.end_date
+          ? new Date(booking.end_date).getTime()
+          : bookingStart;
+        if (from !== null && bookingEnd !== null && bookingEnd < from)
+          return false;
+        if (to !== null && bookingStart !== null && bookingStart > to)
+          return false;
         return true;
       }),
     [bookings, filters, patientMap, staffMap],
@@ -194,7 +224,7 @@ export function HomeCare({
   }, [apiSession?.tenantId, bookings.length, view, router]);
   useEffect(() => {
     setPage(1);
-  }, [filters.query, filters.status]);
+  }, [filters.query, filters.status, filters.fromDate, filters.toDate]);
   useEffect(() => {
     if (page !== safePage) setPage(safePage);
   }, [page, safePage]);
@@ -388,7 +418,11 @@ export function HomeCare({
           invoiceDetail={invoiceDetail}
           onBack={backToList}
           onEdit={() => selected && startEdit(selected)}
-          onCancel={cancelBooking}
+          onCancel={() =>
+            setConfirmAction({
+              type: "cancel-booking",
+            })
+          }
           onStatusChange={updateBookingStatus}
           onInvoice={() => selected && openInvoice(selected)}
           canManage={canManageBooking}
@@ -420,11 +454,39 @@ export function HomeCare({
 
       {confirmAction && (
         <ConfirmModal
-          action={confirmAction}
-          busy={busy === `delete-visit-${confirmAction.row.id}`}
+          action={{
+            title:
+              confirmAction.type === "cancel-booking"
+                ? "Cancel Booking"
+                : "Delete Visit",
+            description:
+              confirmAction.type === "cancel-booking"
+                ? "Are you sure you want to cancel this booking? This action cannot be undone."
+                : "Are you sure you want to delete this visit log?",
+            confirmLabel:
+              confirmAction.type === "cancel-booking"
+                ? "Cancel Booking"
+                : "Delete",
+            confirmTone:
+              confirmAction.type === "cancel-booking" ? "danger" : "danger",
+            kind:
+              confirmAction.type === "cancel-booking"
+              ? "cancel Booking"
+              : "delete log"
+          }}
+          busy={
+            confirmAction.type === "cancel-booking"
+              ? busy === "cancel-booking"
+              : busy === `delete-visit-${confirmAction.row.id}`
+          }
           onCancel={() => setConfirmAction(null)}
           onConfirm={async () => {
-            await deleteVisitLog(confirmAction.row.id);
+            if (confirmAction.type === "cancel-booking") {
+              await cancelBooking();
+            } else {
+              await deleteVisitLog(confirmAction.row.id);
+            }
+
             setConfirmAction(null);
           }}
         />

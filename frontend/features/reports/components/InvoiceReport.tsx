@@ -1,6 +1,5 @@
 import React from "react";
 import { Card,Badge } from "@/app/components/common/ui";
-import { DataTable } from "./DataTable";
 import {
   approvedDiscountUsage,
   offerDiscountUsage,
@@ -9,6 +8,7 @@ import {
 } from "../financials";
 import { Pagination } from "@/app/components/common/Pagination";
 import { InvoiceProps } from "../types";
+import { DataTable } from "@/app/components/common/DataTable";
 
 
 

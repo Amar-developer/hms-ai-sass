@@ -11,8 +11,8 @@ import { Pagination } from "@/app/components/common/Pagination";
 import { FormField } from "@/app/components/FormElements";
 import { CopyIdButton } from "@/app/components/common/CopyIdButton";
 import { RowActions } from "@/features/admin/components/RowActions";
-import { Column } from "@/features/reports/types";
-import { DataTable } from "@/features/reports/components/DataTable";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
 
 export function BranchesManagement({
   tenants,

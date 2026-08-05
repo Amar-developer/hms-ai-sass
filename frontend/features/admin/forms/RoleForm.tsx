@@ -16,6 +16,8 @@ export function RoleForm({
   onSubmit,
   onRoleChange,
   back,
+  readOnly = false,
+  onEdit,
 }: any) {
   const [roleName, setRoleName] = useState(role?.name || "");
   const generatedKey = roleKeyFromName(roleName || role?.key || "");
@@ -27,8 +29,11 @@ export function RoleForm({
         title={title}
         subtitle={role?.key || "Select permissions by module action."}
         back={back}
+        readOnly={readOnly}
+        onEdit={onEdit}
       />
       <form onSubmit={onSubmit} className="mt-4 grid gap-3 md:grid-cols-2">
+        <fieldset disabled={readOnly} className="contents">
         <FormField label="Role Name" required>
           <Input
             name="name"
@@ -73,19 +78,23 @@ export function RoleForm({
           <PermissionCheckboxes
             permissions={permissions}
             selected={role?.permission_keys || []}
-            disabled={false}
+            disabled={readOnly}
             roleName={roleName || role?.name}
             roleId={role?.id}
             roleOptions={role ? roles : []}
             onRoleChange={onRoleChange}
           />
         </div>
-        <Actions
-          busy={busy}
-          back={back}
-          disabled={false}
-          label={role ? "Save Role" : "Create Role"}
-        />
+        </fieldset>
+
+        {!readOnly && (
+          <Actions
+            busy={busy}
+            back={back}
+            disabled={false}
+            label={role ? "Save Role" : "Create Role"}
+          />
+        )}
       </form>
     </Card>
   );

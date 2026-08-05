@@ -22,6 +22,8 @@ export function DepartmentForm({
   tenants,
   selectedId,
   setSelectedId,
+  readOnly = false,
+  onEdit,
 }: any) {
   const {
     register,
@@ -94,6 +96,8 @@ export function DepartmentForm({
           "Medical departments are used for doctors, schedules, appointments, and patient routing."
         }
         back={back}
+        readOnly={readOnly}
+        onEdit={onEdit}
       />
 
       <form
@@ -101,6 +105,7 @@ export function DepartmentForm({
         autoComplete="off"
         className="mt-4 grid gap-3 md:grid-cols-2"
       >
+        <fieldset disabled={readOnly} className="contents">
         {tenants && !department && (
           <TenantPicker
             tenants={tenants}
@@ -206,14 +211,20 @@ export function DepartmentForm({
           </FormField>
         </div>
 
-        <Actions
-          busy={busy}
-          back={back}
-          disabled={isLocked(department) || scopeConflict}
-          label={
-            department ? "Save Medical Department" : "Create Medical Department"
-          }
-        />
+        </fieldset>
+
+        {!readOnly && (
+          <Actions
+            busy={busy}
+            back={back}
+            disabled={isLocked(department) || scopeConflict}
+            label={
+              department
+                ? "Save Medical Department"
+                : "Create Medical Department"
+            }
+          />
+        )}
       </form>
     </Card>
   );

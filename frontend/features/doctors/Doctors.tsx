@@ -3,25 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import {
-  Card,
-  RefreshButton,
-  StatusToast,
-} from "@/app/components/common/ui";
+import { Card, RefreshButton, StatusToast } from "@/app/components/common/ui";
 import { apiFetch, apiUpload } from "@/lib/api";
 import { mapWithConcurrency } from "@/lib/concurrency";
-import {
-  SelectField,
-} from "@/app/components/FormElements";
+import { SelectField } from "@/app/components/FormElements";
 import { uniqueDepartmentRows } from "@/lib/options";
-import { Empty } from "@/app/components/common/Empty";
-import { TableSkeleton } from "@/app/components/common/loader/TableSkeleton";
-import { DoctorRow } from "./components/DoctorRow";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { activeTenantOptions } from "@/utils/helper";
 import { DoctorForm } from "@/features/doctors/forms/DoctorForm";
 import { Pagination } from "@/app/components/common/Pagination";
-import { canCopyDatabaseIds } from "@/app/components/common/CopyIdButton";
+import {
+  CopyIdButton,
+  canCopyDatabaseIds,
+} from "@/app/components/common/CopyIdButton";
 import { usePractitionersQuery } from "@/features/doctors/api/usePractitionersQuery";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -30,6 +24,16 @@ import {
 } from "@/features/tenants/api/tenantReferenceQueries";
 import { status_options } from "../superAdmin/constants";
 import { FilterSection } from "@/app/components/common/FilterSection";
+import { DataTable } from "@/app/components/common/DataTable";
+import { Column } from "@/utils/types";
+import { Badge } from "@/app/components/common/ui";
+import { RowActions } from "@/features/admin/components/RowActions";
+import { doctorTypes } from "@/features/doctors/constants";
+import {
+  activeDoctorDepartmentFeeRules,
+  activeDoctorFeeRule,
+  formatPractitionerName,
+} from "@/features/doctors/helpers";
 
 const pageSize = 10;
 
@@ -91,6 +95,12 @@ export function Doctors({
   const [referenceLoading, setReferenceLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [confirm, setConfirm] = useState<any>(null);
+  const [selectedDepartmentByDoctor, setSelectedDepartmentByDoctor] = useState<
+    Record<string, string>
+  >({});
+  const [selectedBranchByDoctor, setSelectedBranchByDoctor] = useState<
+    Record<string, string>
+  >({});
   const selected = rows.find((row: any) => row.id === selectedId);
   const listLoading = practitionersLoading || referenceLoading;
 
@@ -582,6 +592,201 @@ export function Doctors({
     status,
   };
 
+  const doctorColumns: Column<any>[] = [
+    {
+      key: "full_name",
+      header: "Doctor",
+      width:'140px',
+      render: (row: any) => (
+        <div className="flex min-w-0 items-center gap-2">
+          <b className="truncate text-sm">{formatPractitionerName(row)}</b>
+          <CopyIdButton value={row.id} label="Doctor ID" allowed={canCopyIds} />
+        </div>
+      ),
+    },
+    {
+      key: "practitioner_type",
+      header: "Type",
+      width:'100px',
+      render: (row: any) => (
+        <span className="text-sm">
+          {doctorTypes.find(
+            ([value]) => value === row.practitioner_type,
+          )?.[1] || row.practitioner_type}
+        </span>
+      ),
+    },
+    {
+      key: "branch_ids",
+      header: "Branches",
+      width: "140px",
+      disableRowClick: true,
+      render: (row: any) => {
+        const rowBranches = (row.branch_ids || []).map((id: string) => ({
+          branchId: id,
+          branchName: branches.find((branch: any) => branch.id === id)?.name || id,
+        }));
+        if (!rowBranches.length) return <span className="text-sm">-</span>;
+        if (rowBranches.length === 1)
+          return (
+            <span className="text-slate-600 text-sm">
+              {rowBranches[0].branchName}
+            </span>
+          );
+        const selectedBranchId =
+          selectedBranchByDoctor[row.id] || rowBranches[0].branchId;
+        return (
+          <select
+            value={selectedBranchId}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) =>
+              setSelectedBranchByDoctor((previous) => ({
+                ...previous,
+                [row.id]: event.target.value,
+              }))
+            }
+            className="border rounded px-2 py-1 text-sm"
+          >
+            {rowBranches.map((branch: any) => (
+              <option value={branch.branchId} key={branch.branchId}>
+                {branch.branchName}
+              </option>
+            ))}
+          </select>
+        );
+      },
+    },
+    {
+      key: "department_ids",
+      header: "Departments",
+      cellClassName:"text-center",
+      className:"text-center",
+      width:"180px",
+      disableRowClick: true,
+      render: (row: any) => {
+        const specialties = (row.department_ids || []).map(
+          (departmentId: string) => ({
+            departmentId,
+            departmentName:
+              departments.find((department: any) => department.id === departmentId)
+                ?.name || departmentId,
+          }),
+        );
+        if (!specialties.length) return <span className="text-sm">-</span>;
+        if (specialties.length === 1)
+          return (
+            <span className="text-slate-600 text-sm">
+              {specialties[0].departmentName}
+            </span>
+          );
+        const selectedDepartmentId =
+          selectedDepartmentByDoctor[row.id] || specialties[0].departmentId;
+        return (
+          <select
+            value={selectedDepartmentId}
+            onClick={(event) => event.stopPropagation()}
+            onChange={(event) =>
+              setSelectedDepartmentByDoctor((previous) => ({
+                ...previous,
+                [row.id]: event.target.value,
+              }))
+            }
+            className="border rounded px-2 py-1 text-sm"
+          >
+            {specialties.map((specialty: any) => (
+              <option value={specialty.departmentId} key={specialty.departmentId}>
+                {specialty.departmentName}
+              </option>
+            ))}
+          </select>
+        );
+      },
+    },
+    {
+      key: "contact",
+      header: "Contact",
+      width:"120px",
+      render: (row: any) => (
+        <span className="break-all text-sm">
+          {row.mobile || row.email || "-"}
+        </span>
+      ),
+    },
+    {
+      key: "fee",
+      header: "Fee",
+      width:"80px",
+      render: (row: any) => {
+        const departmentIds = row.department_ids || [];
+        if (!departmentIds.length) return <span className="text-sm">-</span>;
+        const selectedDepartmentId =
+          selectedDepartmentByDoctor[row.id] || departmentIds[0];
+        const departmentFeeRules = activeDoctorDepartmentFeeRules(
+          feeRules,
+          row,
+        );
+        const fallbackFeeRule = activeDoctorFeeRule(feeRules, row);
+        const feeRule =
+          departmentFeeRules.find(
+            (rule: any) => rule.department_id === selectedDepartmentId,
+          ) || fallbackFeeRule;
+        return (
+          <span className="text-sm">
+            {feeRule
+              ? `₹${Number(feeRule.fee_amount || 0).toLocaleString("en-IN")}`
+              : "-"}
+          </span>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: "Status",
+      width:"100px",
+      className: "text-center",
+      cellClassName: "text-center",
+      render: (row: any) => (
+        <Badge
+          tone={row.status === "active" ? "green" : "red"}
+          className="table-status text-sm"
+        >
+          {row.status === "active" ? "Active" : "Inactive"}
+        </Badge>
+      ),
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      width:"100px",
+      className: "text-center",
+      cellClassName: "text-center",
+      disableRowClick: true,
+      render: (row: any) => (
+        <div className="flex justify-center">
+          <RowActions
+            actions={[
+              {
+                label: "Edit",
+                onClick: () => open("edit", row.id),
+              },
+              {
+                label: row.status === "active" ? "Inactive" : "Active",
+                onClick: () => setConfirm({ kind: "status", row }),
+                hidden: !canEditDoctor,
+              },
+              {
+                label: "Delete",
+                onClick: () => setConfirm({ kind: "delete", row }),
+                hidden: !canDeleteDoctor,
+                danger: true,
+              },
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
+
   const handleFilterChange = (key: string, value: string) => {
     setPage(1);
     switch (key) {
@@ -649,48 +854,13 @@ export function Doctors({
       </div>
       <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
         <div className="min-w-[1280px]">
-          <div className="hidden md:grid grid-cols-[1.05fr_.65fr_.9fr_.9fr_.65fr_.7fr_.7fr_.65fr] items-center gap-3 bg-slate-50 px-4 py-3 text-xs font-bold uppercase text-slate-500 ">
-            <span className="text-sm">Doctor</span>
-            <span className="text-sm">Type</span>
-            <span className="text-sm">Branches</span>
-            <span className="text-sm">Departments</span>
-            <span className="text-sm">Contact</span>
-            <span className="text-sm">Fee</span>
-            <span className="text-sm text-center">Status</span>
-            <span className="text-sm text-center">Actions</span>
-          </div>
-          <div className="divide-y divide-slate-200">
-            {listLoading ? (
-              <TableSkeleton rows={pageSize} />
-            ) : (
-              <>
-                {pageRows.length === 0 && (
-                  <Empty text="No doctors match your search." />
-                )}
-                {pageRows.map((row: any) => (
-                  <DoctorRow
-                    key={row.id}
-                    row={row}
-                    canCopyIds={canCopyIds}
-                    branches={branches}
-                    departments={departments}
-                    feeRules={feeRules}
-                    onEdit={() => open("edit", row.id)}
-                    onStatus={
-                      canEditDoctor
-                        ? () => setConfirm({ kind: "status", row })
-                        : undefined
-                    }
-                    onDelete={
-                      canDeleteDoctor
-                        ? () => setConfirm({ kind: "delete", row })
-                        : undefined
-                    }
-                  />
-                ))}
-              </>
-            )}
-          </div>
+          <DataTable
+            columns={doctorColumns}
+            data={pageRows}
+            loading={listLoading}
+            emptyMessage="No doctors match your search."
+            onRowClick={(row: any) => open("edit", row.id)}
+          />
         </div>
       </div>
       <Pagination

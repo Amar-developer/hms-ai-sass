@@ -314,23 +314,27 @@ export function BookingDetail({
                 </FormField>
               )}
               {fixedServiceCategory === "home_care_service" ? (
-                <SelectField
-                  label="Hours"
-                  value={visitForm.quantity}
-                  onChange={(value: string) => setVisitField("quantity", value)}
-                  options={[
-                    ...(homeCareHourPrices[String(visitForm.quantity)]
-                      ? []
-                      : [
-                          {
-                            value: String(visitForm.quantity || ""),
-                            label: `${visitForm.quantity || 0} hours - custom`,
-                          },
-                        ]),
-                    ...homeCareHourOptions,
-                  ]}
-                  required
-                />
+                <FormField label="Hours">
+                  <SearchableSelect
+                    searchable={false}
+                    value={visitForm.quantity}
+                    onChange={(value: string) =>
+                      setVisitField("quantity", value)
+                    }
+                    options={[
+                      ...(homeCareHourPrices[String(visitForm.quantity)]
+                        ? []
+                        : [
+                            {
+                              value: String(visitForm.quantity || ""),
+                              label: `${visitForm.quantity || 0} hours - custom`,
+                            },
+                          ]),
+                      ...homeCareHourOptions,
+                    ]}
+                    required
+                  />
+                </FormField>
               ) : null}
               <NumberField
                 label={
@@ -434,7 +438,7 @@ export function BookingDetail({
                               entity: "serviceLog",
                               row: {
                                 id: row.id,
-                                name: row.service_name || 'Log',
+                                name: row.service_name || "Log",
                               },
                             })
                           }

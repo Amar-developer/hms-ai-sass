@@ -25,11 +25,11 @@ import { pageSize } from "@/utils/constants";
 import { ButtonLoader } from "@/app/components/common/loader/ButtonLoader";
 import { Skeleton } from "@/app/components/common/loader/Skeleton";
 import { RowActions } from "../admin/components/RowActions";
-import { DataTable } from "../reports/components/DataTable";
 import { useQueueActions, useQueueDisplay } from "./api";
 import { ConfirmModal } from "@/app/components/common/ConfirmModal";
 import { useAppointmentsQuery } from "@/features/appointments/api/useAppointmentsQuery";
 import { call_language_options, display_mode_options } from "./constants";
+import { DataTable } from "@/app/components/common/DataTable";
 
 export function TokenQueue({
   apiSession,
@@ -378,9 +378,9 @@ export function TokenQueue({
                   onClick={() => openConsultation(appointment)}
                   className="rounded-lg bg-slate-900 p-3 text-left text-white transition hover:bg-slate-800"
                 >
-                  <p className="text-xl font-black flex items-center">
-                    {item.token_number || item.token} -
-                    <span className="mt-1 text-sm font-semibold text-white mb-1">
+                  <p className="text-xl font-black  flex justify-between items-center">
+                    <span className=" w-1/2">{item.token_number || item.token}</span> <span className="p-1">-</span>
+                    <span className="mt-1 p-1   text-center w-1/2 text-sm font-semibold text-white mb-1">
                       {appointment.patient ||
                         publicDisplayValue(item.patient_id, "Patient")}
                     </span>

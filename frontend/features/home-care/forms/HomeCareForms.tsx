@@ -8,7 +8,6 @@ import {
   DateField,
   FormField,
   NumberField,
-  SearchableSelectField,
   TextareaField,
 } from "@/app/components/FormElements";
 import {
@@ -127,8 +126,8 @@ export function BookingForm({
         patient_id: "",
         booking_type: "home_care",
         recurrence: "daily",
-      visit_day_mode: "all",
-      visit_weekdays: [],
+        visit_day_mode: "all",
+        visit_weekdays: [],
         start_date: today(),
         end_date: today(),
         status: "requested",
@@ -147,7 +146,6 @@ export function BookingForm({
   const endDate = watch("end_date");
   const visitDayMode = watch("visit_day_mode");
   const visitWeekdays = watch("visit_weekdays");
-
   const isHomeVisitBooking = bookingType === "home_visit";
   const visibleServices = isHomeVisitBooking ? visitServices : [];
   // Bill for the days actually visited, not every day in the span: a
@@ -266,8 +264,8 @@ export function BookingForm({
         patient_id: "",
         booking_type: "home_care",
         recurrence: "daily",
-      visit_day_mode: "all",
-      visit_weekdays: [],
+        visit_day_mode: "all",
+        visit_weekdays: [],
         start_date: today(),
         end_date: today(),
         status: "requested",
@@ -401,25 +399,26 @@ export function BookingForm({
             />
           )}
         />
-
-        <FormField label="Visit Days" error={errors.visit_day_mode?.message}>
-          <Controller
-            name="visit_day_mode"
-            control={control}
-            render={({ field }) => (
-              <SearchableSelect
-                value={field.value}
-                onChange={field.onChange}
-                options={visitDayModeOptions.map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
-                placeholder="Every day"
-                searchable={false}
-              />
-            )}
-          />
-        </FormField>
+        {recurrence !== "daily" && (
+          <FormField label="Visit Days" error={errors.visit_day_mode?.message}>
+            <Controller
+              name="visit_day_mode"
+              control={control}
+              render={({ field }) => (
+                <SearchableSelect
+                  value={field.value}
+                  onChange={field.onChange}
+                  options={visitDayModeOptions.map(([value, label]) => ({
+                    value,
+                    label,
+                  }))}
+                  placeholder="Every day"
+                  searchable={false}
+                />
+              )}
+            />
+          </FormField>
+        )}
 
         {visitDayMode === "weekdays" && (
           <div className="md:col-span-2 lg:col-span-3">
@@ -531,9 +530,7 @@ export function BookingForm({
                   : "Manual hourly service entry"}
               </span>
             </p>
-            {!isHomeVisitBooking && (
-              <ActionButton onClick={addLine}>Add Service</ActionButton>
-            )}
+            <ActionButton onClick={addLine}>Add Service</ActionButton>
           </div>
           <div className="space-y-3">
             {lineItems.map((line, index) => (
@@ -631,11 +628,13 @@ export function BookingForm({
                   onChange={(value) => setLine(index, "unit_amount", value)}
                   min={0}
                 />
-                <div className="flex items-end">
+                <div
+                  className={`flex items-center ${errors.lineItems?.[index]?.service_id?.message ? "mt-0" : "mt-5"}`}
+                >
                   <ActionButton
                     tone="danger"
                     onClick={() => removeLine(index)}
-                    disabled={isHomeVisitBooking || lineItems.length === 1}
+                    disabled={lineItems.length === 1}
                   >
                     Remove
                   </ActionButton>
@@ -673,7 +672,11 @@ export function BookingForm({
         <div className="flex items-end gap-2 md:col-span-4">
           <Button disabled={busy} className="save-button">
             <ButtonLoader loading={busy}>
-              {busy ? "Saving..." : editing ? "Update Booking" : "Create Booking"}
+              {busy
+                ? "Saving..."
+                : editing
+                  ? "Update Booking"
+                  : "Create Booking"}
             </ButtonLoader>
           </Button>
           <button
